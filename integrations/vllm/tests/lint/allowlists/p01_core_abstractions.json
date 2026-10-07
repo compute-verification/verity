@@ -23,8 +23,6 @@
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "core-private", "symbol": "request_boundaries", "detail": "verity.primitives.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.primitives.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "_canonicalize", "detail": "verity.primitives.circuits.codec._encode_definition"},
-    {"file": "verity_vllm/query/program_view.py", "kind": "core-private", "symbol": "_Columns.param_reads_of", "detail": "verity_vllm.query.units.ValueRef._make"},
-    {"file": "verity_vllm/query/program_view.py", "kind": "core-private", "symbol": "_Columns.reads_of", "detail": "verity_vllm.query.units.ValueRef._make"},
     {"file": "verity_vllm/query/program_view.py", "kind": "core-private", "symbol": "_spec_id", "detail": "verity.primitives.circuits.codec._spec_id"},
     {"file": "verity_vllm/query/program_view.py", "kind": "core-private", "symbol": "spec_statics", "detail": "verity.primitives.circuits.codec._split_record"}
   ]

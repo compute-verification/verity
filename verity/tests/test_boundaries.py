@@ -1,95 +1,87 @@
-"""The core dependency rules (README "Development") as import-boundary checks over the source tree.
+"""The core dependency rules (README "Development") as import-boundary checks over ``verity/``.
 
-    ir <- evaluation <- ml,  ir <- commitments,  ir + ml + commitments <- proofs;  randomness and claims import no
-    core module;  nothing depends back on a later layer, and no core module imports a backend, frontend, integration,
-    protocol, tool or external runtime: core imports the standard library, its declared dependencies and itself.
+    primitives.circuits <- primitives.commitments -> primitives.crypto;  primitives.circuits <- protocols.profile;
+    each protocol imports the primitives, the profile and the protocols it names in ``ALLOWED``, and no third-party package;  claims, randomness and crypto import no
+    core unit;  a primitive never imports a protocol, and no unit imports another distribution of the workspace (the
+    catalog, the kernels, experimental, a backend, an integration, a benchmark, a tool) or an external runtime: core
+    imports the standard library, its declared dependencies and itself.
 
 An import is an import statement (a relative one resolved against its package), a string handed to
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
-time: a module named as data is still a dependency.
+time: a module named as data is still a dependency.  Tests (``tests/``) are suites of their own and declare what they read;
+a ``lean/`` directory holds a Lean package and the scripts that write its vectors, run by path.
 
-numpy is a core dependency (architecture decision: `verity.primitives.circuits.evaluation` batches over numpy arrays and kernels sit beside
-their Definitions in `verity_catalog.definitions`).  The plain-integer references stay numpy-free on purpose, because they are the
-specification the Rust guest, the Lean vectors and the probes are checked against: `verity.primitives.circuits` and `verity_catalog.silicon`.
-`verity.primitives.randomness` is exact stdlib arithmetic too.
+numpy is a core dependency (architecture decision: `verity.primitives.circuits.evaluation` batches over numpy arrays).  The
+plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
+the probes are checked against: the rest of `verity.primitives.circuits`.  `verity.primitives.randomness` is exact stdlib
+arithmetic too.
 """
 
 from __future__ import annotations
 
 import ast
-import importlib.util
-import pkgutil
 import re
 import sys
 from pathlib import Path
 
 import pytest
 
-import verity
+SRC = Path(__file__).resolve().parents[1]
 
-#: Each directory the import system finds `verity` in: one while it is a regular package, one per member that ships part of it
-#: once it is a namespace (PEP 420).
-PORTIONS = [Path(p).resolve() for p in verity.__path__]
-#: Each module of `verity`, wherever the member that ships it lives: a package's directory, or a top-level module's file
-#: (``errors.py``).
-MODULES = {m.name: Path(importlib.util.find_spec(f"verity.{m.name}").origin).resolve().parent if m.ispkg
-           else Path(importlib.util.find_spec(f"verity.{m.name}").origin).resolve() for m in pkgutil.iter_modules(verity.__path__)}
-
-#: For each core module, the sibling core modules it may import.  ``errors`` is shared by all.
+#: For each core unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` is shared by all.
 ALLOWED = {
-    "ir": set(),
-    "evaluation": {"ir"},
-    "ml": {"ir", "evaluation"},
-    "commitments": {"ir"},
-    "proofs": {"ir", "ml", "commitments"},
-    "resource_accounting": {"ir", "proofs", "commitments"},
-    "randomness": set(),
     "claims": set(),
+    "primitives.circuits": set(),
+    "primitives.randomness": set(),
+    "primitives.crypto": set(),
+    "primitives.commitments": {"primitives.circuits", "primitives.crypto"},
+    "protocols.profile": {"primitives.circuits"},
+    # The two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`), and the proof
+    # service's challenger draws with it (`service.Stream.select`).
+    "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "primitives.randomness",
+                                              "protocols.profile"},
+    "protocols.accounting.space.pous": {"claims", "primitives.circuits", "primitives.commitments", "primitives.randomness"},
+    # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.
+    "protocols.accounting.work.pouw": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
+                                       "primitives.randomness", "protocols.profile", "protocols.verification.sampled_proofs"},
+    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
+    # are LMS signatures (`primitives.crypto.lms`).
+    "protocols.accounting.communication.certifier": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
+                                                     "protocols.verification.sampled_proofs"},
 }
-#: Import names core never imports or names as a string: the other workspace distributions (backends, integrations,
-#: protocols, tools), external runtimes, and the repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity.protocols.verification.sampled_proofs", "verity.protocols.accounting.space.pous",
-                      "verity_torch", "circuit_check", "research", "sp1", "vllm", "torch", "jax", "onnx",
-                      "backends", "frontends", "integrations", "protocols", "tools", "veritor")
-#: Core's third-party dependencies (``verity/pyproject.toml``); anything else it imports is the stdlib or ``verity``.
+#: Import names core never imports or names as a string: the other workspace distributions, external runtimes, and the
+#: repository's own directories.
+FORBIDDEN_EXTERNAL = ("verity_catalog", "verity_kernels", "verity_experimental", "verity_sp1", "verity_vllm", "verity_numerical",
+                      "verity_flock", "verity_torch", "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax",
+                      "onnx", "catalog", "kernels", "experimental", "archive", "backends", "benchmarks", "frontends",
+                      "integrations", "tools", "veritor")
+#: The one edge out of core: PoUW's schemes and circuits are stated over the catalog's silicon models and Definitions (the
+#: tensor-core steps, FP32 and the casts its verifier recomputes), which live in the catalog by ruling, while the scheme
+#: stays in core.  Nothing else in core imports the catalog.
+EXCEPTIONS = {"protocols.accounting.work.pouw": {"verity_catalog"}}
+#: Core's third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or ``verity``.  A
+#: protocol imports none: it is the standard library and core, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
-#: Source subtrees that must stay stdlib-only: the scalar references.
-NUMPY_FREE = ("ir", "ml/tc", "randomness", "claims")
+#: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
+NUMPY_FREE = ("primitives/circuits", "primitives/randomness", "claims")
+NUMPY_USERS = ("primitives/circuits/evaluation", "primitives/circuits/boolean/forms.py")
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
 
-def _package(path: Path) -> list[str]:
-    """The dotted package a core source file belongs to, as parts."""
-    if path.parent in PORTIONS:
-        return ["verity"]
-    for name, root in MODULES.items():
-        if root.is_dir() and path.is_relative_to(root):
-            return ["verity", name, *path.relative_to(root).parts[:-1]]
-    raise AssertionError(f"{path} is in no module of verity")
-
-
-def _rel(path: Path) -> str:
-    """``path`` as it lies under ``verity/``, whichever member ships it (``ml/tc/total.py``)."""
-    return "/".join([*_package(path)[1:], path.name])
-
-
-def _sources(module: str) -> list[Path]:
-    """The Python files of ``module`` (``ml/tc`` names a subpackage), which must exist: a rule over nothing passes."""
-    head, _, rest = module.partition("/")
-    assert head in MODULES, f"verity.{head} is not importable: found {sorted(MODULES)} in {PORTIONS}"
-    root = MODULES[head] / rest if rest else MODULES[head]
-    files = sorted(root.rglob("*.py")) if root.is_dir() else [root]
-    assert files, f"no source of verity.{module.replace('/', '.')} under {root}"
-    return files
+def _sources(root: Path = SRC) -> list[Path]:
+    """Core's own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, or a Lake build
+    directory (``verity/Security/.lake`` holds its dependencies' checkouts, Mathlib's scripts among them)."""
+    return sorted(p for p in root.rglob("*.py")
+                  if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts))
 
 
 def _imports(path: Path) -> list[tuple[str, int, bool]]:
     """``(module, line, imported)`` for every module ``path`` names.  Statements and import-call strings are ``imported``; a
     ``"module:attr"`` string is not, since any ``word:word`` constant matches: only the forbidden and core-direction rules
     apply to it."""
-    package = _package(path)
+    package = ["verity", *path.relative_to(SRC).parts[:-1]]
     out = []
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
         if isinstance(node, ast.Import):
@@ -109,56 +101,72 @@ def _imports(path: Path) -> list[tuple[str, int, bool]]:
     return out
 
 
+def _unit(dotted: str) -> str | None:
+    """The unit a module under ``verity`` (``primitives.circuits.cut``) belongs to, or None for a grouping or a top-level file."""
+    parts = dotted.split(".")
+    return next((".".join(parts[:n]) for n in range(len(parts), 0, -1) if ".".join(parts[:n]) in ALLOWED), None)
+
+
+def _dotted(path: Path) -> str:
+    parts = path.relative_to(SRC).with_suffix("").parts
+    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
+
+
 def _external(name: str, imported: bool, allowed: set[str]) -> bool:
-    """Whether a non-core ``name`` breaks the rules: it is forbidden, or it is imported and is neither stdlib nor in ``allowed``."""
+    """Whether a non-core ``name`` breaks the rules: it is forbidden and not ``allowed``, or it is imported and is neither stdlib
+    nor in ``allowed``."""
     top = name.split(".")[0]
-    return top in FORBIDDEN_EXTERNAL or (imported and top != "verity" and top not in sys.stdlib_module_names and top not in allowed)
+    return (top in FORBIDDEN_EXTERNAL and top not in allowed) or (
+        imported and top != "verity" and top not in sys.stdlib_module_names and top not in allowed)
 
 
-def _core_modules() -> list[str]:
-    return sorted(name for name, root in MODULES.items() if root.is_dir())
-
-
-def _top_level_files() -> list[Path]:
-    return sorted(p for portion in PORTIONS for p in portion.glob("*.py"))
-
-
-def test_every_rule_is_over_modules_that_are_found() -> None:
-    """The rules below are parametrized over what the import system finds, so a module that moved where they don't look would
-    drop out of them silently: the modules every layout has, and the files directly under ``verity``, are found."""
-    assert {"ir", "evaluation", "ml", "errors"} <= MODULES.keys(), f"found {sorted(MODULES)} in {PORTIONS}"
-    assert MODULES["errors"] in _top_level_files(), _top_level_files()
-
-
-@pytest.mark.parametrize("module", _core_modules())
-def test_core_module_imports_only_inward(module: str) -> None:
-    assert module in ALLOWED, f"new core module {module!r}: add it to ALLOWED with its permitted dependencies"
+@pytest.mark.parametrize("unit", sorted(ALLOWED))
+def test_core_unit_imports_only_inward(unit: str) -> None:
+    files = [p for p in _sources() if _unit(_dotted(p)) == unit]
+    assert files, f"core unit {unit!r} has no source: remove it from ALLOWED"
     offenders = []
-    for path in _sources(module):
+    for path in files:
         for name, line, imported in _imports(path):
             parts = name.split(".")
-            target = parts[1] if parts[0] == "verity" and len(parts) > 1 else None
-            if _external(name, imported, DEPENDENCIES) or target not in (None, module, "errors", *ALLOWED[module]):
-                offenders.append(f"{_rel(path)}:{line}: {name}")
+            target = _unit(".".join(parts[1:])) if parts[0] == "verity" and len(parts) > 1 else None
+            third_party = set() if unit.startswith("protocols.") else DEPENDENCIES
+            if (_external(name, imported, third_party | EXCEPTIONS.get(unit, set()))
+                    or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
+                offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
     assert not offenders, "\n".join(offenders)
 
 
-def test_top_level_files_import_only_the_standard_library() -> None:
-    """``verity/__init__.py`` re-exports nothing and ``verity/errors.py`` is shared by every module, the stdlib-only references
-    included: the files directly under ``verity/`` import the standard library and nothing else."""
-    offenders = [f"{path.name}:{line}: {name}" for path in _top_level_files() for name, line, imported in _imports(path)
-                 if _external(name, imported, set()) or name.split(".")[0] == "verity"]
+def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
+    """A new package under ``verity`` is a new unit, listed in ``ALLOWED``; what is outside every unit is a grouping's
+    ``__init__.py`` (``primitives``, ``protocols.accounting``) or a file directly under ``verity/``, and imports the standard
+    library and nothing else: ``verity/__init__.py`` re-exports nothing and ``verity/errors.py`` is shared by every unit, the
+    stdlib-only references included."""
+    offenders = []
+    for path in _sources():
+        if _unit(_dotted(path)) is not None:
+            continue
+        if path.name != "__init__.py" and path.parent != SRC:
+            offenders.append(f"{path.relative_to(SRC)}: outside every unit; add its package to ALLOWED")
+        offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line, imported in _imports(path)
+                      if _external(name, imported, set()) or name.split(".")[0] == "verity"]
     assert not offenders, "\n".join(offenders)
+
+
+def test_every_source_directory_is_a_package() -> None:
+    """``verity`` is one regular package: every directory of its own Python has an ``__init__.py``, so no part of it resolves
+    as a namespace package from whatever else is on the path.  Tests and Lean scripts are run by path and stay out."""
+    missing = sorted({str(p.parent.relative_to(SRC.parent)) for p in _sources() for d in [p.parent, *p.parent.parents]
+                      if d.is_relative_to(SRC) and not (d / "__init__.py").exists()})
+    assert not missing, missing
 
 
 @pytest.mark.parametrize("subtree", NUMPY_FREE)
 def test_scalar_references_are_stdlib_only(subtree: str) -> None:
-    offenders = [f"{_rel(path)}:{line}: {name}"
-                 for path in _sources(subtree)
+    offenders = [f"{path.relative_to(SRC)}:{line}: {name}"
+                 for path in _sources(SRC / subtree)
+                 if not any(path.relative_to(SRC).as_posix().startswith(u) for u in NUMPY_USERS)
                  for name, line, _ in _imports(path)
-                 if name.split(".")[0] == "numpy" or (subtree == "ml/tc" and name.startswith("verity.")
-                                                      and name.split(".")[:2] != ["verity", "errors"]
-                                                      and name.split(".")[:3] != ["verity", "ml", "tc"])]
+                 if name.split(".")[0] == "numpy"]
     assert not offenders, "\n".join(offenders)
 
 
@@ -179,9 +187,9 @@ def test_core_never_reads_the_census() -> None:
     """The census (``catalog/census/``, data only) is read by the renderer, benchmarks, tools and the website, never by core: core takes
     such numbers as parameters.  No string in core code (docstrings aside) names the directory or one of its files."""
     offenders = []
-    for path in [*_top_level_files(), *(p for module in _core_modules() for p in _sources(module))]:
+    for path in _sources():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         docs = _docstrings(tree)
-        offenders += [f"{_rel(path)}:{n.lineno}" for n in ast.walk(tree)
+        offenders += [f"{path.relative_to(SRC)}:{n.lineno}" for n in ast.walk(tree)
                       if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs and CENSUS_PATH.search(n.value)]
     assert not offenders, offenders

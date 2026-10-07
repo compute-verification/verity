@@ -4,7 +4,7 @@
     python -m verity.primitives.commitments.vllm_v1.vectors --check  # exit 1 if vectors.json is stale
 
 Every input is derived from a fixed label by SHA-256 counter expansion, so the file is a pure function of this
-module and the reference; ``tests/commitments/test_vllm_v1.py`` fails if they drift apart.
+module and the reference; ``verity/primitives/commitments/tests/test_vllm_v1.py`` fails if they drift apart.
 """
 
 from __future__ import annotations

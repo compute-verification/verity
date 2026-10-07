@@ -66,12 +66,29 @@ def test_portions_that_overlap_never_share_a_digest_across_orders(monkeypatch, t
 
 
 def test_todays_digest_is_the_one_portion_walk():
-    """On today's layout every package has one portion, and the digest is the old per-portion walk, byte for byte."""
+    """On today's layout every package has one portion, and the digest is the old per-portion walk, byte for byte, less the
+    files under a name holding a dot."""
     h = hashlib.sha256()
-    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity.protocols.accounting.work.pouw"):
+    for name in ("verity", "verity_catalog", "verity_kernels", "verity_experimental", "verity_flock", "circuit_check", "verity_vllm"):
         spec = importlib.util.find_spec(name)
         assert spec is None or len(spec.submodule_search_locations or []) <= 1, (name, spec.submodule_search_locations)
         for root in (spec.submodule_search_locations or []) if spec else []:
             for f in sorted(Path(root).rglob("*.py")):
-                h.update(f"{name}/{f.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(f.read_bytes()).digest())
+                if not any("." in p for p in f.relative_to(root).with_suffix("").parts):
+                    h.update(f"{name}/{f.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(f.read_bytes()).digest())
     assert h.hexdigest() == CS._source_digest()
+
+
+def test_a_name_holding_a_dot_is_no_module_and_is_not_hashed(monkeypatch, tmp_path):
+    """A built Lake package keeps Mathlib's Python scripts under `.lake/`: Python imports nothing from a directory or file whose
+    name holds a dot, so editing one leaves the digest alone, while editing an importable module beside it still moves it."""
+    for rel in ("ns/m.py", "ns/lean/.lake/packages/mathlib/scripts/lint.py", "ns/lean/a.b.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("X = 1\n")
+    locs = [str(tmp_path / "ns")]
+    d0 = _digest(monkeypatch, locs)
+    for rel in ("ns/lean/.lake/packages/mathlib/scripts/lint.py", "ns/lean/a.b.py"):
+        (tmp_path / rel).write_text("X = 2  # edited\n")
+    assert _digest(monkeypatch, locs) == d0
+    (tmp_path / "ns/m.py").write_text("X = 2  # edited\n")
+    assert _digest(monkeypatch, locs) != d0

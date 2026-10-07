@@ -1,8 +1,8 @@
 """Application-level commitments: binding Verity values and authenticating their openings.
 
 Two commitment schemes, both wire-pinned by the SP1 kernel: transparent SHA-256 Merkle trees over
-verifier-derived position domains, one word per leaf (``merkle``, with ``multiproof`` opening many leaves of one
-tree at once), and trees over whole runtime tensor leaves under the ``verity-vllm/leaf/v1`` framing (``leaves``),
+verifier-derived position domains, one word per leaf (``merkle``; ``verity_experimental.commitments.multiproof`` opens many
+leaves of one tree at once), and trees over whole runtime tensor leaves under the ``verity-vllm/leaf/v1`` framing (``leaves``),
 the scheme the packed-word obligations of the serving path authenticate against.  ``indexed`` holds the domains,
 ``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits.
 
@@ -32,7 +32,6 @@ from .identity import Digest, JSONValue, canonical_json_bytes, identity_digest, 
 from .indexed import ExplicitIndexedDomain, IndexedDomain, RangeIndexedDomain, iter_domain, iter_members
 from .limits import VerificationLimits
 from .merkle import Commitment, CommitmentDomain, MerkleTree, Opening, merkle_depth, validate_commitment, verify_opening
-from verity_experimental.commitments.multiproof import MultiproofCost, multiproof, multiproof_cost, multiproof_from_paths, verify_multiproof
 
 __all__ = [
     "Commitment",
@@ -42,7 +41,6 @@ __all__ = [
     "IndexedDomain",
     "JSONValue",
     "MerkleTree",
-    "MultiproofCost",
     "Opening",
     "RangeIndexedDomain",
     "VerificationLimits",
@@ -51,12 +49,8 @@ __all__ = [
     "iter_domain",
     "iter_members",
     "merkle_depth",
-    "multiproof_cost",
-    "multiproof_from_paths",
-    "multiproof",
     "tagged_sha256",
     "validate_commitment",
     "validate_digest",
-    "verify_multiproof",
     "verify_opening",
 ]

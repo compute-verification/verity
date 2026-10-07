@@ -7,7 +7,7 @@
 #   MODE=build      nothing more
 # env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi)  CPU_SELF=1 (0: skip the CPU selftest)
 #      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})  TYPED=1 (the typed statement)
-#      ZK=1 (selftest: M1's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
+#      ZK=1 (selftest: C-Flock ZK's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
 #      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)  FC_COINS=os (bench: m0's sessions on per-round OS
 #      coins, no seed and no PRF; seed: the binary's default; a selftest build always seeds)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -25,7 +25,7 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
 # after the circuit prover is generated (it widens both provers' trees)
 (cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/backends/flock/flock-sha512-b684b12.patch \
   && git apply $REPO/backends/flock/flock-glue-b684b12.patch) || exit 1
-# M1 (lane flock-zk): Ligerito level 0's hiding (flock-circuit --zk)
+# C-Flock ZK (lane flock-zk): Ligerito level 0's hiding (flock-circuit --zk)
 (cd $F && git apply $REPO/backends/flock/flock-zk-b684b12.patch) || exit 1
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
 (cd $F && git apply $REPO/backends/flock/flock-vtime-b684b12.patch) || exit 1
@@ -37,7 +37,7 @@ B=$F/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 for tarf in $I/*.tar; do
   t=$(basename $tarf .tar); S=$W/sets/$t; rm -rf $S && mkdir -p $S && tar -xf $tarf -C $S || exit 1

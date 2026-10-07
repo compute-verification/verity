@@ -19,7 +19,8 @@ from research.store.tool import Tool
 TREE = workspace_root(__file__)
 
 CLOSURE = ["benchmarks/pouw/**", "verity/protocols/accounting/work/pouw/**",
-           *package_paths(TREE, "verity", "randomness/**", "commitments/**", "ml/tc/**", "errors.py")]
+           *package_paths(TREE, "verity", "primitives/randomness/**", "primitives/commitments/**", "errors.py"),
+           *package_paths(TREE, "verity_catalog", "silicon/**")]
 
 
 def _parser() -> argparse.ArgumentParser:

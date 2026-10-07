@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The hidden-read kill experiment (read_gadget.py): GemmCoordinate<K> class statements with and without two hidden Merkle reads
-# a VU, each proved in loopback --zk sessions on the CPU under /usr/bin/time, every case with the same instances, cores and
+# a template instance, each proved in loopback --zk sessions on the CPU under /usr/bin/time, every case with the same instances, cores and
 # session counts; then Lean's flock-verify on each case's last session. Run from the verity tree (research run --cwd source);
 # CPU only. Outputs under out/ (flat): host.txt, check.json, stage-<case>.json, statement-<case>.txt, live.tsv (one LIVE record
 # per proof: case, json), time-{prove,serve}-<case>.txt (peak RSS and wall time), prove-/serve- logs, lean-<case>.log and
@@ -71,7 +71,7 @@ B=$BIN/flock-circuit; sha256sum $B | tee $O/binary.sha256
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm
 G="python3 backends/flock/pod/read_gadget.py"
 $G check > $O/check.json || { cat $O/check.json; exit 1; }
 

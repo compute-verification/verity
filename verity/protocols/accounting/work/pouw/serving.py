@@ -1,8 +1,10 @@
 """What a served PoUW executor and its verifier agree on, whatever runs the model: the hashing formats, the Pearl-C family's
 scheme names, the schedules a pass may run under, and what one pass publishes.
 
-* `HashFormat` (`HASH_FORMATS`): a format's tree hash, its keyed-BLAKE3 labels, and whether forming waits for A's tree.  An
-  executor reads keys and tree hash from here, never from literals, so the format is a switch (`SchemeId.with_hashing`).
+* `HashFormat` (`HASH_FORMATS`): a format's tree hash, whether forming waits for A's tree, and what a row's seed is keyed
+  on.  An executor reads the tree hash from here, never from a literal.  The formats are h0 (TurboSHAKE128 digests, SHA-256
+  trees) and h3 (SHA-512 throughout, each row seeding its own E_A line); the BLAKE3 formats h1, h2 and BLAKE3 -h3 are in
+  ``archive/pouw-blake3/`` (one hash, SHA-512: Daniel, 2026-10-06).
 * `SchemeId`: the one grammar of Pearl-C names, ``pearl-c-{device}-{forming}[-{hashing}][@{prices}]`` for FP8 and
   ``pearl-c-{nvfp4|mxfp4}-{version}[-{hashing}]`` for Pearl-C4.  Every name in use parses and prints back unchanged.
 * `Schedule` (`SCHEDULES`): which step groups of a call leave the critical path, and at what priority; `schedule_refusals`
@@ -14,7 +16,7 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   kernel directory is the runtime's; naming, gating and selecting one is here, so a bench or a ledger names a variant
   without importing a runtime.
 
-Stdlib and `verity` only (the repository's ``tests/test_protocol_boundaries.py``).
+Stdlib and `verity` only (``verity/tests/test_boundaries.py``).
 """
 from __future__ import annotations
 
@@ -23,33 +25,23 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from verity.primitives.crypto.blake3 import blake3
-
 
 @dataclass(frozen=True)
 class HashFormat:
     """``seed_a`` is ``unit-root`` when forming reads seed_A from A's root (so A's tree is on the critical path), ``row``
-    when each row seeds its own E_A line (h3)."""
+    when each row seeds its own E_A line (h3).  ``row_digest`` is the schema of the row digest a row's seed is keyed on
+    (h3: ``sha512/row-seg/v1``, `rowleaf.sha512_row_seg_digest`), None when rows don't seed."""
 
     name: str
     tree_hash: str
-    message_label: str | None
-    leaf_label: str | None
     seed_a: str
     row_cap: bool = False
-
-    def message_key(self) -> bytes | None:
-        return None if self.message_label is None else blake3(self.message_label.encode())
-
-    def leaf_key(self) -> bytes | None:
-        return None if self.leaf_label is None else blake3(self.leaf_label.encode())
+    row_digest: str | None = None
 
 
 HASH_FORMATS: dict[str, HashFormat] = {
-    "h0": HashFormat("h0", "sha256", None, None, "unit-root"),
-    "h1": HashFormat("h1", "blake3", "pearl-c/h1/message", "pearl-c/h1/leaf", "unit-root"),
-    "h2": HashFormat("h2", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "unit-root"),
-    "h3": HashFormat("h3", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "row", row_cap=True),
+    "h0": HashFormat("h0", "sha256", "unit-root"),
+    "h3": HashFormat("h3", "hm96-sha512", "row", row_cap=True, row_digest="sha512/row-seg/v1"),
 }
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``
@@ -179,13 +171,14 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
 
 
 MANIFEST_SCHEMA = "verity/pouw/pass-manifest/v1"
-#: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocol_options.pouw_pearl_c_device`)
-MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v1")
+#: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocol_options.pouw_pearl_c_device`), v1 (salted
+#: from a beacon, before epoch coins) only as a replay of a recorded pass
+MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v2", "verity-vllm/pouw-pearl-c-run/v1")
 
 
 @dataclass(frozen=True)
 class PassCommitment:
-    """``activation_roots`` is the SHA-256 over every call's A root in call order; ``kernel`` the kernel variant's id;
+    """``activation_roots`` is the SHA-512 over every call's A root in call order; ``kernel`` the kernel variant's id;
     ``controls`` every poisoning or negative control the pass ran with, empty for an honest pass."""
 
     scheme: str

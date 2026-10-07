@@ -1,7 +1,7 @@
 """One-stage audit, run A3: every unit type M0's statement proves in one #101 decoder layer, as one audit with one draw and
 one integrity profile.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/verity/protocols/verification/sampled_proofs \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a3.py --sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--layer 0] [--k 128] [--delta 2^-20]
 
@@ -76,8 +76,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7521)
     ap.add_argument("--draw-file", action="store_true", help="serve each template its share of the verifier's Lean draw (M0 --draw-file)")
     ap.add_argument("--statement", default=a0.STATEMENT_ID, help="the Lean verifier's statement name")
+    ap.add_argument("--binding", default=a0.STAND_IN_BINDING, choices=sorted(a0.STAND_IN_BINDINGS), help="M0's frame-domain binding tag")
     a = ap.parse_args()
     a0.STATEMENT_ID = a.statement
+    a0.STAND_IN_BINDING = a.binding
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     root = Path(a.sets)

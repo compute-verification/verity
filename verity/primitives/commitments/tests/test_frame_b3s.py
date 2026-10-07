@@ -1,14 +1,19 @@
 """``frame-b3s``: the segment-tree leaf of a ``hash="blake3-s256"`` domain (Pearl-C's hashing format -h2), one test per
 format condition of the theory sign-off (research store ``internal/pouw/rtx-pro/a-commit-latency.md``): distinct keys, a
-segment key binding every field, the last segment at its true length, the odd-node rule. Then openings, multiproofs,
+segment key binding every field, the last segment at its true length, the odd-node rule. Then openings,
 pinned vectors and a root rebuilt with the `blake3` package from the documented layout alone."""
 
 from __future__ import annotations
 
 import pytest
 
-from verity.primitives.commitments import (CommitmentDomain, MerkleTree, RangeIndexedDomain, VerificationLimits, multiproof,
-                                verify_multiproof, verify_opening)
+from verity.primitives.commitments import (
+    CommitmentDomain,
+    MerkleTree,
+    RangeIndexedDomain,
+    VerificationLimits,
+    verify_opening,
+)
 from verity.primitives.crypto.blake3 import keyed
 from verity.primitives.commitments.merkle import (B3S_SEGMENT, _FRAME, _uint, b3s_level_key, b3s_levels, b3s_segment_key,
                                        blake3_node_key)
@@ -115,7 +120,7 @@ def test_condition_4_an_odd_node_is_promoted_unchanged(n):
             assert above[-1] == below[-1]
 
 
-def test_openings_and_multiproofs_authenticate_and_tampering_fails():
+def test_openings_authenticate_and_tampering_fails():
     d, vals = domain(), values()
     tree = MerkleTree(d, vals, lambda _: "rows")
     limits = VerificationLimits()
@@ -128,11 +133,6 @@ def test_openings_and_multiproofs_authenticate_and_tampering_fails():
     b3 = MerkleTree(CommitmentDomain(BINDING, 3, RangeIndexedDomain(5), hash="blake3"), vals, lambda _: "rows")
     assert tree.commitment.root != b3.commitment.root
     assert MerkleTree(domain(0), {}, lambda _: "rows").commitment.root == domain(0).empty_root()
-    d7, v7 = domain(7), values(7)
-    t7 = MerkleTree(d7, v7, lambda _: "rows")
-    ranks = (1, 4, 6)
-    leaves = {r: d7.leaf(r, r, "rows", v7[r]) for r in ranks}
-    assert verify_multiproof(t7.commitment.root, 7, d7.domain_id, leaves, multiproof(t7, ranks), hash="blake3-s256")
 
 
 #: the vectors another implementation checks against: `domain()` (five values, binding bytes(range(32)), owner 3), schema

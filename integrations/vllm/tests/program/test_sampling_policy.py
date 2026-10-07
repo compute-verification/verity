@@ -183,7 +183,7 @@ def test_a_single_request_takes_the_constant_S_of_its_sm_count(tmp_path, num_sms
     from verity_vllm.pipeline.build import sampler_geometry
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import single_request_splits
-    from verity_vllm.program.registry.topp_split import splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import splits_for_v1
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
     for lp_t in ((8, 15), (8, 9), (None, None)):
         pol = sampling_policy(None, _requests_manifest(tmp_path, 1))

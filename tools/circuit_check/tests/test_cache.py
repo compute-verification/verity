@@ -242,10 +242,11 @@ from pathlib import Path
 
 root, repo = Path(sys.argv[1]), Path(sys.argv[2])
 sys.path.insert(0, str(root))
-from circuit_check import cache as CC, checks as CK, cli, targets as TG
+from circuit_check import cache as CC, checks as CK, cli, sidecars as SC, targets as TG
 
 CC.TARGETS, CC.PINS, CC._TARGETS_FILE = root / "targets.py", root / "pins.json", str(root / "targets.py")
 CK.PINS = root / "pins.json"
+SC.REPO, SC.PACKAGES = root, ("syn",)
 cli.REPO = root
 inner = CC._interpreter_dirs
 CC._interpreter_dirs = lambda: (*inner(), str(repo) + "/")      # the checker's own modules come from the repository
@@ -267,6 +268,13 @@ for units, make in catalog.BINDINGS:
         if TG.family(fn) in catalog.FAMILIES:
             suite[fid] = fn
             TG.BINDINGS.setdefault(fid, set()).update(units)
+for _mod, m in SC.binding_modules():                            # each sidecar's `_model_roots` entries, as `catalog` runs them
+    for label, make in m._model_roots():
+        units = (f"{m.__name__}#_model_roots:{label}",)
+        for fid, fn in TG.reachable(TG._produce(units, lambda make=make: [make()])).items():
+            if TG.family(fn) in catalog.FAMILIES:
+                suite[fid] = fn
+                TG.BINDINGS.setdefault(fid, set()).update(units)
 TG.load_registries = lambda: None
 TG.suite = lambda: dict(sorted(suite.items()))
 TG.templates = lambda: []
@@ -334,6 +342,29 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
+#: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
+#: one, with the tree's root on no `sys.path` entry
+EXACT = HARNESS.replace("sys.path.insert(0, str(root))",
+                        "from editables.redirector import RedirectingFinder\n"
+                        "RedirectingFinder.install()\n"
+                        "RedirectingFinder.map_module('syn', str(root / 'syn' / '__init__.py'))")
+
+
+def test_a_package_an_exact_editable_install_serves_is_held_like_one_on_the_path(tmp_path):
+    """Its modules are the tree's, held by name, the redirect is in the key, and an edit to one a target resolved reruns that
+    target (held by none, as before this, every target would be reused after any edit to core)."""
+    assert EXACT != HARNESS
+    root = _tree(tmp_path)
+    assert _run(root, EXACT)["hits"] == []
+    assert _run(root, EXACT)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    top = _entry(root, "SynTop_v1")
+    assert {"syn.top", "syn.sub", "syn.prims", "syn.check", "syn.h"} <= set(top["reads"]["modules"])
+    assert "<redirect>syn=<tree>/syn/__init__.py" in top["key"]["path"]
+    _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
+    out = _run(root, EXACT)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
+
+
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
     root = _tree(tmp_path)
     _run(root)
@@ -372,6 +403,126 @@ def test_another_binding_or_pin_reuses_every_target_and_its_own_reruns_it(tmp_pa
     pins["pieces"]["SynTop_v1"] = {"and": 4}
     (root / "pins.json").write_text(json.dumps(pins))
     assert _run(root)["hits"] == ["SynOther_v1"]
+
+
+#: SynOther's binding and pin moved out of `targets.py` and `pins.json` into its module's sidecar
+SIDECAR = """
+def _model_roots():
+    from verity.primitives.circuits.defs import bind
+    from syn import idle, other
+    return [
+        ("SynOther_v1", lambda: bind(other.SynOther)),
+        ("SynIdle_v1", lambda: bind(idle.SynIdle)),
+    ]
+"""
+
+
+def _sidecar(root: Path) -> None:
+    text = (root / "syn/catalog.py").read_text()
+    (root / "syn/catalog.py").write_text(text.replace(', (("_model_roots:SynOther_v1",), model)', "", 1))
+    _edit(root, "targets.py", '("SynOther_v1", lambda: "SynOther_v1"),\n', "")
+    (root / "syn/other.circuit-check.py").write_text(SIDECAR.lstrip("\n"))
+    pins = json.loads((root / "pins.json").read_text())
+    (root / "syn/other.circuit-check.json").write_text(json.dumps({"pieces": {"SynOther_v1": pins["pieces"].pop("SynOther_v1")}}))
+    (root / "pins.json").write_text(json.dumps(pins))
+
+
+def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
+    """A binding in a Definition module's sidecar is a unit of that file, named by its module (``<module>.circuit-check#<unit>``)
+    with the file's ``common``, and a pin in its pins file is held there: editing another entry of the sidecar or another
+    file's pin reuses the target, its own entry or pin reruns it and nothing else."""
+    root = _tree(tmp_path)
+    _sidecar(root)
+    _run(root)
+    other, top = _entry(root, "SynOther_v1")["reads"], _entry(root, "SynTop_v1")["reads"]
+    side = "syn/other.circuit-check.py"
+    assert set(other["units"]) == {"syn.other.circuit-check#_model_roots:SynOther_v1", "syn.other.circuit-check#common",
+                                   "targets.py#common"}
+    assert set(other["pins"]) == {"syn.other.circuit-check#pieces#SynOther_v1"}
+    assert set(top["pins"]) == {"pins.json#pieces#SynTop_v1"}
+    assert not {side, "syn/other.circuit-check.json"} & set(other["files"])
+    _edit(root, side, '("SynIdle_v1", lambda: bind(idle.SynIdle))', '("SynIdle_v1", lambda: bind(idle.SynIdle, **{}))')
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, side, '("SynOther_v1", lambda: bind(other.SynOther))', '("SynOther_v1", lambda: bind(other.SynOther, **{}))')
+    assert _run(root)["hits"] == ["SynTop_v1"]
+    pins = json.loads((root / "syn/other.circuit-check.json").read_text())
+    pins["pieces"]["SynOther_v1"] = {"and": 6}
+    (root / "syn/other.circuit-check.json").write_text(json.dumps(pins))
+    assert _run(root)["hits"] == ["SynTop_v1"]
+
+
+def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_pins_json(tmp_path):
+    """SynK has no pin: its check read the absence in the pins file a new pin of it goes to (its module's sidecar) and in
+    `pins.json`, so adding it to either reruns SynK alone.  (A new file in `syn` would rerun every target, whose imports
+    listed the directory, so the sidecar is there from the start.)"""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_sized_roots",), sized)', families=("SynK_v1",))
+    _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model), ', "")
+    _sidecar(root)
+    (root / "syn/kdef.circuit-check.json").write_text("{}")
+    _run(root)
+    assert set(_entry(root, "SynK_v1{K=2}")["reads"]["pins"]) == {"syn.kdef.circuit-check#pieces#SynK_v1{K=2}",
+                                                                  "pins.json#pieces#SynK_v1{K=2}"}
+    (root / "syn/kdef.circuit-check.json").write_text(json.dumps({"pieces": {"SynK_v1{K=2}": {"and": 2}}}))
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    (root / "syn/kdef.circuit-check.json").write_text("{}")
+    _run(root)
+    pins = json.loads((root / "pins.json").read_text())
+    (root / "pins.json").write_text(json.dumps({"pieces": {**pins["pieces"], "SynK_v1{K=2}": {"and": 2}}}))
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+
+
+def test_a_new_pin_goes_to_the_sidecar_of_its_definitions_module(tmp_path):
+    """`sidecars.pin_file`: a pin is written where it is, and a new one to the pins file of the module that defines its
+    Definition, a module without a sidecar getting one beside it."""
+    root = _tree(tmp_path)
+    _sidecar(root)
+    code = HARNESS.split("CC.trace(root)")[0] + """
+import syn.kdef, syn.other, syn.top  # noqa: E401
+CK.load_pins()
+SC.write_pins({("pieces", "SynOther_v1"): {"and": 7}, ("pieces", "SynTop_v1"): {"and": 8}, ("pieces", "SynK_v1"): {"and": 9},
+               ("pieces", "Nobody_v1"): {"and": 1}})
+"""
+    r = subprocess.run([sys.executable, "-c", code, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO)
+    assert r.returncode == 0, r.stderr
+    read = lambda rel: json.loads((root / rel).read_text())["pieces"]  # noqa: E731
+    assert read("syn/other.circuit-check.json") == {"SynOther_v1": {"and": 7}}
+    assert read("syn/kdef.circuit-check.json") == {"SynK_v1": {"and": 9}}
+    assert read("pins.json") == {"SynTop_v1": {"and": 8}, "Nobody_v1": {"and": 1}}
+
+
+def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
+    import pytest
+
+    from circuit_check import sidecars as SC
+
+    (tmp_path / "synorphan").mkdir()
+    (tmp_path / "synorphan/__init__.py").write_text("")
+    (tmp_path / "synorphan/kept.py").write_text("")
+    (tmp_path / "synorphan/kept.circuit-check.json").write_text("{}")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(SC, "PACKAGES", ("synorphan",))
+    SC.discover.cache_clear()
+    try:
+        assert list(SC.discover()) == ["synorphan.kept"]
+        (tmp_path / "synorphan/gone.circuit-check.py").write_text("")
+        SC.discover.cache_clear()
+        with pytest.raises(FileNotFoundError, match="synorphan.gone, which has no module"):
+            SC.discover()
+    finally:
+        SC.discover.cache_clear()
+
+
+def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
+    """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
+    other package is never read, so its bindings would leave the task list without an error."""
+    from circuit_check import sidecars as SC
+    from circuit_check import targets as TG
+    from verity.primitives.circuits.defs import REGISTRY
+
+    TG.load_registries()
+    tops = {m.partition(".")[0] for d in REGISTRY.defs.values() if TG._authored(d) and (m := SC.owner(d))}
+    assert tops <= set(SC.PACKAGES), sorted(tops - set(SC.PACKAGES))
 
 
 def test_a_target_that_would_reuse_a_memoized_result_reruns_when_its_dependency_changes(tmp_path):
@@ -467,6 +618,71 @@ def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     _edit(root, "syn/fam/top.py", "*operands(a, b)", "*operands(b, a)")
     assert _run(root)["hits"] == ["SynOther_v1"]
+
+
+def test_a_pure_move_of_a_definition_module_with_a_sidecar_reuses_its_targets(tmp_path):
+    """SynOther's binding and pin are in its module's sidecar (`_sidecar`).  `syn/other.py` moves to `syn/fam/` with both
+    sidecar files, and every import line that names it is rewritten, the sidecar's own split and put first: a sidecar's units
+    and pins are named by its module and read where its module is now, so both targets are reused.  Each is stored again under
+    the module's new name, so afterwards an edit of the moved sidecar's other entry reruns nothing, and one of its binding of
+    SynOther, or of SynOther's pin, reruns SynOther alone."""
+    root = _tree(tmp_path)
+    _sidecar(root)
+    _run(root)
+    assert "syn.other" in _entry(root, "SynOther_v1")["reads"]["modules"]
+    side = _move_other(root)
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, side, '("SynIdle_v1", lambda: bind(idle.SynIdle))', '("SynIdle_v1", lambda: bind(idle.SynIdle, **{}))')
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(root, side, '("SynOther_v1", lambda: bind(other.SynOther))', '("SynOther_v1", lambda: bind(other.SynOther, **{}))')
+    assert _run(root)["hits"] == ["SynTop_v1"]
+    (root / "syn/fam/other.circuit-check.json").write_text(json.dumps({"pieces": {"SynOther_v1": {"and": 6}}}))
+    assert _run(root)["hits"] == ["SynTop_v1"]
+
+
+def _move_other(root: Path) -> str:
+    """`syn/other.py` moved to `syn/fam/` with both its sidecar files, and every import line that names it rewritten (the
+    sidecar's own split and put first); the moved binding file's path."""
+    _move(root, "syn/other.py", "syn/fam/other.py", ("syn/catalog.py", "from syn import other", "from syn.fam import other"))
+    for ext in (".py", ".json"):
+        (root / f"syn/other.circuit-check{ext}").rename(root / f"syn/fam/other.circuit-check{ext}")
+    side = "syn/fam/other.circuit-check.py"
+    _edit(root, side, "from syn import idle, other", "from syn.fam import other\n    from syn import idle")
+    return side
+
+
+def test_a_sidecars_units_move_with_its_module_where_the_target_does_not_hold_the_module(tmp_path):
+    """SynAdd, which both of the sidecar's entries reach, holds their units but not `syn.other`, which only SynOther's check
+    reads (as every gate a model reaches holds the bindings of that model's Definitions).  The move finds the module where the
+    units' import sites of it lead now, the one imported module with the content they recorded, so SynAdd is reused too; it is
+    stored again there, so a later edit of an entry it holds reruns it.  The module starts in a package with code of its own,
+    `syn.models.attn`, which SynAdd does not hold either (no enumeration lists it) and which the module is imported through
+    before the move as after."""
+    root = _tree(tmp_path)
+    _sidecar(root)
+    _edit(root, "syn/catalog.py", 'FAMILIES = ["SynOther_v1"', 'FAMILIES = ["SynAdd_v1", "SynOther_v1"')
+    was, pkg = "syn/models/attn", "syn.models.attn"
+    _move(root, "syn/other.py", f"{was}/other.py", ("syn/catalog.py", "from syn import other", f"from {pkg} import other"))
+    (root / "syn/models/__init__.py").write_text('"""Models."""\n')
+    (root / f"{was}/__init__.py").write_text("NAME = 'attn'\n")
+    for ext in (".py", ".json"):
+        (root / f"syn/other.circuit-check{ext}").rename(root / f"{was}/other.circuit-check{ext}")
+    _edit(root, f"{was}/other.circuit-check.py", "from syn import idle, other", f"from {pkg} import other\n    from syn import idle")
+    _run(root)
+    add = _entry(root, "SynAdd_v1")["reads"]
+    assert f"{pkg}.other.circuit-check#_model_roots:SynIdle_v1" in add["units"]
+    assert not {pkg, f"{pkg}.other"} & set(add["modules"])
+    _move(root, f"{was}/other.py", f"{was}/fam/other.py", ("syn/catalog.py", f"from {pkg} import other", f"from {pkg}.fam import other"))
+    for ext in (".py", ".json"):
+        (root / f"{was}/other.circuit-check{ext}").rename(root / f"{was}/fam/other.circuit-check{ext}")
+    side = f"{was}/fam/other.circuit-check.py"
+    _edit(root, side, f"from {pkg} import other", f"from {pkg}.fam import other")
+    out = _run(root)
+    assert out["hits"] == ["SynAdd_v1", "SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0
+    _edit(root, side, '("SynIdle_v1", lambda: bind(idle.SynIdle))', '("SynIdle_v1", lambda: bind(idle.SynIdle, **{}))')
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
 
 
 def test_a_move_that_is_not_pure_reruns_what_it_changes(tmp_path):
@@ -592,23 +808,83 @@ def test_a_pure_move_of_a_kernel_module_reuses_its_target_and_a_kernel_edit_reru
 
 
 def test_the_catalogs_units_are_its_root_functions_and_entries():
-    """The real `targets.py` splits into the units the cache keys on: each root function, each `_model_roots` entry, each
-    `TEMPLATE_PARAMS` entry, and ``common``; a comment changes none, an entry's edit only its own."""
+    """The real binding files (`targets.py` and each sidecar) split into the units the cache keys on: each root function, each
+    `_model_roots` entry, each `TEMPLATE_PARAMS` entry, and each file's ``common``; a comment changes none, an entry's edit
+    only its own."""
     import re
 
     from circuit_check import cache as CC
+    from circuit_check import sidecars as SC
     from circuit_check import targets as TG
 
-    src = CC.TARGETS.read_text()
-    units, _spans, _sites = CC._units_of(src)
-    labels = re.findall(r'^ +\("([^"]+)", lambda', src, re.M)
-    assert {f"_model_roots:{label}" for label in labels} <= set(units) and len(labels) > 50
-    assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.TEMPLATE_PARAMS} <= set(units)
-    assert {"_core_roots", "_boolean_roots", "_pouw_roots", "_kernel_roots", "_vocabulary_bindings", "common"} <= set(units)
-    assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units
-    edited = CC._units_of(src.replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
-                                      '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
-    assert {u for u in units if edited.get(u) != units[u]} == {"_model_roots:ResidualAdd_v1"}
+    srcs = {p: p.read_text() for p in (CC.TARGETS, *(f["py"] for f in SC.discover().values() if "py" in f))}
+    units = {p: CC._units_of(src)[0] for p, src in srcs.items()}
+    every = {u for us in units.values() for u in us}
+    labels = [label for src in srcs.values() for label in re.findall(r'^ +\("([^"]+)", lambda', src, re.M)]
+    assert {f"_model_roots:{label}" for label in labels} <= every and len(labels) > 50
+    assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.template_params()} <= every
+    assert {"_core_roots", "_boolean_roots", "_pouw_roots", "_kernel_roots", "_vocabulary_bindings", "common"} <= every
+    assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
+    src = srcs[CC.TARGETS]
+    assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
+    b1 = SC.path_of("verity_vllm.program.registry.b1", "py")
+    edited = CC._units_of(srcs[b1].replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
+                                           '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
+    assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
+
+
+def test_every_binding_and_pin_is_in_the_module_it_binds():
+    """The tree is migrated (`migrate_bindings.py`): it would move no binding out of `targets.py` and no pin out of the file
+    that holds it, so a binding or pin added in the wrong place fails here."""
+    import importlib.util
+
+    from circuit_check import checks as CK
+    from circuit_check import sidecars as SC
+
+    spec = importlib.util.spec_from_file_location("migrate_bindings", REPO / "tools/circuit_check/migrate_bindings.py")
+    MB = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(MB)
+    moved, _text, summary = MB.plan(strict=True)
+    assert not moved and not summary["stays"], (sorted(moved), summary["stays"])
+    misplaced = []
+    for kind, pins in CK.load_pins().items():
+        for key in pins:
+            mod = SC.pin_owner(kind, key)
+            want = (SC.path_of(mod, "json") if mod else None) or SC.SHARED_PINS
+            if (have := SC.pin_file(kind, key)) != want:
+                misplaced.append(f"{kind} {key}: in {SC.rel(have)}, owned by {SC.rel(want)}")
+    assert not misplaced, misplaced
+
+
+OWNERS = """
+import json
+from circuit_check import checks as CK, sidecars as SC
+from verity.primitives.circuits.defs import REGISTRY, bind
+
+ON_DEMAND = [("definitions", "GatherBf16x1024u10_v1"), ("definitions", "GatherBf16x64_v2"), ("pieces", "GatherBf16x1_v1"),
+             ("pieces", "BitAtx32_v1")]
+keys = sorted({*((kind, key) for kind, pins in CK.load_pins().items() for key in pins), *ON_DEMAND})
+owners = lambda: {f"{kind} {key}": SC.pin_owner(kind, key) for kind, key in keys}
+before = owners()
+from verity_vllm.program.registry import boolean_gather, prims, sampling
+_ = bind(boolean_gather.gather_bf16(1100)).body
+boolean_gather.gather_bf16(64), prims.gather_bf16(1), sampling.bit_at(32)
+print(json.dumps({"before": before, "after": owners(), "built": [key for _, key in ON_DEMAND if key in REGISTRY.defs]}))
+"""
+
+
+def test_a_pins_owner_is_what_its_key_names_not_what_the_process_built():
+    """`sidecars.pin_owner` asked in a fresh process, then again once the on-demand Definitions are built (an earlier test in the
+    process, or another target's check, builds them): the same owner for every pin, so a pin's file is a function of the tree.
+    An on-demand primitive is its factory's (`prims`, `sampling`), not its caller's; a level of a gather's tree, which no key
+    makes alone, has none."""
+    r = subprocess.run([sys.executable, "-c", OWNERS], capture_output=True, text=True, cwd=REPO, check=True)
+    got = json.loads(r.stdout)
+    assert len(got["built"]) == 4, got["built"]
+    assert got["before"] == got["after"], {k: (v, got["after"][k]) for k, v in got["before"].items() if got["after"][k] != v}
+    assert got["before"]["pieces GatherBf16x1_v1"] == "verity_vllm.program.registry.prims"
+    assert got["before"]["pieces BitAtx32_v1"] == "verity_vllm.program.registry.sampling"
+    assert got["before"]["definitions GatherBf16x1024u10_v1"] is None
 
 
 def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():

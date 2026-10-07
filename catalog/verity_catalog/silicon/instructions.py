@@ -160,7 +160,7 @@ _AUTOPROOF = (
     "autoproof spec/SEMANTICS.lock.v1.json + probes/results/probe3_1783788526.json (RTX 5090 sm_120, driver "
     "570.195.03, SASS 166a24a0...): lockfile records 1,574,998/1,574,998 dot statements bit-exact under model5 "
     "(the JSON itself scores the clip-less model2 at 1,574,997/1,574,998, D12); the 1,601 recorded sample vectors "
-    "replay 1,601/1,601 in verity (tests/ml/test_models.py) -- replicas catalog/verity_catalog/silicon/captures/autoproof-{SEMANTICS.lock.v1,"
+    "replay 1,601/1,601 in verity (catalog/tests/test_models.py) -- replicas catalog/verity_catalog/silicon/captures/autoproof-{SEMANTICS.lock.v1,"
     "probe-vectors}.json"
 )
 _AUTOPROOF_UNSCALED = (

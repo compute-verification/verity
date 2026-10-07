@@ -202,12 +202,14 @@ fi
 
 # Lean dependencies in source trees (Daniel's card 23a10e51, 3:33 PM PDT 2 Oct, at any age): WarmDeps.take moves or copies
 # check's Lean packages into a tree's .lake/packages, and a failed audit never gives them back; the next run on the tree drops
-# them before its own take. Only .lake/packages of the verifier's three Lake packages goes, only in a tree nothing live names
+# them before its own take. Only .lake/packages of the verifier's Lake packages goes, only in a tree nothing live names
 # (REFS_PY, by sha); each is renamed aside, the tree checked once more, put back if named, and deleted.
-# Trees from before and after the 5 Oct layout move sit side by side, so both layouts' paths are listed; the move leaves LK_OLD.
+# Trees from before and after the 5 Oct layout move and the Lean move sit side by side, so every layout's paths are listed.
+# These are strings the moves' path rewriting must leave alone: each names where a tree of that age keeps them.
 LK_OLD="backends/flock/verifier/lean backends/flock/verifier/lean/level3 backends/flock/verifier/lean/soundness"
 LK_NEW="verity/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
-LK="$LK_OLD $LK_NEW"
+LK_LEAN="verity/Security verity/Security/Proofs"
+LK="$LK_OLD $LK_NEW $LK_LEAN"
 [ $LAKE = 1 ] && [ $DRY = 0 ] && for k in $LK; do for p in $SRC/*/$k/.lake/packages.rs-trash-*; do
   [ -d "$p" ] && gone "$p" $(age_h "$p") "$p (left by an interrupted sweep)"; done; done
 : > $T/lk

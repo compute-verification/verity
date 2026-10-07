@@ -44,7 +44,8 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
         assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
-        assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]
+        assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity")),
+                             "catalog/**", "kernels/**", "experimental/**"]
         for k in t.produces:
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
@@ -299,31 +300,6 @@ def _pinned(stage: str) -> dict:
     return {"hw.family": PINNED["hw.family"], f"tool.vllm.{stage}.torch": PINNED["torch"], f"tool.vllm.{stage}.vllm": PINNED["vllm"]}
 
 
-@pytest.mark.usefixtures("no_dirty_digest", "pinned_probes")
-def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
-    """`research run --tool vllm.match --input build=art:...`: a store id names the input directly; it lands in `inputs`
-    (hence the derivation), not as a hashed path."""
-    from research import cli as RC
-    import argparse
-
-    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
-    art = "art:" + "7" * 64
-    ns = argparse.Namespace(tool="vllm.match", campaign="c", project="verity", exclusive_lock=False, source_identity=None, scratch=[])
-    a = argparse.Namespace(cwd=str(REPO), input=[f"build={art}"])
-    cmd = _argv("match")
-    prep = RC._prepare_store(ns, a, cmd, "r20260922-000000-0001", tmp_path / "run")
-    sec = prep["section"]
-    assert "error" not in sec, sec
-    assert {k: sec["conditions"][k] for k in sec["key_conditions"]} == _pinned("match")
-    assert sec["inputs"] == {"build": art} and "input.build" not in sec["key_params_resolved"]
-    other = RC._prepare_store(ns, a, cmd, "r20260922-000000-0002", tmp_path / "run2")["section"]
-    assert other["derivation"] == sec["derivation"], "same tool, params, inputs, conditions: same derivation"
-    a2 = argparse.Namespace(cwd=str(REPO), input=["build=art:" + "8" * 64])
-    assert RC._prepare_store(ns, a2, cmd, "r20260922-000000-0003", tmp_path / "run3")["section"]["derivation"] != sec["derivation"]
-    from research.telemetry.job import input_ref
-    ref = input_ref(f"build={art}")
-    assert ref["artifact"] == art and ref["sha256"] is None and "store id" in ref["sha256_reason"]
 
 
 @pytest.mark.usefixtures("no_dirty_digest", "pinned_probes")

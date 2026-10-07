@@ -41,14 +41,16 @@ Each layer may depend on the layers below it:
 ~~~text
 integrations/vllm, benchmarks/
 ---------------------------------------------------------------------------
-protocols/                    backends/
-  sampled_proofs                flock                    C-Flock and its Lean verifier
-  pous                          gkr, direct, sp1, vole   frozen
-  pouw
-  network_warden
+backends/flock               archive/                  kernels/, experimental/
+  C-Flock, the proof system,   kept, not developed:      (untrusted)
+  and its Lean verifier        gkr, direct, sp1, vole
+---------------------------------------------------------------------------
+catalog/: silicon semantics, Definitions, targets, the census
 ---------------------------------------------------------------------------
 verity, the core library:
-  ir, ml, evaluation, commitments, randomness, proofs, claims
+  protocols: profile, sampled_proofs, pous, pouw, certifier, nci
+  primitives: circuits (with evaluation), commitments, crypto, randomness
+  claims
 ~~~
 
 `tools/research` sits outside the layers: it runs and records the work, and depends on none of them.
@@ -68,39 +70,41 @@ x, w and y are the previously committed values
 y = ExactDot(x, w)
 ~~~
 
-The commitment establishes the first, and a backend's proof the second. A proof system's own internal commitments stay inside its backend.
+The commitment establishes the first, and the proof system's proof the second. A proof system's own internal commitments stay inside it.
 
 ### Proofs
 
-`verity_sp1.proofs` defines backend-independent statements, how a backend's proof of them is judged, and the integrity profile, which records what an accepted audit established. A proof counts only when it verifies against the intended statement and an approved backend identity; a verifier that accepts some self-consistent statement is not enough.
+`verity.protocols.profile` defines the integrity profile, which records what an accepted audit established. A proof counts only when it verifies against the intended statement and an approved prover identity; a verifier that accepts some self-consistent statement is not enough.
 
 ### Protocols
 
-Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol under `protocols/` is its own distribution and imports only the standard library, `verity`, itself and the protocols it builds on (PoUW builds on sampled proofs).
+Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol is a package under `verity.protocols` and imports only the standard library, the primitives it is allowed, itself and the protocols it builds on (PoUW builds on sampled proofs, and reads the catalog's silicon semantics).
 
-### Backends
+### The proof system and the proof service
 
-A backend proves statements. C-Flock (`backends/flock`) is the backend in active development; its verifier of record is written in Lean, and upstream Flock's Rust verifier is a cross-check. A-GKR, B-Ligero, D-SP1 and the VOLE backend are frozen: kept, and still benchmarked, but not developed. A backend consumes backend-independent objects, never branches on a frontend, a model name or another source-system label, and is testable without a frontend or an integration.
+C-Flock (`backends/flock`) is the proof system: it proves statements over arbitrary Boolean circuits, and its verifier of record is written in Lean, with upstream Flock's Rust verifier as a cross-check. It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an integration. The proof systems before it (A-GKR, B-Ligero, D-SP1 and the VOLE backend) are in `archive/`: kept, and still in the benchmark tables, but not developed.
+
+Every accounting protocol (PoUW, PoUS, network accounting) uses one proof service. A protocol states what is committed, which units need proofs, the public Program each must pass and what it does with the outcome; the service owns commitments, live coins and the record, the selection, proving, verifying and the integrity profile. On the developer's side it is the workers behind the firewall; on the auditor's, the challenger and the verifier, with network certifiers and memory challengers placed in the developer's site. Every protocol is zero-knowledge, and everything hashes with SHA-512.
 
 ### Integrations
 
-An integration makes Verity work end to end with a real system. The vLLM integration builds each served workload's circuit with an embedded Torch-to-IR frontend, supplies its silicon-specific bindings, acquires and commits runtime values while serving, and runs proving. It composes the components above without owning their semantics: circuits belong to core, and commitment schemes to `verity.primitives.commitments`. Standalone frontends, which would translate a source representation such as PyTorch, JAX or ONNX into circuits, don't exist yet.
+An integration makes Verity work end to end with a real system. The vLLM integration builds each served workload's circuit with an embedded Torch-to-circuit frontend, supplies its silicon-specific bindings, acquires and commits runtime values while serving, and runs proving. It composes the components above without owning their semantics: circuits belong to core, and commitment schemes to `verity.primitives.commitments`.
 
 ## Repository structure
 
-- [`verity/`](verity/README.md): the core library: `verity.primitives.circuits`, the [circuit format](verity/primitives/circuits/PROTOCOL.md), and `verity_catalog.definitions`, exact hardware semantics
-- `verity.primitives.commitments` and `verity_sp1.proofs`, also in [`verity/`](verity/README.md): commitments to the records, the statements a backend proves, and the integrity profile an audit returns
-- [`backends/flock/`](backends/flock/README.md): C-Flock, the proof backend in active development; the frozen backends are listed in [`backends/`](archive/README.md)
+- [`verity/`](verity/README.md): the core library: `verity.primitives.circuits` and the [circuit format](verity/primitives/circuits/PROTOCOL.md), `verity.primitives.commitments` (commitments to the records), and `verity.protocols` (the protocols and the integrity profile an audit returns)
+- `catalog/`: `verity_catalog`, exact hardware semantics (`silicon`), the primitive circuits' Definitions and the targets; `kernels/` (`verity_kernels`) holds the fast code checked against them, and `experimental/` (`verity_experimental`) what is under development or kept for study
+- [`backends/flock/`](backends/flock/README.md): C-Flock, the proof system; the proof systems before it are in [`archive/`](archive/README.md)
 - [`backends/flock/verifier/`](backends/flock/verifier/README.md): the verifier of record, written in Lean
 - [`verity/protocols/verification/sampled_proofs/`](verity/protocols/verification/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`verity/protocols/accounting/space/pous/`](verity/protocols/accounting/space/pous/README.md): proofs of useful space
 - [`verity/protocols/accounting/work/pouw/`](verity/protocols/accounting/work/pouw/PROTOCOL.md): proofs of useful work
-- [`verity/protocols/accounting/communication/warden/`](verity/protocols/accounting/communication/warden/README.md): the network warden, network transparency's timing channel
+- [`verity/protocols/accounting/communication/certifier/`](verity/protocols/accounting/communication/certifier/README.md): the network certifier, network accounting's timing channel
 - [`integrations/vllm/`](integrations/vllm/README.md): the vLLM integration, a hooked vLLM engine that builds each served workload's circuit and commits its values while serving
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
 - [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites; `rename_merge.py` merges a PR onto a train tip that moved files it edits, applying its changes at the new paths or refusing with the paths
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
-- [`tools/lean/`](tools/lean/README.md): the audit every Lean package passes
+- [`tools/lean/`](tools/lean/README.md): the Lean check every Lean package passes
 - [`tools/cluster/`](tools/cluster/README.md): `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger
 - `tools/tc_probe/`, `tools/tc_probe_fp4/`, `tools/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `benchmarks/`: reproducible workloads and measurements, including the [one-stage audit end to end](benchmarks/one_stage/README.md)
@@ -139,22 +143,21 @@ query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each w
 
 ## Development
 
-Dependencies point inward: integrations, backends, protocols and benchmarks depend on the core, and the core's modules depend on each other in one direction:
+Dependencies point inward: integrations, the proof system, benchmarks, the catalog, the kernels and experimental depend on the core, the core imports no other distribution (PoUW's reading of the catalog aside), and the core's modules depend on each other in one direction:
 
 ~~~text
-ir  <-  evaluation  <-  ml
-ir  <-  commitments
-ir + ml + commitments  <-  proofs
-randomness, claims: import no other core module
+primitives.circuits  <-  primitives.commitments  ->  primitives.crypto
+primitives.circuits  <-  protocols.profile  <-  the protocols
+primitives.randomness, primitives.crypto, claims: import no other core module
 ~~~
 
-`verity/tests/test_boundaries.py` and `tests/test_protocol_boundaries.py` enforce these rules. Import each object from the module that owns it (`from verity.primitives.circuits import Program`); `verity` itself re-exports nothing.
+`verity/tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.primitives.circuits import Program`); `verity` itself re-exports nothing.
 
 There is no GitHub Actions CI. `check` is the one check, and a merge into `main` goes through `research merge`, which refuses without a passing `check` of that exact commit. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
 
 ## Documentation
 
-- Specifications: the [program format](verity/primitives/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/primitives/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/primitives/commitments/vllm_v1/PROTOCOL.md)), the protocols ([sampled proofs](verity/protocols/verification/sampled_proofs/README.md), stated in Lean, [proofs of useful space](verity/protocols/accounting/space/pous/PROTOCOL.md), [proofs of useful work](verity/protocols/accounting/work/pouw/PROTOCOL.md), [the network warden](verity/protocols/accounting/communication/warden/PROTOCOL.md)) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
+- Specifications: the [program format](verity/primitives/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/primitives/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/primitives/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`verity/Security/`) with each one's README as its outline ([sampled proofs](verity/protocols/verification/sampled_proofs/README.md), [proofs of useful space](verity/protocols/accounting/space/pous/README.md), [proofs of useful work](verity/protocols/accounting/work/pouw/PROTOCOL.md), [the network certifier](verity/protocols/accounting/communication/certifier/README.md); a protocol's `PROTOCOL.md` remains only until its Lean covers it) and [C-Flock's verifier](backends/flock/verifier/PROTOCOL.md)
 - Each component's README, linked under Repository structure
 - [AGENTS.md](AGENTS.md) for contributors and agents, and the skills under [`.agents/skills/`](.agents/skills/) for recurring workflows such as Lean proofs
 
@@ -162,11 +165,11 @@ There is no GitHub Actions CI. `check` is the one check, and a merge into `main`
 
 Code, docs, CLI help and output fields use these terms. When a term changes, this section changes with it, and the new term is rolled out in the same change.
 
-- **Developer** and **auditor**: the protocol's two parties. The developer runs computations in its datacenters, keeps private records of them and proves properties of those records; the auditor checks the proofs, acting as the verifier.
+- **Developer** and **auditor**: the protocol's two parties. The developer runs computations in its datacenters, keeps private records of them and proves properties of those records; the auditor checks the proofs, with a challenger online and a verifier offline, and places network certifiers and memory challengers inside the developer's site.
 - **Program**: the computation a proof claims something about (`verity.primitives.circuits.Program`): one circuit, stored compressed as Definitions called from a root body, with the same interface at every level. The proof system is generic, so "model" never names it.
 - **Registered input** and **run input**: the two binding times of a program's input gates (`verity.primitives.circuits.program`). A registered input (`RegisteredInput<w>_v1`) is bound when the program is registered and holds what the program brings: its weights, constants such as a norm's epsilon, the attention scale or a softcap, and tables such as `gelu_tanh_bf16`. A run input (`Input<w>_v1`) is bound per request and holds the request's data and parameters, such as temperature, top-p and the Philox positions. Both are values, committed under hiding leaves, so a program holds no data; a constant gate is an operation's own bits (`verity.primitives.circuits.constants`).
 - **Operation**: a Definition whose own definition is gates: the floating-point formats' constants, the round constants of SHA-512 and Keccak-f, and every measured MUFU table (the library, `verity.primitives.circuits.library`) are its bits, not a program's data. The operations are one pinned, versioned list (`verity.primitives.circuits.operations`, `verity/operations` v1), and its guard (`operations.program_data`) lists the data a program still holds: a constant outside any operation, and a table a primitive reads that the library does not list. No statement or table claims that a program's values are always hidden until the guard returns {} for it.
-- **Circuit**: gates and the wires between them. A program is a compressed circuit; an *expanded* circuit is written out gate by gate, like the files C-Flock's circuit prover proves. A backend's lowering of a statement is also a circuit, as in A-GKR's pinned circuits or "SHA-256 in circuit".
+- **Circuit**: gates and the wires between them. A program is a compressed circuit; an *expanded* circuit is written out gate by gate, like the files C-Flock's circuit prover proves. A proof system's lowering of a statement is also a circuit, as in A-GKR's pinned circuits or "SHA-512 in circuit".
 - **Gate**: a node of a circuit: an input gate, the constant 0 or 1 as one of an operation's own bits, the AND or XOR of two or more bits, or NOT. Each gate outputs one bit (`verity.primitives.circuits.boolean`). An operation's own definition is gates, its constants and the hardware's measured tables included: the floating-point formats' constants, SHA-512's, and the MUFU tables for exp2, rcp, tanh and the rest (`verity.primitives.circuits.library`). A constant that a program or a request brings is a value, never a gate, and so is every other table, even one that tabulates a fixed function with no program parameter (`TanhF32Rn_v1`'s RN32 tanh).
 - **Wire**: an edge from a gate to a gate that reads it. A wire carries its source gate's value and has none of its own.
 - **Port**: a named array of fixed-width elements on the boundary of a circuit definition, one of its parameters or results; each call binds it to gates of the caller. A Call's result ports are the first place a partition tries to cut: under `Q_call` a Call whose results fit in X bits is one proof unit.
@@ -176,31 +179,38 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Word view**: a Boolean Definition read with each element's bits packed into one integer (`verity.primitives.circuits.boolean.word_type`); under it, `GemmCoordinate_v3` takes and returns exactly what the word Definition `GemmCoordinate_v2` does.
 - **Value**: the bit a gate takes in one run. The transcript is all of them (`verity.primitives.circuits.evaluate.ExecutionTranscript`), and the value of an element or port is the transcript read at its gates, in order. Gates, wires, ports and elements are structure, and so are shapes such as batch size and sequence length, public until a private-circuit protocol; values are data, even those that are the same in every run. Everything else a program or a request brings is a value like any bit a run computes: the weights, a program's constants (eps, the attention scale, a softcap) and tables (`gelu_tanh_bf16`, `tanh_rn`), and a request's parameters (temperature, top-p, Philox positions). Values are always hidden: a value is committed under a hiding leaf and touched only inside a zero-knowledge proof, never treated as part of the program the verifier holds. The messages between prover and verifier are the *proof transcript*.
 - **Subcircuit template**: a named template with typed parameters, such as `gemm_coordinate(K, semantics)` or `rmsnorm(d, semantics)`. Shape and numeric (silicon) semantics are both parameters; a semantics value is an instruction id of `verity_catalog.silicon.instructions.INSTRUCTIONS`.
-- **Subcircuit**: a subcircuit template with every parameter bound, such as `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. A backend proves subcircuits, and a benchmark cell measures one.
+- **Subcircuit**: a subcircuit template with every parameter bound, such as `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits, and a benchmark cell measures one.
 - **Input**: one concrete assignment of values to a subcircuit's input gates, that is, to the elements of its input ports, with the output the chip produced recorded alongside.
 - **Input set**: a batch of inputs for one subcircuit, with their provenance (captured or synthetic).
 - **Commitment scheme**: how serving committed the values being proven, such as frame-v3 rows or `vllm-v1` (`verity.primitives.commitments`). Each scheme has a stable id and lists the hash assumptions it rests on. `frame-v3-sha512` and `vllm-v1-sha512` are the same framings through SHA-512, for the re-baseline's SHA-512 data commitments.
-- **Hiding leaf**: a leaf whose published data hides the committed value, statistically given uniform salts, so a low-entropy value can't be searched from its digest. `hm96-sha256/v1` and `hm96-sha512/v1` (`verity.primitives.commitments.hm96`) wrap a scheme's SHA-256 or SHA-512 leaf digest with a salt stored beside the value; a leaf opens with its value and salt. With its pinned key the bound is N·2^-192 for N leaves, except for a 2^-64 fraction of keys (a common-reference-string step).
-- **Statement**: what a backend proves, the full committed relation: a circuit (a subcircuit, or the proof units an audit drew) plus the commitment scheme that binds its inputs and outputs. A backend lowers a statement into its own circuit. Changing the scheme changes the statement, not the backend.
-- **Backend family**: A-GKR, B-Ligero, C-Flock or D-SP1. The letter is part of the name. C-Flock is in active development; A-GKR, B-Ligero and D-SP1 are frozen: kept, and still in the benchmark tables, but not developed. **C-Flock's circuit prover** proves a statement over an expanded circuit (`verity/flock-circuit`); **C-Flock ZK** is its zero-knowledge version, in development.
-- **Backend**: an implementation of the Backend interface, that is, one concrete member of a family: A-interactive, A-fs, B-interactive, B-fs, C-interactive or D-fs, where fs means Fiat–Shamir. A composed backend gets its own id: route (a), A-GKR with C-Flock and a link, is `A-route-a`. A scheme is not part of a backend's identity.
-- **Cell**: one benchmark result, a backend × statement × input set × prover hardware.
-- **Partition**: a division of a program's computed gates into proof units, each in exactly one (`verity/partition/v1`, `verity.primitives.circuits.partition_object`). A gate with no inputs, a registered or run input or a constant, is in no unit: each is bound outside the partition (`Q_word` also leaves out its structure: wiring, and gates computed from constants alone). It is a named query on the program: the object holds the program's digest and the query's name, version and parameters, such as `Q_call` v1 `{X: 32}`, which cuts each Call down its hierarchy until every unit has at most 32 output bits, or `Q_word` v1 `{X: 16, W: 32}`. A verifier evaluates the query itself. The committed set, every gate read across a unit boundary plus every computing gate a Call returns, follows from the partition and is never stored.
-- **Proof unit**: one part of a partition, proved on its own: a set of gates S whose inputs in(S) and outputs out(S) (`verity.primitives.circuits.parts`) are ordered bit strings, counted in bits at any gate width. Under `Q_call` its outputs are at most X = 32 bits and its inputs are unbounded. A unit is incorrect when its committed outputs differ from its gates applied to its committed inputs. An audit's verifier draws the proof units to prove.
+- **Hiding leaf**: a leaf whose published data hides the committed value, statistically given uniform salts, so a low-entropy value can't be searched from its digest. `hm96-sha512/v1` (`verity.primitives.commitments.hm96`) wraps a scheme's SHA-512 leaf digest with a salt stored beside the value; a leaf opens with its value and salt. With its pinned key the bound is N·2^-192 for N leaves, except for a 2^-64 fraction of keys (a common-reference-string step).
+- **Statement**: what the proof system proves, the full committed relation: a circuit (a subcircuit, or the proof units an audit drew) plus the commitment scheme that binds its inputs and outputs. The proof system lowers a statement into its own circuit. Changing the scheme changes the statement, not the proof system.
+- **Proof system**: what proves statements. C-Flock is the proof system: **C-Flock's circuit prover** proves a statement over an expanded circuit (`verity/flock-circuit`), and **C-Flock ZK**, its zero-knowledge version, is what the proof service runs. The proof systems before it, A-GKR, B-Ligero, D-SP1 and the VOLE backend, are in `archive/`: kept, and still in the benchmark tables, but not developed. Their recorded cells name a *backend*, one concrete member of a family (A-interactive, A-fs, B-interactive, B-fs, C-interactive or D-fs, where fs means Fiat–Shamir, or a composed id such as `A-route-a`); a scheme is not part of a backend's identity.
+- **Cell**: one benchmark result, a proof system (an archived one's backend id included) × statement × input set × prover hardware.
+- **Partition**: a division of a program's computed gates into proof units, each in exactly one (`verity/partition/v1`, `verity.primitives.circuits.partition_object`). A gate with no inputs, a registered or run input or a constant, is in no unit: each is bound outside the partition (`Q_word` also leaves out its structure: wiring, and gates computed from constants alone). It is a named query on the program: the object holds the program's digest and the query's name, version and parameters, such as `Q_call` v1, which cuts each Call down its hierarchy until every unit has at most `X` output bits, or `Q_word` v1. A verifier evaluates the query itself. The committed set, every gate read across a unit boundary plus every computing gate a Call returns, follows from the partition and is never stored.
+- **Proof unit**: one part of a partition, proved on its own: a set of gates S whose inputs in(S) and outputs out(S) (`verity.primitives.circuits.parts`) are ordered bit strings, counted in bits at any gate width. Its outputs are at most 16 bits, a literal limit (a query's `X`), and its inputs are unbounded. A unit is incorrect when its committed outputs differ from its gates applied to its committed inputs. An audit's verifier draws the proof units to prove.
 - **Declaration**: the circuit the developer registers and its baseline, the input gates whose values it committed beforehand (its models, code and data in storage); every other value is *novel information* (`Verity.Declaration` in core's Lean).
 - **Policy**: a condition on declarations that the verifier checks from the circuit and its baseline alone, a protocol with no rounds of its own. NCI's is the first (`Nci.Complies`).
-- **Isolation unit (IU)** and **novel communication intensity (NCI)**: an IU is a part of a division of a declared circuit's computed gates, and its NCI is the novel information it reads, in bits, per gate it holds. NCI's policy asks for IUs of bounded size, each with bounded NCI (`verity/protocols/compliance/nci/lean`).
+- **Isolation unit (IU)** and **novel communication intensity (NCI)**: an IU is a part of a division of a declared circuit's computed gates, and its NCI is the novel information it reads, in bits, per gate it holds. NCI's policy asks for IUs of bounded size, each with bounded NCI (`verity/Security`).
 - **Replay unit (RU)**: in sampled proofs' two-stage law (`verity/protocols/verification/sampled_proofs/README.md`), a part of a Program that the prover replays to build the witness; the verifier draws replay units, then proof units inside each drawn one. "Unit" never names a subcircuit.
 - **Instrumented program**: the program plus what serving adds to measure it: a tap on every committed gate, and the leaf and tree hashing whose outputs are the roots. It is derived from the program, the partition and the commitment scheme, never authored, and no proof claims anything about it.
 - **Integrity profile**: the audit's output, an object of its own (`verity.protocols.profile.IntegrityProfile`): per-stratum bounds on how many proof units of a partition are faulty (a unit is faulty when its committed outputs differ from its gates applied to its committed inputs), from the facts checked exhaustively, the verifier's draw law and its failure probability δ. Applications consume it with their own weights (`verity_experimental.sampled_proofs.consumers`): exfiltration security weights faulty units by their output bits and adds which units are faulty, compute security weights them by their work.
-- **Verifier**: the party that checks proofs. It issues each session's coins and draws the proof units to prove, in the one-stage audit from its own randomness; the coin server that hands out coins is part of it, not a separate party. C-Flock's verifier of record is written in Lean (`backends/flock/verifier/`), and upstream Flock's Rust verifier is a cross-check.
-- **Guarantee** (security guarantee): a proved `Prop` in which named assumptions imply a conclusion, such as the network warden's bound on how much a covert sender can carry out through when its frames leave. A Lean package laid out under the four names (`AGENTS.md`, "Lean") states each as a `def G : Prop` in its `Guarantees` and proves it in `SecurityProofs.G`; the packages not yet moved state theirs in layouts of their own (PoUW's `Pinned` modules, C-Flock's theorems). The lock records each guarantee's statement. A theorem is a guarantee when something relies on it as proved: a ledger row, a published table, the docs site, a claim id in `verity.claims`, or code that reads its result. A mention in prose, a PR, a test or an internal table doesn't make one. `verity.claims` names the kinds Table 1 cites (soundness, zero knowledge, …).
-- **Assumption**: a named `Prop` that guarantees take as a hypothesis and nothing proves, stated once in its package's assumptions module (`Assumptions`) with its rationale; the audit admits no other unproved fact (no `axiom`, no `sorry`). One about a primitive has a claim id `property/instance` in `verity.claims`, such as `cr/sha-512`, SHA-512's collision resistance. Proving an assumption removes it from every guarantee that took it.
+- **Proof service**: what lets the auditor check what the developer's AI servers did, under PoUW, PoUS and network accounting, while learning nothing about the weights or data beyond each protocol's stated public outputs. The protocols describe their checks; the service handles commitments, coins, proving and verifying. On the developer's side it is the workers behind a firewall; on the auditor's, a challenger and a verifier, with network certifiers and memory challengers placed in the developer's site. A protocol states only a `Spec` (`verity.protocols.verification.sampled_proofs.service`): what it commits, its selection rule, its check as a public Program, and its public items, each with its reason.
+- **Workers**: the developer's servers and GPUs. They run the computation and nearly all proving, with zero knowledge off, trusted by neither party, and reach the auditor only through the firewall.
+- **Firewall**: the developer-trusted only path from the workers to the auditor. It commits every outbound message under a fresh salt, masks and checks or fixes everything else, and releases outer proofs, which are zero-knowledge, one at a time on a fixed schedule; only outer proofs reach the auditor. The prover is the workers behind it (P = F ∘ W).
+- **Network certifier**: an auditor-trusted device on each node's uplink, untrusted by the developer (`verity.protocols.accounting.communication.certifier`). It attests the contents of the traffic it carries in network certificates and scrubs its timing, which backs the auditor's network bound; every node uplink passes through one.
+- **Network certificate**: a network certifier's record of what crossed a link (`grid.Record`, committed as a `CommittedRecord`), signed under the certifier's key over its SHA-512 record digest (`certificate.CertifiedRecord`). Certificates never reach the auditor in the clear: they are witness, and the developer proves that its committed circuits are consistent with them.
+- **Memory challenger**: an auditor-trusted device beside a network certifier, inside the node's isolation boundary, that runs PoUS's timed rounds and signs each one (`verity.protocols.accounting.space.pous`'s `MemoryChallenger`). The per-round on-time bits stay in its signed record; PoUS publishes the audit's verdict.
+- **Challenger**: the auditor's online service. It issues live coins, committed in advance, draws, and keeps the record; the coins the auditor sees come only from it, and it never sees the witness. In C-Flock its live-coin part is the Rust `Server` of the patched checkout. Fiat–Shamir's challenger keeps its own sense.
+- **Verifier**: the auditor's Lean verifier of record, run offline, and the outcome it writes. C-Flock's is written in Lean (`backends/flock/verifier/`), and upstream Flock's Rust verifier is a cross-check. As a party in a protocol's statements, such as the one-stage audit's draw of proof units or a game's `Verifier`, "the verifier" is the auditor's side as a whole.
+- **Selection rule**: which proof units of a registration are proved (`Spec.selection`): all of them, a one-stage law such as `stratified:K`, the two-stage law, or a timed session's sequential draw. It is drawn from the challenger's randomness; a policy is a condition on declarations, not a draw.
+- **Guarantee** (security guarantee): a proved `Prop` in which named assumptions imply a conclusion, such as the network certifier's bound on how much a covert sender can carry out through when its frames leave. A Lean package laid out under the four names (`AGENTS.md`, "Lean") states each as a `def G : Prop` in its `Guarantees` and proves it in `SecurityProofs.G`; the packages not yet moved state theirs in layouts of their own (PoUW's `Pinned` modules, C-Flock's theorems). The lock records each guarantee's statement. A theorem is a guarantee when something relies on it as proved: a ledger row, a published table, the docs site, a claim id in `verity.claims`, or code that reads its result. A mention in prose, a PR, a test or an internal table doesn't make one. `verity.claims` names the kinds Table 1 cites (soundness, zero knowledge, …).
+- **Assumption**: a named `Prop` that guarantees take as a hypothesis and nothing proves, stated once with its rationale in its area's `Specs/<Area>/Assumptions` (package `security`; C-Flock's in `Proofs/Flock/Soundness/Assumptions` until its spec is extracted); the audit admits no other unproved fact (no `axiom`, no `sorry`). One about a primitive has a claim id `property/instance` in `verity.claims`, such as `cr/sha-512`, SHA-512's collision resistance. Proving an assumption removes it from every guarantee that took it.
 - **Lemma**: any proved statement that isn't a guarantee, even one a package's record lists. A package laid out under the four names keeps its lemmas in `SecurityProofs`, outside its spec, and they change freely as long as every guarantee still proves the same statement.
 - **Spec**: a Lean package's trusted text, everything a reader must trust to read its guarantees: its `Protocol` (definitions), `Assumptions` and `Guarantees`, which import only one another, core's spec and Mathlib (`layers` in `lean-audit.json`). Every line of a spec is trusted, so it is kept as short as possible, and the proofs, the lemmas and as much machinery as possible go in `SecurityProofs`.
 - **Lock**: the records of a package's guarantees in its `lean-audit.json` (`guarantees` and `reads`): each guarantee's statement and every definition the statement reads, written by `tools/lean/audit.py --update`. A changed record means a guarantee now says something else, and Daniel gets a DM showing it when it lands on `main`; a guarantee that only moved keeps its records (`--moved`). The lock protects as little as possible, the guarantees and what their statements read, though today it still lists many lemmas as well.
 - **Trusted computing base (TCB)**: what a guarantee's conclusion about the running system depends on beyond its assumptions: each spec, and the code that implements it for every role, verifier and prover, reference and fast. The TCB is trusted, not certified trustworthy: if its code doesn't implement its spec, security degrades, whether soundness for the auditor or zero knowledge and completeness for the developer. Other code is untrusted or is the workload being verified. The *assurance TCB* is what makes "this guarantee is proved" and "this commit passed `check`" believable: Lean's kernel and toolchain, the pinned Mathlib and ArkLib, the Lean audit (`tools/lean/`), `check`'s gates, and upstream's Rust verifier through lean-agreement.
-- **Frontend**: translates a source representation such as PyTorch, JAX or ONNX into Verity IR. The vLLM integration's `verity_vllm.program.frontend` is an embedded Torch→IR frontend, the seed of `frontends/torch` once a second consumer needs it.
+- **Frontend**: translates a source representation such as PyTorch, JAX or ONNX into a circuit (a Program). The vLLM integration's `verity_vllm.program.frontend` is an embedded Torch-to-circuit frontend; there is no standalone one.
 - **Integration**: makes Verity work end to end with a real system or runtime, composing Verity's components around it. vLLM is an integration (`integrations/vllm`), an application of Verity, not a frontend.
 - **Serving** and **proving**: serving is the live inference path, and its cost is serving overhead, such as computing commitments while serving; proving is proof generation, and its cost is proving overhead. Neither is called "production".
 - **Approach**: a line of work (a scheme, a route or an attack) with a hypothesis, an owning lane and a status: live, parked, killed, superseded or merged. Each is a record in the evidence store (`research notes claim`, `research notes approach`, `research notes approaches`; the research notes' `kb/onboarding.md`), rendered into the notes as `campaigns/<campaign>/APPROACHES.md`, and every status but live gives its reason and evidence. A dead end is a killed or superseded approach, kept so nobody goes down it again unknowingly.
@@ -209,19 +219,28 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 
 | Old name, where it stays | Term |
 |---|---|
-| "Candidate A", "Candidate B"; the `candidate` feature and label keys, `CandidateA`, `CandidateB`, `account_candidate_a` | backend family A-GKR, B-Ligero |
+| "Candidate A", "Candidate B"; the `candidate` feature and label keys, `CandidateA`, `CandidateB`, `account_candidate_a` | the archived proof systems A-GKR, B-Ligero |
 | the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not C-Flock) |
 | `verity_catalog.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
-| "configured backend" | backend |
+| "backend", "backend family", "configured backend" for C-Flock; `backends/` (the directory C-Flock still lives in), `verity_flock.backend`, `BACKENDS` | the proof system |
+| "IR", "Verity IR", "IR primitives", "IR evaluator"; `verity.ir` | circuit, Program; `verity.primitives.circuits` |
 | "instance", "instance set"; the `bench-instances/*` datasets and `fixtures/bench-instances/`, the fingerprint's `instances` (`contract.instances_ref`) and its tier (`vu-k1536`, …), the `instance-equiv/v1` and `vllm-vu-set/v1` kinds, the `instances_dataset` / `instances_tier` labels, `instances_per_second` | input, input set |
-| "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a backend and a statement |
+| "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a proof system and a statement |
 | `verity_sp1.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of proof-unit obligations, not a statement in this sense; a kind is a subcircuit |
 | "pin", "pinned theorem", "pinned statement"; `pins` in a `lean-audit.json` written before the rename (read as `guarantees`, rewritten by its next `--update`) and in `tools/lean/Facts.lean`'s facts | guarantee |
-| "verification unit" (VU); `vu_*` identifiers, `select_verification_units`, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof unit |
+| "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof unit |
 | "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | C-Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
 | "M1", "M2" (elsewhere in the code these also name unrelated things) | C-Flock ZK |
-| "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the verifier |
+| `hm96-sha256/v1`, until one-hash deletes it | the hiding leaf `hm96-sha512/v1` |
+| "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
+| "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
+| "warden", "network warden"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
+| "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
+| "prover gateway", "gateway"; one recorded statement string of recursive sessions | the firewall |
+| "verifier gateway" | the challenger |
+| "batch verifier" (outside `archive/`, where B-Ligero's is another thing) | the verifier |
+| "GPU workers" | workers |
 | "trusted text", in the `layers` reasons of `lean-audit.json` and the module docs of the `Protocol.lean` files | spec |
 
 Some words keep a different, narrower sense:
@@ -233,4 +252,4 @@ Some words keep a different, narrower sense:
   unit, so the developer's circuit is hidden like any value.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend in `archive/vole`, not C-Flock.
-- In `integrations/vllm`, "family" and "kind" name IR definitions and query families, many of them serialized fields (see its README's vocabulary).
+- In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).

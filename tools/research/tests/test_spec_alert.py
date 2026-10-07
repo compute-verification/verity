@@ -99,6 +99,38 @@ def test_the_dm_names_the_package_the_pull_requests_and_the_compare_link(tmp_pat
     assert "*pkg/lean*\n• changed guarantee `P.t`" in text
 
 
+def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_path):
+    repo = _repo(tmp_path)
+    doc = _doc({"P.t": _g("P.t : A", H1), "P.u": _g("P.u : B", H2)})
+    old = _commit(repo, "protocols/p/lean/lean-audit.json", doc, "base")
+    subprocess.run(["git", "-C", str(repo), "mv", "protocols/p", "p"], check=True)
+    moved = _commit(repo, "p/lean/lean-audit.json", doc, "Layout move (#9)")
+    assert spec.message(repo, old, moved) is None
+    edited = _commit(repo, "p/lean/lean-audit.json", _doc({"P.t": _g("P.t : C", H3), "P.u": _g("P.u : B", H2)}), "m")
+    text = spec.message(repo, old, edited)
+    assert "*p/lean*\n• changed guarantee `P.t`" in text and "new guarantee" not in text and "P.u" not in text
+
+
+def test_records_that_moved_between_lock_files_are_matched_by_name_and_tallied_as_moves(tmp_path):
+    """The Lean move merged six packages' records into one: matched file by file, the DM listed 990 guarantees removed from
+    the six and 990 new in the one, where all but a handful kept their names and type hashes."""
+    repo = _repo(tmp_path)
+    _commit(repo, "a/lean-audit.json", _doc({"P.t": _g("P.t : A", H1), "P.u": _g("P.u : B", H2)}, {"P.D": H1}), "a")
+    old = _commit(repo, "b/lean-audit.json", _doc({"Q.v": _g("Q.v : C", H3)}, {"Q.E": H2}, ("Q.v",)), "b")
+    subprocess.run(["git", "-C", str(repo), "rm", "-q", "a/lean-audit.json", "b/lean-audit.json"], check=True)
+    both = _doc({"P.t": _g("P.t : A", H1), "P.u": _g("P.u : B", H2), "Q.v": _g("Q.v : C", H3)})
+    both["reads"] = {"P.Defs": {"definitions": {"P.D": H1, "Q.E": H2}, "guarantees": ["P.t", "Q.v"]}}
+    moved = _commit(repo, "c/lean-audit.json", both, "Layout move (#9)")
+    assert spec.message(repo, old, moved) is None
+    both["guarantees"]["Q.v"] = _g("Q.v : D", H1)
+    both["reads"]["P.Defs"]["definitions"]["Q.E"] = H3
+    edited = _commit(repo, "c/lean-audit.json", both, "m")
+    text = spec.message(repo, old, edited)
+    assert "• `c`: guarantees: 1 changed, 2 moved here; definitions: 1 changed" in text
+    assert "removed" not in text and "new guarantee" not in text and "P.D" not in text
+    assert "*c*\n• changed guarantee `Q.v`" in text and "• definition `Q.E` changed; read by `P.t`, `Q.v`" in text
+
+
 def test_a_long_dm_ends_with_the_compare_link_and_closes_its_code_block(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     monkeypatch.setattr(spec, "LIMIT", 400)
