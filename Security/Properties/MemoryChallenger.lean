@@ -8,9 +8,10 @@ The properties of the executable challenger (`verity/experimental/core/devices/m
 from the initial state (`reach`): the driver's World is adversarial, so an event list is any list. Each is a `Prop`;
 none is proved yet (no `Properties.Proofs.MemoryChallenger`).
 
-What a property assumes is in its statement: that the clock never runs backwards (`ReceiptAfterSend`, the driver's
-`clock` is monotonic), that the leaf state never hands out a leaf twice (`NoLeafSignedTwice`), and a key's tree at most
-2^31 leaves high, so a leaf fits the signature's `u32 q`. `MessageBinds` is stated in the form
+What a property assumes is in its statement: that the leaf state never hands out a leaf twice (`NoLeafSignedTwice`),
+and a key's tree at most 2^31 leaves high, so a leaf fits the signature's `u32 q`. None assumes the clock: a round is
+late when its elapsed time is outside `[0, limit_ns]` (`Late`, `verdict`'s condition), so a clock that runs backwards
+ends the session as a slow answer does. `MessageBinds` is stated in the form
 `Security/Proofs/Flock/Verifier/Hash.lean` uses, with its caveat: `Sha512Collision` is inhabited classically (SHA-512
 compresses), so a proof of the disjunction must exhibit a colliding pair taken from the two inputs, as
 `Security/Proofs/Flock/Soundness/StrictCR.lean` does, to say anything.
@@ -28,28 +29,26 @@ def actionsOf (cfg : Config) (events : List Event) : List Action := (run cfg eve
 
 def sends : List Action → List ByteArray := List.filterMap fun | .send b => some b | _ => none
 
-/-- A challenge is sent only with no round open and every recorded round answered on time, and it reveals the next
-round's committed index: index `j + 1` is never revealed before round `j`'s answer is in, and never after its deadline
-(which ends the session). -/
+/-- A challenge is sent only with no round open and every recorded round answered on time (receipt neither before its
+send nor past the limit), and it reveals the next round's committed index: index `j + 1` is never revealed before round
+`j`'s answer is in, and never after its deadline (which ends the session). -/
 def RevealsAfterAnswer : Prop :=
   ∀ cfg events e, let s := reach cfg events
     ∀ b ∈ sends (step cfg s e).2,
       s.phase = .running ∧ s.current = none ∧ s.rounds.size < cfg.coins.k ∧
         b = reveal s.rounds.size cfg.coins.indices[s.rounds.size]! ∧
-        ∀ r ∈ s.rounds, r.elapsedNs ≤ (cfg.limitNs : Int)
+        ∀ r ∈ s.rounds, 0 ≤ r.elapsedNs ∧ r.elapsedNs ≤ (cfg.limitNs : Int)
 
-/-- The clock reading an event carries. -/
-def time? : Event → Option Nat
-  | .tick now => some now
-  | .received now _ => some now
-  | _ => none
-
-/-- On a clock that never runs backwards, every round's receipt time is at least its send time. -/
+/-- On any clock, every round's receipt time is at least its send time, but for the last round of a session that ended
+`late`: a receipt before its send ends the session with that round. A session signed `complete` has none. -/
 def ReceiptAfterSend : Prop :=
-  ∀ cfg events, (events.filterMap time?).Pairwise (· ≤ ·) →
-    ∀ r ∈ (reach cfg events).rounds, r.sendNs ≤ r.receiptNs
+  ∀ cfg events, let s := reach cfg events
+    ∀ i (h : i < s.rounds.size), (i + 1 < s.rounds.size ∨ s.ended ≠ LATE) →
+      s.rounds[i].sendNs ≤ s.rounds[i].receiptNs
 
-def Late (cfg : Config) (r : MemoryChallenger.Round) : Prop := (cfg.limitNs : Int) < r.elapsedNs
+/-- A round is late when its elapsed time is outside `[0, limit_ns]`: past the limit, or a receipt before its send. -/
+def Late (cfg : Config) (r : MemoryChallenger.Round) : Prop :=
+  ¬(0 ≤ r.elapsedNs ∧ r.elapsedNs ≤ (cfg.limitNs : Int))
 
 /-- A late round is the session's last, and the session has ended `late` with it. -/
 def EndsAtFirstLate : Prop :=
