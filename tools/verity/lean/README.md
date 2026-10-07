@@ -340,6 +340,9 @@ input hashes don't depend on the checkout's path: a build published from `/build
 module docstring has the layout and the rules. In short:
 - The client checks every file's sha256 against the commit's record before Lake sees it, and hands the files to Lake with
   `lake cache unstage`. Lake never reads the bucket itself, because its hashes aren't cryptographic.
+- A package's record also carries the build of each dependency that Mathlib's cache doesn't provide (ArkLib and the
+  packages it brings, for `Security/Proofs`), unstaged into that dependency's scope. A fresh machine then needs
+  `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
 - A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
 - The audit never reads the cache: `lake_env()` sets `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`, so the validator
