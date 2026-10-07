@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Flat
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
-import Proofs.Flock.Soundness.Discharge.Canonical.OutCopy
+import Proofs.Flock.Soundness.Discharge.Canonical.Commit
 
 set_option Elab.async false
 
@@ -18,12 +18,15 @@ circuit's facts are the twin's (`Aliased.UnitFacts` at `Hidden.flatTwin st`, whi
 * `zero_bitP`: the forced zero (`HiddenExec.zeroPos_blockH`);
 * `publicCol_rowNet`: a row net's slot's bit is no public column;
 * `msg_copyCP`: a canonical output row's data bit holds its copy (`Canonical.msg_copyC`), whether it is in a
-  compression's block or in the last block's `hm96` pad input.
+  compression's block or in the last block's `hm96` pad input;
+* `inBit_copyAllP`, `row_bc_CP`: Δ's one copy at a `cv` or `pad` input bit, and a canonical row's `b ‖ c`
+  (`Canonical.row_bc_C`) at the statement.
 -/
 
 namespace FlockSoundness.Discharge.ZkPubIn
 
 open Flock FlockLevel3 Hm Compose Flock.DeriveAll Types.Dag
+open Flock.HmNets (wordBit)
 
 section HmP
 
@@ -251,6 +254,145 @@ theorem msg_copyCP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z 
     have hpc := publicCol_rowNet L F Lf lp (Or.inr rfl) hat
     exact block_of_rows hz o hx fun i =>
       inBit_rows (st := st) R (Or.inr rfl) hat (hmNet_ofRows R.rowNets) (hmLaid_self hoff) hx (hδ hpc) i
+
+/-- **`Hidden.inBit_copyAll` at the statement**: at a `cv` or `pad` input bit `x` of a row net's slot, Δ is
+`HmRow.delta`'s: `x` is no public column (`publicCol_rowNet`) and no canonical output row's data bit (`HmRow.delta`
+copies into `x`, `Hidden.flatAll_count`, and into no such bit, `Canonical.flat_count_msgC`). -/
+theorem inBit_copyAllP (hrw : RowWires st.c)
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s off x src : ℕ}
+    (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
+    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
+    (hoff : off < (st.c.nets.getD n default).2.inWords * Flock.WORD)
+    (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off])
+    (hf : (Hidden.rowCopiesAll st.c st.pin ++
+        wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
+      (fun e => e.1 = x) = [(x, src)]) :
+    blockBit (L.model regs) z o x = blockBit (L.model regs) z o src := by
+  have R := RowRanges.ofL L F.parse F.check
+  have hF : ∀ j, (Hidden.flatPairsAll st.c st.pin).count (x, j) =
+      (if j = x then 1 else 0) + (if j = src then 1 else 0) := fun j => by
+    rw [Hidden.flatAll_count Lf F hrw hn hat hl hoff, hf]
+    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+  have hpc := publicCol_rowNet L F Lf lp hn hat
+  have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ x := by
+    intro q hq hqx
+    simp only [Hidden.outPairs, List.mem_flatMap, List.mem_range, List.mem_cons, List.not_mem_nil,
+      or_false] at hq
+    obtain ⟨g, hg, j, hj, k, hk, t, ht, hq⟩ := hq
+    have hq1 : q.1 = Hidden.deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) := by
+      rcases hq with rfl | rfl <;> rfl
+    obtain ⟨hp, hb, hd, ht8⟩ := Canonical.outRowC_bound hrows hj hk ht
+    have h0 := Canonical.flat_count_msgC Lf F F.parse.rowWires hrows.1 hg hp hb hd ht8 x
+    rw [← hq1, hqx, hF x] at h0
+    simp at h0
+  have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧
+      deltaEntry st.db x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
+    intro j
+    have e : deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) := by
+      rw [hda, deltaEntry_filter (fun j' => by simp [hpc]) j, Hidden.deltaEntry_append_out hout, deltaEntry_eq_count,
+        Hidden.delta_flat_all _ _ F.parse.typed hrows.1, hF]
+    exact ⟨e, by rw [L.delta_b]; exact e⟩
+  have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
+  exact block_of_rows hz o hx fun j => inBit_rows R hn hat hl hself hx hδ j
+
+/-- **`Canonical.row_bc_C` at the statement**: in every block of a satisfying witness of the statement with the
+verifier's public inputs, at an unsegmented `sha512/row/v2` row `p` of any `ℓ` bits in the compressions its length
+needs, the `b ‖ c` at its `hm96` output is the commit string of `P(ℓ)` and `packBits` of the bits at its message
+columns, under the salt its `hm96` slot reads. `row_bc_C`'s route, with each copy from `inBit_copyAllP` and the row
+nets' slots and the forced zero from `shaSlot_flatP`, `hmSlot_flatP` and `zero_bitP`. -/
+theorem row_bc_CP (hupv : 0 < st.c.upv)
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
+    (hp : p < st.c.ports.size) (hv : st.c.ports[p]!.v2 = true)
+    (hn : st.c.ports[p]!.chunks + 1 = ((st.c.ports[p]!.bits + 7) / 8 + 17 + 127) / 128) :
+    bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
+      ((HmRow.rowPrefixV2 st.c.ports[p]!.bits).data.toList ++
+        HmRow.packBits (Canonical.rowBits (blockBit (L.model regs) z o) st.c g p))
+      (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
+  have R := RowRanges.ofL L F.parse F.check
+  have hu := hrows.1
+  have hrw : RowWires st.c := F.parse.rowWires
+  have hs := hu _ (getElem_mem_toList' hp)
+  have hpin := pin_bit L hz o
+  have hzero := zero_bitP L F Lf hupv (by omega) hz o
+  have hhm := hmSlot_flatP L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
+  have hmid : HmRow.midstateOf st.c.ports[p]! = Sha512.compress Sha512.iv (HmRow.rowPrefixV2 st.c.ports[p]!.bits) 0 := by
+    simp only [HmRow.midstateOf, HmRow.prefixOf, hs, hv, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+  have hbl := Canonical.rowBits_length (blockBit (L.model regs) z o) st.c g p
+  have hn' : st.c.ports[p]!.chunks + 1 =
+      ((HmRow.packBits (Canonical.rowBits (blockBit (L.model regs) z o) st.c g p)).length + 17 + 127) / 128 := by
+    rw [RowV2.packBits_length, hbl]; exact hn
+  have hsz := rowSlots_size hp
+  have hrowbit : ∀ x, x < st.c.ports[p]!.bits →
+      bitL (Canonical.rowTail (HmRow.packBits (Canonical.rowBits (blockBit (L.model regs) z o) st.c g p))) x =
+        blockBit (L.model regs) z o (Typed.msgCol st.c g p (x / 8) (x % 8)) := fun x hx => by
+    rw [Canonical.bitL_rowTail_lt (by rw [hbl]; exact hx), Canonical.rowBits_getD _ _ _ _ hx]
+  refine Canonical.port_commit_rowsC st.c _ g p (Hidden.size_rowPrefixV2 _) hn' R.rowNets
+    (fun k hk => (rowSlot_lt hp hk).2)
+    (fun k hk => shaSlot_flatP L F hz o hg (by rw [R.perVu_sha]; exact (rowSlot_lt hp hk).1)) hhm
+    (fun h0 t ht => ?_) (fun k hk t ht => ?_) (fun h0 t ht => ?_) (fun h0 t ht => ?_) (fun k hk o' ho' t ht => ?_)
+    (fun o' ho' t ht => ?_)
+  · have hs' : shaSub st.c p 0 < 3 := (rowSlot_lt hp h0).2
+    rw [Hidden.shaIn_pos R hu hp h0]
+    have hf := Hidden.cv0_filterAll R hu (pin := st.pin) hg hp h0 ht
+    rw [inBit_copyAllP L F Lf lp hrows hda hrw hz o (Or.inl rfl)
+      (Hidden.shaPos_at R hu hg hp h0 (off := t) (by omega)) (shaNet_ofRows R.rowNets)
+      (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf,
+      blockBit_constSrc _ _ hpin hzero, hmid]
+  · have hs' : shaSub st.c p (k + 1) < 3 := (rowSlot_lt hp hk).2
+    have hf := Hidden.chain_filterAll R hu (pin := st.pin) (k := k + 1) hg hp (by omega) hk ht
+    rw [chainDst_eq R.rowNets hs'] at hf
+    rw [inBit_copyAllP L F Lf lp hrows hda hrw hz o (Or.inl rfl) (R.shaIn_at hg hp hk ht) (shaNet_ofRows R.rowNets)
+      (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
+    rfl
+  · rw [(hmIn_eq R.rowNets).1, Nat.add_zero]
+    have hf := Hidden.hmcv0_filterAll R hu (pin := st.pin) hg hp h0 ht
+    rw [inBit_copyAllP L F Lf lp hrows hda hrw hz o (Or.inr rfl) (R.hmIn_at hg hp (off := t) (by omega))
+      (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf,
+      blockBit_constSrc _ _ hpin hzero, hmid]
+  · rw [(hmIn_eq R.rowNets).1, Nat.add_zero]
+    have hf := Hidden.hmcv_filterAll R hu (pin := st.pin) hg hp h0 ht
+    have hx : Flat.wireDst st.c g (hmWire st.c.ports st.c.shaNet st.c.hmNet p) = st.c.slotCol st.c.hmNet g p :=
+      hmWireDst_eq R.rowNets g p
+    rw [hx] at hf
+    rw [inBit_copyAllP L F Lf lp hrows hda hrw hz o (Or.inr rfl) (R.hmIn_at hg hp (off := t) (by omega))
+      (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
+    unfold Flat.wireSrc hmWire shaBase shaOut shaSub
+    simp only [rowSlots_size hp]
+  · have hwb : wordBit (8 * o' + t) < 1024 := by unfold wordBit; omega
+    have hs' : shaSub st.c p k < 3 := (rowSlot_lt hp hk).2
+    by_cases hbit : 8 * (128 * k + o') + t < st.c.ports[p]!.bits
+    · rw [hrowbit _ hbit, show (8 * (128 * k + o') + t) / 8 = 128 * k + o' by omega,
+        show (8 * (128 * k + o') + t) % 8 = t by omega, msgCol_eq st.c g p k hs (by rw [hsz]; exact hk) ho' ht]
+    · have hf := Canonical.msg_filterConstC R hu (pin := st.pin) hg hp hk hwb
+      rw [Canonical.constBit_rowC hv hs hbl k ho' ht (by omega)] at hf
+      simp only [Hidden.bitCopy] at hf
+      have hat := Hidden.shaPos_at R hu hg hp hk (off := 512 + wordBit (8 * o' + t)) (by omega)
+      rw [← Hidden.msgColOf_pos R hu hp hk] at hat
+      rw [show shaBase st.c g p k + shaIn st.c (2 * shaSub st.c p k + 1) + wordBit (8 * o' + t) =
+          msgColOf st.c g p k + wordBit (8 * o' + t) from rfl,
+        inBit_copyAllP L F Lf lp hrows hda hrw hz o (Or.inl rfl) hat (shaNet_ofRows R.rowNets)
+          (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
+      exact Canonical.blockBit_ite hpin hzero _
+  · have hwb : wordBit (8 * o' + t) < 1024 := by unfold wordBit; omega
+    have hx : st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + wordBit (8 * o' + t) = padCol st.c g p + wordBit (8 * o' + t) := by
+      rw [(hmIn_eq R.rowNets).2.1, padCol_eq R.rowNets]
+    rw [hx]
+    by_cases hbit : 8 * (128 * st.c.ports[p]!.chunks + o') + t < st.c.ports[p]!.bits
+    · rw [hrowbit _ hbit, show (8 * (128 * st.c.ports[p]!.chunks + o') + t) / 8 = 128 * st.c.ports[p]!.chunks + o' by
+          omega, show (8 * (128 * st.c.ports[p]!.chunks + o') + t) % 8 = t by omega, ← hsz,
+        Canonical.msgCol_pad st.c g p hs ho' ht]
+    · have hf := Hidden.pad_filterAll R hu (pin := st.pin) hg hp hwb
+      rw [hsz, Canonical.constBit_rowC hv hs hbl _ ho' ht (by omega)] at hf
+      simp only [Hidden.bitCopy] at hf
+      have hx' : padCol st.c g p + wordBit (8 * o' + t) = st.c.slotCol st.c.hmNet g p + (512 + wordBit (8 * o' + t)) := by
+        rw [padCol_eq R.rowNets, Nat.add_assoc]
+      rw [hx'] at hf ⊢
+      rw [inBit_copyAllP L F Lf lp hrows hda hrw hz o (Or.inr rfl)
+        (R.hmIn_at hg hp (off := 512 + wordBit (8 * o' + t)) (by omega))
+        (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
+      exact Canonical.blockBit_ite hpin hzero _
 
 end HmP
 

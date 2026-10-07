@@ -16,7 +16,10 @@ set_option Elab.async false
 * `copy_siteHP`: a stacked unit input that is no public leaf's bit and whose Δ key is message bit `bit` of byte `byte`
   of row `q` holds the witness's bit at that message column (`copyPos_blockHP`);
 * `out_copyHCP`: at canonical output rows, copy `u'`'s output `j`, bit `t` holds the witness's bit at its output
-  row's message column (`Canonical.out_copyHC`, through `msg_copyCP`).
+  row's message column (`Canonical.out_copyHC`, through `msg_copyCP`);
+* `AcceptedHP.row_bcCP`, `bc_site_commitHCP`: on a canonical circuit, a row's `b ‖ c` at a drawn unit's site is the
+  commit string of `P(ℓ)` and `packBits` of its message bits (`Canonical.bc_site_commitC`, through `row_bc_CP`). No
+  condition on the out net.
 -/
 
 namespace FlockSoundness.Discharge.ZkPubIn
@@ -256,5 +259,57 @@ theorem out_copyHCP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet) (hr
   rw [hb, hb8, bit_siteAddrHP ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht', h, L, hR, regs, rfl⟩
     z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jr) (2 * k + t / 8) (t % 8), hmc, hsrc, ← hcol,
     blockBit_of_lt _ z o (Fin.isLt _)]
+
+/-! ## A canonical row's `b ‖ c` at a site -/
+
+/-- **`row_bc_CP` in an accepted statement `T` on a canonical circuit** (`Canonical.AcceptedH.row_bcC`). -/
+theorem AcceptedHP.row_bcCP (a : AcceptedHP T) (hfmt : Canonical.formatOk a.st.c = true) {z : Witness T.m}
+    (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g) (hp : p < a.st.c.ports.size) :
+    bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
+      ((HmRow.rowPrefixV2 a.st.c.ports[p]!.bits).data.toList ++
+        HmRow.packBits (Canonical.rowBits (blockBit T z o) a.st.c g p))
+      (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
+  have hpa := a.parse
+  have hcr := a.checkRows
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, L, hR, regs, hT⟩ := a
+  subst hT
+  dsimp only at hfmt hg hp hpa hcr ⊢
+  obtain ⟨pi, s⟩ := setupHidden_specP h
+  have L0 := flat_layoutP ht h
+  have F0 := flat_unitFactsP ht h
+  have hda := (delta_filterP ht s).1
+  obtain ⟨hrow, -, -, -, -⟩ := Canonical.formatOk_spec L.unit_built hfmt
+  have hrows := (Canonical.outRowsC_of L.unit_built hpa hcr hfmt).1
+  obtain ⟨ls, hls⟩ := (parse_facts hpa).check
+  have hupv : 0 < st.c.upv := Hidden.check_upv_pos (parse_facts hpa).typed hls
+  have hpr := hrow _ (getElem_mem_toList' hp)
+  exact row_bc_CP L F0 L0 s.leavesPublic hrows hda hupv hz o hg hp hpr.1
+    (Canonical.v2_of_parse hpa hp hpr.1 hpr.2).2
+
+/-- **A canonical row's `b ‖ c` at a drawn unit's site** (`Canonical.bc_site_commitC`) in an accepted statement with
+the verifier's public inputs: at block `o`, VU `g` and row `p`, input or output, the bytes at the address the regions
+pin (`Layout.bcAddr`) are the commit string of `P(ℓ_p)` and `packBits` of the `ℓ_p` bits at the row's message columns,
+under the salt at `saltCol`. -/
+theorem bc_site_commitHCP (a : AcceptedHP T) (hfmt : Canonical.formatOk a.st.c = true) {z : Witness T.m}
+    (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g) (hp : p < a.st.c.ports.size) :
+    Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrHP a o (Layout.bcAddr a.st.c g p j.val t.val)) =
+      Binding.commitString ((HmRow.rowPrefixV2 a.st.c.ports[p]!.bits).data.toList ++
+        HmRow.packBits (Canonical.rowBits (fun x => FlockSoundness.bit (z (siteAddrHP a o x))) a.st.c g p))
+        (Binding.bytesAt z fun (j : Fin 192) (t : Fin 8) => siteAddrHP a o (saltCol a.st.c g p j.val t.val)) := by
+  have R := a.rowRanges
+  have hbc : (fun (j : Fin 128) (t : Fin 8) => siteAddrHP a o (Layout.bcAddr a.st.c g p j.val t.val)) =
+      fun j t => siteAddrHP a o (bcCol a.st.c g p j.val t.val) := by
+    funext j t
+    rw [Layout.bcAddr_eq_slotCol _ _ _ _ _ (Hm.perVu_hm_pow2 R)]
+    rfl
+  have hrb : Canonical.rowBits (fun x => FlockSoundness.bit (z (siteAddrHP a o x))) a.st.c g p =
+      Canonical.rowBits (blockBit T z o) a.st.c g p := by
+    unfold Canonical.rowBits
+    congr 1
+    funext i
+    exact bit_siteAddrHP a z o (Layout.msgCol_lt_of_parse a.parse hg hp _ _ (Nat.mod_lt _ (by norm_num)))
+  rw [hbc, bytesAt_siteHP a z o 128 (bcCol a.st.c g p) (fun j hj t ht => Hm.bcCol_lt R hg hp hj ht),
+    bytesAt_siteHP a z o 192 (saltCol a.st.c g p) (fun j hj t ht => Hm.saltCol_lt R hg hp hj ht), hrb]
+  exact AcceptedHP.row_bcCP a hfmt hz o hg hp
 
 end FlockSoundness.Discharge.ZkPubIn
