@@ -101,6 +101,15 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-07 (3:25 PM PDT, relayed by top; the rule agreed by top and ci): skip the full check where it's reasonable, and
+  revert if something breaks. Every lane lands the same way. A branch is ready when it merges cleanly onto main, passes at
+  its head the suites whose inputs it touches (plus `circuit-check` for a circuit and the Lean audit for a Lake package it
+  touches), run by its owner and cited by run id, and holds the grants `queue.toml` requires there (a pure test deletion
+  needs none); the owner posts `ready N@SHA` with those runs on the merge thread. ci builds whatever is ready into one tip
+  (`research merge --train --prepare`) when no train is mid-landing, and the lander lands it by hand with an `Override:`
+  trailer citing this ruling; nothing lands outside a tip. After each landing the lander starts one full `check` of main,
+  which blocks nothing; if it fails, ci names the member at fault, and its owner fixes forward within an hour or the
+  lander reverts that member and the owner relands it fixed.
 - 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
   rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
   This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
