@@ -47,8 +47,8 @@ import Proofs.Pous.Rebuild.Exclusion
 /-!
 # The proved guarantees
 
-`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `verity/Security/Specs/Pous/Guarantees.lean`,
-`verity/Security/Specs/Pous/Guarantees/P2.lean` and `verity/Security/Specs/Pous/Guarantees/SecureErasure.lean` that has
+`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `verity/Security/Models/Pous/Guarantees.lean`,
+`verity/Security/Models/Pous/Guarantees/P2.lean` and `verity/Security/Models/Pous/Guarantees/SecureErasure.lean` that has
 a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a definition it reads, changes their
 records. The open statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
 
@@ -194,7 +194,7 @@ theorem P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond := by
 
 theorem P2SlackFamilyFreeBlocks : Pous.Guarantees.P2SlackFamilyFreeBlocks := Pous.FreeBlocks.p2_slack_family_free_blocks
 
-/-! ## Proved results cited outside the package (`verity/Security/Specs/Pous/Guarantees.lean`) -/
+/-! ## Proved results cited outside the package (`verity/Security/Models/Pous/Guarantees.lean`) -/
 
 theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
 theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64

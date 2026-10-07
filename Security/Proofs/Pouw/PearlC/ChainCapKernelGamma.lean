@@ -1,5 +1,5 @@
 import Proofs.Pouw.PearlC.DeviceChainCapGamma
-import Specs.Pouw.Assumptions.PearlC.DeviceChainCapKernel
+import Models.Pouw.Assumptions.PearlC.DeviceChainCapKernel
 import Proofs.Pouw.PearlC.KernelWrefGamma
 import Definitions.Pouw.PearlC.DevicePricesLoop
 

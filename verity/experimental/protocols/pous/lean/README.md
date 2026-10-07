@@ -43,14 +43,14 @@ Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMee
 Definitions/Pous/P2/Cost.lean       P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
-Specs/Pous/Assumptions.lean         trusted, the assumptions: named hypotheses (Lemma A, Conjecture B1′)
-Specs/Pous/Assumptions/P2.lean      P2's named open step `PrimeP16448`, the primality of its modulus
-Specs/Pous/Guarantees.lean          trusted, the guarantees: 73 statements, the 62 grade.sh grades against,
+Models/Pous/Assumptions.lean         trusted, the assumptions: named hypotheses (Lemma A, Conjecture B1′)
+Models/Pous/Assumptions/P2.lean      P2's named open step `PrimeP16448`, the primality of its modulus
+Models/Pous/Guarantees.lean          trusted, the guarantees: 73 statements, the 62 grade.sh grades against,
                                     `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
                                     cited outside the package
-Specs/Pous/Guarantees/P2.lean       six statements about the abstract model `m1p` at P2's parameters,
+Models/Pous/Guarantees/P2.lean       six statements about the abstract model `m1p` at P2's parameters,
                                     which grade.sh also grades against; none is about the concrete P2
-Specs/Pous/Guarantees/SecureErasure.lean
+Models/Pous/Guarantees/SecureErasure.lean
                                     four statements, which grade.sh also grades against: the digest is almost
                                     universal (`DigestAU`), secure erasure from any sequential audit bound
                                     (`SecureErasureMeets`), and on the band at every `N` and at 96 GiB
@@ -107,7 +107,7 @@ bash check.sh                       # the audit, the open targets, and the grade
 ~~~
 
 **Trusted without proof:** the statements in the three layers `Security/lean-audit.json`'s `meaning` lists,
-`Definitions/Pous`, `Specs/Pous/Assumptions` and `Specs/Pous/Guarantees` (each directory and its own `.lean` file);
+`Definitions/Pous`, `Models/Pous/Assumptions` and `Models/Pous/Guarantees` (each directory and its own `.lean` file);
 Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is checked by machine. Docstring paths such
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
@@ -121,8 +121,8 @@ non-vacuity theorems `complete`, `tight` and `tight_p16448`, and the refutation 
 continuous audit's counting step (`PousContinuous.pr_misses_le`, `pr_misses_gt_le`). When a changed record lands on
 `main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
 
-**Submissions** are one file that imports only the trusted layers (`Definitions.Pous`, `Specs.Pous.Assumptions`,
-`Specs.Pous.Guarantees`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
+**Submissions** are one file that imports only the trusted layers (`Definitions.Pous`, `Models.Pous.Assumptions`,
+`Models.Pous.Guarantees`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
 grader first and records their hashes; compiles the submission with `lean` in a scratch directory inside a user, mount,
 PID and network namespace where every other mount is read-only (so compile-time IO can change nothing, and its processes
 die with the build); checks the hashes again; then runs the grader. The grader loads the submission's `.olean` as data,
@@ -141,7 +141,7 @@ and running the audit (`bash check.sh`):
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
   ../../../../../Security/lean-toolchain ../../../../../Security/lakefile.toml ../../../../../Security/lake-manifest.json \
   ../../../../../Security/Proofs/lakefile.toml ../../../../../Security/Proofs/lake-manifest.json \
-  ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Specs/Pous/Assumptions.lean ../../../../../Security/Specs/Pous/Guarantees.lean \
+  ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Models/Pous/Assumptions.lean ../../../../../Security/Models/Pous/Guarantees.lean \
   ../../../../../Security/Proofs/Pous/Sanity.lean ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Specs/Pous/Assumptions ../../../../../Security/Specs/Pous/Guarantees -name '*.lean' | LC_ALL=C sort) > TRUSTED.sha256
+  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Models/Pous/Assumptions ../../../../../Security/Models/Pous/Guarantees -name '*.lean' | LC_ALL=C sort) > TRUSTED.sha256
 ~~~

@@ -1,10 +1,10 @@
-import Specs.Pous.Guarantees
+import Models.Pous.Guarantees
 
 /-!
 # Open targets (untrusted)
 
 Nothing here is trusted, and nothing here is in the default build: it is the list of what to prove next. Every target
-is pinned in `verity/Security/Specs/Pous/Guarantees.lean`; `grade.sh` grades a proof of `Pous.Guarantees.X` given as
+is pinned in `verity/Security/Models/Pous/Guarantees.lean`; `grade.sh` grades a proof of `Pous.Guarantees.X` given as
 `theorem solution`. The names below are the draft names the prover files use. The proved statements are in
 `verity/Security/Proofs/Pous.lean`.
 -/

@@ -2,8 +2,8 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Combinatorics.SimpleGraph.Clique
 import Mathlib.Combinatorics.SimpleGraph.Finite
 import Definitions.Pous
-import Specs.Pous.Assumptions
-import Specs.Pous.Guarantees
+import Models.Pous.Assumptions
+import Models.Pous.Guarantees
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 
