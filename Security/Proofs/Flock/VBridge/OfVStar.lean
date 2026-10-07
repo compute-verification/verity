@@ -378,7 +378,7 @@ theorem laid_recOpenUnit (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha51
     rw [outWords_recOpenUnit hU]
     have hs : U.outs.size = (recOpenOuts LANES H (ports LANES H)).length := by
       rw [(recOpenUnit_ok hU).2.1]
-      first | rfl | simp
+      rfl
     omega
   rw [outStart_recOpenUnit hU]
   exact laid_recOpen ms hms LANES H (recOpenUnit_H hU).2 (ports LANES H) (Array.replicate U.outWords 16) v hout'
