@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Flat
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Tables
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.WireP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
 
 set_option Elab.async false
@@ -177,53 +178,6 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   (pi : HmIn.Ports)
-
-/-- **`keyIdxP` at an input that is no public leaf's bit**: no gate exactly at the zero key, and otherwise an input
-with its key that is no public leaf's bit either. -/
-theorem keyIdxP_none (c : Flock.Circuit) (pi : HmIn.Ports) (m : ℕ) (x : Fin m) (hx : pubLeaf c pi x.val = none) :
-    (keyIdxP c pi m x = none ↔ Aliased.srcKey c x.val = .zero) ∧
-      ∀ i, keyIdxP c pi m x = some i → pubLeaf c pi i.val = none ∧ Aliased.srcKey c i.val = Aliased.srcKey c x.val := by
-  unfold keyIdxP
-  simp only [hx, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
-  by_cases hz : Aliased.srcKey c x.val = .zero
-  · simp only [hz, ↓reduceIte, reduceCtorEq, false_implies, implies_true, and_self]
-  · simp only [hz, ↓reduceIte, iff_false]
-    refine ⟨fun hn => ?_, fun i hi => ?_⟩
-    · rw [List.find?_eq_none] at hn
-      exact hn x (List.mem_finRange x) (by simp [hx])
-    · have := List.find?_some hi
-      simp only [Bool.and_eq_true, Option.isNone_iff_eq_none, decide_eq_true_eq] at this
-      exact this
-
-/-- **Two inputs on one `keyIdxP` gate are one input, or neither a public leaf's bit and both of one key.** -/
-theorem keyIdxP_eq (c : Flock.Circuit) (pi : HmIn.Ports) (m : ℕ) (x x' : Fin m)
-    (h : keyIdxP c pi m x = keyIdxP c pi m x') :
-    x = x' ∨ (pubLeaf c pi x.val = none ∧ pubLeaf c pi x'.val = none ∧
-      Aliased.srcKey c x.val = Aliased.srcKey c x'.val) := by
-  have hpub : ∀ y : Fin m, (pubLeaf c pi y.val).isSome → keyIdxP c pi m y = some y := fun y hy => by
-    unfold keyIdxP; simp [hy]
-  cases hx : pubLeaf c pi x.val with
-  | some v =>
-    have e := (hpub x (by simp [hx])).symm.trans h
-    cases hx' : pubLeaf c pi x'.val with
-    | some v' => exact Or.inl (Option.some.inj (e.trans (hpub x' (by simp [hx']))))
-    | none =>
-      have := ((keyIdxP_none c pi m x' hx').2 x e.symm).1
-      rw [hx] at this
-      cases this
-  | none =>
-    cases hx' : pubLeaf c pi x'.val with
-    | some v' =>
-      have := ((keyIdxP_none c pi m x hx).2 x' (h.trans (hpub x' (by simp [hx'])))).1
-      rw [hx'] at this
-      cases this
-    | none =>
-      refine Or.inr ⟨rfl, rfl, ?_⟩
-      have k1 := keyIdxP_none c pi m x hx
-      have k2 := keyIdxP_none c pi m x' hx'
-      cases hk : keyIdxP c pi m x with
-      | none => rw [k1.1.1 hk, k2.1.1 (h ▸ hk)]
-      | some i => rw [← (k1.2 i hk).2, ← (k2.2 i (h ▸ hk)).2]
 
 /-- **Two inputs of one unit of `keyProgP` on one gate are one input, or neither a public leaf's bit and both of one
 key**, in the program's own instance (`Placed.keyProg_wire_key`). -/
