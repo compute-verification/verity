@@ -130,7 +130,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 #: where the Lean files are run from: `main` points it at a copy taken before the first build
 TOOL = HERE
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[2]
 POLICY = "lean-audit.json"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
 #: compiler trust: `native_decide` declares an axiom `<decl>._native.native_decide.ax_<i>` (older toolchains used these two)
