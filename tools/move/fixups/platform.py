@@ -79,6 +79,10 @@ EDITS = [
     ("tools/research/src/research/store/README.md", "the example above is\nillustrative, the files follow the scripts' real argparse)",
      "the example above is\nillustrative, the files follow the scripts' argparse)"),
     ("tools/research/src/research/store/README.md", "read-back).  One extra", "read-back). One extra"),
+    ("tools/research/src/research/store/README.md",
+     '"replay_instances"],' + " " * 21 + '# path-valued params: identity = content, never pathname\n    caches=["nvcc"],' + " " * 60 + "#",
+     '"replay_instances"],  # path-valued params: identity = content, never pathname\n    caches=["nvcc"],' + " " * 40 + "#"),
+    ("tools/research/README.md", "`check`'s is `tools/verity/check/post_train.py`, the vLLM", "`check`'s is its `post_train.py`, the vLLM"),
     # the research console finds cluster's checkout copy under infra/
     ("tools/research/console/verity_console.py", 'for p in (HERE, HERE.parents[1] / "cluster" / "src"):',
      'for p in (HERE, HERE.parents[2] / "infra" / "cluster" / "src"):'),
