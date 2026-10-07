@@ -163,10 +163,13 @@ Landing:
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/experimental/protocols/pous/lean/`) and
     the certifier program (`verity/experimental/protocols/certifier/lean/`, `NetworkCertifier`, with its
-    difftest).
+    difftest) and the NCI check (`verity/experimental/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
+    `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
+    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
+    `security_proofs`.
   - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's analysis is all
