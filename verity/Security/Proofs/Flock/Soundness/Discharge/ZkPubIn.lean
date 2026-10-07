@@ -11,6 +11,7 @@ import Proofs.Flock.Soundness.Discharge.ZkPubIn.HmP
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.SiteP
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.RowsP
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.TablesJ
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Bind
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -36,5 +37,7 @@ a canonical output row's data bit holds its copy (`msg_copyCP`). `SiteP`: a draw
 canonical row's `b ‖ c` (`bc_site_commitHCP`). `RowsP`: `lay` and `rs` at `keyProgP`'s places in canonical tables
 (`keyLayoutCP`, `keyRowsCP`, `keyRowsCP_computes`), a public gate holding the verifier's own word's bit (`pub_siteCP`,
 from `Canonical.public_pinnedC`). `TablesJ`: the session's `J` tables with `own` (`setupOfP_tableJH`,
-`DrawSetupZHJP`, `planZHJP`) and their public shadow (`tableShHJP`, `planShHJP`).
+`DrawSetupZHJP`, `planZHJP`) and their public shadow (`tableShHJP`, `planShHJP`). `Bind`: the canonical session's
+sites (`sitesShCP`, `sitesShCP_bcSite`) and `lay`, `rs` at `keyProgP` moved to its `--zk` tables (`layZCP`, `rsZCP`,
+`rsZCP_computes`).
 -/
