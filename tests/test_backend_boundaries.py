@@ -17,6 +17,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+#: The backends' tree: C-Flock, the backend in development.
+BACKENDS = ROOT / "verity" / "ml" / "flock"
 #: The integrations' import packages, from each distribution's wheel configuration.
 INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrations").glob("*/pyproject.toml"))
                          for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
@@ -27,36 +29,36 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: Every backend file that imports an integration, with each integration module it imports.  Repoint a backend at core (or
 #: drop the use) and delete its line; a new line needs a reason the dependency cannot go through core.
 KNOWN = {
-    ("backends/flock/python/verity_flock/boolean_export.py", "verity_vllm.pipeline.program_graph"),
-    ("backends/flock/python/verity_flock/boolean_export.py", "verity_vllm.program.registry"),
-    ("backends/flock/python/verity_flock/boolean_export.py", "verity_vllm.query"),
-    ("backends/flock/python/verity_flock/boolean_export.py", "verity_vllm.query.word"),
-    ("backends/flock/python/verity_flock/class_statement.py", "verity_vllm.pipeline.program_graph"),
-    ("backends/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.kernels"),
-    ("backends/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.registry"),
-    ("backends/flock/python/verity_flock/ir_sampling.py", "verity_vllm.program.registry"),
-    ("backends/flock/python/verity_flock/partition_units.py", "verity_vllm.program.registry"),
-    ("backends/flock/python/verity_flock/tail.py", "verity_vllm.program.registry"),
-    ("backends/flock/python/verity_flock/tail_pieces.py", "verity_vllm.program.registry"),
-    ("backends/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_keep_builder"),
-    ("backends/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_word_gates"),
-    ("backends/flock/tests/test_boolean_export.py", "verity_vllm.program.registry"),
-    ("backends/flock/tests/test_boolean_export.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_circuit.py", "verity_vllm.program.kernels"),
-    ("backends/flock/tests/test_circuit.py", "verity_vllm.program.registry"),
-    ("backends/flock/tests/test_class_statement.py", "verity_vllm.program.registry"),
-    ("backends/flock/tests/test_derive.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_flock_rows.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.sampling"),
-    ("backends/flock/tests/test_ir_sampling.py", "verity_vllm.program.registry"),
-    ("backends/flock/tests/test_ir_sampling.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_lean_rope.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_lean_typed_statement.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_partition_units.py", "verity_vllm.program.registry"),
-    ("backends/flock/tests/test_stage_typed.py", "verity_vllm.program.registry.prims"),
-    ("backends/flock/tests/test_topp_word.py", "verity_vllm.program.registry"),
-    ("backends/flock/tests/test_typed_statement.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.pipeline.program_graph"),
+    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.query"),
+    ("verity/ml/flock/python/verity_flock/boolean_export.py", "verity_vllm.query.word"),
+    ("verity/ml/flock/python/verity_flock/class_statement.py", "verity_vllm.pipeline.program_graph"),
+    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.kernels"),
+    ("verity/ml/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/python/verity_flock/ir_sampling.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/python/verity_flock/partition_units.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/python/verity_flock/tail.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/python/verity_flock/tail_pieces.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_keep_builder"),
+    ("verity/ml/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_word_gates"),
+    ("verity/ml/flock/tests/test_boolean_export.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/tests/test_boolean_export.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_circuit.py", "verity_vllm.program.kernels"),
+    ("verity/ml/flock/tests/test_circuit.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/tests/test_class_statement.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/tests/test_derive.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_flock_rows.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_ir_lowering.py", "verity_vllm.program.registry.sampling"),
+    ("verity/ml/flock/tests/test_ir_sampling.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/tests/test_ir_sampling.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_lean_rope.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_lean_typed_statement.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_partition_units.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/tests/test_stage_typed.py", "verity_vllm.program.registry.prims"),
+    ("verity/ml/flock/tests/test_topp_word.py", "verity_vllm.program.registry"),
+    ("verity/ml/flock/tests/test_typed_statement.py", "verity_vllm.program.registry.prims"),
 }
 
 
@@ -78,7 +80,7 @@ def _modules(path: Path, text: str) -> set[str]:
 @functools.cache
 def _sites() -> frozenset[tuple[str, str]]:
     sites = set()
-    for path in sorted((ROOT / "backends").rglob("*.py")):
+    for path in sorted(BACKENDS.rglob("*.py")):
         rel = path.relative_to(ROOT)
         if any(part.startswith(".") or part in SKIP_DIRS for part in rel.parts):
             continue
@@ -93,11 +95,11 @@ def test_the_integrations_are_found():
 
 
 def test_the_scan_sees_the_backends():
-    """The scan walks `backends/`: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
+    """The scan walks C-Flock's tree: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
     as sites of files that don't exist yet."""
     for name in ("verity_flock",):
         origin = Path(importlib.util.find_spec(name).origin).resolve()
-        assert origin.is_relative_to(ROOT / "backends"), f"{name} is at {origin}, outside the scanned backends/"
+        assert origin.is_relative_to(BACKENDS), f"{name} is at {origin}, outside the scanned {BACKENDS.relative_to(ROOT)}/"
     assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"
 
 

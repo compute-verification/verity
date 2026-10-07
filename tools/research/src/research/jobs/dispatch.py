@@ -17,7 +17,7 @@ runs where `research run --on` with custody works today, the research coordinato
                 claimed for it (`check.py --record` sets no --timeout, so its launch doesn't extend the lease).  Its rules of its
                 own are about whether a pod is free, not whether it's prepared: no job for a pod whose setup hasn't reported done
                 (a chain that launched a check while `pod_setup.sh` still ran cost train TVC an hour), nor for one with a live run.
-    preflight   whether a pod is prepared is decided in one place, `tools/check/preflight.py` (#440), which `research run --on`
+    preflight   whether a pod is prepared is decided in one place, `tools/verity/check/preflight.py` (#440), which `research run --on`
                 runs on the machine before claiming the run: a `--tool check` run gets it, and a `lean-regen` asks for it with
                 `--preflight check`.  A refusal is an error, retried on another pod, and the pod is benched for BENCH_S.
     launch      in a child process (`python -m research.jobs.dispatch launch SPEC`), so renewals never wait on it: fetch the
@@ -25,7 +25,7 @@ runs where `research run --on` with custody works today, the research coordinato
                   merge-check  `check.py --record --on POD --base BASE [--verdicts-in PACK]` (the pack fetched from the store)
                   audit-main   `check.py --record --on POD --base EMPTY_TREE --no-cache`: a cold check of `main`'s tip with every
                                path counted as changed, so `merge_requires` sends the Lean agreement's inputs too
-                  lean-regen   `research run --on POD --source . --cwd source` of `audit.py --build --update PACKAGE...`, each
+                  lean-regen   `research run --on POD --source . --cwd source` of `check.py --build --update PACKAGE...`, each
                                regenerated lean-audit.json copied to the run dir's records/ (custody publishes it)
                 and the worktree is removed once the source is shipped.  The job's token is not in the child's environment.
     run         every POLL_S, `research fetch` of the run's records.  merge-check, audit-main: passed on rc 0 with check's result.json
@@ -65,7 +65,7 @@ RENEW_S = 60
 POLL_S = 60
 PREFLIGHT_S = 600
 BENCH_S = 1800             # a pod that failed check's preflight sits out this long
-SETUP_MARKER = "~/.research/pod-setup.json"      # tools/check/pod_setup.sh writes it last, on the pod
+SETUP_MARKER = "~/.research/pod-setup.json"      # tools/verity/check/pod_setup.sh writes it last, on the pod
 LAUNCH_TIMEOUT_S = 1800
 DEFAULT_TIMEOUT_S = 2 * 3600       # a cold check took 41 min, a Lean regeneration 30-40
 AUDIT_TIMEOUT_S = 3 * 3600         # a cold check with the Lean agreement
@@ -563,13 +563,13 @@ def command(job: dict, pod: str, python: str, pack: Path | None, preflight: bool
     """What the launch child runs in the commit's worktree.  `preflight`: the launcher's `research run` knows `--preflight` (#440)."""
     p = job["payload"]
     if job["kind"] == "merge-check":
-        return [python, "tools/check/check.py", "--record", "--on", pod, "--base", p["base"],
+        return [python, "tools/verity/check/check.py", "--record", "--on", pod, "--base", p["base"],
                 *(["--verdicts-in", str(pack)] if pack else [])]
     if job["kind"] == "audit-main":
-        return [python, "tools/check/check.py", "--record", "--on", pod, "--base", EMPTY_TREE, "--no-cache"]
+        return [python, "tools/verity/check/check.py", "--record", "--on", pod, "--base", EMPTY_TREE, "--no-cache"]
     if job["kind"] == "lean-regen":
         pkgs = " ".join(shlex.quote(x) for x in p["packages"])
-        script = (f"python3 tools/lean/audit.py --build --update {pkgs}; rc=$?; for p in {pkgs}; do "
+        script = (f"python3 tools/verity/lean/check.py --build --update {pkgs}; rc=$?; for p in {pkgs}; do "
                   f"mkdir -p \"$RESEARCH_RUN_DIR/records/$p\" && cp \"$p/lean-audit.json\" \"$RESEARCH_RUN_DIR/records/$p/\"; done; exit $rc")
         return [python, "-m", "research", "run", "--on", pod, "--project", PROJECT, "--source", ".", "--cwd", "source",
                 *(["--preflight", "check"] if preflight else []), "--", "sh", "-c", script]

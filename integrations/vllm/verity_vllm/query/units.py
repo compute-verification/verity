@@ -10,7 +10,7 @@ open are the values that cross a unit boundary, plus what the protocol prescribe
 where, for a unit ``V``: ``in(V)`` is every Value produced *outside* ``V`` (by a Call of another unit, or by a
 prescribed input of the Program) that a Call inside ``V`` reads, and ``out(V)`` is every Value produced inside ``V``
 that a Call outside ``V`` reads or that is a Program output.  A Value is a *logical* identity ``(producer, port)``:
-the Call that produces it and the output port it leaves the Call by (``verity.primitives.circuits`` invariant: "Composite interfaces ->
+the Call that produces it and the output port it leaves the Call by (``verity.ml.circuits`` invariant: "Composite interfaces ->
 ordered collections of value references"; a port is one such collection).  Nothing here is a commitment position, a
 tensor, a module or a kernel.
 
@@ -20,7 +20,7 @@ an identity is spelt for a collector are the integration's concern (``verity_vll
 example of the design (``x -- Matmul -- u -- Activation -- y``: one unit -> {x, y}; two units -> {x, u, y}) is the
 contract; see ``integrations/vllm/tests/query/test_units.py``.
 
-The Program is read through the :class:`Program` protocol so an integration can present a decoded ``verity.primitives.circuits`` descriptor,
+The Program is read through the :class:`Program` protocol so an integration can present a decoded ``verity.ml.circuits`` descriptor,
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
 (id, definition id, output ports, the Values each read), the Values its prescribed inputs produce, and its outputs.
 Prescribed inputs are modelled as *Values of a producer that is not a Call* (``ValueRef.call`` is the input's id, which
