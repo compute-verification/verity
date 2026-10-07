@@ -2,7 +2,7 @@
 # online prover, in executable Lean. It reuses `certifier_program`'s schedule and `network_check`'s grid parameters; no
 # Mathlib and nothing of Security.
 name = "certifier_device"
-defaultTargets = ["CertifierDevice"]
+defaultTargets = ["CertifierDevice", "certifier-device-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -18,3 +18,7 @@ path = "../../../protocols/network/lean"
 
 [[lean_lib]]
 name = "CertifierDevice"
+
+[[lean_exe]]
+name = "certifier-device-difftest"
+root = "CertifierDevice.DifftestMain"
