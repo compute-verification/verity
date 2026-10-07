@@ -1,5 +1,6 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
-vendored from #1036's trial, and mirrors of what it composes over (the core interface's `answer`, the stub components).
+vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
+`Core.Protocol.case` and `answer` decode a case) and mirrors of the stub components.
 
 The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
 `cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
@@ -30,7 +31,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from verity_difftest import canonical
+from verity_difftest import Reject, canonical
+from verity_difftest import protocol as P
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -49,88 +51,6 @@ def verdict(verdicts: list[str]) -> str:
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
 
 
-class Refused(Exception):
-    """A decoder refuses its input; `answer` prefixes the message and rejects."""
-
-
-@dataclass(frozen=True)
-class Answer:
-    """`Core.Answer`: the verdict, its reason unless it accepts, the commitment's digest once it decoded, and the public
-    outputs and profile as JSON on acceptance."""
-
-    protocol: str
-    verdict: str
-    reason: str | None
-    digest: bytes | None
-    public: Any = None
-    profile: Any = None
-
-    def json(self, reason: bool = True) -> dict:
-        """`Answer.toJson`, with `"reason": null` when `reason` is false (the difftest doesn't compare reasons)."""
-        return {"commitment": None if self.digest is None else self.digest.hex(), "profile": self.profile,
-                "protocol": self.protocol, "public": self.public, "reason": self.reason if reason else None,
-                "verdict": self.verdict}
-
-
-def canonical_json(b: bytes) -> Any:
-    """`Core.canonicalJson`: UTF-8 that canonical JSON writes back byte for byte."""
-    try:
-        s = b.decode("utf-8")
-    except UnicodeDecodeError:
-        raise Refused("not UTF-8") from None
-    try:
-        j = json.loads(s)
-    except ValueError:
-        raise Refused("not JSON") from None
-    try:
-        same = canonical(j) == s
-    except TypeError:
-        same = False
-    if not same:
-        raise Refused("not canonical JSON (compact, keys sorted, integers only)")
-    return j
-
-
-def unhex(s: str) -> bytes:
-    """`Flock.unhex`: lowercase hex digits, an even number of them."""
-    if len(s) % 2 or any(c not in "0123456789abcdef" for c in s):
-        raise Refused("not lowercase hex")
-    return bytes.fromhex(s)
-
-
-def answer(protocol, params: bytes, commitment: bytes, evidence: bytes) -> Answer:
-    """`Core.Protocol.answer`: decode params (canonical JSON), commitment and evidence in that order, a refusal rejecting
-    with the commitment's digest once it decoded, then the check."""
-    def refuse(reason: str, digest: bytes | None) -> Answer:
-        return Answer(protocol.id, REJECT, reason, digest)
-
-    try:
-        p = protocol.params(canonical_json(params))
-    except Refused as e:
-        return refuse(f"params: {e}", None)
-    try:
-        c = protocol.commitment(commitment)
-    except Refused as e:
-        return refuse(f"commitment: {e}", None)
-    d = protocol.digest(c)
-    try:
-        ev = protocol.evidence(evidence)
-    except Refused as e:
-        return refuse(f"evidence: {e}", d)
-    kind, a, b = protocol.check(p, c, ev)
-    if kind == ACCEPT:
-        return Answer(protocol.id, ACCEPT, None, d, protocol.public_json(a), protocol.profile_json(b))
-    return Answer(protocol.id, kind, a, d)
-
-
-def _nat(j: Any, k: str) -> int:
-    """`j.getObjValAs? Nat k`."""
-    v = j.get(k) if isinstance(j, dict) else None
-    if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-        raise Refused(f"{k} is missing or not a natural number")
-    return v
-
-
 @dataclass(frozen=True)
 class Stub:
     """`Core.Example.protocol` under the id `id` (`Core.Composition.Stub.stub`): params `{"k": k}`, a 32-byte root that is
@@ -139,37 +59,32 @@ class Stub:
 
     id: str
 
-    def params(self, j):
-        return _nat(j, "k")
-
-    def commitment(self, b: bytes) -> bytes:
+    @staticmethod
+    def _root(b: bytes) -> bytes:
         if len(b) != 32:
-            raise Refused(f"a root is 32 bytes, not {len(b)}")
+            raise Reject(f"a root is 32 bytes, not {len(b)}")
         return b
 
-    def digest(self, root: bytes) -> bytes:
-        return root
+    @staticmethod
+    def _evidence(b: bytes) -> tuple[int, int]:
+        j = P.canonical_json(b)
+        return P.nat(j, "drawn"), P.nat(j, "passed")
 
-    def evidence(self, b: bytes) -> tuple[int, int]:
-        j = canonical_json(b)
-        return _nat(j, "drawn"), _nat(j, "passed")
-
-    def check(self, k: int, root: bytes, e: tuple[int, int]):
+    @staticmethod
+    def _check(k: int, root: bytes, e: tuple[int, int]) -> tuple:
         drawn, passed = e
         if passed < drawn:
-            return REJECT, f"{drawn - passed} of {drawn} drawn units failed", None
+            return REJECT, f"{drawn - passed} of {drawn} drawn units failed"
         if drawn < k:
-            return UNDECIDED, f"{drawn} of the {k} units drawn", None
+            return UNDECIDED, f"{drawn} of the {k} units drawn"
         profile = {"covered": [], "delta": "1/1000000", "drawn": {"unit": drawn},
                    "levels": [{"draw": {"subset": k}, "name": "unit", "query": None, "size": drawn}], "linked": True,
                    "prescribed": [], "programs": [root.hex()]}
-        return ACCEPT, passed, profile
+        return ACCEPT, {"passed": passed}, profile
 
-    def public_json(self, passed: int):
-        return {"passed": passed}
-
-    def profile_json(self, profile):
-        return profile
+    def answer(self, case: Any) -> dict:
+        return P.answer(self.id, case, params=lambda j: P.nat(j, "k"), commitment=self._root, evidence=self._evidence,
+                        check=self._check)
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
@@ -181,21 +96,21 @@ def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
 
 def _exactly(j: Any, keys: list[str], ctx: str) -> None:
     if not isinstance(j, dict):
-        raise Refused(f"{ctx}: not an object")
+        raise Reject(f"{ctx}: not an object")
     if sorted(j) != keys:
-        raise Refused(f"{ctx}: the keys must be {keys}, not {sorted(j)}")
+        raise Reject(f"{ctx}: the keys must be {keys}, not {sorted(j)}")
 
 
 def _entries(j: Any, ctx: str) -> list:
     _exactly(j, ["components"], ctx)
     if not isinstance(j["components"], list):
-        raise Refused(f"{ctx}.components: not a list")
+        raise Reject(f"{ctx}.components: not a list")
     return j["components"]
 
 
 def _str(x: dict, k: str) -> str:
     if not isinstance(x[k], str):
-        raise Refused(f"{k}: not a string")
+        raise Reject(f"{k}: not a string")
     return x[k]
 
 
@@ -206,57 +121,71 @@ class Product:
     id: str
     components: tuple
 
-    def params(self, j) -> list[tuple[str, str]]:
+    def params(self, j: Any) -> list[tuple[str, str]]:
         out = []
         for x in _entries(j, "the composition's params"):
             _exactly(x, ["id", "params"], "a component's params")
             out.append((_str(x, "id"), canonical(x["params"])))
         return out
 
-    def commitment(self, b: bytes) -> bytes:
+    @staticmethod
+    def commitment(b: bytes) -> bytes:
         if len(b) != 64:
-            raise Refused(f"the binding of the components' digests is 64 bytes, not {len(b)}")
+            raise Reject(f"the binding of the components' digests is 64 bytes, not {len(b)}")
         return b
 
-    def digest(self, c: bytes) -> bytes:
-        return c
-
-    def evidence(self, b: bytes) -> list[tuple[str, str, bytes, bytes]]:
+    @staticmethod
+    def evidence(b: bytes) -> list[tuple[str, str, bytes, bytes]]:
         out = []
-        for x in _entries(canonical_json(b), "the composition's evidence"):
+        for x in _entries(P.canonical_json(b), "the composition's evidence"):
             _exactly(x, ["commitment", "evidence", "id", "params"], "a component's case")
-            out.append((_str(x, "id"), canonical(x["params"]), unhex(_str(x, "commitment")), unhex(_str(x, "evidence"))))
+            out.append((_str(x, "id"), canonical(x["params"]), P.unhex(_str(x, "commitment")),
+                        P.unhex(_str(x, "evidence"))))
         return out
 
-    def run(self, ps, ev) -> list[tuple[str, Answer]] | str:
-        """`Core.Composition.run`: the components' answers, or why the cases don't fit the composition."""
-        want = [P.id for P in self.components]
+    def run(self, ps, ev) -> list[tuple[str, dict]] | str:
+        """`Core.Composition.run`: each component's outcome on its case, or why the cases don't fit the composition."""
+        want = [C.id for C in self.components]
         if [i for i, _ in ps] != want:
             return "params: not the composition's components, once each, in order"
         if [k[0] for k in ev] != want:
             return "evidence: not the composition's components, once each, in order"
         if any(k[1] != n[1] for n, k in zip(ps, ev)):
             return "evidence: a case carries params other than the composition's"
-        return [(P.id, answer(P, n[1].encode(), k[2], k[3])) for P, n, k in zip(self.components, ps, ev)]
+        return [(C.id, C.answer({"commitment": k[2].hex(), "evidence": k[3].hex(), "params": json.loads(n[1])}))
+                for C, n, k in zip(self.components, ps, ev)]
 
-    def check(self, ps, c: bytes, ev):
+    def binds(self, answers: list[tuple[str, dict]], c: bytes) -> bool:
+        """`Core.Composition.binding id answers = some c`: every component's digest is there, and they bind to `c`."""
+        if any(a["commitment"] is None for _, a in answers):
+            return False
+        return bind(self.id, [(i, bytes.fromhex(a["commitment"])) for i, a in answers]) == c
+
+    def check(self, ps, c: bytes, ev) -> tuple:
         answers = self.run(ps, ev)
         if isinstance(answers, str):
-            return REJECT, answers, None
-        rule = verdict([a.verdict for _, a in answers])
+            return REJECT, answers
+        rule = verdict([a["verdict"] for _, a in answers])
         if rule == REJECT:
-            return REJECT, "a component rejected", None
-        if bind(self.id, [(i, a.digest) for i, a in answers]) != c:
-            return REJECT, "the commitment does not bind the components' digests", None
+            return REJECT, "a component rejected"
+        if not self.binds(answers, c):
+            return REJECT, "the commitment does not bind the components' digests"
         if rule == UNDECIDED:
-            return UNDECIDED, "a component is undecided", None
-        return ACCEPT, {i: a.public for i, a in answers}, {i: a.profile for i, a in answers}
+            return UNDECIDED, "a component is undecided"
+        return ACCEPT, {i: a["public"] for i, a in answers}, {i: a["profile"] for i, a in answers}
 
-    def public_json(self, keyed):
-        return keyed
+    def answer(self, case: Any) -> dict:
+        """`Core.Protocol.case` of the product: the outcome of one `serve` line."""
+        return P.answer(self.id, case, params=self.params, commitment=self.commitment, evidence=self.evidence,
+                        check=self.check)
 
-    def profile_json(self, keyed):
-        return keyed
+    def verdicts(self, case: Any) -> list[str]:
+        """The components' verdicts on a case that fits the composition, else none."""
+        try:
+            answers = self.run(self.params(case["params"]), self.evidence(P.unhex(case["evidence"])))
+        except (Reject, KeyError, TypeError):
+            return []
+        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
 
 
 def stub_ids(*names: str) -> tuple[Stub, ...]:

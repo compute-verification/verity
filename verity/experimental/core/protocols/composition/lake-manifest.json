@@ -3,13 +3,6 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "verity_difftest",
-   "manifestFile": "lake-manifest.json",
-   "inherited": false,
-   "dir": "../../difftest/lean",
-   "configFile": "lakefile.toml"},
-  {"type": "path",
-   "scope": "",
    "name": "core_protocol",
    "manifestFile": "lake-manifest.json",
    "inherited": false,

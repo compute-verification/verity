@@ -1,9 +1,9 @@
-"""Onsite's and remote's Lean (`onsite-difftest`, `remote-difftest`: `Core.CompositionDifftest.answer` of each product)
-against the Python reference (`reference.py`: the trial's composition rule with top's reject dominance, over mirrors of the
-core interface's `answer` and of the stub components). Hypothesis draws each component's case to accept, reject, be
+"""Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
+reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
+core interface and mirrors of the stub components). Hypothesis draws each component's case to accept, reject, be
 undecided or fail to decode, then often breaks the composition's own inputs (a component dropped, unknown, repeated or
-out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence), and every
-outcome but its reason must agree exactly."""
+out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case
+itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly."""
 
 from __future__ import annotations
 
@@ -58,16 +58,18 @@ def stub_case(draw, cid: str) -> dict:
     return case
 
 
+#: The binding breaks come thrice: they are the only ones under which the components' own verdicts still stand, so the
+#: only way to reach a rejection that no component's explains.
 MUTATIONS = [None] * 10 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
-                           "repeat-param", "repeat-case", "case-params", "binding", "binding-id", "commitment-size",
-                           "evidence-noncanonical", "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex",
-                           "garbage-evidence", "garbage-params", "not-a-case"]
+                           "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
+                           "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
+                           "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 3
 
 
 @st.composite
 def composite(draw, product: R.Product) -> dict:
     """One case of `product`: its components' cases, then at most one break of the composition's own inputs."""
-    cases = [draw(stub_case(P.id)) for P in product.components]
+    cases = [draw(stub_case(C.id)) for C in product.components]
     named = [{"id": c["id"], "params": c["params"]} for c in cases]
     entries = [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(), "id": c["id"], "params": c["params"]}
                for c in cases]
@@ -111,47 +113,35 @@ def composite(draw, product: R.Product) -> dict:
     if m == "not-a-case":
         return draw(st.sampled_from([{"commitment": commitment.hex(), "params": params},
                                      {"commitment": "zz", "evidence": evidence.hex(), "params": params},
+                                     {"commitment": commitment.hex().upper(), "evidence": evidence.hex(), "params": params},
                                      {"commitment": commitment.hex(), "evidence": 7, "params": params}, []]))
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
-def components(product: R.Product, params: bytes, evidence: bytes) -> list[str]:
-    """The components' verdicts when the cases fit the composition, else none."""
-    try:
-        answers = product.run(product.params(R.canonical_json(params)), product.evidence(evidence))
-    except R.Refused:
-        return []
-    return [] if isinstance(answers, str) else [a.verdict for _, a in answers]
-
-
 def reference(product: R.Product, seen: collections.Counter):
-    """The Python side of `answer`: a case's outcome without its reason, or `Reject` for an input that isn't a case.
-    Counts the verdicts it gives in `seen`, and the rejections with an undecided component among them."""
-    def answer(value):
-        if not isinstance(value, dict) or "params" not in value or not all(
-                isinstance(value.get(k), str) for k in ("commitment", "evidence")):
-            raise D.Reject("not a case")
-        try:
-            c, e = R.unhex(value["commitment"]), R.unhex(value["evidence"])
-        except R.Refused as x:
-            raise D.Reject(str(x)) from None
-        params = canonical(value["params"]).encode()
-        a = R.answer(product, params, c, e)
-        seen[a.verdict] += 1
-        parts = components(product, params, e)
-        if a.verdict == R.REJECT and R.UNDECIDED in parts:
+    """The Python side of `serve`: a case's outcome. Counts the verdicts it gives in `seen`, the rejections with an
+    undecided component among them, and those no component's rejection explains."""
+    def answer(case):
+        out = product.answer(case)
+        seen[out["verdict"]] += 1
+        parts = product.verdicts(case)
+        if out["verdict"] == R.REJECT and R.UNDECIDED in parts:
             seen["reject, a component undecided"] += 1
-        if a.verdict == R.REJECT and parts and R.REJECT not in parts:
+        if out["verdict"] == R.REJECT and parts and R.REJECT not in parts:
             seen["reject, no component rejected"] += 1
-        return a.json(reason=False)
+        return out
     return answer
 
 
+def port(name: str, product: R.Product, seen: collections.Counter) -> D.ProtocolPort:
+    """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
+    return D.ProtocolPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
+                          package=PROTOCOLS / name)
+
+
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
-ONSITE = D.Port("onsite-difftest", "answer", reference(R.ONSITE, SEEN["onsite"]), composite(R.ONSITE),
-                package=PROTOCOLS / "onsite")
-REMOTE = D.Port("remote-difftest", "answer", reference(R.REMOTE, SEEN["remote"]), composite(R.REMOTE),
-                package=PROTOCOLS / "remote")
+ONSITE = port("onsite", R.ONSITE, SEEN["onsite"])
+REMOTE = port("remote", R.REMOTE, SEEN["remote"])
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 
@@ -168,11 +158,11 @@ def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_co
                 assert R.trial_verdict(vs) == R.verdict(vs), vs
 
 
-def _agree(port: D.Port, server, seen: collections.Counter, examples: int) -> None:
+def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) -> None:
     seen.clear()
-    stats = D.run(port, examples=examples, seed=0, server=server)
-    print(f"{port.exe}: {stats}, verdicts {dict(seen)}")
-    assert stats.rejects > examples // 100, stats
+    stats = D.run(p, examples=examples, seed=0, server=server)
+    print(f"{p.label}: {stats}, verdicts {dict(seen)}")
+    assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
     for kind in (R.ACCEPT, R.REJECT, R.UNDECIDED, "reject, a component undecided", "reject, no component rejected"):
         assert seen[kind] > examples // 50, (kind, dict(seen))
 
@@ -183,3 +173,27 @@ def test_remote_agrees(remote_server):
 
 def test_onsite_agrees(onsite_server):
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
+
+
+class Trial(R.Product):
+    """The trial's rule over the components' verdicts (`trial_verdict`): a component left undecided leaves the product
+    undecided even when another rejects. Everything else is the port's."""
+
+    def check(self, ps, c, ev) -> tuple:
+        answers = self.run(ps, ev)
+        if not isinstance(answers, str) and self.binds(answers, c) and R.trial_verdict(
+                [a["verdict"] for _, a in answers]) == R.UNDECIDED:
+            return R.UNDECIDED, "a component is undecided"
+        return super().check(ps, c, ev)
+
+
+def test_a_reference_without_reject_dominance_is_caught(onsite_server):
+    """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
+    is undecided, under a commitment that binds their digests."""
+    trial = Trial(R.ONSITE.id, R.ONSITE.components)
+    with pytest.raises(D.Mismatch) as e:
+        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
+              server=onsite_server)
+    assert (e.value.lean[0], e.value.python[0]) == (R.REJECT, R.UNDECIDED), (e.value.lean, e.value.python)
+    parts = R.ONSITE.verdicts(e.value.input)
+    assert R.REJECT in parts and R.UNDECIDED in parts, parts

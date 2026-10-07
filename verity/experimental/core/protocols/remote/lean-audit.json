@@ -1,8 +1,7 @@
 {
  "roots": ["CoreRemote"],
  "exempt": {
-  "RemoteMain": "the remote executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
-  "RemoteDifftest": "the remote-difftest executable's entry point, one line; it serves Core.CompositionDifftest.answer, audited under CompositionDifftest"
+  "RemoteMain": "the remote executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "layers": {
   "CoreRemote": {

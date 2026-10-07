@@ -1,5 +1,5 @@
 {
- "roots": ["CoreComposition", "CompositionDifftest"],
+ "roots": ["CoreComposition"],
  "layers": {
   "CoreComposition.Product": {
    "imports": ["CoreProtocol.Protocol", "Flock.Hash"],

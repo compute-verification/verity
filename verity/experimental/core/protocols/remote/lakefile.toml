@@ -1,8 +1,8 @@
 # Remote Verity as one `Core.Protocol` (`verity/remote/v0`): the composition of integrity (sampled proofs) and work
-# (PoUW), each a stub until its port lands. Its executable is the core CLI (`remote id | check | serve`); `remote-difftest`
-# serves its `answer` to the difftest. Code: no Mathlib.
+# (PoUW), each a stub until its port lands. Its executable is the core CLI (`remote id | check | serve`),
+# which the difftest drives. Code: no Mathlib.
 name = "core_remote"
-defaultTargets = ["CoreRemote", "remote", "remote-difftest"]
+defaultTargets = ["CoreRemote", "remote"]
 
 [leanOptions]
 autoImplicit = false
@@ -17,10 +17,6 @@ name = "core_protocol"
 path = "../interface"
 
 [[require]]
-name = "verity_difftest"
-path = "../../difftest/lean"
-
-[[require]]
 name = "core_composition"
 path = "../composition"
 
@@ -30,7 +26,3 @@ name = "CoreRemote"
 [[lean_exe]]
 name = "remote"
 root = "RemoteMain"
-
-[[lean_exe]]
-name = "remote-difftest"
-root = "RemoteDifftest"
