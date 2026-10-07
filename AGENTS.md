@@ -153,25 +153,30 @@ multi-core CPU pod. It covers:
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
-Landing (Daniel, 7 Oct: skip the full `check` where it's reasonable, and revert what breaks):
+Landing (Daniel, 7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check stays fast because a
+part's verdict is reused whenever its inputs haven't changed. Each verdict is keyed on a hash of the part's declared inputs
+(the read guard enforces them), the base image and the check's own code. So a docs-only change reruns nothing, a deleted
+test reruns its suite, and a layout move or a change to the check's own code reruns everything. The merge queue runs the
+check on the queued group. A nightly uncached check must agree; a disagreement means some part reads something it doesn't
+declare, and it is fixed in the check, not by reverting anyone's change.
 
-- A change lands on a targeted check: the parts its diff touches, run in parallel on the CPU machines. That's its changed
-  test suites (`tools/verity/check/suites.py`), circuit-check on the circuits it changes (cold workers reach 128-157 GB
-  each, so `--jobs 4` at most on vy-nebius-cpu-1 and 2 on vy-nebius-cpu-2, or run it on vy-nebius-1), the Lean check of
-  every Lake package whose pass misses (`tools/verity/lean/lean_audit.py --out DIR`, which includes each package requiring
-  a changed one by path; `--explain PKG` says why one misses), and `lean-agreement` when it touches C-Flock or its Lean
-  verifier (on its own: `lake build` in `verity/core/service/flock`, then `verity/ml/flock/verifier/ci.py` against the
-  upstream build `upstream.json` pins, under `research run`). A change that only edits docs or deletes tests needs none.
-- A full `check` runs before landing only for a layout move and for the gate's own code (`tools/verity/check/`,
-  `research merge` and its queue, the Lean audit), where a broken check would hide every later failure.
-- After a landing, one full `check` of `main`'s newest tip runs on vy-nebius-1. When it fails, the lander reverts the
-  merge that broke it (`git revert -m 1`) unless its owner has the fix within 30 minutes, and the revert lands unchecked.
-- `research merge --push` lands a commit whose full `check` passed. Until it takes a targeted check, a fast landing is a
-  merge commit made by hand, with trailers naming the targeted runs (`Checked:`) and the skipped full check
+Until reuse and the merge queue exist:
+
+- The lander lands a change by hand once every part whose declared inputs it touches passes: its test suites
+  (`tools/verity/check/suites.py`, minutes on the CPU machines), circuit-check on the circuits it changes (cold workers
+  reach 128-157 GB each, so `--jobs 4` at most on vy-nebius-cpu-1 and 2 on vy-nebius-cpu-2, or run it on vy-nebius-1),
+  the Lean check of every Lake package whose pass misses (`tools/verity/lean/lean_audit.py --out DIR`, which includes each
+  package requiring a changed one by path; `--explain PKG` says why one misses), and `lean-agreement` when it touches
+  C-Flock or its Lean verifier (on its own: `lake build` in `verity/core/service/flock`, then
+  `verity/ml/flock/verifier/ci.py` against the upstream build `upstream.json` pins, under `research run`).
+- The landing is a merge commit with trailers naming those runs (`Checked:`) and the skipped full check
   (`Skipped-check:`), pushed with `--no-verify`. Then `research merge --sweep` runs what a plain push skips: the spec DM,
   node 1's mirror and the post-train regression.
-- PRs land in trains: ci stacks the tips, and the lander lands the merged tree on the targeted check of what its members
-  touch.
+- A layout move and a change to the check or merge tooling (`tools/verity/check/`, `research merge` and its queue, the
+  Lean check) get a full `check` first and land through `research merge --push`.
+- After landings, a full `check` of the newest `main` runs on vy-nebius-1, one at a time. When it fails, the lander finds
+  the landing that broke it and reverts it at once (`git revert -m 1`), and its owner relands with the fix.
+- PRs land in trains: ci stacks the tips, and the lander lands the merged tree once every part its members touch passes.
 - A train member needs its owner's `ready` label at its head, written by hand if need be:
   `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass.
 - A grant carries to a head whose own patch is byte-identical.
