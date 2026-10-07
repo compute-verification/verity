@@ -1,5 +1,5 @@
 """Pearl-C's work law: what the verifier credits, draws and checks, all recomputed by the verifier (statement review item 5;
-red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vllm.md``).
+red team F1, F2 and F5–F8).
 
 * **`Split`**: a weight's channel split.
   - S is a set of at most ⌊k/100⌋ input channels, computed outside the unit.
@@ -33,8 +33,7 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
   - under a hashing format with the row cap (-h3, `row_cap`), so is each credited A row's debit over the credited columns,
     at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)).
   A failure is a wrong tile, reported as a reason; nothing raises.
-* **Voluntary rows (V-EX; research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md`` §6.13, the assessor's B at
-  17:32Z).**
+* **Voluntary rows (V-EX; the assessor's B at 17:32Z).**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
     in every unit of the weight). They are committed in `records_root` with the excluded rows, before the draw coin.
   - A voluntary row earns no credit. Its words are still formed, checked and hashed on every drawn tile that holds it.
