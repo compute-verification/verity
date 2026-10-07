@@ -45,7 +45,7 @@ def screen(x, alpha, aux, out, k, k8, sigma, band, BLOCK: tl.constexpr):
     screen_row(x, alpha, aux, out, tl.program_id(0), k, k8, sigma, band, BLOCK)
 
 @triton.jit
-def scatter(x, alpha, aux, rows, k, k8, sigma, band, flags_to, leaves, leaves_to, root, roots_to, offs, n_leaves,
+def scatter(x, alpha, aux, rows, k, k8, sigma, band, flags_to, leaves, leaves_to, root, roots_to, offs, n_leaves, n_root,
             BLOCK: tl.constexpr):
     p, b0 = tl.program_id(0), tl.cdiv(n_leaves, BLOCK)
     if p < rows:
@@ -55,4 +55,4 @@ def scatter(x, alpha, aux, rows, k, k8, sigma, band, flags_to, leaves, leaves_to
         tl.store(leaves_to + tl.load(offs) + i, tl.load(leaves + i, mask=i < n_leaves), mask=i < n_leaves)
     else:
         i = tl.arange(0, BLOCK)
-        tl.store(roots_to + tl.load(offs + 2) + i, tl.load(root + i, mask=i < 32), mask=i < 32)
+        tl.store(roots_to + tl.load(offs + 2) + i, tl.load(root + i, mask=i < n_root), mask=i < n_root)
