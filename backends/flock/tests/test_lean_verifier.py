@@ -798,14 +798,15 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     head, meta_line, rest = text.split("\n", 2)
     meta = json.loads(meta_line[5:])
 
-    def statement(m):
+    def statement(circuit):
         f = tmp_path / "c.circuit"
-        f.write_text(f"{head}\nMETA {json.dumps(m)}\n{rest}")
+        f.write_text(circuit)
         return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
                                "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True,
                               text=True, preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
 
-    assert statement(meta).returncode == 0
+    p = statement(text)
+    assert p.returncode == 0, p.stdout + p.stderr
     big = 2**32 - 1
     mask = next(r for r in meta["ranges"] if r["net"] == "mask")
     wide = dict(meta, k_log=big, ranges=meta["ranges"] + [dict(mask, slot_log=big, pos0=0)] * 24)
@@ -813,7 +814,7 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
                                          "lo_bits": 2}})
     for m, why in [(wide, f"META: k_log {big} is over 27: no fast100 schedule"),
                    (lookup, "META: lookup rsq's index is not its table's")]:
-        p = statement(m)
+        p = statement(f"{head}\nMETA {json.dumps(m)}\n{rest}")
         assert p.returncode == 1 and why in p.stdout, (why, p.returncode, p.stdout, p.stderr[-400:])
 
 
