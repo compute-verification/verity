@@ -1,13 +1,13 @@
 {
  "roots": ["Evaluate"],
  "exempt": {
-  "Evaluate.Main": "the verity-evaluate executable's entry point, one line; its loop is Evaluate.serve, audited under Evaluate"
+  "Evaluate.Main": "the verity-evaluate executable's entry point, one line: Evaluate.evaluateFn behind Difftest.serve, each audited in its own package"
  },
  "layers": {
   "Evaluate": {
-   "imports": ["Evaluate", "Flock", "Lean"],
+   "imports": ["Evaluate", "Flock", "Difftest", "Lean"],
    "except": [],
-   "why": "the evaluator is code: Lean core and C-Flock's verifier only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the evaluator is code: Lean core, C-Flock's verifier and the difftest harness only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

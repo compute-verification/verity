@@ -12,6 +12,10 @@ relaxedAutoImplicit = false
 name = "flock_verifier"
 path = "../../../../core/service/flock"
 
+[[require]]
+name = "verity_difftest"
+path = "../../difftest/lean"
+
 [[lean_lib]]
 name = "Evaluate"
 

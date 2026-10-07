@@ -1,28 +1,32 @@
-"""The Lean evaluator (`verity-evaluate`, `Evaluate.evaluate`) against the Python reference, output for output and refusal for
-refusal, on Boolean Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`).
+"""The Lean evaluator (`verity-evaluate`, `Evaluate.evaluateFn`) against the Python reference, output for output and refusal
+for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
+(`verity_difftest`: one server open per module, reject parity, Hypothesis drawing deterministically).
 
-The Python side of each case is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over the whole circuit
-with the run inputs bound, the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those
-Programs `reference.evaluate` itself is checked too. The Lean side reads the same descriptor and inputs as JSON lines. Two of
-the Lean evaluator's refusals are not the oracle's, so `python_answer` applies them by name: E0 implements the Boolean profile
-(§9) and run inputs only, and an input word of `Input<w>_v1` is below `2^w` (the oracle stores whatever it is given).
+The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over the whole circuit with the run
+inputs bound, the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those Programs
+`reference.evaluate` itself is checked too. Two of the Lean evaluator's refusals are not the oracle's, so `python_answer`
+applies them by name: a primitive the Lean does not implement yet, and a registered input; and an input word of
+`Input<w>_v1` is below `2^w` (the oracle stores whatever it is given).
 
-The Programs: the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table; real Boolean Definitions traced from
-`verity.ml.boolean`'s builders, on their one-call Programs, also held to the word Definition each computes; and seeded random
-Boolean composites built with the IR builder, which reach every node form (primitive, call, batch of a gate and of a
-composite over an axis, scan with xs and a shared argument) and both constants. Malformed programs and inputs are mutations
-of those, and both sides must refuse each.
+The Programs: seeded random Boolean composites built with the IR builder, which reach every node form (primitive, call,
+batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, drawn by a
+Hypothesis strategy with their inputs and, for a quarter of them, a mutation both sides must refuse; and explicit examples:
+the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table, real Boolean Definitions traced from
+`verity.ml.boolean`'s builders on their one-call Programs, also held to the word Definition each computes, and the malformed
+programs and inputs of `REFUSE`.
 """
 from __future__ import annotations
 
 import copy
+import functools
 import json
 import random
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+import verity_difftest as DT
+from hypothesis import strategies as st
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
@@ -30,6 +34,7 @@ from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.evaluation import reference
+from verity.ml.circuits.ops import fp32 as FP
 from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.ops.boolean import cast as BC
 from verity.ml.circuits.ops.boolean import elementwise as BE
@@ -38,19 +43,21 @@ from verity.ml.circuits.program import RUN, Program, input_id
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
 
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
 PKG = Path(__file__).resolve().parents[1]
 ADDER = Path(__file__).resolve().parents[5] / "ml/circuits/tests/boolean_vectors.json"
 BIT = BL.BIT
-RANDOM_PROGRAMS = 64
-RANDOM_INPUTS = 8
+#: seeds of the random composites the strategy draws from (each Program is built once), and the examples a run draws
+RANDOM_SEEDS = 256
+RANDOM_EXAMPLES = 1024
 
-needs_lake = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-
-# ---- the two sides ------------------------------------------------------------------------------------------------------
+# ---- the reference ------------------------------------------------------------------------------------------------------
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
-    """E0's primitives: the Boolean profile's gates and constant bits, and the run inputs of any width."""
+    """The primitives the Lean evaluator implements: the Boolean profile's gates and constant bits, and the run inputs of
+    any width."""
     m = input_id(fn.id)
     return m[0] == RUN if m else BL.is_gate(fn) or BL.is_constant_bit(fn)
 
@@ -61,7 +68,7 @@ def python_answer(desc: dict, inputs: list) -> dict:
         D = codec.decode_program(copy.deepcopy(desc), REGISTRY)
         for f in D.defs.values():
             if isinstance(f, PrimitiveDefinition) and not _in_scope(f):
-                raise ValueError(f"primitive {f.id}: outside E0")
+                raise ValueError(f"primitive {f.id}: not implemented by the Lean evaluator")
         body = D.root.body
         gates = [(body.offsets[k] + m, input_id(n.fn.id)[1]) for k, n in enumerate(body.nodes)
                  if isinstance(n.fn, PrimitiveDefinition) and input_id(n.fn.id) for m in range(n.gates)]
@@ -80,42 +87,25 @@ def python_answer(desc: dict, inputs: list) -> dict:
         return {"reject": f"{type(e).__name__}: {e}"}
 
 
-@pytest.fixture(scope="module")
-def lean():
-    subprocess.run(["lake", "build", "verity-evaluate"], cwd=PKG, check=True, capture_output=True)
-    exe = PKG / ".lake/build/bin/verity-evaluate"
-
-    def run(cases: list[tuple[dict, list]]) -> list[dict]:
-        lines = "".join(json.dumps({"fn": "evaluate", "input": {"program": d, "inputs": x}}) + "\n" for d, x in cases)
-        p = subprocess.run([str(exe)], input=lines, capture_output=True, text=True, check=True)
-        out = [json.loads(line) for line in p.stdout.splitlines()]
-        assert len(out) == len(cases), p.stderr
-        return out
-
-    return run
+def evaluate_reference(value: dict) -> list[int]:
+    """The port's reference: `python_answer` on a request's input, a refusal raised as the harness's `Reject`."""
+    if not (isinstance(value, dict) and set(value) == {"program", "inputs"} and isinstance(value["program"], dict)):
+        raise DT.Reject("input: a program object and its inputs")
+    got = python_answer(value["program"], value["inputs"])
+    if "reject" in got:
+        raise DT.Reject(got["reject"])
+    return got["output"]
 
 
-def assert_agree(lean, cases: list[tuple[str, dict, list]]) -> tuple[int, int]:
-    """Every case answered alike: the same outputs, or a refusal on both sides. Returns (outputs, refusals)."""
-    got = lean([(d, x) for _, d, x in cases])
-    bad = []
-    for (label, d, x), g in zip(cases, got):
-        want = python_answer(d, x)
-        if ("output" in want) != ("output" in g) or want.get("output") != g.get("output"):
-            bad.append((label, x, want, g))
-    assert not bad, bad[:5]
-    return sum("output" in g for g in got), sum("reject" in g for g in got)
+def request(desc: dict, inputs: list) -> dict:
+    return {"program": desc, "inputs": inputs}
 
 
 def desc_of(program: Program) -> dict:
     return json.loads(codec.canonical_json(codec.encode_program(program)))
 
 
-# ---- the programs -------------------------------------------------------------------------------------------------------
-
-def _bits(rng: random.Random, n: int) -> list[int]:
-    return [rng.randint(0, 1) for _ in range(n)]
-
+# ---- the random composites ----------------------------------------------------------------------------------------------
 
 def _random_program(seed: int) -> tuple[Program, CompositeDefinition, list[int]]:
     """A random Boolean composite `x: Array<nx, bit>, y: bit -> Array<r, bit>` over helper composites, and its parameter
@@ -199,67 +189,13 @@ def _random_program(seed: int) -> tuple[Program, CompositeDefinition, list[int]]
     return Program(bind(main)), main, [nx, 1]
 
 
-#: Boolean Definitions traced from the builders, small enough for the oracle; each names the word Definition it computes
-REAL = [BC.Bf16ToF32, BG.F2fpBf16, BE.I32Add, BE.Bf16Add, BE.F32Add, BG.AmpereBF16TcDot16]
+@functools.cache
+def _random_desc(seed: int) -> tuple[str, tuple[int, ...]]:
+    program, _main, leaves = _random_program(seed)
+    return json.dumps(desc_of(program)), tuple(leaves)
 
 
-def _words(bits: list[int], widths: list[int]) -> list[int]:
-    out, i = [], 0
-    for w in widths:
-        out.append(sum(b << j for j, b in enumerate(bits[i:i + w])))
-        i += w
-    return out
-
-
-# ---- the tests ----------------------------------------------------------------------------------------------------------
-
-@needs_lake
-def test_the_pinned_adder(lean):
-    v = json.loads(ADDER.read_text())["program"]
-    desc = json.loads(v["descriptor"])
-    cases = []
-    for (x, y), _ in v["words"]:
-        cases.append((f"adder {x}+{y}", desc, [[x & 1, x >> 1], [y & 1, y >> 1]]))
-    got = lean([(d, i) for _, d, i in cases])
-    assert [_words(g["output"], [4]) for g in got] == [w for _, w in v["words"]]
-    assert assert_agree(lean, cases) == (16, 0)
-
-
-@needs_lake
-def test_random_boolean_composites(lean):
-    cases, forms = [], set()
-    for seed in range(RANDOM_PROGRAMS):
-        program, main, leaves = _random_program(seed)
-        desc = desc_of(program)
-        forms |= {nd["form"] for d in desc["definitions"].values() if d["form"] == "composite" for nd in d["body"]["nodes"]}
-        rng = random.Random(10_000 + seed)
-        for i in range(RANDOM_INPUTS):
-            x = [_bits(rng, n) for n in leaves]
-            cases.append((f"seed {seed} input {i}", desc, x))
-            assert python_answer(desc, x)["output"] == list(reference.evaluate(bind(main), *x))
-    assert forms == {"primitive", "call", "batch", "scan"}
-    assert assert_agree(lean, cases) == (RANDOM_PROGRAMS * RANDOM_INPUTS, 0)
-
-
-@needs_lake
-@pytest.mark.slow
-def test_traced_definitions(lean):
-    """The builders' own circuits on their one-call Programs, against `reference.evaluate` and the word Definition."""
-    cases = []
-    for k, d in enumerate(REAL):
-        spec = bind(d)
-        program, _call = reference.standalone_call(spec)
-        desc = desc_of(program)
-        params, ret = spec.signature()
-        rng = random.Random(k)
-        for _ in range(4):
-            x = [_bits(rng, t.leaves) for _, t in params]
-            want = list(reference.evaluate(spec, *x))
-            words = [w for (_, t), b in zip(params, x) for w in _words(b, BL.elements(t))]
-            assert _words(want, BL.elements(ret)) == list(reference.evaluate(word_of(d), *words))
-            cases.append((f"{spec.id}", desc, x))
-    assert assert_agree(lean, cases) == (len(cases), 0)
-
+# ---- malformed programs and inputs --------------------------------------------------------------------------------------
 
 def _root_nodes(desc: dict) -> list[dict]:
     return desc["definitions"][desc["root"]]["body"]["nodes"]
@@ -287,7 +223,7 @@ def _first_gate(desc: dict) -> str:
     return next(f for f in desc["callees"] if f in ("And2_v1", "Xor2_v1", "And3_v1", "Xor3_v1"))
 
 
-#: (label, mutation of the seed-0 random program's descriptor or inputs); each is refused on both sides
+#: (label, mutation of a random program's descriptor or of its inputs); each is refused on both sides
 REFUSE = [
     ("an input word short", None, lambda x: x[0].pop()),
     ("an input word extra", None, lambda x: x[1].append(0)),
@@ -305,51 +241,145 @@ REFUSE = [
      lambda d: d["definitions"][_first_gate(d)]["params"][0].__setitem__(0, "y"), None),
     ("a gate id with a leading zero", lambda d: _rename(d, _first_gate(d), _first_gate(d).replace("2", "02").replace("3", "03")), None),
     ("an unknown primitive", lambda d: _rename(d, _first_gate(d), "Or2_v1"), None),
-    ("a constant bit 2", lambda d: _rename(d, "Not_v1", "Const1[0x2]_v1") if "Not_v1" in d["callees"] else None, None),
+    ("a constant bit 2", lambda d: _rename(d, "Not_v1", "Const1[0x2]_v1"), None),
     ("a forward reference", _forward, None),
 ]
 
 
-@needs_lake
-def test_refusals(lean):
-    program, _main, leaves = _random_program(0)
-    base = desc_of(program)
-    assert "Not_v1" in base["callees"] and ["Value", 1] in base["types"]
-    cases = []
-    for label, edit_desc, edit_inputs in REFUSE:
-        d, x = copy.deepcopy(base), [[0] * n for n in leaves]
+def _mutated(desc: dict, inputs: list, k: int) -> tuple[dict, list] | None:
+    """`REFUSE[k]` applied to copies, or None where it does not apply to this program (no such node or callee)."""
+    _label, edit_desc, edit_inputs = REFUSE[k]
+    d, x = copy.deepcopy(desc), copy.deepcopy(inputs)
+    try:
         if edit_desc:
             edit_desc(d)
         if edit_inputs:
             edit_inputs(x)
-        assert "reject" in python_answer(d, x), label
-        cases.append((label, d, x))
-    registered = desc_of(Program(bind(_random_program(1)[1]), registered=("y",)))
-    cases.append(("a registered input", registered, [[0] * n for n in _random_program(1)[2]]))
-    assert assert_agree(lean, cases) == (0, len(cases))
+    except (StopIteration, ValueError, KeyError, IndexError, AssertionError):
+        return None
+    return d, x
 
 
-@needs_lake
-def test_refusals_name_what_is_refused(lean):
-    """A primitive outside E0, and a registered input, are refused by name, never evaluated."""
-    word = CompositeDefinition("DtWordAdd", 1, (), lambda S: ((("a", SC.I32), ("b", SC.I32)), SC.I32),
-                               lambda B, S, a, b: B.call(SC.I32Add, a, b), register=False)
-    _, main, leaves = _random_program(1)
-    got = lean([(desc_of(Program(bind(word))), [[1], [2]]),
-                (desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves])])
-    assert "I32Add_v1" in got[0]["reject"] and "not implemented" in got[0]["reject"], got[0]
-    assert "RegisteredInput1_v1" in got[1]["reject"], got[1]
-    assert python_answer(desc_of(Program(bind(word))), [[1], [2]])["reject"].endswith("outside E0")
+@st.composite
+def composite_requests(draw) -> dict:
+    """A random composite on random input bits; one draw in four is mutated by an entry of `REFUSE` (an input word of 2 where
+    the drawn one does not apply)."""
+    text, leaves = _random_desc(draw(st.integers(0, RANDOM_SEEDS - 1)))
+    desc = json.loads(text)
+    x = [draw(st.lists(st.integers(0, 1), min_size=n, max_size=n)) for n in leaves]
+    if draw(st.integers(0, 3)) == 0:
+        desc, x = _mutated(desc, x, draw(st.integers(0, len(REFUSE) - 1))) or _mutated(desc, x, 2)
+    return request(desc, x)
 
 
-@needs_lake
-def test_every_line_is_answered(lean):
-    """A request outside the protocol is refused in its line, and the lines after it are still answered."""
-    exe = PKG / ".lake/build/bin/verity-evaluate"
+PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=composite_requests(), package=PKG)
+server = DT.server_fixture(PORT)
+
+
+def _bits(rng: random.Random, n: int) -> list[int]:
+    return [rng.randint(0, 1) for _ in range(n)]
+
+
+def _words(bits: list[int], widths: list[int]) -> list[int]:
+    out, i = [], 0
+    for w in widths:
+        out.append(sum(b << j for j, b in enumerate(bits[i:i + w])))
+        i += w
+    return out
+
+
+def agree(server, cases: list[dict]) -> tuple[int, int]:
+    """Each case answered alike by both sides (`verity_difftest.replay`); (outputs, refusals)."""
+    kinds = [DT.replay(PORT, c, server)[0] for c in cases]
+    return kinds.count("output"), kinds.count("reject")
+
+
+# ---- the tests ----------------------------------------------------------------------------------------------------------
+
+@pytest.mark.slow
+def test_random_boolean_composites(server):
+    stats = DT.run(PORT, examples=RANDOM_EXAMPLES, seed=0, server=server)
+    assert stats.outputs >= 512 and stats.rejects >= 128, stats
+
+
+def test_the_random_composites_reach_every_form_and_their_oracle_is_reference_evaluate():
+    forms = set()
+    for seed in range(64):
+        program, main, leaves = _random_program(seed)
+        desc = desc_of(program)
+        forms |= {nd["form"] for d in desc["definitions"].values() if d["form"] == "composite" for nd in d["body"]["nodes"]}
+        rng = random.Random(10_000 + seed)
+        for _ in range(8):
+            x = [_bits(rng, n) for n in leaves]
+            assert python_answer(desc, x)["output"] == list(reference.evaluate(bind(main), *x))
+    assert forms == {"primitive", "call", "batch", "scan"}
+
+
+def test_the_pinned_adder(server):
     v = json.loads(ADDER.read_text())["program"]
-    lines = ["not json", json.dumps({"fn": "nope", "input": {}}), json.dumps({"fn": "evaluate", "input": {"program": 3}}), "",
-             json.dumps({"fn": "evaluate", "input": {"program": v["descriptor"], "inputs": [[1, 0], [1, 0]]}})]
-    p = subprocess.run([str(exe)], input="\n".join(lines) + "\n", capture_output=True, text=True, check=True)
-    out = [json.loads(line) for line in p.stdout.splitlines()]
-    assert [list(o) for o in out] == [["reject"]] * 3 + [["output"]]
-    assert _words(out[3]["output"], [4]) == [1 + 1 + 8]
+    desc = json.loads(v["descriptor"])
+    cases = [request(desc, [[x & 1, x >> 1], [y & 1, y >> 1]]) for (x, y), _ in v["words"]]
+    got = [json.loads(DT.replay(PORT, c, server)[1]) for c in cases]
+    assert [_words(g, [4]) for g in got] == [w for _, w in v["words"]]
+    assert agree(server, cases) == (16, 0)
+
+
+#: Boolean Definitions traced from the builders, small enough for the oracle; each names the word Definition it computes
+REAL = [BC.Bf16ToF32, BG.F2fpBf16, BE.I32Add, BE.Bf16Add, BE.F32Add, BG.AmpereBF16TcDot16]
+
+
+@pytest.mark.slow
+def test_traced_definitions(server):
+    """The builders' own circuits on their one-call Programs, against `reference.evaluate` and the word Definition."""
+    cases = []
+    for k, d in enumerate(REAL):
+        spec = bind(d)
+        program, _call = reference.standalone_call(spec)
+        desc = desc_of(program)
+        params, ret = spec.signature()
+        rng = random.Random(k)
+        for _ in range(4):
+            x = [_bits(rng, t.leaves) for _, t in params]
+            want = list(reference.evaluate(spec, *x))
+            words = [w for (_, t), b in zip(params, x) for w in _words(b, BL.elements(t))]
+            assert _words(want, BL.elements(ret)) == list(reference.evaluate(word_of(d), *words))
+            assert python_answer(desc, x)["output"] == want
+            cases.append(request(desc, x))
+    assert agree(server, cases) == (len(cases), 0) == (24, 0)
+
+
+def test_refusals(server):
+    desc, leaves = json.loads(_random_desc(0)[0]), _random_desc(0)[1]
+    assert "Not_v1" in desc["callees"] and ["Value", 1] in desc["types"]
+    cases = []
+    for k, (label, _, _) in enumerate(REFUSE):
+        d, x = _mutated(desc, [[0] * n for n in leaves], k)
+        assert "reject" in python_answer(d, x), label
+        cases.append(request(d, x))
+    _, main, leaves1 = _random_program(1)
+    cases.append(request(desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves1]))
+    assert agree(server, cases) == (0, len(cases)) == (0, 18)
+
+
+def test_refusals_name_what_is_refused(server):
+    """A primitive the Lean does not implement, and a registered input, are refused by name, never evaluated."""
+    f32 = CompositeDefinition("DtF32Add", 1, (), lambda S: ((("a", SC.F32), ("b", SC.F32)), SC.F32),
+                              lambda B, S, a, b: B.call(FP.F32Add, a, b), register=False)
+    _, main, leaves = _random_program(1)
+    s = DT.Server(PORT.argv())
+    with s:
+        got = [s.call("evaluate", request(desc_of(Program(bind(f32))), [[1], [2]])),
+               s.call("evaluate", request(desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves]))]
+    assert got[0][0] == "reject" and "F32Add_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
+    assert got[1][0] == "reject" and "RegisteredInput1_v1" in got[1][1], got[1]
+    assert "not implemented" in python_answer(desc_of(Program(bind(f32))), [[1], [2]])["reject"]
+
+
+def test_a_malformed_input_is_rejected_and_the_next_request_answered(server):
+    v = json.loads(ADDER.read_text())["program"]
+    assert server.call("evaluate", {"program": 3})[0] == "reject"
+    assert server.call("evaluate", {"program": v["descriptor"]})[0] == "reject"
+    with pytest.raises(DT.ProtocolError, match="unknown fn"):
+        server.call("nope", {})
+    kind, out = server.call("evaluate", request(v["descriptor"], [[1, 0], [1, 0]]))
+    assert kind == "output" and _words(json.loads(out), [4]) == [1 + 1 + 8]

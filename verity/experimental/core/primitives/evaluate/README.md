@@ -10,16 +10,18 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`, `Const1[0x0]_v1`, `Const1[0x1]_v1`) and `Input<w>_v1`; every other
   primitive, and `RegisteredInput<w>_v1`, is refused by name.
 - `Evaluate/Walk.lean`: the gate walk (`Evaluate.evaluate`).
-- `Evaluate/Serve.lean`: the line protocol, one JSON request per line on stdin, one answer per line on stdout:
-  `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs": [[word, ...], ...]}}` gives `{"output": [word, ...]}` or
-  `{"reject": "<reason>"}`, with one list of words per parameter of the program function, each in leaf order.
+- `Evaluate/Serve.lean`: `Evaluate.evaluateFn`, which `verity-evaluate` serves through the difftest harness's line protocol
+  (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
+  [[word, ...], ...]}}` gives `{"output": [word, ...]}` or `{"reject": "<reason>"}`, with one list of words per parameter of the
+  program function, each in leaf order.
 
 ~~~sh
 cd verity/experimental/core/primitives/evaluate && lake build      # .lake/build/bin/verity-evaluate
 python tools/verity/lean/check.py verity/experimental/core/primitives/evaluate   # the Lean check, from the repository root
-uv run tools/verity/check/suites.py verity/experimental/core/primitives/evaluate # the difftest against the Python
+uv run tools/verity/check/suites.py verity-core-evaluate           # the difftest against the Python
 ~~~
 
-`tests/test_difftest.py` holds it to the Python reference, output for output and refusal for refusal: the pinned 2-bit adder
-of `boolean_vectors.json`, Boolean Definitions traced from the builders (up to the Ampere BF16 tensor-core step), seeded
-random Boolean composites over every node form, and malformed programs and inputs.
+`tests/test_difftest.py` holds it to the Python reference through `verity_difftest`, output for output and refusal for
+refusal: seeded random Boolean composites over every node form, drawn by a Hypothesis strategy with their inputs and with
+mutations both sides refuse; and explicit examples: the pinned 2-bit adder of `boolean_vectors.json`, Boolean Definitions
+traced from the builders (up to the Ampere BF16 tensor-core step), and malformed programs and inputs.
