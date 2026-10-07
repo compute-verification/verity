@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S] [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S [--script-arg ARG]...] [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
@@ -36,6 +36,11 @@ import sys
 import tempfile
 
 SCRIPT = "tools/move/layout.py"
+#: the arguments the move's script runs with (`--script-arg`; rename.py takes its map as `--map`)
+SCRIPT_ARGS: tuple[str, ...] = ()
+#: what a script takes on a branch's tree rather than main's: layout.py notes the branch's own references to a directory the map
+#: splits instead of failing on them (they're its owner's to check, and the move's commit is the same either way)
+BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
 SCRIPT_DIR = "tools/move"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 
@@ -105,7 +110,8 @@ def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None
     """The environment the move's script runs in: this one, unless the uv on the PATH isn't the version `base`'s
     `tools/check/pod_setup.sh` pins, which layout.py refuses to `uv lock` with. Then a `uv` in `tmp` that runs the pinned
     version through `uv tool run` goes first on the PATH, so the restack doesn't depend on which uv the caller has."""
-    found = git("show", f"{base}:tools/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode()
+    found = git("show", f"{base}:tools/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode() or \
+        git("show", f"{base}:tools/verity/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode()
     m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", found, re.M)
     real = shutil.which("uv")
     if not m or not real:
@@ -138,7 +144,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
                 overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
                 git("reset", "-q", "--soft", overlay, cwd=wt)
-            p = subprocess.run([python, SCRIPT], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
+            p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
@@ -154,13 +160,13 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
             git("worktree", "prune", cwd=cwd)
 
 
-_GENERATED: dict[tuple[str, str, str], str] = {}
+_GENERATED: dict[tuple, str] = {}
 
 
 def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
     """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
     fixups) taken as the move would make the third merge undo them, while every branch still reported clean."""
-    key = (move, base, python)
+    key = (move, base, python, SCRIPT, SCRIPT_ARGS)
     if key not in _GENERATED:
         try:
             _GENERATED[key] = run_script(base, base, python, cwd)[0]
@@ -199,7 +205,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
         ran = True
         if tree != tree_of(tip, cwd):
-            msg = (f"restack: rerun {SCRIPT} from {move[:12]} on {branch}\n\n"
+            msg = (f"restack: rerun {shlex.join([SCRIPT, *SCRIPT_ARGS])} from {move[:12]} on {branch}\n\n"
                    f"The layout move's codemod, run at the root of this tree as {move[:12]} was made from {base[:12]}.\n\n"
                    f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
             tip = commit_tree(tree, [tip], msg, cwd)
@@ -230,7 +236,7 @@ def line(r: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    global SCRIPT
+    global SCRIPT, SCRIPT_ARGS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
     ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
@@ -239,6 +245,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
     ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
                                                     "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
+    ap.add_argument("--script-arg", action="append", default=[], metavar="ARG",
+                    help="an argument for the script, repeated in order; one that starts with - as --script-arg=ARG "
+                         "(the rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/security_map.toml)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
@@ -246,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if not a.script.startswith(SCRIPT_DIR + "/"):
         ap.error(f"--script: a script under {SCRIPT_DIR}/")
-    SCRIPT = a.script
+    SCRIPT, SCRIPT_ARGS = a.script, tuple(a.script_arg)
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
     results = []
