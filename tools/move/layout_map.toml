@@ -136,7 +136,6 @@ paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/pri
 "tools/research/tests/test_queue.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
 "tools/research/tests/test_store_prov.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
 "tools/research/tests/test_store_vllm_tools.py: catalog" = "the vLLM tools' closure as the test expects it: the catalog's code, under ml/circuits"
-"verity/Security/Proofs/NetworkCertifier/README.md: verity/protocols/accounting" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
 "verity/primitives/circuits/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
 "verity/primitives/commitments/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
 "verity/protocols/accounting/work/pouw/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
