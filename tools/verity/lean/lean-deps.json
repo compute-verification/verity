@@ -1,0 +1,23 @@
+{
+ "deps": {
+  "033f0f54c0ed2da231c71cb21205a293bc2662cc66955fc921e10cc0f6e042fb": {
+   "bytes": 1313926613,
+   "package": "Security/Proofs",
+   "run": "r20260929-032531-8f07",
+   "sha256": "ab583debd99442d229191651497f784b71050bb57dd0384fb528bc74e24c75d8"
+  },
+  "0afbec3ab8cf77e6fff7b910bd31cbfa1c66ba3ad7cb7fd77105193b174c1b0a": {
+   "bytes": 1309786850,
+   "package": "Security/Proofs",
+   "run": "r20261006-175210-ac32",
+   "sha256": "557ade352fdc854e251a53753887eda7da6586ef14575ebbd4b4c3c1c1bae0ae"
+  },
+  "ffa0705a8465f9a411fd3d909dc363d6663eb036e64a49df98d1aa7d9ae9f682": {
+   "bytes": 701909680,
+   "package": "Security",
+   "run": "r20261003-152421-a7fe",
+   "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
+  }
+ },
+ "schema": "lean-deps-pin/v1"
+}
