@@ -199,6 +199,8 @@ EDITS = [
      "`python tools/verity/lean/check.py Security/Proofs`"),
     ("Security/Proofs/Flock/Soundness/ASSUMPTIONS.md", "`python tools/verity/lean/upstream.py ../Security/Proofs`",
      "`python tools/verity/lean/upstream.py Security/Proofs`"),
+    # backends/ is empty after the move, and @proofs' C-Flock (verity/ml/flock/, verity/core/service/flock/) is under verity/
+    (".agents/skills/using-slack/registry.json", '        "verity/",\n        "backends/",\n', '        "verity/",\n'),
 ]
 
 #: Lean packages whose `TRUSTED.sha256` the move's rewrites leave stale (the grader's pins, the trusted layer's Lake files):
