@@ -6,3 +6,5 @@ import PousCheck.Keys
 import PousCheck.Commit
 import PousCheck.Setup
 import PousCheck.SetupDifftest
+import PousCheck.Merkle
+import PousCheck.Difftest

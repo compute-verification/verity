@@ -1,9 +1,19 @@
 {
  "roots": ["PousCheck"],
  "exempt": {
-  "PousCheck.SetupDifftestMain": "the setup difftest against the Python reference, under `runs`: compiled evaluation of PousCheck.SetupDifftest.main, audited under PousCheck, a test and not a proof"
+  "PousCheck.SetupDifftestMain": "the setup difftest against the Python reference, under `runs`: compiled evaluation of PousCheck.SetupDifftest.main, audited under PousCheck, a test and not a proof",
+  "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof"
  },
  "runs": {
+  "PousCheck.DifftestMain": {
+   "why": "generated instances on which PousCheck's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths)",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "400"],
+   "data": {
+    "difftest/instances.jsonl": "4acab31060b049d30b81ad131bf60b51d65edddf562fa13f79b7d8957bad4804",
+    "difftest/python.jsonl": "327eebfd3af3eff997026655c6808634574123a16132070d8bd97d81e566c1f5"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
   "PousCheck.SetupDifftestMain": {
    "why": "generated instances on which PousCheck's P2 v4 maps (d, σ, D), keys (expand_prefix, sha512_keys), commitment (setup.commit, tagged_sha512, the manifest) and public-encoder setup check (decode_segment, verifier_key mode PUBLIC, refusals by kind) give what the Python reference gives, and the spec's §7 vectors.json against its SHA-512 pins, keys, codewords and σ rejection cases",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "{difftest/p2-vectors.json}", "3741"],
@@ -23,6 +33,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
  }
 }

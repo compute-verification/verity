@@ -2,7 +2,7 @@
 # formats the Python reference writes. It imports Lean core and Flock's executable primitives only. Its properties are
 # stated in `Security/Properties/Pous.lean`; it moves into `verity/core/protocols/pous` once they are proved.
 name = "pous_check"
-defaultTargets = ["PousCheck", "pous-setup-difftest"]
+defaultTargets = ["PousCheck", "pous-setup-difftest", "pous-audit-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -18,3 +18,7 @@ name = "PousCheck"
 [[lean_exe]]
 name = "pous-setup-difftest"
 root = "PousCheck.SetupDifftestMain"
+
+[[lean_exe]]
+name = "pous-audit-difftest"
+root = "PousCheck.DifftestMain"
