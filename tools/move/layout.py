@@ -24,6 +24,11 @@ and neither is a dotted name that only looks like a module ([rewrite] keep_dotte
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
 it moves. It appends [paths] to research's `moves.json` (once), whose recorded moves it never rewrites.
+
+It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
+with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
+whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
+with the reason; one that no longer occurs is an error too.
 """
 from __future__ import annotations
 
@@ -90,6 +95,8 @@ class Layout:
         self.merged = set(data.get("distributions", {}).get("merged", []))
         self.retired = tuple(data.get("retired", {}).get("paths", RETIRED))
         self.drop = set(data.get("drop", {}).get("paths", []))
+        #: "old file: old directory" -> why the file's reference to a directory the map splits may follow the larger part
+        self.split = dict(data.get("split", {}))
 
     # paths
     def file(self, p: str) -> str | None:
@@ -201,9 +208,20 @@ class Run:
         self.moved: dict[str, str] = {}             # new path -> old path, for files this run moves
         self.texts: dict[str, str] = {}             # new path -> text as it will be written
         self.dropped: list[str] = []                # old paths of the files [drop] deletes
+        self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
+
+    def split_reference(self, path: str, directory: str, what: str):
+        """File `path` (new) refers to old `directory`, which the map splits, by a reference the rewrite changes (`what`)."""
+        self.note("approximate directory paths", what)
+        self.splits.setdefault(f"{self.old_of.get(path, path)}: {directory.strip('/')}", what)
+
+    def unacknowledged_splits(self) -> tuple[list[str], list[str]]:
+        """The split references [split] doesn't acknowledge, and the acknowledgements no reference needs any more."""
+        return ([f"{k} ({w})" for k, w in sorted(self.splits.items()) if k not in self.L.split],
+                sorted(k for k in self.L.split if k not in self.splits))
 
     # ---------------------------------------------------------------------------------------------- moves
 
@@ -495,7 +513,7 @@ class Run:
             if out == token.rstrip("/"):
                 return token
             if approx:
-                self.note("approximate directory paths", f"{path}: {token} -> {out}")
+                self.split_reference(path, full, f"{path}: {token} -> {out}")
             self._count(path, "package-relative paths")
             return out + ("/" if token.endswith("/") else "")
 
@@ -540,7 +558,9 @@ class Run:
                 if approx:
                     self.note("unmapped directory paths", f"{path}: {token}")
                 return None
-            if approx or "{" in tail:
+            if approx:
+                self.split_reference(path, head, f"{path}: {token} -> {new}/{tail}")
+            elif "{" in tail:
                 self.note("approximate directory paths", f"{path}: {token} -> {new}/{tail}")
             return f"{new}/{tail}" + ("/" if slash else "")
         is_dir = t in self.old_dirs or slash or (t not in self.known_old and self.L.file(t) is None)
@@ -550,7 +570,7 @@ class Run:
                 self.note("unmapped directory paths", f"{path}: {token}")
             return None
         if approx:
-            self.note("approximate directory paths", f"{path}: {token} -> {new}")
+            self.split_reference(path, t, f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
 
     def _map_relative(self, token: str, path: str, old: str, plain: bool = False, from_member: bool = False) -> str | None:
@@ -579,9 +599,9 @@ class Run:
             if new_target is None:
                 new_target = target            # it stays, though part of it may move
                 if approx and path != old:
-                    self.note("approximate directory paths", f"{path}: {token} (part of {target} moves)")
+                    self.split_reference(path, target, f"{path}: {token} (part of {target} moves)")
             elif approx:
-                self.note("approximate directory paths", f"{path}: {token} -> {new_target}")
+                self.split_reference(path, target, f"{path}: {token} -> {new_target}")
         else:
             new_target = self.L.file(target) or target
         if path == old and new_target == target:
@@ -1400,6 +1420,11 @@ def main(argv: list[str] | None = None) -> int:
     run.move(moves)
     run.create()
     run.rewrite_all()
+    unacknowledged, stale = run.unacknowledged_splits()
+    if unacknowledged or stale:
+        raise SystemExit("references to a directory the map splits, which [split] doesn't acknowledge:\n"
+                         + "".join(f"  {x}\n" for x in unacknowledged)
+                         + "".join(f"  [split] acknowledges what no reference needs any more: {k}\n" for k in stale))
     run.record()
     run.write()
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))
