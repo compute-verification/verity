@@ -177,7 +177,6 @@ current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(a
 `select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
 `replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
 return the attempt documents; artifact queries return `{id, kind, bytes, payload_type, manifest, local, remote, repo_path}`.
-One `Index` may be used from several threads: `db` is the calling thread's own connection.
 `compact(src, dst)` (`research data catalog --compact OUT`) copies the catalog for readers that query it but never fetch
 (`research notes mcp --catalog`): the same tables and indexes, `manifest_json` NULL, no `replicas` / `replica_checks`.
 
@@ -487,8 +486,7 @@ research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels all on the remote, else the failing legs;
-                                              N targets (default 8) at once, each printed as it finishes (--json: at the end, in order)
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
