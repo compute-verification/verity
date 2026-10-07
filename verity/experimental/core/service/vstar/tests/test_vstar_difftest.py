@@ -558,7 +558,8 @@ def _stage(sh: A.Shape) -> list[tuple[str, dict, object]]:
 @pytest.mark.slow
 @pytest.mark.skipif(not STAGE, reason="V*'s whole stage, byte for byte (VERITY_VSTAR_STAGE=M,K_LOG,CLAIMS[;...]): Python's "
                                       "builders take tens of minutes and gigabytes a shape, a CPU pod's job")
-@pytest.mark.parametrize("shape", [tuple(map(int, x.split(","))) for x in STAGE.split(";") if x] or [None])
+@pytest.mark.parametrize("shape", [tuple(map(int, x.split(","))) for x in STAGE.split(";") if x] or [None],
+                         ids=lambda s: "m{}-k{}-c{}".format(*s) if s else "none")
 def test_stage_is_byte_equal(tmp_path, shape):
     """Every statement of V* over an inner session of ``shape``, from `vstar stage`, against the file `rec_vstage.stage`
     writes for it (`_stage`), byte for byte. With ``VERITY_VSTAR_STAGE_OUT`` set, each statement's digests go to
