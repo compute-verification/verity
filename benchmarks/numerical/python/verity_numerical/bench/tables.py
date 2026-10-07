@@ -6,7 +6,7 @@ Reads ``bench-result/v1``, ``native-peak/v1`` and ``instance-equiv/v1`` artifact
 store (``research.store.LocalStore``), applies the frozen validity predicate (:func:`reject_reasons`) and renders:
 
 * **Table 1** -- the candidate proof systems (:data:`CANDIDATES`): definitional, no performance, no status;
-* **Table 2** -- headline proving overhead by target: one row per ``verity_catalog.targets.target.TARGETS`` entry, one
+* **Table 2** -- headline proving overhead by target: one row per ``verity.ml.circuits.targets.target.TARGETS`` entry, one
   column per candidate; a cell is the *best valid* implementation of that candidate (min ``t.total``) run on the row's
   native device SKU, printed as ``R_native_spec / R_proved`` with ``R_proved = 2KB / t.total``;
 * **Table 3** -- the prover phase decomposition of every populated Table 2 cell (the six buckets, joints, ``Other``).
@@ -29,8 +29,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from verity_catalog.silicon.instructions import INSTRUCTIONS
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import census, contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
@@ -157,7 +157,7 @@ CAPTION: dict[str, Any] = {
 
 RESULT_KIND = "bench-result/v1"
 NATIVE_PEAK_KIND = "native-peak/v1"
-#: ``tools/native_peak`` 's canonical GEMM method string (the shape every GEMM measurement's ``method`` starts with).
+#: ``benchmarks/native_peak`` 's canonical GEMM method string (the shape every GEMM measurement's ``method`` starts with).
 NATIVE_PEAK_METHOD_CUBLAS = "cublas dense gemm 8192^3, median of 5"
 #: What the measured column is, for the caption (selection rule in :func:`_native_measured`).
 NATIVE_PEAK_METHOD = ("the best dense GEMM through the vendor library on the row's device x dtype, median of 5, the call and size in the "
@@ -166,7 +166,7 @@ NATIVE_PEAK_METHOD = ("the best dense GEMM through the vendor library on the row
 BF16_INSTANCES_MANIFEST_SHA256 = census.INPUT_SETS["bench-instances-v1"].manifest_sha256
 #: The frozen instance ref a valid result of each target must carry, ``instances`` field for field.  A target absent here
 #: has no frozen set yet: every result of it is rejected with that reason.  The synthetic sets (FP8 Ada, the two Hopper
-#: relations) are pinned by their recipe digest, the BF16 Ampere set by its fixture manifest (``catalog/census/input_sets.json``).
+#: relations) are pinned by their recipe digest, the BF16 Ampere set by its fixture manifest (``benchmarks/census/input_sets.json``).
 FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
     s.target: contract.instances_ref(s.tier, 0, s.size, s.manifest_sha256, dataset=s.dataset) for s in census.INPUT_SETS.values()}
 
@@ -360,7 +360,7 @@ def dtype_of(target: Target) -> str | None:
     return ins.a_dtype if ins else None
 
 
-#: ``native-peak/v1`` measurement dtypes that name a block-scaled *format* over an operand dtype: ``tools/native_peak
+#: ``native-peak/v1`` measurement dtypes that name a block-scaled *format* over an operand dtype: ``benchmarks/native_peak
 #: --dtype nvfp4`` times the sm_120 ``kind::mxf4nvf4`` instruction on E2M1 operands (UE4M3 block scales), so it is the
 #: measured peak of an ``e2m1`` target.
 NATIVE_DTYPE_ALIASES = {"nvfp4": "e2m1", "mxfp4": "e2m1"}
@@ -991,7 +991,7 @@ def build(store: Any) -> Tables:
                  "backend": backend, "profile": fp.get("profile"), "proof_class": fp.get("proof_class")}
         if target is None:
             problems = contract.validate(meta)
-            T.rejected.append({**entry, "reasons": [f"profile {fp.get('profile')!r} is not a target of verity_catalog.targets.target"]
+            T.rejected.append({**entry, "reasons": [f"profile {fp.get('profile')!r} is not a target of verity.ml.circuits.targets.target"]
                                + ([_contract_reason(problems)] if problems else [])})
             continue
         labels = store.labels(art_id)

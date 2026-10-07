@@ -1,11 +1,11 @@
 """The tables vLLM's primitives read by index are declared (`PrimitiveDefinition.tables`): the SiLU, RN32 tanh and gelu-tanh
 activations (`silu_bf16`, `tanh_rn`, `gelu_tanh_bf16`) are the program's, registered inputs the primitives still hold, so the
-guard (`verity.primitives.circuits.operations.program_data`) lists them; FA3's MUFU.RCP table is the library's."""
+guard (`verity.ml.circuits.operations.program_data`) lists them; FA3's MUFU.RCP table is the library's."""
 from __future__ import annotations
 
-from verity.primitives.circuits import constants as K
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits import operations as O
+from verity.ml.circuits import constants as K
+from verity.ml.circuits.program import Program
+from verity.ml.circuits import operations as O
 from verity_vllm.program.registry import b1, dense, hopper
 from verity_vllm.program.registry import prims as P
 

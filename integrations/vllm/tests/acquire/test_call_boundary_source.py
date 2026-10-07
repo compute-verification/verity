@@ -1,7 +1,7 @@
 """The call-boundary source (`acquire.sources.call_boundary_source`) on CPU tensors with a recording committer, on request Programs written
 as Build dirs: a Gemma-2-style dense Program (the ATen norm chains, one input and x + residual, and the soft-capped logits) and the
 block-scaled FP8 linear (`Fp8GroupQuant_v1 -> ScaledMmFp8Block_v1`).  Every `call_boundaries` identity of the manifest is committed once
-per step over its element range with the words a row-by-row `verity.primitives.circuits.evaluation.evaluate` of the Program gives -- on edge words too (NaN
+per step over its element range with the words a row-by-row `verity.ml.circuits.evaluation.evaluate` of the Program gives -- on edge words too (NaN
 payloads, +-inf, +-0, subnormals, the largest finite); a manifest naming none attaches nothing and a forced attach refuses; a body the
 rule cannot evaluate is refused by name; an argument of another shape is a collector error naming the site; and the consuming GEMM's
 replay reads the committed words and checks the served output as before."""
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from tests.acquire.call_boundary_programs import DENSE, EMB, EPS, H, IL, LP, PF, T, V, build_dir, dense_program
-from verity.primitives.circuits.evaluation import evaluate, evaluate_batch
+from verity.ml.circuits.evaluation import evaluate, evaluate_batch
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
 from verity_vllm.query.call_scope import specialization
@@ -77,7 +77,7 @@ def dense_fields():
 
 
 def reference(doc, prompt, fields, field_order):
-    """Every Call's output leaves, row by row through `verity.primitives.circuits.evaluation.evaluate` (the IR's plain-integer reference)."""
+    """Every Call's output leaves, row by row through `verity.ml.circuits.evaluation.evaluate` (the IR's plain-integer reference)."""
     weights = [int(w) for n in field_order for w in fields[n]]
     vals: dict[int, list[int]] = {}
     for r in doc["rows"]:
