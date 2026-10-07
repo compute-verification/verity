@@ -53,10 +53,10 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterable, Sequence
 
-from verity.primitives.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, Node, PrimitiveDefinition, SpecializedDefinition, bind,
+from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, Node, PrimitiveDefinition, SpecializedDefinition, bind,
                     composite)
-from verity.primitives.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
-from verity.primitives.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
+from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
 from verity_vllm.program.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names (SPEC §7)
@@ -284,7 +284,7 @@ def lifted_prim_v1(p: PrimitiveDefinition) -> PrimitiveDefinition:
         from verity_vllm.program.registry.b1 import const
         lp = const(p.ret.w + 1, p.evaluate())
     elif fam == "Input":
-        from verity.primitives.circuits.program import RUN, input_prim
+        from verity.ml.circuits.program import RUN, input_prim
         lp = input_prim(p.ret.w + 1, getattr(p, "binding", RUN))
     elif p.id in ("SelectI32_v1", "SelectF32_v1"):
         lp = l_select(32)
@@ -1648,7 +1648,7 @@ def n_out_histogram(fam: Any, *, max_sets: int = N_OUT_HISTOGRAM_MAX_SETS, progr
     weight or the prompt read across the cut, carries no tag and grows nothing; `n_out_lifted_max` is that count) and, for information
     only, `w_out_payload_max` (= max over sets of `w_out^⊥ − tag bits`, the unlifted width; never the rule).  Bounded by `max_sets`;
     `complete` says whether every set was visited."""
-    from verity.primitives.circuits import boundary as BD
+    from verity.ml.circuits import boundary as BD
     hist: dict[int, int] = {}
     n = unsupported = multipart = 0
     complete = True
@@ -1690,7 +1690,7 @@ def lifted_width_admissibility(program: Any, fam: Any, *, w_max_lifted: int = W_
     lifted parameter `w_max_lifted` on the lifted (w+1) widths the Program's types carry.  Returns the verdict's JSON with the lifted
     labels (A5) and the A4.4 width summary (`max_seen` from the validator, the `n_out` histogram from the boundary module); beside it,
     for information, the same validator's verdict at the active-reference `W_MAX` (fails on any set holding a 32-bit leaf, by design)."""
-    from verity.primitives.circuits import partition as PT
+    from verity.ml.circuits import partition as PT
     lim = limits if limits is not None else PT.Limits()
     v = PT.validate_width(program, fam, int(w_max_lifted), lim)
     v_ref = PT.validate_width(program, fam, W_MAX, lim)
@@ -1711,7 +1711,7 @@ def width_summary_a44(program: Any, fam: Any, width_verdict: Any, *, w_max_lifte
     (the boundary module's per-set Σ(w+1), equal to `max_seen` when the validator certified every set), `n_out_max`, `growth_max`
     (= `n_out_max`), the `n_out` histogram, `w_out_payload_max` (information, never the rule), and `readiness_at_32` (the 32-bit gate
     readiness of the lifted Program, information beside the verdict at `w_max_lifted`)."""
-    from verity.primitives.circuits import partition as PT
+    from verity.ml.circuits import partition as PT
     h = n_out_histogram(fam, max_sets=histogram_max_sets, program=program)
     if not h["complete"]:  # the exact walk did not cover the family (real bodies: 10^9 sets): the STRUCTURAL bound per class covers it all
         h = {**h, "n_out_structural_bound": n_out_structural_bound(program, fam)}
@@ -1739,7 +1739,7 @@ def n_out_structural_bound(program: Any, fam: Any) -> dict:
     returned leaves, the same count `gateset.member_width` sums widths over; internal gates are scoped, nothing else escapes).  Returns the
     histogram of the bound (sets per bound value, every set counted), `n_out_bound_max`, `growth_max_bound`.  Exact for a one-leaf member
     that is read (the default tiling's atomic sets: bound 1, exact walk 1).  No usable tiling -> unavailable by name; nothing is guessed."""
-    from verity.primitives.circuits import partition as PT
+    from verity.ml.circuits import partition as PT
     tiling = PT.family_tiling(fam)
     if tiling is None:
         return {"available": False, "why": "no tiling (an algebra family): the exact walk is the only source"}
@@ -1755,7 +1755,7 @@ def n_out_structural_bound(program: Any, fam: Any) -> dict:
         hit = memo.get(id(fn))
         if hit is not None and hit[0] is fn:
             return hit[1]
-        from verity.primitives.circuits.defs import PrimitiveDefinition
+        from verity.ml.circuits.defs import PrimitiveDefinition
         g = 1 if isinstance(fn, PrimitiveDefinition) else len({ref for ref in fn.body.ret})
         memo[id(fn)] = (fn, g)
         return g
@@ -1862,7 +1862,7 @@ def as_program(fn: SpecializedDefinition, **kw) -> "Program":
     """`Program(fn)` for any complete specialization, INCLUDING body-only ones (a decoded `WorkloadRequest_v1` component or a
     `Lifted[decoded]`): those get a same-id definition whose python body is the identity replay of the set body, so the root lowers,
     evaluates and digests exactly as the body says (the spec id — hence `program_fn` in the digest — is unchanged)."""
-    from verity.primitives.circuits.program import Program
+    from verity.ml.circuits.program import Program
     if not _is_decoded(fn):
         return Program(fn, **kw)
     body = fn.body
@@ -1956,7 +1956,7 @@ def _remap_nodes(r: Refs, args: Sequence[Coll], nidx: Sequence[int], redirect: d
 def request_boundaries(body, boundary_prefix: str = BOUNDARY_PREFIX) -> list[int]:
     """The sampling-event nodes of a flat request body: the nodes whose spec id starts with `boundary_prefix`, each a one-leaf
     `Value<32>` (the committed token of event `s`), in body order.  `cap = len(...)`."""
-    from verity.primitives.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import _spec_id
     b = [k for k, n in enumerate(body.nodes) if _spec_id(n.fn).startswith(boundary_prefix)]
     for k in b:
         if body.nodes[k].out != Value(32):
@@ -2094,7 +2094,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
 def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, int, int]]:
     """PAD-03's deletion rule as a function: the lifted body's `(spec id, lo, hi)` rows with the guard rows deleted and the gates
     renumbered — equal to the unlifted component's rows modulo the `Lifted[…]` spec ids (tested)."""
-    from verity.primitives.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import _spec_id
     b = lifted.body
     guards = set(lifted.guard_nodes)  # type: ignore[attr-defined]
     rows, g = [], 0

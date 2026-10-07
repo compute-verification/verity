@@ -31,7 +31,7 @@ REPO = Path(__file__).resolve().parents[5]
 DIRECTORIES = {
     "A-GKR": REPO / "archive" / "gkr" / "templates",
     "B-Ligero": REPO / "archive" / "direct" / "ligero" / "templates",
-    "C-Flock": REPO / "backends" / "flock" / "python" / "verity_flock" / "templates",
+    "C-Flock": REPO / "verity" / "ml" / "flock" / "python" / "verity_flock" / "templates",
     "D-SP1": REPO / "archive" / "sp1" / "python" / "verity_sp1" / "templates",
 }
 

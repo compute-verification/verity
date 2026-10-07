@@ -2,7 +2,7 @@
 authentication paths leave the device as ONE pinned, non-blocking copy each instead of one synchronous ``.cpu()`` /
 ``cp.asnumpy`` per object (the root; the (M, t) column block; the (t, depth, 8) sibling block).  Same bytes as
 ``merkle.commit_device`` / ``merkle.open_device``: leaf-level-first sibling per level, ``lvl[(c >> k) ^ 1]``, 32 bytes
-each as 8 little-endian uint32 words.  The hash kernels themselves (``kernels/hash_gpu``) are untouched; this
+each as 8 little-endian uint32 words.  The hash kernels themselves (``verity/ml/kernels/hash_gpu``) are untouched; this
 module only reads the tree levels they produce.
 """
 from __future__ import annotations

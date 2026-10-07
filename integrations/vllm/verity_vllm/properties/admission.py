@@ -17,7 +17,7 @@ torch at module level:
 
 `produce` draws the inputs (uint16/uint32 words -> device tensors), runs `production`, and stores every case's input and
 output words (`case_<i>/in_<j>.npy`, `out_<k>.npy`, `case.json`).  `check` rebuilds `spec(statics)`, evaluates its body on
-the SAME input words through the Verity evaluator (core `verity.primitives.circuits.evaluation.evaluate`) and compares the output encodings
+the SAME input words through the Verity evaluator (core `verity.ml.circuits.evaluation.evaluate`) and compares the output encodings
 word for word.  Gate G4 reads the resulting `quarantine.json`: `differential.passed == differential.total > 0` for every
 quarantined definition the run used.  Edge-kind inputs (`zeros`, `max`, `subnormal`, `alternating`) are required: at least
 one case per kind; `check` fails the admission otherwise.
@@ -142,8 +142,8 @@ def produce(adapter: str, n: int, seed: int, out: Path, device: str = "cuda") ->
 # --- check (verity venv) ------------------------------------------------------------------------------------------------
 
 def evaluate_spec(spec, operand_words: list[np.ndarray]) -> list[int]:
-    """Encodings returned by one call of `spec` on operands given as word arrays: core `verity.primitives.circuits.evaluation.evaluate`."""
-    from verity.primitives.circuits.evaluation import evaluate
+    """Encodings returned by one call of `spec` on operands given as word arrays: core `verity.ml.circuits.evaluation.evaluate`."""
+    from verity.ml.circuits.evaluation import evaluate
 
     params, _ = spec.signature()
     if len(params) != len(operand_words):
