@@ -68,7 +68,7 @@ paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/pri
          "tools/native_peak/"]
 
 [drop]
-paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml",
+paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "experimental/verity_experimental/commitments/__init__.py",
          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/communication/__init__.py",
          "verity/protocols/accounting/space/__init__.py", "verity/protocols/accounting/work/__init__.py",
          "verity/protocols/verification/__init__.py"]
