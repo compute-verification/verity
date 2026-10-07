@@ -25,7 +25,7 @@
 # (Programs, manifest), the bootstrap stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has
 # a timed window running or waiting, resolves the Build's artifact in node 1's store, copies that artifact's store manifest into
 # node 2's store (which has no remote, and the Commit's precheck reads it), and writes the fill job. Before any of that it asks the
-# queue (`cluster submit`, from VY_QUEUE_SRC's tools/cluster) to place the Commit on node 2 with its research question: a refusal
+# queue (`cluster submit`, from VY_QUEUE_SRC's infra/cluster) to place the Commit on node 2 with its research question: a refusal
 # keeps the row on node 1, and once the fill job is written the placement is appended to node 1's $GUEST/placed.jsonl. Node 2's
 # fill queue stays the executor, so these count apart from `research run --queue` (top-level 5:14 AM PDT). A queue that gives no
 # answer doesn't hold the row back.

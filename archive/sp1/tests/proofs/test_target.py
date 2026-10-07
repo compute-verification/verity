@@ -1,4 +1,4 @@
-"""The frozen first target (``verity_catalog.targets.target``) is exactly what the recorded vectors prove.
+"""The frozen first target (``verity.ml.circuits.targets.target``) is exactly what the recorded vectors prove.
 
 Each test pins one clause of the target's statement against the code that implements it and against the
 conformance vectors a correct prover produced public values for; a semantic drift in any column fails here.
@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from verity_catalog.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word
-from verity_catalog.silicon.errors import InvalidArtifact
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word
+from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
 from verity_sp1.proofs.families import make_tc_ampere_bf16_gate_set
 from verity_sp1.proofs.programs import gemm_coordinate
-from verity_catalog.targets.target import FAMILY, FAMILY_DIGEST, FIRST, K16_VECTOR, K1536_VECTOR
+from verity.ml.circuits.targets.target import FAMILY, FAMILY_DIGEST, FIRST, K16_VECTOR, K1536_VECTOR
 
 FIXTURES = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists()) / "fixtures" / "typed-obligation-v0"
 

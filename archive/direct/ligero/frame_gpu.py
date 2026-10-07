@@ -1,4 +1,4 @@
-"""The committer's frame-v3 trees on the GPU: ``kernels/hash_gpu/frame_v3.py`` behind the tree builders of
+"""The committer's frame-v3 trees on the GPU: ``verity/ml/kernels/hash_gpu/frame_v3.py`` behind the tree builders of
 ``auth.py`` (word leaves) and ``hashauth.py`` (row leaves, output words), byte-identical to their host paths (the
 ``frame_gpu_test.py`` pins).  ``LIGERO_COMMIT_GPU=0`` keeps the host paths; ``LIGERO_GPU_STRICT=1`` makes a missing
 GPU path on a cupy host an error rather than a silent host fallback.
@@ -21,7 +21,7 @@ ENABLED = os.environ.get("LIGERO_COMMIT_GPU", "1") != "0"
 ROW_SCHEMES = ("blake3", "blake3-xob")  # leaf schemes whose row digests run here (one leaf, two circuits)
 
 try:
-    _shared = str(Path(__file__).resolve().parents[3] / "kernels")
+    _shared = str(Path(__file__).resolve().parents[3] / "verity" / "ml" / "kernels")
     if _shared not in sys.path:
         sys.path.insert(0, _shared)
     import cupy as cp
