@@ -1,8 +1,8 @@
 // Pearl-C4 on sm_120a (RTX PRO 6000, RTX 5090): the kernels of `pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`
 // (verity/experimental/protocols/pouw/schemes/pearl_c4.py), for dev.py.  Every kernel takes one Args by value: 16 pointers p[] and
 // 16 ints i[].  FMT 0 is NVFP4 (E2M1, UE4M3 per 16 along k), FMT 1 MXFP4 (E2M1, UE8M0 per 32).  Hashing is GPU 2's
-// pouw_hash.cuh (TurboSHAKE128, SHA-256), included from the pinned commit build.sh names, and the seeds' SHA-512 is
-// pearl_c/sha512.cuh's (Pearl-C's -h3 compression).
+// pouw_hash.cuh (TurboSHAKE128, SHA-256), included from the pinned commit build.sh names, and the seeds' and noise lines'
+// SHA-512 is pearl_c/sha512.cuh's (Pearl-C's -h3 compression).
 //
 // Buffers, all row-major (scales k-tile major) and little-endian:
 //   x        rows x k BF16 (A or B)                          codes    rows x k/2 bytes, E2M1, even position in the low nibble
@@ -111,16 +111,14 @@ DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); 
 DEV uint32_t swz128(int r, int c) { return r * 128 + ((c ^ (r & 7)) << 4); }
 
 // ---------------------------------------------------------------- noise lines and F's transpose
-// Prototype arms for the line's hash (LINE_ARM, the measurement only): 0 TurboSHAKE128 (below), 1 SHA-512 with one
-// compression per line (its first 16 bytes), 2 SHA-512 with one compression per four lines (block index/4, quarter index%4);
-// SHA-512's H_"pearl-c4/v2/line"(seed ‖ role ‖ u32 LE) from the label block's precomputed state.
-#ifndef LINE_ARM
-#define LINE_ARM 0
-#endif
+// line(seed, role, index) = bytes 16·(index & 3) .. +15 of the line block ⌊index/4⌋ (pearl_c4.line_block):
+// SHA-512(LINE_BLOCK ‖ seed (32 B) ‖ role ‖ c u32 LE), all 64 bytes, LINE_BLOCK = "pearl-c4/v2/line" ‖ \0 zero-padded to one
+// 128-byte block, whose compression LINE_MID is (SHA-512's state after it, big-endian words)
 __constant__ uint64_t LINE_MID[8] = {0xfdb83079a0e69062ull, 0x016df33feb42c07eull, 0x2947f8bafd5eee91ull,
                                      0x5c158735900dc8c1ull, 0xf3ad12a7257a2c36ull, 0x0fe5ee6d0ba4bc58ull,
                                      0x695f5fc8ee46c6ebull, 0x5acf3747d183fa80ull};
 DEV uint64_t bswap64(uint64_t x) { return rs_be64((uint32_t)x, (uint32_t)(x >> 32)); }
+// the line block's state: 8 big-endian words, lines 4c .. 4c + 3 in words (0, 1), (2, 3), (4, 5), (6, 7)
 DEV void line_block(const uint64_t* seed, int role, uint32_t c, uint64_t st[8]) {
   uint64_t w[16];
 #pragma unroll
@@ -134,27 +132,6 @@ DEV void line_block(const uint64_t* seed, int role, uint32_t c, uint64_t st[8]) 
   w[15] = 8 * (128 + 37);
   rs_compress(st, w);
 }
-#if LINE_ARM == 0
-constexpr uint8_t D_LINE = 0x24;
-// line(seed, role, index) = TurboSHAKE128(seed (32 B) | role | index u32 LE, 0x24, 16 bytes)
-DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
-  uint64_t s[25];
-#pragma unroll
-  for (int i = 0; i < 25; i++) s[i] = 0;
-#pragma unroll
-  for (int i = 0; i < 4; i++) s[i] = seed[i];
-  s[4] = (uint64_t)(uint8_t)role | (uint64_t)(uint32_t)idx << 8 | (uint64_t)D_LINE << 40;
-  s[ph::TS_RATE - 1] ^= 0x8000000000000000ull;
-  ph::keccak_p<12>(s);
-  return make_ulonglong2(s[0], s[1]);
-}
-#elif LINE_ARM == 1
-DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
-  uint64_t st[8];
-  line_block(seed, role, (uint32_t)idx, st);
-  return make_ulonglong2(bswap64(st[0]), bswap64(st[1]));
-}
-#else
 DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
   uint64_t st[8];
   line_block(seed, role, (uint32_t)idx >> 2, st);
@@ -163,12 +140,16 @@ DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
   const uint64_t hi = q == 0 ? st[1] : q == 1 ? st[3] : q == 2 ? st[5] : st[7];
   return make_ulonglong2(bswap64(lo), bswap64(hi));
 }
-#endif
-// p0 seed, p1 out; i0 role, i1 count
+// one thread per line block, lines 4·idx .. 4·idx + 3 below count.  p0 seed, p1 out; i0 role, i1 count
 extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
-  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx >= a.i[1]) return;
-  reinterpret_cast<ulonglong2*>(a.p[1])[idx] = line16(reinterpret_cast<const uint64_t*>(a.p[0]), a.i[0], idx);
+  const int c = blockIdx.x * blockDim.x + threadIdx.x;
+  if (4 * c >= a.i[1]) return;
+  uint64_t st[8];
+  line_block(reinterpret_cast<const uint64_t*>(a.p[0]), a.i[0], (uint32_t)c, st);
+  ulonglong2* out = reinterpret_cast<ulonglong2*>(a.p[1]) + 4 * c;
+#pragma unroll
+  for (int q = 0; q < 4; q++)
+    if (4 * c + q < a.i[1]) out[q] = make_ulonglong2(bswap64(st[2 * q]), bswap64(st[2 * q + 1]));
 }
 
 // ft[p][b] = code p of line 2b | code p of line 2b + 1 << 4.  p0 lines (k x 16 B), p1 ft (32 x k/2); i0 k
