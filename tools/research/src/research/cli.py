@@ -1160,7 +1160,7 @@ LEAN_FILE_PATCH = "lean-file.patch"
 def _git(root: Path, *args: str, env: dict | None = None) -> str:
     import subprocess
 
-    r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, env=env)
+    r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, env=env, check=False)
     if r.returncode != 0:
         raise LookupError(f"`git {' '.join(args)}` failed: {r.stderr.strip()[-300:]}")
     return r.stdout
@@ -1180,7 +1180,7 @@ def lean_file_patch(root: Path, rev: str) -> bytes:
             shutil.copyfile(index, env["GIT_INDEX_FILE"])
         _git(root, "add", "-A", env=env)
         r = subprocess.run(["git", "-C", str(root), "diff", "--cached", "--binary", "--full-index", rev], capture_output=True,
-                           env=env)
+                           env=env, check=False)
     if r.returncode != 0:
         raise LookupError(f"`git diff --cached {rev}` failed: {r.stderr.decode(errors='replace').strip()[-300:]}")
     return r.stdout

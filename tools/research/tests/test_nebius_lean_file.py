@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from research import cli
 
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
@@ -172,7 +171,7 @@ def test_the_patch_is_applied_to_the_fresh_tree_and_an_error_in_the_file_fails_t
 
 
 def test_without_warm_deps_for_its_manifest_nothing_runs_and_the_tree_is_removed(node):
-    n, sha, repo, tmp = node
+    n, sha, _repo, tmp = node
     for d in n.deps.iterdir():
         d.rename(d.with_name("other"))
     out = tmp / "out"
@@ -234,5 +233,5 @@ def test_the_workload_hands_vy_lean_file_the_run_dirs_paths(tmp_path):
     env = {"PATH": f"{tmp_path}:/usr/bin:/bin", "RESEARCH_RUN_DIR": "/r"}
     for patch, want in (("lean-file.patch", ["--patch", "/r/inputs/lean-file.patch"]), ("", [])):
         r = subprocess.run(["bash", "-c", cli.LEAN_FILE_CMD, "vy-lean-file", SHA, "A.lean", patch], capture_output=True,
-                           text=True, env=env)
+                           text=True, env=env, check=False)
         assert r.stdout.split() == ["/usr/local/bin/vy-lean-file", SHA, "A.lean", "--out", "/r/out", *want]

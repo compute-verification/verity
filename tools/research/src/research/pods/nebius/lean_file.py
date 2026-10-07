@@ -37,7 +37,7 @@ import sys
 import time
 import tomllib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 OK, FAILED, REFUSED = 0, 1, 2
@@ -156,7 +156,8 @@ def needs_deps(pkg: Path) -> bool:
 
 
 def _active(unit: str) -> bool:
-    r = subprocess.run(["systemctl", "show", "-p", "ActiveState", "--value", unit], capture_output=True, text=True)
+    r = subprocess.run(["systemctl", "show", "-p", "ActiveState", "--value", unit], capture_output=True, text=True,
+                       check=False)
     return r.returncode != 0 or r.stdout.strip() not in ("inactive", "failed")
 
 
@@ -221,7 +222,7 @@ def check(n: Node, sha: str, file: str, patch: Path | None, out: Path, slot_wait
     os.chown(lp, *owner)
     t0 = time.monotonic()
     n.jobs.mkdir(mode=0o755, parents=True, exist_ok=True)
-    tree = n.jobs / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{os.getpid()}-{os.urandom(3).hex()}"
+    tree = n.jobs / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{os.getpid()}-{os.urandom(3).hex()}"
     summary: dict = {"schema": "lean-file/v1", "sha": sha, "file": file, "tree": str(tree)}
     try:
         rc, _ = run_sandbox([*n.sandbox, "checkout", sha, "--tree", str(tree)], lp)
@@ -229,7 +230,7 @@ def check(n: Node, sha: str, file: str, patch: Path | None, out: Path, slot_wait
             raise Refused(f"vy-lean-sandbox checkout exited {rc} (its reason is in {lp})")
         if patch is not None and patch.stat().st_size:
             r = subprocess.run(["git", "-C", str(tree), "-c", f"safe.directory={tree}", "apply", "--whitespace=nowarn",
-                                str(patch.resolve())], capture_output=True, text=True)
+                                str(patch.resolve())], capture_output=True, text=True, check=False)
             if r.returncode != 0:
                 raise Refused(f"the patch doesn't apply to {sha[:12]}: {r.stderr.strip()[-600:]}")
             summary["patch"] = {"sha256": hashlib.sha256(patch.read_bytes()).hexdigest(), "bytes": patch.stat().st_size}
