@@ -18,6 +18,9 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 # --- ml/: Python and CUDA, provers, Python circuits, kernels (ml/ can't affect soundness)
 "verity/primitives/__init__.py" = "verity/ml/__init__.py"
 "verity/primitives/circuits/" = "verity/ml/circuits/"
+"verity/primitives/commitments/" = "verity/ml/commitments/"
+"verity/primitives/crypto/" = "verity/ml/crypto/"
+"verity/primitives/randomness/" = "verity/ml/randomness/"
 "catalog/verity_catalog/definitions/" = "verity/ml/circuits/ops/"
 "catalog/verity_catalog/silicon/" = "verity/ml/circuits/silicon/"
 "catalog/verity_catalog/targets/" = "verity/ml/circuits/targets/"
@@ -34,9 +37,8 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "experimental/verity_experimental/" = "verity/experimental/"
 "experimental/tests/" = "verity/experimental/tests/"
 "experimental/pyproject.toml" = "verity/experimental/pyproject.toml"
-"verity/primitives/commitments/" = "verity/experimental/commitments/"
-"verity/primitives/crypto/" = "verity/experimental/crypto/"
-"verity/primitives/randomness/" = "verity/experimental/randomness/"
+# experimental's planner and consumers of sampled proofs join the protocol (no module name clashes)
+"experimental/verity_experimental/sampled_proofs/" = "verity/experimental/protocols/sampled_proofs/"
 "verity/claims/" = "verity/experimental/claims/"
 "verity/protocols/" = "verity/experimental/protocols/"
 "verity/protocols/accounting/work/pouw/" = "verity/experimental/protocols/pouw/"
@@ -71,7 +73,7 @@ paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/pri
          "tools/native_peak/"]
 
 [drop]
-paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity/pyproject.toml", "experimental/verity_experimental/commitments/__init__.py",
+paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity/pyproject.toml", "experimental/verity_experimental/sampled_proofs/__init__.py",
          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/communication/__init__.py",
          "verity/protocols/accounting/space/__init__.py", "verity/protocols/accounting/work/__init__.py",
          "verity/protocols/verification/__init__.py"]
@@ -108,9 +110,9 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 "verity.claims" = "verity.experimental.claims"
 "verity.primitives" = "verity.ml"
 "verity.primitives.circuits" = "verity.ml.circuits"
-"verity.primitives.commitments" = "verity.experimental.commitments"
-"verity.primitives.crypto" = "verity.experimental.crypto"
-"verity.primitives.randomness" = "verity.experimental.randomness"
+"verity.primitives.commitments" = "verity.ml.commitments"
+"verity.primitives.crypto" = "verity.ml.crypto"
+"verity.primitives.randomness" = "verity.ml.randomness"
 "verity.protocols" = "verity.experimental.protocols"
 "verity.protocols.accounting.communication.certifier" = "verity.experimental.protocols.certifier"
 "verity.protocols.accounting.communication.certifier.lean" = "verity.protocols.accounting.communication.certifier.lean"
@@ -124,6 +126,7 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 "verity_catalog.silicon" = "verity.ml.circuits.silicon"
 "verity_catalog.targets" = "verity.ml.circuits.targets"
 "verity_experimental" = "verity.experimental"
+"verity_experimental.sampled_proofs" = "verity.experimental.protocols.sampled_proofs"
 "verity_kernels" = "verity.ml.kernels"
 
 [aliases]
@@ -146,11 +149,12 @@ new = { "verity-cli" = "tools/verity/cli" }
 # new files: path = contents (the map is their source: a rerun writes them again when they differ, and never rewrites them)
 "verity/ml/__init__.py" = '''
 """Python and CUDA: the provers, the Python versions of core's circuits (`circuits`, with `ops`, what models compute, and
-`silicon`, what the GPUs actually compute), and the kernels. Nothing here affects soundness."""
+`silicon`, what the GPUs actually compute), the commitments, crypto and randomness they use, and the kernels. Nothing here
+affects soundness, and nothing here imports `verity.experimental`."""
 '''
 "verity/experimental/__init__.py" = '''
-"""Work in progress, including today's Python verifiers (the protocols, commitments, randomness) until their Lean versions
-land in core/. core/ never imports it."""
+"""Work in progress, including today's Python verifiers (the protocols, the claims they cite, multiproofs and private
+circuits) until their Lean versions land in core/. It may import `verity.ml`; `verity.ml` and core/ never import it."""
 '''
 "verity/experimental/protocols/__init__.py" = '''
 """The protocols in Python: PoUW, PoUS, the network certifier and sampled proofs, with the integrity profile (`profile`)."""
