@@ -46,7 +46,6 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "verity/protocols/accounting/communication/certifier/" = "verity/experimental/protocols/certifier/"
 "verity/protocols/verification/sampled_proofs/" = "verity/experimental/protocols/sampled_proofs/"
 # the protocols' Lean is lean.py's
-"verity/protocols/accounting/space/pous/lean/" = "verity/core/protocols/pous/"
 "verity/protocols/accounting/communication/certifier/lean/" = "verity/core/devices/certifier/"
 "verity/protocols/accounting/communication/certifier/lean/scripts/" = "verity/experimental/protocols/certifier/lean/scripts/"
 
@@ -122,7 +121,6 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 "verity.protocols.accounting.communication.certifier.lean" = "verity.core.devices.certifier"
 "verity.protocols.accounting.communication.certifier.lean.scripts" = "verity.experimental.protocols.certifier.lean.scripts"
 "verity.protocols.accounting.space.pous" = "verity.experimental.protocols.pous"
-"verity.protocols.accounting.space.pous.lean" = "verity.core.protocols.pous"
 "verity.protocols.accounting.work.pouw" = "verity.experimental.protocols.pouw"
 "verity.protocols.verification.sampled_proofs" = "verity.experimental.protocols.sampled_proofs"
 "verity.tests.test_boundaries" = "tests.test_boundaries"
