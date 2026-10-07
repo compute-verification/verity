@@ -13,12 +13,15 @@ batch of a gate and of a composite over an axis, scan with xs and a shared argum
 Hypothesis strategy with their inputs and, for a quarter of them, a mutation both sides must refuse; and explicit examples:
 the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table, real Boolean Definitions traced from
 `verity.ml.boolean`'s builders on their one-call Programs, also held to the word Definition each computes, and the malformed
-programs and inputs of `REFUSE`.
+programs and inputs of `REFUSE`. E1's primitives each run on their one-call Program: every scalar primitive on the grid of its
+operands' edge words (also held to the Python primitive's own evaluator), on words a strategy draws, and on words out of
+range; every constant of the registry, and renamings of a constant that the Python's id pattern reads or refuses.
 """
 from __future__ import annotations
 
 import copy
 import functools
+import itertools
 import json
 import random
 import shutil
@@ -35,6 +38,7 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.evaluation import reference
 from verity.ml.circuits.ops import fp32 as FP
+from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.ops.boolean import cast as BC
 from verity.ml.circuits.ops.boolean import elementwise as BE
@@ -42,6 +46,9 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import RUN, Program, input_id
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
+from verity_vllm.program.registry import dsa as DSA
+from verity_vllm.program.registry import ref_prims as RP
+from verity_vllm.program.registry import topp_word_gates as TW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -55,11 +62,20 @@ RANDOM_EXAMPLES = 1024
 
 # ---- the reference ------------------------------------------------------------------------------------------------------
 
+#: E1's scalar primitives (`Evaluate.Scalar`), by the Python primitive each transcribes
+SCALARS = (SC.F32Fabs, SC.F32Neg, SC.F32Fmaxf, SC.F32Fminf, SC.F32Sat, SC.F32BitsShl23, SC.F32IsFinite, SC.F32Eq, SC.Bf16GtStrict,
+           SC.I32Le, SC.I32Eq, SC.I32Add, DSA.I32Sub, RP.I64ToI32, DSA.U32And, TW.U32Xor, SC.BitAnd, SC.BitOr, TW.BitXor, SC.BitNot,
+           TW.SelectBit, SC.SelectI32, SC.SelectF32, SC.SelectBf16)
+_SCALAR_IDS = frozenset(p.id for p in SCALARS)
+
+
 def _in_scope(fn: PrimitiveDefinition) -> bool:
-    """The primitives the Lean evaluator implements: the Boolean profile's gates and constant bits, and the run inputs of
-    any width."""
+    """The primitives the Lean evaluator implements: the Boolean profile's gates (E0), the constant family and the scalar
+    primitives (E1), and the run inputs of any width."""
     m = input_id(fn.id)
-    return m[0] == RUN if m else BL.is_gate(fn) or BL.is_constant_bit(fn)
+    if m:
+        return m[0] == RUN
+    return BL.is_gate(fn) or getattr(fn, "family", None) == "Const" or fn.id in _SCALAR_IDS
 
 
 def python_answer(desc: dict, inputs: list) -> dict:
@@ -241,7 +257,7 @@ REFUSE = [
      lambda d: d["definitions"][_first_gate(d)]["params"][0].__setitem__(0, "y"), None),
     ("a gate id with a leading zero", lambda d: _rename(d, _first_gate(d), _first_gate(d).replace("2", "02").replace("3", "03")), None),
     ("an unknown primitive", lambda d: _rename(d, _first_gate(d), "Or2_v1"), None),
-    ("a constant bit 2", lambda d: _rename(d, "Not_v1", "Const1[0x2]_v1"), None),
+    ("a constant declared with a parameter", lambda d: _rename(d, "Not_v1", "Const1[0x3]_v1"), None),
     ("a forward reference", _forward, None),
 ]
 
@@ -383,3 +399,155 @@ def test_a_malformed_input_is_rejected_and_the_next_request_answered(server):
         server.call("nope", {})
     kind, out = server.call("evaluate", request(v["descriptor"], [[1, 0], [1, 0]]))
     assert kind == "output" and _words(json.loads(out), [4]) == [1 + 1 + 8]
+
+
+# ---- E1: the constants and the scalar primitives ------------------------------------------------------------------------
+
+#: every constant the registry holds with every module of `verity` and `verity_vllm` imported (172 primitives besides the
+#: inputs); its widths are 1, 16 and 32
+REGISTRY_CONSTS = (
+    "Const1[0x0]_v1", "Const1[0x1]_v1", "Const16[0x0000]_v1", "Const16[0x8000]_v1", "Const32[0x00000000]_v1",
+    "Const32[0x00000001]_v1", "Const32[0x1e3ce508]_v1", "Const32[0x2edbe6ff]_v1", "Const32[0x32a57060]_v1",
+    "Const32[0x36924925]_v1", "Const32[0x3bbb989d]_v1", "Const32[0x3c80f082]_v1", "Const32[0x3c820821]_v1",
+    "Const32[0x3e085941]_v1", "Const32[0x3f000000]_v1", "Const32[0x3f199999]_v1", "Const32[0x3f800000]_v1",
+    "Const32[0x3fb8aa3b]_v1", "Const32[0x4038aa3b]_v1", "Const32[0x40c00000]_v1", "Const32[0x41102cb3]_v1",
+    "Const32[0x437c0000]_v1", "Const32[0x43e00000]_v1", "Const32[0x4b400001]_v1", "Const32[0x7fffffff]_v1",
+    "Const32[0xbd563cae]_v1", "Const32[0xbeaaa9ed]_v1", "Const32[0xc0000000]_v1", "Const32[0xc3e00000]_v1",
+    "Const32[0xc61c4000]_v1", "Const32[0xcb40007f]_v1", "Const32[0xff800000]_v1", "Const32[0xffffffff]_v1")
+
+#: the edge words of each width: zero, one, the sign bit and its neighbours, the largest word, and for the float widths the
+#: zeros, the smallest subnormal and normal, one, the infinities and the NaNs (quiet, signalling, the GPU's canonical)
+EDGES = {
+    1: (0, 1),
+    16: (0, 1, 0x7F, 0x80, 0x3F80, 0x7F80, 0x7F81, 0x7FC0, 0x7FFF, 0x8000, 0x8001, 0xBF80, 0xFF80, 0xFFFF),
+    32: (0, 1, 0x7FFFFF, 0x800000, 0x3F800000, 0x4B400001, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF, 0x80000000,
+         0x80000001, 0xBF800000, 0xFF800000, 0xFFC00000, 0xFFFFFFFF),
+    64: (0, 1, 2**31 - 1, 2**31, 2**32 - 1, 2**32, 2**63 - 1, 2**63, 2**64 - 2**31 - 1, 2**64 - 2**31, 2**64 - 1),
+}
+
+
+def _one_call(fn: PrimitiveDefinition) -> dict:
+    """The Program of one call of `fn` on the program function's parameters."""
+    main = CompositeDefinition(f"DtOne{fn.name}{fn.version}", 1, (), lambda S: (fn.params, fn.ret),
+                               lambda B, S, *a: B.call(fn, *a), register=False)
+    return desc_of(Program(bind(main)))
+
+
+@functools.cache
+def _one_call_text(fid: str) -> str:
+    return json.dumps(_one_call(next(p for p in SCALARS if p.id == fid)))
+
+
+@st.composite
+def scalar_requests(draw) -> dict:
+    """A scalar primitive on words drawn from its operands' edges and their whole range; one word in ten is out of its
+    range (2^w, 2^w + 1 or -1), which both sides refuse."""
+    fn = draw(st.sampled_from(SCALARS))
+    words = []
+    for _, t in fn.params:
+        if draw(st.integers(0, 9)) == 0:
+            words.append(draw(st.sampled_from([1 << t.w, (1 << t.w) + 1, -1])))
+        else:
+            words.append(draw(st.one_of(st.sampled_from(EDGES[t.w]), st.integers(0, (1 << t.w) - 1))))
+    return request(json.loads(_one_call_text(fn.id)), [[w] for w in words])
+
+
+SCALAR_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=scalar_requests(), package=PKG)
+
+
+def test_scalar_primitives_on_their_edge_grids(server):
+    """Every scalar primitive on every combination of its operands' edge words, each answer also the Python primitive's
+    own evaluator's."""
+    total = 0
+    for fn in SCALARS:
+        desc = json.loads(_one_call_text(fn.id))
+        cases = []
+        for args in itertools.product(*(EDGES[t.w] for _, t in fn.params)):
+            assert python_answer(desc, [[a] for a in args]) == {"output": [fn.evaluate(*args)]}, (fn.id, args)
+            cases.append(request(desc, [[a] for a in args]))
+        assert agree(server, cases) == (len(cases), 0), fn.id
+        total += len(cases)
+    assert total == 4029
+
+
+@pytest.mark.slow
+def test_scalar_primitives_drawn(server):
+    stats = DT.run(SCALAR_PORT, examples=2000, seed=0, server=server)
+    assert stats.outputs >= 1000 and stats.rejects >= 100, stats
+
+
+def test_scalar_words_out_of_range_are_refused(server):
+    """A word of 2^w, -1, or a boolean for each operand of each scalar primitive, the others 0."""
+    cases = []
+    for fn in SCALARS:
+        desc = json.loads(_one_call_text(fn.id))
+        for i, (_, t) in enumerate(fn.params):
+            for bad in (1 << t.w, -1, True):
+                x = [[0] for _ in fn.params]
+                x[i] = [bad]
+                cases.append(request(desc, x))
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 45)
+
+
+def _const_program(fid: str) -> dict:
+    return _one_call(codec.lookup_primitive(REGISTRY, fid))
+
+
+def _renamed(desc: dict, new: str, ret: list | None = None) -> dict:
+    d = copy.deepcopy(desc)
+    old = next(f for f in d["callees"] if f.startswith("Const"))
+    _rename(d, old, new)
+    if ret is not None:
+        d["definitions"][new]["ret"] = ret
+    return d
+
+
+def test_constants(server):
+    """Every constant of the registry, and of each of its widths zero, one, the sign bit and the largest word."""
+    ids = list(REGISTRY_CONSTS)
+    for w in (16, 32):
+        ids += [f"Const{w}[0x{b:0{w // 4}x}]_v1" for b in (0, 1, 1 << (w - 1), (1 << w) - 1)]
+    cases = []
+    for fid in ids:
+        desc = _const_program(fid)
+        bits = int(fid[fid.index("[0x") + 3:fid.index("]")], 16)
+        assert python_answer(desc, []) == {"output": [bits]}, fid
+        cases.append(request(desc, []))
+    assert agree(server, cases) == (len(cases), 0) == (41, 0)
+
+
+#: renamings of a constant both sides read alike: `^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$` takes either case, leading zeros in
+#: the width and the bits, and bits beyond the width, which the gate outputs as they are; and those both refuse
+CONST_IDS = [
+    ("Const32[0x5]_v1", None, [5]),
+    ("Const32[0xABCDEF01]_v1", None, [0xABCDEF01]),
+    ("Const032[0x00000005]_v1", None, [5]),
+    ("Const32[0x1ffffffff]_v1", None, [0x1FFFFFFFF]),
+    ("Const1[0x2]_v1", ["Value", 1], [2]),
+    ("Const16[0x8000]_v1", ["Value", 16], [0x8000]),
+    ("Const32[0x]_v1", None, None),
+    ("Const[0x1]_v1", None, None),
+    ("Const32[1]_v1", None, None),
+    ("Const32[0x1]_v2", None, None),
+    ("Const32[0xg]_v1", None, None),
+    ("Const32[0x1]]_v1", None, None),
+    ("Const32[0x-1]_v1", None, None),
+    ("Const16[0x0001]_v1", None, None),
+    ("Const0[0x0]_v1", None, None),
+    ("Const32[0x1]_v1", ["Value", 16], None),
+]
+
+
+def test_constant_ids(server):
+    base = _const_program("Const32[0x00000005]_v1")
+    cases = []
+    for new, ret, want in CONST_IDS:
+        d = _renamed(base, new, ret)
+        if ret is not None:
+            d["definitions"][d["root"]]["body"]["ret_type"] = ret
+            d["types"] = [ret if t == ["Value", 32] else t for t in d["types"]]
+        got = python_answer(d, [])
+        assert got == {"output": want} if want is not None else "reject" in got, (new, got)
+        cases.append(request(d, []))
+    outputs = sum(w is not None for _, _, w in CONST_IDS)
+    assert agree(server, cases) == (outputs, len(cases) - outputs) == (6, 10)
