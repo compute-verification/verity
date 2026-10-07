@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from verity.primitives.circuits.refs import runs
+from verity.ml.circuits.refs import runs
 from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import gemma2_patterns
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, StorageAlloc
 from verity_vllm.observe.fold.fold import fold, instance_nodes

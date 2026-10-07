@@ -69,7 +69,7 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass, field
 
-from verity.primitives.circuits.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
+from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
 
 from verity_vllm.observe.events import StorageAlloc, ViewDesc
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view

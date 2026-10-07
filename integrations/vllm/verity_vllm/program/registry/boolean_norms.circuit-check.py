@@ -9,8 +9,8 @@ def _boolean_roots() -> list[Any]:
     """The served norms on bits at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the
     switch's binding, `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word
     Definitions of its constant steps."""
-    from verity.primitives.circuits.defs import bind
-    from verity_catalog.definitions.boolean import mufu as BM
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import mufu as BM
     from verity_vllm.program.registry import boolean_norms as BN
 
     return [

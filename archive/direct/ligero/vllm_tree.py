@@ -1,7 +1,7 @@
 """The committed-object side of a ``vllm-v1`` statement (``leaf = vllm-v1``, lane b-ligero-vllm-v1): each port (``a`` x rows,
-``b`` W columns, ``y`` output words) is a ``vllm-v1`` position-leaf tree (``verity.primitives.commitments.vllm_v1``: pairs ``node``, an
+``b`` W columns, ``y`` output words) is a ``vllm-v1`` position-leaf tree (``verity.ml.commitments.vllm_v1``: pairs ``node``, an
 odd trailing child ``lift``, no padding) whose published root is its **step-root binding** over a verifier-held
-:class:`~verity.primitives.commitments.vllm_v1.StepDomain` (PROTOCOL.md §4, §5), never the bare tree root.
+:class:`~verity.ml.commitments.vllm_v1.StepDomain` (PROTOCOL.md §4, §5), never the bare tree root.
 
 The domain of a port (PROTOCOL.md §9.1) is built from the verifier's own data only:
 
@@ -30,8 +30,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
-from verity.primitives.commitments import identity_digest
-from verity.primitives.commitments import vllm_v1 as core
+from verity.ml.commitments import identity_digest
+from verity.ml.commitments import vllm_v1 as core
 
 __all__ = ["TAG", "VALUES", "VllmTree", "build", "ctx_digest", "domain", "fold_multiproof", "multiproof", "port_digests",
            "value_len", "widths", "y_bytes_of"]

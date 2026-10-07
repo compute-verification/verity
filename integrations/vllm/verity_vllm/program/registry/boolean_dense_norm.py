@@ -23,7 +23,7 @@ or a NaN; 0 + x and x + 0 are one function of x), and +0 + +0, which is +0, is f
 divisor's magnitude is in [2^-126, 2^126], as f32(N) always is, and DivFullRcp_v1(f32(N)) is a constant, so the division is
 `MeanDivTriton_v1{N}`, acc * rcp(N), and the mean reads no MUFU.
 
-MUFU: ``RSQRT`` is a Definition computing `RsqrtApprox_v1`: proofs' Boolean `RsqrtApprox_v2` (`verity_catalog.definitions.boolean.mufu`, which
+MUFU: ``RSQRT`` is a Definition computing `RsqrtApprox_v1`: proofs' Boolean `RsqrtApprox_v2` (`verity.ml.circuits.ops.boolean.mufu`, which
 the switch binds through ``word_statics``), or the word id itself, on which each element is packed (`PackF32_v1`) and its result
 unpacked (`UnpackF32_v1`) once.
 """
@@ -31,13 +31,13 @@ from __future__ import annotations
 
 from functools import cache
 
-from verity.primitives.circuits.defs import bind, composite
-from verity.primitives.circuits.refs import Coll, array_of, coll_concat
-from verity.primitives.circuits.types import Array
-from verity_catalog.definitions import fp32 as W
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.silicon import fp
-from verity.primitives.circuits.boolean import trace as TR
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Coll, array_of, coll_concat
+from verity.ml.circuits.types import Array
+from verity.ml.circuits.ops import fp32 as W
+from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.boolean import trace as TR
 from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.boolean_norms import (BF16, F32, PackF32, UnpackF32, _on_bits, _on_word, _rcp_n,
