@@ -1,9 +1,23 @@
-# A suite of `verity`'s tests: the Lean evaluator (`verity-evaluate`, this directory's Lake package) against the Python reference.
+[project]
+name = "verity-core-evaluate"
+version = "0.0.0"
+description = "The Lean evaluator of descriptor v1 (`verity-evaluate`, this directory's Lake package), difftested against the Python reference."
+requires-python = ">=3.12"
+# No dependencies: uv finds `verity/experimental/pyproject.toml` above this directory before the workspace's root, so a
+# `verity = { workspace = true }` source here does not resolve. The tests run in the workspace's environment, against the
+# editable `verity`, as that suite's do, and `inputs` keys them on it.
+dependencies = []
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # `lake build` reads this package and C-Flock's verifier (verity/core/service/flock), which it requires by path; the Python
-# reference is verity.ml.circuits.
+# reference is verity.ml.circuits. The tests build `verity-evaluate` themselves, from those sources, and so declare no
+# `artifacts`; `check` runs them after its Lean steps (`AFTER_LEAN`), since that build writes into the verifier's `.lake`.
 inputs = ["verity"]

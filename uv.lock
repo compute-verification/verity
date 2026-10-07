@@ -30,6 +30,7 @@ members = [
     "verity-circuit-check",
     "verity-cli",
     "verity-commitments-benchmarks",
+    "verity-core-evaluate",
     "verity-direct",
     "verity-flock",
     "verity-gkr",
@@ -1518,6 +1519,11 @@ requires-dist = [
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-core-evaluate"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/primitives/evaluate" }
 
 [[package]]
 name = "verity-direct"
