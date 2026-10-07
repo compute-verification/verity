@@ -7,14 +7,15 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 /-!
 # An output row's registered `b ‖ c` (`OutputsCommitted`)
 
-In a satisfying witness of an untyped hidden-output statement, at block `o`, VU `g` and output row `j`:
+In a satisfying witness of an untyped hidden-output statement, at block `o`, template instance `g` and output row `j`:
 * the 128 bytes at the row's `hm96` output are the population's `b ‖ c` of the drawn unit there: `HmOut.regions`' region
   `p` pins them (`bc_pinned'`, `Layout.bc_pinned` at the region `regions_get` gives), and `HmOut.drawn` is `HmRow.drawn`
   on the circuit without output ports (`Layout.bcChunk_drawn`): `bc_drawnH`, at every row;
 * they are the commit string of the row prefix and the row's message bytes under its salt: the witness satisfies the flat
   twin (`sat_flat`), where `Hm.row_bc_flat` holds;
-* the row's message bytes are the output words the VU computes (`msg_bytes`): each message bit is a copy of `outSrc`
-  (`msg_copy`), the output word's bit below the port's words and the forced-zero row past them (`Hm.zero_bit`).
+* the row's message bytes are the output words the template instance computes (`msg_bytes`): each message bit is a copy
+  of `outSrc` (`msg_copy`), the output word's bit below the port's words and the forced-zero row past them
+  (`Hm.zero_bit`).
 -/
 
 set_option Elab.async false
@@ -154,8 +155,8 @@ variable {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (L0 : FlockSou
   (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray) (hrows : OutRows st.c)
 include L L0 F0 hv1 hda hrows
 
-/-- **An output row's message bytes are the output words its VU computes** (`outBytes`), in every block of a satisfying
-witness of the hidden statement whose forced-zero row carries 0. -/
+/-- **An output row's message bytes are the output words its template instance computes** (`outBytes`), in every block
+of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
 theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     (hzero : blockBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)

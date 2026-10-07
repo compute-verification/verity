@@ -125,6 +125,7 @@ AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
+POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
@@ -444,17 +445,38 @@ def plain(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
 
 
+def _pieces(text: str, limit: int = POST_MAX) -> list[str]:
+    """`text` cut at line breaks (else at a space outside `<...>`) into pieces of at most `limit` bytes."""
+    out = []
+    while len(text.encode()) > limit:
+        window = text.encode()[:limit].decode(errors="ignore")
+        cut = window.rfind("\n")
+        if cut < len(window) // 2:
+            depth, cut = 0, len(window)
+            for i, c in enumerate(window):
+                depth = max(0, depth + (c == "<") - (c == ">"))
+                if c == " " and depth == 0 and i:
+                    cut = i
+        out.append(text[:cut].rstrip())
+        text = text[cut:].lstrip()
+    return [p for p in out if p] + [text]
+
+
 def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None, *,
           route: tuple[dict, Routes | None] | None = None, urgent: bool = False, tags: tuple[str, ...] = ()) -> str:
     """Post, print `<ts> <permalink>`, and with `route` (the registry and the routes) deliver it to whoever it reaches."""
     tags = tuple(tags) + (("urgent",) if urgent and "urgent" not in tags else ())
-    text = f"{slack_dates(text)}{_footer(tags)}"
-    if thread and not api.dry_run and len(text.encode()) < BROKER_MAX_BODY:   # a reply's ts (a doorbell's `reply R`): its thread
+    head, *rest = _pieces(slack_dates(text))
+    text = f"{head}{_footer(tags)}"
+    if thread and not api.dry_run:                       # a reply's ts (a doorbell's `reply R`): its thread
         first = api.call("conversations.replies", channel=ch, ts=thread, limit=1).get("messages", [])
         thread = (first[0].get("thread_ts") or first[0].get("ts") or thread) if first else thread
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=text,
                    unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"
+    for i, piece in enumerate(rest, 2):                  # quiet, and led by its number, so the rest of a post wakes nobody
+        api.call("chat.postMessage", channel=ch, thread_ts=thread or ts, username=handle, unfurl_links="false",
+                 unfurl_media="false", text=f"({i}/{len(rest) + 1}) {piece}{_footer((QUIET,))}")
     try:
         link = api.call("chat.getPermalink", channel=ch, message_ts=ts).get("permalink") or "-"
     except SlackError:                                   # the post went out: a caller that retries on a raise would post it twice
@@ -1012,11 +1034,18 @@ def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: 
     return "\n".join(lines)
 
 
+def _check_audience(to: list[dict], body: str, reg: dict) -> None:
+    if not to and (lead := lead_names(body, reg)):
+        raise SlackError(f"with no --to an announcement goes to every handle, but it starts with "
+                         f"{' '.join('@' + n for n in lead)}: pass them as --to, or move them off the start")
+
+
 def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
-    _post(client(ns), ch, h["handle"], announcement(h, to, _body(ns), ns.verify, ns.ships),
+    _check_audience(to, body := _body(ns), reg)
+    _post(client(ns), ch, h["handle"], announcement(h, to, body, ns.verify, ns.ships),
           route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1038,6 +1067,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
+        _check_audience(to, body, reg)
         text = announcement(h, to, body, ns.verify, ns.ships)
     else:
         if ns.verify or ns.ships:

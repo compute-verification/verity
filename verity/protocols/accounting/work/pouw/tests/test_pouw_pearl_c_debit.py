@@ -17,7 +17,7 @@ from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
 
 VECTORS = Path(__file__).parent / "vectors"
-#: P1's conformance vectors (research store internal/pouw-fp8/pearl-c-scripts/pearlc_skip_vectors*.txt.gz), one word per
+#: P1's conformance vectors, one word per
 #: line, `family forming k i j A′-row B̃-row flags`, their lines verbatim. The k ≤ 2,048 file (SHA-256 86a31922…, 552 words
 #: with the k = 8,192 file) is cut under the repository's 256 KiB blob limit to every word with k ≤ 512 (the 272 words
 #: `decide +kernel` checks among them) and, at k = 2,048, the aligned-spike words under §5's forming: 440 of its 544.
