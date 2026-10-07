@@ -8,5 +8,6 @@ import Models.Pouw.Assumptions
 import Models.Pouw.Guarantees
 import Models.NetworkCertifier.Assumptions
 import Models.NetworkCertifier.Guarantees
+import Models.Flock.Guarantees
 
 /-! Each component's named assumptions and guarantee statements. -/
