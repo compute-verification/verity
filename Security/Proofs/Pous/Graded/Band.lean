@@ -1,4 +1,4 @@
-import Specs.Pous.Guarantees
+import Models.Pous.Guarantees
 import Proofs.Pous.Graded.Theorem
 import Proofs.Pous.Chain.Family
 
