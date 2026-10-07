@@ -1063,7 +1063,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
     assert ops.e_b == ops0.e_b and ops.b.codes == ops0.b.codes and ops.pb == ops0.pb
     checked = s.checked(ctx, ops)
     assert s.digest(ctx, noise, checked) == C.leaf(checked, "h3") != C.leaf(checked)
-    assert s.tickets(noise, checked) == C.PearlC(hashing="h3").tickets(noise, checked) != h0.tickets(noise, checked)
+    assert s.tickets(noise, checked) == C.PearlC(hashing="h3").tickets(noise, checked) == h0.tickets(noise, checked)
     other = list(a)
     other[5] = a[6]
     e = s.encode(ctx, noise, other, b, tile).e_a

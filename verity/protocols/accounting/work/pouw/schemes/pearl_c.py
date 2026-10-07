@@ -436,6 +436,18 @@ def leaf(checked: Checked, hashing: str = "h0") -> bytes:
     return turboshake128(b"".join(message_digest(msg) for msg in messages(checked)), D_LEAF, 32)
 
 
+def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]:
+    """Pearl's lottery tickets over C̃: one per 16 x 16 subtile, row-major, H_"jackpot"(fold; seed_A); under -h3 `s512`'s
+    H_"jackpot"(seed_A ‖ fold)."""
+    out = []
+    for i in range(0, len(checked.c), P.TILE):
+        for j in range(0, len(checked.c[0]), P.TILE):
+            sub = [[P.f32_of_bits(w) for w in row[j:j + P.TILE]] for row in checked.c[i:i + P.TILE]]
+            fold = P.extract(sub)
+            out.append(s512("jackpot", seed_a + fold) if hashing == "h3" else P.hash_labelled(fold, "jackpot", seed_a))
+    return out
+
+
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles;
     smaller bounds make a test instance.  ``hashing`` h3 names the scheme ``…-h3``: SHA-512 throughout (the module
@@ -599,16 +611,8 @@ class PearlC:
         return leaf(checked, self.hashing)
 
     def tickets(self, noise: Noise, checked: Checked) -> list[bytes]:
-        """Pearl's lottery tickets over C̃: one per 16 x 16 subtile, row-major, H_"jackpot"(fold; seed_A); under -h3
-        `s512`'s H_"jackpot"(seed_A ‖ fold)."""
-        out = []
-        for i in range(0, len(checked.c), P.TILE):
-            for j in range(0, len(checked.c[0]), P.TILE):
-                sub = [[P.f32_of_bits(w) for w in row[j:j + P.TILE]] for row in checked.c[i:i + P.TILE]]
-                fold = P.extract(sub)
-                out.append(s512("jackpot", noise.seed_a + fold) if self.hashing == "h3"
-                           else P.hash_labelled(fold, "jackpot", noise.seed_a))
-        return out
+        """Pearl's lottery tickets over C̃ (`tickets`)."""
+        return tickets(noise.seed_a, checked, self.hashing)
 
     def useful(self, ctx: Context, noise: Noise, ops: Ops, checked: Checked) -> list[list[float]]:
         """U/(α_A,i · α_B,j) in double, for measuring quality.  It is not the served y: the served y is the integration's

@@ -36,7 +36,8 @@ fused     AF_ip = chain(A′_i, F_B[:, p]) at scale 1.0 (32 extra columns);  BF_
 peel      Ẽ = bf16(E · a_E · 2^-4) (exact, E's sign kept);  P_A,i = [Ẽ_A,i ‖ RNE_bf16(AF_i)],
           P_B,j = [RNE_bf16(FP32 add(Σ_p fma(Ẽ_B,jp, G_pq), −BF_jq)) ‖ −Ẽ_B,j];
           U_ij = C̃_ij, then four HOPPER_BF16_M16N8K16 steps (sm_120 mma.sync m16n8k16) over P_A,i · P_B,j
-leaf      pearl_c.leaf over C̃ ‖ U;  tickets: Pearl's lottery over C̃ (pearl_c.PearlC.tickets)
+leaf      pearl_c.leaf over C̃ ‖ U;  tickets: Pearl's lottery over C̃, -h3's SHA-512 H_"jackpot" at every hashing
+          (pearl_c.tickets)
 useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
 ~~~
 
@@ -1121,7 +1122,6 @@ class PearlC4:
     test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, SHA-512 trees, leaf and
     tickets, and each row of A drawing its E_A line from its own seed (`row_seeds`); h0 is the default."""
 
-    tickets = C.PearlC.tickets
     cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
@@ -1215,6 +1215,11 @@ class PearlC4:
     def job_cost(self, n: int, k: int) -> int:
         """The weight side, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's FP32 FMA chain."""
         return (FORMING_CREDITED + FORMING_UNCREDITED) * n * k + n * R * k + R * R * k + FP32_UNITS * n * R * R
+
+    def tickets(self, noise: C.Noise, checked: C.Checked) -> list[bytes]:
+        """Pearl's lottery tickets over C̃, as -h3 draws them at every hashing: `pearl_c.s512`'s H_"jackpot"(seed_A ‖
+        fold) per 16 x 16 subtile, row-major (`pearl_c.tickets`)."""
+        return C.tickets(noise.seed_a, checked, "h3")
 
     def noise(self, ctx: Context) -> C.Noise:
         """The unit's seeds: A's keyed by the job's salt, both roots and the unit, B̃'s by `seed_b`.  The verifier forms
