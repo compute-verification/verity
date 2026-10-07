@@ -1324,6 +1324,12 @@
         "tools/tc_probe_fp4/": "benchmarks/tc_probe_fp4/",
         "tools/native_peak/": "benchmarks/native_peak/"
       }
+    },
+    {
+      "paths": {
+        "Security/Specs.lean": "Security/Models.lean",
+        "Security/Specs/": "Security/Models/"
+      }
     }
   ]
 }
