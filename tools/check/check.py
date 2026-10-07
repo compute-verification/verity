@@ -2,6 +2,9 @@
 
     uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
+    ... PART...                                             only those parts (`tests`, `circuits`, `lean`: each job's `part` in
+                                                            ci.toml) and what their jobs need, after the preflight; outside a
+                                                            recorded run, since no gate takes part of a check
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -880,12 +883,21 @@ def shard(spec: str) -> dict:
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
-    files = tracked_files(ROOT)
-    if files is None:
-        raise DECLARATION.DeclarationError("--shard: this tree's files can't be listed, so its Lake packages aren't known")
-    parts_of = {"lean-audit": _lean_audit().packages(files)}
+    parts_of = _parts_of()
     return {"k": k, "n": n, "parts": DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1],
             "all": DECLARATION.all_parts(JOBS, parts_of)}
+
+
+def _parts_of() -> dict[str, list[str]]:
+    files = tracked_files(ROOT)
+    if files is None:
+        raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
+    return {"lean-audit": _lean_audit().packages(files)}
+
+
+def shard_parts() -> list[str]:
+    """Every part an unsharded check covers on this tree (`declaration.all_parts`)."""
+    return DECLARATION.all_parts(JOBS, _parts_of())
 
 
 def _rev(rev: str) -> str | None:
@@ -1343,6 +1355,20 @@ def main(argv: list[str]) -> int:
             return 2
         rest = rest[:i] + rest[i + 2:]
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
+    picked = [a for a in rest if a in DECLARATION.PARTS]
+    rest = [a for a in rest if a not in DECLARATION.PARTS]
+    if picked:
+        if sharded or os.environ.get("RESEARCH_RUN_ID"):
+            print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
+                  file=sys.stderr)
+            return 2
+        try:
+            chosen = DECLARATION.select(JOBS, picked)
+            sharded = {"parts": [p for p in shard_parts() if p.partition(":")[0] in chosen]}
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        print(f"check: parts {', '.join(picked)}: {', '.join(j.name for j in JOBS if j.name in chosen)}", flush=True)
     n = None
     if rest[:1] == ["--cores"] and len(rest) == 2 and rest[1].isdigit():
         n, rest = int(rest[1]), []
