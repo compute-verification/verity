@@ -368,12 +368,14 @@ theorem egressPre_quiet (st : State) (now backlog : Nat) : Quiet st (egressPre s
   · exact h1.trans (Quiet.shaper (ShRel.fault _ _))
   · exact h1
 
-/-- What one live egress tick does: the next shaper tick, its row written as `r · B` bytes when the link's backlog
+/-- What one live egress tick does: the next shaper tick `y`, its row written as `r · B` bytes when the link's backlog
 allows, and at the window's last bucket the window's record. -/
-def EgressSpec (c : Config) (st : State) (backlog : Nat) (x : State × Array Action) : Prop :=
+def EgressSpec (c : Config) (st : State) (backlog : Nat) (y : Shaper × Slots × Option Record)
+    (x : State × Array Action) : Prop :=
   let T := c.egress.buckets
   Good c x.1 ∧ x.1.shaper.t = st.shaper.t + 1 ∧
-    ∃ row status, Packed c.egress row ∧
+    ∃ row status, Packed c.egress row ∧ row = y.2.1 ∧
+      ((st.shaper.t + 1) % T = 0 → y.2.2.map Record.status = some status) ∧
       x.2.toList = (if backlog ≤ 4 * bucketBytes c.egress then [.writeLink (wire c.egress row)] else []) ++
         (if (st.shaper.t + 1) % T = 0 then
           [.publish ⟨c.egressLink, st.shaper.t / T, st.shaper.certifier.rows.push row, status⟩ c.egress]
@@ -384,7 +386,7 @@ def EgressSpec (c : Config) (st : State) (backlog : Nat) (x : State × Array Act
         ∀ r, st.shaper.certifier.fault = some r → x.1.shaper.certifier.fault = some r)
 
 theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Quiet st0 st) (now backlog : Nat) :
-    EgressSpec c st0 backlog (egressTail c.egress now backlog st) := by
+    EgressSpec c st0 backlog (st.checkForwarding now).shaper.tick (egressTail c.egress now backlog st) := by
   have hq' := hq.trans (checkForwarding_quiet st now)
   have hg' := hg.quiet hq'
   have hsh := hg'.shaper
@@ -415,29 +417,31 @@ theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Qu
   · rename_i hc
     obtain ⟨status, hrec, hst⟩ := f5
     subst hrec
-    refine ⟨hgood, f2, row, status, f3, ?_, fun r hr => ⟨hfr r hr, hst r (by rw [hof r hr]; exact hr)⟩,
-      fun h => absurd hc h⟩
+    refine ⟨hgood, f2, row, status, f3, rfl, fun _ => rfl, ?_,
+      fun r hr => ⟨hfr r hr, hst r (by rw [hof r hr]; exact hr)⟩, fun h => absurd hc h⟩
     simp only [hb', hb, hc, ↓reduceIte, List.singleton_append, ← hwire]
     rfl
   · rename_i hc
     obtain ⟨hrec, hr1, hr2⟩ := f5
     subst hrec
     refine ⟨hgood, f2, row, match st0.shaper.certifier.fault with | none => .complete | some r => .notEstablished r,
-      f3, ?_, fun r hr => ⟨hfr r hr, by rw [hr]⟩, fun _ => ⟨hr1, fun r hr => hr2 r (by rw [hof r hr]; exact hr)⟩⟩
+      f3, rfl, fun h => absurd h hc, ?_, fun r hr => ⟨hfr r hr, by rw [hr]⟩,
+      fun _ => ⟨hr1, fun r hr => hr2 r (by rw [hof r hr]; exact hr)⟩⟩
     simp only [hb', hb, hc, ↓reduceIte, List.append_nil, ← hwire]
     rfl
   · rename_i hc
     obtain ⟨status, hrec, hst⟩ := f5
     subst hrec
-    refine ⟨hgood, f2, row, status, f3, ?_, fun r hr => ⟨hfr r hr, hst r (by rw [hof r hr]; exact hr)⟩,
-      fun h => absurd hc h⟩
+    refine ⟨hgood, f2, row, status, f3, rfl, fun _ => rfl, ?_,
+      fun r hr => ⟨hfr r hr, hst r (by rw [hof r hr]; exact hr)⟩, fun h => absurd hc h⟩
     simp only [hb', hb, hc, ↓reduceIte, List.nil_append]
     rfl
   · rename_i hc
     obtain ⟨hrec, hr1, hr2⟩ := f5
     subst hrec
     refine ⟨hgood, f2, row, match st0.shaper.certifier.fault with | none => .complete | some r => .notEstablished r,
-      f3, ?_, fun r hr => ⟨hfr r hr, by rw [hr]⟩, fun _ => ⟨hr1, fun r hr => hr2 r (by rw [hof r hr]; exact hr)⟩⟩
+      f3, rfl, fun h => absurd h hc, ?_, fun r hr => ⟨hfr r hr, by rw [hr]⟩,
+      fun _ => ⟨hr1, fun r hr => hr2 r (by rw [hof r hr]; exact hr)⟩⟩
     simp only [hb', hb, hc, ↓reduceIte, List.append_nil]
     rfl
 
@@ -449,18 +453,39 @@ theorem done_false {c : Config} {st : State} (hg : Good c st) (ht : st.shaper.t 
   unfold horizon at ht
   simp [ht]
 
-theorem pair_toList (x : State × Array Action) :
-    (match x with | (st, acts) => (st, acts.toList) : State × List Action) = (x.1, x.2.toList) := rfl
-
-/-- **A live egress tick** is `egressTick`. -/
-theorem step_egress {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < horizon c) :
-    step st (.tick .egress now backlog) = ((st.egressTick now backlog).1, (st.egressTick now backlog).2.toList) := by
+theorem step_live {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < horizon c)
+    (x : State × Array Action) (hx : st.egressTick now backlog = x) :
+    step st (.tick .egress now backlog) = (x.1, x.2.toList) := by
   have ht' : st.shaper.t < st.ticks st.config.egress := by unfold State.ticks; rw [hg.config]; exact ht
   unfold step
-  simp only [done_false hg ht, Bool.false_eq_true, ↓reduceIte, ht']
+  rw [done_false hg ht]
+  simp only [Bool.false_eq_true, ↓reduceIte, ht', hx]
+
+theorem step_live_fst {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < horizon c)
+    (x : State × Array Action) (hx : st.egressTick now backlog = x) : (step st (.tick .egress now backlog)).1 = x.1 := by
+  rw [step_live hg ht x hx]
+
+theorem step_live_snd {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < horizon c)
+    (x : State × Array Action) (hx : st.egressTick now backlog = x) :
+    (step st (.tick .egress now backlog)).2 = x.2.toList := by
+  rw [step_live hg ht x hx]
+
+/-- **A live egress tick** is `egressTick`: its state, and its actions. Stated by component: the kernel would unfold
+`egressTick` to compare a pair of its projections with it. -/
+theorem step_egress_fst {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
+    (ht : st.shaper.t < horizon c) : (step st (.tick .egress now backlog)).1 = (st.egressTick now backlog).1 :=
+  step_live_fst hg ht _ rfl
+
+theorem step_egress_snd {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
+    (ht : st.shaper.t < horizon c) :
+    (step st (.tick .egress now backlog)).2 = (st.egressTick now backlog).2.toList :=
+  step_live_snd hg ht _ rfl
+
+/-- The shaper an egress tick ticks: after the late and backlog checks and the forwarding check. -/
+def egressMid (st : State) (now backlog : Nat) : Shaper := ((egressPre st now backlog).checkForwarding now).shaper
 
 theorem egress_spec {c : Config} {st : State} (hg : Good c st) (now backlog : Nat) :
-    EgressSpec c st backlog (st.egressTick now backlog) := by
+    EgressSpec c st backlog (egressMid st now backlog).tick (st.egressTick now backlog) := by
   rw [egressTick_eq, hg.config]
   have := egressPre_quiet st now backlog
   exact egressTail_spec hg this now backlog
