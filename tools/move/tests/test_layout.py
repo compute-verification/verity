@@ -106,7 +106,7 @@ new = {}
 """
 
 
-def _split_tree(tmp_path: Path, split: str) -> subprocess.CompletedProcess:
+def _split_tree(tmp_path: Path, split: str, *args: str) -> subprocess.CompletedProcess:
     r = tmp_path / "repo"
     files = {"backends/flock/verifier/ci.py": "", "backends/flock/verifier/lean/lakefile.toml": "",
              "gates.toml": 'merge_requires = ["backends/flock/", "backends/flock/verifier/lean/"]\n',
@@ -120,14 +120,14 @@ def _split_tree(tmp_path: Path, split: str) -> subprocess.CompletedProcess:
     git(r, "add", "-A")
     git(r, "commit", "-q", "-m", "old")
     return subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock",
-                           "--dry-run"], capture_output=True, text=True)
+                           "--dry-run", *args], capture_output=True, text=True)
 
 
 def test_a_reference_to_a_directory_the_map_splits_fails_unless_split_acknowledges_it(tmp_path):
     """The rewrite of a split directory follows its larger part, so a gate naming `backends/flock/` would stop covering the
     Lean verifier that left for core/ (the C-Flock gates that failed open): each such reference is an error until [split]
     names it with its reason, and an acknowledgement nothing needs is an error too. A reference to the part that left is
-    exact, and needs none."""
+    exact, and needs none. On a branch's tree (restack.py's `--report-splits`) they're noted instead: the owner's to check."""
     p = _split_tree(tmp_path / "bare", "")
     assert p.returncode != 0
     assert "gates.toml: backends/flock (" in p.stderr and "check.py: backends/flock/verifier (" in p.stderr, p.stderr
@@ -136,6 +136,8 @@ def test_a_reference_to_a_directory_the_map_splits_fails_unless_split_acknowledg
     assert _split_tree(tmp_path / "acknowledged", ok).returncode == 0
     stale = _split_tree(tmp_path / "stale", ok + '"other.py: backends/flock" = "gone"\n')
     assert stale.returncode != 0 and "no reference needs any more: other.py: backends/flock" in stale.stderr
+    branch = _split_tree(tmp_path / "branch", '\n[split]\n"other.py: backends/flock" = "gone"\n', "--report-splits")
+    assert branch.returncode == 0 and "gates.toml: backends/flock (" in branch.stdout, branch.stderr
 
 
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():

@@ -38,6 +38,9 @@ import tempfile
 SCRIPT = "tools/move/layout.py"
 #: the arguments the move's script runs with (`--script-arg`; rename.py takes its map as `--map`)
 SCRIPT_ARGS: tuple[str, ...] = ()
+#: what a script takes on a branch's tree rather than main's: layout.py notes the branch's own references to a directory the map
+#: splits instead of failing on them (they're its owner's to check, and the move's commit is the same either way)
+BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
 SCRIPT_DIR = "tools/move"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 
@@ -141,7 +144,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
                 overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
                 git("reset", "-q", "--soft", overlay, cwd=wt)
-            p = subprocess.run([python, SCRIPT, *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
+            p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))

@@ -1388,6 +1388,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--resolve", metavar="MODULE")
     ap.add_argument("--report", type=Path, help="write every change and note as JSON here")
     ap.add_argument("--allow-dirty", action="store_true")
+    ap.add_argument("--report-splits", action="store_true",
+                    help="note references to a split directory that [split] doesn't acknowledge, instead of failing (restack.py "
+                         "on a branch: its own references are its owner's to check)")
     a = ap.parse_args(argv)
     layout = load(a.map)
     if a.resolve:
@@ -1421,7 +1424,10 @@ def main(argv: list[str] | None = None) -> int:
     run.create()
     run.rewrite_all()
     unacknowledged, stale = run.unacknowledged_splits()
-    if unacknowledged or stale:
+    if a.report_splits:
+        for x in unacknowledged:
+            run.note("references to a split directory [split] doesn't acknowledge", x)
+    elif unacknowledged or stale:
         raise SystemExit("references to a directory the map splits, which [split] doesn't acknowledge:\n"
                          + "".join(f"  {x}\n" for x in unacknowledged)
                          + "".join(f"  [split] acknowledges what no reference needs any more: {k}\n" for k in stale))
