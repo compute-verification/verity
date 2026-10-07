@@ -1,0 +1,20 @@
+# The active network certifier device: `active.py`'s proxy as a pure state machine over the reference's certifiers and
+# online prover, in executable Lean. It reuses `certifier_program`'s schedule and `network_check`'s grid parameters; no
+# Mathlib and nothing of Security.
+name = "certifier_device"
+defaultTargets = ["CertifierDevice"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "certifier_program"
+path = "../../../../protocols/certifier/lean"
+
+[[require]]
+name = "network_check"
+path = "../../../protocols/network/lean"
+
+[[lean_lib]]
+name = "CertifierDevice"
