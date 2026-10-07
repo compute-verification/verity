@@ -32,6 +32,8 @@ Sanity.lean     a satisfiability witness for every named hypothesis, the joint w
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftest runs, equal to the
                                definitions above: four theorems, not guarantees (below)
+Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
+                               (`security_properties`' `AcceptedRunsAreProgramRuns`, through Code.lean)
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
 CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
 ~~~

@@ -1,0 +1,65 @@
+import Properties.Proofs.NetworkCertifier.Run
+import Proofs.NetworkCertifier.Code
+
+/-!
+# An accepted run is a run of the certifier program (5b)
+
+`Properties.NetworkCertifier.AcceptedRunsAreProgramRuns`, proved from what an accepted run's rows are
+(`Properties.NetworkCertifier.acceptedRowsAreProgramRows`, under `cr/sha-512` and `euf-cma/lms-sha512-n64`) and the
+program's `expectedRow` being the reference's (`CodeExpectedRow`). The declared syncs are one value of Σ_sync per window,
+the same on every link (the check's `advice` and one-clock tests, through `acceptsIff`), so they are advice of the
+reference's constant-rate Program, and the device's rows and statuses are what its `Accepted` asks.
+-/
+
+open NetworkCheck hiding Params
+open NetworkCheck.Check
+open NetworkCertifier (ClockSync)
+open Properties.NetworkCertifier
+
+namespace Proofs.NetworkCertifier
+
+theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
+  intro p c e dev eg ig K In Ac ss frames a op o linkOf hacc hpd hhon hcr hlms hdel hrho hlen hrows hstat hlink hfr
+  obtain ⟨hrow, hst⟩ := acceptedRowsAreProgramRows p c e dev eg ig hacc hpd hhon hcr hlms
+  obtain ⟨hfit, eg', ig', -, he, -⟩ := (acceptsIff p c e).mp hacc
+  have adm : ∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link → ∀ w < p.windows,
+      SyncAdmitted p e link w := by
+    intro ℓ link hl w hw
+    obtain ⟨-, -, -, hadm, -⟩ := he _ _ (zip_index hfit ℓ hl) w hw
+    exact hadm
+  have hσ : ∀ w : Fin p.windows, ∃ v : ss.Elem, ∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link →
+      ∃ s, link.syncs[w.1]? = some s ∧ v.1.1 = s.delta ∧ v.2.1 = s.rho := by
+    intro w
+    by_cases h0 : 0 < p.egress.size
+    · have h0' : 0 < e.links.size := by rw [hfit.1]; exact h0
+      have hl0 : e.links[0]? = some e.links[0] := Array.getElem?_eq_getElem h0'
+      obtain ⟨s, hs, hd, hr, -⟩ := adm ⟨0, h0⟩ _ hl0 w.1 w.2
+      refine ⟨(⟨s.delta, (hdel _).mp hd⟩, ⟨s.rho, (hrho _).mp hr⟩), fun ℓ link hl => ?_⟩
+      obtain ⟨s', hs', -, -, first, s₀, hf, hf0, hd0, hr0⟩ := adm ℓ link hl w.1 w.2
+      have e1 : e.links[0] = first := Option.some.inj (hl0.symm.trans hf)
+      subst e1
+      have e0 : s₀ = s := Option.some.inj (hf0.symm.trans hs)
+      subst e0
+      exact ⟨s', hs', hd0, hr0⟩
+    · obtain ⟨d, hd⟩ := ss.deltas_nonempty
+      obtain ⟨ρ, hρ⟩ := ss.rhos_nonempty
+      exact ⟨(⟨d, hd⟩, ⟨ρ, hρ⟩), fun ℓ _ _ => (h0 (Nat.zero_lt_of_lt ℓ.2)).elim⟩
+  choose σ hσ using hσ
+  refine ⟨σ, hσ, fun t ht => ?_⟩
+  have hto : t < o.length := hlen ▸ ht
+  refine ⟨hto, ?_, fun κ => (hstat t hto κ).mpr (hst _ _ (hlink κ) _ ?_)⟩
+  · rw [hrows t hto]
+    funext ℓ
+    have hℓ : ℓ.1 < e.links.size := by rw [hfit.1]; exact ℓ.2
+    have hl : e.links[ℓ.1]? = some e.links[ℓ.1] := Array.getElem?_eq_getElem hℓ
+    have hdecl := CheckProofs.declares_declared (W := p.windows) (hfit.2.1 _ (Array.mem_def.mp (Array.getElem_mem hℓ)))
+    rw [hrow ℓ _ hl _ hdecl t ht]
+    refine NetTiming.SecurityProofs.CodeExpectedRow _ _ _ _ (fun w => ss.sync (σ w)) (fun w => ?_) _
+      (frames (NetTiming.ingressUpTo op o t) a ℓ) (hfr t ht ℓ _ hl).symm t
+    obtain ⟨s, hs, hd, hr⟩ := hσ w ℓ _ hl
+    have es : CheckProofs.declared p.windows e.links[ℓ.1] w = s := Option.some.inj ((hdecl w).symm.trans hs)
+    rw [es]
+    exact ⟨hd.symm, hr.symm⟩
+  · exact Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact ht)
+
+end Proofs.NetworkCertifier
