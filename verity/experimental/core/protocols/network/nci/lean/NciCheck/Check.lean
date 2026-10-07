@@ -107,23 +107,23 @@ def ownerOf (c : Circuit) (g : Nat) (j : Json) : Except String (Option Nat) := d
   return o
 
 /-- The number of IUs: one more than the largest IU an owner names. -/
-def iuCount (own : List (Option Nat)) : Nat :=
+def iuCount (own : Array (Option Nat)) : Nat :=
   own.foldl (fun m o => match o with | some u => max m (u + 1) | none => m) 0
 
 /-- The IUs an owner names. -/
-def usedOf (own : List (Option Nat)) : Std.HashSet Nat :=
+def usedOf (own : Array (Option Nat)) : Std.HashSet Nat :=
   own.foldl (fun s o => match o with | some u => s.insert u | none => s) {}
 
 def divisionOf (c : Circuit) (theta owner : Array Json) : Except String Division := do
-  let mask ← theta.toList.foldlM (thetaStep c) {}
+  let mask ← (List.range theta.size).foldlM (fun s t => thetaStep c s theta[t]!) {}
   if owner.size != c.N then throw "owner-length"
-  let own ← (List.range c.N).mapM fun g => ownerOf c g owner[g]!
+  let own ← (List.range c.N).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[]
   let n := iuCount own
   -- more IUs than gates leaves one empty, and the check below stays as small as the circuit
   if n > c.N then throw "empty-iu"
   let used := usedOf own
   if !(List.range n).all used.contains then throw "empty-iu"
-  return { theta := mask, owner := own.toArray, n }
+  return { theta := mask, owner := own, n }
 
 /-- Per IU `u`, in one pass over the gates: its number of gates, and the gates outside it that a gate of it reads,
 `into(R)`. -/
