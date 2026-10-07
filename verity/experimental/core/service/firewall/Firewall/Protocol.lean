@@ -13,7 +13,8 @@ One outer session's release decision, through `Core.Protocol`:
 * `check`: `decide` with the send check `Contract.run`: take the slot, admit the session, hold the transcript to the
   contract, then the release time. It accepts with the session, its statement and stream and when its proofs leave
   (public), and the transcript's phase and item count (the profile: the contract let every item through); it rejects a
-  refusal (`FIREWALL-REFUSED: …`) and a stop (its why). It is never undecided.
+  refusal (`FIREWALL-REFUSED: …`), a stop (its why), and a record the session's own ops left unreadable (`Record.op`).
+  It is never undecided.
 
 The record events the session appends (its `slot`, a dead holder's stop, a refusal or a stop) are not in the outcome: an
 `Outcome` carries a verdict and a reason, and nothing of the firewall's state after it. `Firewall.Release.outerSession`
@@ -68,10 +69,11 @@ def sendCheck (pub : PublicInput) (t : Transcript) : Run :=
   | some why => .err why
 
 def check (pub : PublicInput) (r : Record) (e : Evidence) : Core.Outcome Released Checked :=
-  match (decide r.events e.session e.part e.nowMs .ok (sendCheck pub e.transcript)).1 with
-  | .refused why => .reject s!"FIREWALL-REFUSED: {why}"
-  | .stop why => .reject why
-  | .go a => .accept { session := e.session, part := e.part, stream := a.stream, releaseMs := a.releaseMs }
+  match decide r e.session e.part e.nowMs .ok (sendCheck pub e.transcript) with
+  | .error why => .reject why
+  | .ok (.refused why, _) => .reject s!"FIREWALL-REFUSED: {why}"
+  | .ok (.stop why, _) => .reject why
+  | .ok (.go a, _) => .accept { session := e.session, part := e.part, stream := a.stream, releaseMs := a.releaseMs }
       { phase := e.transcript.phase, items := e.transcript.items.size }
 
 def evidenceOf (b : ByteArray) : V Evidence := do
