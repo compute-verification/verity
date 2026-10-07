@@ -45,6 +45,7 @@ def PubDecodesZ (decode : DecoderZK (C := C) planZ tab) (ones zeros : Finset (Fi
       (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
     ∀ g ∈ P.io u, (g ∈ ones → decode S R u M g = true) ∧ (g ∉ ones → g ∈ zeros → decode S R u M g = false)
 
+omit [Fintype K] [DecidableEq K] in
 /-- **The `--zk` link event at the public transcript is the link event at `vals`** (`Partition.linkEvB_of_pub`). -/
 theorem linkEvZK_of_pub {decode : DecoderZK (C := C) planZ tab} {ones zeros : Finset (Fin C.N)}
     (hpub : PubDecodesZ A P planZ tab decode ones zeros) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)
@@ -60,6 +61,7 @@ theorem linkEvZK_of_pub {decode : DecoderZK (C := C) planZ tab} {ones zeros : Fi
     · rw [Xpub_of_mem_zeros hg1 hg0]; exact h0 hg1 hg0
     · rw [Xpub_of_not_mem hg1 hg0]; exact heq
 
+omit [Fintype K] in
 /-- **The compiled link term is monotone in the link event** (`Partition.linkSoundE_mono` at `analysisZC`). -/
 theorem linkSoundZC_mono {L : Law n} {decode : DecoderZK (C := C) planZ tab}
     {Xc Xc' : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)} {k : ℕ}

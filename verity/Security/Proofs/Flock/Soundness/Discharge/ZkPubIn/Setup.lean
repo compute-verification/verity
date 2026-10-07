@@ -158,6 +158,53 @@ theorem setupTables_okHP (hh : tags.hiddenOutputs = true)
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, hall j hj⟩, mPts_of_any (by assumption), rfl⟩
 
+set_option maxHeartbeats 4000000 in
+/-- The session's spec retains rounds exactly when its tags do, under hidden outputs with the verifier's public inputs
+(`HiddenExec.setupTables_retainH`). -/
+theorem setupTables_retainHP (hh : tags.hiddenOutputs = true)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure (some own) =
+      .ok (spec, sts)) :
+    spec.retainRounds = tags.retainRounds := by
+  unfold Stmt.setupTables at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h : jp0 () = .ok (spec, sts) := by
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  replace h : jp1 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp1] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  replace h : jp2 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp2] at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind, ite_eq_left hh] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+  · exact congrArg Tags.retainRounds (setupHidden_tagsP (by assumption))
+  all_goals rfl
+
+/-- The session's two link points have every table's length, under hidden outputs with the verifier's public inputs
+(`HiddenExec.setupTables_pointsAny`). -/
+theorem setupTables_pointsHP (hh : tags.hiddenOutputs = true)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure (some own) =
+      .ok (spec, sts)) :
+    spec.points = 2 ∧ ∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = spec.mPts := by
+  rcases setupTables_okHP hh h with ⟨-, st, -, rfl, rfl⟩ | ⟨-, -, -, hm, hp⟩
+  · exact ⟨rfl, fun j hj => by
+      have : j = 0 := by simpa using hj
+      subst this
+      rfl⟩
+  · exact ⟨hp, hm⟩
+
 /-- One table: its spec retains rounds exactly when its tags do, and its two link points have the table's length. -/
 theorem setupTables_oneHP (hh : tags.hiddenOutputs = true) (hc : count ≤ 1)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure (some own) =
