@@ -130,6 +130,8 @@ inputs = ["verity"]
 # Never rewritten: records of what was, and files whose bytes a digest pins.
 exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           # recorded runs and the rulings say what was, in the paths of their day
+           "benchmarks/numerical/tests/bench/data/**", ".agents/skills/friction/SKILL.md",
            "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
            "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py",                   # its synthetic trees borrow the old names

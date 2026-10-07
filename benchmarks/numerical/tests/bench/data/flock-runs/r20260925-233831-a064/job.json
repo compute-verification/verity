@@ -89,7 +89,7 @@
  "execution": {
   "command": [
    "bash",
-   "verity/ml/provers/flock/pod/30-cell.sh",
+   "backends/flock/pod/30-cell.sh",
    "ROLE=prover",
    "REL=bf16-hopper",
    "VERIFIER=64.247.206.241:19127",
@@ -172,7 +172,7 @@
      "backends/sp1/python",
      "backends/numerical/python",
      "integrations/vllm",
-     "verity/ml/provers/flock/python"
+     "backends/flock/python"
     ],
     "missing": [],
     "source": "pyproject.toml [tool.uv.workspace]"
@@ -215,7 +215,7 @@
   "params": {
    "argv": [
     "bash",
-    "verity/ml/provers/flock/pod/30-cell.sh",
+    "backends/flock/pod/30-cell.sh",
     "ROLE=prover",
     "REL=bf16-hopper",
     "VERIFIER=64.247.206.241:19127",
@@ -227,7 +227,7 @@
   "key_params_resolved": {
    "argv": [
     "bash",
-    "verity/ml/provers/flock/pod/30-cell.sh",
+    "backends/flock/pod/30-cell.sh",
     "ROLE=prover",
     "REL=bf16-hopper",
     "VERIFIER=64.247.206.241:19127",
