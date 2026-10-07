@@ -232,6 +232,8 @@ impl ShadowLink {
         let r = self.round;
         self.round += 1;
         let (want, k) = self.rx.recv().map_err(|_| refused(format!("opening round {r}: the firewall's opening ended before the device's")))?;
+        #[cfg(feature = "sha512")]
+        crate::firewall_transcript::with(|t| t.shadow_round(&want, k));
         if want == content && k == n {
             return Ok(());
         }
