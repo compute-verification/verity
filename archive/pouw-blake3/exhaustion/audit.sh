@@ -12,7 +12,7 @@ exec < /dev/null
 src=${1:?SRC}
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 PY=${PY:-python3}; JOBS=${JOBS:-$(nproc)}
-export PYTHONPATH="$ROOT:$ROOT/verity/protocols/accounting/work/pouw${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$ROOT:$ROOT/verity/experimental/protocols/pouw${PYTHONPATH:+:$PYTHONPATH}"
 if [ -d "$src" ]; then
   OUT=$src
 else

@@ -1,6 +1,6 @@
 """Node 1's dispatcher records the queue's placement of each Job it creates, with the item's research question (option A of
 the `--queue` switch, top-level 1 Oct 5:14 AM PDT; circuits' yes at 5:15 on one condition: no change to a rendered Job, its env
-or its tree). The queue is a stub `cluster` package here: this suite's inputs don't include tools/cluster."""
+or its tree). The queue is a stub `cluster` package here: this suite's inputs don't include infra/cluster."""
 from __future__ import annotations
 
 import importlib.util

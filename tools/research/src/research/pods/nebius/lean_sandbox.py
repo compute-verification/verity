@@ -14,7 +14,7 @@ the few below), --elan DIR (default ~research/.elan, read-only at /opt/elan), --
 --memory SIZE, --max-sec N, --user NAME (default lean-build; never root, research or a member of research, sudo, docker or
 adm). Every DEST must exist: systemd would make a missing one on the host's disk (`vy-lean-build-setup` makes /opt/elan).
 
-Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/check/lean_slot.py`'s
+Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/verity/check/lean_slot.py`'s
 format (`lean-build-I.lock` and `.who` beside the file, waiting in arrival order in `lean-line-build`), unless the caller holds
 one (`--held-slot`, which must be held). The lock directory is research's, so root opens nothing there through a link, takes
 only regular files with one name, and gives research only what it made itself; anything else there is refused. It holds the

@@ -1287,6 +1287,49 @@
         "verity/Security/Specs/Warden/": "verity/Security/Specs/NetworkCertifier/",
         "verity/protocols/accounting/communication/warden/": "verity/protocols/accounting/communication/certifier/"
       }
+    },
+    {
+      "paths": {
+        "verity/primitives/__init__.py": "verity/ml/__init__.py",
+        "verity/primitives/circuits/": "verity/ml/circuits/",
+        "verity/primitives/commitments/": "verity/ml/commitments/",
+        "verity/primitives/crypto/": "verity/ml/crypto/",
+        "verity/primitives/randomness/": "verity/ml/randomness/",
+        "catalog/verity_catalog/definitions/": "verity/ml/circuits/ops/",
+        "catalog/verity_catalog/silicon/": "verity/ml/circuits/silicon/",
+        "catalog/verity_catalog/targets/": "verity/ml/circuits/targets/",
+        "catalog/tests/": "verity/ml/circuits/ops/tests/",
+        "catalog/pyproject.toml": "verity/ml/circuits/ops/pyproject.toml",
+        "kernels/verity_kernels/": "verity/ml/kernels/",
+        "kernels/hash_gpu/": "verity/ml/kernels/hash_gpu/",
+        "backends/flock/": "verity/ml/flock/",
+        "backends/flock/verifier/lean/": "verity/core/service/flock/",
+        "experimental/verity_experimental/": "verity/experimental/",
+        "experimental/tests/": "verity/experimental/tests/",
+        "experimental/pyproject.toml": "verity/experimental/pyproject.toml",
+        "verity/primitives/commitments/tests/test_sha512_framings.py": "verity/experimental/tests/commitments/test_sha512_framings.py",
+        "verity/primitives/commitments/tests/test_hm96.py": "verity/experimental/tests/commitments/test_hm96.py",
+        "experimental/verity_experimental/sampled_proofs/": "verity/experimental/protocols/sampled_proofs/",
+        "verity/claims/": "verity/experimental/claims/",
+        "verity/protocols/": "verity/experimental/protocols/",
+        "verity/protocols/accounting/work/pouw/": "verity/experimental/protocols/pouw/",
+        "verity/protocols/accounting/space/pous/": "verity/experimental/protocols/pous/",
+        "verity/protocols/accounting/communication/certifier/": "verity/experimental/protocols/certifier/",
+        "verity/protocols/verification/sampled_proofs/": "verity/experimental/protocols/sampled_proofs/",
+        "verity/Security/": "Security/",
+        "verity/tests/test_boundaries.py": "tests/test_boundaries.py",
+        "backends/flock/verifier/stratified_agree.py": "verity/ml/flock/tests/stratified_agree.py",
+        "tools/check/": "tools/verity/check/",
+        "tools/circuit_check/": "tools/verity/circuit_check/",
+        "tools/lean/": "tools/verity/lean/",
+        "tools/lean/audit.py": "tools/verity/lean/check.py",
+        "tools/cluster/": "infra/cluster/",
+        "tools/research/control/": "infra/control/",
+        "catalog/census/": "benchmarks/census/",
+        "tools/tc_probe/": "benchmarks/tc_probe/",
+        "tools/tc_probe_fp4/": "benchmarks/tc_probe_fp4/",
+        "tools/native_peak/": "benchmarks/native_peak/"
+      }
     }
   ]
 }

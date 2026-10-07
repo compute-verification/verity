@@ -2,7 +2,7 @@
 
 The model's layers are a stand-in linear type (`pous.linear_types`), their weights byte strings (`pous.TENSORS`), and the
 band runs at a 128-byte segment (`pous._base`), so encoding takes milliseconds.  The codec, the commitment, the salt, the
-storage root and the audit are `verity.protocols.accounting.space.pous`'s own.
+storage root and the audit are `verity.experimental.protocols.pous`'s own.
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class Model:
 
 @pytest.fixture
 def toy(monkeypatch):
-    from verity.protocols.accounting.space.pous import band
+    from verity.experimental.protocols.pous import band
     monkeypatch.setattr(pous, "TENSORS", Bytes())
     monkeypatch.setattr(pous, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(pous, "_base", lambda scheme: band.BandParams(16, 64, 12))
@@ -126,7 +126,7 @@ def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(mo
 
 
 def test_pous_serves_decoded_weights_releases_the_plaintext_and_passes_its_own_audit(toy):
-    from verity.protocols.accounting.space.pous import protocol
+    from verity.experimental.protocols.pous import protocol
     before = hooks.live()
     comp = PO.install(toy, _ctx(f"pous:{BAND}", settings={"pous": {"salt_source": SALT_SOURCE}}))
     opt = comp.get("pous")
