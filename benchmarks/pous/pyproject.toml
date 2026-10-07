@@ -8,5 +8,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # tests/ checks the harness against PoUS itself (verity.experimental.protocols.pous) and the census's hardware ids;
 # test_pous_service.py stages the answers with C-Flock's row machinery (verity/ml/flock/python, which reads catalog and kernels);
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE).
-inputs = ["verity", "verity/ml/circuits", "verity/ml/kernels", "verity/ml/flock/python",
+inputs = ["verity", "benchmarks/census/hardware.json", "verity/ml/circuits", "verity/ml/kernels", "verity/ml/flock/python",
           "benchmarks/numerical/python/verity_numerical/bench/placement.py"]
