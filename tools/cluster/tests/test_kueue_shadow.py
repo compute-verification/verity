@@ -52,7 +52,8 @@ def test_queues_copy_the_nodes_into_their_own_cohort() -> None:
     checks = cqs["shadow-checks"]["spec"]["resourceGroups"][0]["flavors"]
     assert [(f["name"], f["resources"][0]["nominalQuota"]) for f in checks] == [("vy-shadow-slots", 2), ("vy-shadow-train-slots", 1)]
     taints = {o["metadata"]["name"]: o["spec"] for o in objs if o["kind"] == "ResourceFlavor"}
-    assert taints == {"vy-shadow-slots": {}, "vy-shadow-train-slots": {"nodeTaints": [K.TRAINS_TAINT]}}
+    assert taints == {"vy-shadow-slots": {"nodeLabels": {K.SLOT_KIND: "any"}},
+                      "vy-shadow-train-slots": {"nodeLabels": {K.SLOT_KIND: "trains"}, "nodeTaints": [K.TRAINS_TAINT]}}
     lean = cqs["shadow-lean"]["spec"]["resourceGroups"][0]
     assert lean["coveredResources"] == ["vy.dev/lean-audit", "vy.dev/lean-check"]
     lqs = {o["metadata"]["name"]: o["spec"]["clusterQueue"] for o in objs if o["kind"] == "LocalQueue"}
@@ -80,6 +81,10 @@ def test_demand_reads_every_scheduler() -> None:
     train = items["slot/r-train"]
     assert train.trains and train.priority == 1 and train.pod_sets[0]["template"]["spec"]["tolerations"][0]["key"] == "vy.dev/trains"
     assert "tolerations" not in items["slot/r-lane"].pod_sets[0]["template"]["spec"] and not items["slot/r-lane"].running
+    # a holder is pinned to the kind of slot it holds; a waiter may take either kind it tolerates
+    assert train.pod_sets[0]["template"]["spec"]["nodeSelector"] == {K.SLOT_KIND: "trains"}
+    assert items["slot/12"].pod_sets[0]["template"]["spec"]["nodeSelector"] == {K.SLOT_KIND: "any"}
+    assert "nodeSelector" not in items["slot/r-lane"].pod_sets[0]["template"]["spec"]
     assert items["lean/audit/22"].pod_sets[0]["template"]["spec"]["containers"][0]["resources"]["requests"] == {"vy.dev/lean-audit": "1"}
 
 

@@ -59,6 +59,9 @@ FLAVOR = "vy-nebius-1"
 SLOT_FLAVOR = "vy-shadow-slots"
 TRAIN_FLAVOR = "vy-shadow-train-slots"
 TRAINS_TAINT = {"key": "vy.dev/trains", "value": "only", "effect": "NoSchedule"}
+#: which slot a holder has, as its flavor's node label: Kueue would otherwise put a train holding a trains-only slot in the
+#: first flavor it tolerates, and count it against the slots everyone may take
+SLOT_KIND = "vy.dev/slot-kind"
 CHECK_SLOT = "vy.dev/check-slot"
 POOL_LABEL = "verity.dev/gpu-pool"
 # n1_lease.py's pools as node 1 runs them: lease directory, ClusterQueue, WorkloadPriorityClass
@@ -90,11 +93,13 @@ def _true(w: dict, kind: str) -> bool:
     return any(c.get("type") == kind and c.get("status") == "True" for c in (w.get("status") or {}).get("conditions") or ())
 
 
-def _pod_set(requests: dict[str, str], tolerations: tuple[dict, ...] = ()) -> dict[str, Any]:
+def _pod_set(requests: dict[str, str], tolerations: tuple[dict, ...] = (), node_selector: dict[str, str] | None = None) -> dict[str, Any]:
     spec: dict[str, Any] = {"restartPolicy": "Never",
                             "containers": [{"name": "shadow", "image": "none", "resources": {"requests": requests}}]}
     if tolerations:
         spec["tolerations"] = list(tolerations)
+    if node_selector:
+        spec["nodeSelector"] = dict(node_selector)
     return {"name": "main", "count": 1, "template": {"spec": spec}}
 
 
@@ -125,12 +130,13 @@ def queues(cqs: list[dict], slots: dict | None, lean: dict | None) -> list[dict]
         cq(shadow_name(real["metadata"]["name"]), real["spec"]["resourceGroups"], spec)
     if slots and slots.get("slots"):
         n_train = sum(1 for s in slots["slots"] if s.get("trains"))
-        flavors = [(SLOT_FLAVOR, len(slots["slots"]) - n_train, None), (TRAIN_FLAVOR, n_train, [TRAINS_TAINT])]
-        for name, _, taints in flavors:
+        flavors = [(SLOT_FLAVOR, len(slots["slots"]) - n_train, "any", None),
+                   (TRAIN_FLAVOR, n_train, "trains", [TRAINS_TAINT])]
+        for name, _, kind, taints in flavors:
             out.append({"apiVersion": API, "kind": "ResourceFlavor", "metadata": {"name": name, **meta},
-                        "spec": {"nodeTaints": taints} if taints else {}})
+                        "spec": {"nodeLabels": {SLOT_KIND: kind}, **({"nodeTaints": taints} if taints else {})}})
         cq(shadow_name("checks"), [{"coveredResources": [CHECK_SLOT], "flavors": [
-            {"name": name, "resources": [{"name": CHECK_SLOT, "nominalQuota": n}]} for name, n, _ in flavors]}])
+            {"name": name, "resources": [{"name": CHECK_SLOT, "nominalQuota": n}]} for name, n, _, _ in flavors]}])
     if lean and lean.get("pools"):
         res = [f"vy.dev/lean-{p}" for p in sorted(lean["pools"])]
         cq(shadow_name("lean"), [{"coveredResources": res, "flavors": [{"name": FLAVOR, "resources": [
@@ -185,7 +191,8 @@ def demand(workloads: list[dict], local_queues: dict[str, str], leases: dict[str
             if h:
                 # a holder's ticket said whether it was a train; a held trains-only slot can only be one
                 out.append(Item(key=f"slot/{h.get('run') or h['pid']}", queue=shadow_name("checks"),
-                                pod_sets=(_pod_set({CHECK_SLOT: "1"}, toleration if s.get("trains") else ()),),
+                                pod_sets=(_pod_set({CHECK_SLOT: "1"}, toleration if s.get("trains") else (),
+                                                   {SLOT_KIND: "trains" if s.get("trains") else "any"}),),
                                 priority=1 if s.get("trains") else 0, running=True, since=h.get("since") or "",
                                 trains=bool(s.get("trains"))))
         for wt in slots.get("waiters") or ():
