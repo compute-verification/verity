@@ -44,13 +44,16 @@ order of its ids (`ordered`, which each product's `#guard` checks). NCI and the 
 
 ## The properties
 
-`Security/Properties/` (package `security_properties`, Lean core only) states the rule against this code and proves it
-with no assumption: `Properties.Composition` for every id and every list of components (any rejection rejects, a misfit
-rejects, accept exactly when the cases fit, every component accepts and the commitment binds their digests, undecided
-exactly when none rejects and some is undecided, the keyed public outputs and profiles on acceptance, `answer`'s verdict
-the check's, nothing public unless accepted), and `Properties.Onsite` and `Properties.Remote` at each product's id and
-components. Its `lean-audit.json` records the 22 guarantees and every definition they read, this package's spec
-(`CoreComposition.Product`, `CoreComposition.Stubs`) among them, so a change to the rule shows in the records.
+`Security/Properties/` (package `security_properties`, Lean core only, shared with the other protocols' properties)
+states the rule against this code and proves it with no assumption: `Properties.Composition` for every id and every list
+of components (any rejection rejects, a misfit rejects, accept exactly when the cases fit, every component accepts and
+the commitment binds their digests, undecided exactly when none rejects and some is undecided, the keyed public outputs
+and profiles on acceptance, `answer`'s verdict the check's, nothing public unless accepted), and `Properties.Onsite` and
+`Properties.Remote` at each product's id and components. Its `lean-audit.json` records the 22 guarantees and every
+definition they read, this package's spec (`CoreComposition.Product`, `CoreComposition.Stubs`) and the interface's
+(`CoreProtocol.Protocol`, `.Profile`, `.Ratio`) among them, so a change to the rule shows in the records. Onsite's and
+remote's read the stubs' `Core.Example`, which the interface keeps out of its spec, under a `reads_exempt` that goes
+when the last stub does.
 
 ## The difftest
 
