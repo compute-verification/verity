@@ -18699,6 +18699,9 @@
    "assumptions": [],
    "type_hash": "49bc8ef5b1e2715f04313f36bf9ab90599d203127e6e66ea0924fcd3fdd1542a"
   },
+  "FlockSoundness.Discharge.ZkPubIn.zk_session_sound_canonicalP": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR": {
    "owner": "@proofs",
    "signature": [
