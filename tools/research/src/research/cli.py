@@ -15,7 +15,7 @@
                                                  # cancel; never the runner, never SIGKILL, so it still records the exit and publishes
                                                  # custody.  From any VM: a run another VM launched is found as `inspect` finds it
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
-  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
+  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine, and its records fetched here (remote.adopt)
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
@@ -1271,6 +1271,8 @@ def cmd_inspect(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--py-spy", action="store_true", help="instead: print a py-spy dump of the live run's Python processes, read on its "
+                                                          "machine (research.telemetry.pyspy)")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     try:
@@ -1278,6 +1280,8 @@ def cmd_inspect(argv: list[str]) -> int:
     except (FileNotFoundError, LookupError) as exc:
         print(f"research inspect: {exc}", file=sys.stderr)
         return 1
+    if ns.py_spy:
+        return _inspect_py_spy(run_dir)
     s = R.summarize(run_dir)
     if ns.json:
         print(json.dumps(s, indent=2, sort_keys=True))
@@ -1321,6 +1325,28 @@ def cmd_inspect(argv: list[str]) -> int:
     missing = [n for n, ok in (("job.json", s["has_job"]), ("status.json", s["has_status"])) if not ok]
     if missing:
         print(f"missing   {', '.join(missing)}  (the run died before the harness wrote them)")
+    return 0
+
+
+def _inspect_py_spy(run_dir: Path) -> int:
+    from .telemetry import pyspy
+
+    if (run_dir / "remote.json").exists():
+        try:
+            text = remote.py_spy(run_dir)
+        except remote.Refused as e:
+            print(f"research inspect: {run_dir.name}: {e}", file=sys.stderr)
+            return 1
+    else:
+        if (state := R.summarize(run_dir)["state"]) != "running":
+            print(f"research inspect: {run_dir.name} is {state}: no live workload to dump", file=sys.stderr)
+            return 1
+        results = pyspy.of_run(run_dir)
+        if results is None:
+            print(f"research inspect: {pyspy.MISSING}", file=sys.stderr)
+            return 3
+        text = pyspy.render(results)
+    sys.stdout.write(text)
     return 0
 
 

@@ -1856,6 +1856,25 @@ def scope_memory(local_dir: Path) -> list[dict[str, Any]]:
     return out
 
 
+def py_spy(local_dir: Path) -> str:
+    """`research inspect --py-spy`: a py-spy dump of the live workload's Python processes on its machine (research.telemetry.pyspy,
+    sent as `python3 -` over fetch's ssh, which reads the machine's status.json)."""
+    from .telemetry import pyspy
+
+    rec = _read_json(local_dir / "remote.json")
+    if not rec or not rec.get("remote_run_dir"):
+        raise Refused(f"{local_dir} is not a launched remote run")
+    limit = pyspy.MAX_PROCS * pyspy.DUMP_TIMEOUT_S + 60
+    try:
+        r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["python3", "-", rec["remote_run_dir"]],
+                    stdin=Path(pyspy.__file__).read_bytes(), timeout=limit)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"the dump on {rec.get('machine')} took over {limit:g} s") from None
+    if r.returncode:
+        raise Refused(f"no dump on {rec.get('machine')}: rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return r.stdout.decode(errors="replace")
+
+
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
     run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
