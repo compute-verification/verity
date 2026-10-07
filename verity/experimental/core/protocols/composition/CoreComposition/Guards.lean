@@ -57,6 +57,15 @@ private def verdict (xs : List Stubbed) (ps : List Stubbed := xs) (c : ByteArray
 #guard (answer [accepts "a", undecided "b"]).published.isNone && (answer [accepts "a", undecided "b"]).profile.isNone
 #guard (answer [accepts "a", rejects "b"]).published.isNone && (answer [accepts "a", rejects "b"]).profile.isNone
 
+private def readsBack (a : Answer) : Bool :=
+  match Answer.ofJson a.toJson, a.canonical with
+  | .ok b, .ok s => b.canonical.toOption == some s
+  | _, _ => false
+
+-- every verdict's answer reads back through `Answer.ofJson`, which a protocol consuming the composition's answer reads
+#guard [answer [accepts "a", accepts "b"], answer [accepts "a", undecided "b"], answer [undecided "a", rejects "b"],
+  answer [accepts "a"] [accepts "a"], answer [accepts "a", accepts "b"] (c := ByteArray.empty)].all readsBack
+
 -- the cases must fit the composition: each component named once, in order, under the composition's params
 #guard (answer [accepts "a"] [accepts "a"]).reason == some "params: b is missing"
 #guard (answer [accepts "a"] [accepts "a", accepts "b"]).reason == some "evidence: b is missing"
