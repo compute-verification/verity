@@ -12,17 +12,17 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.defs import REGISTRY, bind
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import Circuit
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.silicon import fp
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import Circuit
+from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.silicon import fp
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_dense as BD
 from verity_vllm.program.registry import dense as D

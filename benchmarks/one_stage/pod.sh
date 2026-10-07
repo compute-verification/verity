@@ -31,7 +31,7 @@ LP=$!
 
 # M0's flock-circuit, CPU build
 if [ "$(cat $W/bin/m0.sha 2>/dev/null)" != "$M0SHA" ]; then
-  (cd $W/m0 && RESEARCH_RUN_DIR=$O/m0 MODE=build GPU=0 bash backends/flock/pod/60-circuit.sh) > $O/build-m0.log 2>&1 || { tail -40 $O/build-m0.log; exit 1; }
+  (cd $W/m0 && RESEARCH_RUN_DIR=$O/m0 MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh) > $O/build-m0.log 2>&1 || { tail -40 $O/build-m0.log; exit 1; }
   cp /workspace/flock-gpu-link/flock/target/release/flock-circuit $W/bin/ && echo $M0SHA > $W/bin/m0.sha
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }
@@ -41,8 +41,8 @@ sha256sum $W/bin/flock-circuit $W/bin/flock-verify | tee $O/binaries.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 # M0's import roots in its own tree: the layout of 5 Oct (verity at the root), else the one before it
-m0path() { if [ -f $1/packages/verity/pyproject.toml ]; then echo $1/packages/verity/src:$1/backends/numerical/python:$1/backends/flock/python:$1/integrations/vllm
-           else echo $1:$1/catalog:$1/kernels:$1/experimental:$1/benchmarks/numerical/python:$1/backends/flock/python:$1/integrations/vllm; fi; }
+m0path() { if [ -f $1/packages/verity/pyproject.toml ]; then echo $1/packages/verity/src:$1/backends/numerical/python:$1/verity/ml/flock/python:$1/integrations/vllm
+           else echo $1:$1/catalog:$1/kernels:$1/experimental:$1/benchmarks/numerical/python:$1/verity/ml/flock/python:$1/integrations/vllm; fi; }
 M0PATH=$(m0path $W/m0)
 export RAYON_NUM_THREADS=$(nproc)
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm:$REPO/catalog:$REPO/kernels:$REPO/experimental

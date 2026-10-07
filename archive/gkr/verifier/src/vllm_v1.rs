@@ -1,4 +1,4 @@
-//! Scheme `vllm-v1` of `verity/primitives/commitments/vllm_v1` (its `PROTOCOL.md`), for committed-operands
+//! Scheme `vllm-v1` of `verity/ml/commitments/vllm_v1` (its `PROTOCOL.md`), for committed-operands
 //! statements claimed as `R+vllm-v1`: position leaves over the operand rows' raw little-endian bytes, the unpadded
 //! node / lift fold, and a step-root binding (§4) per tree.  The leaf digest *is* the tree leaf, so the per-VU public
 //! digests are `pos_leaf(row bytes)` and nothing else is hashed around them.
@@ -153,7 +153,7 @@ mod tests {
     use crate::commitments::{hex, unhex32};
 
     fn vectors() -> J {
-        parse_json(include_str!("../../../../verity/primitives/commitments/vllm_v1/vectors.json"))
+        parse_json(include_str!("../../../../verity/ml/commitments/vllm_v1/vectors.json"))
     }
 
     fn opt_path(p: &J) -> Vec<Option<Digest>> { p.arr().iter().map(|e| match e { J::Null => None, e => Some(e.d32()) }).collect() }
