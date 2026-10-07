@@ -81,6 +81,9 @@ EDITS = [
     ("tools/verity/check/tests/test_move_check.py", 'ROOT / "tools" / "check" / "move_check.py")',
      'ROOT / "tools" / "verity" / "check" / "move_check.py")'),
     ("verity/experimental/protocols/pouw/tests/test_lean_package.py", "ROOT = HERE.parents[4]\n", "ROOT = HERE.parents[3]\n"),
+    # the verifier's Lean package is no longer under its scripts' directory, and the agreement reads both
+    ("tools/verity/check/check.py", 'return [f for f in files if f.startswith(pre) and f != lean + "lean-audit.json"',
+     'return [f for f in files if f.startswith((pre, lean)) and f != lean + "lean-audit.json"'),
     # relative to `lean/`, which stays, not to the test that moved
     ("verity/experimental/protocols/pous/tests/test_pous_trusted.py", 'SECURITY = "../../../../Security/"',
      'SECURITY = "../../../../../Security/"'),
