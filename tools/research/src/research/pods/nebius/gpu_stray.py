@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """vy-nebius-1's stray-GPU probe: a process on a GPU that neither Kubernetes nor a lease gave it blocks its lease pool.
 
-    gpu_stray.py loop [--every 60]   as research on node 1 (unit vy-gpu-stray); reads other users' /proc/PID/environ with sudo -n
+    gpu_stray.py loop [--every 60]   as research on node 1 (unit vy-gpu-stray); reads only the GPU variables of other users' /proc/PID/environ, with sudo -n
     gpu_stray.py check               one pass, printed as JSON
 
 A leased pod sees every GPU (`NVIDIA_VISIBLE_DEVICES=all`) and keeps to its lease by honouring CUDA_VISIBLE_DEVICES, so this
@@ -69,15 +69,22 @@ def dev_minors(pid: int) -> set[int]:
     return {int(m.group(1)) for m in (re.fullmatch(r"nvidia(\d+)", n) for n in r.stdout.split()) if m}
 
 
+#: the only variables read from another process's environment (Daniel's ruling, 7 Oct): the rest may hold its secrets
+GPU_VARS = ("NVIDIA_VISIBLE_DEVICES", "CUDA_VISIBLE_DEVICES")
+
+
 def environ(pid: int) -> dict[str, str]:
+    """The process's `GPU_VARS`; under sudo, `grep` passes only those lines, so nothing else of it reaches this process."""
     path = f"/proc/{pid}/environ"
+    pattern = "^(" + "|".join(GPU_VARS) + ")="
     try:
         raw = Path(path).read_bytes()
     except PermissionError:
-        raw = subprocess.run(["sudo", "-n", "cat", path], capture_output=True).stdout
+        raw = subprocess.run(["sudo", "-n", "grep", "-zaE", pattern, path], capture_output=True).stdout
     except OSError:
         return {}
-    return dict(kv.split("=", 1) for kv in raw.decode(errors="replace").split("\0") if "=" in kv)
+    pairs = (kv.split("=", 1) for kv in raw.decode(errors="replace").split("\0") if "=" in kv)
+    return {k: v for k, v in pairs if k in GPU_VARS}
 
 
 def alive(pid: int) -> bool:
