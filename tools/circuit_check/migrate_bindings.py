@@ -42,7 +42,7 @@ REPO = HERE.parents[1]
 TARGETS = HERE / "src" / "circuit_check" / "targets.py"
 PINS = HERE / "src" / "circuit_check" / "pins.json"
 #: the source roots this tree's packages import from, ahead of any installed copy
-PATHS = ("tools/circuit_check/src", ".", "catalog", "kernels", "experimental", "integrations/vllm", "benchmarks/numerical/python",
+PATHS = ("tools/circuit_check/src", ".", "experimental", "integrations/vllm", "benchmarks/numerical/python",
          "verity/ml/provers/flock/python")
 #: `targets.py`'s own: what no one module owns (every kernel's and vocabulary kind's self-check bindings)
 SHARED = ("_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots")
