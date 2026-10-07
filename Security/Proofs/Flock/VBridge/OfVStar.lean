@@ -258,7 +258,8 @@ theorem recOpenUnit_ok {LANES H : ℕ} {U : VStar.UnitC} (h : VStar.recOpenUnit 
     simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     subst h
     have hn : 16 * (VStar.recOpenPorts LANES H).foldl (· + ·) 0 = 16 * (VStar.recOpenPorts LANES H).sum + 0 := by
-      simp [VStar.recOpenPorts] <;> omega
+      simp [VStar.recOpenPorts]
+      omega
     simp only [run_input_bind]
     rw [hn, slices_vars]
     simp only [VStar.recOpenPorts, varSlices, recOpen_eq]
@@ -274,9 +275,11 @@ theorem recOpenUnit_ok {LANES H : ℕ} {U : VStar.UnitC} (h : VStar.recOpenUnit 
 theorem checkRecOpen_ok {LANES H : ℕ} (h : VStar.checkRecOpen LANES H = .ok ()) : 1 ≤ H ∧ H ≤ 16 := by
   unfold VStar.checkRecOpen at h
   by_cases h1 : (LANES < 8 || LANES % 8 != 0) = true
-  · simp only [h1, ↓reduceIte] at h <;> contradiction
+  · simp only [h1, ↓reduceIte] at h
+    contradiction
   · by_cases h2 : (H < 1 || 16 < H) = true
-    · simp only [h1, h2, ↓reduceIte] at h <;> contradiction
+    · simp only [h1, h2, ↓reduceIte] at h
+      contradiction
     · simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt] at h2
       omega
 
@@ -291,9 +294,12 @@ theorem laid_ok {U : VStar.UnitC} {l : Laid} (h : U.laid = .ok l) :
     l = layout U.st (Array.replicate U.inWords 16) (Array.replicate U.outWords 16) U.outs := by
   unfold VStar.UnitC.laid at h
   by_cases h0 : (U.inWords == 0) = true
-  · simp [h0] at h <;> contradiction
+  · simp [h0] at h
+    contradiction
   · cases hd : VStar.deadRow U.st U.outs with
-    | some v => simp [h0, hd] at h <;> contradiction
+    | some v =>
+      simp [h0, hd] at h
+      contradiction
     | none =>
       simp only [h0, hd, Bool.false_eq_true, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
       exact h.symm
@@ -370,8 +376,9 @@ theorem laid_recOpenUnit (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha51
         (MerkleScheme.rowBytes #[consTerm LANES r a c 0, consTerm LANES r a c 1] ++ rest)) := by
   have hout' : (recOpenOuts LANES H (ports LANES H)).length ≤ (Array.replicate U.outWords 16).foldl (· + ·) 0 := by
     rw [outWords_recOpenUnit hU]
-    have hs := congrArg Array.size (recOpenUnit_ok hU).2.1
-    rw [List.size_toArray] at hs
+    have hs : U.outs.size = (recOpenOuts LANES H (ports LANES H)).length := by
+      rw [(recOpenUnit_ok hU).2.1]
+      first | rfl | simp
     omega
   rw [outStart_recOpenUnit hU]
   exact laid_recOpen ms hms LANES H (recOpenUnit_H hU).2 (ports LANES H) (Array.replicate U.outWords 16) v hout'
