@@ -2,7 +2,7 @@
  "roots": ["PousCheck"],
  "exempt": {
   "PousCheck.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousCheck.SetupProtocol.protocol, audited under PousCheck and CoreProtocol",
-  "PousCheck.SetupDifftestMain": "the setup difftest against the Python reference, under `runs`: compiled evaluation of PousCheck.SetupDifftest.main, audited under PousCheck, a test and not a proof",
+  "PousCheck.SetupDifftestMain": "the pous-setup-difftest server's entry point, one line: Difftest.serve of PousCheck.SetupDifftest.table, which tests/test_setup_difftest.py drives against the Python reference; audited under PousCheck",
   "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof"
  },
  "runs": {
@@ -14,22 +14,12 @@
     "difftest/python.jsonl": "327eebfd3af3eff997026655c6808634574123a16132070d8bd97d81e566c1f5"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
-  },
-  "PousCheck.SetupDifftestMain": {
-   "why": "generated instances on which PousCheck's P2 v4 maps (d, σ, D), keys (expand_prefix, sha512_keys), commitment (setup.commit, tagged_sha512, the manifest) and public-encoder setup check (decode_segment, verifier_key mode PUBLIC, refusals by kind) give what the Python reference gives, and the spec's §7 vectors.json against its SHA-512 pins, keys, codewords and σ rejection cases",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "{difftest/p2-vectors.json}", "3741"],
-   "data": {
-    "difftest/instances.jsonl": "837d39593b6cf8558ad9059b8e9ab4bfc9d159f555f700c7039349d01dc40623",
-    "difftest/p2-vectors.json": "ef6886e171da73b5801b8fdad5ad30664f4e6ce4ae3ce71145998e40b039cafd",
-    "difftest/python.jsonl": "8341cc4ed98937247fd2c684d9bacf3d73749c2d92c9303180df8891c8713ae2"
-   },
-   "generate": ["python3", "scripts/setup_difftest.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {
   "PousCheck": {
    "imports": ["PousCheck", "Flock", "CoreProtocol"],
-   "except": [],
+   "except": ["PousCheck.SetupDifftest"],
    "why": "the program is code: Lean core, Flock's executable primitives and the core protocol interface only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },

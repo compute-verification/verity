@@ -17,6 +17,10 @@ path = "../../../../core/service/flock"
 name = "core_protocol"
 path = "../interface"
 
+[[require]]
+name = "verity_difftest"
+path = "../../difftest/lean"
+
 [[lean_lib]]
 name = "PousCheck"
 

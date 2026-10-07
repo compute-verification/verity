@@ -31,7 +31,7 @@ inductive Refusal where
   | commitment
   deriving Repr, BEq
 
-/-- The kind a refusal is reported as, the same word for Python's message (`scripts/setup_difftest.py`). -/
+/-- The kind a refusal is reported as, the same word for Python's message (`_kind` in `tests/test_setup_difftest.py`). -/
 def Refusal.kind : Refusal → String
   | .tooMany _ | .count _ => "segments"
   | .shape _ => "shape"

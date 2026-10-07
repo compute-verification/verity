@@ -1,0 +1,18 @@
+[project]
+name = "pous-check"
+version = "0.1.0"
+description = "The differential test of pous_check, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest) and its protocol (pous-setup)."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: `lake` builds this package and, through its path requires, the core protocol interface and C-Flock's verifier's
+# Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the §7 vectors are the spec's
+# file, which the vector tests read.
+inputs = ["verity/experimental/core/protocols/interface", "verity/core/service/flock/Flock",
+          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
+          "verity/core/service/flock/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json"]

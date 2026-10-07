@@ -16,7 +16,8 @@ A block is `w/8` bytes, unsigned big-endian; a payload is `(w − 16)/8` bytes. 
 refuses, in its order: a block of another width, a block `≥ p`, and a result of more than `8·payloadBytes` bits.
 
 Python's `_Field.square` reduces `a²` by two folds of `c0` and one conditional subtraction, which is `a² mod p` only while
-`c0² < 2^w − 2·c0` or so; here `square` is the spec's `a² mod p` (`DIVERGENCES` in `Difftest.lean` says where they part).
+`c0² < 2^w − 2·c0` or so; here `square` is the spec's `a² mod p`, and `tests/test_setup_difftest.py` keeps to widths
+where the two agree.
 -/
 
 namespace PousCheck.P2
