@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 CATALOG = Path(__file__).resolve().parents[2]
+#: the silicon models; the catalog's Definitions (`silicon/definitions/`) and its tests (`silicon/tests/`) moved in beside them
 SILICON = CATALOG / "silicon"
 FROM_VERITY = ("verity.errors", "verity.primitives.circuits.boolean.forms")
 #: the checker, which the catalog's modules import no more than core's do (`verity/tests/test_boundaries.py`); its
@@ -30,9 +31,10 @@ def _imports(path: Path) -> list[tuple[str, int]]:
 def test_silicon_is_stdlib_only() -> None:
     offenders = [f"{path.relative_to(SILICON)}:{line}: {name}"
                  for path in sorted(SILICON.rglob("*.py"))
+                 if not {"definitions", "tests"} & set(path.relative_to(SILICON).parts)
                  for name, line in _imports(path)
                  if name.split(".")[0] not in sys.stdlib_module_names
-                 and not (name.split(".")[0] == "verity.ml.circuits" and name.startswith("verity.ml.circuits.silicon"))
+                 and not (name == "verity.ml.circuits.silicon" or name.startswith("verity.ml.circuits.silicon."))
                  and name not in FROM_VERITY]
     assert not offenders, "\n".join(offenders)
 
