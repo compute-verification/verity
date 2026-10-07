@@ -14,9 +14,9 @@ content and order. Conventions follow POUS's package (`verity/experimental/proto
 ../../Definitions/NetworkCertifier/Schedule.lean trusted: the Program's logical schedule as `schedule.py` defines it (ClockSync, SyncSet,
                                LogicalFrame, eligible, handingBuckets, enqueued, expectedRow) and the constant-rate
                                Program it gives (constantRate)
-../../Specs/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
+../../Models/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
                                dataflow conditions
-../../Specs/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 1(b), Theorem 3,
+../../Models/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 1(b), Theorem 3,
                                Theorem 3 for the constant-rate Program, the ingress bound)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee, from the lemmas below
 Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO certifier's tightness)
@@ -44,8 +44,8 @@ lake env lean CheckAxioms.lean                              # the axioms of the 
 # the difftest is the certifier program's: see its package, ../../../verity/experimental/protocols/certifier/lean/
 ~~~
 
-**Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Specs/NetworkCertifier/Assumptions.lean` and
-`../../Specs/NetworkCertifier/Guarantees.lean`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
+**Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Models/NetworkCertifier/Assumptions.lean` and
+`../../Models/NetworkCertifier/Guarantees.lean`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
 as `docs/…` and `internal/…` name network accounting's project store, where the covert-capacity note
 (`docs/network-transparency/timing-channel.md`) and the reviews live.
 
@@ -135,7 +135,7 @@ proved by the lemma of the same statement whose name it spells in UpperCamelCase
 to the certifier program (`verity/experimental/protocols/certifier/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
-(`tests/test_lean_packages.py`) and so `Specs/` cannot name the program:
+(`tests/test_lean_packages.py`) and so `Models/` cannot name the program:
 
 - `CodeExpectedRow`: `NetworkCertifier.expectedRow` is `expectedRow` for clock syncs with the same δ and ρ and frames with the same
   payloads, anchors and logical indices (the difftest's `rows`, `diff` and `mismatch`);

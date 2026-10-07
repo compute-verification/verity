@@ -23,7 +23,7 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
   the commitments' hiding gap (`hash-derived-key`) plus the outer session's zero-knowledge gap.
 
-C-Flock's definitions and the recursion's model are still in the proofs package, so `Specs.lean` does not import this
+C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
 -/
 
