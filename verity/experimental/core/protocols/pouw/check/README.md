@@ -20,18 +20,20 @@ One `Core.Protocol` (`verity/experimental/core/protocols/interface`), `PouwCheck
 | `PouwCheck.Inputs` | `params`, `commitment`, `digest`, `unit_draw`, `evidence`, with their refusals (`answer_of` and `integrity` are the interface's decoders) |
 | `PouwCheck.Check` | `expected_items` and `check` |
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
-| `PouwCheck.Difftest` | the difftest's runner |
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
 `Security/Properties/Proofs/Pouw/Check.lean`.
 
-~~~text
-lake build                                                        the library, pouw-check and pouw-check-difftest
-lake exe pouw-check id | check PARAMS COMMITMENT EVIDENCE | serve   the interface's command line
-python3 scripts/difftest_vectors.py REPO --out OUT                 OUT/difftest/{cases,python}.jsonl
-lake exe pouw-check-difftest OUT/difftest/cases.jsonl OUT/difftest/python.jsonl 4000
-python tools/verity/lean/check.py verity/experimental/core/protocols/pouw/check   the Lean check, the difftest among its runs
-~~~
+`tests/test_difftest.py`, the suite `verity-pouw-check-difftest`, which `check` runs after the Lean builds, puts
+`pouw-check serve` on the shared harness (`verity/experimental/core/difftest/`) as a `ProtocolPort` against
+`core_check.case`, comparing whole answers, reasons included. Its cases are `tests/pouw_check_cases.py`: honest
+windows and one mutation per refusal, the case's own framing among them. A run needs an accept, a reject and an
+undecided. `verity/experimental/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the
+refusal it aims at.
 
-`verity/experimental/protocols/pouw/tests/test_pouw_core_check.py` holds the generated data to the SHA-256 the record pins,
-and checks that every mutation reaches the refusal it aims at.
+~~~text
+lake build                                                         the library and pouw-check
+lake exe pouw-check id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
+uv run tools/verity/check/suites.py verity-pouw-check-difftest     the difftest
+python tools/verity/lean/check.py verity/experimental/core/protocols/pouw/check   the Lean check
+~~~

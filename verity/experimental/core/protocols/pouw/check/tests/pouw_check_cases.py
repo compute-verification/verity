@@ -1,32 +1,22 @@
-"""The difftest's data: generated windows, each a `serve` case, and the Python reference's answer to each, for
-`PouwCheck.Difftest`.
-
-    python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
-
-Writes `DIR/difftest/cases.jsonl`, one `serve` case per line (``{"commitment": hex, "evidence": hex, "params": JSON}``),
-and `DIR/difftest/python.jsonl`, `verity.experimental.protocols.pouw.core_check`'s answer to the same line as its
-canonical JSON.  The Lean check runs `PouwCheck.DifftestMain` on both (`runs` in `lean-audit.json`, which pins their
-SHA-256), and `verity/experimental/protocols/pouw/tests/test_pouw_core_check.py` checks that this script still writes them.
+"""The difftest's cases: generated windows, each a `serve` case ``{"commitment": hex, "evidence": hex, "params": JSON}``.
 
 A case is an honest window (random grid bits, tile work, ε, δ, range and level; the registration one-stage's record of
 it, the service's answer an acceptance of that registration with its profile and draw), then one mutation (`MUTATIONS`)
 aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
-writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.
+writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `tests/test_difftest.py`
+draws them for the harness, and `verity/experimental/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to
+the refusal it aims at.
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import random
 from fractions import Fraction
-from pathlib import Path
 
-import verity.experimental.protocols.pouw
 from verity.experimental.protocols.pouw import core_check as CC
 from verity.experimental.protocols.pouw import window as Wd
 
-COUNT = 4000
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
 TILE_WORK = [1, 7, 64, 4096]
@@ -174,6 +164,9 @@ MUTATIONS = [
     ("answer-level-draw-two", "answer", "profile.levels.0.draw", {"bernoulli": "1/2", "subset": 3}),
     ("answer-level-bernoulli-lowest", "answer", "profile.levels.0.draw", {"bernoulli": "2/4"}),
     ("answer-delta-type", "answer", "profile.delta", 1), ("answer-level-renamed", "answer", "profile", None),
+    ("case-commitment-upper", None, None, None), ("case-evidence-odd", None, None, None),
+    ("case-params-missing", None, None, None), ("case-evidence-missing", None, None, None),
+    ("case-commitment-type", None, None, None), ("case-not-object", None, None, None),
     ("noncanonical-record", None, None, None),
     ("noncanonical-answer", None, None, None), ("float-answer", None, None, None), ("utf8-record", None, None, None),
 ]
@@ -273,12 +266,10 @@ def _derived(name: str, case: dict, rng: random.Random):
     raise AssertionError(name)
 
 
-def instance(seed: int) -> dict:
-    """Case `seed`: an honest window, then the mutation `seed` names (every tenth case is left honest)."""
-    rng = random.Random(seed)
+def instance(rng: random.Random, name: str = "honest") -> dict:
+    """An honest window from `rng`, then the mutation `name` (none for "honest")."""
     case = honest(rng)
-    name = None if seed % 10 == 0 else NAMES[(seed // 10 * 9 + seed % 10 - 1) % len(NAMES)]
-    _, which, path, value = next(m for m in MUTATIONS if m[0] == name) if name else (None, None, None, None)
+    which, path, value = next(m[1:] for m in MUTATIONS if m[0] == name) if name != "honest" else (None, None, None)
 
     def mutate(part: str) -> None:
         nonlocal value
@@ -311,42 +302,14 @@ def instance(seed: int) -> dict:
     elif name == "utf8-record":
         rec_b = rec_b + b"\xff"
     raw = {"commitment": rec_b.hex(), "evidence": ans_b.hex(), "params": params}
-    return {"name": name or "honest", "case": raw}
-
-
-def lean_case(inst: dict) -> str:
-    """The `serve` line: the parameters as JSON (`Protocol.case` re-encodes them canonically), the rest as hex."""
-    return _canon(inst["case"])
-
-
-def python_answer(inst: dict) -> str:
-    return CC.line(CC.case(lean_case(inst)))
-
-
-def write(out: Path, count: int = COUNT) -> dict[str, Path]:
-    """Both files for cases 0 … count − 1 under ``out/difftest``."""
-    d = out / "difftest"
-    d.mkdir(parents=True, exist_ok=True)
-    paths = {"difftest/cases.jsonl": d / "cases.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
-    with open(paths["difftest/cases.jsonl"], "w") as fc, open(paths["difftest/python.jsonl"], "w") as fp:
-        for seed in range(count):
-            inst = instance(seed)
-            fc.write(lean_case(inst) + "\n")
-            fp.write(python_answer(inst) + "\n")
-    return paths
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.experimental.protocols.pouw is the reference")
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--count", type=int, default=COUNT)
-    a = ap.parse_args()
-    here = Path(verity.experimental.protocols.pouw.__file__).resolve()
-    if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.experimental.protocols.pouw comes from {here}, not from the checkout {a.verity}")
-    write(a.out, a.count)
-
-
-if __name__ == "__main__":
-    main()
+    if name == "case-commitment-upper":
+        raw["commitment"] = raw["commitment"].upper()
+    elif name == "case-evidence-odd":
+        raw["evidence"] += "0"
+    elif name in ("case-params-missing", "case-evidence-missing"):
+        del raw[name.split("-")[1]]
+    elif name == "case-commitment-type":
+        raw["commitment"] = len(rec_b)
+    elif name == "case-not-object":
+        return [raw]
+    return raw

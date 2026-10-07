@@ -1,19 +1,7 @@
 {
  "roots": ["PouwCheck"],
  "exempt": {
-  "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck",
-  "PouwCheck.DifftestMain": "the difftest against core_check.py, under `runs`: compiled evaluation of PouwCheck.Difftest.main, audited under PouwCheck, a test and not a proof"
- },
- "runs": {
-  "PouwCheck.DifftestMain": {
-   "why": "4,000 generated windows on which PouwCheck.protocol answers what core_check.py answers, byte for byte: honest registrations and service answers, and one mutation each aimed at every refusal (the parameters, the registration, the answer, and each rule of the check)",
-   "args": ["{difftest/cases.jsonl}", "{difftest/python.jsonl}", "4000"],
-   "data": {
-    "difftest/cases.jsonl": "8b1496f8af11f8c9e36cf812123d64fbecc7b89201c511cf501328d5f4627716",
-    "difftest/python.jsonl": "208dc7c2c194cbc9dc96a71f5b996f4530c86f32e47646b309248ef5f1992419"
-   },
-   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
-  }
+  "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck"
  },
  "layers": {
   "PouwCheck.Json": {
@@ -38,6 +26,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "b5b9a408c7654696506015fe40f040fbe98c3793af80b4a74463b9d2317af501"
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
  }
 }

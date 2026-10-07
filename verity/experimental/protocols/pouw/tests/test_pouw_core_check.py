@@ -1,16 +1,14 @@
-"""PoUW's check as a core protocol (`core_check`), the Python reference of the Lean port `pouw_check`, and the difftest's
-Python half.
+"""PoUW's check as a core protocol (`core_check`), the Python reference of the Lean port `pouw_check`.
 
-`verity/experimental/core/protocols/pouw/check/scripts/difftest_vectors.py` writes generated `serve` cases (honest
-windows, and one mutation each aimed at one refusal) and this module's answer to each.  The Lean check runs the Lean half
-(`runs` in that package's `lean-audit.json`: `PouwCheck.DifftestMain` answers every case with `pouw_check` and fails on
-any line that differs), against the data's SHA-256.  Its pass is cached on the Lean package's files alone, so the test
-here is what says the data is still what this module computes."""
+`verity/experimental/core/protocols/pouw/check/tests/pouw_check_cases.py` generates `serve` cases (honest windows, and one
+mutation each aimed at one refusal); that package's `tests/test_difftest.py` holds `pouw-check serve` to this module on
+them, on the shared harness. The tests here hold this module to PoUW's rule: each mutation reaches the refusal it aims
+at, and an accepted window publishes exactly `window.PUBLIC`."""
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
+import random
 from fractions import Fraction
 from pathlib import Path
 
@@ -23,7 +21,7 @@ from verity.experimental.protocols.sampled_proofs.one_stage import registration 
 
 ROOT = Path(__file__).resolve().parents[5]
 PKG = ROOT / "verity/experimental/core/protocols/pouw/check"
-_spec = importlib.util.spec_from_file_location("pouw_check_vectors", PKG / "scripts/difftest_vectors.py")
+_spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
 
@@ -104,39 +102,41 @@ EXPECT = {
     "answer-level-draw-two": "evidence: profile.levels[0].draw: not in the form toJson writes",
     "answer-level-bernoulli-lowest": 'evidence: profile.levels[0].draw.bernoulli: "2/4" is not in lowest terms',
     "answer-delta-type": "evidence: profile.delta: not a string", "answer-level-renamed": "profile: its levels",
+    "case-commitment-upper": "case: not lowercase hex", "case-evidence-odd": "case: odd-length hex",
+    "case-params-missing": "case: the case: params missing", "case-evidence-missing": "case: the case: evidence missing",
+    "case-commitment-type": "case: the case.commitment: not a string", "case-not-object": "case: the case: params missing",
     "noncanonical-record": "commitment: not canonical JSON",
     "noncanonical-answer": "evidence: not canonical JSON", "float-answer": "evidence: canonical JSON: a non-integer number",
     "utf8-record": "commitment: not UTF-8", "honest": None,
 }
 
 
-def _answer(inst: dict) -> dict:
-    return json.loads(vectors.python_answer(inst))
+def _instance(seed: int, name: str = "honest") -> dict:
+    return vectors.instance(random.Random(seed), name)
+
+
+def _answer(case) -> dict:
+    return json.loads(CC.line(CC.case(case)))
 
 
 def test_every_mutation_hits_its_refusal():
-    """Each mutation, over enough cases to cover it several times, is answered with the refusal it aims at, and an honest
-    window is accepted."""
+    """Each mutation, over a few cases each, is answered with the refusal it aims at, and an honest window is accepted."""
     assert set(EXPECT) == set(vectors.NAMES) | {"honest"}
-    seen: dict[str, int] = {}
-    for seed in range(2 * 10 * len(vectors.NAMES) // 9 + 10):
-        inst = vectors.instance(seed)
-        a, want = _answer(inst), EXPECT[inst["name"]]
-        seen[inst["name"]] = seen.get(inst["name"], 0) + 1
-        if want is None:
-            assert a["verdict"] == "accept" and a["reason"] is None, (seed, a["reason"])
-        else:
-            assert a["reason"].startswith(want), (seed, inst["name"], a["reason"])
-            assert a["verdict"] == ("undecided" if inst["name"] == "answer-undecided" else "reject")
-            assert a["public"] is None and a["profile"] is None
-    assert set(seen) == set(EXPECT)
+    for name, want in EXPECT.items():
+        for seed in range(3):
+            a = _answer(_instance(seed, name))
+            if want is None:
+                assert a["verdict"] == "accept" and a["reason"] is None, (seed, a["reason"])
+            else:
+                assert a["reason"].startswith(want), (seed, name, a["reason"])
+                assert a["verdict"] == ("undecided" if name == "answer-undecided" else "reject")
+                assert a["public"] is None and a["profile"] is None
 
 
 def test_an_accepted_window_publishes_exactly_pouw_public():
-    for seed in range(0, 200, 10):
-        inst = vectors.instance(seed)
-        a = _answer(inst)
-        case = inst["case"]
+    for seed in range(20):
+        case = _instance(seed)
+        a = _answer(case)
         rec = json.loads(bytes.fromhex(case["commitment"]))
         ans = json.loads(bytes.fromhex(case["evidence"]))
         assert a["verdict"] == "accept" and set(a["public"]) == {p[0] for p in Wd.PUBLIC}
@@ -154,8 +154,8 @@ def test_every_answer_reads_back():
     """An answer is what `Core.Answer.ofJson` reads back, so an accept's public outputs are never `null`, and an accept's
     profile is what `Core.Integrity.ofJson` reads back."""
     accepted = 0
-    for seed in range(0, 600, 3):
-        a = _answer(vectors.instance(seed))
+    for seed, name in enumerate(["honest", *vectors.NAMES] * 2):
+        a = _answer(_instance(seed, name))
         assert CC.answer_of(a)["verdict"] == a["verdict"]
         if a["verdict"] == "accept":
             accepted += 1
@@ -165,8 +165,8 @@ def test_every_answer_reads_back():
 
 def test_the_digest_is_one_stages():
     """The commitment's digest is `registration.digest` of the record, the one the service's receipt and outcome cite."""
-    for seed in range(0, 50, 10):
-        b = bytes.fromhex(vectors.instance(seed)["case"]["commitment"])
+    for seed in range(5):
+        b = bytes.fromhex(_instance(seed)["commitment"])
         c = CC.commitment(b)
         assert CC.digest(c).hex() == R.digest(json.loads(b))
     assert CC.ONE_STAGE == R.PROTOCOL and CC.SCHEME == S.SCHEME and CC.FORMATS == (R.FORMAT, R.FORMAT_V2)
@@ -187,14 +187,3 @@ def test_canonical_json_is_leans():
                    (b"\xff", "not UTF-8"), (b"{", "not JSON")):
         with pytest.raises(CC.Refused, match=why):
             CC.canonical(b)
-
-
-
-
-
-def test_the_data_is_what_the_lean_check_pins(tmp_path):
-    """Every case and this module's answer to it, byte for byte as the Lean package's record pins them."""
-    run = json.loads((PKG / "lean-audit.json").read_text())["runs"]["PouwCheck.DifftestMain"]
-    made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
-    assert made == run["data"]
-    assert run["args"] == ["{difftest/cases.jsonl}", "{difftest/python.jsonl}", str(vectors.COUNT)]

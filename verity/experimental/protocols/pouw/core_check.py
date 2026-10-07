@@ -486,10 +486,18 @@ def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     return out(verdict, reason, d, *(acc or (None, None)))
 
 
-def case(line: str) -> dict:
-    """One `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``, well formed."""
-    j = json.loads(line)
-    return answer(_canon(j["params"]).encode(), bytes.fromhex(j["commitment"]), bytes.fromhex(j["evidence"]))
+def case(j: Any) -> dict:
+    """`Core.Protocol.case` on one `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``: a malformed one
+    is rejected with no commitment."""
+    try:
+        params_j = _get(j, "params", "the case")
+        c = _unhex(_str_at(j, "commitment", "the case"))
+        e = _unhex(_str_at(j, "evidence", "the case"))
+        params_b = _canon(params_j).encode()
+    except Refused as err:
+        return {"protocol": ID, "verdict": "reject", "reason": f"case: {err}", "commitment": None, "public": None,
+                "profile": None}
+    return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
 
 
 def line(a: dict) -> str:
