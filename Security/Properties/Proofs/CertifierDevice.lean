@@ -1,12 +1,14 @@
 import Mathlib
 import Properties.CertifierDevice
 import Properties.Proofs.CertifierDevice.Trace
+import Properties.Proofs.CertifierDevice.Issuer
 
 /-!
 # The certifier device's properties, proved
 
 Each statement of `Properties.CertifierDevice`, proved as the lower-case theorem of its name: the trace properties from
-one step's (`Proofs.CertifierDevice.Step`, `Proofs.CertifierDevice.Trace`).
+one step's (`Proofs.CertifierDevice.Step`, `Proofs.CertifierDevice.Trace`), the issuer's from LMS's correctness
+(`Proofs.CertifierDevice.Lms`, `Proofs.CertifierDevice.Issuer`).
 -/
 
 namespace Properties.CertifierDevice
@@ -22,5 +24,14 @@ theorem records : Records := Proofs.records_proof
 
 /-- **(3) Fail-closed.** -/
 theorem failClosed : FailClosed := Proofs.failClosed_proof
+
+/-- **(4) LMS signs and verifies.** -/
+theorem lmsCorrect : LmsCorrect := Proofs.Lms.lmsCorrect_proof
+
+/-- **(4) The issuer's certificates verify.** -/
+theorem issuerVerifies : IssuerVerifies := Proofs.Issuer.issuerVerifies_proof
+
+/-- **(4) The issuer certifies at every leaf.** -/
+theorem issuerSigns : IssuerSigns := Proofs.Issuer.issuerSigns_proof
 
 end Properties.CertifierDevice
