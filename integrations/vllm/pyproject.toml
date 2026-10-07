@@ -7,7 +7,6 @@ dependencies = [
     "research",
     "verity",
     "numpy>=1.26",
-    "blake3>=1.0",
     "verity-catalog",
     "verity-experimental",
     "verity-kernels",
