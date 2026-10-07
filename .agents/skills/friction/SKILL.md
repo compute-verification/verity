@@ -101,6 +101,13 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-07 (3:25 PM PDT): skip the full `check` more. It's too slow for the pace we need: pick what gets us there
+  fastest, be careful, and revert what breaks. Applied by top (`AGENTS.md`, "Checking and merging"): a change lands on a
+  targeted check of the parts it touches, run on the CPU machines; a full `check` runs before landing only for a layout
+  move and the gate's own code, and after every landing on `main`'s newest tip, where a failure is reverted unless its
+  owner fixes it within 30 minutes. A change that only removes tests needs no grant. Before an expensive step (a full
+  check, a move window), rehearse the cheap one after it: `research merge --dry-run` against a scratch `main` would
+  have shown on 7 Oct, ten hours earlier, that main's gate could accept no check of the moved tree.
 - 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
   rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
   This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.

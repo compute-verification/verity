@@ -153,16 +153,24 @@ multi-core CPU pod. It covers:
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
-Landing:
+Landing (Daniel, 7 Oct: skip the full `check` where it's reasonable, and revert what breaks):
 
-- `main` moves only through `research merge --push`. It refuses without a passing `check` of that exact commit, or when
-  `main` has moved past it, and then pushes and sweeps.
-- A plain `git push` would skip the spec DM, node 1's mirror and the post-train regression.
-- PRs land in trains: ci stacks the tips, and the lander runs `research merge --train A B C --on POD --project verity`
-  over one `check` of the merged tree.
+- A change lands on a targeted check: the parts its diff touches, run in parallel on the CPU machines (vy-nebius-cpu-1,
+  vy-cpu-1, vy-cpu-2). That's its changed test suites (`tools/verity/check/suites.py`), circuit-check on the circuits it
+  changes, the Lean check of the Lake packages it changes, and `lean-agreement` when it touches C-Flock or its Lean
+  verifier. A change that only edits docs or deletes tests needs none.
+- A full `check` runs before landing only for a layout move and for the gate's own code (`tools/verity/check/`,
+  `research merge` and its queue, the Lean audit), where a broken check would hide every later failure.
+- After a landing, one full `check` of `main`'s newest tip runs on vy-nebius-1. When it fails, the lander reverts the
+  merge that broke it (`git revert -m 1`) unless its owner has the fix within 30 minutes, and the revert lands unchecked.
+- `research merge --push` lands a commit whose full `check` passed. Until it takes a targeted check, a fast landing is a
+  merge commit made by hand, with trailers naming the targeted runs (`Checked:`) and the skipped full check
+  (`Skipped-check:`), pushed with `--no-verify`. Then `research merge --sweep` runs what a plain push skips: the spec DM,
+  node 1's mirror and the post-train regression.
+- PRs land in trains: ci stacks the tips, and the lander lands the merged tree on the targeted check of what its members
+  touch.
 - A train member needs its owner's `ready` label at its head, written by hand if need be:
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, since the train's full `check` is the
-  gate.
+  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass.
 - A grant carries to a head whose own patch is byte-identical.
 - A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
   the tip; a push to the PR would refuse every tip that pins its old head.
