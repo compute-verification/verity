@@ -4,6 +4,7 @@ import Evaluate.Casts
 import Evaluate.TC.Dots
 import Evaluate.Words
 import Evaluate.Libdevice
+import Evaluate.Mufu
 
 /-!
 # The primitives the evaluator implements
@@ -224,6 +225,15 @@ def sampler : List (String × Array (String × Ty) × Ty × (Array Nat → Nat))
    ("GumbelNoiseLane_v1", lane, f32, binary noiseLane), ("GumbelNoiseLane_v2", lane, f32, binary noiseLaneGpu),
    ("TopPNumkeep_v1", #[("numdup", f32), ("q", f32)], f32, binary toppNumkeep)]
 
+/-- The MUFU primitives by id (`verity.ml.circuits.ops.mufu`, the vLLM integration's `hopper.Fa3InvSum`), with the
+signatures the registry holds for them. -/
+def mufu : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
+  open Mufu in
+  [("MufuEx2Ftz_v1", #[("x", f32)], f32, unary mufuEx2Ftz), ("MufuRcpFtz_v1", #[("x", f32)], f32, unary mufuRcpFtz),
+   ("Fa2InvSum_v1", #[("sum", f32)], f32, unary fa2InvSum), ("Fa3InvSum_v1", #[("sum", f32)], f32, unary fa3InvSum),
+   ("MufuSqrtFtz_v1", #[("x", f32)], f32, unary mufuSqrtFtz), ("DivFullRcp_v1", #[("b", f32)], f32, unary divFullRcp),
+   ("RsqrtApprox_v1", #[("x", f32)], f32, unary rsqrtApprox), ("MufuTanh_v1", #[("x", f32)], f32, unary mufuTanh)]
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -232,7 +242,7 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   | none, none, some (w, b) => some (.gate fun _ => b, #[], .value w)
   | none, none, none =>
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
-    else ((scalars ++ floats ++ dots ++ words ++ sampler).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
+    else ((scalars ++ floats ++ dots ++ words ++ sampler ++ mufu).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2

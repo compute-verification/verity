@@ -57,6 +57,7 @@ from verity.ml.circuits.program import RUN, Program, input_id
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
 from verity_vllm.program.registry import dsa as DSA
+from verity_vllm.program.registry import hopper as HOP
 from verity_vllm.program.registry import moe as MOE
 from verity_vllm.program.registry import pouw_rows as PR
 from verity_vllm.program.registry import prims as VP
@@ -96,7 +97,9 @@ _TC_IDS = frozenset(p.id for p in TCS)
 WORDS = tuple(getattr(W, n) for n in W.__all__ if n.startswith("Pouw")) + (PR.NcpAbsMax, PR.NcpRneClampI7, PR.NcpDot16I7)
 #: E4's sampler primitives (`Evaluate.Libdevice`)
 SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL.GumbelNoiseLaneV2, TW.TopPNumkeep)
-_E4_IDS = frozenset(p.id for p in WORDS + SAMPLER)
+#: E4's MUFU primitives (`Evaluate.Mufu`)
+MUFU = (MU.MufuEx2Ftz, MU.MufuRcpFtz, MU.Fa2InvSum, HOP.Fa3InvSum, MU.MufuSqrtFtz, MU.DivFullRcp, MU.RsqrtApprox, MU.MufuTanh)
+_E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU)
 
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
@@ -411,14 +414,14 @@ def test_refusals(server):
 
 def test_refusals_name_what_is_refused(server):
     """A primitive the Lean does not implement, and a registered input, are refused by name, never evaluated."""
-    ex2 = CompositeDefinition("DtEx2", 1, (), lambda S: ((("x", SC.F32),), SC.F32), lambda B, S, x: B.call(MU.MufuEx2Ftz, x),
+    ex2 = CompositeDefinition("DtEx2", 1, (), lambda S: ((("x", SC.F32),), SC.F32), lambda B, S, x: B.call(RP.F32ExpRn, x),
                               register=False)
     _, main, leaves = _random_program(1)
     s = DT.Server(PORT.argv())
     with s:
         got = [s.call("evaluate", request(desc_of(Program(bind(ex2))), [[1]])),
                s.call("evaluate", request(desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves]))]
-    assert got[0][0] == "reject" and "MufuEx2Ftz_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
+    assert got[0][0] == "reject" and "F32ExpRn_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
     assert got[1][0] == "reject" and "RegisteredInput1_v1" in got[1][1], got[1]
     assert "not implemented" in python_answer(desc_of(Program(bind(ex2))), [[1]])["reject"]
 
@@ -1455,3 +1458,115 @@ def test_sampler_primitives_drawn(server):
 def test_sampler_words_out_of_range_are_refused(server):
     cases = _refused_leaves(SAMPLER)
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 10)
+
+
+# ---- E4: the MUFU primitives: ex2, rcp, sqrt, rsqrt and tanh, the inverse sums and div.full's reciprocal ----------------
+
+#: the exponents where the rules change (subnormals, the parity of sqrt and rsq about one, ex2's integer range and its
+#: |x| = 2^30 saturation, MUFU.TANH's eleven binades and its rules' ends, div.full's 2^-126 and 2^126) and, at each, every
+#: segment boundary of the interpolants (2^16 and 2^17 mantissas; tanh's 0 to 4 segment bits) with its neighbours, both signs
+_MUFU_EXPONENTS = (0, 1, 2, 103, 104, *range(118, 131), 133, 134, 150, 156, 157, 158, 253, 254)
+MUFU_SWEEP = tuple(sorted({*F32_SWEEP, *(s | ((e << 23) + (k << j) + d) & 0x7FFFFFFF for e in _MUFU_EXPONENTS
+                                        for j in (16, 17, 19, 20, 21, 22, 23) for k in range(1 << (23 - j)) for d in (-1, 0, 1)
+                                        for s in (0, 1 << 31)),
+                           *(struct.unpack("<I", struct.pack("<f", float(n)))[0] + d & 0xFFFFFFFF for n in range(-160, 161)
+                             for d in (-1, 0, 1))}))
+TEST_MUFU = Path(__file__).resolve().parents[5] / "ml/circuits/ops/tests/test_mufu.py"
+
+
+def _test_mufu_literals(*names: str) -> dict:
+    """`test_mufu`'s top-level constants `names`, evaluated from its source (importing it would import the SP1 guest's
+    mirror)."""
+    import ast
+
+    ns: dict = {}
+    for node in ast.parse(TEST_MUFU.read_text()).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and getattr(node.targets[0], "id", None) in names:
+            ns[node.targets[0].id] = eval(compile(ast.Expression(node.value), str(TEST_MUFU), "eval"), {"__builtins__": {}}, ns)
+    return ns
+
+
+def test_mufu_primitives_on_their_grids(server):
+    """Each MUFU primitive on every word of `MUFU_SWEEP`, each answer also the Python primitive's own evaluator's."""
+    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in MUFU_SWEEP[i:i + 8192]] for i in range(0, len(MUFU_SWEEP), 8192)])
+              for fn in MUFU}
+    assert counts == {fn.id: len(MUFU_SWEEP) for fn in MUFU}, counts
+
+
+def test_the_mufu_output_fingerprints(server):
+    """`test_mufu.PINNED`'s output fingerprints, recorded from the vLLM integration's registration: the SHA-256 over its
+    `MUFU_EDGES` and 4000 seeded words of each `[input, output]`, computed from the Lean evaluator's outputs."""
+    import hashlib
+
+    lit = _test_mufu_literals("PINNED", "F32_EDGES", "MUFU_EDGES")
+    for fn in MUFU:
+        if fn.id not in lit["PINNED"]:
+            continue
+        rng = random.Random(f"mufu-move/{fn.id}")
+        xs = [*lit["MUFU_EDGES"], *(rng.getrandbits(32) for _ in range(4000))]
+        kind, out = DT.replay(PORT, request(json.loads(_batch_text(fn.id, len(xs))), [xs]), server)
+        assert kind == "output"
+        h = hashlib.sha256()
+        for x, y in zip(xs, json.loads(out)):
+            h.update(json.dumps([[x], y]).encode())
+        assert h.hexdigest() == lit["PINNED"][fn.id][2], fn.id
+    assert len(lit["PINNED"]) == 8 and sum(fn.id in lit["PINNED"] for fn in MUFU) == 7
+
+
+def test_the_tanh_hardware_sample(server):
+    """The RTX 4090's MUFU.TANH words of the table manifest's 512-word sample (`mufu_tanh_table_manifest()["sample"]`)."""
+    pairs = MU.mufu_tanh_table_manifest()["sample"]["pairs"]
+    rows, want = [(int(x, 16),) for x, _ in pairs], [int(y, 16) for _, y in pairs]
+    assert _replay_capture(server, MU.MufuTanh, rows, want) == 512
+
+
+def _library_sha512(server, name: str) -> str:
+    kind, out = server.call("library_table", {"name": name})
+    assert kind == "output", out
+    return json.loads(out)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name", ["rcp", "ex2", "rsq", "sqrt"])
+def test_the_mufu_tables_are_the_library_tables(server, name):
+    """The Lean evaluator's ex2, rcp, rsq and sqrt tables (their interpolants), as the library stores them, have the
+    library's SHA-512: every word of each, which the grids reach only a few of (about 6 s a table)."""
+    from verity.ml.circuits import library
+
+    assert _library_sha512(server, name) == library.table(name).sha512
+
+
+@pytest.mark.slow
+def test_the_tanh_table_is_the_library_table(server):
+    """The Lean evaluator's MUFU.TANH table, as the library stores it (`tanh_mufu`, 2^27 words), has the library's SHA-512:
+    all 92 million words of MUFU.TANH's eleven binades, against the measured shard's, which no cheaper test reaches (about
+    2 min)."""
+    from verity.ml.circuits import library
+
+    assert _library_sha512(server, "tanh_mufu") == library.table("tanh_mufu").sha512
+    assert server.call("library_table", {"name": "tanh_rn"})[0] == "reject"
+
+
+@st.composite
+def mufu_requests(draw) -> dict:
+    """A MUFU primitive on eight words, each drawn from `MUFU_SWEEP` or the whole range; one request in ten has a word out
+    of its range, which both sides refuse."""
+    fn = draw(st.sampled_from(MUFU))
+    x = [[draw(st.one_of(st.sampled_from(MUFU_SWEEP), st.integers(0, (1 << 32) - 1))) for _ in range(8)]]
+    if draw(st.integers(0, 9)) == 0:
+        x[0][draw(st.integers(0, 7))] = draw(st.sampled_from([1 << 32, (1 << 32) + 1, -1]))
+    return request(json.loads(_batch_text(fn.id, 8)), x)
+
+
+MUFU_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=mufu_requests(), package=PKG)
+
+
+@pytest.mark.slow
+def test_mufu_primitives_drawn(server):
+    stats = DT.run(MUFU_PORT, examples=1000, seed=0, server=server)
+    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+
+
+def test_mufu_words_out_of_range_are_refused(server):
+    cases = _refused_leaves(MUFU)
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 8)

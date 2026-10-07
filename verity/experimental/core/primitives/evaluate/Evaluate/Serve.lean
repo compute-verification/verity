@@ -38,4 +38,11 @@ def evaluateFn (input : Json) : Except String Json := do
   let out ← evaluate bytes (← inputsOfJson inputs)
   return Json.arr (out.map fun v => Lean.toJson v)
 
+/-- `library_table` on a request's `input`, `{"name": <table>}`: the SHA-512 (hex) of the library table the MUFU primitives
+read (`Evaluate.Mufu.tableSha512`), or the refusal. -/
+def libraryTableFn (input : Json) : Except String Json := do
+  let .ok name := input.getObjValAs? String "name" | throw "input: no table name"
+  let some digest := Mufu.tableSha512 name | throw s!"table {name}: not a table the MUFU primitives read"
+  return Json.str digest
+
 end Evaluate
