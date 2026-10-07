@@ -19,7 +19,8 @@ _spec = importlib.util.spec_from_file_location("split_attention", VLLM / "tools"
 S = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(S)
 REGISTRY = VLLM.parents[1] / "verity" / "ml" / "circuits" / "ops"
-PKG = S.PKG
+#: the registry's package (`S.PKG` names it where the split found it, in the integration)
+PKG = "verity.ml.circuits.ops"
 
 #: another family's registry module -> the names a family Definition module may take from it (None: the whole module), and why
 OTHER_FAMILIES = {
@@ -34,12 +35,16 @@ OTHER_FAMILIES = {
     "topp_word_gates": ({"I32ToF32"}, "the int-to-float conversion primitive DSA's top-k reads"),
 }
 THIRD_PARTY = {"numpy"}
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+#: the catalog, where the layout move put core's Definitions and silicon models; the registry sits beside it in `verity.ml.circuits`
+CATALOG = ("verity.ml.circuits.silicon", "verity.ml.circuits.targets")
 
 
 def _catalog(name: str) -> bool:
-    return name == CATALOG or name.startswith(CATALOG + ".")
+    return name == "verity.ml.circuits" or any(name == c or name.startswith(c + ".") for c in CATALOG)
+
+
+def _core(name: str) -> bool:
+    return name.split(".")[0] == "verity" and not name.startswith("verity.ml.circuits")
 
 
 def _definition_modules() -> list[str]:
@@ -69,7 +74,7 @@ def _violations(mod: str) -> list[str]:
                 top = a.name.split(".")[0]
                 if a.name.startswith(PKG + "."):
                     out.append(f"{mod}:{node.lineno}: `import {a.name}` (name what it takes: from ... import)")
-                elif top not in ("verity", *THIRD_PARTY) and top not in sys.stdlib_module_names and not _catalog(a.name):
+                elif not _core(a.name) and top not in THIRD_PARTY and top not in sys.stdlib_module_names and not _catalog(a.name):
                     out.append(f"{mod}:{node.lineno}: imports {a.name}")
         elif isinstance(node, ast.ImportFrom):
             base = (node.module if node.level == 0
@@ -82,7 +87,8 @@ def _violations(mod: str) -> list[str]:
                         out.append(f"{mod}:{node.lineno}: imports {PKG}.{a.name}")
             elif base.startswith(PKG + "."):
                 take(base[len(PKG) + 1:], [a.name for a in node.names], node.lineno)
-            elif top not in ("verity", "__future__", *THIRD_PARTY) and top not in sys.stdlib_module_names and not _catalog(base):
+            elif (not _core(base) and top not in ("__future__", *THIRD_PARTY) and top not in sys.stdlib_module_names
+                  and not _catalog(base)):
                 out.append(f"{mod}:{node.lineno}: imports {base}")
         elif isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", None)) in ("import_module", "__import__"):
             out.append(f"{mod}:{node.lineno}: imports by name")
