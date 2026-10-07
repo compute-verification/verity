@@ -13,6 +13,8 @@ Two kinds of local copy can go, and only these:
   `run_files`, or a typed output its `outputs.json` declares, laid out under that output's `tree` path (a Build's `outputs/build`).
   Oldest run first.  A run touched in the last `quiet_s` seconds, or whose status is not terminal, is left alone.
   `run-files.evicted.json` in the run dir lists what went and the `research data fetch`es that bring it back.
+  A sealed run dir (store.sealed) is the root helper's to change: `sudo -n vy-seal-runs evict` removes the files its
+  `.custody` lists at the size it recorded and unchanged since (`evict_custody`'s rule), as root.
 
 * **source trees** (`<root>/src/<sha>`, `evict_src`): the trees `research run --on` ships per commit (remote.py `ship_source`;
   up to 24 GB and 480k inodes with Lean builds), whose bytes are a commit's.  Oldest first, every one that meets root's three
@@ -53,6 +55,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from . import sealed
 from .local import LocalStore, sha256_file
 from .model import utc_now
 
@@ -311,7 +314,15 @@ def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dr
             break
         rd = Path(r["dir"])
         n = sum(f["bytes"] for f in r["files"])
-        if not dry_run:
+        if not dry_run and sealed.sealed(rd):
+            try:
+                got = sealed.evict(rd, min_bytes)
+            except (OSError, ValueError) as e:
+                say(f"{r['run']}: sealed, and vy-seal-runs refused to evict it: {e}")
+                continue
+            n = got["evicted_bytes"]
+            r = {**r, "files": got["files"]}
+        elif not dry_run:
             for f in r["files"]:
                 (rd / f["path"]).unlink(missing_ok=True)
             doc = {"schema": EVICTED_SCHEMA, "run_id": r["run"], "artifact": r["artifact"], "evicted_utc": utc_now(), "files": r["files"],
