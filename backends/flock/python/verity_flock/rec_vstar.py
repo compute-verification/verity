@@ -1,22 +1,28 @@
-"""The reference for V*'s hashing (hiding model architectures, lane rec-v0): every inner Ligerito opening's ``hm96-sha512/v1``
-leaf climbs to the public cap node its coin-derived position names, and every message row opens its commitment.
+"""The reference for V*'s hashing (hiding model architectures, lane rec-v0): every inner Ligerito opening's leaf climbs to
+the node of its tree's top that its coin-derived position names, every top opens the salted commitment the coin server
+received, and every message row opens its commitment.
 
-V* (the outer statement) checks an inner session of `verity_flock.rec_live` without seeing the inner statement. Its hashing
-part, which this module states over plain Python:
+V* (the outer statement) checks an inner session of `verity_flock.rec_live` without seeing the inner statement or a tree's
+top. Its hashing part, which this module states over plain Python:
 
-* **Openings** (PROTOCOL.md §13.3, §13.5, §14). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into the tree
-  whose cap the prover published in the clear (the coin server's record: level 0's in the rep's binding round and in
-  ``Commit``, level ``l >= 1``'s in the round that absorbed it). Query ``j``'s position is ``pos_j = (s_j << (d - c_j)) |
-  (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins, its leaf ``SHA-512(leaf_prefix || b || c)`` for
-  ``x = SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE) under the opening's 192-byte salt
-  (``hm96.SHA512``, ``default_key``), and the ``d - c`` siblings climb it (``node(acc, sib)`` at an even index, else
-  ``node(sib, acc)``) to ``cap[pos >> (d - c)]``. The rows, salts and siblings are the inner proof's (V*'s witness); the
-  positions, depths and cap nodes are public.
+* **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the coin server
+  received each node's salted commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
+  tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
+  commitments is refused (``GATE-REFUSED: tree top``).
+* **Openings** (PROTOCOL.md §13.3, §13.5). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
+  ``j``'s position is ``pos_j = (s_j << (d - c_j)) | (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins,
+  its leaf ``SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE: the statement's
+  ``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`), and the ``d - c`` siblings climb it
+  (``node(acc, sib)`` at an even index, else ``node(sib, acc)``) to ``top[pos >> (d - c)]``. The rows and siblings are the
+  inner proof's and the top's nodes the prover's (V*'s witness); the positions and depths are public. A proof with
+  ``hm96-sha512/v1`` leaves (``SHA-512(leaf_prefix || b || c)`` for ``x = SHA-512(row)`` under the opening's 192-byte
+  salt: rec-step2's sessions and the fixture) decodes and climbs too; the RecOpen gadgets open plain leaves alone.
 * **Message rows**: each round's free message rows open the ``b || c`` the coin server recorded for them before it drew the
   round's coins (`verity_flock.rec_live.commit_rows`).
 
-`check` runs both over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
-openings in the order the RecOpen gadgets take them, each with its public part (level, position, depth, cap node).
+`check` runs all three over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
+openings in the order the RecOpen gadgets take them, each with its public part (level, position, depth) and the top's node
+it climbs to.
 """
 from __future__ import annotations
 
@@ -32,7 +38,9 @@ from . import rec_live as RL
 
 HASH = 64
 SALT = 192
-#: PcsParams.merkle_hash of an hm96-sha512/v1 tree (PROTOCOL.md §14)
+#: PcsParams.merkle_hash (bincode's variant index of flock-hash's HashKind) of a tree with plain SHA-512 leaves
+PLAIN_KIND = 2
+#: and of an hm96-sha512/v1 tree (PROTOCOL.md §14)
 HM96_KIND = 3
 
 
@@ -75,11 +83,12 @@ class _R:
 
 @dataclass
 class Level:
-    """One opened Ligerito level: its tree's cap (the proof's copy), and per query the row, the salt and the siblings."""
+    """One opened Ligerito level: its tree's cap (the proof's copy), and per query the row, the salt (None for a plain
+    leaf) and the siblings."""
 
     cap: list[bytes]
     rows: list[list[int]]
-    salts: list[bytes]
+    salts: list[bytes | None]
     sibs: list[list[bytes]]
 
     @property
@@ -93,17 +102,20 @@ class Level:
 
 
 def decode(b: bytes) -> dict:
-    """The parts of an hm96-sha512/v1 inner proof (PROTOCOL.md §8.2 with each level's ``opened_salts``) V*'s hashing reads:
-    ``m``, ``k0`` and the opened levels in query order (level 0 against ``initial_cap``, then each ``recursive_proofs`` entry
-    against the cap before it, then ``final_proof`` against the last ``recursive_caps`` entry)."""
+    """The parts of an inner proof of the SHA-512 build (PROTOCOL.md §8.2 with each level's ``opened_salts``: 192 bytes a
+    query for ``hm96-sha512/v1`` leaves, empty for plain ones) V*'s hashing reads: ``m``, ``k0``, ``plain`` and the opened
+    levels in query order (level 0 against ``initial_cap``, then each ``recursive_proofs`` entry against the cap before it,
+    then ``final_proof`` against the last ``recursive_caps`` entry)."""
     r = _R(b)
     cap = r.vec(r.h)
     m, _rate, k0 = r.u64(), r.u64(), r.u64()
     r.u32()
     if r.u8():
         r.u64()
-    if r.u32() != HM96_KIND:
-        raise ValueError("not an hm96-sha512/v1 proof")
+    kind = r.u32()
+    if kind not in (PLAIN_KIND, HM96_KIND):
+        raise ValueError(f"merkle_hash {kind}: neither plain SHA-512 nor hm96-sha512/v1 leaves")
+    plain = kind == PLAIN_KIND
     pair = lambda: (r.f128(), r.f128())
     r.vec(r.f128), r.vec(r.f128), r.vec(pair), r.f128(), r.f128(), r.f128(), r.vec(r.u64)
     r.vec(pair), r.vec(r.f128), r.vec(pair), r.vec(r.u64)
@@ -114,10 +126,10 @@ def decode(b: bytes) -> dict:
         flat = r.vec(r.h)
         salts = r.vec(r.salt)
         q = len(rows)
-        if q == 0 or len(flat) % q or len(salts) != q:
+        if q == 0 or len(flat) % q or len(salts) != (0 if plain else q):
             raise ValueError("an opening whose rows, siblings and salts disagree")
         w = len(flat) // q
-        return Level(cap_, rows, salts, [flat[j * w:(j + 1) * w] for j in range(q)])
+        return Level(cap_, rows, [None] * q if plain else salts, [flat[j * w:(j + 1) * w] for j in range(q)])
 
     icap = r.vec(r.h)
     if icap != cap:
@@ -129,7 +141,7 @@ def decode(b: bytes) -> dict:
         levels.append(level(rcaps[i]))
     yr = r.vec(r.f128)
     levels.append(level(rcaps[-1]))
-    return {"m": m, "k0": k0, "levels": levels, "yr": yr, "rcaps": rcaps}
+    return {"m": m, "k0": k0, "plain": plain, "levels": levels, "yr": yr, "rcaps": rcaps}
 
 
 def strata(Q: int, d: int) -> list[int]:
@@ -158,10 +170,14 @@ def row_bytes(row: list[int]) -> bytes:
     return b"".join(RL.f128_bytes(v) for v in row)
 
 
-def leaf(row: list[int], salt: bytes) -> bytes:
-    """``hm96-sha512/v1``: ``SHA-512(leaf_prefix || b || c)`` for ``x = SHA-512(row)`` and ``salt``."""
+def leaf(row: list[int], salt: bytes | None = None) -> bytes:
+    """A plain leaf, ``SHA-512(row)``; with ``salt``, ``hm96-sha512/v1``'s: ``SHA-512(leaf_prefix || b || c)`` for
+    ``x = SHA-512(row)``."""
+    x = hashlib.sha512(row_bytes(row)).digest()
+    if salt is None:
+        return x
     inst = hm96.SHA512
-    return inst.tree_leaf(inst.default_key, inst.commit_string(inst.default_key, hashlib.sha512(row_bytes(row)).digest(), salt))
+    return inst.tree_leaf(inst.default_key, inst.commit_string(inst.default_key, x, salt))
 
 
 def climb(acc: bytes, pos: int, sibs: list[bytes]) -> bytes:
@@ -173,6 +189,9 @@ def climb(acc: bytes, pos: int, sibs: list[bytes]) -> bytes:
 
 @dataclass
 class Query:
+    """One opening: its public part (rep, level, query, position, depth, the top's ``c``) and its witness (the top's node it
+    climbs to, the row, the salt of an hm96 leaf or None, the siblings)."""
+
     rep: int
     level: int
     j: int
@@ -181,7 +200,7 @@ class Query:
     c: int
     cap_node: bytes
     row: list[int]
-    salt: bytes
+    salt: bytes | None
     sibs: list[bytes]
 
 
@@ -190,12 +209,12 @@ def _stream_rounds(public: dict, stream: str) -> list[dict]:
 
 
 def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
-    """The rounds whose coins are the query coins of a rep's levels in order: the rounds with no caps whose coin count is
-    the next level's ``Q`` (the last level's also absorbs ``yr``; the verifier's own schedule places them, v0 finds them by
-    that shape)."""
+    """The rounds whose coins are the query coins of a rep's levels in order: the rounds that absorb no top (salted or a
+    level-0 copy) whose coin count is the next level's ``Q`` (the last level's also absorbs ``yr``; the verifier's own
+    schedule places them, v0 finds them by that shape)."""
     out, li = [], 0
     for r in _stream_rounds(public, stream):
-        if li < len(qs) and not r["caps"] and r["n"] == qs[li]:
+        if li < len(qs) and not r["tops"] and not r["level0"] and r["n"] == qs[li]:
             out.append(r)
             li += 1
     if li != len(qs):
@@ -203,41 +222,72 @@ def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
     return out
 
 
-def public_caps(public: dict, stream: str) -> list[list[bytes]]:
-    """Each Ligerito level's cap as the coin server received it: level 0's from the binding round, then each later cap in
-    the order the rounds absorbed them (one cap a round). Ligerito absorbs level 0's cap again when it starts; that copy
-    must equal the binding round's and is not a level of its own."""
-    caps = []
+@dataclass(frozen=True)
+class Top:
+    """A tree's top as the firewall committed it: its nodes and their salts (the prover's, ``private.json``) and each node's
+    ``b || c`` (the coin server's record, public)."""
+
+    nodes: tuple[bytes, ...]
+    salts: tuple[bytes, ...]
+    bcs: tuple[bytes, ...]
+
+
+def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
+    """The prover's ``opening`` of a top (its nodes and salts), when they open ``bcs``, the ``b || c`` a node the coin server
+    received; refused by name otherwise."""
+    nodes = [bytes.fromhex(x) for x in opening["nodes"]]
+    salts = [bytes.fromhex(x) for x in opening["salts"]]
+    if (not nodes or len(nodes) != len(bcs) or len(salts) != len(nodes) or any(len(n) != HASH for n in nodes)
+            or [b.hex() for b in RL.commit_top(b"".join(nodes), salts)] != bcs):
+        raise ValueError(f"GATE-REFUSED: tree top: {what} does not open its commitment")
+    return Top(tuple(nodes), tuple(salts), tuple(bytes.fromhex(b) for b in bcs))
+
+
+def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> list[Top]:
+    """Each Ligerito level's top of a rep's stream, opened (`opened_top`) against the coin server's record: level 0's the
+    table's ``root_B`` from ``Commit``, then each later salted top in the order the stream's rounds absorbed them. A round's
+    copies of a level-0 top (``level0``: the binding round's, Ligerito's first absorb) are not levels of their own."""
+    out = [opened_top(private["roots"][table], public["link"]["roots"][table], f"{table}'s root_B")]
+    prv = {(r["stream"], r["k"]): r for r in private["rounds"]}
     for r in _stream_rounds(public, stream):
-        for c in r["caps"]:
-            b = bytes.fromhex(c)
-            caps.append([b[i:i + HASH] for i in range(0, len(b), HASH)])
-    if len(caps) > 1 and len(caps[1]) == len(caps[0]):
-        if caps[1] != caps[0]:
-            raise ValueError(f"{stream}: Ligerito's initial cap is not the binding round's")
-        del caps[1]
-    return caps
+        got = prv.get((stream, r["k"]), {}).get("tops", [])
+        if len(got) != len(r["tops"]):
+            raise ValueError(f"GATE-REFUSED: tree top: {stream} round {r['k']} commits {len(r['tops'])} tops, the prover "
+                             f"opens {len(got)}")
+        out += [opened_top(o, bcs, f"{stream} round {r['k']}'s top {i}") for i, (o, bcs) in enumerate(zip(got, r["tops"]))]
+    return out
 
 
-def queries(public: dict, proofs: dict[int, bytes], table: str = "circuit") -> list[Query]:
-    """Every opening of every rep, in rep, level and query order, with its public part from ``public`` and its witness part
-    from the proof."""
+def reps(public: dict) -> list[int]:
+    """The reps the session's ``hello`` declares; each has a stream and a proof, or V* refuses the session."""
+    return list(range(public["hello"]["reps"]))
+
+
+def queries(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> list[Query]:
+    """Every opening of every rep, in rep, level and query order, with its public part from ``public``, the top's node it
+    climbs to from ``private`` (`tops`) and the rest of its witness from the proof. Refused by name unless every declared rep
+    (`reps`) has its stream and its proof, and nothing else does."""
+    want = reps(public)
+    if not want or sorted(proofs) != want or any(f"{table}/rep{r}" not in public["streams"] for r in want):
+        raise ValueError(f"GATE-REFUSED: proofs: the session declares {table}'s reps {want}; it has streams "
+                         f"{sorted(public['streams'])} and proofs of reps {sorted(proofs)}")
     out = []
     for rep, b in sorted(proofs.items()):
         p = decode(b)
         stream = f"{table}/rep{rep}"
         levels = p["levels"]
-        caps = public_caps(public, stream)
-        if len(caps) != len(levels):
-            raise ValueError(f"{stream}: {len(caps)} public caps for {len(levels)} opened levels")
-        if public["link"]["roots"].get(table) != b"".join(caps[0]).hex():
-            raise ValueError(f"{stream}: the binding round's cap is not the committed root_B")
+        ts = tops(public, private, stream, table)
+        if len(ts) != len(levels):
+            raise ValueError(f"{stream}: {len(ts)} committed tops for {len(levels)} opened levels")
+        if any(len(t.nodes) != len(lv.cap) for t, lv in zip(ts, levels)):
+            raise ValueError(f"{stream}: a committed top is not the width of the proof's cap")
         rounds = query_rounds(public, stream, [len(lv.rows) for lv in levels])
-        for li, (lv, cap, rd) in enumerate(zip(levels, caps, rounds)):
-            d, c = lv.depth, (len(cap) - 1).bit_length()
+        for li, (lv, t, rd) in enumerate(zip(levels, ts, rounds)):
+            top = t.nodes
+            d, c = lv.depth, (len(top) - 1).bit_length()
             pos = positions(len(lv.rows), d, [int(x, 16) for x in rd["coins"]])
             for j, ps in enumerate(pos):
-                out.append(Query(rep, li, j, ps, d, c, cap[ps >> (d - c)], lv.rows[j], lv.salts[j], lv.sibs[j]))
+                out.append(Query(rep, li, j, ps, d, c, top[ps >> (d - c)], lv.rows[j], lv.salts[j], lv.sibs[j]))
     return out
 
 
@@ -246,8 +296,9 @@ def opens(q: Query) -> bool:
 
 
 def check(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> dict:
-    """V*'s hashing over a finished inner session: every opening (`opens`) and every message row's commitment."""
-    qs = queries(public, proofs, table)
+    """V*'s hashing over a finished inner session: every top (`tops`, refused by name when one does not open), every
+    opening (`opens`) and every message row's commitment."""
+    qs = queries(public, private, proofs, table)
     bad_q = [(q.rep, q.level, q.j) for q in qs if not opens(q)]
     by_round = {(r["stream"], r["k"]): r for r in public["rounds"]}
     bad_m, rows = [], 0
@@ -260,14 +311,17 @@ def check(public: dict, private: dict, proofs: dict[int, bytes], table: str = "c
     per_level: dict[str, int] = {}
     for q in qs:
         per_level[f"rep{q.rep}/L{q.level}"] = per_level.get(f"rep{q.rep}/L{q.level}", 0) + 1
-    return {"queries": len(qs), "per_level": per_level, "openings_failed": bad_q, "message_rows": rows, "message_rows_failed": bad_m,
-            "accepted": not bad_q and not bad_m and rows == public["message_rows"]}
+    return {"queries": len(qs), "per_level": per_level, "plain_leaves": all(q.salt is None for q in qs), "openings_failed": bad_q,
+            "message_rows": rows, "message_rows_failed": bad_m,
+            "accepted": bool(qs) and not bad_q and not bad_m and rows == public["message_rows"]}
 
 
 def load(d: Path, table: str = "circuit") -> tuple[dict, dict, dict[int, bytes]]:
-    """``public.json``, ``private.json`` and the proofs of an inner session directory (`verity_flock.rec_live.Proxy.write`)."""
+    """``public.json``, ``private.json`` and the proofs of an inner session directory (`verity_flock.rec_live.Proxy.write`):
+    every ``<table>.rep<r>.bin`` there; `queries` refuses a missing or an undeclared rep."""
     d = Path(d)
-    proofs = {r: (d / "session" / f"{table}.rep{r}.bin").read_bytes() for r in (0, 1) if (d / "session" / f"{table}.rep{r}.bin").exists()}
+    pre = f"{table}.rep"
+    proofs = {int(p.name[len(pre):-4]): p.read_bytes() for p in (d / "session").glob(f"{pre}*.bin") if p.name[len(pre):-4].isdigit()}
     return json.loads((d / "public.json").read_text()), json.loads((d / "private.json").read_text()), proofs
 
 
@@ -278,7 +332,12 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("inner", help="an inner session directory (public.json, private.json, session/)")
     a = ap.parse_args(argv)
-    res = check(*load(Path(a.inner)))
+    try:
+        res = check(*load(Path(a.inner)))
+    except ValueError as e:
+        if not str(e).startswith("GATE-REFUSED"):
+            raise
+        res = {"accepted": False, "refused": str(e)}
     json.dump(res, sys.stdout, sort_keys=True)
     print()
     return 0 if res["accepted"] else 1

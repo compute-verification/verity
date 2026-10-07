@@ -1,6 +1,6 @@
 """The inner session's proxy and coin server (`verity_flock.rec_live`): the wire codec, how a round's frames are sorted into
-public caps and the private free message, the message rows' commitments, and that the coin server is shown nothing of the
-hidden statement while the proxy's session record keeps what the live server's would."""
+caps and the private free message, the message rows' and tops' salted commitments, and that the coin server is shown nothing
+of the hidden statement or a tree top while the proxy's session record keeps what the live server's would."""
 from __future__ import annotations
 
 import hashlib
@@ -115,6 +115,24 @@ def test_a_rounds_message_is_one_row_of_whole_blocks_committed_as_a_registered_r
     assert RL.commit_rows([row, other], salts) == list(reg.bcs)
 
 
+def test_a_top_is_committed_node_by_node_as_registered_rows():
+    """Each 64-byte node is one row (its 32 little-endian u16 words, 32 zero words) under its own salt, so a top's
+    commitment is the registered value's ``b || c`` a node; a top that is not whole nodes is refused."""
+    rows = RL.top_rows(CAP0)
+    assert len(rows) == 2 and all(len(r) == RL.ROW_WORDS and r[32:] == [0] * 32 for r in rows)
+    assert bytes(b for w in rows[1][:32] for b in w.to_bytes(2, "little")) == CAP0[64:]
+    salts = [bytes([i]) * 192 for i in range(1, 3)]
+    reg = G.Registered.commit("00" * 64, "rec-top-L0", rows, salts)
+    assert RL.commit_top(CAP0, salts) == list(reg.bcs)
+    with pytest.raises(ValueError, match="whole"):
+        RL.top_rows(CAP0[:100])
+
+
+def _content():
+    """The session's rounds after the binding round: a free message and a fresh top, then Ligerito's copy of level 0's."""
+    return [_obs([5, 6, 7]) + _bytes(CAP1) + _sq(1, RL.KIND_SCALAR), _label(b"flock-ligerito") + _bytes(CAP0) + _sq(2)]
+
+
 def _session(proxy):
     m = 4
     hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"],
@@ -125,7 +143,8 @@ def _session(proxy):
            proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(32))),
            proxy.handle(RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"flock-circuit/fast100/rep0", 0)),
            proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _binding_round(), 6)),
-           proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _obs([5, 6, 7]) + _sq(1, RL.KIND_SCALAR), 1)),
+           proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content()[0], 1)),
+           proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content()[1], 2)),
            proxy.handle(RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"the proof")),
            proxy.handle(RL.encode_req(RL.REQ_FINISH))]
     return [RL.decode_resp(b) for b in out]
@@ -137,15 +156,20 @@ def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(
     resp = _session(proxy)
     assert resp[0] == (RL.RESP_DRAW, "null") and resp[1] == (RL.RESP_OK,)
     assert resp[2][0] == RL.RESP_COINS and len(resp[2][1]) == 8
-    assert resp[5][0] == RL.RESP_COINS and len(resp[5][1]) == 6 and resp[6][0] == RL.RESP_COINS and len(resp[6][1]) == 1
+    assert [(r[0], len(r[1])) for r in resp[5:8]] == [(RL.RESP_COINS, 6), (RL.RESP_COINS, 1), (RL.RESP_COINS, 2)]
     assert resp[-1][0] == RL.RESP_VERDICT
     pub = coins.record()
     text = json.dumps(pub)
-    for secret in ("ab" * 64, DIGEST.hex(), b"sigma-root-f".hex()):
+    for secret in ("ab" * 64, DIGEST.hex(), b"sigma-root-f".hex(), CAP0[:64].hex(), CAP0[64:].hex(), CAP1.hex()):
         assert secret not in text
-    assert pub["link"]["roots"] == {"circuit": CAP0.hex()}
-    assert [r["caps"] for r in pub["rounds"]] == [[CAP0.hex()], []]
-    assert [len(r["commits"]) for r in pub["rounds"]] == [0, 1] and pub["message_rows"] == 1
+    op0 = proxy.roots["circuit"]
+    assert op0["nodes"] == [CAP0[:64].hex(), CAP0[64:].hex()] and len(set(op0["salts"])) == 2
+    assert pub["link"]["roots"] == {"circuit": [b.hex() for b in RL.commit_top(CAP0, [bytes.fromhex(s) for s in op0["salts"]])]}
+    assert [(len(r["tops"]), r["level0"]) for r in pub["rounds"]] == [(0, 1), (1, 0), (0, 1)]
+    (op1,) = proxy.private[1]["tops"]
+    assert op1["nodes"] == [CAP1.hex()] and op1["salts"][0] not in op0["salts"]
+    assert pub["rounds"][1]["tops"] == [[b.hex() for b in RL.commit_top(CAP1, [bytes.fromhex(op1["salts"][0])])]]
+    assert [len(r["commits"]) for r in pub["rounds"]] == [0, 1, 0] and pub["message_rows"] == 1
     priv = proxy.private[1]
     assert RL.commit_rows(priv["rows"], [bytes.fromhex(s) for s in priv["salts"]]) == [bytes.fromhex(c) for c in pub["rounds"][1]["commits"]]
     assert RL.row_elements(priv["rows"][0])[:3] == [5, 6, 7]
@@ -153,13 +177,25 @@ def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(
     st = rec["streams"][0]
     assert st["root_sha512"] == hashlib.sha512(CAP0).hexdigest()
     assert [r["coins"] for r in st["rounds"]] == [r["coins"] for r in pub["rounds"]]
-    assert bytes.fromhex(st["rounds"][1]["msg"]) == _obs([5, 6, 7]) + _sq(1, RL.KIND_SCALAR)
+    assert bytes.fromhex(st["rounds"][1]["msg"]) == _content()[0]
     pts = b"".join(RL.f128_bytes(int(c, 16)) for p in rec["link"]["points"] for c in p)
     assert rec["link_sha512"] == hashlib.sha512(b"sigma-root-f" + CAP0 + pts + bytes(32)).hexdigest()
     assert rec["proof_sha512"] == [{"stream": "circuit/rep0", "bytes": 9, "sha512": hashlib.sha512(b"the proof").hexdigest()}]
     sess = proxy.write(tmp_path)
     assert (sess / "circuit.rep0.bin").read_bytes() == b"the proof"
     assert json.loads((tmp_path / "public.json").read_text())["kind"] == RL.KIND
+    assert json.loads((tmp_path / "private.json").read_text())["roots"] == {"circuit": op0}
+
+
+def test_a_binding_round_whose_cap_is_not_root_b_is_refused():
+    """The firewall commits level 0's top once, at ``Commit``; a rep that binds another cap gets no coins."""
+    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts())
+    hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"], "link": {"sigma": "00", "m": 2, "points": 2}})
+    for req in ((RL.REQ_HELLO, hello), (RL.REQ_COMMIT, b"rf", [("circuit", CAP1 + CAP1)], []), (RL.REQ_LINK, bytes(32)),
+                (RL.REQ_OPEN, "circuit/rep0", "", b"d", 0)):
+        assert RL.decode_resp(proxy.handle(RL.encode_req(*req)))[0] in (RL.RESP_OK, RL.RESP_COINS)
+    got = RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _binding_round(), 6)))
+    assert got[0] == RL.RESP_REFUSED and "not the committed root_B" in got[1] and proxy.coins.rounds == []
 
 
 def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
@@ -199,6 +235,7 @@ def test_coins_follow_the_link_exchange():
     proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts())
     hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"], "link": {"sigma": "00", "m": 2, "points": 2}})
     proxy.handle(RL.encode_req(RL.REQ_HELLO, hello))
+    proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], []))
     proxy.handle(RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"d", 0))
     got = RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _binding_round(), 6)))
     assert got[0] == RL.RESP_REFUSED and "before the link exchange" in got[1]
