@@ -1,17 +1,17 @@
-"""A served pass's rows in the ZK statement's format beside -h2's: each decode forward that vLLM replays whole
+"""A served pass's rows in the ZK statement's format beside the scheme's (-h3's): each decode forward that vLLM replays whole
 (`verity_vllm.protocol_options.pouw_pearl_c_whole`) commits, once after the forward and on the replay's stream (so the next
 forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves of frame-v3-sha512 trees (hm96_rows.cu,
 `rows_bench.Commit`).  `PearlCDeviceRun.statement` holds it; it runs while ``enabled`` (e2e.py's ``pearlc-zk`` mode).
 
 - **The rows:** inside the whole capture, each call's A words (m₁₆ FP32 rows, its BF16 x widened, exact) are copied to its
   weight's slot of its k's stage (`stage`).  After the replay (`after`), each k's stage is one commitment of role X rows
-  (``hm96-sha512/row-seg/v1``), and the forward's tile leaves (-h2's, 32 bytes each, standing in for the statement's tile
+  (``hm96-sha512/row-seg/v1``), and the forward's tile leaves (the scheme's, `run.nb` bytes each, standing in for the statement's tile
   digest, TurboSHAKE128, which is not computed) one of ``row/v2`` rows.
 - **The salts:** C-Flock's ChaCha20 stream under a key derived from the install's salt (`SALT_TAG`), the nonce the forward's
   serial in the install and the tree's place.  Each tree's domain names its k (or the tiles) and m₁₆, not the forward (v0).
 - **The roots:** each forward's, copied to a device ring (`ROOTS` forwards), whose SHA-256 over the forwards since the last
   `take` the e2e's decode response reports.
-- **What it is not:** -h2's root still seeds forming (seed_A), so the statement's roots are in addition to -h2's.  Prefill
+- **What it is not:** the scheme's own A root seeds forming (seed_A), so the statement's roots are in addition to its.  Prefill
   runs eagerly, so its rows are not committed here; nor are the fp8-p rows (the tile's inputs), which a prover commits after
   the pass, before the draw (rows_bench.py's ``batch.p.hm96``).
 
@@ -96,7 +96,7 @@ class Statement:
             B, h = self.B, self.h
             cms = [B.Commit(h, h, self.consts, f"x/k{k}/m{m16}", self.stages[(k, m16)].data_ptr(), self.count[k] * m16, 4 * k,
                             4 * k, B.SEG, 0, prefix=PREFIX) for k in self.ks]
-            cms.append(B.Commit(h, h, self.consts, f"t/m{m16}/{tiles}", 0, tiles, 32, 32, B.V2, 0, prefix=PREFIX))
+            cms.append(B.Commit(h, h, self.consts, f"t/m{m16}/{tiles}", 0, tiles, self.run.nb, self.run.nb, B.V2, 0, prefix=PREFIX))
             h.sync()
             self.commits[key] = cms
         return self.commits[key]
@@ -109,7 +109,7 @@ class Statement:
         cms = self._commits(calls[0].m16, sum(c.tiles for c in calls))
         if self.skip:
             return
-        cms[-1].data = self.run.leaves.data_ptr() + 32 * tiles_at
+        cms[-1].data = self.run.leaves.data_ptr() + self.run.nb * tiles_at
         self.h.stream = self.run.stream()
         try:
             at = self.ring.data_ptr() + 64 * (len(cms) * (self.forwards % ROOTS))
@@ -186,7 +186,7 @@ class Statement:
                     self.skip = False
                 torch.cuda.synchronize(dev)
                 cms = self._commits(m, sum(c.tiles for c in calls))
-                cms[-1].data = run.leaves.data_ptr() + 32 * at
+                cms[-1].data = run.leaves.data_ptr() + run.nb * at
                 same = []
                 for cm in cms:
                     want = cm.reference(cm.read_rows())
