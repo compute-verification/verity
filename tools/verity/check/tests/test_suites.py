@@ -793,6 +793,30 @@ def test_explain_names_what_a_miss_changed(tmp_path):
     assert "pkg/tests/test_uses.py: it reaches pkg/tests/test_shared.py, which changed" in p.stdout, p.stdout
 
 
+def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, bytes]:
+    """(whether something was written to ``fifo`` before ``p`` closed its stdout, ``p``'s output read meanwhile), never waiting
+    on a bare blocking ``open``: a runner that dies before the writer starts would leave that waiting forever."""
+    import select
+
+    fd, out, buf = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK), p.stdout.fileno(), []
+    poll = select.poll()
+    poll.register(fd, select.POLLIN)
+    poll.register(out, select.POLLIN)
+    try:
+        while True:
+            for ready, _ in poll.poll():
+                if ready == fd:
+                    if os.read(fd, 1):
+                        return True, b"".join(buf)
+                    poll.unregister(fd)                    # a writer closed without writing
+                elif not (chunk := os.read(out, 65536)):
+                    return False, b"".join(buf)
+                else:
+                    buf.append(chunk)
+    finally:
+        os.close(fd)
+
+
 def test_an_interrupted_run_keeps_what_finished(tmp_path):
     """A stop (check.py's SIGINT to the step's processes) mid-suite: the tests that passed before it are kept."""
     import signal
@@ -808,11 +832,11 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
     p = subprocess.Popen([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
-                         cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
-    with open(gate) as f:                                  # test_heavy's two tests have passed; test_block is running
-        f.read()
+                         cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+    written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
+    assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
     os.killpg(p.pid, signal.SIGINT)
-    out = p.communicate()[0]
+    out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("tests~test_heavy.py--*.json"))) == 1
 
