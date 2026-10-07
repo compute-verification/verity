@@ -43,6 +43,16 @@ Until their ports land, each component is a stub, `Core.Example.protocol` under 
 stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, keeping each list in the
 order of its ids (`ordered`, which each product's `#guard` checks). NCI and the trial's reconciling are not components yet.
 
+## The properties
+
+`Security/Properties/` (package `security_properties`, Lean core only) states the rule against this code and proves it
+with no assumption: `Properties.Composition` for every id and every list of components (any rejection rejects, a misfit
+rejects, accept exactly when the cases fit, every component accepts and the commitment binds their digests, undecided
+exactly when none rejects and some is undecided, the keyed public outputs and profiles on acceptance, `answer`'s verdict
+the check's, nothing public unless accepted), and `Properties.Onsite` and `Properties.Remote` at each product's id and
+components. Its `lean-audit.json` records the 22 guarantees and every definition they read, this package's spec
+(`CoreComposition.Product`, `CoreComposition.Stubs`) among them, so a change to the rule shows in the records.
+
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds both difftest executables and holds them to
