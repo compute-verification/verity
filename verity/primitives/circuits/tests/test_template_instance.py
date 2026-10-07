@@ -134,7 +134,7 @@ def build(decode: bool = True) -> dict:
     progs = {k: codec.decode_program(json.loads(_canon(p)), REG) if decode else p for k, p in PROGRAMS.items()}
     return {
         "about": "Pinned vectors of Q_template_instance v0 and Q_template_instances v0 (verity.primitives.circuits.partition_object), checked by "
-                 "tests/ir/test_template_instance.py; written by it with --write.  Programs are descriptor bytes; units are "
+                 "verity/primitives/circuits/tests/test_template_instance.py; written by it with --write.  Programs are descriptor bytes; units are "
                  "[unit, root node, member, first gate, end gate, inputs, outputs].",
         "descriptors": {k: _canon(p) for k, p in PROGRAMS.items()},
         "template_ids": {"TScale descriptor id": SCALE_ID, "TScale readable id": Scale.id, "TDot": DOT_ID},

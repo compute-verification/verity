@@ -62,7 +62,7 @@ def kblock_n_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     tile_size_fwd_sm90``, element_size 2, causal, paged KV without TMA) with ``use_one_mma_wg = D in {64, 128} and seqlen_q *
     qheads_per_kvhead <= 64`` (``hopper/heuristics.h``; ``seqlen_q`` = the launch's max_seqlen_q under varlen): D <= 64 -> 192 under
     one MMA warpgroup (64 x 192 tile) else 128 (192 x 128 tile); D <= 128 -> 128.  The same rule as
-    ``verity_vllm.program.registry.targets.fa3_kblock_n`` (the registered one; ``check`` cross-checks the two)."""
+    ``verity_vllm.program.frontend.targets.fa3_kblock_n`` (the registered one; ``check`` cross-checks the two)."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
     if D not in SUPPORTED_HEAD_DIMS:
         raise ValueError(f"FA3 head dim {D}: not modelled (supported {SUPPORTED_HEAD_DIMS})")

@@ -77,7 +77,7 @@ def Accepts (I : Inputs) (t : Transcript) : Prop :=
 variable {n : ℕ} {Reg : Type}
 
 /-- **The audit as it runs**: the prover registers `R`; the verifier draws `S` by `L`; the live session `live S R`
-(the prover against the coin server) ends in the session directory. Output: the registration, the draw and the
+(the prover against the challenger) ends in the session directory. Output: the registration, the draw and the
 transcript. -/
 def auditLive (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → Game Transcript) :
     Game (Reg × Finset (Fin n) × Transcript) :=
