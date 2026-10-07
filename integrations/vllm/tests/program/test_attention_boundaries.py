@@ -38,6 +38,17 @@ THIRD_PARTY = {"numpy"}
 CATALOG = "verity.ml.circuits"
 
 
+def _core(name: str) -> bool:
+    """`name` is core as it was before the move: under `verity`, except what the move put there from outside it (experimental,
+    the catalog, the kernels, C-Flock), with core's own protocols and claims, which moved under `verity.experimental`."""
+    def under(prefix: str) -> bool:
+        return name == prefix or name.startswith(prefix + ".")
+    moved_in = ("verity.experimental", "verity.ml.circuits.ops", "verity.ml.circuits.silicon", "verity.ml.circuits.targets",
+                "verity.ml.kernels", "verity.ml.flock")
+    return under("verity") and (not any(map(under, moved_in))
+                                or any(map(under, ("verity.experimental.protocols", "verity.experimental.claims"))))
+
+
 def _catalog(name: str) -> bool:
     return name == CATALOG or name.startswith(CATALOG + ".")
 
@@ -69,7 +80,7 @@ def _violations(mod: str) -> list[str]:
                 top = a.name.split(".")[0]
                 if a.name.startswith(PKG + "."):
                     out.append(f"{mod}:{node.lineno}: `import {a.name}` (name what it takes: from ... import)")
-                elif top not in ("verity", *THIRD_PARTY) and top not in sys.stdlib_module_names and not _catalog(a.name):
+                elif not _core(a.name) and top not in THIRD_PARTY and top not in sys.stdlib_module_names and not _catalog(a.name):
                     out.append(f"{mod}:{node.lineno}: imports {a.name}")
         elif isinstance(node, ast.ImportFrom):
             base = (node.module if node.level == 0
@@ -82,7 +93,8 @@ def _violations(mod: str) -> list[str]:
                         out.append(f"{mod}:{node.lineno}: imports {PKG}.{a.name}")
             elif base.startswith(PKG + "."):
                 take(base[len(PKG) + 1:], [a.name for a in node.names], node.lineno)
-            elif top not in ("verity", "__future__", *THIRD_PARTY) and top not in sys.stdlib_module_names and not _catalog(base):
+            elif (not _core(base) and top not in ("__future__", *THIRD_PARTY) and top not in sys.stdlib_module_names
+                  and not _catalog(base)):
                 out.append(f"{mod}:{node.lineno}: imports {base}")
         elif isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", None)) in ("import_module", "__import__"):
             out.append(f"{mod}:{node.lineno}: imports by name")
