@@ -1,11 +1,11 @@
-"""Retire superseded catalog Definition versions, and move the vLLM registry's quarantine to `experimental/`.
+"""Retire superseded catalog Definition versions, and move the vLLM registry's quarantine to `verity/experimental/`.
 
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py apply [--only ID ...] [--dest DIR | --promote-only]
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py commands
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py snapshot OUT.json
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py verify BEFORE.json AFTER.json
 
-The plan is note:20261004T2058Z-draft-repo-organization-principles, under Daniel's rulings of 4 Oct 2026: `experimental/` is a
+The plan is note:20261004T2058Z-draft-repo-organization-principles, under Daniel's rulings of 4 Oct 2026: `verity/experimental/` is a
 top-level directory, `verity/` holds only what cited claims depend on, and a superseded catalog Definition version stays only so
 that old records replay. A superseded version that no kept Program or record names may be deleted, but only after a
 `circuits/<slug>` superseded approach entry citing the last commit that has it is recorded (`commands` prints those entries).
@@ -22,7 +22,7 @@ home are allowlisted where they now live (`P08_ADDED`), and an emptied lane pack
 admission home of any later lane, kept by name in the dead-code list. Every
 edit is planned, and refused if it would leave a name of a promoted lane behind, before anything is written. Running it again
 changes nothing. `--promote-only` deletes and promotes but moves nothing: the `MOVE` lanes stay in core's quarantine, for a tree
-that has no `experimental/` yet.
+that has no `verity/experimental/` yet.
 
 `snapshot` records circuit-check's task list and every registered Definition, each with its descriptor digest (sha512 of the
 canonical JSON of its definition entry). `verify` compares two snapshots: the task list may lose only the deleted versions'
@@ -56,8 +56,8 @@ DEST = "experimental/vllm/quarantine"
 #: the moved lanes, the lists keyed by them) is derived from this one constant.
 PACKAGE = "verity_quarantine"
 DISTRIBUTION = PACKAGE.replace("_", "-")
-TARGETS = "tools/circuit_check/src/circuit_check/targets.py"
-PINS = "tools/circuit_check/src/circuit_check/pins.json"
+TARGETS = "tools/verity/circuit_check/src/circuit_check/targets.py"
+PINS = "tools/verity/circuit_check/src/circuit_check/pins.json"
 #: Where Definitions are registered: a version is deleted from one of these.
 DEFINITION_DIRS = (REGISTRY_DIR, "verity")
 #: JSON lists keyed by a moved file or module: their entries for the moved lanes are dropped (each list only shrinks).
@@ -116,7 +116,7 @@ class Promotion:
     `edits` (exact replacements, each of which must match) applied; otherwise its statements after its imports, but for its
     `SEMANTIC_ID` and `__all__`, go into `dst` before `dst`'s `__all__` (or at its end), and the `imports` `dst` lacks join its
     imports.  A merged module's `X.name`, for an alias `X` in `unqualify`, becomes `name`, which `dst` must bind (the sampling
-    family's split left `sampling` importing each primitive by name from `verity_catalog.definitions`, not through `registry.prims`)."""
+    family's split left `sampling` importing each primitive by name from `verity.ml.circuits.ops`, not through `registry.prims`)."""
     src: str                                   # under QUARANTINE
     dst: str                                   # under REGISTRY_DIR
     edits: tuple[tuple[str, str], ...] = ()
@@ -129,7 +129,7 @@ class Promotion:
 PROMOTE: tuple[Promotion, ...] = (
     Promotion("ln/layer_norm_aten.py", "layer_norm.py", edits=(
         ("from verity_vllm.program.registry.quarantine.ln._common import BF16, F32, ZERO32, Array, P, f32c\n",
-         "from verity.primitives.circuits.types import Array\nfrom verity_vllm.program.registry import prims as P\n"
+         "from verity.ml.circuits.types import Array\nfrom verity_vllm.program.registry import prims as P\n"
          "from verity_vllm.program.registry.b1 import ZERO32, f32c\nfrom verity_vllm.program.registry.prims import BF16, F32\n"),
         ("The lane's difftest (`layer_norm_aten_difftest.py`) is the bit-exact check.",
          "Its difftest (`layer_norm_difftest.py`) is the bit-exact check."))),
@@ -169,8 +169,8 @@ def redirects(dest: str) -> tuple[tuple[str, str, str], ...]:
          "rep = lint(Path(QC.__file__).resolve().parents[1])"),
     )) + (
         # the shipped PYTHONPATH's roots follow the root's dependencies, which now include the experimental member
-        ("tools/research/tests/test_pythonpath.py", '"backends/flock/python", "tools/circuit_check/src"]',
-         f'"backends/flock/python", "tools/circuit_check/src",\n              "{dest}"]'),
+        ("tools/research/tests/test_pythonpath.py", '"verity/ml/flock/python", "tools/verity/circuit_check/src"]',
+         f'"verity/ml/flock/python", "tools/verity/circuit_check/src",\n              "{dest}"]'),
     )
 
 
@@ -510,7 +510,7 @@ def promote_edits(dest: str | None) -> tuple[tuple[str, str, str], ...]:
          '["GeluErfBf16"]\n'
          '    assert layer_norm_aten.VEC == 4 and layer_norm_aten.NTHREADS == 128 and layer_norm_aten.MEAN_FMA_ORDER == "A"\n',
          "def test_layer_norm_and_gelu_erf_are_registry_definitions():\n"
-         "    from verity.primitives.circuits.defs import REGISTRY\n"
+         "    from verity.ml.circuits.defs import REGISTRY\n"
          "    fns = (layer_norm.LayerNormAten, layer_norm.LayerNormAtenV2, act.GeluErf, act.GeluErfBf16)\n"
          '    assert [f.id for f in fns] == ["LayerNormAten_v1", "LayerNormAten_v2", "GeluErf_v1", "GeluErfBf16_v1"]\n'
          "    assert all(REGISTRY[f.id] is f for f in fns)\n"
@@ -1012,8 +1012,8 @@ def _rewrite_tree(root: Path, dest: str) -> list[str]:
 # --- snapshot and verify -----------------------------------------------------------------------------------------------
 
 def _digest(fn) -> str:
-    from verity.primitives.circuits.codec import canonical_json, definition_entry
-    from verity.primitives.circuits.defs import FunctionDefinition
+    from verity.ml.circuits.codec import canonical_json, definition_entry
+    from verity.ml.circuits.defs import FunctionDefinition
     if not isinstance(fn, FunctionDefinition):
         return f"not a definition: {type(fn).__name__}"
     try:
@@ -1030,7 +1030,7 @@ def _import_tree(name: str) -> None:
 
 def snapshot() -> dict:
     from circuit_check import targets as T
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.defs import REGISTRY
     suite = T.suite()
     _import_tree(QUARANTINE_MODULE)
     if importlib.util.find_spec(PACKAGE) is not None:

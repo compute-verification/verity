@@ -1,5 +1,5 @@
 """`boolean_softcap`: `AttnBlockSoftcap_v3` / `AttentionHeadSoftcap_v3` / `AttentionSoftcap_v3` with ``TANH`` = `MufuTanh_v2` and
-``EX2`` = `MufuEx2Ftz_v2` (`verity_catalog.definitions.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
+``EX2`` = `MufuEx2Ftz_v2` (`verity.ml.circuits.ops.boolean.mufu`) are Boolean, agree with their word views (`fa2_softcap`'s v2 chain at the
 same statics, over `MufuTanh_v1` and `MufuEx2Ftz_v1`), Call their blocks and heads as the word chain does, and are pinned by gate
 count and program digest.
 
@@ -13,19 +13,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation.batch import type_shape
-from verity.primitives.circuits.evaluation.reference import standalone_call
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits import codec
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.types import Array
-from verity_catalog.definitions.boolean import attention as BA
-from verity_catalog.definitions.boolean import gemm as BG
-from verity_catalog.definitions.boolean import mufu as BM
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import NOT, const_bits, sub
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation.batch import type_shape
+from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.types import Array
+from verity.ml.circuits.ops.boolean import attention as BA
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.ops.boolean import mufu as BM
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import NOT, const_bits, sub
 from verity_vllm.program.registry import boolean_softcap as BSC
 from verity_vllm.program.registry import fa2_softcap as FS
 from verity_vllm.program.registry import prims as P

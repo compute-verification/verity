@@ -40,8 +40,8 @@ def _standalone(spec):
 @pytest.mark.parametrize("N,eps", [(576, 1e-5), (1536, 1e-6)])
 def test_ir_body_equals_numpy_twin(N, eps):
     _numerics()
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
     from verity_vllm.program.kernels import rmsnorm_fused_sweep as SW
     rng = np.random.default_rng(1234 + N)
@@ -60,7 +60,7 @@ def test_ir_body_equals_numpy_twin(N, eps):
 
 def test_v2_gate_counts():
     """N=1536: 1024 threads (512 with an FFMA), 32 warps x 31 adds + 31; N=576: 576 threads, 18 warps x 31 + 17."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import b1
     for N, eps, nthreads, nfma, nwarps in ((1536, 1e-6, 1024, 512, 32), (576, 1e-5, 576, 0, 18)):
         prog, call = _standalone(bind(b1.RMSNormFusedCuda, N=N, EPS=eps))

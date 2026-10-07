@@ -100,7 +100,7 @@ def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None
 
 
 def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None:
-    """The Program's digest (`verity.primitives.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
+    """The Program's digest (`verity.ml.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
     recomputed from its `descriptor.json.gz`; None when the Build has neither."""
     s = (res.get("program") or {}).get("digest")
     if s:
@@ -109,7 +109,7 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
     if not os.path.exists(p):
         return None
     import gzip
-    from verity.primitives.circuits.codec import program_digest
+    from verity.ml.circuits.codec import program_digest
     with gzip.open(p, "rt") as f:
         return program_digest(json.load(f))
 

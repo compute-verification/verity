@@ -24,11 +24,11 @@ import pytest
 from research import deploy
 
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
-CHECK = Path(__file__).resolve().parents[3] / "tools/check"
+CHECK = Path(__file__).resolve().parents[3] / "tools/verity/check"
 
 
 def _load(name: str, path: Path):
-    """``path`` as module ``name``, compiled from its source: tools/check's __pycache__ is no input of this suite."""
+    """``path`` as module ``name``, compiled from its source: tools/verity/check's __pycache__ is no input of this suite."""
     old = sys.pycache_prefix, sys.dont_write_bytecode
     sys.pycache_prefix, sys.dont_write_bytecode = os.devnull, True
     try:
@@ -725,8 +725,8 @@ def test_the_setup_script_runs_only_as_root(tmp_path):
 
 _N = "tools/research/src/research/pods/nebius"
 LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": f"{_N}/lean_build_setup.sh", "/usr/local/bin/vy-lean-sandbox": f"{_N}/lean_sandbox.py",
-              "/usr/local/lib/vy-lean-cache/run-daily": "tools/lean/run_daily.py",
-              "/usr/local/lib/vy-lean-cache/cache.py": "tools/lean/cache.py",
+              "/usr/local/lib/vy-lean-cache/run-daily": "tools/verity/lean/run_daily.py",
+              "/usr/local/lib/vy-lean-cache/cache.py": "tools/verity/lean/cache.py",
               "/etc/systemd/system/vy-lean-cache-daily.service": f"{_N}/vy-lean-cache-daily.service",
               "/etc/systemd/system/vy-lean-cache-daily.timer": f"{_N}/vy-lean-cache-daily.timer"}
 

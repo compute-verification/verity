@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from functools import reduce
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.primitives.circuits import partition_object as PO
+from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
@@ -63,10 +63,10 @@ __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLIN
            "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
            "CallMember", "Population", "population", "Q_WORD_ID", "Q_WORD_TEXT", "QUERY_OF_RECORD", "QUERIES", "partition_of"]
 
-#: the query of record: every Call cut into word units (`verity.primitives.circuits.cut`); the Program's partition is the `verity/partition/v1` object
+#: the query of record: every Call cut into word units (`verity.ml.circuits.cut`); the Program's partition is the `verity/partition/v1` object
 #: naming it (`partition_of`).  `Q_module_body_v1` stays selectable, for A/B only.
 Q_WORD_ID = word_query.query_id(16, 32)
-Q_WORD_TEXT = (f"{Q_WORD_ID}: units = the word units of every Call's cut (verity.primitives.circuits.cut; {PO.FORMAT} names the partition as Q_word v1 "
+Q_WORD_TEXT = (f"{Q_WORD_ID}: units = the word units of every Call's cut (verity.ml.circuits.cut; {PO.FORMAT} names the partition as Q_word v1 "
                "{X: 16, W: 32}); committed = every Value one Call produces and another Call reads or the Program returns, and the prescribed "
                "inputs a Call reads (U_C (in(C) u out(C)) over the Calls), minus the Program's literals (the Values of Calls that read no "
                "Value: written in the descriptor, never acquired); plus each Call's committed interior words (the tap families)")
