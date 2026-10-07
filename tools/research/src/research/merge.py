@@ -804,7 +804,7 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                            f"name it as N@SHA")
                 continue
             lacking = set(need) - grants(pr, sha) if need else set()
-            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto)):
+            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto, rules)):
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: from {by.get(g) or 'its rule, which names no `by`'}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
@@ -899,7 +899,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
         for n, sha, onto in pins:
             need = rules.needs(repo, onto, sha) if rules else set()
             lacking = need - grants(n, sha)
-            if missing := lacking - grants.carried(n, sha, lacking, onto):
+            if missing := lacking - grants.carried(n, sha, lacking, onto, rules):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
         raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e
