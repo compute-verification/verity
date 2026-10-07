@@ -160,7 +160,7 @@ def test_resolve_prefix_and_ambiguity(tmp_path):
 def test_no_packages_import():
     """`research` must not depend on the Verity library, frontends, backends, or integrations (README: it treats
     the workload as opaque). Covers `verity` and any `verity_*` extension distribution but `verity_ops`, whose importers
-    tests/test_infra_boundaries.py lists."""
+    tests/test_boundaries.py (INFRA_IMPORTERS) lists."""
     import pathlib
     import re
 

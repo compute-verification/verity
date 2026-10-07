@@ -88,6 +88,17 @@ ML_IMPORTS_EXPERIMENTAL = {
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
                                                 "deploy and Slack code in the follow-up to the platform layout move (#1450)",
+    "tools/research/src/research/spec_alert.py": "the spec-change alert posts to Slack from `research data`'s hook (comms')",
+    "tools/research/src/research/monitors.py": "the monitors' relay posts their alerts to Slack from a VM (on node 1 they only "
+                                               "write files); moves to infra/nebius with pods/nebius",
+    "tools/research/src/research/pods/nebius/n1_alerts.py": "posts node 1's lease and dispatcher incidents to Slack; moves to "
+                                                            "infra/nebius with pods/nebius",
+    "tools/research/src/research/pods/nebius/preflight_probe.py": "posts its findings to Slack; moves to infra/nebius with pods/nebius",
+    "tools/research/src/research/pods/nebius/write_probe.py": "its relay posts to Slack; moves to infra/nebius with pods/nebius",
+    "tools/research/control/control_disk_alert.py": "the control pod's disk alert posts to Slack; moves to infra/control",
+    "tools/research/tests/test_monitors.py": "checks the monitors' Slack relay",
+    "tools/research/tests/test_nebius_lean_sandbox.py": "checks the Lean sandbox's deploy.toml entries with verity_ops.deploy",
+    "tools/research/tests/test_nebius_write_probe.py": "checks the write probe's Slack relay",
 }
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
