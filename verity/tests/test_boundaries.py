@@ -2,9 +2,10 @@
 
     primitives.circuits <- primitives.commitments -> primitives.crypto;  primitives.circuits <- protocols.profile;
     each protocol imports the primitives, the profile and the protocols it names in ``ALLOWED``, and no third-party package;  claims, randomness and crypto import no
-    core unit;  a primitive never imports a protocol, and no unit imports another distribution of the workspace (the
-    catalog, the kernels, experimental, a backend, an integration, a benchmark, a tool) or an external runtime: core
-    imports the standard library, its declared dependencies and itself.
+    core unit;  a primitive never imports a protocol, and no unit imports ``verity.ml`` (PoUW's ``EXCEPTIONS`` aside), another
+    distribution of the workspace (experimental, a backend, an integration, a benchmark, a tool) or an external runtime: core
+    imports the standard library, its declared dependencies and itself.  ``verity/ml/`` imports core and the edges
+    ``ML_EDGES`` pins.
 
 An import is an import statement (a relative one resolved against its package), a string handed to
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
@@ -48,14 +49,26 @@ ALLOWED = {
 }
 #: Import names core never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity.ml.circuits", "verity.ml.kernels", "verity_experimental", "verity_sp1", "verity_vllm", "verity_numerical",
+FORBIDDEN_EXTERNAL = ("verity_experimental", "verity_sp1", "verity_vllm", "verity_numerical",
                       "verity_flock", "verity_torch", "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax",
                       "onnx", "catalog", "kernels", "experimental", "archive", "backends", "benchmarks", "frontends",
                       "integrations", "tools", "veritor")
-#: The one edge out of core: PoUW's schemes and circuits are stated over the catalog's silicon models and Definitions (the
-#: tensor-core steps, FP32 and the casts its verifier recomputes), which live in the catalog by ruling, while the scheme
-#: stays in core.  Nothing else in core imports the catalog.
-EXCEPTIONS = {"protocols.accounting.work.pouw": {"verity.ml.circuits"}}
+#: ``verity/ml/``: Python and CUDA (provers, Python circuits, kernels), which can't affect soundness or hiding.  It is no core
+#: unit: core never imports it, and it imports core, its dependencies and the edges ``ML_EDGES`` pins.
+ML = "ml"
+#: The one edge out of core: PoUW's schemes and circuits are stated over the silicon models and Definitions (the tensor-core
+#: steps, FP32 and the casts its verifier recomputes), which live in ``verity.ml.circuits.silicon`` while the scheme stays in
+#: core.  Nothing else in core imports ``verity.ml``.
+EXCEPTIONS = {"protocols.accounting.work.pouw": {"verity.ml.circuits.silicon"}}
+#: What ``verity/ml/`` imports beyond the standard library, numpy and ``verity``, by subtree: every edge the layout has yet to
+#: remove.  ``provers/flock`` is C-Flock's own distribution (its pyproject declares what it imports) and a ``*.circuit-check.py``
+#: sidecar is circuit-check's binding, run by path, so neither is scanned here.
+ML_EDGES = {
+    # the sampler chain and MLA's checks reach the integration's kernel twins and relations (`verity_vllm.program.kernels`)
+    "circuits/ops": {"verity_vllm"},
+    # the frozen backends' CUDA hashing, imported by path as `hash_gpu`, with its GPU stacks and the bench's pricing
+    "kernels/hash_gpu": {"cupy", "torch", "hash_gpu", "blake3", "verity_numerical"},
+}
 #: Core's third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or ``verity``.  A
 #: protocol imports none: it is the standard library and core, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
@@ -67,11 +80,18 @@ MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
 
-def _sources(root: Path = SRC) -> list[Path]:
-    """Core's own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, or a Lake build
-    directory (``verity/Security/.lake`` holds its dependencies' checkouts, Mathlib's scripts among them)."""
+def _sources(root: Path = SRC, ml: bool = False) -> list[Path]:
+    """Core's own Python files (``verity/ml/``'s with ``ml``): every ``.py`` under ``root`` outside a ``tests/`` or ``lean/``
+    directory, or a Lake build directory (``verity/Security/.lake`` holds its dependencies' checkouts, Mathlib's scripts among
+    them).  ``verity/ml/provers/flock`` is a distribution of its own and is never one of them."""
     return sorted(p for p in root.rglob("*.py")
-                  if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts))
+                  if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
+                  and (p.relative_to(SRC).parts[0] == ML) == ml
+                  and not p.relative_to(SRC).as_posix().startswith(f"{ML}/provers/flock/"))
+
+
+def _is_ml(name: str) -> bool:
+    return name == f"verity.{ML}" or name.startswith(f"verity.{ML}.")
 
 
 def _imports(path: Path) -> list[tuple[str, int, bool]]:
@@ -127,7 +147,10 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
             parts = name.split(".")
             target = _unit(".".join(parts[1:])) if parts[0] == "verity" and len(parts) > 1 else None
             third_party = set() if unit.startswith("protocols.") else DEPENDENCIES
-            if (_external(name, imported, third_party | EXCEPTIONS.get(unit, set()))
+            excepted = any(name == e or name.startswith(e + ".") for e in EXCEPTIONS.get(unit, ()))
+            if excepted:
+                continue
+            if (_external(name, imported, third_party) or _is_ml(name)
                     or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
     assert not offenders, "\n".join(offenders)
@@ -152,9 +175,33 @@ def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
 def test_every_source_directory_is_a_package() -> None:
     """``verity`` is one regular package: every directory of its own Python has an ``__init__.py``, so no part of it resolves
     as a namespace package from whatever else is on the path.  Tests and Lean scripts are run by path and stay out."""
-    missing = sorted({str(p.parent.relative_to(SRC.parent)) for p in _sources() for d in [p.parent, *p.parent.parents]
+    missing = sorted({str(d.relative_to(SRC.parent)) for p in [*_sources(), *_sources(ml=True)] for d in [p.parent, *p.parent.parents]
                       if d.is_relative_to(SRC) and not (d / "__init__.py").exists()})
     assert not missing, missing
+
+
+def test_ml_imports_core_its_dependencies_and_the_pinned_edges() -> None:
+    """``verity/ml/`` imports the standard library, ``verity``'s dependencies, ``verity`` and, from a subtree ``ML_EDGES``
+    lists, the names pinned there: a new edge out of ml fails here, and a pinned one that went away must leave the list."""
+    seen: dict[str, set[str]] = {k: set() for k in ML_EDGES}
+    offenders = []
+    for path in _sources(ml=True):
+        rel = path.relative_to(SRC / ML).as_posix()
+        if path.name.endswith(".circuit-check.py"):
+            continue
+        sub = next((k for k in ML_EDGES if rel.startswith(k + "/")), None)
+        for name, line, imported in _imports(path):
+            top = name.split(".")[0]
+            if name.startswith(".") or top == "verity" or top in DEPENDENCIES or top in sys.stdlib_module_names:
+                continue
+            if not imported and top not in FORBIDDEN_EXTERNAL:
+                continue
+            if sub and top in ML_EDGES[sub]:
+                seen[sub].add(top)
+            else:
+                offenders.append(f"ml/{rel}:{line}: {name}")
+    assert not offenders, "\n".join(offenders)
+    assert seen == ML_EDGES, f"pinned edges no longer taken: { {k: ML_EDGES[k] - v for k, v in seen.items() if v != ML_EDGES[k]} }"
 
 
 @pytest.mark.parametrize("subtree", NUMPY_FREE)

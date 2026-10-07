@@ -22,11 +22,11 @@ build-backend = "hatchling.build"
 # repository's root on every sys.path, and with it every top-level directory as an import name.
 packages = ["verity"]
 dev-mode-exact = true
-exclude = ["verity/**/tests", "verity/**/pyproject.toml"]
+exclude = ["verity/**/tests", "verity/**/pyproject.toml", "verity/ml/provers/flock"]   # C-Flock is a distribution of its own
 
 [tool.hatch.build.targets.sdist]
 only-include = ["verity"]
-exclude = ["verity/**/tests", "verity/**/pyproject.toml"]
+exclude = ["verity/**/tests", "verity/**/pyproject.toml", "verity/ml/provers/flock"]   # C-Flock is a distribution of its own
 
 [tool.uv]
 conflicts = [
