@@ -15,8 +15,8 @@ Writes, under `DIR/difftest/`:
     of `ValueError`;
   - `commit` and `tagged`: `setup.commit(params, W)` with the manifest, and `tagged_sha512(tag, payload)` with plain
     SHA-512 of the payload, which Lean absorbs in the given pieces;
-  - `setup`: `protocol.verifier_key(P2(params), commitment, salt, mode=PUBLIC, encoded=C*)`: accepted with `vk`'s root
-    (which Lean does not yet compute), or the kind of `ValueError`;
+  - `setup`: `protocol.verifier_key(P2(params), commitment, salt, mode=PUBLIC, encoded=C*)`: accepted with `vk`'s root,
+    or the kind of `ValueError`;
 - `p2-vectors.json`, a copy of the spec's §7 vectors (`benchmarks/pous/p2_v1/vectors.json`), which Lean checks against
   §7's SHA-512, entry hashes and all.
 

@@ -1,6 +1,7 @@
 {
  "roots": ["PousCheck"],
  "exempt": {
+  "PousCheck.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousCheck.SetupProtocol.protocol, audited under PousCheck and CoreProtocol",
   "PousCheck.SetupDifftestMain": "the setup difftest against the Python reference, under `runs`: compiled evaluation of PousCheck.SetupDifftest.main, audited under PousCheck, a test and not a proof",
   "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof"
  },
@@ -27,9 +28,9 @@
  },
  "layers": {
   "PousCheck": {
-   "imports": ["PousCheck", "Flock"],
+   "imports": ["PousCheck", "Flock", "CoreProtocol"],
    "except": [],
-   "why": "the program is code: Lean core and Flock's executable primitives only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core, Flock's executable primitives and the core protocol interface only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

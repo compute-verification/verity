@@ -14,8 +14,8 @@ the same from this package's definitions, gives every one of them. The kinds:
 * `commit`: `Commit.commit` and `Commit.manifest` (`setup.commit`, `canonical_json_bytes(params.manifest())`); `tagged`:
   `Commit.taggedSha512` (`identity.tagged_sha512`), and `Prim.Sha512` absorbing the payload in the given pieces against
   `hashlib.sha512`;
-* `setup`: `Setup.checkEncoding` (`protocol.verifier_key(…, mode=PUBLIC)`): accepted, or the kind of refusal. Python's
-  answer also carries `vk`'s root, which is compared once `PousCheck.Merkle` supplies `Setup.Tree` (`ROOT_PENDING`).
+* `setup`: `Setup.verifierKeyFromEncoding` (`protocol.verifier_key(…, mode=PUBLIC)`): accepted with `vk`'s root, or the
+  kind of refusal.
 
 `vectorProblems` checks the spec's §7 file (`benchmarks/pous/p2_v1/vectors.json`, schema `p2-test-vectors/v4`) against
 the SHA-512 §7 pins, each entry's own `sha512` (of its canonical JSON without it), and each vector's K, t, its rejection
@@ -44,9 +44,6 @@ def params (j : Json) : V P2.Params := do
 
 def blockList (j : Json) : V (Array ByteArray) := do (← Flock.J.arr j "blocks" "instance").mapM fun b => do
   Flock.unhex (← Flock.J.asStr b "block")
-
-/-- Python's answer keys that Lean does not compute yet: `vk`'s root, until `PousCheck.Merkle` supplies the tree. -/
-def ROOT_PENDING : List String := ["root"]
 
 /-- This package's answer to one instance, in the form of Python's line. -/
 def answer (i : Json) : V Json := do
@@ -84,8 +81,8 @@ def answer (i : Json) : V Json := do
   | "setup" =>
     let encoded ← (← Flock.J.arr i "encoded" "instance").mapM fun seg => do
       (← Flock.J.asArr seg "segment").mapM fun b => do Flock.unhex (← Flock.J.asStr b "block")
-    match Setup.checkEncoding (← params i) (← bytes i "commitment") (← bytes i "salt") encoded with
-    | .ok () => return Json.mkObj [("verdict", .str "ok")]
+    match Setup.verifierKeyFromEncoding (← params i) (← bytes i "commitment") (← bytes i "salt") encoded with
+    | .ok vk => return Json.mkObj [("verdict", .str "ok"), ("root", hex vk.root)]
     | .error r => return err r.kind
   | k => throw s!"unknown kind {k}"
 
@@ -97,7 +94,7 @@ def without (keys : List String) : Json → Json
 def differences (n : Nat) (inst py : String) : List String :=
   match (do
     let i ← Json.parse inst
-    let want ← Flock.canon (without ROOT_PENDING (← Json.parse py))
+    let want ← Flock.canon (← Json.parse py)
     let got ← Flock.canon (← answer i)
     pure (← str i "kind", got, want) : V (String × String × String)) with
   | .error e => [s!"instance {n}: {e}"]
