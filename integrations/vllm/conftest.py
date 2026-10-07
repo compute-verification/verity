@@ -15,12 +15,23 @@ import verity.ml.circuits.defs  # noqa: F401  (loaded before the first test, so 
 _MISSING = object()
 
 
+def _core(name: str) -> bool:
+    """`name` is core as it was before the move: under `verity`, except what the move put there from outside it (experimental,
+    the catalog, the kernels, C-Flock), with core's own protocols and claims, which moved under `verity.experimental`."""
+    def under(prefix: str) -> bool:
+        return name == prefix or name.startswith(prefix + ".")
+    moved_in = ("verity.experimental", "verity.ml.circuits.ops", "verity.ml.circuits.silicon", "verity.ml.circuits.targets",
+                "verity.ml.kernels", "verity.ml.flock")
+    return under("verity") and (not any(map(under, moved_in))
+                                or any(map(under, ("verity.experimental.protocols", "verity.experimental.claims"))))
+
+
 def _verity_modules() -> dict[str, tuple[object, object, object]]:
     """{name: (module, parent package, the parent's attribute of that name)} -- the attribute is snapshotted, not assumed to be the
     module: a package may re-export a function under its submodule's name (`verity.ml.circuits.query`)."""
     snap = {}
     for n, m in list(sys.modules.items()):
-        if m is None or not (n == "verity" or n.startswith("verity.")):
+        if m is None or not _core(n):
             continue
         parent, _, child = n.rpartition(".")
         pkg = sys.modules.get(parent) if parent else None
