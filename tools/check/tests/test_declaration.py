@@ -129,3 +129,47 @@ def test_a_step_declared_after_another_groups_step_starts_only_once_it_has_passe
 def test_a_step_declared_after_a_step_that_failed_is_stopped_without_starting(tmp_path, monkeypatch):
     started, by = _run_two_groups(tmp_path, monkeypatch, "failed")
     assert started == ["a"] and by["b"]["status"] == "stopped" and "not started: a failed" in by["b"]["detail"]
+
+
+def test_each_part_runs_its_jobs_and_what_they_need_and_the_parts_cover_every_job():
+    assert all(j.part in D.PARTS for j in D.load())
+    jobs = CHECK.JOBS
+    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build"}
+    assert D.select(jobs, ["circuits"]) == {"flock-circuit-build", "circuit-check", "flock-rust-tests"}
+    assert D.select(jobs, ["lean"]) == {"lean-build", "lean-unit-cut", "lean-agreement", "lean-audit", "lean-changed"}
+    assert D.select(jobs, list(D.PARTS)) == {j.name for j in jobs}
+
+
+def test_a_part_that_isnt_one_and_a_job_in_no_part_are_refused():
+    with pytest.raises(D.DeclarationError, match="part 'docs' isn't one of tests, circuits, lean"):
+        _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\npart = "docs"\n')
+    with pytest.raises(D.DeclarationError, match="no part docs"):
+        D.select(CHECK.JOBS, ["docs"])
+    with pytest.raises(D.DeclarationError, match="a declare no part"):
+        D.select([D.Job("a", "ci", 1), D.Job("b", "ci", 1, part="tests")], ["tests"])
+
+
+def _main_parts(monkeypatch, argv):
+    """check.main on ``argv`` with the run replaced: the parts it was given, or None when it never ran."""
+    got = []
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only: got.append(only) or (True, []))
+    rc = CHECK.main(argv)
+    return rc, got[0] if got else None
+
+
+def test_check_of_parts_runs_only_their_jobs_and_lean_audit_on_every_package(monkeypatch):
+    rc, only = _main_parts(monkeypatch, ["lean", "circuits", "--keep-going"])
+    assert rc == 0 and {p.partition(":")[0] for p in only} == D.select(CHECK.JOBS, ["lean", "circuits"])
+    assert [p for p in only if p.startswith("lean-audit:")] == [p for p in CHECK.shard_parts() if p.startswith("lean-audit:")]
+    assert _main_parts(monkeypatch, [])[1] is None, "no part: the whole check"
+
+
+def test_a_check_of_parts_is_refused_with_a_shard_or_inside_a_recorded_run(monkeypatch, capsys):
+    assert _main_parts(monkeypatch, ["tests", "--shard", "1/3"]) == (2, None)
+    monkeypatch.setattr(CHECK.os, "environ", {**CHECK.os.environ, "RESEARCH_RUN_ID": "r20261007-000000-abcd"})
+    monkeypatch.setattr(CHECK, "run", lambda *a: (_ for _ in ()).throw(AssertionError("ran")))
+    assert CHECK.main(["tests"]) == 2
+    assert "no gate takes part of a check" in capsys.readouterr().err
