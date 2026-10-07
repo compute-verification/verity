@@ -4,7 +4,8 @@ import Properties.Pouw.Commit
 # Proofs of PoUW's commitment properties (`Properties.Pouw.Commit`)
 
 The sizes and numbers by unfolding and evaluation in the kernel, the refusals and the accepted coins by unfolding the
-port's definitions case by case. `CoinBinding` and `FrameInjective` are open.
+port's definitions case by case, and the draws' shape from `Flock.Draw.uniform`'s range and the tickets' running sums.
+`CoinBinding` and `FrameInjective` are open.
 -/
 
 namespace Properties.Pouw.Commit
@@ -172,5 +173,188 @@ theorem coinRaises : CoinRaises := by
       all_goals (try simp_all)
       all_goals (repeat' split at *)
       all_goals simp_all
+
+/-! ## Salts, keys and draws -/
+
+open FlockSoundness.Randomness in
+theorem derive_size (source : ByteArray) (domain : String) (context : List (String × Part)) :
+    (derive source domain context).size = 32 := by
+  unfold derive
+  rw [ByteArray.size_extract, sha512_size]
+  rfl
+
+theorem keyRefusals : KeyRefusals := by
+  intro source domain context
+  unfold key?
+  by_cases h : source.size = 0
+  · rw [ite_eq_left_of_eq_true _ _ (eq_true h)]; simp only [h, ne_eq, not_true_eq_false, decide_false]; rfl
+  · rw [ite_eq_right_of_eq_false _ _ (eq_false h)]; simp only [h, ne_eq, not_false_eq_true, decide_true]; rfl
+
+theorem keySize : KeySize := by
+  intro source domain context k h
+  unfold key? at h
+  split at h
+  · cases h
+  · rw [← Except.ok.inj h]; exact derive_size ..
+
+open FlockSoundness.Randomness in
+theorem blocks_size (key : ByteArray) (index : List Part) (l : List Nat) (acc : ByteArray) :
+    (l.foldl (fun acc c => acc ++ block key index c) acc).size = acc.size + 64 * l.length := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons c l ih =>
+    rw [List.foldl_cons, ih, ByteArray.size_append, block, sha512_size]
+    simp only [List.length_cons]
+    omega
+
+open FlockSoundness.Randomness in
+/-- A read of `n` bytes of a stream gives `n` bytes. -/
+theorem stream_size (key : ByteArray) (index : List Part) (n : Nat) : (stream key index n).size = n := by
+  simp only [stream, ByteArray.size_extract, blocks_size, List.length_range, ByteArray.size_empty]
+  omega
+
+theorem saltSize : SaltSize := by
+  refine ⟨fun c coin wr s h => ?_, fun seed wr s h => ?_⟩
+  · unfold saltOf at h
+    simp only [bind, Except.bind, pure, Except.pure] at h
+    split at h
+    · cases h
+    · rw [← Except.ok.inj h]; exact stream_size ..
+  · unfold unverifiedSalt at h
+    simp only [bind, Except.bind, pure, Except.pure] at h
+    split at h
+    · cases h
+    · rw [← Except.ok.inj h]; exact stream_size ..
+
+theorem saltRefusals : SaltRefusals := by
+  refine ⟨fun c coin wr => ?_, fun seed wr => ?_⟩
+  · unfold saltOf key?
+    by_cases h : coin.size = 0
+    · rw [ite_eq_left_of_eq_true _ _ (eq_true h)]; simp only [h, ne_eq, not_true_eq_false, decide_false]; rfl
+    · rw [ite_eq_right_of_eq_false _ _ (eq_false h)]; simp only [h, ne_eq, not_false_eq_true, decide_true]; rfl
+  · unfold unverifiedSalt key?
+    by_cases h : seed.size = 0
+    · rw [ite_eq_left_of_eq_true _ _ (eq_true h)]; simp only [h, ne_eq, not_true_eq_false, decide_false]; rfl
+    · rw [ite_eq_right_of_eq_false _ _ (eq_false h)]; simp only [h, ne_eq, not_false_eq_true, decide_true]; rfl
+
+theorem epochSaltAccepts : EpochSaltAccepts := by
+  intro c o wr s
+  rw [← coinAccepts c o "salt" wr]
+  unfold epochSalt
+  cases h : coinReason c o "salt" wr with
+  | error e => simp [bind, Except.bind]
+  | ok r =>
+    cases r with
+    | some r => simp [bind, Except.bind, pure, Except.pure]
+    | none =>
+      cases hs : saltOf c o.coin wr <;> simp [bind, Except.bind, pure, Except.pure]
+
+theorem drawCoinAccepts : DrawCoinAccepts := by
+  refine ⟨fun c o after coin => ?_, fun o after coin => ?_⟩
+  · rw [← coinAccepts c o "draw" after]
+    unfold drawCoin
+    cases h : coinReason c o "draw" after with
+    | error e => simp [h, bind, Except.bind]
+    | ok r => cases r <;> simp [h, bind, Except.bind, pure, Except.pure, eq_comm]
+  · simp [drawCoin, pure, Except.pure]
+
+theorem mapM_shape {α β : Type} (f : α → Except String β) :
+    ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ys.length = l.length ∧ ∀ y ∈ ys, ∃ x ∈ l, f x = .ok y := by
+  intro l
+  induction l with
+  | nil => intro ys h; simp [pure, Except.pure] at h; subst h; simp
+  | cons a l ih =>
+    intro ys h
+    simp only [List.mapM_cons, bind, Except.bind] at h
+    cases ha : f a with
+    | error e => simp [ha] at h
+    | ok b =>
+      cases hl : l.mapM f with
+      | error e => simp [ha, hl] at h
+      | ok bs =>
+        simp [ha, hl, pure, Except.pure] at h
+        subst h
+        obtain ⟨hlen, hmem⟩ := ih bs hl
+        refine ⟨by simp [hlen], ?_⟩
+        intro y hy
+        simp at hy
+        rcases hy with rfl | hy
+        · exact ⟨a, by simp, ha⟩
+        · obtain ⟨x, hx, hfx⟩ := hmem y hy
+          exact ⟨x, by simp [hx], hfx⟩
+
+theorem draw_uniform_lt (n : Nat) (hn : 0 < n) (src : ByteArray) :
+    ∀ fuel pos r, Draw.uniform n src fuel pos = some r → r.1 < n := by
+  intro fuel
+  induction fuel with
+  | zero => intro pos r h; simp [Draw.uniform] at h
+  | succ fuel ih =>
+    intro pos r h
+    simp only [Draw.uniform] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h; exact Nat.mod_lt _ hn
+      · exact ih _ _ h
+
+theorem sums_shape (tickets : List Nat) (acc : Array Nat) (s : Nat) :
+    let r := tickets.foldl (fun (acc : Array Nat × Nat) w => (acc.1.push (acc.2 + w), acc.2 + w)) (acc, s)
+    r.1.size = acc.size + tickets.length ∧ (tickets ≠ [] → r.1.toList.getLast? = some r.2) := by
+  induction tickets generalizing acc s with
+  | nil => simp
+  | cons w ts ih =>
+    simp only [List.foldl_cons]
+    obtain ⟨h1, h2⟩ := ih (acc.push (s + w)) (s + w)
+    refine ⟨by simp [h1]; omega, fun _ => ?_⟩
+    by_cases hts : ts = []
+    · subst hts; simp
+    · exact h2 hts
+
+theorem takeWhile_length_lt (p : Nat → Bool) :
+    ∀ (l : List Nat) (x : Nat), x ∈ l → p x = false → (l.takeWhile p).length < l.length
+  | [], _, h, _ => by simp at h
+  | a :: l, x, hx, hp => by
+    cases ha : p a
+    · simp [ha]
+    · have hl : x ∈ l := by
+        rcases List.mem_cons.1 hx with rfl | h
+        · simp [ha] at hp
+        · exact h
+      have := takeWhile_length_lt p l x hl hp
+      simp [ha]
+      omega
+
+theorem bisectRight_lt (l : List Nat) (x : Nat) (last : Nat) (h : l.getLast? = some last) (hx : x < last) :
+    bisectRight l x < l.length :=
+  takeWhile_length_lt _ l last (List.mem_of_getLast? h) (by simp; omega)
+
+theorem drawShape : DrawShape := by
+  intro key tickets t ids h
+  unfold weightedDraw at h
+  by_cases ht : t = 0
+  · subst ht; simp [pure, Except.pure] at h; subst h; simp
+  simp only [ht, ite_false] at h
+  obtain ⟨hsize, hlast⟩ := sums_shape tickets #[] 0
+  generalize hr : tickets.foldl _ (#[], 0) = r at hsize hlast h
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  · rename_i total hne hl
+    simp only [bind, Except.bind, pure, Except.pure] at h
+    have hpos : 0 < total := Nat.pos_of_ne_zero hne
+    obtain ⟨hlen, hmem⟩ := mapM_shape _ _ _ h
+    refine ⟨by simpa using hlen, fun i hi => ?_⟩
+    obtain ⟨j, _, hj⟩ := hmem i hi
+    split at hj
+    · rename_i rr hu
+      cases hj
+      have hrr : rr < total := by
+        simp only [FlockSoundness.Randomness.uniform, FlockSoundness.Randomness.uniformOn, Option.map_eq_some_iff] at hu
+        obtain ⟨p, hp, rfl⟩ := hu
+        exact draw_uniform_lt total hpos _ _ _ _ hp
+      have := bisectRight_lt _ rr total hl hrr
+      simp at hsize
+      simpa [hsize] using this
+    · cases hj
 
 end Properties.Pouw.Commit

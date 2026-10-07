@@ -1,4 +1,5 @@
 import PouwCommit.Coins
+import PouwCommit.Draws
 import PouwCommit.Rows
 
 /-!
@@ -6,7 +7,7 @@ import PouwCommit.Rows
 
 What the executable Lean of PoUW's commitments does, stated against its own functions, for every input. The numbers are
 the protocol's: digests of 64 bytes (SHA-512) or 32 (SHA-256), hm96 salts of 192 bytes, coins of 32, two coins an epoch
-and so a one-sibling path. A collision of SHA-512 is written in where binding rests on it (`Sha512Collision`): the binding
+and so a one-sibling path, and derived keys and epoch salts of 32. A collision of SHA-512 is written in where binding rests on it (`Sha512Collision`): the binding
 statements say that two different openings accepted against one commitment give one, which is the assumption's content,
 taken as a disjunct rather than assumed away.
 -/
@@ -79,6 +80,45 @@ def CoinOpens (c : CoinCommitment) (o : CoinOpening) (label : String) (after : B
 
 /-- `coin_reason` accepts (gives no reason) exactly the openings `CoinOpens` describes. -/
 def CoinAccepts : Prop := ∀ c o label after, coinReason c o label after = .ok none ↔ CoinOpens c o label after
+
+/-! ## Salts and draw keys -/
+
+/-- A key PoUW derives (`derive` under its domains) is refused exactly when its source is empty. -/
+def KeyRefusals : Prop :=
+  ∀ source domain context, (key? source domain context).isOk = decide (source.size ≠ 0)
+
+/-- Every key PoUW derives is 32 bytes: the epoch's salt key, the audit key, and the Pearl-C draw and replay keys. -/
+def KeySize : Prop :=
+  ∀ source domain context k, key? source domain context = .ok k → k.size = 32
+
+/-- An epoch's salt, from its salt coin (`salt_of`) or from a bare seed (`Epoch.unverified`), is 32 bytes. -/
+def SaltSize : Prop :=
+  (∀ c coin weightsRoot s, saltOf c coin weightsRoot = .ok s → s.size = SALT_BYTES) ∧
+    ∀ seed weightsRoot s, unverifiedSalt seed weightsRoot = .ok s → s.size = SALT_BYTES
+
+/-- `salt_of` refuses exactly an empty coin, and `Epoch.unverified` exactly an empty seed, whatever the epoch, the coin
+commitment and the weights' root. -/
+def SaltRefusals : Prop :=
+  (∀ c coin weightsRoot, (saltOf c coin weightsRoot).isOk = decide (coin.size ≠ 0)) ∧
+    ∀ seed weightsRoot, (unverifiedSalt seed weightsRoot).isOk = decide (seed.size ≠ 0)
+
+/-- `Epoch.start` gives a salt exactly when the opening is the epoch's salt coin opened after the weights' root, and that
+salt is `salt_of` of the opened coin. -/
+def EpochSaltAccepts : Prop :=
+  ∀ c o weightsRoot s, epochSalt c o weightsRoot = .ok (.ok s) ↔
+    CoinOpens c o "salt" weightsRoot ∧ saltOf c o.coin weightsRoot = .ok s
+
+/-- `draw_coin` gives a coin exactly when the opening is the epoch's draw coin opened after what the verifier recorded,
+and the coin is the opened one; an epoch without a coin commitment gives none. -/
+def DrawCoinAccepts : Prop :=
+  (∀ c o after coin, drawCoin (some c) o after = .ok (.ok coin) ↔ CoinOpens c o "draw" after ∧ coin = o.coin) ∧
+    ∀ o after coin, drawCoin none o after ≠ .ok (.ok coin)
+
+/-! ## Draws -/
+
+/-- A work-weighted draw (`Sampled.select`) gives `t` tickets, each a position of the ticket list. -/
+def DrawShape : Prop :=
+  ∀ key tickets t ids, weightedDraw key tickets t = .ok ids → ids.length = t ∧ ∀ i ∈ ids, i < tickets.length
 
 /-! ## Binding -/
 

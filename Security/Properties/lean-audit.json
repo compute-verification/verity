@@ -6,7 +6,8 @@
   "PouwCommit.Frame",
   "PouwCommit.Rows",
   "PouwCommit.Py",
-  "PouwCommit.Coins"
+  "PouwCommit.Coins",
+  "PouwCommit.Draws"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -17,9 +18,11 @@
  },
  "reads_exempt": {
   "Flock.Bytes": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Flock.Draw": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Flock.Hash": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Flock.Hm96": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Flock.HmRow": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Flock.HmRow": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Randomness": "core's randomness (`core_randomness`), read through PouwCommit: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec"
  },
  "guarantees": {
   "Properties.Pouw.Commit.coinAccepts": {
@@ -52,17 +55,59 @@
    "assumptions": [],
    "type_hash": "3027f3c9a6bed6a9a79e76b844ba678bcb31f3a8001b6b67436a898a30e7583b"
   },
+  "Properties.Pouw.Commit.drawCoinAccepts": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.drawCoinAccepts : Properties.Pouw.Commit.DrawCoinAccepts"],
+   "assumptions": [],
+   "type_hash": "94d38a0225cde06f3731a9af9350f6b5d174a69e88a3bb9db608658d77be19a1"
+  },
+  "Properties.Pouw.Commit.drawShape": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.drawShape : Properties.Pouw.Commit.DrawShape"],
+   "assumptions": [],
+   "type_hash": "a9b27ef9d784124ffefdc3f62ee866098fa0560ff916a4dfa2c1b28e149e9239"
+  },
+  "Properties.Pouw.Commit.epochSaltAccepts": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.epochSaltAccepts : Properties.Pouw.Commit.EpochSaltAccepts"],
+   "assumptions": [],
+   "type_hash": "552e94e629015560964a7134592c5c3b699c681120641a55554dac260e91fe1c"
+  },
   "Properties.Pouw.Commit.frameSizes": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Commit.frameSizes : Properties.Pouw.Commit.FrameSizes"],
    "assumptions": [],
    "type_hash": "2fcbf326a4d9e4cbe51b6dd8ccd56bf540629951fe22d1650ead90a10658f4fd"
   },
+  "Properties.Pouw.Commit.keyRefusals": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.keyRefusals : Properties.Pouw.Commit.KeyRefusals"],
+   "assumptions": [],
+   "type_hash": "fb2ac3684a0c5eba4fe7b1320a4738377c2e55fb9081a2784423875b97cd074f"
+  },
+  "Properties.Pouw.Commit.keySize": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.keySize : Properties.Pouw.Commit.KeySize"],
+   "assumptions": [],
+   "type_hash": "8417ce6814230e1eabe8e5c5d56bce6165a4c858b09664e5f694138c601d9195"
+  },
   "Properties.Pouw.Commit.leafRefusals": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Commit.leafRefusals : Properties.Pouw.Commit.LeafRefusals"],
    "assumptions": [],
    "type_hash": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33"
+  },
+  "Properties.Pouw.Commit.saltRefusals": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.saltRefusals : Properties.Pouw.Commit.SaltRefusals"],
+   "assumptions": [],
+   "type_hash": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac"
+  },
+  "Properties.Pouw.Commit.saltSize": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.saltSize : Properties.Pouw.Commit.SaltSize"],
+   "assumptions": [],
+   "type_hash": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a"
   },
   "Properties.Pouw.Commit.taggedSize": {
    "owner": "@compute-accounting",
@@ -73,7 +118,7 @@
  },
  "reads": {
   "PouwCommit.Coins": {
-   "digest": "ace4da0a5d718e1bf453bbbbd2376f88683ded0d1fbf2546db9db641ee20adf5",
+   "digest": "9fb46f856e4675ec1e507fc22f635f4aa2bbcde4d85ab89be1a2d8c6cff2de3e",
    "definitions": {
     "PouwCommit.COIN_BYTES": "9170dc99954072437073819839553dbd79cc80dc5ef5caa2e823f7da4bf164ab",
     "PouwCommit.COIN_TAG": "494e3fdba2173b1fd9d292443e9c89a4dd1ff1c8065c83b754dd8fa5f13843fb",
@@ -89,28 +134,57 @@
     "PouwCommit.CoinOpening.salt": "0fabe1e7ba15a974c740cc788e044b676fa06f0bcdcc8c63023a6effa444393e",
     "PouwCommit.LABELS": "0e86f8db39f45f0b72288f1e0a3f64c06595175aa1b0411016ba3169778f2068",
     "PouwCommit.SCHEME": "a768d141c009d84cb876b8d54f97302102685b9a483e0d1601f55037a1947262",
-    "PouwCommit.coinDomain": "0ceadbac1ab7662d54dcefb0072d33d684b7378477b3a914c52ca91b194f326c",
+    "PouwCommit.coinDomain": "9a8060cd0883eda4fd688ece2a9a2800c6d1a869357e07ffed0874cdeaf94a93",
     "PouwCommit.coinReason": "6bbfa0756296cd79ed4f1e7cbac3589af982432e3350b2630bba8e2e85f66e4c",
     "PouwCommit.leafValue": "0a086cb3d0509926f891a48895a6f8ed78a66a4395d9c22c21c6f497b9d493f7"
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinNumbers",
-    "Properties.Pouw.Commit.coinRaises"
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.epochSaltAccepts",
+    "Properties.Pouw.Commit.saltRefusals",
+    "Properties.Pouw.Commit.saltSize"
+   ]
+  },
+  "PouwCommit.Draws": {
+   "digest": "e2df2d20e8965e65e13b9e1674c3e8a06f3ec4ad445e54a627a41c8df05da644",
+   "definitions": {
+    "PouwCommit.DRAW_WORDS": "3259ed121534b75ad3a72fe05c82b040467684fced892e1e9ccf9453a2669b45",
+    "PouwCommit.EPOCH_SALT_DOMAIN": "73c53f36ab53df91575a62cf390eeebf764f6218f33fb51ed86c241a67e938ad",
+    "PouwCommit.SALT_BYTES": "730b4e5788777c4fbf7442dc67a71ae44ca9965dce8a9eea7b952ed436f3e276",
+    "PouwCommit.SALT_DOMAIN": "d6d03d428808e9c9ab29bf1e7e2a09b185f79224aff6f2189e406a34dd1b78cf",
+    "PouwCommit.bisectRight": "fb183d371577b5e7b0ab896ba040913ff961656c4fb2a259ee18b40e71fc1750",
+    "PouwCommit.drawCoin": "4a12db96b226c146f08f851514bcef2efbe494ddb44fb47aed0f886a0c488a75",
+    "PouwCommit.epochSalt": "7b60f3257234c6ebf6179b7283ce8283123ad1c92a1d3541d0bd20cf1eadf736",
+    "PouwCommit.key?": "f5d20a12aada8b11add4a4a8c159fc384058bcc5b4371dbf0ecd8523976cdac6",
+    "PouwCommit.saltOf": "81221e88b0072b130a06ba57b91e01af051846b944df4d8e38f59fb127461717",
+    "PouwCommit.unverifiedSalt": "c78a8e047a68d0d4ed3e761dbd59a204bce6f57f644830535bebf47b810b0de5",
+    "PouwCommit.weightedDraw": "4f95fa60240c7e4d0827646bbf4c15fb2b6719310586659e1eaf2b20d171fdcd"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.drawShape",
+    "Properties.Pouw.Commit.epochSaltAccepts",
+    "Properties.Pouw.Commit.keyRefusals",
+    "Properties.Pouw.Commit.keySize",
+    "Properties.Pouw.Commit.saltRefusals",
+    "Properties.Pouw.Commit.saltSize"
    ]
   },
   "PouwCommit.Frame": {
-   "digest": "4b40e6aeabe65cc7666da3002869056926453b840d9d4d1fe97293e9026b7715",
+   "digest": "9f94efbaeb44b6288d01c5596358e0c761611782c7dd8cf4f48e1e0a796d3579",
    "definitions": {
     "PouwCommit.Domain": "9fec723b34bd2909ea66bff49fb2c521467390aa31017d446d8cae7c122addd4",
     "PouwCommit.Domain.count": "656f0d5f545492183076ea329ae409106bab714818d56a577df3b42a746b0394",
     "PouwCommit.Domain.empty": "3f671b685b1ab659b558a2deb0e355d3713a42526295f781a2d5cacc1c542637",
     "PouwCommit.Domain.hash": "3ddf4a7a4b90d495b37fe287111a8a318edb371c57aecb1e033ac654b575b50b",
     "PouwCommit.Domain.id": "54ada349d24dae444f091a13523a575bdf85ed1354533ce239986f7c772f9943",
-    "PouwCommit.Domain.leaf": "6b744e9638fca6bf9d7c96787fab20d6954fb5ce614d528fe451bdba2e45fafd",
-    "PouwCommit.Domain.mk?": "6e4492bda5d642b48c762eea0ab8476f7354fbe3e7f83917f7b0d9126fc09730",
-    "PouwCommit.Domain.node": "aa894427fc7bdf184914efed833b2df3e0da9ce176dbef3aa1dae04279b29dca",
-    "PouwCommit.Domain.pad": "0f3fab502e9a07f9d7978729d13d700a2ca1776e590a08a99ca2c1c6e1f4605d",
+    "PouwCommit.Domain.leaf": "aff5f4af1a0626b740fcb9447515685e1be5372c3fe593f09b6963a67b9db8e0",
+    "PouwCommit.Domain.mk?": "5bf5050cea024684971a1a9ed0d10ddfb38af641cf523eb95a9bc4407b5ba146",
+    "PouwCommit.Domain.node": "85667f95af152594497cb38278cee7597e9bed8075abce43d338b6cf4a38dda8",
+    "PouwCommit.Domain.pad": "58eef236d2ca89306831b1ea656c3a72d453e43b3b49d66b1bd099e84ec2ed51",
     "PouwCommit.Domain.verify": "3c5fc91042e929bcca8dce56169ec91c2376cbbb051066b4a9b377fc9a357a0e",
     "PouwCommit.FRAME": "57f7b9e4a4dba5d34e901ef8d86fff4f7f1048e98bbc3c9d8de929322821e65c",
     "PouwCommit.Hash": "c823720d287776d44473b9dcb771e4fbf0e85d65c6b16e503b1454615b5fcaf1",
@@ -118,10 +192,10 @@
     "PouwCommit.Hash.run": "7205ebbd439afb11cd6351c5944f1b009d2f1b523a0b52ad3ae40ea87016cc63",
     "PouwCommit.Hash.sha256": "b570aa8301307f10f2f0af68ce4dc75ef3b451955346ea451bf9e759db000aca",
     "PouwCommit.Hash.sha512": "2d744f94140667fc2266d18cc60d4bdf6d961c9b5f2a1c359cc5cb2fccd8eacb",
-    "PouwCommit.Hash.tagged": "21b9f74299ffaf90e249d26cfa34021837f4c09d275a46990d24989339dbe0ce",
+    "PouwCommit.Hash.tagged": "9e76b6800bb57da35f2a598f5391b44979ec2993b9b553b66fe24e1637a038ee",
     "PouwCommit.checkPath": "0588a9d5e634b7514c95675b40d8e1251a1cf22db15fdd8c32f77b7e3093a8b7",
     "PouwCommit.depth": "0136cc0777f5f29d54f92d6529872dbc95db24e16e35fe5f8135f58bc429c323",
-    "PouwCommit.frameHash": "9d1eb1d308375cd7239f798d59ef95698c19a1ff87b6ba12a21f941637c56b96",
+    "PouwCommit.frameHash": "9628343b068457866e56b179a21a72b21de94b5b4e113ed2fa71507c85d04954",
     "PouwCommit.instReprHash.repr": "c55ef4c414901fd69be2a4afde393212707f6bada33e3c4f15c9d43f680f8843",
     "PouwCommit.rangeIdentity": "78603c6c6af2df2ae1b5c19cbb561f6e9f2a3399071f4bc29dd3dc3b305bce5c"
    },
@@ -131,6 +205,8 @@
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.depthServed",
     "Properties.Pouw.Commit.domainRefusals",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals"
    ]
@@ -141,7 +217,12 @@
     "PouwCommit.pyRepr": "56b0dc4128f9707e95d63618145d9b417b09c0161b92fcc525e8c97ebf4efed3",
     "_private.PouwCommit.Py.0.PouwCommit.hexDigits": "08f5b6c49d0c3c680daef5f3bcffc195977a9d28f66c1469241dc99e1f8bbd83"
    },
-   "guarantees": ["Properties.Pouw.Commit.coinAccepts", "Properties.Pouw.Commit.coinRaises"]
+   "guarantees": [
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.epochSaltAccepts"
+   ]
   },
   "PouwCommit.Rows": {
    "digest": "788abadf385c76b2c21340372a49fee24f80a6ae80456096e90d85bee97a3463",
@@ -156,29 +237,21 @@
    "guarantees": ["Properties.Pouw.Commit.leafRefusals"]
   },
   "PouwCommit.Tagged": {
-   "digest": "b464f6cbdc1fc17fd4fc557edd5ea34f9c47065f04e534984c956f116d81d88f",
+   "digest": "0de31a2e6ad23594c5f56981488a727e94f3427c630c60311540f4a37c5f17a0",
    "definitions": {
-    "PouwCommit.Part": "aee42cda9131217517968052e4b7644623fd764e912aefbcb589ec0b5e4b30e4",
-    "PouwCommit.Part.bytes": "ffb517c36bf50224d2a884822f06671a9f593c0ab9002a5f5bf8dea53fa7605e",
-    "PouwCommit.Part.nat": "93624cad654e234fff3d30ea35c3fa6636e4fb9178e9a7ad515fd62d72e94c69",
-    "PouwCommit.Part.str": "4b4a2aa07fcfc6393d3b12556de04723b173102375d8012d65d81e7a7a43a130",
-    "PouwCommit.be8": "7f7c129c20e0f1473bb96831230422ccb9b587faf0172fed9733fe917abc4208",
-    "PouwCommit.frame": "a5b7bd971567d13eb2df89097905e578b3cab9fee845b709c3d3db579d0ae81e",
-    "PouwCommit.natBytes": "36bba4cbe596c64338ced255d7e42a32c3505739dffe83e812b3cfd597dcc44d",
-    "PouwCommit.tagged": "a2ac1ff4e1291811ae2edeb76f0ea2c80ff8748112bc63857340fad969fb3b44"
+    "PouwCommit.tagged": "bfc4d3a7476a4bdf25df2035c0e86db202140f555b17996579885a50067a2caa"
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinNumbers",
     "Properties.Pouw.Commit.coinRaises",
-    "Properties.Pouw.Commit.domainRefusals",
-    "Properties.Pouw.Commit.frameSizes",
-    "Properties.Pouw.Commit.leafRefusals",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.taggedSize"
    ]
   },
   "Properties.Pouw.Commit": {
-   "digest": "2b8f1801f49a3dd4ac7da4a538b18c67d2b9925b375fceb7d3ed7992df996965",
+   "digest": "3df4a2cf79100d055f514ef76dc3e7fb9960125dd03af3b032894dc57e53892c",
    "definitions": {
     "Properties.Pouw.Commit.CoinAccepts": "3063d83c396c424a1c015414ec09ba2c4c0498de4244eb40e637c17676139c3b",
     "Properties.Pouw.Commit.CoinNumbers": "ebf4b2d01ebc28e060bd4e40345dfad9deac9f93c91d22266f6a9d133851145d",
@@ -186,9 +259,16 @@
     "Properties.Pouw.Commit.CoinRaises": "e4586bf1bf49595161880e22676295d3d91a485062cd45cb3890fc7716ad89be",
     "Properties.Pouw.Commit.DepthServed": "2f873f3abe96acb266875ea11ad4da11c6f91c3be01cfc98b6ae6d27b010f7fe",
     "Properties.Pouw.Commit.DomainRefusals": "a431d267bca6f9c6878d7778a59a6fb8c8fd3bf9c69a389392e8a22f56156183",
+    "Properties.Pouw.Commit.DrawCoinAccepts": "3f4097c5ac40dbee539905f341878ed2e288ce66536ac9d81644cc1b8434c9ec",
+    "Properties.Pouw.Commit.DrawShape": "8bf11cfb0a3649c87b1f88959aed2ce2eef174a9aa35ce7109faef723425af1e",
+    "Properties.Pouw.Commit.EpochSaltAccepts": "472b6b7c334e773136e9694d8879e8beca17be9b7b798497389ceee7831e4635",
     "Properties.Pouw.Commit.FrameSizes": "86c21e59981d31bc2bd8857a5399e8f24ddb38cbf23b36658eb8ab95cf6e7b82",
+    "Properties.Pouw.Commit.KeyRefusals": "e67b12707e09df9902d8310ce49a74ce51d09687dd10e91091ecd6427a77d606",
+    "Properties.Pouw.Commit.KeySize": "e7e452f85d5d233a4bde2dce33a01471fbcd6e3ab8ba1667d4adbefc18862fb8",
     "Properties.Pouw.Commit.LeafRefusals": "1b6691449d0660b89a5fc0a0ea60b673300b5aa46caf37a60d0c4856571c6e4c",
-    "Properties.Pouw.Commit.TaggedSize": "adaac743223042de8f99af62a06e9dcb0fff89e1db0bf6b3df1a5ac3134fbaf4",
+    "Properties.Pouw.Commit.SaltRefusals": "281b99307e1143566f840e27602e578669455f89c6ee02078b26eb922880ceb9",
+    "Properties.Pouw.Commit.SaltSize": "fb8d2f825788ea26c7d957cf3a58692eb85b2e3c91cd40fec2582fc55acc9fd8",
+    "Properties.Pouw.Commit.TaggedSize": "ed2d4ae90b13ab43f0d939fe7c5cb57d97c057368bea84183366cb4324e252c6",
     "Properties.Pouw.Commit.coinRoot": "a434574eaf71a6b85e392f525784e4b09491dda6080cecd0d6d924a25faa6de7"
    },
    "guarantees": [
@@ -197,8 +277,15 @@
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.depthServed",
     "Properties.Pouw.Commit.domainRefusals",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.drawShape",
+    "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.frameSizes",
+    "Properties.Pouw.Commit.keyRefusals",
+    "Properties.Pouw.Commit.keySize",
     "Properties.Pouw.Commit.leafRefusals",
+    "Properties.Pouw.Commit.saltRefusals",
+    "Properties.Pouw.Commit.saltSize",
     "Properties.Pouw.Commit.taggedSize"
    ]
   }
