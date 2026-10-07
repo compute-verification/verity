@@ -4,13 +4,15 @@ on drawn programs, laws, records, draws and verdicts, valid ones and one or two 
 
 The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`) behind the protocol's decoders, which this file writes as the Lean reads them (`OneStage.paramsOfJson`,
-`commitmentOf`, `evidenceOf`). The verifier's program is looked up among this file's programs by its descriptor. Inputs
+`commitmentOf`, `evidenceOf`), and for the `draw` piece `two_stage.draw_first` on `OwnRandomness` over the given bytes.
+The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, ASCII digits
 in a probability, and integer populations in a draw.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -25,6 +27,7 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.experimental.protocols.profile import Stratified, Stratum
 from verity.experimental.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registration as R
+from verity.experimental.protocols.sampled_proofs.two_stage import OwnRandomness, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value
@@ -297,6 +300,28 @@ def check_proved(j):
             and ints(j.get("proved_units")) and _int(j.get("instances"))):
         raise D.Reject("not a draw of integer units, proved units and an instance count")
     return {"codes": list(DR.check_proved(d, j["proved_units"], j["instances"]).codes)}
+
+
+def draw(j):
+    """`draw_first` on the source's bytes, read in order; it raises `ValueError` (and `TypeError` on an unhashable law
+    name) where Lean refuses."""
+    j = _json(j)
+    if not isinstance(j, dict) or not isinstance(j.get("law"), dict):
+        raise D.Reject("law is not an object")
+    if not _nat(j.get("population")):
+        raise D.Reject("population is not a natural number")
+    if not isinstance(j.get("source"), str):
+        raise D.Reject("source is not hex")
+    src, at = PR.unhex(j["source"]), 0
+
+    def source(n: int) -> bytes:
+        nonlocal at
+        at += n
+        return src[at - n:at]
+    try:
+        return draw_first(OwnRandomness(source), j["law"], j["population"])
+    except (ValueError, TypeError) as e:
+        raise D.Reject(str(e)) from None
 
 
 def bound(j):
@@ -667,6 +692,48 @@ CHECK_PROVED = D.Port(PIECES, "check_proved", check_proved, st.one_of(
                                                        lambda u: [*u, 99], lambda u: "u"]),
               st.sampled_from([0, 0, 1, -1])),
     st.builds(lambda d, p, i: {"draw": d, "instances": i, "proved_units": p}, JSON, JSON, JSON)), package=PACKAGE)
+def _sources(least: int, most: int):
+    """Sources of the verifier's own randomness, `least` to `most` bytes after some `ff` bytes or none: a word of them is
+    rejected under any `n` but a power of two, so a stream runs out early and is extended and rerun."""
+    random = st.builds(lambda seed, n: hashlib.shake_256(seed).hexdigest(n), st.binary(max_size=4), st.integers(least, most))
+    return random | st.builds(lambda r, s: "ff" * r + s, st.integers(1, 400), random)
+
+
+SOURCE = _sources(1200, 2400)
+SHORT_SOURCE = _sources(0, 200)
+SIMPLE_LAWS = st.builds(lambda k: {"k": k, "law": "subset"}, st.integers(0, 40)) | st.builds(
+    lambda num, den: {"law": "bernoulli", "p": f"{num}/{den}"}, st.integers(0, 12), st.integers(1, 12))
+LAW_CHANGES = [
+    lambda law, x: law,
+    lambda law, x: {**law, "k": law["k"] + x % 3 - 1} if "k" in law else {**law, "p": ["0/1", "1/1", "2/4", "3/2", "1/0", "1"][x % 6]},
+    lambda law, x: {**law, "strata": law["strata"][:-1]},
+    lambda law, x: {**law, "strata": [{**s, "k": s["k"] + 1} if i == x % len(law["strata"]) else s
+                                      for i, s in enumerate(law["strata"])]},
+    lambda law, x: {**law, "extra": 1},
+    lambda law, x: {k: v for k, v in law.items() if k != "law"},
+    lambda law, x: {**law, "law": ["subset", "bernoulli", "stratified", "work", [1]][x % 5]},
+]
+
+
+def _changed_law(law: dict, change, x: int) -> dict:
+    try:
+        return change(law, x)
+    except (KeyError, ZeroDivisionError):
+        return law
+
+
+DRAW = D.Port(PIECES, "draw", draw, st.one_of(
+    st.builds(lambda a, src: {"law": a["record"]["law"], "population": a["record"]["population"], "source": src},
+              changed_audits(most=0), SOURCE),
+    st.builds(lambda a, f, x, dn, src: {"law": _changed_law(a["record"]["law"], f, x),
+                                        "population": a["record"]["population"] + dn, "source": src},
+              changed_audits(most=0), st.sampled_from(LAW_CHANGES), st.integers(0, 63), st.sampled_from([0, 0, 0, 1, -1]),
+              SOURCE),
+    st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, SIMPLE_LAWS, st.integers(0, 40), SOURCE),
+    st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, SIMPLE_LAWS | laws(6),
+              st.integers(0, 40), SHORT_SOURCE),
+    st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
+              SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -694,8 +761,8 @@ VERDICT = D.Port(PIECES, "verdict", verdict, st.one_of(
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 500), (CHECK_DRAW, 500), (CHECK_PROVED, 300), (BOUND, 500),
-              (VERDICT, 300)]
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 500), (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300),
+              (BOUND, 500), (VERDICT, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])

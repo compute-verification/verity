@@ -68,21 +68,13 @@ private def nats (j : Json) (what : String) : V (Array Nat) := do
     | some n => pure n
     | none => throw s!"{what} is not a list of natural numbers"
 
-private def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
-
-/-- `NUM/DEN` in ASCII digits with `0 < DEN` and `NUM ≤ DEN`. -/
-def probability? (p : String) : Option (Nat × Nat) :=
-  match p.splitOn "/" with
-  | [a, b] => if digits a && digits b && 0 < b.toNat! && a.toNat! ≤ b.toNat! then some (a.toNat!, b.toNat!) else none
-  | _ => none
-
 /-- The agreed law, a rule `Draw.derive` expands. -/
 def rule (law : Json) : V Json := do
   match getD law "law" with
   | .str "bernoulli" =>
     exactly law #["law", "p"] "the law"
     let .str p := getD law "p" | throw "the law's p is not NUM/DEN"
-    if (probability? p).isNone then throw "the law's p is not NUM/DEN, 0 <= NUM <= DEN, 0 < DEN"
+    if (Draw.probability? p).isNone then throw "the law's p is not NUM/DEN, 0 <= NUM <= DEN, 0 < DEN"
   | .str "subset" | .str "stratified" | .str "work" =>
     exactly law #["k", "law"] "the law"
     if (nat? (getD law "k")).isNone then throw "the law's k is not a natural number"
@@ -178,7 +170,7 @@ def profileDraw (law : Json) : Option Core.Draw :=
   | .str "subset" => (nat? (getD law "k")).map .subset
   | .str "bernoulli" => do
     let .str p := getD law "p" | none
-    let (a, b) ← probability? p
+    let (a, b) ← Draw.probability? p
     return .bernoulli (← Core.Ratio.mk' a b)
   | .str "stratified" | .str "work" => do
     let .arr ss := getD law "strata" | none

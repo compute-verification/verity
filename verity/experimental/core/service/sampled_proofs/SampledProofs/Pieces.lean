@@ -6,6 +6,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
 * `registration`: R1–R6's failure codes for a record against the parameters;
 * `check_draw`, `check_proved`: the draw's checks;
+* `draw`: the verifier's draw from given bytes of its own randomness;
 * `bound`: the exact bounds on wrong units at δ;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold.
 -/
@@ -61,6 +62,13 @@ def checkDraw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   return codes (Draw.checkDraw (getD j "draw") (getD j "population") (getD j "law"))
 
+/-- `{"law", "population", "source"}`, the law an object, the population a natural number and the source hex, to the draw
+`two_stage.draw_first` samples from the source's bytes; refused where it raises. -/
+def draw (j : Json) : V Json := do
+  if !(getD j "law" matches .obj _) then throw "law is not an object"
+  let some n := nat? (getD j "population") | throw "population is not a natural number"
+  Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
+
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
   let draw := getD j "draw"
@@ -102,6 +110,6 @@ def verdict (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("check_draw", checkDraw),
-   ("check_proved", checkProved), ("bound", bound), ("verdict", verdict)]
+   ("draw", draw), ("check_proved", checkProved), ("bound", bound), ("verdict", verdict)]
 
 end SampledProofs.Pieces

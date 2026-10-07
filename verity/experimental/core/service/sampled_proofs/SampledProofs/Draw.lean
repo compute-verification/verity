@@ -1,8 +1,8 @@
 /-
-The draw's checks (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a draw held
-to the registration and to that law (`checkDraw`), and the proved statement's units held to the draw (`checkProved`). The
-strata, their rules and the law object are C-Flock's (`Flock.Draw`). Nothing here samples: the draw comes from the verifier's
-own randomness, outside the check.
+The draw (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a draw held to the
+registration and to that law (`checkDraw`), and the proved statement's units held to the draw (`checkProved`). The strata,
+their rules, the law object and the samplers are C-Flock's (`Flock.Draw`). The check samples nothing: the draw comes from
+the verifier's own randomness, raw bytes with no derivation, which `drawFirst` reads as `two_stage.draw_first` does.
 -/
 import Flock.Draw
 import SampledProofs.Partition
@@ -90,6 +90,12 @@ private def ascending (xs : Array Int) : Bool := (List.range (xs.size - 1)).all 
 
 private def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
 
+/-- `NUM/DEN` in ASCII digits with `0 < DEN` and `NUM ≤ DEN`. -/
+def probability? (p : String) : Option (Nat × Nat) :=
+  match p.splitOn "/" with
+  | [a, b] => if digits a && digits b && 0 < b.toNat! && a.toNat! ≤ b.toNat! then some (a.toNat!, b.toNat!) else none
+  | _ => none
+
 /-- `draw.check_draw`'s failure codes: the draw is well formed, over the registered population, under the verifier's law
 (for `stratified` and `work`, the expanded law of `derive`). -/
 def checkDraw (draw population law : Json) : Array String := Id.run do
@@ -113,10 +119,7 @@ def checkDraw (draw population law : Json) : Array String := Id.run do
   if kind == "subset" && int? (getD draw "k") != some (units.size : Int) then c := addCode c "units-count"
   if kind == "bernoulli" then
     let ok := match getD draw "p" with
-      | .str p =>
-        let num := (p.splitOn "/").headD ""
-        let den := (p.drop (num.length + 1)).toString
-        p.contains '/' && digits num && digits den && 0 < den.toNat! && num.toNat! ≤ den.toNat!
+      | .str p => (probability? p).isSome
       | _ => false
     if !ok then c := addCode c "p"
   if kind == "stratified" || kind == "work" then
@@ -159,5 +162,43 @@ def checkProved (draw : Json) (provedUnits : Array Json) (instances : Json) : Ar
   if int? instances != some (want.size : Int) then c := addCode c "instances"
   if provedUnits.map int? != want.map some then c := addCode c "units"
   return c
+
+/-- `src`'s bytes handed out in order, `need` at a time (`OwnRandomness.read`); an error when fewer are left. -/
+private def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray := do
+  let at_ ← get
+  if src.size < at_ + need then throw "the randomness source ran out"
+  set (at_ + need)
+  return src.extract at_ (at_ + need)
+
+/-- `two_stage.draw_first` without a closure map: the one-stage draw object of the verifier's law over `[0, population)`
+(the law as `derive` expands it, with `population` and the drawn `units`), sampled as `Flock.Draw.drawWith` samples it
+from `src` read in order: `subset` and `bernoulli` (at its `NUM/DEN` as written) on one stream, `stratified` and `work` one
+stream per stratum, each extended and rerun when it runs out. An error when the law is not exactly a one-stage law's keys
+(`two_stage._law_problem`), a subset exceeds the population, a stratified or work law isn't well formed over it
+(`strataProblem`), or `src` runs out. -/
+def drawFirst (law : Json) (population : Nat) (src : ByteArray) : Except String Json := do
+  let kind := match getD law "law" with | .str s => s | _ => ""
+  let flock ← match kind with
+    | "subset" =>
+      if keys? law != some (sortStrings #["law", "k"]) then throw "a subset law is exactly {law, k}"
+      let some k := nat? (getD law "k") | throw "a subset law's k is a natural number"
+      if population < k then throw s!"a subset draw of {k} exceeds the population of {population}"
+      pure (Flock.Draw.Law.subset k)
+    | "bernoulli" =>
+      if keys? law != some (sortStrings #["law", "p"]) then throw "a bernoulli law is exactly {law, p}"
+      let .str p := getD law "p" | throw "a bernoulli law's p is NUM/DEN"
+      let some (a, b) := probability? p | throw "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
+      pure (.bernoulli a b)
+    | "stratified" | "work" =>
+      if keys? law != some (sortStrings #["law", "k", "strata"]) then throw s!"a {kind} law is exactly \{law, k, strata}"
+      let (some k, .arr ss) := (nat? (getD law "k"), getD law "strata")
+        | throw s!"a {kind} law's k is a natural number and its strata a list"
+      if strataProblem law population then throw s!"the {kind} law's strata are not well formed over {population} units"
+      let some strata := ss.mapM (stratum? (kind == "work")) | throw s!"the {kind} law's strata"
+      pure (if kind == "work" then .work k strata else .stratified k (strata.map (·.toStratum)))
+    | _ => throw "a one-stage law is subset, bernoulli, stratified or work"
+  let (some d, _) ← (Flock.Draw.drawWith (fun _ need => take src need) flock population).run 0
+    | throw "the draw did not end"
+  return Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson d.units)])
 
 end SampledProofs.Draw
