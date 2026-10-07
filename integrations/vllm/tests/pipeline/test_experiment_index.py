@@ -48,9 +48,9 @@ def test_spec_dtype_is_the_served_dtype():
 
 
 def test_code_version_is_dirty_for_an_edit_in_every_directory_of_core(tmp_path: Path):
-    """The dirty check covers each directory that ships core (`research_tools.CORE_DIRS`), not one hand-written path, and the
-    catalog's, the kernels' and experimental's beside it (`research_tools.CODE_DIRS`)."""
-    assert set(research_tools.CORE_DIRS) < set(research_tools.CODE_DIRS)
+    """The dirty check covers each directory that ships core (`research_tools.CORE_DIRS`), not one hand-written path, and
+    every other directory the integration imports (`research_tools.CODE_DIRS`)."""
+    assert set(research_tools.CORE_DIRS) <= set(research_tools.CODE_DIRS)
     files = [Path("integrations/vllm/verity_vllm/x.py"), *(Path(d) / "x.py" for d in research_tools.CODE_DIRS)]
     for f in files:
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
