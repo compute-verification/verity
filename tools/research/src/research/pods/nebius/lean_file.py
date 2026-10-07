@@ -5,7 +5,8 @@ dependencies and build, in a tree of its own inside `vy-lean-sandbox`; what an a
     sudo -n vy-lean-file SHA FILE [--patch P] --out DIR [--slot-wait S] [--max-sec N]
 
 1. `vy-lean-sandbox checkout SHA --tree JOBS/<tag>`: a fresh tree of this job's own, never the publisher's /build/verity nor one
-   another job writes. SHA must be on node 1's main; P (`git diff` against SHA, `research lean-file` sends the working tree's)
+   another job writes, on DEPS's filesystem (step 2 links into it) and bound in the sandbox at MOUNTS/<tag>, since the sandbox
+   hides /workspace. SHA must be on node 1's main; P (`git diff` against SHA, `research lean-file` sends the working tree's)
    is applied to it with `git apply` as root.
 2. FILE's package is the innermost directory above it with a lakefile. Its fetched dependencies are the daily publisher's
    copy for its `lake-manifest.json` and `lean-toolchain` (`run_daily.deps_key`, under DEPS), as the package's `.lake/packages`:
@@ -28,6 +29,7 @@ Stdlib only: it runs as root from /usr/local/bin, beside vy-lean-sandbox, and it
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -62,7 +64,8 @@ def log(msg: str) -> None:
 @dataclass
 class Node:
     """Where everything is on node 1; the tests point it at a temporary directory."""
-    jobs: Path = Path("/build/lean-file")
+    jobs: Path = Path("/workspace/lean-build/file-jobs")
+    mounts: Path = Path("/build/lean-file")
     deps: Path = Path("/workspace/lean-build/deps")
     publisher: Path = Path("/build/verity")
     publisher_unit: str = "vy-lean-cache-daily.service"
@@ -179,16 +182,16 @@ def _active(unit: str) -> bool:
     return r.returncode != 0 or r.stdout.strip() not in ("inactive", "failed")
 
 
-def warm(n: Node, tree: Path, pkgs: list[str], active=_active) -> tuple[list[list[str]], str]:
-    """[[the publisher's `.lake/build`, this tree's]] for each of ``pkgs`` it has with the same manifest and toolchain, and why
-    not the rest."""
+def warm(n: Node, tree: Path, tree_in: Path, pkgs: list[str], active=_active) -> tuple[list[list[str]], str]:
+    """[[the publisher's `.lake/build`, this tree's in the sandbox (``tree_in``)]] for each of ``pkgs`` it has with the same
+    manifest and toolchain, and why not the rest."""
     if active(n.publisher_unit):
         return [], f"{n.publisher_unit} is building {n.publisher} (or its state is unknown): every package builds cold"
     got, cold = [], []
     for p in pkgs:
         src = n.publisher / p / ".lake" / "build"
         if src.is_dir() and not src.is_symlink() and deps_key(n.publisher / p) == deps_key(tree / p):
-            got.append([str(src), str(tree / p / ".lake" / "build")])
+            got.append([str(src), str(tree_in / p / ".lake" / "build")])
         else:
             cold.append(p)
     return got, f"cold: {', '.join(cold)} (no build in {n.publisher} with the same manifest and toolchain)" if cold else ""
@@ -240,9 +243,12 @@ def check(n: Node, sha: str, file: str, patch: Path | None, out: Path, slot_wait
     os.chown(lp, *owner)
     t0 = time.monotonic()
     n.jobs.mkdir(mode=0o755, parents=True, exist_ok=True)
-    tree = n.jobs / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{os.getpid()}-{os.urandom(3).hex()}"
-    summary: dict = {"schema": "lean-file/v1", "sha": sha, "file": file, "tree": str(tree)}
+    tag = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{os.getpid()}-{os.urandom(3).hex()}"
+    tree, tree_in = n.jobs / tag, n.mounts / tag
+    summary: dict = {"schema": "lean-file/v1", "sha": sha, "file": file, "tree": str(tree), "tree_in": str(tree_in)}
     try:
+        n.mounts.mkdir(mode=0o755, parents=True, exist_ok=True)
+        tree_in.mkdir(mode=0o755)
         rc, _ = run_sandbox([*n.sandbox, "checkout", sha, "--tree", str(tree)], lp)
         if rc != 0:
             raise Refused(f"vy-lean-sandbox checkout exited {rc} (its reason is in {lp})")
@@ -266,13 +272,13 @@ def check(n: Node, sha: str, file: str, patch: Path | None, out: Path, slot_wait
             pw = getpwnam(n.builder)
             links = link_tree(deps, tree / pkg / ".lake" / "packages", pw.pw_uid, pw.pw_gid)
             summary["deps_links"] = {"links": links, "seconds": round(time.monotonic() - t1, 2)}
-        copies, why = warm(n, tree, requires(tree, pkg), active)
+        copies, why = warm(n, tree, tree_in, requires(tree, pkg), active)
         summary.update(package=pkg, deps=str(deps) if linked else None, warm=[c[0] for c in copies])
         if why:
             log(why)
             summary["cold"] = why
-        spec = {"package": str(tree / pkg), "file": os.path.relpath(file, pkg), "warm": copies}
-        rc, text = run_sandbox([*n.sandbox, "run", "--tree", str(tree), "-E", "LAKE_ARTIFACT_CACHE=false",
+        spec = {"package": str(tree_in / pkg), "file": os.path.relpath(file, pkg), "warm": copies}
+        rc, text = run_sandbox([*n.sandbox, "run", "--tree", f"{tree}:{tree_in}", "-E", "LAKE_ARTIFACT_CACHE=false",
                                 "--max-sec", str(max_sec), *(["--slot-wait", str(slot_wait)] if slot_wait is not None else []),
                                 "--by", "lean-file", "--", n.python, "-I", "-c", Path(__file__).read_text(), "_inside",
                                 json.dumps(spec)], lp)
@@ -292,6 +298,8 @@ def check(n: Node, sha: str, file: str, patch: Path | None, out: Path, slot_wait
         raise
     finally:
         shutil.rmtree(tree, ignore_errors=True)
+        with contextlib.suppress(OSError):
+            tree_in.rmdir()
         summary["wall_seconds"] = round(time.monotonic() - t0, 2)
         _write(out, "lean-file.json", json.dumps(summary, indent=1) + "\n", owner)
 

@@ -76,9 +76,9 @@ def test_the_publishers_build_is_copied_only_for_the_same_manifest_and_toolchain
     (pub / "b/.lake/build").mkdir(parents=True)
     (pub / "b/lean-toolchain").write_text("leanprover/lean4:v4.33.0\n")
     n = F.Node(publisher=pub)
-    got, why = F.warm(n, tree, ["a", "b"], active=lambda unit: False)
-    assert got == [[str(pub / "a/.lake/build"), str(tree / "a/.lake/build")]] and why.startswith("cold: b")
-    assert F.warm(n, tree, ["a"], active=lambda unit: unit == n.publisher_unit)[0] == []
+    got, why = F.warm(n, tree, Path("/in"), ["a", "b"], active=lambda unit: False)
+    assert got == [[str(pub / "a/.lake/build"), "/in/a/.lake/build"]] and why.startswith("cold: b")
+    assert F.warm(n, tree, Path("/in"), ["a"], active=lambda unit: unit == n.publisher_unit)[0] == []
 
 
 FAKE_SANDBOX = r'''
@@ -94,7 +94,15 @@ if args[0] == "checkout":
         os.mkdir(os.path.join(tree, os.path.dirname(lf), ".lake"))
     sys.exit(0)
 cmd = args[args.index("--") + 1:]
-sys.exit(subprocess.run(cmd, env={**os.environ, "PATH": os.environ["FAKE_BIN"] + ":" + os.environ["PATH"]}).returncode)
+src, _, dst = args[args.index("--tree") + 1].partition(":")
+os.rmdir(dst)
+os.symlink(src, dst)                                          # the bind
+try:
+    rc = subprocess.run(cmd, env={**os.environ, "PATH": os.environ["FAKE_BIN"] + ":" + os.environ["PATH"]}).returncode
+finally:
+    os.unlink(dst)
+    os.mkdir(dst)
+sys.exit(rc)
 '''
 
 FAKE_LAKE = r'''#!/bin/sh
@@ -127,7 +135,7 @@ def node(tmp_path, monkeypatch):
     (tmp_path / "sandbox.py").write_text(FAKE_SANDBOX)
     for k, v in {"FAKE_LOG": tmp_path / "sandbox.log", "FAKE_REPO": repo, "FAKE_BIN": tmp_path / "bin"}.items():
         monkeypatch.setenv(k, str(v))
-    n = F.Node(jobs=tmp_path / "jobs", deps=deps, publisher=pub, sandbox=[sys.executable, str(tmp_path / "sandbox.py")],
+    n = F.Node(jobs=tmp_path / "jobs", mounts=tmp_path / "mounts", deps=deps, publisher=pub, sandbox=[sys.executable, str(tmp_path / "sandbox.py")],
                python=sys.executable, builder=pwd.getpwuid(os.getuid()).pw_name)
     return n, sha, repo, tmp_path
 
@@ -159,10 +167,11 @@ def test_a_check_elaborates_the_file_in_a_tree_of_its_own_with_the_warm_deps_lin
     tree = checkout[checkout.index("--tree") + 1]
     assert checkout[:2] == ["checkout", sha] and Path(tree).parent == n.jobs and not Path(tree).exists()
     assert "--ro" not in run and "--deps" not in run
-    assert run[run.index("--tree") + 1] == tree and "LAKE_ARTIFACT_CACHE=false" in run and run[run.index("--by") + 1] == "lean-file"
+    tree_in = n.mounts / Path(tree).name
+    assert run[run.index("--tree") + 1] == f"{tree}:{tree_in}" and not tree_in.exists() and "LAKE_ARTIFACT_CACHE=false" in run and run[run.index("--by") + 1] == "lean-file"
     spec = json.loads(run[-1])
-    assert spec["warm"] == [[str(n.publisher / "verity/Security/.lake/build"), f"{tree}/verity/Security/.lake/build"]]
-    assert spec["file"] == "Definitions/A.lean" and spec["package"] == f"{tree}/verity/Security"
+    assert spec["warm"] == [[str(n.publisher / "verity/Security/.lake/build"), f"{tree_in}/verity/Security/.lake/build"]]
+    assert spec["file"] == "Definitions/A.lean" and spec["package"] == f"{tree_in}/verity/Security"
     assert (out / "elaboration.txt").read_text() == "elaborated Definitions/A.lean\n"
     summary = json.loads((out / "lean-file.json").read_text())
     assert [s["step"] for s in summary["steps"]] == [f"warm {n.publisher}/verity/Security/.lake/build", "imports", "elaborate"]
@@ -192,7 +201,7 @@ def test_without_warm_deps_for_its_manifest_nothing_runs_and_the_tree_is_removed
     out = tmp / "out"
     with pytest.raises(F.Refused, match="no fetched dependencies"):
         F.check(n, sha, "verity/Security/Definitions/A.lean", None, out, geteuid=lambda: 0, active=lambda u: False)
-    assert [c[0] for c in _calls(tmp)] == ["checkout"] and list(n.jobs.iterdir()) == []
+    assert [c[0] for c in _calls(tmp)] == ["checkout"] and list(n.jobs.iterdir()) == list(n.mounts.iterdir()) == []
     assert "no fetched dependencies" in json.loads((out / "lean-file.json").read_text())["refused"]
 
 
