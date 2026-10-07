@@ -23,7 +23,7 @@ from verity_vllm.check.replay import vu_query as vq
 from verity_vllm.observe.fold.fold import fold
 from tests.observe import test_fold_synthetic as tfs
 from tests.check.test_compare_synthetic import ToyWeights, _evaluate_program, _write_snapshots
-from verity.primitives.circuits.layout import FunctionCall
+from verity.ml.circuits.layout import FunctionCall
 
 REQ = tfs.REQ
 C = tfs.C
