@@ -157,8 +157,11 @@ Landing (Daniel, 7 Oct: skip the full `check` where it's reasonable, and revert 
 
 - A change lands on a targeted check: the parts its diff touches, run in parallel on the CPU machines (vy-nebius-cpu-1,
   vy-cpu-1, vy-cpu-2). That's its changed test suites (`tools/verity/check/suites.py`), circuit-check on the circuits it
-  changes, the Lean check of the Lake packages it changes, and `lean-agreement` when it touches C-Flock or its Lean
-  verifier. A change that only edits docs or deletes tests needs none.
+  changes, the Lean check of every Lake package whose pass misses (`tools/verity/lean/lean_audit.py --out DIR`, which
+  includes each package requiring a changed one by path; `--explain PKG` says why one misses), and `lean-agreement` when it
+  touches C-Flock or its Lean verifier (on its own: `lake build` in `verity/core/service/flock`, then
+  `verity/ml/flock/verifier/ci.py` against the upstream build `upstream.json` pins, under `research run`). A change that
+  only edits docs or deletes tests needs none.
 - A full `check` runs before landing only for a layout move and for the gate's own code (`tools/verity/check/`,
   `research merge` and its queue, the Lean audit), where a broken check would hide every later failure.
 - After a landing, one full `check` of `main`'s newest tip runs on vy-nebius-1. When it fails, the lander reverts the
