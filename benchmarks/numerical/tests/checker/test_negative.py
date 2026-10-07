@@ -9,7 +9,7 @@ from collections.abc import Callable
 import pytest
 from conftest import bf16, f32
 
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
 from verity_numerical.checker import REAL, Reject, check_step, check_vu, gen_step, gen_vu
 from verity_numerical.checker.gadgets import Epilogue
 from verity_numerical.checker.tables import align_table, norm_table, pow_table
@@ -354,8 +354,8 @@ def test_epilogue_mutations_are_rejected() -> None:
     a = [bf16(0, 127, 0x40)] * 16
     b = [bf16(0, 127, 0x01)] * 16
     h = gen_vu(P, a, b)
-    from verity_catalog.silicon.cast import f32_to_bf16_word
-    from verity_catalog.silicon.silicon import tc_dot_chain
+    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+    from verity.ml.circuits.silicon.silicon import tc_dot_chain
     y16 = f32_to_bf16_word(tc_dot_chain(AMPERE_BF16_M16N8K16, 0, a, b))
     check_vu(P, a, b, y16, h)
 

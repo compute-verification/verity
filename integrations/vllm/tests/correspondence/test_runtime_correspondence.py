@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from verity.primitives.circuits.codec import encode_program, program_digest
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.program import Program
 from verity_vllm.correspondence.runtime import (
     JSON_SCHEMA, NAMESPACE, SCHEMA, ArgSpan, RuntimeCorrespondence, correspondence_digest, load_correspondence, validate_document,
 )

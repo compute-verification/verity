@@ -1,6 +1,6 @@
 """F-fp8-GM1 (R15 fp8 BLOCKER M-0823, R16 fp8): GM-01 / X-09 over a fold whose weights Record is NOT width-homogeneous.
 
-`verity.primitives.circuits.program._lower_input` lowers a homogeneous-width Input type to ONE `Input<w>` batch node and recurses into a
+`verity.ml.circuits.program._lower_input` lowers a homogeneous-width Input type to ONE `Input<w>` batch node and recurses into a
 Record/Array/Tuple whose leaves have several widths -- one node per homogeneous field.  The block-scaled FP8 checkpoint
 (Qwen3-4B-FP8: e4m3 weights, f32 `weight_scale_inv` 128x128 block scales, bf16 norms) therefore lowers its weights Record to
 435 Input nodes, while every bf16 model lowers it to a single node = `n_input_nodes - 1`.  `batch_decomp.decompose`,
@@ -25,7 +25,7 @@ from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import global_match as gm
 from tests.check import test_global_match as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401 - fixture
-from verity.primitives.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, Record, Value
 
 SCALE_FIELD = ("scale32", Array(4, Value(32)))
 

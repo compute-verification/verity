@@ -32,9 +32,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.primitives.circuits.codec import canonical_json  # noqa: E402
+from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
-from verity.protocols.verification.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
+from verity.experimental.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
 
 ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")
 

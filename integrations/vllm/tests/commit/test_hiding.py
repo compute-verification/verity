@@ -9,8 +9,8 @@ import random
 
 import pytest
 
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.hm96 import vectors as V
+from verity.ml.commitments import hm96
+from verity.ml.commitments.hm96 import vectors as V
 from verity_vllm.acquire.committer_api import Opening
 from verity_vllm.commit import hiding, scheme
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
