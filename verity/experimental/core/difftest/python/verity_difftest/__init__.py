@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import fcntl
 import functools
 import json
 import subprocess
@@ -102,11 +103,18 @@ def canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+#: held around every `lake build`: a port's package writes the `.lake` of each package it requires by path, which other
+#: ports' builds write too, and two builds writing one `.lake` at once fail (two suites side by side, or xdist workers)
+BUILD_LOCK = Path(tempfile.gettempdir()) / "verity-difftest-lake-build.lock"
+
+
 @functools.cache
 def build(package: Path, exe: str) -> Path:
-    """`lake build EXE` in the Lake package `package`, once per process; the built executable's path."""
+    """`lake build EXE` in the Lake package `package`, once per process and under `BUILD_LOCK`; the built executable's path."""
     try:
-        p = subprocess.run(["lake", "build", exe], cwd=package, capture_output=True, text=True)
+        with open(BUILD_LOCK, "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            p = subprocess.run(["lake", "build", exe], cwd=package, capture_output=True, text=True)
     except FileNotFoundError:
         raise BuildError(f"lake is not on the PATH, so {exe} in {package} cannot be built") from None
     if p.returncode != 0:
