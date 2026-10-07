@@ -11,9 +11,10 @@ import VStar.Stage
     vstar stage M K_LOG CLAIMS BINDINGS OUT every statement's circuit, OUT/<dir>/circuit.txt
 
 A statement's bindings are `{"partition", "program", "program_digests"}`: its `verity/partition/v1` digest, its Program's
-SHA-512 and its `program_digests`, which core's descriptor codec gives. `BINDINGS` is a JSON file of one statement's, or for
-`stage` a list of them in `statements`' order. Each file is written line by line; its SHA-512, size and unit rows go to
-stdout as JSON.
+SHA-512 and its `program_digests` (`circuit.program_digests`: the program digest keyed by the descriptor id core's codec
+names the Definition by, which for `InnerRepCheck_v2{S}` holds S), as core's descriptor codec gives them. `BINDINGS` is a
+JSON file of one statement's, or for `stage` a list of them in `statements`' order. Each file is written line by line; its
+SHA-512, size and unit rows go to stdout as JSON.
 -/
 
 namespace VStar.Cli
