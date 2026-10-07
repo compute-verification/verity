@@ -1,0 +1,16 @@
+# PoUW's audit window as executable Lean (`verity/experimental/protocols/pouw/window.py`): the grid, the draw size K′ and the
+# `sampling` item, the advice's tile map and the window statement (L4), and the public items. Lean core only. Its
+# properties are stated in `Security/Properties/Pouw.lean`; the difftest holds it to the Python on generated inputs.
+name = "pouw_window"
+defaultTargets = ["PouwWindow", "pouw-window-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "PouwWindow"
+
+[[lean_exe]]
+name = "pouw-window-difftest"
+root = "PouwWindow.DifftestMain"
