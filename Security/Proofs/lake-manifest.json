@@ -30,6 +30,33 @@
    "configFile": "lakefile.toml"
   },
   {
+   "type": "path",
+   "scope": "",
+   "name": "core_firewall",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../verity/experimental/core/service/firewall",
+   "configFile": "lakefile.toml"
+  },
+  {
+   "type": "path",
+   "scope": "",
+   "name": "core_protocol",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir": "../../verity/experimental/core/protocols/interface",
+   "configFile": "lakefile.toml"
+  },
+  {
+   "type": "path",
+   "scope": "",
+   "name": "verity_difftest",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir": "../../verity/experimental/core/difftest/lean",
+   "configFile": "lakefile.toml"
+  },
+  {
    "url": "https://github.com/Verified-zkEVM/ArkLib",
    "type": "git",
    "subDir": null,
