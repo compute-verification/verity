@@ -1164,6 +1164,26 @@ def cmd_launch_request(argv: list[str]) -> int:
     return 0
 
 
+def _read_holds(rows: list[dict]) -> None:
+    """Each live run's `scope_memory` and `holds` (research.holds' lines) where it executes, one ssh per machine for remote runs,
+    or its `scope_memory_error`."""
+    from . import holds, scopemem
+
+    remotes = [Path(s["dir"]) for s in rows if s.get("remote_rec")]
+    got = remote.node_readings(remotes) if remotes else {}
+    for s in rows:
+        if s.get("remote_rec"):
+            r = got.get(str(Path(s["dir"]))) or {"error": "not read"}
+        else:
+            doc = scopemem.node([str(s["dir"])])
+            r = {"run": doc.pop("runs")[str(s["dir"])], "node": doc, "machine": None}
+        if r.get("error"):
+            s["scope_memory_error"] = r["error"]
+            continue
+        s["scope_memory"] = r["run"]["memory"]
+        s["holds"] = holds.lines(s.get("run_id") or s["id"], r["machine"], r)
+
+
 def _fmt(s: dict) -> str:
     cmd = " ".join(s["command"]).replace("\n", " ") if s.get("command") else "?"
     if len(cmd) > 50:
@@ -1215,9 +1235,8 @@ def cmd_status(argv: list[str]) -> int:
     rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
-    from . import scopemem
-
     unread = 0
+    live = []
     for s in rows:
         rr = s.get("remote_rec")
         if s["state"] not in R.ACTIVE or (rr and not rr.get("remote_run_dir")):
@@ -1225,10 +1244,8 @@ def cmd_status(argv: list[str]) -> int:
         if rr and not (ns.refresh or one):
             unread += 1
             continue
-        try:
-            s["scope_memory"] = remote.scope_memory(Path(s["dir"])) if rr else scopemem.reading(Path(s["dir"]))
-        except remote.Refused as e:
-            s["scope_memory_error"] = str(e)
+        live.append(s)
+    _read_holds(live)
     if ns.json:
         print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
         return 0
@@ -1244,8 +1261,8 @@ def cmd_status(argv: list[str]) -> int:
     print(f"{'run':<24} {'state':<10} {'rc':>3}  {'class':<22} {'res':<4} {'valid':<8} {'project':<10} {'where':<11} {'stage':<16} command")
     for s in rows:
         print(_fmt(s))
-        for m in s.get("scope_memory") or []:
-            print(f"{'':<26}mem  {scopemem.render(m)}")
+        for label, text in s.get("holds") or []:
+            print(f"{'':<26}{label:<4} {text}")
         if s.get("scope_memory_error"):
             print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
@@ -1316,6 +1333,15 @@ def cmd_inspect(argv: list[str]) -> int:
         print(f"observed  phase={rr.get('phase')} at={rr.get('observed_utc')} state={lo.get('state')}"
               + (f"  ERROR={rr.get('error')}" if rr.get("error") else "")
               + ("  (records shown are a cached copy; `research fetch` refreshes)" if rr.get("observed_utc") else "  (nothing fetched yet)"))
+        if q := rr.get("queue"):
+            print(f"queue     placed on {q.get('machine')} ({q.get('why')}); {q.get('phase')} phase")
+    if s["state"] in R.ACTIVE and (not s.get("remote_rec") or s["remote_rec"].get("remote_run_dir")):
+        row = {**s, "id": Path(s["dir"]).name}
+        _read_holds([row])
+        for label, text in row.get("holds") or []:
+            print(f"{label:<9} {text}")
+        if row.get("scope_memory_error"):
+            print(f"mem       unread: {row['scope_memory_error']}")
     files = sorted(p.name for p in Path(s["dir"]).iterdir() if p.is_file())
     print(f"files     {', '.join(files)}")
     missing = [n for n, ok in (("job.json", s["has_job"]), ("status.json", s["has_status"])) if not ok]
