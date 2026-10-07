@@ -26,7 +26,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`, `flock-circuit --zk`), and `verifier/`: the
       verifier's specification and the scripts that run it, with upstream's Rust verifier as a cross-check.
   - `verity/experimental/` (`verity.experimental`): work in progress, including today's Python verifiers until their Lean
-    versions land in `verity/core/`.
+    versions land in `verity/core/`. Core's Lean ports go under `experimental/core/`, each held to today's Python by
+    `experimental/core/difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`) and the network certifier (`certifier`). A protocol's Lean
       code is its `lean/`. NCI is Lean only.
