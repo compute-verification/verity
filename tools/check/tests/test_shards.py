@@ -272,14 +272,14 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
     monkeypatch.setattr(CHECK, "lean_deps_url_file", url_file)
     monkeypatch.setattr(subprocess, "run", run)
     sent = {}
-    for args in (["--shard", "3/5"], ["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
+    for args in (["--shard", "3/5"], ["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], ["tests"], ["lean"], []):
         launched.clear(), urls.clear()
         assert CHECK.record(["--base", "HEAD", "--agreement", *args]) == 0
         [cmd] = launched
         assert cmd[-len(args):] == args if args else True
         sent[" ".join(args)] = ("flock_upstream=art:u" in cmd, bool(urls))
     assert sent == {"--shard 3/5": (True, False), "--shard 1/5": (False, True), "--shard 4/5": (False, False),
-                    "--combine r1 r2": (False, False), "": (True, True)}
+                    "--combine r1 r2": (False, False), "tests": (False, False), "lean": (True, True), "": (True, True)}
     assert CHECK.record(["--base", "HEAD", "--shard", "9/5"]) == 2
 
 
@@ -297,6 +297,7 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
     monkeypatch.setattr(subprocess, "run", run)
-    for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
+    for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], ["circuits"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
-    assert parts == [[list(SECURITY)], [["pytest"]], [[]], []], "an unsharded check sends none"
+    assert parts == [[list(SECURITY)], [["pytest"]], [[]], [["flock-circuit-build", "circuit-check", "flock-rust-tests"]], []], \
+        "an unsharded check sends none"

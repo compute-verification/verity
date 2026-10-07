@@ -3,8 +3,9 @@
     uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
     ... PART...                                             only those parts (`tests`, `circuits`, `lean`: each job's `part` in
-                                                            ci.toml) and what their jobs need, after the preflight; outside a
-                                                            recorded run, since no gate takes part of a check
+                                                            ci.toml) and what their jobs need, after the preflight; recorded,
+                                                            its result is a `check-part/v1` (`PART_KIND`), which no gate takes
+    uv run python tools/check/check.py [PART...] --remote   the same as --record --on auto (or the --on given): on a node, recorded
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -745,6 +746,12 @@ def record(argv: list[str]) -> int:
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
+    elif picked := [a for a in rest if a in DECLARATION.PARTS]:
+        try:
+            parts = part_parts(picked)
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
     if base is None:
         subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
         base = "origin/main"
@@ -898,6 +905,17 @@ def _parts_of() -> dict[str, list[str]]:
 def shard_parts() -> list[str]:
     """Every part an unsharded check covers on this tree (`declaration.all_parts`)."""
     return DECLARATION.all_parts(JOBS, _parts_of())
+
+
+#: a check of parts' result kind, which the tool doesn't produce, so no gate takes it (`research merge` holds an attempt to the
+#: kinds `tool.py` declares, and to the declared command with check.py's own flags only)
+PART_KIND = "check-part/v1"
+
+
+def part_parts(picked: list[str]) -> list[str]:
+    """The shard parts a check of the parts ``picked`` runs (`declaration.select`): their jobs, and lean-audit on every package."""
+    chosen = DECLARATION.select(JOBS, picked)
+    return [p for p in shard_parts() if p.partition(":")[0] in chosen]
 
 
 def _rev(rev: str) -> str | None:
@@ -1278,14 +1296,15 @@ def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
 
 
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
-                 nondeterministic: list[dict] = (), shard: dict | None = None) -> None:
+                 nondeterministic: list[dict] = (), shard: dict | None = None, parts: list[str] | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
-    config (the tree of `tools/check/` at HEAD) and each of its steps' parts (the plan's names that step ran)."""
+    config (the tree of `tools/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for a check of
+    ``parts``, `PART_KIND`, naming them."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/check")}
-    doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
+    doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else PART_KIND if parts else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
@@ -1296,6 +1315,8 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                         if p and (run_dir / p).exists()]}
     if shard:
         doc["shard"] = shard
+    if parts:
+        doc["parts"] = list(parts)
     if verdicts:
         doc["verdicts"] = verdicts
     if contradicted:
@@ -1327,6 +1348,8 @@ def main(argv: list[str]) -> int:
         return preflight_only()
     if argv[:1] == ["--slots"]:
         return slots_view(argv[1:])
+    if "--remote" in argv:
+        argv = [a for a in argv if a != "--remote"] + ["--record"] + ([] if "--on" in argv else ["--on", "auto"])
     if "--record" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)
@@ -1358,17 +1381,15 @@ def main(argv: list[str]) -> int:
     picked = [a for a in rest if a in DECLARATION.PARTS]
     rest = [a for a in rest if a not in DECLARATION.PARTS]
     if picked:
-        if sharded or os.environ.get("RESEARCH_RUN_ID"):
-            print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
-                  file=sys.stderr)
+        if sharded:
+            print("check: a check of parts takes no --shard", file=sys.stderr)
             return 2
         try:
-            chosen = DECLARATION.select(JOBS, picked)
-            sharded = {"parts": [p for p in shard_parts() if p.partition(":")[0] in chosen]}
+            sharded = {"parts": part_parts(picked)}
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
-        print(f"check: parts {', '.join(picked)}: {', '.join(j.name for j in JOBS if j.name in chosen)}", flush=True)
+        print(f"check: parts {', '.join(picked)}: {', '.join(dict.fromkeys(p.partition(':')[0] for p in sharded['parts']))}", flush=True)
     n = None
     if rest[:1] == ["--cores"] and len(rest) == 2 and rest[1].isdigit():
         n, rest = int(rest[1]), []
@@ -1395,7 +1416,7 @@ def main(argv: list[str]) -> int:
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
-        write_result(run_dir, ok, done, verdicts, bad, flaky, sharded)
+        write_result(run_dir, ok, done, verdicts, bad, flaky, None if picked else sharded, picked or None)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1

@@ -167,9 +167,30 @@ def test_check_of_parts_runs_only_their_jobs_and_lean_audit_on_every_package(mon
     assert _main_parts(monkeypatch, [])[1] is None, "no part: the whole check"
 
 
-def test_a_check_of_parts_is_refused_with_a_shard_or_inside_a_recorded_run(monkeypatch, capsys):
+def test_a_check_of_parts_takes_no_shard(monkeypatch, capsys):
     assert _main_parts(monkeypatch, ["tests", "--shard", "1/3"]) == (2, None)
-    monkeypatch.setattr(CHECK.os, "environ", {**CHECK.os.environ, "RESEARCH_RUN_ID": "r20261007-000000-abcd"})
-    monkeypatch.setattr(CHECK, "run", lambda *a: (_ for _ in ()).throw(AssertionError("ran")))
-    assert CHECK.main(["tests"]) == 2
-    assert "no gate takes part of a check" in capsys.readouterr().err
+    assert "takes no --shard" in capsys.readouterr().err
+
+
+def test_a_recorded_check_of_parts_is_a_kind_no_gate_takes(tmp_path, monkeypatch):
+    from research import result as RES
+    from research.merge import invocation
+
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261007-010000-abcd")
+    done = [{"step": "preflight-lock", "status": "passed", "seconds": 1.0}, {"step": "pytest", "status": "passed", "rc": 0, "seconds": 2.0}]
+    CHECK.write_result(tmp_path, True, done, parts=["tests"])
+    r = RES.check(tmp_path, "r20261007-010000-abcd")
+    assert r.valid, r.errors
+    assert r.doc["kind"] == CHECK.PART_KIND not in TOOL.CHECK.produces and r.doc["parts"] == ["tests"]
+    assert invocation([*TOOL.CHECK.command, "tests"], TOOL.CHECK.command)[0] == "refused"
+
+
+def test_remote_records_on_a_node_and_sends_a_check_of_parts_its_parts(monkeypatch):
+    got = {}
+    monkeypatch.setattr(CHECK, "record", lambda argv: got.setdefault("argv", argv) and 0)
+    CHECK.main(["lean", "--remote"])
+    CHECK.main(["--remote", "--on", "vy-nebius-2"])
+    assert got["argv"] == ["lean", "--on", "auto"]
+    got.clear()
+    CHECK.main(["--remote", "--on", "vy-nebius-2"])
+    assert got["argv"] == ["--on", "vy-nebius-2"]
