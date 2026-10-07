@@ -158,6 +158,11 @@ def field (j : Json) (k : String) : Except String Json :=
   | .ok v => pure v
   | .error _ => throw "instance"
 
+/-- A JSON array of two entries. -/
+def pairOf? : Json → Option (Json × Json)
+  | .arr a => if a.size = 2 then some (a[0]!, a[1]!) else none
+  | _ => none
+
 /-- The instance's fields, refused (`instance`) where one is missing or of the wrong JSON kind, and (`params`) where `Γ`
 or `α` is not as stated. -/
 def parse (j : Json) : Except String Instance := do
@@ -167,11 +172,10 @@ def parse (j : Json) : Except String Instance := do
   let gammaJ ← field j "gamma"
   let alphaJ ← field j "alpha"
   let some gamma := natOf? gammaJ | throw "params"
-  let (num, den) ← match alphaJ with
-    | .arr #[a, b] => match natOf? a, natOf? b with
-      | some a, some b => if b > 0 then pure (a, b) else throw "params"
-      | _, _ => throw "params"
-    | _ => throw "params"
+  let some (a, b) := pairOf? alphaJ | throw "params"
+  let some num := natOf? a | throw "params"
+  let some den := natOf? b | throw "params"
+  if den = 0 then throw "params"
   return { program, theta, owner, gamma, num, den }
 
 /-- The verdict as JSON: `{gates, ius: [[size, novelReads], …], complies, failure: null | [iu, rule]}`. -/
