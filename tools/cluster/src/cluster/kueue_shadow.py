@@ -65,8 +65,8 @@ POOL_LABEL = "verity.dev/gpu-pool"
 POOLS = {"node1": ("/run/gpu-lease", "provers", "dev"),
          "circuits": ("/run/gpu-lease-circuits", "deployments-gpu", "circuits-gpu")}
 TREE = Path(__file__).resolve().parents[4]
-SLOT_PY = TREE / "tools" / "check" / "slot.py"
-LEAN_SLOT_PY = TREE / "tools" / "check" / "lean_slot.py"
+SLOT_PY = TREE / "tools/check/slot.py"
+LEAN_SLOT_PY = TREE / "tools/check/lean_slot.py"
 TICK_S = 60
 
 
