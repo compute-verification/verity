@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.NCP.GamePinned
+import Models.Pouw.Assumptions.NCP.GamePinned
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.Barrier.Proofs
 import Proofs.Pouw.Reduction
