@@ -625,6 +625,12 @@ src = "tools/research/src/research/pods/nebius/device_cores.sh"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 
+[[file]]  # after installing it, `sudo sysctl --system` (or the next boot) applies it
+path = "/etc/sysctl.d/90-vy-device-cores.conf"
+src = "tools/research/src/research/pods/nebius/device-cores-sysctl.conf"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
 [[file]]
 path = "/workspace/pouw/infra/bin/gpu-lease"
 src = "tools/research/src/research/pods/sh/gpu_lease.sh"
