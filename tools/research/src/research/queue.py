@@ -863,7 +863,10 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
     each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none;
     None when no machine's slots could be read. And why, with each machine skipped."""
-    s = importlib.util.spec_from_file_location("queue_check", repo / "tools" / "check" / "check.py")
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/check/check.py", lambda p: (repo / p).is_file()) or "tools/check/check.py"
+    s = importlib.util.spec_from_file_location("queue_check", repo / path)
     check = importlib.util.module_from_spec(s)
     sys.modules[s.name] = check
     s.loader.exec_module(check)
