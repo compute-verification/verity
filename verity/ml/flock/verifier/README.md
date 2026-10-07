@@ -178,8 +178,18 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   replays recorded sessions from their coins and salts. The K = 4096 sessions it replayed before (`r20261006-070620-e02d`'s,
   4 of 4 accepted by both) are `rec/inner-transcript/v0`'s, from before rec-step3's tops and level0, and today's firewall
   refuses their schedule. A v1 session at that size has been recorded since (`r20261006-021550-4e4b`, rec-reprice's
-  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The outer
-  phase (`firewall.rs`) is not covered yet.
+  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The
+  outer phase: `firewall_outer_agree.py` runs the contract on the outer firewall's transcripts (`FC_FIREWALL_TRANSCRIPT`,
+  `live/PROTOCOL.md` §10.4), each honest one accepted and each `FC_FIREWALL_TAMPER` control cut where the firewall stopped, for its
+  control's reason, with every check's outcome recomputed from its affine form over the tape's pads, all under one public
+  input: the honest sessions' (`public-<k>.json`, the same in each), which every control's agrees with. The contract doesn't
+  yet hold the outer phase's order and count: with no schedule it decides each outer item alone. The harness holds them
+  against the honest sessions instead. Every honest session's item sequence is one and the same, and each control's is the
+  same up to its cut, with its held-back candidate where those items leave in an honest session. A public input that
+  carries the outer sequence, for the contract to hold, is not written yet. On RoPE d64 at m = 25, CPU gated sessions,
+  60 of 60 as expected (`r20261006-134729-fddc`: 10 relations, 265 statement values, 383 values of the firewall's own
+  computation, and one item sequence of 1,454 items), and each of 21 of its sessions with items dropped, swapped,
+  duplicated or moved, or with an early `finish`, a miss at the item it moves (12 of them accepted by the contract).
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
   instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
   (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's

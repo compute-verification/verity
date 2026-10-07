@@ -34,6 +34,8 @@ pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
 pub mod firewall;
+#[cfg(feature = "sha512")]
+pub mod firewall_transcript;
 pub mod glue;
 pub mod pure_block;
 pub mod release;
