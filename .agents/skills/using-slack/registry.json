@@ -125,14 +125,14 @@
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
-      "remit": "Network accounting: the network warden (verity/protocols/accounting/communication/warden) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/protocols/accounting/communication/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
       "owns": [
-        "verity/protocols/accounting/communication/warden/",
-        "verity/Security/Definitions/Warden/",
-        "verity/Security/Specs/Warden/",
-        "verity/Security/Proofs/Warden/",
+        "verity/protocols/accounting/communication/certifier/",
+        "verity/Security/Definitions/NetworkCertifier/",
+        "verity/Security/Specs/NetworkCertifier/",
+        "verity/Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
       ]
     },

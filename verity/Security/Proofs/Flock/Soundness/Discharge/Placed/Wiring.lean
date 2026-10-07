@@ -97,13 +97,13 @@ theorem insOf_eq_unit {u u' : ℕ} (hu : u < nU) (hu' : u' < nU) {x x' : Fin nIn
           _ ≤ u * B := Nat.mul_le_mul_right _ hl
       omega
 
-/-- **The program of a circuit's units on source-indexed input gates**: `nU` units of the circuit's VU rows, input column
+/-- **The program of a circuit's units on source-indexed input gates**: `nU` units of the circuit's template instance rows, input column
 `x` of each on its source's gate (`insOf`), the constant on `oneGate`. -/
 noncomputable def circuitProg (c : Flock.Circuit) (hU : Built c.unit) (nU B : ℕ)
     (src : Fin (circuitRows c hU).nIn → Option (Fin B)) : Prog (gates (inGates nU B) (circuitRows c hU) nU) nU :=
   uniform (inGates nU B) (circuitRows c hU) (insOf nU B src) (oneGate nU B) (insOf_ne_one nU B src) nU
 
-/-- Every unit of the circuit's program has the circuit's VU rows. -/
+/-- Every unit of the circuit's program has the circuit's template instance rows. -/
 theorem rows_circuitProg (c : Flock.Circuit) (hU : Built c.unit) (nU B : ℕ)
     (src : Fin (circuitRows c hU).nIn → Option (Fin B)) (u : Fin nU) :
     (circuitProg c hU nU B src).rows u = circuitRows c hU :=

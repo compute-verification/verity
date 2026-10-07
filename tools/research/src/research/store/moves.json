@@ -1269,6 +1269,24 @@
         "verity/protocols/accounting/work/pouw/lean/Pouw/SecurityProofs/PearlC/Cap/": "verity/Security/Proofs/Pouw/PearlC/Cap/",
         "verity/protocols/compliance/nci/lean/Nci/SecurityProofs/": "verity/Security/Proofs/Nci/"
       }
+    },
+    {
+      "paths": {
+        "verity/Security/Proofs/Warden/Difftest.lean": "verity/protocols/accounting/communication/warden/lean/Warden/Difftest.lean",
+        "verity/Security/Proofs/Warden/DifftestMain.lean": "verity/protocols/accounting/communication/warden/lean/Warden/DifftestMain.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/band_gpu/live.py": "benchmarks/pous/band_gpu/memory_challenger.py",
+        "benchmarks/pous/p2_v1/live.py": "benchmarks/pous/p2_v1/memory_challenger.py",
+        "verity/Security/Definitions/Warden.lean": "verity/Security/Definitions/NetworkCertifier.lean",
+        "verity/Security/Definitions/Warden/": "verity/Security/Definitions/NetworkCertifier/",
+        "verity/Security/Proofs/Warden.lean": "verity/Security/Proofs/NetworkCertifier.lean",
+        "verity/Security/Proofs/Warden/": "verity/Security/Proofs/NetworkCertifier/",
+        "verity/Security/Specs/Warden/": "verity/Security/Specs/NetworkCertifier/",
+        "verity/protocols/accounting/communication/warden/": "verity/protocols/accounting/communication/certifier/"
+      }
     }
   ]
 }

@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
 import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
 
 /-!
-# The batched `--zk` session on M2's coin tree
+# The batched `--zk` session on C-Flock ZK's coin tree
 
 `session_coins_sound` (`SessionCoinsSound`) and `session_coins_hm96` (`SessionCoinsHm96`): `committed_le` (resp.
 `committed_le_hm96`) on `sessionZKC`, which opens each committed round at most once (`distinct_sessionZKC`) and, drawn
