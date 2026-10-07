@@ -178,7 +178,7 @@ def spec_of(params: dict, ell: int) -> S.Spec:
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
                   selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
-                  check=S.Check(PT.program_digest(Program(d)), PT.template_instance_query(d)),
+                  check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d)),
                   public=tuple(S.Public(i, k, r) for i, k, r in LAYOUT), context=params["context"].encode())
 
 

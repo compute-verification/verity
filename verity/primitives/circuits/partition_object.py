@@ -109,6 +109,10 @@ def _program(program_or_desc: Any) -> str:
     return program_digest(desc)
 
 
+#: the program field under the name META's `program_sha512` and its callers use; equal to `codec.program_digest`
+program_sha512 = _program
+
+
 def query(X: int = 16, W: int = 32, version: int = 1) -> dict[str, Any]:
     """`Q_word{X, W}`, v1 unless `version` names v2 (`cut.RECOMPUTE`)."""
     if not all(_is_int(v) and 0 < v <= PARAM_MAX for v in (X, W)):
@@ -511,4 +515,4 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
 
 __all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES", "Q_CALL",
            "call_query", "CallPartition", "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
-           "owners_digest", "verify"]
+           "owners_digest", "program_sha512", "verify"]

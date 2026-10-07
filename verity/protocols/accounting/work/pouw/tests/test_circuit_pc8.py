@@ -21,7 +21,6 @@ import circuit_fixtures as CF
 import pearl_c_vectors as V
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import partition_object as PO
-from verity.primitives.circuits.codec import program_digest
 from verity.primitives.circuits.program import Program
 from verity_catalog.definitions.fp32 import F32FmaV2
 from verity_catalog.definitions.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
@@ -505,7 +504,7 @@ def test_whole_tile_programs_and_layouts_are_pinned(shape):
         fn = build(shape)
         row[side] = {"id": fn.id, "query": json.dumps(pc8.query(shape, side), sort_keys=True)}
         if shape.m * shape.n <= 4096:
-            row[side]["program"] = program_digest(Program(fn))
+            row[side]["program"] = PO.program_sha512(Program(fn))
     assert hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest() == WHOLE[shape]
 
 
