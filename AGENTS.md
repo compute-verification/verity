@@ -163,7 +163,7 @@ Landing:
     (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/experimental/protocols/pous/lean/`) and
     the certifier program (`verity/experimental/protocols/certifier/lean/`, `NetworkCertifier`, with its
     difftest).
-  - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Specs/` (its named
+  - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
   - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
