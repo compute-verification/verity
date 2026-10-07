@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Game.Basic
 
 C-Flock's soundness is stated over its own public-coin games (`FlockSoundness.Game`), and the hidden audit plays core's
 (`Verity.Game`). The two inductives have the same constructors and the same `Strategy`, `prob` and `value`, but are
-distinct types. `toVerity` carries a C-Flock game to core's node by node; `Strategy.toVerity` and `Strategy.ofVerity`
+distinct types. `toVerity` carries a C-Flock game to core's node by node; `stratToVerity` and `stratOfVerity`
 carry a prover's strategies both ways and are inverse to each other; and every event has the same probability under a
 strategy and its image (`prob_toVerity`, `prob_ofVerity`), and the same value for the optimal prover (`value_toVerity`).
 So a bound C-Flock proves on `FlockSoundness.Game.prob` is the same bound on core's game, for the same prover.
@@ -25,55 +25,55 @@ def toVerity : FlockSoundness.Game α → Verity.Game α
   | @FlockSoundness.Game.coin _ C iF iN k => @Verity.Game.coin _ C iF iN fun c => toVerity (k c)
 
 /-- A strategy for C-Flock's game is one for core's: the same message at every node. -/
-def Strategy.toVerity : (g : FlockSoundness.Game α) → FlockSoundness.Game.Strategy g →
+def stratToVerity : (g : FlockSoundness.Game α) → FlockSoundness.Game.Strategy g →
     Verity.Game.Strategy (toVerity g)
   | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.toVerity (k s.1) s.2⟩
-  | @FlockSoundness.Game.coin _ _ _ _ k, s => fun c => Strategy.toVerity (k c) (s c)
+  | .send _ k, s => ⟨s.1, stratToVerity (k s.1) s.2⟩
+  | @FlockSoundness.Game.coin _ _ _ _ k, s => fun c => stratToVerity (k c) (s c)
 
-/-- A strategy for core's image of C-Flock's game is one for C-Flock's, the inverse of `Strategy.toVerity`. -/
-def Strategy.ofVerity : (g : FlockSoundness.Game α) → Verity.Game.Strategy (toVerity g) →
+/-- A strategy for core's image of C-Flock's game is one for C-Flock's, the inverse of `stratToVerity`. -/
+def stratOfVerity : (g : FlockSoundness.Game α) → Verity.Game.Strategy (toVerity g) →
     FlockSoundness.Game.Strategy g
   | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofVerity (k s.1) s.2⟩
-  | @FlockSoundness.Game.coin _ _ _ _ k, s => fun c => Strategy.ofVerity (k c) (s c)
+  | .send _ k, s => ⟨s.1, stratOfVerity (k s.1) s.2⟩
+  | @FlockSoundness.Game.coin _ _ _ _ k, s => fun c => stratOfVerity (k c) (s c)
 
-theorem Strategy.ofVerity_toVerity :
+theorem stratOfVerity_toVerity :
     ∀ (g : FlockSoundness.Game α) (s : FlockSoundness.Game.Strategy g),
-      Strategy.ofVerity g (Strategy.toVerity g s) = s
+      stratOfVerity g (stratToVerity g s) = s
   | .ret _, _ => rfl
   | .send _ k, ⟨m, s'⟩ => by
-      show (⟨m, Strategy.ofVerity (k m) (Strategy.toVerity (k m) s')⟩ :
+      show (⟨m, stratOfVerity (k m) (stratToVerity (k m) s')⟩ :
         FlockSoundness.Game.Strategy (FlockSoundness.Game.send _ k)) = ⟨m, s'⟩
-      rw [Strategy.ofVerity_toVerity (k m) s']
-  | @FlockSoundness.Game.coin _ _ _ _ k, s => funext fun c => Strategy.ofVerity_toVerity (k c) (s c)
+      rw [stratOfVerity_toVerity (k m) s']
+  | @FlockSoundness.Game.coin _ _ _ _ k, s => funext fun c => stratOfVerity_toVerity (k c) (s c)
 
-theorem Strategy.toVerity_ofVerity :
+theorem stratToVerity_ofVerity :
     ∀ (g : FlockSoundness.Game α) (s : Verity.Game.Strategy (toVerity g)),
-      Strategy.toVerity g (Strategy.ofVerity g s) = s
+      stratToVerity g (stratOfVerity g s) = s
   | .ret _, _ => rfl
   | .send _ k, ⟨m, s'⟩ => by
-      show (⟨m, Strategy.toVerity (k m) (Strategy.ofVerity (k m) s')⟩ :
+      show (⟨m, stratToVerity (k m) (stratOfVerity (k m) s')⟩ :
         Verity.Game.Strategy (toVerity (FlockSoundness.Game.send _ k))) = ⟨m, s'⟩
-      rw [Strategy.toVerity_ofVerity (k m) s']
-  | @FlockSoundness.Game.coin _ _ _ _ k, s => funext fun c => Strategy.toVerity_ofVerity (k c) (s c)
+      rw [stratToVerity_ofVerity (k m) s']
+  | @FlockSoundness.Game.coin _ _ _ _ k, s => funext fun c => stratToVerity_ofVerity (k c) (s c)
 
 /-- **The bridge keeps every event's probability**: core's `prob` of `p` on the image of C-Flock's game, under the
 image of a strategy, is C-Flock's `prob` of `p` under the strategy. -/
 theorem prob_toVerity (p : α → Prop) :
     ∀ (g : FlockSoundness.Game α) (s : FlockSoundness.Game.Strategy g),
-      Verity.Game.prob p (toVerity g) (Strategy.toVerity g s) = FlockSoundness.Game.prob p g s
+      Verity.Game.prob p (toVerity g) (stratToVerity g s) = FlockSoundness.Game.prob p g s
   | .ret _, _ => rfl
   | .send _ k, s => prob_toVerity p (k s.1) s.2
   | @FlockSoundness.Game.coin _ C _ _ k, s => by
-      show ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * Verity.Game.prob p (toVerity (k c)) (Strategy.toVerity (k c) (s c)) =
+      show ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * Verity.Game.prob p (toVerity (k c)) (stratToVerity (k c) (s c)) =
         ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * FlockSoundness.Game.prob p (k c) (s c)
       exact Finset.sum_congr rfl fun c _ => by rw [prob_toVerity p (k c) (s c)]
 
 /-- `prob_toVerity` from core's side: C-Flock's `prob` under the strategy a core strategy is, is core's. -/
 theorem prob_ofVerity (p : α → Prop) (g : FlockSoundness.Game α) (s : Verity.Game.Strategy (toVerity g)) :
-    FlockSoundness.Game.prob p g (Strategy.ofVerity g s) = Verity.Game.prob p (toVerity g) s := by
-  rw [← prob_toVerity p g (Strategy.ofVerity g s), Strategy.toVerity_ofVerity]
+    FlockSoundness.Game.prob p g (stratOfVerity g s) = Verity.Game.prob p (toVerity g) s := by
+  rw [← prob_toVerity p g (stratOfVerity g s), stratToVerity_ofVerity]
 
 /-- The bridge keeps the optimal prover's value. -/
 theorem value_toVerity (p : α → Prop) :
@@ -102,7 +102,7 @@ theorem toVerity_bind (f : α → FlockSoundness.Game β) :
 /-- The bridge commutes with relabelling the output. -/
 theorem toVerity_map (f : α → β) (g : FlockSoundness.Game α) :
     toVerity (g.map f) = (toVerity g).map f :=
-  toVerity_bind _ g
+  toVerity_bind (fun a => FlockSoundness.Game.ret (f a)) g
 
 /-- Relabelling core's strategies there and back is the identity (`Strategy.toMap_ofMap`'s other half). -/
 theorem ofMap_toMap (f : α → β) :

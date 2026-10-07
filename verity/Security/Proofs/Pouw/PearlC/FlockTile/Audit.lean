@@ -61,7 +61,7 @@ def proofGame (H : Q → R) (s : S) (U : Workload) (r : F.Root) (g : ℕ) : Veri
 /-- The strategy of the session's game that a strategy of tile `g`'s proof game is. -/
 def stratOf {H : Q → R} {s : S} {U : Workload} {r : F.Root} {g : ℕ}
     (σ : Verity.Game.Strategy (F.proofGame H s U r g)) : FlockSoundness.Game.Strategy (F.game H s U r g) :=
-  Strategy.ofVerity _ (Verity.Game.Strategy.ofMap F.verdict _ σ)
+  stratOfVerity _ (Verity.Game.Strategy.ofMap F.verdict _ σ)
 
 /-- **The hidden audit's single-game class.** A strategy `σ` of a game `G`, on the transcript `τ` committed under the
 opening `o`, is in the class at `q` when, at every tile whose proof game `G` is (for every workload, oracle and salt), the
@@ -117,10 +117,10 @@ def TileReadSession.tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
   G := toVerity (F.game H s U (F.root U τ o) g)
   verdict := F.verdict
   game_eq := rfl
-  Bad σ x := F.Bad U τ o H s g (Strategy.ofVerity _ σ) x
+  Bad σ x := F.Bad U τ o H s g (stratOfVerity _ σ) x
   bad_le q σ hcls := by
     have hc := hcls U H s g rfl
-    change F.Cls U τ o H s g (Strategy.ofVerity _ (Verity.Game.Strategy.ofMap F.verdict _
+    change F.Cls U τ o H s g (stratOfVerity _ (Verity.Game.Strategy.ofMap F.verdict _
       (Verity.Game.Strategy.toMap F.verdict (toVerity (F.game H s U (F.root U τ o) g)) σ))) q at hc
     rw [ofMap_toMap] at hc
     have hb := hT3 U hU τ o H s g _ q hc

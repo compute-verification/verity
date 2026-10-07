@@ -42,7 +42,10 @@ session `F`, at `t·ηzk(q)` more error than the sampled audit. `pearlCHiddenSm1
 Its hypotheses: `TTOutTilePearlCDevRev1` (the device's timing, as in the sampled audit); `TileReadSound` (T3 at the
 session, to be discharged by C-Flock's soundness of the TileRead statement, whose CR hypotheses are `F.Cls`); and
 `TileReadBinds` (the binding, to be proved from TileRead's gates, L4, hm96-sha512's binding, L3 and L8). Cite it only as
-conditional on the last two, and beside the honest prover's `ProverBounded` at `F.audit` (the module docstring). -/
+conditional on the last two, and beside the honest prover's `ProverBounded` at `F.audit` (the module docstring). It says
+something about C-Flock only at the session whose `game` is TileRead's live session and whose `Cls` is T3's CR
+hypotheses: at a session with an empty `Cls`, `F.audit`'s class is empty too and both obligations hold with `Bad`
+everything, as at `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`'s degenerate hidden audit. -/
 theorem pearlCHiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 (F : TileReadSession Q R S) (ηzk : ℕ → ℝ)
     (h0 : ∀ q, 0 ≤ ηzk q)
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000))
