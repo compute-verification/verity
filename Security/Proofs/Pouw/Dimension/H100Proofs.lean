@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.Dimension.H100
+import Models.Pouw.Assumptions.Dimension.H100
 import Proofs.Pouw.Dimension.EmbedProofs
 
 /-!
