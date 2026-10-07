@@ -796,13 +796,35 @@ def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     assert [m.head for m in q.sync()[0]] == [new]
     assert f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} (restack; no lean-audit.json change)" in world.logs
     for extra, why in (({"backends/flock/y.py": "y = 1\n"}, "its change against origin/main differs (backends/flock/y.py)"),
-                       ({"a.txt": "a, too\n"}, "its change against origin/main differs (a.txt)"),
-                       ({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
-                        "its lean-audit.json patch isn't byte-identical (pkg/lean-audit.json)")):
+                       ({"backends/flock/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
+                        "its lean-audit.json patch isn't byte-identical (backends/flock/lean-audit.json)")):
         world.gh.put(1, h := world.change({**flock, **extra}))
         members, entries = q.sync()
         assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
         assert f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: {why}" in world.logs
+
+
+def test_a_grant_carries_across_a_change_its_rule_leaves_out(world):
+    """Friction from proofs (7 Oct): a tests-only fix after a red-team grant voided it, though the rule leaves tests out and the
+    fix alone would need no grant.  Only the paths the grant's rule covers are compared; one it covers still voids it."""
+    q = _carrying(world, RULES + '\n[[grant]]\nrole = "red-team"\npaths = ["backends/flock/", "!README.md", "!*/tests/*"]\n')
+    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    flock = {"backends/flock/x.py": "x = 1\n"}
+    world.gh.put(1, old := world.change(flock))
+    _grant(world, 1, old, "red-team")
+    assert [m.pr for m in q.sync()[0]] == [1]
+    for extra in ({"backends/flock/tests/test_x.py": "assert True\n"}, {"backends/flock/README.md": "x\n", "other.txt": "o\n"},
+                  {"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})}):
+        world.gh.put(1, h := world.change({**flock, **extra}))
+        assert [m.head for m in q.sync()[0]] == [h]
+        n = len(extra)
+        assert (f"research queue: grant red-team carried from pr:1@{old} to {h[:12]} (restack; "
+                f"no lean-audit.json change; {n} changed path{'s' * (n != 1)} its rule leaves out not compared)") in world.logs
+    world.gh.put(1, h := world.change({**flock, "backends/flock/tests/test_x.py": "assert True\n", "backends/flock/y.py": "y\n"}))
+    members, entries = q.sync()
+    assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
+    assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its change against origin/main differs "
+            f"(backends/flock/y.py)") in world.logs
 
 
 def test_a_grant_on_a_head_git_cannot_compare_carries_nothing(world):
