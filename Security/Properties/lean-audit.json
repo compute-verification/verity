@@ -33,6 +33,12 @@
    "assumptions": [],
    "type_hash": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f"
   },
+  "Properties.Pouw.Window.drawMisses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"],
+   "assumptions": [],
+   "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389"
+  },
   "Properties.Pouw.Window.floorPointGreatest": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.floorPointGreatest : Properties.Pouw.Window.FloorPointGreatest"],
@@ -185,6 +191,7 @@
     "PouwWindow.missShare": "6e007f3d3a3bf81825460d2f17c550de6eae7ad21ae0e5d108aa8baed764ca0e"
    },
    "guarantees": [
+    "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
@@ -225,6 +232,7 @@
     "Properties.Pouw.Window.bucketCost",
     "Properties.Pouw.Window.bucketCost3",
     "Properties.Pouw.Window.bucketCredits",
+    "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.floorPointGreatest",
     "Properties.Pouw.Window.gridRefusals",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
@@ -254,12 +262,13 @@
    "guarantees": ["Properties.Pouw.Window.publicItems_eq"]
   },
   "Properties.Pouw": {
-   "digest": "9698e5aa2befae185ba9de6c919355eb99bf111f2712c4922bfd8bd719735c97",
+   "digest": "9b87d55ab7b9b16975d21280dcd0d6ec786e90d6fdbf34dcf216da4d0adabef8",
    "definitions": {
     "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
     "Properties.Pouw.Window.BucketCost": "322d0e98c3877937089f11c6a8ea1133785e984ca67b7a1e2a1ca1bc2cd24c0d",
     "Properties.Pouw.Window.BucketCost3": "5bc871c565b2bbd3c394649be4fad8e856045c669fee8fd8a28bc7ca23d88432",
     "Properties.Pouw.Window.BucketCredits": "6d557ebccf5f7bc302c561f3bc7a0df5a865595ad9b0d82e826e5285e8d3914a",
+    "Properties.Pouw.Window.DrawMisses": "b7460ad7746259572f809666b0fa689896158bad64575f88e3bcdad19fc2d8a9",
     "Properties.Pouw.Window.EntryOK": "a01518da8f1d63e9771e73f7a33381eeae298a99caed65b4b2d15e8f540024bf",
     "Properties.Pouw.Window.FloorPointGreatest": "4e68c5d4a0b0ac00e7286557b1b871000c9ae19f0aa29de86a196409fa097ffb",
     "Properties.Pouw.Window.GridRefusals": "89f6c58c824eb3b87ed21472f343ff23c23e87b18bb94caba9859fef6c08fb90",
@@ -278,6 +287,7 @@
     "Properties.Pouw.Window.WindowAccepts": "6727fb9e8b7fd8043dabf01a1f50a8d7c220c900e9c80f65ace72c4d9aec7689",
     "Properties.Pouw.Window.WindowCreditsTheCalls": "2c1834cb99ce4fc736caedb1fb9d2c29ce966dfff3b1b180c02b04ac76beac62",
     "Properties.Pouw.Window.WindowOK": "de0fb81f9596007f005fe5b822d2ef9afc7bcb88abb882ab9849558b77dd36b3",
+    "Properties.Pouw.Window.missProb": "c5e678c835285495dce78a44f1f2877e8fadfd73147232bc5f705e24c34653e3",
     "Properties.Pouw.Window.servedK": "f180a0127ece52b30dea9c01733b3421eabdba5e8805040f54e44e4eb43e1d1e"
    },
    "guarantees": [
@@ -285,6 +295,7 @@
     "Properties.Pouw.Window.bucketCost",
     "Properties.Pouw.Window.bucketCost3",
     "Properties.Pouw.Window.bucketCredits",
+    "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.floorPointGreatest",
     "Properties.Pouw.Window.gridRefusals",
     "Properties.Pouw.Window.kPrimeExactAtEquality",

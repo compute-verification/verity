@@ -7,6 +7,10 @@ import Properties.Proofs.Pouw.Grid
 decide is the exact answer and `missAtMost` is the integer comparison `a^k·dd ≤ dn·b^k` (`missAtMost_eq`), which is
 `q^k ≤ δ` (`exact_iff`) and holds from some `k` on (`exact_mono`); the bisection finds the least such `k`
 (`leastAbove_spec`).
+
+`DrawMisses`, from `KPrimeLeast`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each draw's
+miss factor `(N − B − i)/(N − i)` is in `[0, 1 − p]` and the miss chance is at most `(1 − p)^K′ ≤ δ` (`missProb_le`);
+when `K′ = N` the draw takes every tile and the chance is 0 (`missProb_zero`).
 -/
 
 namespace Properties.Pouw.Window
@@ -234,5 +238,100 @@ theorem kPrimeLeast : KPrimeLeast := by
     refine ⟨_, rfl, h1, h2, fun h => (hpred _).1 (h3 h), fun j hj hjk => ?_⟩
     have := h4 j hj hjk
     rw [← Rat.not_le]; intro h'; rw [← hpred] at h'; simp_all
+
+/-- The draw's `i`-th factor: the chance that draw `i` misses too, given the first `i` missed. -/
+abbrev missFactor (N B i : Nat) : Rat := ((N - B - i : Nat) : Rat) / ((N - i : Nat) : Rat)
+
+theorem natCast_sub {a b : Nat} (h : b ≤ a) : ((a - b : Nat) : Rat) = a - b := by
+  obtain ⟨r, rfl⟩ := Nat.exists_eq_add_of_le h
+  rw [Nat.add_sub_cancel_left]; push_cast; grind
+
+theorem missProb_succ (N B k : Nat) : missProb N B (k + 1) = missProb N B k * missFactor N B k := by
+  unfold missProb; rw [List.range_succ, List.map_append, List.foldl_append]; rfl
+
+theorem missFactor_nonneg {N B i : Nat} (h : i < N) : 0 ≤ missFactor N B i := by
+  have hc : (0 : Rat) < ((N - i : Nat) : Rat) := by exact_mod_cast (by omega : 0 < N - i)
+  rw [← Rat.not_lt, Rat.div_lt_iff hc]; intro h'
+  have : (0 : Rat) ≤ ((N - B - i : Nat) : Rat) := Rat.natCast_nonneg
+  grind
+
+/-- Each factor is at most `q` when `q·(N − i) ≥ N − B − i`. -/
+theorem missFactor_le {N B i : Nat} {q : Rat} (h : i < N) (hq : ((N - B - i : Nat) : Rat) ≤ q * ((N - i : Nat) : Rat)) :
+    missFactor N B i ≤ q := by
+  have hc : (0 : Rat) < ((N - i : Nat) : Rat) := by exact_mod_cast (by omega : 0 < N - i)
+  rw [← Rat.not_lt]; intro h'
+  rw [Rat.lt_div_iff hc] at h'
+  grind
+
+theorem missProb_le {N B : Nat} {q : Rat} (hf : ∀ i, i < N → missFactor N B i ≤ q) :
+    ∀ k, k ≤ N → 0 ≤ missProb N B k ∧ missProb N B k ≤ q ^ k
+  | 0, _ => by simp [missProb]; exact Rat.le_refl
+  | k + 1, hk => by
+    obtain ⟨h0, h1⟩ := missProb_le hf k (by omega)
+    have f0 := missFactor_nonneg (B := B) (by omega : k < N)
+    rw [missProb_succ, Rat.pow_succ]
+    refine ⟨Rat.mul_nonneg h0 f0, ?_⟩
+    have qk0 : 0 ≤ q ^ k := Rat.le_trans h0 h1
+    exact Rat.le_trans (Rat.mul_le_mul_of_nonneg_right h1 f0) (Rat.mul_le_mul_of_nonneg_left (hf k (by omega)) qk0)
+
+theorem missProb_zero {N B : Nat} : ∀ k, N - B < k → missProb N B k = 0
+  | 0, h => absurd h (by omega)
+  | k + 1, h => by
+    rw [missProb_succ]
+    by_cases hk : k = N - B
+    · have : N - B - k = 0 := by omega
+      simp [missFactor, this, Rat.div_def]
+    · rw [missProb_zero k (by omega)]; simp
+
+theorem drawMisses : DrawMisses := by
+  intro eps δ credited n w B k hd hk hB hcov
+  obtain ⟨k', hk', h1, hkN, hlt, -⟩ := kPrimeLeast eps δ credited n w hd
+  rw [hk] at hk'; cases hk'
+  have hd' := hd
+  obtain ⟨he0, he1, hδ0, hδ1, hn, hw, hc0, hc1⟩ := hd'
+  obtain ⟨N, rfl⟩ : ∃ N : Nat, n = N := ⟨n.toNat, (Int.toNat_of_nonneg (by omega)).symm⟩
+  have hNN : (N : Int).toNat = N := Int.toNat_natCast N
+  rw [hNN] at hB hkN hlt ⊢
+  have hNR : (((N : Int)) : Rat) = (N : Rat) := by norm_cast
+  have hN0 : (0 : Rat) < (N : Rat) := by exact_mod_cast (by omega : 0 < N)
+  have hwR : (0 : Rat) < (w : Rat) := by exact_mod_cast (by omega : (0 : Int) < w)
+  have hcR : (0 : Rat) < credited := by exact_mod_cast hc0
+  have hNw : (N : Rat) * w ≠ 0 := Rat.ne_of_gt (Rat.mul_pos hN0 hwR)
+  generalize hp : missShare eps credited N w = p at hlt
+  have hpdef : p * ((N : Rat) * w) = eps * credited := by
+    rw [← hp]; unfold missShare; rw [hNR]; exact Rat.div_mul_cancel hNw
+  have hp0 : 0 ≤ p := by
+    rw [← Rat.not_lt]; intro h
+    have := Rat.mul_lt_mul_of_pos_right h (Rat.mul_pos hN0 hwR)
+    have := Rat.mul_pos he0 hcR
+    grind
+  have hpN : p * N ≤ B := by
+    apply Rat.le_of_mul_le_mul_right _ hwR
+    have : ((eps * credited : Rat)) ≤ (B : Rat) * w := by exact_mod_cast hcov
+    grind
+  by_cases hkl : k < N
+  · refine Rat.le_trans ?_ (hlt hkl)
+    refine (missProb_le (fun i hi => missFactor_le hi ?_) k (by omega)).2
+    have hci : ((N - i : Nat) : Rat) = (N : Rat) - i := natCast_sub (by omega)
+    have hiN : (i : Rat) < N := by exact_mod_cast hi
+    have hpi : p * ((N : Rat) - i) ≤ p * N := Rat.mul_le_mul_of_nonneg_left (by
+      have : (0 : Rat) ≤ (i : Rat) := Rat.natCast_nonneg
+      grind) hp0
+    have hp1 : p ≤ 1 := Rat.le_of_mul_le_mul_right (by
+      have : (B : Rat) ≤ N := by exact_mod_cast hB
+      grind : p * N ≤ 1 * N) hN0
+    rw [hci]
+    by_cases hle : B + i ≤ N
+    · rw [show N - B - i = N - (B + i) from by omega, natCast_sub hle]; push_cast; grind
+    · rw [show N - B - i = 0 from by omega]
+      exact Rat.mul_nonneg (by grind) (by grind)
+  · have hB1 : 1 ≤ B := by
+      rcases Nat.eq_zero_or_pos B with h | h
+      · subst h
+        have : (0 : Rat) < eps * credited := Rat.mul_pos he0 hcR
+        have : ((eps * credited : Rat)) ≤ ((0 : Nat) : Rat) * w := by exact_mod_cast hcov
+        simp at this; grind
+      · exact h
+    rw [missProb_zero k (by omega)]; exact Rat.le_of_lt hδ0
 
 end Properties.Pouw.Window
