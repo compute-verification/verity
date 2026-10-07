@@ -50,10 +50,19 @@ def test_a_root_relative_diff_touching_a_protected_file_is_not_sealed(tmp_path):
 
 def test_lane_writable_paths_and_paths_outside_the_package_seal_clean(tmp_path):
     root, base = _repo(tmp_path)
-    head = _commit(root, {f"{PKG}/verity_vllm/program/registry/quarantine/q.py": "Q = 1\n",
+    head = _commit(root, {"verity/ml/circuits/ops/quarantine/q.py": "Q = 1\n",
                           f"{PKG}/tests/observe/test_new.py": "\n", "verity/README.md": "core, edited\n"}, "lane")
     rep = protected.provenance(base, head, cwd=root / PKG)
     assert rep["sealed"] and rep["protected_files_modified"] == [] and rep["n_changed"] == 3
+
+
+def test_an_edited_registered_primitive_outside_the_package_is_not_sealed(tmp_path):
+    root, base = _repo(tmp_path)
+    base = _commit(root, {"verity/ml/circuits/ops/prims.py": "P = 1\n"}, "registry")
+    head = _commit(root, {"verity/ml/circuits/ops/prims.py": "P = 2\n"}, "lane")
+    rep = protected.provenance(base, head, cwd=root / PKG)
+    assert not rep["sealed"]
+    assert rep["existing_primitives_modified"] == ["../../verity/ml/circuits/ops/prims.py"]
 
 
 def test_a_changed_frozen_manifest_entry_is_not_sealed(tmp_path):
@@ -67,8 +76,8 @@ def test_a_changed_frozen_manifest_entry_is_not_sealed(tmp_path):
 
 def test_renaming_a_protected_file_into_a_lane_writable_tree_is_not_sealed(tmp_path):
     root, base = _repo(tmp_path)
-    (root / PKG / "verity/ml/circuits/ops/quarantine").mkdir(parents=True)
-    _git(root, "mv", f"{PKG}/verity_vllm/check/gates.py", f"{PKG}/verity_vllm/program/registry/quarantine/gates.py")
+    (root / "verity/ml/circuits/ops/quarantine").mkdir(parents=True)
+    _git(root, "mv", f"{PKG}/verity_vllm/check/gates.py", "verity/ml/circuits/ops/quarantine/gates.py")
     head = _commit(root, {}, "lane")
     rep = protected.provenance(base, head, cwd=root / PKG)
     assert not rep["sealed"]

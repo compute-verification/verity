@@ -43,7 +43,7 @@ PROTECTED: tuple[str, ...] = (
     # the two base profiles (a lane derives its own profile module from `build_profile`; it does not edit these)
     "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
     # existing registered semantics and the IR
-    "verity_vllm/*",
+    "verity_vllm/*", "../../verity/ml/circuits/ops/*",
     # frozen decisions / accepted results / the design notes the integrator owns
     "out/capture/decisions.md", "data/logs/*", "verity_vllm/observe/DESIGN.md", "out/gen/RULES.md",
 )
@@ -54,10 +54,10 @@ PROTECTED_EXISTING: tuple[str, ...] = (
 )
 #: Frozen.  Lane-writable exceptions inside otherwise protected trees.
 WRITABLE_EXCEPTIONS: tuple[str, ...] = (
-    "verity/ml/circuits/ops/quarantine/*",
+    "../../verity/ml/circuits/ops/quarantine/*",
 )
 #: Existing registered primitive semantics (a change here is `EXISTING PRIMITIVES MODIFIED`).
-PRIMITIVE_PATHS: tuple[str, ...] = ("verity/ml/circuits/ops/*",)
+PRIMITIVE_PATHS: tuple[str, ...] = ("../../verity/ml/circuits/ops/*",)
 #: The checkpoint manifest: appending entries is lane work; changing an existing entry is not.
 MANIFEST = "manifests/checkpoints.json"
 
@@ -144,7 +144,7 @@ def new_definitions(changed: list[tuple[str, str]], head: str, cwd: Path = REPO)
     import re
     out = []
     for st, path in changed:
-        if path.startswith("verity/ml/circuits/ops/quarantine/") and path.endswith(".py"):
+        if path.startswith("../../verity/ml/circuits/ops/quarantine/") and path.endswith(".py"):
             try:
                 src = _git("show", f"{head}:./{path}", cwd=cwd)
             except subprocess.CalledProcessError:
