@@ -5,11 +5,11 @@
  },
  "runs": {
   "PousCheck.DifftestMain": {
-   "why": "generated instances on which PousCheck's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths) and the challenges (verity.ml.randomness derive, stream and uniform; reference.audit_id, audit_key, round_key, each round's index and nonce)",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "600"],
+   "why": "generated instances on which PousCheck's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths), the challenges (verity.ml.randomness; reference.audit_id, audit_key, round_key, each round's index and nonce), and the timed audit (wire.verify_audit's FINAL frame or fault on honest and adversarial sessions, at reduced width and at the deployment's, and on the spec's 31 negative and 3 positive audit vectors), with the spec's section 7 pins of the audit files and frames",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1242"],
    "data": {
-    "difftest/instances.jsonl": "cd9731dea97313a0c6d5b80810218c2f11fd952dc81744d22c65b7f5407e5d2b",
-    "difftest/python.jsonl": "7272a1d0e48f4de4c8f7d758e8628e4cc6d97e957e0ea201e43c3dec61f9a1ae"
+    "difftest/instances.jsonl": "2ccd1dab9c7f164f2f65e61251ca576b14050584369036a59fb8d6bfe0c6d5d1",
+    "difftest/python.jsonl": "454c101ce65981b0b9607dafbec76b1af75e6cecbfb762f1b5f584fa0eb97c3e"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }

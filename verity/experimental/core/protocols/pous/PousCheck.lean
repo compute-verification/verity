@@ -2,4 +2,6 @@ import PousCheck.Params
 import PousCheck.Merkle
 import PousCheck.Randomness
 import PousCheck.Challenge
+import PousCheck.Wire.Codec
+import PousCheck.Wire
 import PousCheck.Difftest

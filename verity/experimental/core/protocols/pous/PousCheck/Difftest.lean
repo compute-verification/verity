@@ -1,6 +1,7 @@
 import Flock.Canon
 import PousCheck.Merkle
 import PousCheck.Challenge
+import PousCheck.Wire
 
 /-!
 # The difftest: the PoUS check against the Python verifier, on generated instances
@@ -15,6 +16,9 @@ a test, not a proof.
   from its name and arguments), and the leaf of each sample block.
 * `randomness`: `Randomness.derive` of a random source, domain and context, its streams and uniforms over random indices,
   and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices (`PousCheck.Challenge`).
+* `audit`: `Wire.verifyAudit` on a session (frames, measured latencies, the verifier's secret, beacons and seen pairs): its
+  `FINAL` frame, or the fault's code when there is none.
+* `sha512`: the SHA-512 of labelled bytes, against the pins the spec's §7 states for them.
 -/
 
 namespace PousCheck.Difftest
@@ -127,10 +131,40 @@ def randomness (inst : Json) : V Json := do
       | some x => num x
       | none => .null))]
 
+/-- A JSON field that may be `null` or absent. -/
+def optional {α : Type} (j : Json) (k : String) (f : Json → V α) : V (Option α) :=
+  match j.getObjValD k with
+  | .null => pure none
+  | v => some <$> f v
+
+/-- An `audit` instance's answer: `Wire.verifyAudit`'s `FINAL` frame, or the code of the fault that leaves none. -/
+def audit (inst : Json) : V Json := do
+  let frames ← bytesArr (← J.get inst "frames" "audit") "frames"
+  let elapsed ← (← J.arr inst "elapsed_ns" "audit").mapM (J.asNat · "elapsed_ns")
+  let source ← optional inst "verifier_source" (bytesOf · "verifier_source")
+  let beacons ← optional inst "beacons" fun j => do (← J.asArr j "beacons").mapM fun b => do
+    let #[r, v] := (← J.asArr b "beacon") | throw "audit: a beacon is [round, value]"
+    pure (← J.asNat r "round", ← bytesOf v "beacon")
+  let seen ← optional inst "seen" fun j => do (← J.asArr j "seen").mapM fun p => do
+    let #[e, a] := (← J.asArr p "pair") | throw "audit: a seen pair is [epoch, audit id]"
+    pure (← bytesOf e "epoch", ← bytesOf a "audit id")
+  pure <| match Wire.verifyAudit frames elapsed ⟨source, beacons, seen⟩ with
+    | .ok final => Json.mkObj [("final", hex final)]
+    | .error e => Json.mkObj [("error", num e.code)]
+
+/-- A `sha512` instance's answer: the SHA-512 of each item's bytes, by its label (the spec's §7 pins). -/
+def sha512 (inst : Json) : V Json := do
+  let items ← (← J.arr inst "items" "sha512").mapM fun i => do
+    let #[label, b] := (← J.asArr i "item") | throw "sha512: an item is [label, bytes]"
+    pure (← J.asStr label "label", hex (Sha512.hash (← bytesOf b "bytes")))
+  pure (Json.mkObj items.toList)
+
 def evaluate (inst py : Json) : V Json := do
   match ← J.str inst "kind" "instance" with
   | "merkle" => merkle inst py
   | "randomness" => randomness inst
+  | "audit" => audit inst
+  | "sha512" => sha512 inst
   | k => throw s!"unknown instance kind {k}"
 
 /-- The differences on one line: none, or why its answer is not the Python's. -/

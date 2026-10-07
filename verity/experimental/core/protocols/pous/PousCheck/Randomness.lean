@@ -69,11 +69,11 @@ def stream (key : ByteArray) (index : List Part) (n : Nat) : ByteArray :=
 /-- `Key._uniform`'s reduction on the stream `s`, from its start: `none` when `s` runs out first. -/
 def uniformOn (n : Nat) (s : ByteArray) : Option Nat := (Flock.Draw.uniform n s (s.size + 1) 0).map (·.1)
 
-/-- `Key.uniform(n, index)`: the stream at `("u", *index)` read in doubling prefixes, from 8 blocks, until a word is
-accepted. A word is refused with probability below `2^-64`, so the first prefix decides in practice; `none` only for
-`n = 0` or after 48 doublings. -/
+/-- `Key.uniform(n, index)`: the stream at `("u", *index)` read in doubling prefixes, from one block, until a word is
+accepted. Every prefix of the stream is the Python's, so the first accepted word is; a word is refused with probability
+below `2^-64`, so a prefix holding one word decides in practice. `none` only for `n = 0` or after 64 doublings. -/
 def uniform (key : ByteArray) (n : Nat) (index : List Part) : Option Nat :=
-  if n = 0 then none else go 48 8
+  if n = 0 then none else go 64 ((Flock.Draw.width n + 63) / 64)
 where
   go : Nat → Nat → Option Nat
     | 0, _ => none
