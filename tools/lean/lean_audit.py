@@ -47,7 +47,10 @@ they're dropped, so a run's compile-time code cannot leave the next run a cache 
 earlier passing run. The package's own `.lake/build` is kept the same way (`WarmBuilds`), under its toolchain, manifest and
 lakefile less the paths to what it requires (`build_key`), not under its path: Lake decides what is up to date by content
 hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
-`.olean` files with the package's record, and the kernel replay still covers the package's own modules. Lean gets this
+`.olean` files with the package's record, and the kernel replay still covers the package's own modules: each one whose
+`.olean` files, and those of every module it imports, transitively, passed an earlier replay here is reused
+(`audit.py --replay-cache`, `lean-replay/` beside the passes; not with `--fresh`), so a change to a few modules replays
+those and what imports them. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
@@ -632,6 +635,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "lean" / "audit.py"), *FLAGS, *(str(work / p) for p in audited),
+                            *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay")]),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
