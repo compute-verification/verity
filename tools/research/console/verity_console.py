@@ -1071,7 +1071,7 @@ USAGE_RECORD = Path("/workspace/usage/usage-hourly.jsonl")  # cluster.usage.RECO
 def usage_module():
     """`cluster.usage`, the one usage computation: the copy deploy.toml ships beside this script, else the checkout's; never
     another `cluster` on the path."""
-    for p in (HERE, HERE.parents[1] / "cluster" / "src"):
+    for p in (HERE, HERE.parents[2] / "infra" / "cluster" / "src"):
         if (p / "cluster" / "usage.py").is_file():
             if str(p) not in sys.path:
                 sys.path.insert(0, str(p))
