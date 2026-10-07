@@ -108,13 +108,13 @@ RULES_UNREAD = f"{trains.TOOL_PY} on main has a merge_requires this gate can't r
 OK = 'CHECK = Tool(name="check", produces=["check/v1"]'
 #: main's own layout: `preflight` after `merge_requires`
 MAINS = ('CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--extra", "torch-cpu", "python", '
-         '"tools/check/check.py"],\n             produces=["check/v1"],\n'
-         '             merge_requires={"lean-agreement": ["backends/flock/", "!README.md", "!PROTOCOL.md"]},\n'
-         '             preflight=["tools/check/preflight.py"])\n')
+         '"tools/verity/check/check.py"],\n             produces=["check/v1"],\n'
+         '             merge_requires={"lean-agreement": ["verity/ml/flock/", "!README.md", "!PROTOCOL.md"]},\n'
+         '             preflight=["tools/verity/check/preflight.py"])\n')
 
 
 def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
-    """(the service, its one train, the PR's head): PR ``pr`` as a train on a main whose tools/check/tool.py is ``tool_py``,
+    """(the service, its one train, the PR's head): PR ``pr`` as a train on a main whose tools/verity/check/tool.py is ``tool_py``,
     checked by run r9 with a ``kind`` result whose one step, suites, passed, after the reconcile cron."""
     s = service(TRAINS)
     head = s.github.prs[pr]["head"]
@@ -138,7 +138,7 @@ def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
 @pytest.mark.parametrize(("tool_py", "pr", "state", "why"), [
     pytest.param(f"{OK}\n", 2, "stuck", f"{trains.TOOL_PY} on main doesn't parse (", id="unparseable"),
     pytest.param(f"{OK}, merge_requires=RULES)\n", 2, "stuck", RULES_UNREAD, id="merge_requires-a-name"),
-    pytest.param(f'{OK}, merge_requires={{"lean-agreement": "backends/flock/"}})\n', 2, "stuck", RULES_UNREAD,
+    pytest.param(f'{OK}, merge_requires={{"lean-agreement": "verity/ml/flock/"}})\n', 2, "stuck", RULES_UNREAD,
                  id="merge_requires-of-a-string"),
     pytest.param('CHECK = Tool(name="check", produces=("check/v1",))\n', 2, "stuck",
                  f"{trains.TOOL_PY} on main has a produces this gate can't read", id="produces-a-tuple"),
@@ -154,7 +154,7 @@ def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
 ])
 def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state, why):
     """Python-only beside the vectors: a syntax error's why is Python's own message; a missing `merge_requires` asks for no
-    step, so a backends/flock/ change lands without lean-agreement."""
+    step, so a verity/ml/flock/ change lands without lean-agreement."""
     s, tr, head = _train_on(tool_py, pr)
     assert tr.state == state, tr.why
     assert tr.why is None if why is None else tr.why.startswith(why), tr.why
@@ -177,12 +177,12 @@ def test_the_gate_reads_checks_own_produces_whatever_quotes_one_above_it(above):
 
 
 def test_the_repositorys_own_check_declaration_parses_to_what_importing_it_declares(tmp_path):
-    """The regression the patterns had: main's tools/check/tool.py changed its layout (a keyword after merge_requires) and the
+    """The regression the patterns had: main's tools/verity/check/tool.py changed its layout (a keyword after merge_requires) and the
     gate silently read no merge_requires.  This reads the file itself, so a layout the gate can't parse fails here first."""
     from research.merge import declaration
 
     text = (Path(__file__).resolve().parents[3] / trains.TOOL_PY).read_text()
-    # imported from a copy: importing the real file reads its tools/check/__pycache__, which the suite's inputs don't cover
+    # imported from a copy: importing the real file reads its tools/verity/check/__pycache__, which the suite's inputs don't cover
     (tmp_path / trains.TOOL_PY).parent.mkdir(parents=True)
     (tmp_path / trains.TOOL_PY).write_text(text)
     tool = declaration(tmp_path, "check")

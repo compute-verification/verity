@@ -8,7 +8,7 @@ RNE bf16.  Emits every online-state version the kernel holds in registers (mappi
 
 Run:  cd integrations/vllm; PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --case p0b --out /tmp/p0b_ref.json
       PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --compare /tmp/p0b_ref.json /tmp/p0b_dump.json
-Needs the MUFU tables (core's, `verity_catalog.definitions.mufu.TABLE_DIR`).
+Needs the MUFU tables (core's, `verity.ml.circuits.ops.mufu.TABLE_DIR`).
 Deterministic: inputs come from numpy PCG64(seed); no torch, no GPU.  All words are hex in the JSON (f32: 8 digits,
 bf16: 4 digits); ints `n_block`, `nvis`, `M`, `T`, `D`, `BN` are decimal.
 """

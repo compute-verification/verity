@@ -1033,7 +1033,7 @@ def instances_form() -> str:
 
 
 def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path) -> dict:
-    """D85: freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.primitives.circuits.codec`,
+    """D85: freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.ml.circuits.codec`,
     digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
     memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
     the operand `Refs` as runs) -- and `accesses.jsonl.gz` the full memory-access journal (alloc / root / read / write /
@@ -1043,8 +1043,8 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     import gzip
 
     from verity_vllm.observe.events import ViewDesc
-    from verity.primitives.circuits import codec
-    from verity.primitives.circuits.refs import runs
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.refs import runs
 
     # [R17 mfast, COORD R17-39 (a) fold/persist] the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
     # same dict, in field order, that dataclasses.asdict + _jsonable produced), an operand_refs item is a list of a str and ints already
