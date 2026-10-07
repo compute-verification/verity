@@ -1,12 +1,13 @@
 import Properties.Pouw
 import Properties.Pouw.Check
+import Properties.Proofs.Pouw.Grid
 
 /-!
 # Proofs of PoUW's check properties (`Properties.Pouw.Check`)
 
 By unfolding the check: `registered_ok` and `outcome_accept` say what each of its two rules accepts, and `acceptMeans`
-composes them; the rest follow. `AcceptedInRange` is open: `acceptedInRange_of_grid` proves it from the window's grid
-properties `PointEnumerates` and `FloorPointGreatest`, open in `Properties.Pouw`.
+composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRange` from the window's grid properties
+`PointEnumerates` and `FloorPointGreatest`, which `Properties.Proofs.Pouw.Grid` proves.
 -/
 
 namespace Properties.Pouw.Check
@@ -230,7 +231,7 @@ theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
   | reject r₀ => simp only [hs] at h; cases h
   | undecided r₀ => simp only [hs] at h; cases h; exact ⟨r₀, rfl, rfl⟩
 
-/-- `AcceptedInRange` from the window's grid properties, open there: the credited tiles are at least `lo` by the level's
+/-- `AcceptedInRange` from the window's grid properties: the credited tiles are at least `lo` by the level's
 rule, and the padded count `point (level + 1)` is at most the floor point of `hi`, since `point` increases and inverts
 `level` on the grid. -/
 theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) (hf : Window.FloorPointGreatest) : AcceptedInRange := by
@@ -259,6 +260,9 @@ theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) (hf : Window.Floor
     simp only [PouwWindow.floorPoint, PouwWindow.level, Nat.zero_div, Nat.zero_mul] at h3
     rw [ite_eq_left (Nat.two_pow_pos _)] at h3
     omega
+
+theorem acceptedInRange : AcceptedInRange :=
+  acceptedInRange_of_grid Window.pointEnumerates Window.floorPointGreatest
 
 theorem commitmentKeepsBytes : CommitmentKeepsBytes := by
   intro b c h

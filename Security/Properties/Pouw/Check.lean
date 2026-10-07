@@ -5,8 +5,7 @@ import PouwCheck
 
 The properties of the executable check (`verity/experimental/core/protocols/pouw/check/`, the port of
 `verity/experimental/protocols/pouw/core_check.py`), stated against `protocol.check` as it runs, for every input of
-the types its decoders produce. Each is a `Prop`; `Properties.Proofs.Pouw.Check` proves the ones it can, and the others
-are open.
+the types its decoders produce. Each is a `Prop`, and `Properties.Proofs.Pouw.Check` proves every one.
 
 `AcceptMeans` is the check's whole meaning: it accepts exactly when the registration keeps PoUW's rule
 (`RegistrationKeeps`) and the service accepted that registration with the profile and draw the rule fixes
