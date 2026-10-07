@@ -255,7 +255,7 @@ def main(argv: list[str]) -> int:
         for w, names in fresh.items():
             cfg["watch"][w]["ack"] = sorted(set(cfg["watch"][w].get("ack", [])) | set(names))
         import importlib.util
-        spec = importlib.util.spec_from_file_location("lean_audit", HERE / "audit.py")
+        spec = importlib.util.spec_from_file_location("lean_audit", HERE / "check.py")
         audit = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(audit)
         audit.dump(pkg, policy)
