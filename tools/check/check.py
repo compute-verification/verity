@@ -152,8 +152,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-#: the Lean verifier of record, and `ci.py`, its agreement job against upstream's Rust verifier
+#: `ci.py`, the agreement job of the Lean verifier against upstream's Rust verifier, and its other scripts
 FLOCK_VERIFIER = ROOT / "backends" / "flock" / "verifier"
+#: the Lean verifier of record, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
+#: the Lean package away from the scripts rewrites it)
+FLOCK_LEAN = ROOT / "backends" / "flock" / "verifier" / "lean"
 #: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
 VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
                       "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY",
@@ -526,7 +529,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  `research merge` requires it for a change under `backends/flock/` (`tools/check/tool.py`), and
     `--record` sends it then."""
-    lean = FLOCK_VERIFIER / "lean"
+    lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
         return [("lean", "skipped: backends/flock/verifier/lean is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
@@ -684,7 +687,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
         return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
-    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_VERIFIER / "lean" / ".lake" / "build" / "bin" / "flock-verify"),
+    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
