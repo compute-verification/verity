@@ -2,8 +2,7 @@
 # 'Verity repository', draft of 7 Oct 2026).
 #
 # [paths] maps an old path prefix (a file, or a directory ending in "/") to its new one; the longest prefix that matches a
-# tracked file decides where it goes, and a row that maps a directory to itself keeps it where it is (the Lean that
-# `tools/move/lean.py` moves). Python module names follow from the paths and [roots] (`layout.py` derives every rename);
+# tracked file decides where it goes, and a row that maps a directory to itself keeps it where it is. Python module names follow from the paths and [roots] (`layout.py` derives every rename);
 # [modules] lists the renames at package level, and the script fails when what it derives disagrees with them. [aliases]
 # adds old names that no file in the tree carries any more. [retired] lists the old paths the move empties, and [drop] the
 # files it deletes (an `__init__.py` of a package level that goes, a pyproject whose distribution folds into `verity`).
@@ -30,9 +29,9 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "kernels/verity_kernels/" = "verity/ml/kernels/"
 "kernels/hash_gpu/" = "verity/ml/kernels/hash_gpu/"
 # C-Flock keeps its distribution and import name (`verity_flock` depends on verity-vllm and verity-numerical, which depend on
-# `verity`, so it can't fold into `verity`); its verifier's Lean is lean.py's
+# `verity`, so it can't fold into `verity`); its verifier's Lean is core's first package
 "backends/flock/" = "verity/ml/flock/"
-"backends/flock/verifier/lean/" = "backends/flock/verifier/lean/"
+"backends/flock/verifier/lean/" = "verity/core/service/flock/"
 
 # --- experimental/: work in progress, including today's Python verifiers until their Lean versions land in core/
 "experimental/verity_experimental/" = "verity/experimental/"
@@ -49,10 +48,9 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "verity/protocols/accounting/space/pous/" = "verity/experimental/protocols/pous/"
 "verity/protocols/accounting/communication/certifier/" = "verity/experimental/protocols/certifier/"
 "verity/protocols/verification/sampled_proofs/" = "verity/experimental/protocols/sampled_proofs/"
-# the protocols' Lean is lean.py's
-"verity/protocols/accounting/work/pouw/lean/" = "verity/protocols/accounting/work/pouw/lean/"
-"verity/protocols/accounting/space/pous/lean/" = "verity/protocols/accounting/space/pous/lean/"
-"verity/protocols/accounting/communication/certifier/lean/" = "verity/protocols/accounting/communication/certifier/lean/"
+
+# --- Security/: what core/ guarantees, and the proofs
+"verity/Security/" = "Security/"
 
 # --- tests/: the whole tree's rules (a pyproject.toml at verity/ would end uv's search for the workspace of verity/ml/flock)
 "verity/tests/test_boundaries.py" = "tests/test_boundaries.py"
@@ -102,7 +100,7 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 # the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
 # says otherwise
 "backends.flock" = "verity.ml.flock"
-"backends.flock.verifier.lean" = "backends.flock.verifier.lean"
+"backends.flock.verifier.lean" = "verity.core.service.flock"
 "backends.flock.verifier.stratified_agree" = "verity.ml.flock.tests.stratified_agree"
 "catalog.census" = "benchmarks.census"
 "catalog.tests" = "verity.ml.circuits.ops.tests"
@@ -116,6 +114,7 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 "tools.research.control" = "infra.control"
 "tools.tc_probe" = "benchmarks.tc_probe"
 "tools.tc_probe_fp4" = "benchmarks.tc_probe_fp4"
+"verity.Security" = "Security"
 "verity.claims" = "verity.experimental.claims"
 "verity.primitives" = "verity.ml"
 "verity.primitives.circuits" = "verity.ml.circuits"
@@ -126,11 +125,8 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 "verity.primitives.randomness" = "verity.ml.randomness"
 "verity.protocols" = "verity.experimental.protocols"
 "verity.protocols.accounting.communication.certifier" = "verity.experimental.protocols.certifier"
-"verity.protocols.accounting.communication.certifier.lean" = "verity.protocols.accounting.communication.certifier.lean"
 "verity.protocols.accounting.space.pous" = "verity.experimental.protocols.pous"
-"verity.protocols.accounting.space.pous.lean" = "verity.protocols.accounting.space.pous.lean"
 "verity.protocols.accounting.work.pouw" = "verity.experimental.protocols.pouw"
-"verity.protocols.accounting.work.pouw.lean" = "verity.protocols.accounting.work.pouw.lean"
 "verity.protocols.verification.sampled_proofs" = "verity.experimental.protocols.sampled_proofs"
 "verity.tests.test_boundaries" = "tests.test_boundaries"
 "verity_catalog.definitions" = "verity.ml.circuits.ops"
