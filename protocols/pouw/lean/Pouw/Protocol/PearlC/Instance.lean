@@ -18,8 +18,8 @@ Its domain rules are `Defs`' liveness rule (`LiveRow` under `Stat.every8`), fini
 are `creditOf` minus the replayed debit (`unitDebit`), and `wrefOf`.
 
 `sem` collects the pieces that are not pinned yet, each to be replaced by a shared definition when it lands:
-* `noise`: the unit's noise factors from the oracle: E_A per unit, keyed by (salt, A root, B root, unit index), and F_A,
-  F_B and E_B per job, keyed by (salt, B root);
+* `noise`: the unit's noise factors from the oracle, as E4M3 codes: E_A per unit, keyed by (salt, A root, B root, unit
+  index), and F_A, F_B and E_B per job, keyed by (salt, B root);
 * `fc`: the forming chain before the cast (§5's atom-mix);
 * `alpha`, `beta`, `floor`: a row's scale, noise scale and noise-floor quantity (§5: α from the model's quantizer,
   σ = δ·ρ with ρ over every 8th position, floor σ·α).
@@ -50,12 +50,21 @@ def atNat {p q : ℕ} (M : Matrix (Fin p) (Fin q) (Option ℚ)) : ℕ → ℕ �
 /-- The BF16 word of a value BF16 represents exactly (an E4M3 code's value): the top half of its FP32 word. -/
 def bf16WordOf (v : ℚ) : ℕ := f32Word v >>> 16
 
+/-- **An E4M3 code widened to BF16** (`F2fpBf16 ∘ E4m3ToF32`, `pearl_c._bf16_of_code`): the code's sign bit over the
+BF16 word of its magnitude, which BF16 holds exactly. So `−0` (`0x80`) widens to `0x8000`. -/
+def codeBf16 (c : Code) : ℕ := bf16WordOf |codeVal c| ||| (if c.sign then 0x8000 else 0)
+
 /-- A committed operand of `p` rows and `q` columns passes the domain rules: every word finite, every row live
 (`LiveRow` at δ under §5's statistic `Stat.every8`, the ρ of the noise scale) and above the noise floor. Under the
 full row's RMS the rule would admit every nonzero row (`liveRow_of_meanSq_pos`). -/
 def PearlCSem.OperandOK (sem : PearlCSem Q R S) (p q : ℕ) (W : Codes) : Prop :=
   (∀ i < p, ∀ l < q, (wordQ (W i l)).isSome) ∧
     ∀ i : Fin p, LiveRow Params.pi.δ (wordsVal p q W i) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W i)
+
+/-- Row `i` of a committed operand of `p` rows and `q` columns passes Π's rules: `PearlCSem.OperandOK`, one row. -/
+def PearlCSem.RowOK (sem : PearlCSem Q R S) (p q : ℕ) (W : Codes) (i : ℕ) : Prop :=
+  (∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ h : i < p,
+    LiveRow Params.pi.δ (wordsVal p q W ⟨i, h⟩) Stat.every8 ∧ 1 ≤ sem.floor q (wordsVal p q W ⟨i, h⟩)
 
 /-- The unit's noisy operands and ticket chain. -/
 noncomputable def PearlCSem.unitChain (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
@@ -69,8 +78,8 @@ noncomputable def PearlCSem.unitChain (sem : PearlCSem Q R S) (H : Q → R) (s :
    sem.fc.quantB (fun j => sem.alpha sh.k (W j)) (fun j => sem.beta sh.k (W j)) W z)
 
 /-- **The unit's useful output U under the pinned order** (`PeelExact.peelExactVal`), from the unit's noisy codes
-(`unitChain`), the bases `F_A` and `F_B` as E4M3 codes (their entries are E4M3 values, so `e4m3` reads them exactly),
-and the peel's noise rows under §5's forming: `bf16(E′)` with `E′ = lineCodes β e` per row. -/
+(`unitChain`), the bases' codes `F_A` and `F_B`, and the peel's noise rows under §5's forming: `bf16(E′)` (`codeBf16`)
+with `E′ = lineCodes β e` per row. -/
 noncomputable def PearlCSem.unitUseful (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
     Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).n) (Option ℚ) :=
   let sh := U.layout.shape u
@@ -78,8 +87,8 @@ noncomputable def PearlCSem.unitUseful (sem : PearlCSem Q R S) (H : Q → R) (s 
   let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
   let z := sem.noise H s U u act
   let AB := sem.unitChain H s U u act
-  let be := fun (β : ℚ) (e : Fin Params.pi.r → ℚ) (p : Fin 32) => bf16WordOf (codeVal (lineCodes β e p))
-  PeelExact.peelExactVal AB.1 AB.2 (fun l p => e4m3 (z.FA l p)) (fun l p => e4m3 (z.FB l p))
+  let be := fun (β : ℚ) (e : Fin Params.pi.r → Code) (p : Fin 32) => codeBf16 (lineCodes β e p)
+  PeelExact.peelExactVal AB.1 AB.2 (fun l p => z.FA l p) (fun l p => z.FB l p)
     (fun i => be (sem.beta sh.k (X i)) (z.EA i)) (fun j => be (sem.beta sh.k (W j)) (z.EB j))
 
 open Classical in
@@ -107,7 +116,7 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
     atNat (ctChain Params.pi.G (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUseful H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w => sem.OperandOK sh.n sh.k w
+  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditOf Params.pi c (U.layout.shape u) - debitOf Params.pi c (sem.unitDebit H s U u act) : ℚ) : ℝ)
   capOK := fun H s U u act =>

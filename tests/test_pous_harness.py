@@ -469,7 +469,7 @@ def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_i
     facts = {"before": {"clocks.max.sm": "2500", "nvidia_smi_id": "GPU-b"}}
     got = harness.step_floor(fake, 2, 483_000, facts)
     assert got["fastest"] == "pair" and got["min_s"] == 4e-4 and got["below_certificate"]
-    assert set(got["variants"]) == set(harness.STEP_VARIANTS) and "upper bound" in got["label"]
+    assert set(got["variants"]) == set(harness.STEP_VARIANTS) and "not an upper bound on the adversary" in got["label"]
     assert harness.STEP_VARIANTS["chain_pairs"] == {"chain_pairs": True}                    # the decode's lane-pair kernel
     assert got["sampled_sm_mhz"] == 2000.0 and got["at_max_clock_s"] == 4e-4 * 2000 / 2500                  # scaled to max
     assert got["sampled_nvidia_smi_id"] == "GPU-b"

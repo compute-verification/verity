@@ -1,8 +1,8 @@
 """The PoUW Lean package (`lean/`) and what the rest of this directory says about it: every Lean theorem `PROTOCOL.md` cites is
-pinned in its `lean-audit.json`, and its FP8 conformance data is what `verity.ml.tc` computes. `lean/scripts/fp8atom_vectors.py`,
-run again, writes the kernel-pinned vectors in `lean/Pouw/Protocol/Fp8Atom/` and their checks in `lean/Pouw/SecurityProofs/Fp8Atom/`
-byte for byte, and the bulk whose SHA-256 the record pins for `PouwBulk`. The Lean audit runs `PouwBulk` on that bulk (`runs`);
-this is the half that says the data is still `verity.ml.tc`'s."""
+a guarantee in its `lean-audit.json`, and its FP8 conformance data is what `verity.ml.tc` computes.
+`lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `lean/Pouw/Protocol/Fp8Atom/` and their
+checks in `lean/Pouw/SecurityProofs/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the record holds for `PouwBulk`. The
+Lean audit runs `PouwBulk` on that bulk (`runs`); this is the half that says the data is still `verity.ml.tc`'s."""
 from __future__ import annotations
 
 import gzip
@@ -22,15 +22,15 @@ SCRIPT = LEAN / "scripts" / "fp8atom_vectors.py"
 POLICY = json.loads((LEAN / "lean-audit.json").read_text())
 
 
-def test_cited_theorems_are_pinned() -> None:
-    """A qualified `Pouw.…` name in `PROTOCOL.md` is a pinned theorem or a definition a pinned statement reads (a named
+def test_cited_theorems_are_guarantees() -> None:
+    """A qualified `Pouw.…` name in `PROTOCOL.md` is a guarantee in the record or a definition a guarantee reads (a named
     assumption, a game)."""
-    pins = set(POLICY["pins"])
+    guarantees = set(POLICY["guarantees"])
     read = {d for g in POLICY["reads"].values() for d in g["definitions"]}
     doc = (HERE / "PROTOCOL.md").read_text()
     cited = set(re.findall(r"`(Pouw\.[A-Za-z0-9_.']+)`", doc))
     assert cited
-    assert sorted(cited - pins - read) == []
+    assert sorted(cited - guarantees - read) == []
 
 
 @pytest.fixture(scope="module")

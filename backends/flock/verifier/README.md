@@ -16,17 +16,19 @@ keyed-BLAKE3 row leaf, SHA-256 or SHA-512 unsalted trees). Four things are param
 Merkle scheme (`Flock.MerkleScheme`: SHA-256, or SHA-512 with 64-byte siblings) and the Halevi–Micali leaf (`Flock.Hm96`,
 generic over the hash). The legacy module (pure-block, IR frame) is not written yet.
 
-`verify` fails closed (§16.15): a statement that sets up but whose form the soundness proof does not cover is refused,
-every session with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`).
-That refuses every version before `hm96-sha512` rows, the typed statements, public input ports, several tables without
-`--zk`, shared-row public files, and circuits outside `Layout.scopeOk` (a unit reading more than one input group, a tail
-that computes the outputs, among others), except, at a `--zk` statement with hidden outputs, a circuit in the canonical
-I/O format whose unit returns the outputs (§16.16's V1, `Flock.ProvedScope.canonicalOk`). Those statements still parse
-and set up (`statement` prints their digest and Σ), and the agreement check expects the refusal of them (D12,
-`vectors.json`'s `lean_refuses`). A session drawn by a law no soundness claim draws by is refused too, with `refused:
-<why>: no soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without
-a closure, a subset draw without `--zk`, and a stratified draw at a statement only the canonical format admits
-(`Flock.ProvedScope.canonicalLaw`; `lean_refuses_drawn`).
+`verify` fails closed (§16.15): every session of a statement whose form the soundness proof does not cover is refused
+with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`), once every check
+has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
+rows, the typed statements, public input ports, several tables without `--zk`, shared-row public files, and circuits
+outside `Layout.scopeOk` (a unit reading more than one input group, a tail that computes the outputs, among others),
+except, at a `--zk` statement with hidden outputs, a circuit in the canonical I/O format whose unit returns the outputs
+(§16.16's V1, `Flock.ProvedScope.canonicalOk`). Those statements still parse, set up and verify (`statement` prints their
+digest and Σ), and the agreement check compares a session refused for its form alone as accepted (D12, `vectors.json`'s
+`lean_refuses`). A session drawn by a law no soundness claim draws by is refused at setup, with `refused: <why>: no
+soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without a
+closure, a subset draw without `--zk`, and a stratified draw at a statement only the canonical format admits
+(`Flock.ProvedScope.canonicalLaw`; `lean_refuses_drawn`). So is a session without a draw, with `refused: a session without
+a draw: every soundness claim is about a drawn session (D12)`, last, after the form's refusal (`lean_refuses_drawless`).
 
 ## Build and run
 
@@ -34,6 +36,7 @@ a closure, a subset draw without `--zk`, and a stratified draw at a statement on
 cd backends/flock/verifier/lean && lake build          # .lake/build/bin/flock-verify
 flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
 flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os]   # digest, Σ, Hello
+flock-verify scope [--statement ID] --circuit F --public pub.bin [--tables DIR] [--zk] [--session-tables J]   # the form check alone
 ~~~
 
 `ID` names a version:
@@ -188,7 +191,8 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   and the agreement is between Lean and this repository's Rust prover, not upstream's verifier. `vectors.json`
   `live.sets` 2 to 5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate;
   `ci.py --live`: 20/20, 21/21, 20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`). On flat RoPE the honest
-  sessions are accepted, so digest and Σ are the prover's, and every negative refused, `output_row_committed_false` (an
+  sessions pass every check, so digest and Σ are the prover's (they have no draw, so their verdict is that refusal, D12),
+  and every negative is refused by its check, `output_row_committed_false` (an
   output row's `b ‖ c` not the circuit's outputs) included; flat GEMM (a unit reading two input groups) and both typed
   sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
   cases (the honest session and the three false statements) from a fetched fixture

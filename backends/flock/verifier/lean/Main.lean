@@ -312,10 +312,12 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
-A statement whose form the soundness proof does not cover is refused (`ProvedScope.check`, §16.15), each session with
-the reason, and so is a session whose draw is by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or
+A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`; at a statement in the canonical format, §16.16, a
-stratified draw, `ProvedScope.canonicalLaw`). Exit 0 iff every session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
+stratified draw, `ProvedScope.canonicalLaw`). Every session of a statement whose form the soundness proof does not cover
+(`ProvedScope.check`, §16.15) is refused, and so is a session without a draw, both after every check has passed (so the
+reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every session is accepted. `--zk`: the
+sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
@@ -370,9 +372,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | some k => match k.toNat? with
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
-  -- a statement that sets up is still refused when no soundness claim draws by its draw's law (`ProvedScope.drawLaw`,
-  -- and at a canonical statement `ProvedScope.canonicalLaw`) or the soundness proof does not cover its form
-  -- (`ProvedScope.check`)
+  -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
+  -- (`ProvedScope.drawLaw`, and at a canonical statement `ProvedScope.canonicalLaw`); a statement whose form the soundness
+  -- proof does not cover (`ProvedScope.check`) is refused in each session's verdict
   let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
   let canonical := ProvedScope.canonicalAt tags zk circuitB tables
   let setupOf := fun (draw : Option Lean.Json) =>
@@ -381,8 +383,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
           registered publicInputs (identifier.map Prod.snd)
         if zk then r.2.forM Zk.shapeOk
         pure r) with
-    | .ok (spec, sts) => (ProvedScope.drawLaw zk draw).bind fun () => (ProvedScope.canonicalLaw canonical draw).bind fun () =>
-      scope.map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).bind fun () =>
+      (ProvedScope.canonicalLaw canonical draw).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -422,6 +424,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
+      -- last, so a session that fails a check keeps that check's reason: the form's refusal, then a draw-less session's
+      scope
+      if draw.isNone then ProvedScope.drawLaw zk draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
@@ -434,6 +439,29 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
+
+/-- `scope [--statement ID] [--archive DIR] --circuit F --public F [--tables DIR] [--public-inputs F] [--zk]
+[--session-tables J]`: the form check `verify` ends each session's verdict with (`ProvedScope.check`, §16.15), under the
+tags `verify` would set the statement up with, and whether the circuit is in the canonical format and outside
+`Layout.scopeOk` (`ProvedScope.canonicalAt`, where `canonicalLaw` refuses a stratified draw, §16.16), with no session:
+`verify` reaches the check only in a session that passed every other one. One `SCOPE {"ok", "why", "canonical"}` line;
+exit 0 iff the check passes. -/
+def scopeCmd (args : List String) : IO UInt32 := do
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let some count := ((argOf args "--session-tables").getD "1").toNat?
+    | IO.eprintln "scope: --session-tables J: J is a natural number"; return 2
+  let zk := args.contains "--zk"
+  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
+  let tags := if zk then Zk.tags (tags.withCoins (Coins.tree (Zk.coinSpec (tags.tableNames count)))) (Zk.maskLogOf circuitB) count
+    else tags
+  let r := ProvedScope.check tags zk circuitB pubB tables count (argOf args "--public-inputs").isSome
+  let line := Lean.Json.mkObj [("ok", Lean.Json.bool r.toBool), ("why", Lean.Json.str (match r with | .ok () => "" | .error e => e)),
+    ("canonical", Lean.Json.bool (ProvedScope.canonicalAt tags zk circuitB tables))]
+  IO.println s!"SCOPE {line.compress}"
+  return (if r.toBool then 0 else 1)
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
 def statementCmd (args : List String) : IO UInt32 := do
@@ -936,6 +964,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw" :: rest => drawCmd rest
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
+  | "scope" :: rest => scopeCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path

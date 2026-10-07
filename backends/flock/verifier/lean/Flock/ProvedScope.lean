@@ -138,9 +138,10 @@ def lawWhy (zk : Bool) (d : Draw.UnitDraw) : Option String :=
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
 /-- **The session's draw is by a law a soundness claim draws by** (PROTOCOL.md §16.15): `draw` is the record's
-(`recordDraw`), none for a session without one. A draw that does not parse is refused too. -/
+(`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without a draw is
+refused (D12); so is a draw that does not parse. -/
 def drawLaw (zk : Bool) : Option Lean.Json → Except String Unit
-  | none => .ok ()
+  | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
   | some j => match Draw.UnitDraw.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
     | .ok d => match lawWhy zk d with

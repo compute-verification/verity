@@ -2,6 +2,7 @@
 differ from the definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
@@ -200,13 +201,18 @@ def test_unit_draw_check(tmp_path):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
 
 
+def _ir_tests() -> Path:
+    """Core's `tests/ir`, beside the `verity.ir` the import system finds (whichever member ships it): the vectors the Lean verifier
+    agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
+    return Path(importlib.util.find_spec("verity.ir").origin).resolve().parents[3] / "tests" / "ir"
+
+
 def _template_vectors():
     try:
-        import verity
+        import verity  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "template_instance_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "template_instance_vectors.json"
 
 
 
@@ -584,12 +590,10 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
 
 def _qword_vector_file():
     try:
-        import verity
         from verity.ir.codec import decode_program  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "qword_vectors.json"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
@@ -613,9 +617,7 @@ def _qword_vectors():
         from verity.ir.cut import cut_word  # noqa: F401
     except ImportError:
         return None
-    import verity
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "partition_vectors.json"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
@@ -628,12 +630,19 @@ def test_qword_evaluator_agrees_with_the_reference(tmp_path):
 
 def _format_vectors():
     try:
-        import verity
+        import verity  # noqa: F401
     except ImportError:
         return None
-    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
-    need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
-    return ir if all(p.exists() for p in need) else None
+    return _ir_tests()
+
+
+def test_the_reference_vectors_exist():
+    """The agreement tests below skip without Lean or without core, never for a vectors file that is not where they look."""
+    ir = _format_vectors()
+    files = [_template_vectors(), _qword_vector_file(), _qword_vectors(),
+             *(ir / n for n in ("format_vectors.json", "partition_vectors.json", "test_format_spec.py", "qcall_vectors.json"))]
+    missing = [str(f) for f in files if not f.exists()]
+    assert not missing, missing
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
@@ -649,8 +658,7 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None
-                    or not (_format_vectors() / "qcall_vectors.json").exists(), reason="no Lean toolchain or no Q_call vectors")
+@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -1143,8 +1151,8 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     `sha512_row_seg_word_digest`), commitment ``b || c`` and hm96 tree leaf, so their frame leaves agree under one domain; each
     side's statement digest is the one `flock-circuit statement` gives it, seeded and under `FC_COINS=os`. A writer's META
     that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
-    don't match the row's length, no runs (one row per port), a row named after another port, and its length or schema
-    changed. The composer refuses a run that isn't consecutive output ports."""
+    don't match the row's length, no runs (one row per port), a row named after another port, a later port of its run named
+    after an input row, and its length or schema changed. The composer refuses a run that isn't consecutive output ports."""
     from verity.commitments import hm96
     from verity.commitments.rowleaf import sha512_row_seg_word_digest
     from verity_flock import circuit as FC
@@ -1183,6 +1191,7 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
         "an empty run": (lambda m: m.__setitem__("out_row_ports", [0, 3]), runs_bad),
         "no runs": (lambda m: m.pop("out_row_ports"), rows_bad),
         "named after another port": (lambda m: m["ports"][1].__setitem__(0, "a1"), rows_bad),
+        "a later port of the run named after an input row": (lambda m: m["out_ports"][1].__setitem__(0, "p0"), rows_bad),
         "its length": (lambda m: m["row_schemas"][1].__setitem__(1, 19440),
                        "port a0: a row of 19440 bits is 1215 u16 leaves and 23 compressions, not META's 1216 and 23"),
         "read as v2": (lambda m: m["row_schemas"][1].__setitem__(0, "hm96-sha512/row/v2"),

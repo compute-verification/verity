@@ -2,7 +2,9 @@
 protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on RoPE d64 (m = 25 and 26), each with the
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
 two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
-them with upstream's offline verdict (§18)."""
+them with upstream's offline verdict (§18). Only the drawn session is accepted: the others have no draw, which `verify` refuses
+after every check has passed (§16.15, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other
+session its own reason."""
 from __future__ import annotations
 
 import json
@@ -23,6 +25,8 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: accepted); its identity's refused_coins name the zerocheck outer coin r_j = 1 (run r20261004-033801-14b6)
 FIXTURE = "art:5542740a"
 STATEMENT = "verity/flock-circuit+seed-injection"
+#: the refusal of a session without a draw, which `verify` reaches only when every check has passed
+DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -52,6 +56,12 @@ def _verify(root: Path, *sessions: Path, **kw) -> list[dict]:
             if line.startswith("VERDICT ")]
 
 
+def _passes(v: dict) -> bool:
+    """A session without a draw passed every check: it is refused for that alone."""
+    assert not v["accepted"], v
+    return v["why"] == DRAWLESS
+
+
 def _one(root: Path, name: str, k: int = 0) -> Path:
     return sorted(p for p in (root / "sessions" / name).iterdir() if p.is_dir())[k]
 
@@ -67,15 +77,15 @@ def _selftest(root: Path, keep) -> None:
     assert len(verdicts) == len(cases)
     for d, v in zip(cases, verdicts):
         live = json.loads((d / "case.json").read_text())["live"]
-        assert v["accepted"] == live["accepted"], (d.name, v["why"], live["why"])
+        assert _passes(v) == live["accepted"], (d.name, v["why"], live["why"])
         if live["why"].startswith("zk inner"):
             assert v["why"] == live["why"], d.name
 
 
 @pytest.mark.slow
 def test_the_zk_selftest_sessions_get_their_live_verdicts(zk):
-    """The two honest sessions accepted; level 0's hiding forged four ways, the pads not the committed ones (with and without
-    `final_c'` re-solved) and an internal bit flipped, each refused."""
+    """The two honest sessions pass every check; level 0's hiding forged four ways, the pads not the committed ones (with and
+    without `final_c'` re-solved) and an internal bit flipped, each refused by its check."""
     _selftest(zk, lambda n: n.startswith(("honest", "zk_")) or n == "unit_internal_bit_flipped")
 
 
@@ -103,7 +113,7 @@ def test_a_session_key_is_used_once(zk):
     """The coin tree's key is fresh (§7.4): a session read twice in one run is refused the second time."""
     honest = zk / "sessions" / "selftest" / "honest"
     first, second = _verify(zk, honest, honest)
-    assert first["accepted"], first["why"]
+    assert _passes(first), first["why"]
     assert not second["accepted"] and second["why"].startswith("S2: coin_tree.key is an earlier session's"), second["why"]
 
 
@@ -125,9 +135,13 @@ def test_zk_takes_no_coins_flag(zk):
 
 
 @pytest.mark.slow
-def test_two_tables_a_draw_and_m26_are_accepted(zk):
-    assert [v["accepted"] for v in _verify(zk, _one(zk, "j2"), public="pub-32.bin", tables=2)] == [True]
-    assert [v["accepted"] for v in _verify(zk, _one(zk, "m26"), _one(zk, "drawn"), public="pub-32.bin")] == [True, True]
+def test_a_draw_is_accepted_and_two_tables_and_m26_pass_every_check(zk):
+    """The drawn session is accepted; the sessions of two tables and of one m = 26 table, which have no draw, pass every check
+    and are refused for that alone."""
+    [j2] = _verify(zk, _one(zk, "j2"), public="pub-32.bin", tables=2)
+    m26, drawn = _verify(zk, _one(zk, "m26"), _one(zk, "drawn"), public="pub-32.bin")
+    assert _passes(j2) and _passes(m26), (j2["why"], m26["why"])
+    assert drawn["accepted"], drawn["why"]
 
 
 @pytest.mark.slow
@@ -153,7 +167,7 @@ TAMPERED = ["zk-zc-final-a", "zk-lig-lane-message", "zk-l0-ybar", "zk-l0-missing
 @pytest.mark.slow
 def test_tampered_sessions_meet_their_checks(zk, tmp_path):
     """A tampered copy keeps its original's key, so each runs alone; each gets the verdict and the reason `zk_mutants.py`
-    expects of the Lean verifier."""
+    expects of the Lean verifier, a copy it expects accepted passing every check (the honest session has no draw)."""
     sys.path.insert(0, str(VERIFIER))
     import zk_mutants
 
@@ -163,4 +177,4 @@ def test_tampered_sessions_meet_their_checks(zk, tmp_path):
         verdicts = dict(zip(TAMPERED, ex.map(lambda n: _verify(zk, tmp_path / n)[0], TAMPERED)))
     for name, v in verdicts.items():
         e = expect[name]
-        assert v["accepted"] == e["accepted"] and v["why"].startswith(e["why"]), (name, v["why"], e)
+        assert _passes(v) if e["accepted"] else not _passes(v) and v["why"].startswith(e["why"]), (name, v["why"], e)

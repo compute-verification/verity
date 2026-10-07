@@ -3686,7 +3686,7 @@
   "dump_plan": "Add `--dump DIR` to the selftest subcommand of flock-pure-gpu, flock-ir-frame and the PR #83 circuit-statement binary so every case writes its session.json and proofs; run once on a CPU pod at 8 VUs (a few minutes); preserve the tree as one artifact; each case's expected verdict is its selftest `pass` line."
  },
  "replayable": {
-  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py). A set with `lean_refuses` is a statement form the soundness proof does not cover (PROTOCOL.md §16.15, D12): the Lean verifier refuses every session with that reason (one that does not set up, for that first), and upstream must give each session its expected verdict (`agree.py --lean-refuses`). A set with `lean_refuses_drawn` has sessions drawn by a law no soundness claim draws by (D12): the Lean verifier refuses each session whose record carries a unit draw with that reason, and upstream must give it its expected verdict (`agree.py --lean-refuses-drawn`); in a set with both, a drawn session may meet either refusal.",
+  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py). A set with `lean_refuses_drawn` has sessions drawn by a law no soundness claim draws by (D12): the Lean verifier refuses each session whose record carries a unit draw with that reason at setup (one that does not set up, for that first), and upstream must give it its expected verdict (`agree.py --lean-refuses-drawn`). A set with `lean_refuses` is a statement form the soundness proof does not cover (PROTOCOL.md §16.15, D12), and one with `lean_refuses_drawless` has sessions without a draw (D12): the Lean verifier refuses each session they cover (every session not refused at setup, and each without a draw) with that reason once every check has passed, the form's first. Such a session passed every check and is compared as accepted, any other verdict as it is (`agree.py --lean-refuses`, `--lean-refuses-drawless`).",
   "sets": [
    {
     "statement": {
@@ -4188,7 +4188,8 @@
     "forgeries": "art:c49cb61e/rope-head/extra",
     "selftest_note": "19 selftest cases and the draw cases unit_draw_session (a drawn statement, accepted) and unit_draw_ignored_refused (refused at Hello); extra/: honest_vector, draw_altered and draw_dropped (the record's draw changed or removed: S2), salt_altered (an opened salt flipped, proof_sha512 rebuilt: the Merkle opening)",
     "agreement": "r20260927-060508-66c0 (result art:294b6cf1): 25/25; r20260927-064449-6059 (sets 8 and 9): 50/50",
-    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law"
+    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law",
+    "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
     "tags": "verity/flock-circuit (hm96-sha512 rows, SHA-512 identity and binding digests)",
@@ -4227,7 +4228,8 @@
     ],
     "selftest_note": "19 selftest cases and the draw cases (a drawn session over the caller's indices, and one that ignores the draw)",
     "agreement": "r20260927-070106-614e: 21/21",
-    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law"
+    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law",
+    "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
     "tags": "verity/flock-circuit (the e2e bindings, an open query name)",
@@ -4246,7 +4248,8 @@
     ],
     "selftest_note": "honest and unit_draw_session, both accepted; rope-head/partition-noformat.json (no format) is refused at setup",
     "agreement": "2/2 (local, 2026-09-27T07:25Z)",
-    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law"
+    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law",
+    "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
     "tags": "verity/flock-circuit (the e2e bindings, Q_template_instance v0, units derived)",
@@ -4266,7 +4269,8 @@
     ],
     "selftest_note": "honest and unit_draw_session, both accepted with units derived",
     "agreement": "2/2 (local, 2026-09-27T07:45Z)",
-    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law"
+    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law",
+    "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
     "tags": "verity/flock-circuit (GEMM: packed unit range, out_net, leaf_cuts)",
@@ -4327,7 +4331,8 @@
     ],
     "selftest_note": "every selftest case that runs a session, and the draw cases (no row_ref_claim_false: no table)",
     "agreement": "22/22 (local, 2026-09-27T10:05Z)",
-    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law"
+    "lean_refuses_drawn": "refused: a subset draw without --zk: no soundness claim draws by this law",
+    "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
     "tags": "verity/flock-circuit (registered reads: header registered, flock-verify --registered)",
@@ -4398,7 +4403,7 @@
   ]
  },
  "live": {
-  "note": "Sets whose upstream verdicts are the live server's, from each case's case.json: main's flock-circuit has no replay subcommand and the vectors patch no longer builds against it, so there is no upstream binary to pin (`pr83` names the build that recorded them). They are not replayable sets: check's agreement step (upstream.json's pinned binaries and inputs) does not run them, and set 1 needs a 128 GB machine. Run them with `ci.py --live`. `lean_refuses` and `lean_refuses_drawn` are D12, as in the replayable sets.",
+  "note": "Sets whose upstream verdicts are the live server's, from each case's case.json: main's flock-circuit has no replay subcommand and the vectors patch no longer builds against it, so there is no upstream binary to pin (`pr83` names the build that recorded them). They are not replayable sets: check's agreement step (upstream.json's pinned binaries and inputs) does not run them, and set 1 needs a 128 GB machine. Run them with `ci.py --live`. `lean_refuses`, `lean_refuses_drawn` and `lean_refuses_drawless` are D12, as in the replayable sets.",
   "sets": [
    {
     "tags": "verity/flock-circuit (main ac412eb8, 967b8d06 identity): attention with T not a multiple of 16",
@@ -4454,7 +4459,8 @@
      "art:50de1919/flat/rope-head/records"
     ],
     "selftest_note": "every selftest case that runs a session (20: 3 honest; output_claim_false, output_row_committed_false and digest_claim_false each with its own pub.bin, rejected at the proof's openings); upstream's verdicts are its live ones in each case.json",
-    "agreement": "local ci.py --live --sets 2 (2026-10-02T00:38Z, Lean at ce0e60810): 20/20, 3 accepted"
+    "agreement": "local ci.py --live --sets 2 (2026-10-02T00:38Z, Lean at ce0e60810): 20/20, 3 accepted",
+    "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
     "tags": "verity/flock-circuit (hidden outputs, PROTOCOL.md §16.13): one BF16 GEMM coordinate, a tail stage returns its one output word in a 64-word row",

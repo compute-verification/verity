@@ -1,11 +1,14 @@
 """Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session drawn by a law no soundness claim draws by (a bernoulli
-draw, a work draw with or without a closure, a subset draw without `--zk`) whatever flags it holds, and passes a stratified
-draw, and under `--zk` a subset draw, on to the statement-form check. The sessions are the registered-reads set's honest
+draw, a work draw with or without a closure, a subset draw without `--zk`) at setup, whatever flags it holds, and passes a
+stratified draw, and under `--zk` a subset draw, on to the session's checks. The statement's form is checked last, once every
+check has passed, and a session without a draw is refused after that. The sessions are the registered-reads set's honest
 session (`FIXTURE`, vectors.json's set 16) with its record's draw replaced: its statement is the corpus's one whose program
 and partition a work draw's law derives from, so a work draw sets up there, where any other statement refuses it at setup
-before its law is read. Its public file has shared rows, which the form check refuses, so a draw that passes the law check
-meets that refusal. Each draw is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law
-check with a work draw."""
+before its law is read. A draw that passes the law check sets up and meets the session's checks, which the edited record
+fails at S2: its Hello is the undrawn session's, and under `--zk` not a `--zk` session's. Its public file has shared rows,
+which the form check refuses, so the session as recorded, without a draw and without `--zk`, passes every check and meets
+that refusal. Each draw is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law check
+with a work draw."""
 from __future__ import annotations
 
 import json
@@ -59,7 +62,7 @@ def verdicts(tmp_path_factory):
     draws = {"work": {**draw(*work), "units": [2, 6]}, "closure": widened,
              "bernoulli": {"law": "bernoulli", "population": 8, "p": "1/2", "units": [1, 6]},
              "subset": {"law": "subset", "population": 8, "k": 2, "units": [1, 6]},
-             "stratified": draw("--stratified", "2")}
+             "stratified": draw("--stratified", "2"), "none": None}
     sessions = {}
     for name, law in draws.items():
         s = shutil.copytree(root / "vectors" / "honest", d / name)
@@ -79,7 +82,7 @@ def verdicts(tmp_path_factory):
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         plain = ex.submit(verify, False, list(draws))
-        zk = ex.submit(verify, True, ["work", "closure", "bernoulli", "subset"])
+        zk = ex.submit(verify, True, ["work", "closure", "bernoulli", "subset", "none"])
         return {False: plain.result(), True: zk.result()}
 
 
@@ -94,8 +97,17 @@ def test_no_claim_draws_by_these_laws_in_either_mode(verdicts, zk, name, why):
 
 
 def test_a_subset_draw_needs_zk(verdicts):
-    """Without `--zk` a subset draw is refused for its law; under `--zk` it meets the statement's form check, as a
-    stratified draw does in either mode."""
+    """Without `--zk` a subset draw is refused for its law; under `--zk` it sets up and meets the session's checks, as a
+    stratified draw does without `--zk`."""
     assert verdicts[False]["subset"]["why"] == _law("a subset draw without --zk")
-    assert verdicts[True]["subset"]["why"] == SHARED
-    assert verdicts[False]["stratified"]["why"] == SHARED
+    assert verdicts[True]["subset"]["why"].startswith("S2/R7"), verdicts[True]["subset"]["why"]
+    assert verdicts[False]["stratified"]["why"].startswith("S2/R7"), verdicts[False]["stratified"]["why"]
+
+
+def test_a_session_without_a_draw_is_refused_after_every_check(verdicts):
+    """No soundness claim covers a session without a draw (D12), and `verify` refuses one last, after every check has
+    passed and after the form check, so a session that fails a check keeps that check's reason: without `--zk`, the
+    statement's form; under `--zk`, Hello's coin check. Its own refusal shows on the statements whose form is covered
+    (`test_lean_zk.py`, `test_lean_live_os.py`, `test_lean_hidden_outputs.py`)."""
+    assert verdicts[False]["none"]["why"] == SHARED
+    assert verdicts[True]["none"]["why"].startswith("S2/R7"), verdicts[True]["none"]["why"]
