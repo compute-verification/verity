@@ -2,9 +2,9 @@
 after the handle, and rings on Slack with the issue's link.
 
 Credentials come from the environment only. LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET are an OAuth app's client-credentials
-grant: an `app` actor, so each issue and comment shows as filed by the asking handle (`createAsUser`). Without them,
-LINEAR_API_KEY is a person's key, and that person is unsubscribed from each issue after filing it and after each comment
-(a comment subscribes its author again), so their inbox stays quiet. Either way an issue carries a `from:<handle>` label and
+grant (never the authorization-code flow): an `app` actor, so each issue and comment shows as filed by the asking handle
+(`createAsUser`). Without them, LINEAR_API_KEY is a person's key. Either way the acting user is unsubscribed from each issue
+after filing it and after each comment (a comment subscribes its author again), so a person's inbox stays quiet. Either way an issue carries a `from:<handle>` label and
 is never assigned or delegated: an issue assigned to the Cursor app starts a new agent instead of waking the lead. Stdlib only."""
 from __future__ import annotations
 
@@ -113,7 +113,9 @@ class Linear:
         return r["data"]
 
     def team(self, name: str) -> dict:
-        nodes = self.gql("query($n: String!) { teams(filter: {name: {eq: $n}}) { nodes { id key name } } }", {"n": name})["teams"]["nodes"]
+        """The team named `name` (a handle), or whose key it is."""
+        q = "query($n: String!) { teams(filter: {or: [{name: {eq: $n}}, {key: {eq: $n}}]}) { nodes { id key name } } }"
+        nodes = self.gql(q, {"n": name})["teams"]["nodes"]
         if not nodes:
             raise LinearError(f"no Linear team named {name!r}")
         return nodes[0]
@@ -127,8 +129,11 @@ class Linear:
         return made["issueLabelCreate"]["issueLabel"]["id"]
 
     def _quiet(self, issue_id: str) -> None:
-        if not self.app:
+        try:
             self.gql("mutation($id: String!) { issueUnsubscribe(id: $id) { success } }", {"id": issue_id})
+        except LinearError:
+            if not self.app:                                  # a person's inbox must stay quiet; an app's has nobody to bother
+                raise
 
     def file(self, team: str, sender: str, body: str) -> dict:
         """The ask as an issue in `team`, from `sender`: {id, identifier, url}."""
@@ -162,6 +167,17 @@ class Linear:
         q = "query($id: String!) { issue(id: $id) { subscribers { nodes { name } } } }"
         return [n["name"] for n in self.gql(q, {"id": issue_id})["issue"]["subscribers"]["nodes"]]
 
+    def authors(self, issue_id: str) -> tuple[str, list[str]]:
+        """Who the issue and each of its comments show as filed by: an app's `createAsUser` name, else the user's."""
+        q = ("query($id: String!) { issue(id: $id) { creator { name } botActor { name userDisplayName } "
+             "comments { nodes { user { name } botActor { name userDisplayName } } } } }")
+        i = self.gql(q, {"id": issue_id})["issue"]
+
+        def who(x: dict) -> str:
+            bot, user = x.get("botActor") or {}, x.get("creator") or x.get("user") or {}
+            return f"{bot.get('userDisplayName')} (via {bot.get('name')})" if bot.get("userDisplayName") else user.get("name") or "?"
+        return who(i), [who(c) for c in i["comments"]["nodes"]]
+
     def check(self, write_team: str | None = None, sender: str = "comms") -> tuple[list[str], bool]:
         """What these credentials reach, as lines, and whether they're fit for asks: no admin scope, and (with `write_team`)
         a test issue filed, commented on and canceled there."""
@@ -181,8 +197,9 @@ class Linear:
             subs = self.subscribers(issue["id"])
             self.comment(issue["id"], sender, "a test comment")
             subs_after = self.subscribers(issue["id"])
-            lines += [f"filed {issue['identifier']} {issue['url']} (subscribers: {', '.join(subs) or 'none'})",
-                      f"commented (subscribers: {', '.join(subs_after) or 'none'})",
+            by, comments_by = self.authors(issue["id"])
+            lines += [f"filed {issue['identifier']} {issue['url']} as {by} (subscribers: {', '.join(subs) or 'none'})",
+                      f"commented as {', '.join(comments_by) or '?'} (subscribers: {', '.join(subs_after) or 'none'})",
                       f"moved to {self.close(issue['id'], 'canceled')}"]
         return lines, ok
 

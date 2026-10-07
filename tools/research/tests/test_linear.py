@@ -20,7 +20,13 @@ class FakeLinear:
 
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
-        self.subscribers = {}
+        self.subscribers, self.authors, self.comments = {}, {}, []
+
+    @staticmethod
+    def _author(user: str, i: dict, field: str) -> dict:
+        if "createAsUser" in i:
+            return {field: None, "botActor": {"name": "Verity Asks", "userDisplayName": i["createAsUser"]}}
+        return {field: {"name": user}, "botActor": None}
 
     def __call__(self, url: str, data: bytes, headers: dict) -> dict:
         if url == linear.TOKEN_URL:
@@ -34,8 +40,10 @@ class FakeLinear:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"errors": [{"message": "auth"}]}'))
         user = "the app" if headers["Authorization"].startswith("Bearer") else "Daniel"
         if "teams(filter" in q:
-            return {"data": {"teams": {"nodes": [{"id": f"T-{v['n']}", "key": v["n"][:3].upper(), "name": v["n"]}]
-                                                 if v["n"] in self.teams else []}}}
+            team = next((t for t in self.teams if v["n"] in (t, t[:3].upper())), None)
+            return {"data": {"teams": {"nodes": [{"id": f"T-{team}", "key": team[:3].upper(), "name": team}] if team else []}}}
+        if "botActor" in q:
+            return {"data": {"issue": {**self.authors["I1"], "comments": {"nodes": self.comments}}}}
         if "issueLabels" in q:
             return {"data": {"issueLabels": {"nodes": [{"id": self.labels[v["n"]]}] if v["n"] in self.labels else []}}}
         if "issueLabelCreate" in q:
@@ -43,8 +51,10 @@ class FakeLinear:
             return {"data": {"issueLabelCreate": {"issueLabel": {"id": self.labels[v["i"]["name"]]}}}}
         if "issueCreate" in q:
             self.subscribers["I1"] = [user]
+            self.authors["I1"] = self._author(user, v["i"], "creator")
             return {"data": {"issueCreate": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1"}}}}
         if "commentCreate" in q:
+            self.comments.append(self._author(user, v["i"], "user"))
             self.subscribers["I1"] = sorted({*self.subscribers["I1"], user})
             return {"data": {"commentCreate": {"success": True}}}
         if "issueUnsubscribe" in q:
@@ -76,7 +86,7 @@ def test_the_app_files_an_ask_as_the_sender_with_its_label_and_never_assigns_it(
     assert v["i"] == {"teamId": "T-infra", "title": "4 GPUs on node 2", "description": "4 GPUs on node 2\nfor 6 h",
                       "labelIds": ["L0"], "createAsUser": "compute-accounting"}                 # no assignee, delegate or subscribers
     assert fake.labels == {"from:compute-accounting": "L0"} and h["Authorization"] == "Bearer tok1"
-    assert not fake.sent("issueUnsubscribe")                                                    # an app has no inbox to quiet
+    assert fake.subscribers["I1"] == []
 
 
 def test_the_client_credentials_token_is_cached_private_until_near_expiry_and_refetched_when_refused(tmp_path):
@@ -121,8 +131,15 @@ def test_check_reports_reach_and_admin_and_exercises_the_write_path(tmp_path):
     lines, ok = linear.Linear(KEY, FakeLinear(), cache=tmp_path / "t").check("infra")
     assert ok and lines[0] == "credentials: personal key, acting as Daniel in verity-research"
     assert lines[1] == "teams (2): comms COM, infra INF" and lines[2].startswith("admin: none (Linear: HTTP 403: Invalid scope")
-    assert lines[3:] == ["filed INF-1 https://linear.app/x/issue/INF-1 (subscribers: none)", "commented (subscribers: none)",
-                         "moved to Canceled"]
+    assert lines[3:] == ["filed INF-1 https://linear.app/x/issue/INF-1 as Daniel (subscribers: none)",
+                         "commented as Daniel (subscribers: none)", "moved to Canceled"]
+
+
+def test_check_with_the_app_names_a_team_by_key_and_shows_the_sender_as_the_author(tmp_path):
+    lines, ok = linear.Linear(APP, FakeLinear(), cache=tmp_path / "t").check("INF", "compute-accounting")
+    assert ok and lines[0] == "credentials: app (client credentials), acting as the app in verity-research"
+    assert lines[3:5] == ["filed INF-1 https://linear.app/x/issue/INF-1 as compute-accounting (via Verity Asks) (subscribers: none)",
+                          "commented as compute-accounting (via Verity Asks) (subscribers: none)"]
 
 
 def test_an_ask_with_linear_links_its_issue_and_still_goes_out_when_linear_fails(fake, registry, capsys, monkeypatch):
