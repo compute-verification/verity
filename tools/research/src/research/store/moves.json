@@ -1304,7 +1304,6 @@
         "integrations/vllm/tests/program/test_held_tables.py": "verity/ml/circuits/ops/tests/test_held_tables.py",
         "integrations/vllm/tests/program/test_pad_prims.py": "verity/ml/circuits/ops/tests/test_pad_prims.py",
         "integrations/vllm/tests/program/test_registered_value_chains.py": "verity/ml/circuits/ops/tests/test_registered_value_chains.py",
-        "integrations/vllm/tests/program/test_splits_for_v1.py": "verity/ml/circuits/ops/tests/test_splits_for_v1.py",
         "integrations/vllm/tests/program/test_superseded_kept.py": "verity/ml/circuits/ops/tests/test_superseded_kept.py",
         "integrations/vllm/tests/program/test_topp_split_halves.py": "verity/ml/circuits/ops/tests/test_topp_split_halves.py",
         "kernels/": "verity/ml/kernels/",
