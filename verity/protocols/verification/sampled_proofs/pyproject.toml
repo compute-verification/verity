@@ -12,4 +12,4 @@ inputs = ["verity", "verity/Security/Proofs/Flock/Soundness/Audit/Influence.lean
           "verity/Security/Proofs/Flock/Soundness/Audit/Stratified.lean",
           "verity/Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
           "verity/Security/Proofs/lake-manifest.json",
-          "verity/Security/Proofs/lean-toolchain", "catalog", "verity/ml/kernels"]
+          "verity/Security/Proofs/lean-toolchain"]
