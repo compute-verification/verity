@@ -3,10 +3,10 @@
 #
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
 # `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
-# MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with the
-# pinned upstream build when COMMIT changes verity/ml/flock/ against origin/main. --agreement sends that build whatever the
-# train changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere. It
-# prints the run id; `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds COMMIT's branch.
+# MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with the pinned
+# upstream build when COMMIT changes verity/ml/flock/ or verity/core/service/flock/ against origin/main. --agreement sends that
+# build whatever the train changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
+# It prints the run id; `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds COMMIT's branch.
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, and a shell that skips the store-backed tests.
