@@ -191,8 +191,8 @@ honest (`Honest`, which the deployment's `trusted-nebius-host` is about): an egr
 its recorded rows under its status, an ingress head carries its status, every head names its own link-window, and every
 frame it records is `8·B` bits (W3). It signs, with the key, the `certificateMessage` of each head it issues (`Signed`).
 
-The assumptions are for the run: `LmsEufCma` (`euf-cma/lms-sha512-n64`), that every message and signature the
-verifier accepts under the key is one the device signed, and `Sha512CollisionFreeOn` (`cr/sha-512`) over `RunStrings`,
+The assumptions are for the run: `LmsEufCma` (`euf-cma/lms-sha512-n64`), that every signature of the commitment's
+certificates the verifier accepts under the key is over a message the device signed, and `Sha512CollisionFreeOn` (`cr/sha-512`) over `RunStrings`,
 the strings the check and the device hash: each record's head and certificate message, the head and frame tree the
 check recomputes for each egress link-window, and each issued head, its message and the device's frame tree of each
 egress link-window. -/
@@ -234,6 +234,11 @@ def lmsAccepts (p : Params) (m sig : ByteArray) : Bool :=
   match Lms.Signature.decode p.lms sig with
   | .ok s => (Lms.verify p.lms p.key m s).toOption == some true
   | .error _ => false
+
+/-- The LMS verifier on the run's own signatures, those of the commitment's certificates: what `LmsEufCma` is assumed
+of, so that it says no certificate of the run is a forgery. -/
+def runAccepts (p : Params) (c : Commitment) (m sig : ByteArray) : Bool :=
+  lmsAccepts p m sig && c.records.any (·.certificate.signature == sig)
 
 /-- What SHA-512 hashes for a record head: `tagged_sha512(RECORD_TAG, encode(h))`'s input. -/
 def HeadString (h : RecordHead) (x : ByteArray) : Prop := ∃ enc, h.encode = .ok enc ∧ x = taggedInput recordTag enc
@@ -282,7 +287,7 @@ def AcceptedRowsAreProgramRows : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg ig : ByteArray),
     protocol.Accepts p c e → ParamsDigests p eg ig → Honest p dev eg →
     Verity.Assumptions.Sha512CollisionFreeOn Flock.Sha512.hash (RunStrings p c e dev eg) →
-    Verity.Assumptions.LmsEufCma (lmsAccepts p) (Signed dev) →
+    Verity.Assumptions.LmsEufCma (runAccepts p c) (Signed dev) →
     (∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link → ∀ syncs : Fin p.windows → ClockSync,
       Declares link syncs → ∀ t < p.windows * p.grid.buckets,
         dev.rows ℓ t = expectedRow p.grid.allocation p.grid.buckets p.windows syncs link.frames t) ∧
@@ -302,7 +307,7 @@ def AcceptedRunsAreProgramRuns : Prop :=
     (o : List (NetTiming.Obs p.egress.size K p.grid.allocation)) (linkOf : Fin K → Direction × String),
     protocol.Accepts p c e → ParamsDigests p eg ig → Honest p dev eg →
     Verity.Assumptions.Sha512CollisionFreeOn Flock.Sha512.hash (RunStrings p c e dev eg) →
-    Verity.Assumptions.LmsEufCma (lmsAccepts p) (Signed dev) →
+    Verity.Assumptions.LmsEufCma (runAccepts p c) (Signed dev) →
     (∀ δ, δ ∈ p.syncSet.deltas ↔ δ ∈ ss.deltas) → (∀ ρ, ρ ∈ p.syncSet.rhos ↔ ρ ∈ ss.rhos) →
     o.length = p.windows * p.grid.buckets →
     (∀ t (ht : t < o.length), o[t].rows = fun ℓ => dev.rows ℓ t) →
