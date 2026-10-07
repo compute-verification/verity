@@ -313,7 +313,8 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
     under it, `lean-audit.json` included).
 
     The rule: against its merge base with ``base`` (the `main` the gate compares with now, so a parent that landed counts as
-    `main`), ``new`` changes exactly the paths ``old`` changes, and each the same way (`rebased`: its edit, replayed onto
+    `main`; for a PR stacked on another in a train, the ref below it there, so a parent that moved underneath it by adding
+    commits or merging `main` doesn't count as its change), ``new`` changes exactly the paths ``old`` changes, and each the same way (`rebased`: its edit, replayed onto
     ``new``'s base by a three-way merge, gives ``new``'s bytes).  A `lean-audit.json` that `main` changed elsewhere meanwhile
     still carries; one where `main` changed the lines the PR edits doesn't, since replaying the edit then conflicts or gives other
     bytes.  That is what a rebase onto `main`, a restack
@@ -372,13 +373,15 @@ class StoreGrants:
         """Whether someone asserted `ready = true` on `pr:{n}@{head}`."""
         return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
 
-    def carried(self, pr: int, head: str, roles: set[str]) -> set[str]:
-        """Which of ``roles`` a `grant` on another head of pull request ``pr`` gives ``head`` (`carry`)."""
-        return {str(lab.value) for _, lab in self._carried(pr, head, vocab.GRANT, roles)} if roles else set()
+    def carried(self, pr: int, head: str, roles: set[str], onto: str | None = None) -> set[str]:
+        """Which of ``roles`` a `grant` on another head of pull request ``pr`` gives ``head`` (`carry`), each head's change taken
+        against ``onto`` (default the ``base`` it merges onto; for a PR stacked on another in a train, the ref below it there)."""
+        return {str(lab.value) for _, lab in self._carried(pr, head, vocab.GRANT, roles, onto)} if roles else set()
 
-    def _carried(self, pr: int, head: str, key: str, values: set[str] | None) -> list[tuple]:
+    def _carried(self, pr: int, head: str, key: str, values: set[str] | None, onto: str | None = None) -> list[tuple]:
         """(the head it's on, the label) for each ``key`` label (whose value is in ``values``, unless None) on another head of pull
-        request ``pr`` from which `carry` says it counts at ``head``; a line for each head with such labels, carried or not."""
+        request ``pr`` from which `carry` onto ``onto`` (default ``base``) says it counts at ``head``; a line for each head with such
+        labels, carried or not."""
         if self.repo is None:
             return []
         out = []
@@ -386,7 +389,7 @@ class StoreGrants:
             if not (labs := [lab for lab in labs if values is None or str(lab.value) in values]):
                 continue
             what = ", ".join(sorted({f"{key} {lab.value}" for lab in labs}))
-            ok, why = carry(self.repo, self.base, old, head)
+            ok, why = carry(self.repo, onto or self.base, old, head)
             if ok:
                 self.log(f"research queue: {what} carried from {grant_target(pr, old)} to {head[:12]} ({why})")
                 out += [(old, lab) for lab in labs]
@@ -860,7 +863,10 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
     each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none;
     None when no machine's slots could be read. And why, with each machine skipped."""
-    s = importlib.util.spec_from_file_location("queue_check", repo / "tools" / "check" / "check.py")
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/check/check.py", lambda p: (repo / p).is_file()) or "tools/check/check.py"
+    s = importlib.util.spec_from_file_location("queue_check", repo / path)
     check = importlib.util.module_from_spec(s)
     sys.modules[s.name] = check
     s.loader.exec_module(check)

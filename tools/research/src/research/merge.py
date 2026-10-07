@@ -158,7 +158,11 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The job names ``commit``'s own `tools/check/ci.toml` declares, or why they can't be read."""
     import tomllib
 
-    r = _git(repo, "show", f"{commit}:tools/check/ci.toml", check=False)
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/check/ci.toml",
+                                  lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
+    r = _git(repo, "show", f"{commit}:{path or 'tools/check/ci.toml'}", check=False)
     try:
         jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", [])] if r.returncode == 0 else None
     except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
@@ -800,7 +804,7 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                            f"name it as N@SHA")
                 continue
             lacking = set(need) - grants(pr, sha) if need else set()
-            if missing := sorted(lacking - grants.carried(pr, sha, lacking)):
+            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto)):
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: from {by.get(g) or 'its rule, which names no `by`'}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
@@ -895,7 +899,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
         for n, sha, onto in pins:
             need = rules.needs(repo, onto, sha) if rules else set()
             lacking = need - grants(n, sha)
-            if missing := lacking - grants.carried(n, sha, lacking):
+            if missing := lacking - grants.carried(n, sha, lacking, onto):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
         raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e

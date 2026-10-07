@@ -448,17 +448,17 @@ def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault
     """Custody marks a run dir preserved while its run record only lists an undeclared file over the cap (custody.select); those
     bytes are on no remote, so gc keeps the dir."""
     root = tmp_path / "ws"
-    d = run_dir(root, "research/runs/r1", extra={"out/big.bin": b"t" * UNIT})
+    d = run_dir(root, "research/runs/r1", extra={"work/big.bin": b"t" * UNIT})
     monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
     st = LocalStore(vault_store)
     art = CU.put_run_record(st, d, "r1")
-    assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["out/big.bin"]
+    assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["work/big.bin"]
     (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
     assert CU.marker_problem(d) is None, "custody vouches for the dir"
     plan = run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=R.store_check(str(vault_store)))
-    assert d.exists() and (d / "out/big.bin").exists()
+    assert d.exists() and (d / "work/big.bin").exists()
     assert by_path(plan)["research/runs/r1"]["reason"] == (f"preserved {art} is not verified on the remote: 1 file(s) under it are not "
-                                                         "in the artifact at their size, e.g. out/big.bin")
+                                                         "in the artifact at their size, e.g. work/big.bin")
 
 
 # ---- the command line -----------------------------------------------------------------------------------------------------------------
