@@ -278,9 +278,9 @@ def layout_problem(entry: Entry) -> str | None:
     for side, n in (("a", entry.n_a), ("b", entry.n_b)):
         if not 1 <= n <= 1 << DEPTHS[side]:
             return f"side {side} holds {n} rows, not 1 to 2^{DEPTHS[side]}"
-    if entry.kind == "filler" and entry.root_h3 != _ZERO:
+    if entry.kind == "filler" and any(entry.root_h3):
         return "the filler's -h3 root is not zero"
-    if entry.kind == "filler" and entry.record != _ZERO:
+    if entry.kind == "filler" and any(entry.record):
         return "the filler's record is not zero"
     return None
 
