@@ -31,7 +31,7 @@ def COIN_BYTES : Nat := 32
 /-- The epoch's coin tree: `CommitmentDomain(tagged(SCHEME, e), -1, RangeIndexedDomain(2), "sha512")`. -/
 def coinDomain (epoch : Nat) : Domain :=
   ⟨.sha512, 2, frameHash .sha512 "domain"
-    [tagged SCHEME [.nat epoch], natBytes 1, rangeIdentity .sha512 2, natBytes 2]⟩
+    [tagged SCHEME [.int epoch], natBytes 1, rangeIdentity .sha512 2, natBytes 2]⟩
 
 /-- `leaf_value`: the committed value of one coin. -/
 def leafValue (coin salt : ByteArray) : ByteArray := Hm96.Default512.leaf (Sha512.hash (COIN_TAG ++ coin)) salt

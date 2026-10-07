@@ -12,8 +12,12 @@ The cases: `tagged` over bytes, strings (non-ASCII among them) and integers past
 over random weight-root maps; domain ids under both frame hashes with bindings, owners and counts out of range; the roots of
 random row and tile-digest trees under `sha256`, `sha512` and `hm96-sha512` (rows of several segments, values of the wrong
 size, missing or short salt keys); openings of those trees, honest and tampered (value, path, position, root, count, schema,
-path and value lengths); and epoch coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
-refusals and each refusal of the JSON forms.
+path and value lengths); epoch coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
+refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
+them), epochs and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a draw
+with no coin commitment; the audit, draw and replay keys and `draw_after`; and `Sampled.select`'s and `pearl_c_work.draw`'s
+work-weighted draws, each run as written with only its tickets given (`tickets` patched), over ticket lists with zeros,
+totals past 64 bits, none, or all zero.
 """
 from __future__ import annotations
 
@@ -23,8 +27,10 @@ import random
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
-COUNTS = {"tagged": 1000, "bindings": 500, "domain": 1000, "commit_rows": 1500, "transcript": 500, "verify": 4000, "coins": 100}
+COUNTS = {"tagged": 1000, "bindings": 500, "domain": 1000, "commit_rows": 1500, "transcript": 500, "verify": 4000, "coins": 100,
+          "salt_of": 400, "unverified_salt": 200, "epoch_salt": 60, "key": 600, "sampled": 300, "pearl_draw": 300}
 
 
 def _outcome(f) -> dict:
@@ -36,7 +42,9 @@ def _outcome(f) -> dict:
 
 def generate(seed: int = 0) -> list[dict]:
     from verity.experimental.protocols.pouw import audit, coins
-    from verity.experimental.protocols.pouw.protocol import tagged
+    from verity.experimental.protocols.pouw.protocol import DomainError, Matmul, Shape, tagged
+    from verity.experimental.protocols.pouw.schemes import pearl_c_work as pcw
+    from verity.ml.randomness import derive
     from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                        VerificationLimits, verify_opening)
 
@@ -236,6 +244,122 @@ def generate(seed: int = 0) -> list[dict]:
                       "Lean refuses a boolean epoch, which Python's == takes for the integer")
             coin_case(cj, oj | {"epoch": float(epoch)}, label, ah, byname,
                       "Lean refuses an epoch written as a float, which Python's == takes for the integer")
+
+    def roots_map() -> dict[int, bytes]:
+        return {w: rng.randbytes(rng.choice([32, 64])) for w in rng.sample(range(10**6), rng.randrange(5))}
+
+    def size() -> int:
+        return rng.choice([32] * 6 + [64] * 3 + [0, 1, 31, 33, 200])
+
+    for _ in range(COUNTS["salt_of"]):
+        cj = {"scheme": coins.SCHEME, "epoch": rng.choice([0, 1, 5, rng.randrange(2**40), 2**70]), "root": rng.randbytes(64).hex()}
+        coin, wr = rng.randbytes(size()), rng.randbytes(size())
+        add("salt_of", {"commitment": cj, "coin": coin.hex(), "weights_root": wr.hex()},
+            _outcome(lambda: audit.salt_of(coins.CoinCommitment.from_json(cj), coin, wr).hex()))
+
+    for _ in range(COUNTS["unverified_salt"]):
+        roots, seed = roots_map(), rng.randbytes(size())
+
+        def unverified() -> str:
+            wl = audit.Workload(tuple(Matmul(i, Shape(1, 1, 1), w) for i, w in enumerate(roots)))
+            return audit.Epoch.unverified(wl, roots, seed).salt.hex()
+        add("unverified_salt", {"seed": seed.hex(), "weight_roots": [[k, v.hex()] for k, v in roots.items()]}, _outcome(unverified))
+
+    def refusable(f) -> dict:
+        res = _outcome(f)
+        return res["ok"] if "ok" in res else res
+
+    def epoch_salt_case(cj: dict, oj: dict, roots: dict[int, bytes]) -> None:
+        def start() -> dict:
+            c, o = coins.CoinCommitment.from_json(cj), coins.CoinOpening.from_json(oj)
+            wl = audit.Workload(tuple(Matmul(i, Shape(1, 1, 1), w) for i, w in enumerate(roots)))
+            try:
+                return {"ok": audit.Epoch.start(wl, roots, c, o).salt.hex()}
+            except DomainError as e:
+                if str(e).startswith("the salt's "):
+                    return {"reason": str(e)}
+                raise
+        add("epoch_salt", {"commitment": cj, "opening": oj, "weight_roots": [[k, v.hex()] for k, v in roots.items()]},
+            refusable(start))
+
+    def draw_coin_case(cj: dict | None, oj: dict, after: bytes) -> None:
+        def draw() -> dict:
+            c = None if cj is None else coins.CoinCommitment.from_json(cj)
+            o = coins.CoinOpening.from_json(oj)
+            coin, why = audit.draw_coin(SimpleNamespace(coins=c), SimpleNamespace(open=lambda _label, _after: o), after)
+            return {"ok": coin.hex()} if why is None else {"reason": why}
+        add("draw_coin", {"commitment": cj, "opening": oj, "after": after.hex()}, refusable(draw))
+
+    for _ in range(COUNTS["epoch_salt"]):
+        epoch = rng.choice([0, 1, 5, rng.randrange(2**40), 2**70])
+        ch, other = coins.Challenger(epoch, rng.randbytes), coins.Challenger(epoch, rng.randbytes)
+        roots = roots_map()
+        wr = audit.weights_root(roots)
+        cj, salt_op, draw_op = ch.commitment.to_json(), ch.open("salt", wr).to_json(), ch.open("draw", wr).to_json()
+        other_salt, other_draw = other.open("salt", wr).to_json(), other.open("draw", wr).to_json()
+        epoch_salt_case(cj, salt_op, roots)
+        epoch_salt_case(cj, draw_op, roots)
+        epoch_salt_case(cj, salt_op | {"after": rng.randbytes(64).hex()}, roots)
+        epoch_salt_case(cj, other_salt, roots)
+        epoch_salt_case(cj, salt_op | {"epoch": epoch + 1}, roots)
+        epoch_salt_case(cj, salt_op | {"coin": flip(bytes.fromhex(salt_op["coin"])).hex()}, roots)
+        epoch_salt_case(cj, salt_op | {"path": [rng.randbytes(33).hex()]}, roots)
+        epoch_salt_case(cj, salt_op, roots | {10**6 + 1: rng.randbytes(64)})
+        draw_coin_case(cj, draw_op, wr)
+        draw_coin_case(None, draw_op, wr)
+        draw_coin_case(cj, draw_op, flip(wr))
+        draw_coin_case(cj, salt_op, wr)
+        draw_coin_case(cj, other_draw, wr)
+        draw_coin_case(other.commitment.to_json(), other_draw, wr)
+        draw_coin_case(cj, draw_op | {"salt": flip(bytes.fromhex(draw_op["salt"])).hex()}, wr)
+        draw_coin_case(cj, draw_op | {"path": [rng.randbytes(65).hex()]}, wr)
+
+    for _ in range(COUNTS["key"]):
+        which = rng.choice(["audit", "draw", "replay", "after"])
+        source, tr, rd, salt = rng.randbytes(size()), rng.randbytes(64), rng.randbytes(rng.choice([64, 32, 0])), rng.randbytes(size())
+        rnd = rng.choice([0, 1, rng.randrange(2**32), 2**64 + 3])
+
+        def key() -> str:
+            if which == "audit":
+                return derive(source, audit.AUDIT_DOMAIN, {"transcript": tr, "salt": salt}).value.hex()
+            if which == "draw":
+                return pcw.draw_key(source, tr, rd, salt).value.hex()
+            if which == "replay":
+                return pcw.replay_key(pcw.RecordedDraw(rnd, source), tr, rd, salt).value.hex()
+            return pcw.draw_after(tr, rd).hex()
+        add("key", {"which": which, "source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(),
+                    "round": rnd}, _outcome(key))
+
+    def tickets() -> list[int]:
+        n = rng.choice([0, 1, 2, 3, 7, 20, rng.randrange(60)])
+        shape = rng.choice(["small", "zeros", "big", "allzero"])
+        if shape == "allzero":
+            return [0] * n
+        if shape == "big":
+            return [rng.choice([0, rng.randrange(1, 2**70)]) for _ in range(n)]
+        return [rng.choice([0, 1, 2, 3, 1000] if shape == "zeros" else [1, 2, 7, rng.randrange(1, 10**6)]) for _ in range(n)]
+
+    def t_draws() -> int:
+        return rng.choice([0, 1, 2, 5, 32, rng.randrange(100)])
+
+    for _ in range(COUNTS["sampled"]):
+        source, tr, salt, tk, t = rng.randbytes(rng.choice([32] * 12 + [0])), rng.randbytes(64), rng.randbytes(32), tickets(), t_draws()
+
+        def sampled() -> list[int]:
+            with mock.patch.object(audit, "tickets", lambda _scheme, _workload, _refs: list(tk)):
+                epoch = SimpleNamespace(salt=salt, workload=None)
+                return list(audit.Sampled(t).select(None, epoch, SimpleNamespace(commitment=SimpleNamespace(root=tr)), source, [], None))
+        add("sampled", {"source": source.hex(), "transcript": tr.hex(), "salt": salt.hex(), "tickets": tk, "t": t}, _outcome(sampled))
+
+    for _ in range(COUNTS["pearl_draw"]):
+        source, tr, rd, salt = rng.randbytes(rng.choice([32] * 12 + [0])), rng.randbytes(64), rng.randbytes(64), rng.randbytes(32)
+        tk, t = tickets(), t_draws()
+
+        def pearl() -> list[int]:
+            with mock.patch.object(pcw, "tickets", lambda _scheme, _records: [(i, None, w) for i, w in enumerate(tk)]):
+                return [i for i, _ in pcw.draw(None, [], pcw.draw_key(source, tr, rd, salt), t)]
+        add("pearl_draw", {"source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(), "tickets": tk,
+                           "t": t}, _outcome(pearl))
     return cases
 
 

@@ -1,4 +1,5 @@
 import PouwCommit.Coins
+import PouwCommit.Draws
 import PouwCommit.Rows
 import Lean.Data.Json
 
@@ -16,7 +17,11 @@ agree by kind alone. `main` computes each case's outcome from the port and fails
 * `commit_rows`: `commit_rows(…).commitment.root`, plain and hm96-sha512, rows and tile digests;
 * `transcript`: the transcript tree's root over tile digests (`Prover.prove`);
 * `verify`: `verify_opening` against `rows_domain`, of openings Python's trees made and of tampered ones;
-* `coins`: `coin_reason` of `CoinCommitment.from_json` and `CoinOpening.from_json`, honest and tampered.
+* `coins`: `coin_reason` of `CoinCommitment.from_json` and `CoinOpening.from_json`, honest and tampered;
+* `salt_of`, `unverified_salt`: the epoch's salt from a coin, and `Epoch.unverified`'s from a seed;
+* `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
+* `key`: the audit, draw and replay keys and `draw_after`;
+* `sampled`, `pearl_draw`: `Sampled.select`'s and `pearl_c_work.draw`'s work-weighted draws over given tickets.
 -/
 
 namespace PouwCommit.Difftest
@@ -57,7 +62,7 @@ def part : Json → E Part
     | some (.str h), none, none => return .bytes (← unhex h)
     | none, some (.str s), none => return .str s
     | none, none, some n => match jsonInt? n with
-      | some i => if i < 0 then throw "a part's integer is negative" else return .nat i.toNat
+      | some i => if i < 0 then throw "a part's integer is negative" else return .int i.toNat
       | none => throw "a part's integer is not one"
     | _, _, _ => throw "a part is {\"b\"}, {\"s\"} or {\"i\"}"
   | _ => throw "a part is an object"
@@ -73,14 +78,7 @@ def outcome (kind : String) (i : Json) : E Json := do
       | _ => throw "parts is not an array"
     return hexJ (tagged (← str i "tag") parts)
   | "bindings" =>
-    let roots ← match ← field i "weight_roots" with
-      | .arr ps => ps.toList.mapM fun
-        | .arr #[w, .str r] => do
-          let some n := jsonInt? w | throw "a weight is an integer"
-          if n < 0 then throw "a weight is nonnegative"
-          return (n.toNat, ← unhex r)
-        | _ => throw "a weight root is [w, root]"
-      | _ => throw "weight_roots is not an array"
+    let roots ← weightRoots i
     let salt ← unhexField i "salt"
     let wr ← weightsRoot roots
     return Json.mkObj [("weight", hexJ (weightBinding (← nat i "weight"))),
@@ -115,13 +113,64 @@ def outcome (kind : String) (i : Json) : E Json := do
     return match ← coinReason c o (← str i "label") (← unhexField i "after") with
       | none => Json.mkObj [("ok", .null)]
       | some r => Json.mkObj [("reason", .str r)]
+  | "salt_of" =>
+    let c ← CoinCommitment.ofJson (← field i "commitment")
+    return hexJ (← saltOf c (← unhexField i "coin") (← unhexField i "weights_root"))
+  | "unverified_salt" =>
+    return hexJ (← unverifiedSalt (← unhexField i "seed") (← weightsRoot (← weightRoots i)))
+  | "epoch_salt" =>
+    let c ← CoinCommitment.ofJson (← field i "commitment")
+    let o ← CoinOpening.ofJson (← field i "opening")
+    return refusable (← epochSalt c o (← weightsRoot (← weightRoots i)))
+  | "draw_coin" =>
+    let c ← match ← field i "commitment" with
+      | .null => pure none
+      | j => pure (some (← CoinCommitment.ofJson j))
+    let o ← CoinOpening.ofJson (← field i "opening")
+    return refusable (← drawCoin c o (← unhexField i "after"))
+  | "key" =>
+    let (tr, rd, salt) := (← unhexField i "transcript", ← unhexField i "records", ← unhexField i "salt")
+    match ← str i "which" with
+    | "audit" => return hexJ (← auditKey (← unhexField i "source") tr salt)
+    | "draw" => return hexJ (← drawKey (← unhexField i "source") tr rd salt)
+    | "replay" => return hexJ (← replayKey (← nat i "round") (← unhexField i "source") tr rd salt)
+    | "after" => return hexJ (drawAfter tr rd)
+    | w => throw s!"no key {w}"
+  | "sampled" =>
+    let key ← auditKey (← unhexField i "source") (← unhexField i "transcript") (← unhexField i "salt")
+    return draws (← weightedDraw key (← tickets i) (← nat i "t"))
+  | "pearl_draw" =>
+    let key ← drawKey (← unhexField i "source") (← unhexField i "transcript") (← unhexField i "records") (← unhexField i "salt")
+    return draws (← pearlDraw key (← tickets i) (← nat i "t"))
   | k => throw s!"no kind {k}"
 where
   unhexField (j : Json) (k : String) : E ByteArray := do unhex (← str j k)
+  weightRoots (j : Json) : E (List (Nat × ByteArray)) := do
+    match ← field j "weight_roots" with
+    | .arr ps => ps.toList.mapM fun
+      | .arr #[w, .str r] => do
+        let some n := jsonInt? w | throw "a weight is an integer"
+        if n < 0 then throw "a weight is nonnegative"
+        return (n.toNat, ← unhex r)
+      | _ => throw "a weight root is [w, root]"
+    | _ => throw "weight_roots is not an array"
+  tickets (j : Json) : E (List Nat) := do
+    match ← field j "tickets" with
+    | .arr ts => ts.toList.mapM fun t => match jsonInt? t with
+      | some n => if n < 0 then throw "a ticket is negative" else pure n.toNat
+      | none => throw "a ticket is not an integer"
+    | _ => throw "tickets is not an array"
+  refusable : Except String ByteArray → Json
+    | .ok b => Json.mkObj [("ok", hexJ b)]
+    | .error r => Json.mkObj [("reason", .str r)]
+  draws (ids : List Nat) : Json := .arr (ids.toArray.map fun (n : Nat) => toJson n)
 
-/-- An outcome as the cases write it: coins' outcomes are already `{"ok"}` or `{"reason"}`. -/
+/-- The kinds whose outcomes are already `{"ok"}` or `{"reason"}`. -/
+def REFUSABLE : List String := ["coins", "epoch_salt", "draw_coin"]
+
+/-- An outcome as the cases write it. -/
 def wrap (kind : String) : E Json → Json
-  | .ok v => if kind == "coins" then v else Json.mkObj [("ok", v)]
+  | .ok v => if REFUSABLE.contains kind then v else Json.mkObj [("ok", v)]
   | .error e => Json.mkObj [("error", .str e)]
 
 def isError (j : Json) : Bool := (j.getObjVal? "error").toOption.isSome

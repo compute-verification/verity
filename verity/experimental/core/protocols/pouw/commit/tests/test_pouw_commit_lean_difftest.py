@@ -1,7 +1,8 @@
 """The difftest of PoUW's commitments against their Lean port (`PouwCommit`): the Python half.
 
 `tests/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
-`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`). `check` runs the Lean half
+`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the draw
+keys and the work-weighted draws). `check` runs the Lean half
 in its Lean audit (`runs` in `lean-audit.json`): `PouwCommit/DifftestMain.lean` computes every case from the port and fails
 on any difference. The audit checks the data against the record's SHA-256, and its pass is cached on the Lean package's
 files alone, so the test here is what says the data is still what the Python computes: a change to the protocol's hashing
@@ -77,6 +78,27 @@ def test_the_tree_cases_reach_every_branch():
     assert {c["in"]["hash"] for c in _of("domain") if "ok" in c["python"]} == {"sha256", "sha512"}
     assert any("error" in c["python"] for c in _of("domain"))
     assert any("ok" in c["python"] for c in _of("transcript"))
+
+
+def test_the_salt_and_draw_cases_reach_every_branch():
+    for kind in ("salt_of", "unverified_salt", "key", "sampled", "pearl_draw"):
+        outcomes = [c["python"] for c in _of(kind)]
+        assert any("ok" in o for o in outcomes), kind
+        assert any("error" in o for o in outcomes), kind
+    assert {c["in"]["which"] for c in _of("key") if "ok" in c["python"]} == {"audit", "draw", "replay", "after"}
+    for kind, starts in (("epoch_salt", ("the salt's coin is epoch ", "the salt's coin is the epoch's ",
+                                         "the salt's coin does not open", "the salt's coin was not opened after")),
+                         ("draw_coin", ("the epoch has no coin commitment", "the draw's coin is the epoch's ",
+                                        "the draw's coin does not open", "the draw's coin was not opened after"))):
+        outcomes = [c["python"] for c in _of(kind)]
+        assert any("ok" in o for o in outcomes) and any("error" in o for o in outcomes), kind
+        for start in starts:
+            assert any(o.get("reason", "").startswith(start) for o in outcomes), start
+    draws = [c for c in _of("sampled") + _of("pearl_draw") if "ok" in c["python"]]
+    assert any(len(c["python"]["ok"]) > 1 and sum(c["in"]["tickets"]) > 2**64 for c in draws), "a total past 64 bits"
+    assert any(0 in c["in"]["tickets"] and c["python"]["ok"] for c in draws), "zero tickets among drawn ones"
+    assert any(c["in"]["t"] == 0 for c in draws)
+    assert any(c["python"]["ok"] == [] and c["in"]["t"] > 0 for c in _of("pearl_draw") if "ok" in c["python"]), "none above 0"
 
 
 def test_lean_differs_only_by_refusing():

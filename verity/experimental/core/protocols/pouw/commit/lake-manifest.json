@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "core_randomness",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../../primitives/randomness",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "flock_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
