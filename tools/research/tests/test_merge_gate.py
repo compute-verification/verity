@@ -594,7 +594,7 @@ def test_a_grant_carries_into_a_train_across_a_restack_or_a_merge_of_main_and_no
     assert merge_main(["--train", "--prepare", "train-prep/x", f"20@{restated[:9]}", "--lint", "true"]) == 3
     out, err = capsys.readouterr()
     assert f"#20 needs the red-team grant at {restated[:12]}" in err and "nothing was built" in err
-    assert (f"research merge: grant red-team on pr:20@{old} doesn't carry to {restated[:12]}: its lean-audit.json change "
+    assert (f"research merge: grant red-team on pr:20@{old} doesn't carry to {restated[:12]}: its lean-audit.json patch "
             f"isn't byte-identical (lean-audit.json)") in out
     assert _git(origin, "for-each-ref", "--format=%(refname)", "refs/heads/train-prep") == \
         "refs/heads/train-prep/m\nrefs/heads/train-prep/r"

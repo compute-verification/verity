@@ -70,12 +70,14 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -278,20 +280,48 @@ def own_change(repo: Path, base: str, head: str) -> dict[str, tuple[str, ...]] |
     return {path: tuple(meta.lstrip(":").split()[:4]) for meta, path in zip(fields[0::2], fields[1::2])}
 
 
+ZERO_BLOB = "0" * 40
+
+
+def rebased(repo: Path, was: tuple[str, ...], now: tuple[str, ...]) -> bool:
+    """Whether one path's change ``now`` is the change ``was`` replayed onto another base (`own_change` entries: modes and blobs,
+    before and after): ``was``'s edit, merged into ``now``'s base the way `git merge-file` merges three versions, applies cleanly
+    and gives ``now``'s bytes exactly.  So the same hunks carry onto a base that changed elsewhere in the file, and hunks that land
+    on other lines, or that the base changed under, don't.  The same modes are required, and a file added, deleted or pinned as a
+    submodule (no three versions to merge) is ``was == now`` alone."""
+    if was == now:
+        return True
+    if was[:2] != now[:2] or "160000" in was[:2] or ZERO_BLOB in (*was[2:], *now[2:]):
+        return False
+    with tempfile.TemporaryDirectory() as tmp:
+        files = []
+        for name, blob in (("ours", now[2]), ("base", was[2]), ("theirs", was[3])):
+            r = subprocess.run(["git", "cat-file", "blob", blob], cwd=repo, capture_output=True, env=git_env())
+            if r.returncode:
+                return False
+            (f := Path(tmp) / name).write_bytes(r.stdout)
+            files.append(str(f))
+        merged = subprocess.run(["git", "merge-file", "-p", "-q", *files], cwd=repo, capture_output=True, env=git_env())
+        want = subprocess.run(["git", "cat-file", "blob", now[3]], cwd=repo, capture_output=True, env=git_env())
+    return merged.returncode == 0 and want.returncode == 0 and merged.stdout == want.stdout
+
+
 def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
-    """Whether a grant on ``old``, another head of a PR, counts at its head ``new``, and why (Daniel's ruling,
-    2 Oct: one carries across a restack or a merge of `main` when the new head's `lean-audit.json` change against its base is
-    byte-identical to the one granted; any other `lean-audit.json` change needs a new grant).
+    """Whether a grant on ``old``, another head of a PR, counts at its head ``new``, and why (Daniel's
+    rulings: 2 Oct, one carries across a restack or a merge of `main` when the new head's `lean-audit.json` change is identical to
+    the one granted; 6 Oct, 8:03 AM PDT, it carries when the PR's own patch is byte-identical at both heads, even if `main` moved
+    under it, `lean-audit.json` included).
 
     The rule: against its merge base with ``base`` (the `main` the gate compares with now, so a parent that landed counts as
-    `main`), ``new`` changes exactly the paths ``old`` changes, each from the same bytes to the same bytes (`own_change`: mode and
-    blob, before and after).  That is what a rebase onto `main`, a restack after a parent landed, or a merge of `main` leaves when
-    `main`'s own changes didn't touch the PR's files, and every `lean-audit.json` the PR changes is among those paths.  So it
-    carries only to a head whose change is the one that was granted, whatever its history: with one merge base, a merge commit
-    can hold edits of its own and a rebase rewrites every commit, but neither can make two different changes compare equal.
-    Nothing else carries: a head that changes any file more, less or differently (a `lean-audit.json` that `main` changed
-    meanwhile included, since then its base bytes differ), or one git can't compare (``old`` isn't in ``repo``, no merge base, or
-    several, where a merge can drop a change `main` merged without any diff against one of them showing it), needs new grants."""
+    `main`), ``new`` changes exactly the paths ``old`` changes, and each the same way (`rebased`: its edit, replayed onto
+    ``new``'s base by a three-way merge, gives ``new``'s bytes).  A `lean-audit.json` that `main` changed elsewhere meanwhile
+    still carries; one where `main` changed the lines the PR edits doesn't, since replaying the edit then conflicts or gives other
+    bytes.  That is what a rebase onto `main`, a restack
+    after a parent landed, or a merge of `main` leaves, so it carries only to a head whose patch is the one that was granted,
+    whatever its history: with one merge base, a merge commit can hold edits of its own and a rebase rewrites every commit, but
+    neither can make two different patches compare equal.  Nothing else carries: a head that changes any file more, less or
+    differently, or one git can't compare (``old`` isn't in ``repo``, no merge base, or several, where a merge can drop a change
+    `main` merged without any diff against one of them showing it), needs new grants."""
     for h in (old, new):
         if _git(repo, "cat-file", "-e", f"{h}^{{commit}}", check=False).returncode:
             return False, f"{h[:12]} isn't in {repo}, so its change can't be compared (fetch it)"
@@ -305,9 +335,9 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
     was, now = own_change(repo, base, old), own_change(repo, base, new)
     if was is None or now is None:
         return False, f"git can't diff {(old if was is None else new)[:12]} against its merge base with {name}"
-    if differ := sorted(p for p in was.keys() | now.keys() if was.get(p) != now.get(p)):
+    if differ := sorted(p for p in was.keys() | now.keys() if p not in was or p not in now or not rebased(repo, was[p], now[p])):
         if audits := [p for p in differ if _is_audit(p)]:
-            return False, f"its lean-audit.json change isn't byte-identical ({', '.join(map(_shown, audits))})"
+            return False, f"its lean-audit.json patch isn't byte-identical ({', '.join(map(_shown, audits))})"
         more = f" and {len(differ) - 3} more" if len(differ) > 3 else ""
         return False, f"its change against {name} differs ({', '.join(map(_shown, differ[:3]))}{more})"
     def below(a: str, b: str) -> bool:
@@ -892,7 +922,8 @@ class RemoteQuickTier(QuickTier):
                       f'-- python3 "$i/{job.name}" {shlex.join(args)}')
             r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
                              "--source", str(wt), "--cwd", "source", "--send", str(job), "--send", str(self.slot), "--require-result",
-                             "--timeout", f"{self.wait_s + self.timeout_s:g}", "--declared-output", "out/*", "--", "sh", "-c", script], wt)
+                             "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
+                             "--declared-output", "out/*", "--", "sh", "-c", script], wt)
         if r.returncode:
             return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
         print(f"research queue: the quick tier runs as {rid} on {on}, in a check slot; waiting for it to end "

@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from research.cli import main as research_main
+from research.cli import _custody_ttl_problem, main as research_main
 from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, grant_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
@@ -726,7 +726,7 @@ def test_a_grant_carries_to_a_restack_with_a_byte_identical_lean_audit_change_an
 
 def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_change(world):
     """A merge of `main` carries; a restated pin doesn't, and neither does the same pin change restacked onto a `main` that changed
-    the same `lean-audit.json` meanwhile, since its change now starts from other bytes (fail closed: a new grant)."""
+    the same line of `lean-audit.json` meanwhile (fail closed: a new grant)."""
     q = _carrying(world)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     world.gh.put(1, old := world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
@@ -742,12 +742,44 @@ def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_chan
         world.gh.put(1, h)
         members, entries = q.sync()
         assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
-        assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json change "
+        assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json patch "
                 f"isn't byte-identical (pkg/lean-audit.json)") in world.logs
 
     refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "3"}})}))
     _move_main(world, {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "1", "U": "1"}})})
     refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2", "U": "1"}})}))
+
+
+def test_a_grant_carries_the_prs_lean_audit_patch_onto_a_main_that_changed_other_lines_of_that_file(world):
+    """Daniel's ruling (6 Oct, 8:03 AM PDT): the PR's own patch must be byte-identical, not the file, so a lock that `main`
+    changed elsewhere since the grant carries it.  The patch is its lines in place: one whose lines `main` changed, or the same
+    edit made to another occurrence of a repeated line, needs a new grant."""
+    from research.queue import carry
+
+    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    keys = "ABCDEFGH"
+
+    def lock(**pins: str) -> dict[str, str]:
+        return {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {k: pins.get(k, "1") for k in keys}}, indent=1) + "\n"}
+
+    _move_main(world, lock())
+    old = world.change(lock(A="2"))
+    _move_main(world, lock(H="5"))
+    same = "lean-audit.json change identical"
+    assert carry(world.dev, "origin/main", old, world.change(lock(A="2", H="5"))) == (True, f"restack; {same}")
+    assert carry(world.dev, "origin/main", old, _merge_main(world, old)) == (True, f"merge of main; {same}")
+    patch = "its lean-audit.json patch isn't byte-identical (pkg/lean-audit.json)"
+    assert carry(world.dev, "origin/main", old, world.change(lock(A="3", H="5"))) == (False, patch)
+    _move_main(world, lock(A="4", H="5"))
+    assert carry(world.dev, "origin/main", old, world.change(lock(A="2", H="5"))) == (False, patch)    # main changed the PR's line
+
+    repeated = {"pkg/notes.txt": "x\n" + "same\n" * 6 + "y\n"}
+    _move_main(world, repeated)
+    edited = world.change({"pkg/notes.txt": "x\nsame\nedit\n" + "same\n" * 4 + "y\n"})
+    _move_main(world, {"pkg/notes.txt": "x2\n" + "same\n" * 6 + "y\n"})
+    moved = world.change({"pkg/notes.txt": "x2\n" + "same\n" * 4 + "edit\nsame\ny\n"})
+    assert carry(world.dev, "origin/main", edited, moved) == (False, "its change against origin/main differs (pkg/notes.txt)")
+    assert carry(world.dev, "origin/main", edited, world.change({"pkg/notes.txt": "x2\nsame\nedit\n" + "same\n" * 4 + "y\n"}))[0]
 
 
 def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
@@ -766,7 +798,7 @@ def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     for extra, why in (({"backends/flock/y.py": "y = 1\n"}, "its change against origin/main differs (backends/flock/y.py)"),
                        ({"a.txt": "a, too\n"}, "its change against origin/main differs (a.txt)"),
                        ({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
-                        "its lean-audit.json change isn't byte-identical (pkg/lean-audit.json)")):
+                        "its lean-audit.json patch isn't byte-identical (pkg/lean-audit.json)")):
         world.gh.put(1, h := world.change({**flock, **extra}))
         members, entries = q.sync()
         assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
@@ -1014,6 +1046,9 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert flags[:4] == [sys.executable, "-m", "research", "run"] and "--require-result" in flags
     assert [flags[flags.index(k) + 1] for k in ("--on", "--project", "--cwd", "--declared-output")] == ["vy-test", "verity", "source", "out/*"]
     assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S
+    ttl = flags[flags.index("--custody-ttl") + 1]
+    assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
+        "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
     assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
     assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
         "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "python3"]
