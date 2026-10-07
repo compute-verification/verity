@@ -87,6 +87,7 @@ def load_registries() -> None:
     import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
     import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
     import verity.protocols.accounting.work.pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity.protocols.accounting.work.pouw.circuit.window_statement  # noqa: F401  (PoUW's window statement, L4, on bits)
     import verity.protocols.accounting.space.pous.circuit  # noqa: F401  (P2's modular squaring on bits)
     import verity.protocols.accounting.space.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
     import verity.protocols.accounting.space.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
