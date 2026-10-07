@@ -45,7 +45,7 @@ bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Ma
 cd PKG && lake build                   once per checkout; incremental from then on
 lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
 lake build Pkg.Area.File               after editing a file others import, so they see the change
-python tools/verity/lean/audit.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part)
+python tools/verity/lean/check.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part)
 ~~~
 
 Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
@@ -54,7 +54,7 @@ proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a s
 `--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
-your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took
+your own, use the fast path on a shared machine. Don't run `check.py --build --update` from a fresh tree there: that took
 about 22 minutes unpinned on the check cores.
 
 ~~~text
@@ -144,7 +144,7 @@ simp with that.
   when you want a second reading of the printout, but don't hold the merge for it.
 - **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
-  `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
+  `check.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
   record says, renamed or lifted, and the definitions the same under their old names, each get one line; the rest prints
   in full. Moving a definition to another module needs no map.
 - **A lift needs no map.** `theorem X (xs) : e` becoming `theorem X (xs) : G as`, with `def G (ys) : Prop := e` in a
@@ -159,7 +159,7 @@ simp with that.
 - The PR says which guarantees changed, if any, and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/verity/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
-  rebuild, and only a conflict it refuses needs `audit.py --update` on the merged tree.
+  rebuild, and only a conflict it refuses needs `check.py --update` on the merged tree.
 
 ## Rulings so far
 

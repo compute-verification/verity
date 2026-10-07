@@ -43,8 +43,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `benchmarks/numerical/`: the table tooling of the archived proof systems.
 - `tools/`:
   - `verity/`: the `verity` command (`cli/`) and the tools it runs: `check/` (the one check a merge requires),
-    `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `audit.py` until lean renames
-    it `lean_check.py`).
+    `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
   - `agent-guard`: the VM's secret guard.
@@ -196,7 +195,7 @@ Landing:
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
   - an assumption is a named `Prop`, taken as a hypothesis;
   - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `audit.py --update` records its
+- **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it, and a statement reviewer is optional.
