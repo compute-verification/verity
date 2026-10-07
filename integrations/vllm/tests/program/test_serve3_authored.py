@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 torch = pytest.importorskip("torch")
 
-from verity.primitives.circuits import Program, bind, program_digest  # noqa: E402
+from verity.ml.circuits import Program, bind, program_digest  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
 from tests.program import serve3_authored as A  # noqa: E402

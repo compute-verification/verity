@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from verity_catalog.silicon.silicon import tc_dot
+from verity.ml.circuits.silicon.silicon import tc_dot
 
 from . import protocol as protocol_mod
 from .compile import P

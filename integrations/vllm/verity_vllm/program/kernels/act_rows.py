@@ -43,7 +43,7 @@ def silu_mul_expf(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[st
 
 
 def check_targets(rng) -> list:
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import act
     return [bind(act.SiluMul, I=8)]
 

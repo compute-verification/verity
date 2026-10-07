@@ -22,7 +22,7 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boo
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention")
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity_catalog"
+CATALOG = "verity.ml.circuits"
 
 
 def _imports(name: str) -> list[tuple[str, int]]:

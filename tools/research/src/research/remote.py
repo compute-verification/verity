@@ -449,13 +449,13 @@ QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's 
 
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (tools/cluster). Refused when the queue refuses the job."""
+    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
     from .store import tools_registry
 
-    src = (Path(source) / (tools_registry.resolve("tools/cluster", lambda p: (Path(source) / p).is_dir()) or "tools/cluster")
+    src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
            if source is not None else None)
     if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
-        raise Refused("--queue: the --source tree has no tools/cluster with `cluster submit` (the queue's description and client)")
+        raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
@@ -1840,7 +1840,7 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
 
 #: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py
 #: --slots` does) for the check and Lean slots a run holds or waits on; without them the reading has no slots
-CHECK_DIR = Path(__file__).resolve().parents[3] / "check"
+CHECK_DIR = Path(__file__).resolve().parents[3] / "verity" / "check"
 #: what `node_readings` runs on a machine as `python3 - RUN_DIR...`, after `SRC = {...}`: research.scopemem's `node`
 NODE_PROGRAM = '''
 import json, sys, types
@@ -1855,8 +1855,8 @@ def load(name, src, file):
 
 
 mem = load("research_scopemem", SRC["scopemem"], "research/scopemem.py")
-mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/check/slot.py"),
-        load("check_lean_slot", SRC["lean"], "tools/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
+mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/verity/check/slot.py"),
+        load("check_lean_slot", SRC["lean"], "tools/verity/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
 print(json.dumps(mem.node(sys.argv[1:], slot_mods=mods)))
 '''
 

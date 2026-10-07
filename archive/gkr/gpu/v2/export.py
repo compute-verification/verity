@@ -316,14 +316,14 @@ def merge_tables(text: str) -> str:
 
 def circuits(out: Path, model: str, K: int = 1536, merge: bool = True) -> dict:
     """The statement's Params-only files (``circuit.txt``, ``epilogue.txt``, ``chain.txt``, ``manifest.json``) at
-    ``Params.from_model`` of the ``verity_catalog.silicon.models.MODELS`` entry ``model``: what ``bench_result.py`` reads for a
+    ``Params.from_model`` of the ``verity.ml.circuits.silicon.models.MODELS`` entry ``model``: what ``bench_result.py`` reads for a
     relation whose instances are a recipe, not an exported tier.  An E4M3 model gets the adder-side view and the
     packed-word epilogue of ``gpu/v2/fp8.py`` (units of ``sum(groups) = 32`` products); with ``merge`` its unit circuit's
     tables are the one tagged table of ``merge_tables`` (the epilogue queries none)."""
     import dataclasses
 
-    from verity_catalog.silicon.models import MODELS
-    from verity_catalog.silicon.term import FORMATS
+    from verity.ml.circuits.silicon.models import MODELS
+    from verity.ml.circuits.silicon.term import FORMATS
 
     m = MODELS[model]
     if FORMATS[m.dtype].nan_rule == "e4m3":
@@ -408,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--out", type=Path, required=True)
     n.add_argument("--seed", type=int, default=20260922)
     c = sub.add_parser("circuits")
-    c.add_argument("--model", required=True, help="a verity_catalog.silicon.models.MODELS name, e.g. hopper_bf16_m16n8k16")
+    c.add_argument("--model", required=True, help="a verity.ml.circuits.silicon.models.MODELS name, e.g. hopper_bf16_m16n8k16")
     c.add_argument("--out", type=Path, required=True)
     c.add_argument("--k", type=int, default=1536, help="the VU's reduction length: the files are uniform in K, the manifest's steps "
                                                        "are K / products per unit")
