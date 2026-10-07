@@ -51,6 +51,12 @@
    "assumptions": [],
    "type_hash": "56ee09302db5e8a3b601c900ae373a34da3dc327d9738d74c2664dd4ee304cdf"
   },
+  "Properties.Pouw.Window.kPrimeLeast": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.kPrimeLeast : Properties.Pouw.Window.KPrimeLeast"],
+   "assumptions": [],
+   "type_hash": "5490be2a87fb8935e8d06c8e5adf1656ae9203186a8aa1fb02f9aa650d865aa9"
+  },
   "Properties.Pouw.Window.kPrimeRefuses": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"],
@@ -120,6 +126,7 @@
    },
    "guarantees": [
     "Properties.Pouw.Window.kPrimeExactAtEquality",
+    "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed"
    ]
@@ -159,6 +166,7 @@
     "Properties.Pouw.Window.floorPointGreatest",
     "Properties.Pouw.Window.gridRefusals",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
+    "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed",
     "Properties.Pouw.Window.levelsCount",
@@ -181,7 +189,7 @@
    "guarantees": ["Properties.Pouw.Window.publicItems_eq"]
   },
   "Properties.Pouw": {
-   "digest": "ed215129f50c08e3800ad5b5adfcb40a89506a8814f4842f7e600c2e53cfbc85",
+   "digest": "9e9146f20d683114daade1dd0b37c6d7dcc7cf5eb5614b068d85cab65e2bbac0",
    "definitions": {
     "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
     "Properties.Pouw.Window.BucketCost": "322d0e98c3877937089f11c6a8ea1133785e984ca67b7a1e2a1ca1bc2cd24c0d",
@@ -191,6 +199,7 @@
     "Properties.Pouw.Window.GridRefusals": "89f6c58c824eb3b87ed21472f343ff23c23e87b18bb94caba9859fef6c08fb90",
     "Properties.Pouw.Window.IsPoint": "d5e22ed4ef29611ef12dd622bd16b62e17c8e5c9b305c568b431c58c672b9488",
     "Properties.Pouw.Window.KPrimeExactAtEquality": "d8418512b1444e803757d81fd0a26b506448c8740b15c67cd023f377c2bc3215",
+    "Properties.Pouw.Window.KPrimeLeast": "5f8dd55e7f3239d2ce5b46537232fbd28f6849ee4f4a9e2289388a98e651961c",
     "Properties.Pouw.Window.KPrimeRefuses": "29c44c33dd261f2870fb75364e2ebcf2c0bfe70fdad24120647fa9cb651574b3",
     "Properties.Pouw.Window.KPrimeServed": "e04552a46d5011cfc207a623075a274ffe4168fe4a8b619416f5de983f472110",
     "Properties.Pouw.Window.LevelsCount": "c9d3224e6334e9a5446cac68292bc398a3df19a028cb7f5b204310657fc69adc",
@@ -209,6 +218,7 @@
     "Properties.Pouw.Window.floorPointGreatest",
     "Properties.Pouw.Window.gridRefusals",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
+    "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed",
     "Properties.Pouw.Window.levelsCount",
