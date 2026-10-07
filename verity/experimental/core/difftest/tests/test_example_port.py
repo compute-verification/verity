@@ -155,5 +155,5 @@ def test_an_unknown_fn_is_a_protocol_error_not_a_reject(server):
 def test_a_vacuous_run_fails(server):
     with pytest.raises(D.Vacuous, match="none of 50 inputs was rejected"):
         D.run(port("add", add, st.fixed_dictionaries({"a": st.integers(), "b": st.integers()})), examples=50, server=server)
-    with pytest.raises(D.Vacuous, match="gave an output"):
+    with pytest.raises(D.Vacuous, match="gave .output."):
         D.run(port("add", add, st.just({})), examples=5, server=server)
