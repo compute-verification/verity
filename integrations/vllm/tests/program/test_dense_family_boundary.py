@@ -18,8 +18,12 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 #: other families' Definition modules the family reads: the primitives, the b1 composites, and `sampling.bit_at` (`UnpackF32_v1`)
 READS = ("prims", "b1", "sampling")
 THIRD_PARTY = ("numpy",)
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+#: the catalog, where the layout move put core's Definitions and silicon models; the registry sits beside it in `verity.ml.circuits`
+CATALOG = ("verity.ml.circuits.silicon", "verity.ml.circuits.targets")
+
+
+def _catalog(module: str) -> bool:
+    return module == "verity.ml.circuits" or any(module == c or module.startswith(c + ".") for c in CATALOG)
 MOVED = {"rope_difftest": "verity_vllm.properties.difftests", "rope_gptj_difftest": "verity_vllm.properties.difftests",
          "rmsnorm_fused_sweep": "verity_vllm.program.kernels", "gemm_targets": "verity_vllm.program.frontend"}
 
@@ -39,12 +43,13 @@ def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
 
 def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:
     top = mod.partition(".")[0]
-    if top in sys.stdlib_module_names or top in THIRD_PARTY or top == "verity" or mod == CATALOG or mod.startswith(CATALOG + "."):
+    if (top in sys.stdlib_module_names or top in THIRD_PARTY or (top == "verity" and not mod.startswith("verity.ml.circuits"))
+            or _catalog(mod)):
         return []
     allowed = set(FAMILY) | set(READS)
     if mod == REGISTRY:
         return [f"{REGISTRY}.{x}" for x in names if x not in allowed]
-    if mod.startswith(REGISTRY + ".") and mod.split(".")[3] in allowed:
+    if mod.startswith(REGISTRY + ".") and mod[len(REGISTRY) + 1:].split(".")[0] in allowed:
         return []
     return [mod]
 

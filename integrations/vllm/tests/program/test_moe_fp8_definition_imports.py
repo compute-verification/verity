@@ -21,8 +21,12 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boo
 #: (`boolean_attention._Bits`)
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention")
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+#: the catalog, where the layout move put core's Definitions and silicon models; the registry sits beside it in `verity.ml.circuits`
+CATALOG = ("verity.ml.circuits.silicon", "verity.ml.circuits.targets")
+
+
+def _catalog(module: str) -> bool:
+    return module == "verity.ml.circuits" or any(module == c or module.startswith(c + ".") for c in CATALOG)
 
 
 def _imports(name: str) -> list[tuple[str, int]]:
@@ -44,8 +48,8 @@ def _imports(name: str) -> list[tuple[str, int]]:
 
 def _allowed(module: str) -> bool:
     top = module.split(".")[0]
-    return ((top in sys.stdlib_module_names and top != "__main__") or top == "verity" or module in ALLOWED
-            or module == CATALOG or module.startswith(CATALOG + "."))
+    return ((top in sys.stdlib_module_names and top != "__main__") or (top == "verity" and not module.startswith("verity.ml.circuits"))
+            or module in ALLOWED or _catalog(module))
 
 
 @pytest.mark.parametrize("name", FAMILY)
@@ -59,4 +63,4 @@ def test_the_rule_sees_what_it_forbids(tmp_path, monkeypatch):
                                    "    from . import fp8, targets\n")
     monkeypatch.setattr(sys.modules[__name__], "DIR", tmp_path)
     assert [(m, _allowed(m)) for m, _ in _imports("x")] == [
-        ("numpy", False), ("verity_vllm.program.kernels", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]
+        ("numpy", False), ("verity.ml.circuits.kernels", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]
