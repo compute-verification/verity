@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_audit", HERE.parent / "audit.py")
+spec = importlib.util.spec_from_file_location("lean_audit", HERE.parent / "check.py")
 A = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(A)
 
@@ -943,7 +943,7 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
     monkeypatch.delenv("LEAN_NUM_THREADS", raising=False)
     cpu = min(os.sched_getaffinity(0))
     code = (f"import importlib.util, os\nos.sched_setaffinity(0, {{{cpu}}})\n"
-            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parent / 'audit.py')!r})\n"
+            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parent / 'check.py')!r})\n"
             "A = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(A)\nprint(A.lake_env()['LEAN_NUM_THREADS'])\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "1"
@@ -1201,6 +1201,40 @@ def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
         "nothing or another file; write a path under `{repo}`",
         "runs: U's `generate` names .., outside the package: check's audit runs on a scratch tree, where it finds nothing "
         "or another file; write {repo}/a"]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tmp_path):
+    """On a real build: a second audit reuses every module's replay; a change to `Control.Defs` replays it and what imports
+    it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores nothing."""
+    pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda: A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache)
+    build()
+    rep = audit()
+    assert rep["failures"] == [] and rep["replay"] == {"checked": 4, "reused": 0}
+    assert len(list(cache.glob("*.json"))) == 4
+    rep = audit()
+    assert rep["failures"] == [] and rep["replay"] == {"checked": 0, "reused": 4}
+    defs = pkg / "Control" / "Defs.lean"
+    defs.write_text(defs.read_text() + "\ndef Control.extra : Nat := 1\n")
+    build()
+    rep = audit()
+    assert rep["failures"] == [] and rep["replay"] == {"checked": 3, "reused": 1}, "Defs, Thms and Control; not Assumptions"
+    kernel = json.loads((HERE / "fixtures" / "violations.json").read_text())["kernel"]
+    for rel, text in kernel["write"].items():
+        (pkg / rel).write_text(text)
+    for rel, (old, new) in kernel["replace"].items():
+        (pkg / rel).write_text((pkg / rel).read_text().replace(old, new))
+    A.dump(pkg, A.load(pkg) | kernel["policy"])
+    build()
+    stored = set(cache.glob("*.json"))
+    rep = audit()
+    assert rep["replay"] == {"checked": 2, "reused": 3}, "Bad and Control"
+    assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
+    assert set(cache.glob("*.json")) == stored
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

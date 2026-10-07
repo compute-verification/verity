@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
-VERIFIER = LEAN.parent
+VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the four sets (`flat/` and `typed/`, each `rope-head/` and `gemm-coordinate/`: the statement's `stage/` files and CASES'
 #: `records-cpu/`), recorded by 60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 (TYPED=1 for `typed/`) at 455a01049

@@ -4,6 +4,7 @@ units it names; and the checked-in manifest's own rules (units only, an owner ea
 is this machine: a runner that runs the probe and the installer locally, over files under a temporary directory."""
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from research import deploy
+from verity_ops import deploy
 
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 FUTURE = 4102444800    # 2100-01-01: an mtime after any process here started
@@ -550,3 +551,23 @@ def test_a_manifest_entry_needs_exactly_one_of_src_and_by_and_a_known_node(tmp_p
     m.write_text('[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nsrc = "s"\nnodes = ["m"]\n')
     with pytest.raises(ValueError, match="has no \\[nodes.m\\]"):
         deploy.load(m)
+
+
+# the Lean sandbox, its setup and the daily cache units (test_nebius_lean_sandbox.py tests what they do)
+_N = "tools/research/src/research/pods/nebius"
+LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": f"{_N}/lean_build_setup.sh", "/usr/local/bin/vy-lean-sandbox": f"{_N}/lean_sandbox.py",
+              "/usr/local/lib/vy-lean-cache/run-daily": "tools/verity/lean/run_daily.py",
+              "/usr/local/lib/vy-lean-cache/cache.py": "tools/verity/lean/cache.py",
+              "/etc/systemd/system/vy-lean-cache-daily.service": f"{_N}/vy-lean-cache-daily.service",
+              "/etc/systemd/system/vy-lean-cache-daily.timer": f"{_N}/vy-lean-cache-daily.timer"}
+
+
+def test_deploy_puts_the_sandbox_its_setup_and_the_daily_units_on_node_1_only_and_starts_nothing():
+    nodes = deploy.load()
+    n1 = {e.path: e for e in nodes["vy-nebius-1"].entries}
+    for path, src in LEAN_CACHE.items():
+        assert n1[path].src == src and n1[path].run == [], path
+        assert any(fnmatch.fnmatch(path, m) for m in nodes["vy-nebius-1"].managed), path
+    assert not set(LEAN_CACHE) & {e.path for e in nodes["vy-nebius-2"].entries}
+    for src in (deploy.REPO / _N / "lean_build_setup.sh", deploy.REPO / _N / "lean_sandbox.py", deploy.REPO / "tools/verity/lean/run_daily.py"):
+        assert os.access(src, os.X_OK), src                                         # installed with the repository's mode
