@@ -104,7 +104,9 @@ GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gp
 # the preflight check's three GPU cases at once, each its own process, while 3 x one case's device memory fits the GPU's free
 # memory (class_statement's guard), else one at a time. One case's bound per K (B = 16) is its measured peak (selftest.per_case)
 # with some room: at most 4794, 5074, 9272 and 17678 MiB at K = 2048, 4096, 8192 and 16384 (r20261001-092917-8b05,
-# r20261001-131526-f969), with the pod's host memory at most 12, 16, 27 and 53 GB with the three at once
+# r20261001-131526-f969), with the pod's host memory at most 12, 16, 27 and 53 GB with the three at once. K = 32768 has none, so
+# its cases run one at a time: at BF16's k_log 27 one case holds about 30 GiB, and three at once overfilled the 97,887 MiB card
+# (r20261002-113014-821f). Each case's stderr is kept as out/gate/classes/*/selftest-<case>.err, beside the class's prove.out
 case $K in 2048|4096) CASE_MIB=6144 ;; 8192) CASE_MIB=12288 ;; 16384) CASE_MIB=20480 ;; *) CASE_MIB= ;; esac
 [ -n "$GS" ] && [ -n "$CASE_MIB" ] && GS+=" SELFTEST_JOBS=3 SELFTEST_CASE_MIB=$CASE_MIB"
 ok=1
@@ -177,10 +179,10 @@ for i in $(seq 0 $(( (ran > 0 ? ran : 1) - 1 ))); do
   P=$(pdir $i); mkdir -p $R/out/$P
   BS=$R/out/${P}m35/binary.sha256; [ -f $BS ] || BS=$R/out/preflight/binary.sha256
   if [ "$POINTS" = 1 ]; then RES=$R/result.json HC=$R/hillclimb.json; else RES=$R/out/${P}result.json HC=$R/hillclimb-$i.json; fi
-  PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
+  PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/backends/flock/python \
     $PYBIN backends/flock/pod/gemm_hill.py metrics --dtype $DTYPE --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/${P}results.jsonl \
     --stamps $R/out/${P}stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
-    --gpu-csv $R/out/gpu.csv --census census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $BS --step ${STEP:-0} \
+    --gpu-csv $R/out/gpu.csv --census catalog/census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $BS --step ${STEP:-0} \
     --label "${LABEL:-baseline}" ${QUESTION:+--question "$QUESTION"} --node ${HILL_NODE:-vy-nebius-1} --point $i --points $POINTS --preflight-key $R/out/preflight/key.json \
     --point-key $R/out/${P}key.json --out $R/out/${P}metrics.json --result $RES --hillclimb $HC || ok=0
 done

@@ -43,11 +43,11 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import fp4_emulation_1ad1aaa2 as E
+from emulation import E
 import numpy as np
 import probe as P
 import sparse as S
-from verity.ml.tc import models as M
+from verity_catalog.silicon import models as M
 
 HERE = Path(__file__).resolve().parent
 EMULATION = HERE / "fp4_emulation_1ad1aaa2.py"

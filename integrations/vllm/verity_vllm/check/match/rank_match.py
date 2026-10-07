@@ -62,11 +62,25 @@ def collectives_from_summary(summary: dict) -> list[dict]:
     return list(summary.get("collectives") or [])
 
 
+def _own_run(rs: list, c: dict) -> Any:
+    """The run of a collective row's operand (`parts` in rank order) that holds this rank's own part: the first run for rank 0, the last for
+    rank world-1, and for a rank between them the run holding leaf `rank * N` (its part's first leaf)."""
+    rank, world = int(c["rank"]), int(c.get("world") or 2)
+    if rank == 0 or rank == world - 1 or not rs:
+        return rs[0] if rank == 0 else rs[-1]
+    at, off = rank * int(c["N"]), 0
+    for r in rs:
+        if off <= at < off + int(r[3]) - int(r[2]):
+            return r
+        off += int(r[3]) - int(r[2])
+    return rs[-1]
+
+
 def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
     """From an in-memory FoldResult: for every collective (step, k) the spec ids of the instances that PRODUCED the own-partial rows
     (the node-space runs of operand 0 of each collective row instance).  A row whose own part is not a node output (a parameter or an
     unwritten read) yields the marker `<not-a-node>`."""
-    from verity.ir.refs import runs
+    from verity.primitives.circuits.refs import runs
     out: dict[tuple[int, int], list[str]] = {}
     node_spec = {}
     for i, n in enumerate(result.body.nodes):
@@ -79,9 +93,7 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
         key = (int(c["step"]), int(c["k"]))
         node = result.body.nodes[m["node"]]
         arg = node.args[0]
-        rank = int(c["rank"])
-        rs = list(runs(arg.refs))
-        own = rs[0] if rank == 0 else rs[-1]    # rank order: rank 0's part first
+        own = _own_run(list(runs(arg.refs)), c)
         if own[0] == "n":
             out.setdefault(key, []).append(node_spec.get(own[1], "?"))
         else:
@@ -107,11 +119,17 @@ def own_producers_from_record(instances_path: str | Path, program_nodes_spec: di
         c = o["collective"]
         key = (int(c["step"]), int(c["k"]))
         refs = (o.get("operand_refs") or [[]])[0]
-        own = refs[0] if int(c["rank"]) == 0 else refs[-1]
-        if own and own[0] == "N":   # [R17 mfast F2] v2 file: a node-space progression ["N", idx, lo, hi, dI, dL, dH, count]; the own part
-            from verity_vllm.program.compact import runs_from_file_items   # is its first (rank 0) / last (rank world-1) run
-            r = runs_from_file_items([own])
-            own = r[0] if int(c["rank"]) == 0 else r[-1]
+        rank, world = int(c["rank"]), int(c.get("world") or 2)
+        if 0 < rank < world - 1:
+            from verity_vllm.program.compact import runs_from_file_items
+            rs = runs_from_file_items(refs)
+            own = _own_run(rs, c) if rs else None
+        else:
+            own = refs[0] if rank == 0 else refs[-1]
+            if own and own[0] == "N":   # [R17 mfast F2] v2 file: a node-space progression ["N", idx, lo, hi, dI, dL, dH, count]; the own part
+                from verity_vllm.program.compact import runs_from_file_items   # is its first (rank 0) / last (rank world-1) run
+                r = runs_from_file_items([own])
+                own = r[0] if rank == 0 else r[-1]
         if own and own[0] == "n":
             out.setdefault(key, []).append(spec_of.get(int(own[1]), "?"))
         else:

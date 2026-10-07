@@ -17,16 +17,22 @@ judgement; `audit.py` holds the policy.
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
 - `pins`: for each name in `pins`, its kind, signature, axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
-  `meaning`, with their source lines. Signatures print with no notation, since no notation is loaded: nothing a package
-  declares can change how its statements read.
+  `meaning`, with their source lines (`reads`), and the constants other than theorems outside `meaning` where that walk
+  stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
+  package declares can change how its statements read.
+- `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
+  declaration range: what Lean generates for them has none), projections and internal names aside.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
-there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256.
+there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256. A pinned statement that is a
+definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
+(`liftOf`), with the definition and its module, so that `audit.py` can certify a statement lifted into a `Guarantees`
+definition as the statement its record holds.
 
 With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is
 written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
-statement that is a `Prop` definition under `meaning` also with that definition unfolded (`statementOf`), so that
+statement that is such a definition also with that definition unfolded (`liftOf`), so that
 `audit.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
 pin) whose old name would be another one's too: there the comparison would not tell the two apart. A constant that keeps
 its name stands for itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a
@@ -159,15 +165,21 @@ partial def inlineAuxProofs (env : Environment) (e : Expr) : Expr :=
   let e' := e.replace fun x => (auxProof? env x.getAppFn).map (·.beta x.getAppArgs)
   if e' == e then e else inlineAuxProofs env e'
 
-/-- When a statement is a `Prop` definition declared under `meaning` (a theorem `t : G` that proves a named statement),
-that definition and its value, with the proofs the elaborator abstracted out of it put back, so that it reads as the
-same statement written as a theorem's type would. -/
-def statementOf (env : Environment) (meaning : Array Name) (t : Expr) : Option (Name × Expr) := do
-  let .const g us := t.consumeMData | none
-  let .defnInfo v ← env.find? g | none
-  let i ← env.getModuleIdxFor? g
-  guard (v.type.isProp && under meaning env.header.moduleNames[i.toNat]!)
-  return (g, inlineAuxProofs env (v.value.instantiateLevelParams v.levelParams us))
+/-- When a statement is a definition declared under `meaning` applied to arguments under binders, `∀ xs, G.{us} as` (a
+theorem `t (xs) : G as` that proves a named statement), that definition and the statement with it unfolded once: the
+binders `xs` as they are, and in place of `G.{us} as` the value of `G` at the levels `us` with its leading `fun`s
+instantiated by `as` (`Expr.beta`, as `Meta.unfoldDefinition?` unfolds an applied constant), with the proofs the
+elaborator abstracted out of that value put back, so that it reads as the same statement written as a theorem's type
+would. Nothing else is reduced. -/
+partial def liftOf (env : Environment) (meaning : Array Name) : Expr → Option (Name × Expr)
+  | .forallE n d b bi => (liftOf env meaning b).map fun (g, b') => (g, .forallE n d b' bi)
+  | .mdata _ e => liftOf env meaning e
+  | e => do
+    let .const g us := e.getAppFn | none
+    let .defnInfo v ← env.find? g | none
+    let i ← env.getModuleIdxFor? g
+    guard (us.length == v.levelParams.length && under meaning env.header.moduleNames[i.toNat]!)
+    return (g, inlineAuxProofs env ((v.value.instantiateLevelParams v.levelParams us).beta e.getAppArgs))
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
 def uses : ConstantInfo → Array Name
@@ -220,11 +232,15 @@ unsafe def entriesOf (α : Type) (data : ModuleData) (ext : Name) : Array (Name 
   | some (_, es) => es.map fun e => unsafeCast e
   | none => #[]
 
-/-- The definitions under `meaning` that the constants `roots` read, transitively. -/
-def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Array (Name × Name × ConstantInfo) := Id.run do
+/-- The definitions under `meaning` that the constants `roots` read, transitively, and the constants other than theorems
+outside `meaning` that the walk reaches and does not follow (with their modules). The state holds each definition's
+`meaningDeps`, shared across calls: a read definition's value is walked once per run, not once per guarantee. -/
+def reads (env : Environment) (meaning : Array Name) (roots : Array Name) :
+    StateM (Std.HashMap Name (Array Name)) (Array (Name × Name × ConstantInfo) × Array (Name × Name)) := do
   let mut seen : NameSet := {}
   let mut stack := roots
   let mut out := #[]
+  let mut outside := #[]
   repeat
     match stack.back? with
     | none => break
@@ -235,14 +251,20 @@ def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Arra
       let some ci := env.find? c | continue
       let some i := env.getModuleIdxFor? c | continue
       let m := env.header.moduleNames[i.toNat]!
-      if !under meaning m then continue
       if ci matches .thmInfo _ then continue
+      if !under meaning m then
+        outside := outside.push (c, m)
+        continue
       out := out.push (c, m, ci)
-      stack := stack ++ meaningDeps ci
-  return out
+      let ds ← match (← get)[c]? with
+        | some ds => pure ds
+        | none => let ds := meaningDeps ci; modifyGet fun memo => (ds, memo.insert c ds)
+      stack := stack ++ ds
+  return (out, outside)
 
-def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
-    (ranges : Std.HashMap Name DeclarationRanges) (n : Name) : MetaM Json := do
+def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
+    (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
+    MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => env.header.moduleNames[i.toNat]!
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
@@ -264,7 +286,23 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
-    ("reads", toJson ((reads env meaning ci.type.getUsedConstants).map readJson))]
+    ("reads", toJson (rs.1.map readJson)),
+    ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
+
+/-- Whether a definition is a structure's projection, whose value is the field (the audit loads no environment
+extension, so `isProjectionFn` would not know). -/
+def projection : ConstantInfo → Bool
+  | .defnInfo v => go v.value
+  | _ => false
+where go : Expr → Bool
+  | .lam _ _ b _ => go b
+  | .proj .. => true
+  | _ => false
+
+/-- Whether a constant is one of the definitions a spec module declares that `spec_definitions` lists: not a theorem, a
+constructor or recursor, an internal name, or a projection. -/
+def specDefinition (ci : ConstantInfo) : Bool :=
+  (ci matches .defnInfo _ | .opaqueInfo _ | .inductInfo _) && !ci.name.isInternal && !projection ci
 
 def names (j : Json) (k : String) : Array Name :=
   ((j.getObjValD k).getArr?.toOption.getD #[]).filterMap fun v => v.getStr?.toOption.map String.toName
@@ -280,6 +318,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let meaning := names cfg "meaning"
   let allowed := names cfg "allowed"
   let pins := names cfg "pins"
+  let spec := names cfg "spec"
   let out := (cfg.getObjValD "out").getStr?.toOption.getD "facts.json"
   let str (j : Json) (i : Nat) : Option Name := ((j.getArrVal? i).toOption.bind (·.getStr?.toOption)).map String.toName
   let back : Std.HashMap Name Name := ((cfg.getObjValD "moved").getArr?.toOption.getD #[]).foldl (init := {}) fun m j =>
@@ -310,12 +349,16 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut offenders := #[]
   let mut declared := #[]
   let mut escapes := #[]
+  let mut specDefs := #[]
   for (m, data) in audited do
     let impl := (entriesOf Name data Compiler.implementedByAttr.ext.name).foldl (fun s (n, _) => s.insert n) NameSet.empty
     let ext := (entriesOf Unit data externAttr.ext.name).foldl (fun s (n, _) => s.insert n) NameSet.empty
     for ci in data.constants do
       let n := ci.name
       counts := counts.insert (kind ci) (counts.getD (kind ci) 0 + 1)
+      if under spec m && specDefinition ci && ranges.contains n then
+        specDefs := specDefs.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString),
+          ("kind", toJson (kind ci))]
       if ci matches .axiomInfo _ then
         declared := declared.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString)]
       let axs := (axioms.getD n {}).toArray
@@ -330,8 +373,17 @@ unsafe def main (args : List String) : IO UInt32 := do
         escapes := escapes.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString), ("why", toJson why)]
   let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
-  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning axioms ranges p))).toIO
-    ctx { env }
+  let readsOf : Std.HashMap Name (Array (Name × Name × ConstantInfo) × Array (Name × Name)) := Id.run do
+    let mut memo := {}
+    let mut acc := {}
+    for p in pins do
+      if let some ci := env.find? p then
+        let (rs, memo') := (reads env meaning ci.type.getUsedConstants).run memo
+        memo := memo'
+        acc := acc.insert p rs
+    return acc
+  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
+    return (p.toString, ← pinInfo env axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write
@@ -340,15 +392,19 @@ unsafe def main (args : List String) : IO UInt32 := do
     for p in pins do
       let some ci := env.find? p | continue
       h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
+      let head := liftOf env meaning ci.type
+      if let some (g, s) := head then
+        let m := (env.getModuleIdxFor? g).map fun i => env.header.moduleNames[i.toNat]!.toString
+        h.putStrLn (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
+          ("canon", toJson (canonText s))]).compress
       if !back.isEmpty then
-        let head := statementOf env meaning ci.type
         named := (ci.type.getUsedConstants ++ ((head.map (·.2.getUsedConstants)).getD #[])).foldl (·.insert ·) (named.insert p)
         let unfolded := match head with
           | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]
           | none => []
         h.putStrLn (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
           ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
-      for (c, _, rci) in reads env meaning ci.type.getUsedConstants do
+      for (c, _, rci) in (readsOf.getD p (#[], #[])).1 do
         if done.contains c then continue
         done := done.insert c
         h.putStrLn (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
@@ -371,7 +427,8 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("oleans", toJson oleans),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
-    ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("pins", Json.mkObj pinned.toList),
+    ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
+    ("pins", Json.mkObj pinned.toList),
     ("moved_conflicts", toJson conflicts)]
   IO.FS.writeFile out doc.compress
   return 0

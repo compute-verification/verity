@@ -37,17 +37,18 @@ from typing import Any, Callable, NoReturn, Sequence
 
 import torch
 
-from verity.ir.codec import _spec_id, canonical_json, encode_program, program_digest
-from verity.ir.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
-from verity.ir.defs import bind as ir_bind
-from verity.ir.program import Program
-from verity.ir.refs import Affine, Coll
-from verity.ir.refs import runs as _refs_runs
-from verity.ir.liveness import DeadGateReport, dead_gates as _dead_gates
-from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
+from verity.primitives.circuits.codec import _spec_id, canonical_json, encode_program, program_digest
+from verity.primitives.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+from verity.primitives.circuits.defs import bind as ir_bind
+from verity.primitives.circuits.program import Program
+from verity.primitives.circuits.refs import Affine, Coll
+from verity.primitives.circuits.refs import runs as _refs_runs
+from verity.primitives.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
+from verity.primitives.circuits.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import Registration
+from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
 from verity_vllm.program.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
@@ -113,7 +114,7 @@ class WeightLeaf:
 # ---------------------------------------------------------------------------------------------------------
 
 
-_runs = _refs_runs  # `verity.ir.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
+_runs = _refs_runs  # `verity.primitives.circuits.refs.runs` (pure; moved there so `rules.family.match_program` imports without torch)
 
 
 def _runs_intersect(a: list[tuple[str, int, int, int]], b: list[tuple[str, int, int, int]]) -> bool:
@@ -202,6 +203,8 @@ class Ctx:
         self.state: dict[str, Any] = {}  # StateRule scratch (cache ownership etc.)
         self.weight_roles: dict[str, dict] = {}  # weight field name -> {rule, role, statics} (first use)
         self.current: Any = None  # fx node being translated
+        #: set while `relabel.rank_report` re-emits a node: `call` hands it each call instead of appending to `B` (the template's slot)
+        self.emit_into: Callable[..., Coll] | None = None
         # [R15 moe GATE-PATH] every path a module of the source is registered under -> its first registration (`stack_path`)
         self._module_paths, self._canonical_path = module_registrations(module)
         #: unrooted stack entries that resolved under NO registered path (kept bare) -> bare path -> occurrences; recorded in the
@@ -367,6 +370,8 @@ class Ctx:
 
     def call(self, fn, *args: Coll, node=None, rule: Rule | None = None, name: str | None = None) -> Coll:
         node = node or self.current
+        if self.emit_into is not None:
+            return self.emit_into(fn, args, node, rule, name)
         try:
             out = self.B.call(fn, *args, name=name)
         except TypeError as e:
@@ -456,39 +461,6 @@ class Ctx:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@dataclass
-class DeriveReport:
-    """What a derivation produced: the program (or the refusal), its identity, provenance, and the flat
-    leaf program's digest when a family identity was claimed on top of it."""
-    program: Program | None
-    unsupported: Unsupported | None
-    provenance: dict
-    digest: str | None = None
-    root: str | None = None
-    gates: int | None = None
-    dead: DeadGateReport | None = None
-    flat_digest: str | None = None
-    flat_root: str | None = None
-    family: dict | None = None
-    flat_definition: Any = None  # the flat leaf-level SpecializedDefinition (rules' direct output)
-    correspondence_digest: str | None = None  # sha256 of the runtime correspondence document (`annotations["correspondence"]`), digested apart from the Program
-    descriptor: dict | None = None  # the flat Program's descriptor its digest was taken over (`program` is the flat one), for the writer
-
-    @property
-    def result(self) -> Program | Unsupported:
-        return self.program if self.program is not None else self.unsupported  # type: ignore[return-value]
-
-    @property
-    def ok(self) -> bool:
-        return self.program is not None
-
-    def to_json(self) -> dict:
-        return {"ok": self.ok, "digest": self.digest, "root": self.root, "gates": self.gates, "flat_digest": self.flat_digest,
-                "flat_root": self.flat_root, "correspondence_digest": self.correspondence_digest,
-                "unsupported": self.unsupported.to_json() if self.unsupported else None,
-                "dead_gates": self.dead.to_json() if self.dead else None, "family": self.family, "provenance": self.provenance}
-
-
 def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
            rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
            check_registry: bool = True, rank: tuple[int, int] | None = None, registered_values: bool = False) -> Program | Unsupported:
@@ -500,12 +472,13 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
-                  registered_values: bool = False) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from."""
+    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
+    `session`: a list that receives the derivation's `DeriveSession` when it succeeds (`relabel.rank_report` reads it)."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -526,53 +499,11 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
-        prov["weights"] = [w.to_json() for w in ctx.weights]
-        prov["weight_roles"] = ctx.weight_roles
-        prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual (global M-0595 (3))
-        prov["applications"] = ctx.applications
-        prov["mutation_effects"] = ctx.mutation_effects
-        prov["returned_inputs"] = ctx.returned_inputs
-        prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
-        if ctx.registered_values:
-            prov["supplied"] = ctx.registration.layout()
-        # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
-        # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
-        from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, emit_correspondence
-        from verity_vllm.correspondence.runtime import correspondence_digest
-        corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
-        corr_digest = correspondence_digest(corr_doc)
-        flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc},
-                               registered=ctx.registration.names if ctx.registered_values else ())
-        check_identity(flat_program, check_registry=check_registry)
-        flat_digest = program_digest(flat_desc := encode_program(flat_program))
-        program, family_report = flat_program, None
-        for fam in ruleset.families:
-            if fam.modes is not None and mode not in fam.modes:
-                continue
-            a = "a family claim keeps no registered parameter" if ctx.registered_values else fam.applies_program(flat_sd, ctx)
-            if a is not True:
-                prov.setdefault("families_not_applied", []).append({"rule": fam.rule_id, "why": a})
-                continue
-            family_report = fam.claim(flat_sd, ctx)  # verified isomorphism or Refuse(identity)/no-claim
-            if family_report is not None and family_report.get("matched"):
-                program = Program(family_report.pop("program"), annotations={"derive": prov})
-                check_identity(program, check_registry=check_registry)
-                prov["family"] = family_report
-                break
-            elif family_report is not None:
-                prov.setdefault("families_not_matched", []).append(family_report)
-                family_report = None
-        digest = flat_digest if program is flat_program else program_digest(program)
-        dead = _dead_gates(program, limit=32)
-        # a family claim replaces the flat body by the family's: the correspondence describes the FLAT Calls and stays with the flat root
-        corr_applies = program is flat_program
-        prov["result"] = {"root": _spec_id(program.fn), "digest": digest, "gates": program.gates, "flat_root": _spec_id(flat_sd),
-                          "flat_digest": flat_digest, "dead_gates": dead.total,
-                          "correspondence_digest": corr_digest if corr_applies else None,
-                          "correspondence": {"schema": corr_doc["schema"], "calls": len(corr_doc["calls"]), "occurrences": len(corr_doc["occurrences"]),
-                                             "applies_to": "program_fn" if corr_applies else f"flat body only ({_spec_id(flat_sd)}); not attached", "digest": corr_digest}}
-        return DeriveReport(program, None, prov, digest, _spec_id(program.fn), program.gates, dead, flat_digest, _spec_id(flat_sd),
-                            prov.get("family"), flat_sd, corr_digest if corr_applies else None, flat_desc if corr_applies else None)
+        head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
+        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry)
+        if session is not None:
+            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family))
+        return rep
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
         _record_partial(prov, holder)
@@ -582,6 +513,59 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         prov["unsupported"] = u.to_json()
         _record_partial(prov, holder)
         return DeriveReport(None, u, prov)
+
+
+def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
+                   check_registry: bool) -> DeriveReport:
+    """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
+    family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
+    prov["weights"] = [w.to_json() for w in ctx.weights]
+    prov["weight_roles"] = ctx.weight_roles
+    prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual (global M-0595 (3))
+    prov["applications"] = ctx.applications
+    prov["mutation_effects"] = ctx.mutation_effects
+    prov["returned_inputs"] = ctx.returned_inputs
+    prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
+    if ctx.registered_values:
+        prov["supplied"] = ctx.registration.layout()
+    # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
+    # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
+    from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, emit_correspondence
+    from verity_vllm.correspondence.runtime import correspondence_digest
+    corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
+    corr_digest = correspondence_digest(corr_doc)
+    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc},
+                           registered=ctx.registration.names if ctx.registered_values else ())
+    check_identity(flat_program, check_registry=check_registry)
+    flat_digest = program_digest(flat_desc := encode_program(flat_program))
+    program, family_report = flat_program, None
+    for fam in ruleset.families:
+        if fam.modes is not None and mode not in fam.modes:
+            continue
+        a = "a family claim keeps no registered parameter" if ctx.registered_values else fam.applies_program(flat_sd, ctx)
+        if a is not True:
+            prov.setdefault("families_not_applied", []).append({"rule": fam.rule_id, "why": a})
+            continue
+        family_report = fam.claim(flat_sd, ctx)  # verified isomorphism or Refuse(identity)/no-claim
+        if family_report is not None and family_report.get("matched"):
+            program = Program(family_report.pop("program"), annotations={"derive": prov})
+            check_identity(program, check_registry=check_registry)
+            prov["family"] = family_report
+            break
+        elif family_report is not None:
+            prov.setdefault("families_not_matched", []).append(family_report)
+            family_report = None
+    digest = flat_digest if program is flat_program else program_digest(program)
+    dead = _dead_gates(program, limit=32)
+    # a family claim replaces the flat body by the family's: the correspondence describes the FLAT Calls and stays with the flat root
+    corr_applies = program is flat_program
+    prov["result"] = {"root": _spec_id(program.fn), "digest": digest, "gates": program.gates, "flat_root": _spec_id(flat_sd),
+                      "flat_digest": flat_digest, "dead_gates": dead.total,
+                      "correspondence_digest": corr_digest if corr_applies else None,
+                      "correspondence": {"schema": corr_doc["schema"], "calls": len(corr_doc["calls"]), "occurrences": len(corr_doc["occurrences"]),
+                                         "applies_to": "program_fn" if corr_applies else f"flat body only ({_spec_id(flat_sd)}); not attached", "digest": corr_digest}}
+    return DeriveReport(program, None, prov, digest, _spec_id(program.fn), program.gates, dead, flat_digest, _spec_id(flat_sd),
+                        prov.get("family"), flat_sd, corr_digest if corr_applies else None, flat_desc if corr_applies else None)
 
 
 def _record_partial(prov: dict, holder: list) -> None:
@@ -729,12 +713,18 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     src_static = {"class": _describe_source(source, example_inputs, mode, profile, config, allowed_dims).get("class", name), "mode": mode,
                   "profile": profile or "", "inputs": [list(shape_of(t)[0]) for _, t in params[:len(user_names)]],
                   "config_sha256": hashlib.sha256(canonical_json(_jsonable(config))).hexdigest()[:16]}
-    # the flat program never carries a registered name: identity is claimed only through a verified family match
-    defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (tuple(params), out.type), replayer(body),
+    return _flat_definition(name, body, src_static, mode), ctx
+
+
+def _flat_definition(name: str, body, src_static: dict, mode: str) -> SpecializedDefinition:
+    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified
+    family match."""
+    params, ret = tuple(body.params), body.ret_type
+    defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (params, ret), replayer(body),
                                doc=f"derived ({mode}) from {src_static['class']}", conformance="derived: see provenance", register=False)
     sd = ir_bind(defn, SRC=src_static)
     sd.set_body(body)
-    return sd, ctx
+    return sd
 
 
 def _translate(ctx: Ctx) -> Coll:
@@ -798,7 +788,7 @@ def _translate(ctx: Ctx) -> Coll:
 
 
 def _concat_refs(parts):
-    from verity.ir.refs import concat
+    from verity.primitives.circuits.refs import concat
     return concat(list(parts))
 
 
@@ -978,5 +968,5 @@ def _no_rule(ctx: Ctx, node, reasons: list[str]) -> NoReturn:
     refuse("custom_op_without_binding", node, mp, f"Python callable {t!r} in the graph")
 
 
-__all__ = ["derive", "derive_report", "DeriveReport", "Unsupported", "Refuse", "refuse", "Ctx", "StaticIndex", "Alloc", "WeightLeaf",
+__all__ = ["derive", "derive_report", "DeriveReport", "DeriveSession", "Unsupported", "Refuse", "refuse", "Ctx", "StaticIndex", "Alloc", "WeightLeaf",
            "REASONS", "DERIVE_VERSION"]

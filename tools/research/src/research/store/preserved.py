@@ -38,6 +38,8 @@ from .remote import md5_file
 from .remote_s3 import SINGLE_PUT_MAX, is_md5_etag
 
 MODES = ("head", "readback", "recorded")
+#: in a head-mode verdict: the attempt key is write-once on the remote, so no push makes this run preserved (store.reconcile)
+DIFFERS = "the remote holds a DIFFERENT attempt document"
 
 
 def attempt_artifacts(doc: dict[str, Any]) -> dict[str, str]:
@@ -200,7 +202,7 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
                     if differs:
                         tr["attempt_manifest_differs"] = True
                 if not man_ok:
-                    why = (f"{attempt_key(t)}: the remote holds a DIFFERENT attempt document for this run id (`research data "
+                    why = (f"{attempt_key(t)}: {DIFFERS} for this run id (`research data "
                            f"reconcile-attempts {t}`)" if tr.get("attempt_manifest_differs") else
                            f"{attempt_key(t)}: absent on the remote" if r else rep.get("reason", "no remote"))
                     rep["not_preserved"].append({"id": t, "kind": "attempt", "errors": [why]})

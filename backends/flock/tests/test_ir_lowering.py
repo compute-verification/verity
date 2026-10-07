@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ir.defs import REGISTRY
+from verity.primitives.circuits.defs import REGISTRY
 from verity_flock import fp, gf2
 from verity_flock import ir_lower as IL
 
@@ -20,7 +20,7 @@ from verity_numerical.bench import templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 
-SLICES = Path(__file__).resolve().parents[2] / "numerical" / "tests" / "bench" / "data" / "captured-101" / "slices"
+SLICES = Path(__file__).resolve().parents[3] / "benchmarks" / "numerical" / "tests" / "bench" / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}}
 
@@ -106,6 +106,22 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
     got = run_piece(piece, widths, out, vecs)
     bad = [(v, g) for v, g in zip(vecs, got) if g != ref(*v)]
     assert bad == []                                  # exact bits: a NaN's sign and payload too
+
+
+def test_a_primitive_without_a_piece_lowers_through_the_boolean_definition_of_its_word():
+    """A primitive C-Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
+    running that Definition's ``build``: found through core's registry, not imported from its owner."""
+    from types import SimpleNamespace
+
+    from verity.primitives.circuits import boolean as BL
+    from verity.primitives.circuits.types import Array
+    from verity.primitives.circuits.boolean.forms import NOT
+    from verity.primitives.circuits.boolean.trace import definition
+
+    U4, word = Array(4, BL.BIT), SimpleNamespace(id="FlockTestNot4_v1")
+    assert word.id not in IL.PIECES
+    definition("FlockTestNot4Bits", 1, lambda C, a: [NOT(b) for b in a], (("a", U4),), U4, word=word)
+    assert run_piece(IL.PIECES[word.id], (4,), 4, [[a] for a in range(16)]) == [~a & 15 for a in range(16)]
 
 
 @pytest.mark.parametrize("name", sorted(V2))
@@ -194,7 +210,7 @@ def test_the_other_rows_pieces_match_the_ir_primitives(name):
 
 
 def _e2m1_vectors(rng: random.Random) -> list[list[int]]:
-    from verity.ml.tc.cast import E2M1_UP
+    from verity_catalog.silicon.cast import E2M1_UP
     words = [b + d for b, _ in E2M1_UP for d in range(-4, 5)] + [b | 1 << i for b, _ in E2M1_UP for i in range(21)]
     words += [0, 1, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x7F800000] + [0x7F800000 | 1 << i for i in range(23)]
     words += [e << 23 | rng.getrandbits(3) << 20 | rng.choice([0, 1, rng.getrandbits(20)]) for e in range(118, 134) for _ in range(16)]
@@ -213,8 +229,8 @@ def test_the_nvfp4_cast_and_bit_and_pieces_match_the_ir_primitives(name, widths,
     """Exact bits: the E4M3 widening on every byte (NaN 0x7FFFE000), the AND on every pair of bits, and the E2M1 cast on each
     boundary of its grid (the six ties and 5, where saturation begins) within 4 ulps and with each of its low 21 bits set, on
     ±0, subnormals, ±inf and a NaN per payload bit, across the exponents around the grid and on random words, both signs."""
-    import verity.ml.prims  # noqa: F401  (registers the casts)
-    import verity.ml.scalar  # noqa: F401  (registers BitAnd_v1)
+    import verity_catalog.definitions.prims  # noqa: F401  (registers the casts)
+    import verity_catalog.definitions.scalar  # noqa: F401  (registers BitAnd_v1)
 
     vecs = gen(random.Random(name))
     ref = REGISTRY[name].evaluate
@@ -226,7 +242,7 @@ def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding(name):
     """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` and sm_120's ``BlackwellE4m3QmmaDot32`` (the total models): E4M3 NaNs (0x7F,
     0xFF), zeros, subnormals, the largest magnitudes, accumulators of every class (Hopper's 14-bit adder truncates them too, sm_120's
     26-bit one does not), bit for bit."""
-    import verity.ml.prims  # noqa: F401  (registers the steps)
+    import verity_catalog.definitions.prims  # noqa: F401  (registers the steps)
 
     Q = REGISTRY[name]
 
@@ -274,7 +290,7 @@ def test_the_nvf4_step_matches_the_ir_on_every_encoding():
     """``unit_fp4.step_total`` = ``BlackwellNvf4OmmaDot64``: NaN scale bytes (low seven bits 0x7F, either bit 7), bit 7 set on
     ordinary scales (ignored), zero and subnormal scale mantissas, the top exponent field, NaN and infinite accumulators, cancelling
     groups, bit for bit."""
-    from verity.ml.prims import BlackwellNvf4OmmaDot64 as Q
+    from verity_catalog.definitions.prims import BlackwellNvf4OmmaDot64 as Q
 
     def scale(rng, fam):
         def one():
@@ -295,7 +311,7 @@ def test_the_mxf4_step_matches_the_ir_on_every_encoding():
         lo, hi = {3: (0, 20), 4: (230, 254), 5: (100, 150)}.get(fam, (0, 254))
         return [0xFF if rng.random() < 0.03 else rng.randint(lo, hi) for _ in range(4)]
 
-    from verity.ml.prims import BlackwellMxf4OmmaDot64 as Q
+    from verity_catalog.definitions.prims import BlackwellMxf4OmmaDot64 as Q
 
     vecs = _fp4_vectors(random.Random(14), 3500, scale)
     got = run_piece(IL.PIECES["BlackwellMxf4OmmaDot64_v1"], [32] + [4] * 128 + [8] * 4, 32, vecs)
@@ -774,9 +790,9 @@ def test_rmsnorm_warp_widths():
 
 
 def test_units_refuse_components_of_different_shapes():
-    from verity.ir.defs import CompositeDefinition, bind
-    from verity.ir.refs import array_of
-    from verity.ir.types import Array, Value
+    from verity.primitives.circuits.defs import CompositeDefinition, bind
+    from verity.primitives.circuits.refs import array_of
+    from verity.primitives.circuits.types import Array, Value
 
     mixed = CompositeDefinition("FlockLoweringMixed", 1, (), lambda S: ((("x", Array(4, Value(32))),), Array(2, Value(32))),
                                 lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Mul, x[2], x[3])]),
@@ -786,8 +802,8 @@ def test_units_refuse_components_of_different_shapes():
 
 
 def test_a_primitive_without_a_piece_is_named():
-    from verity.ir.defs import PrimitiveDefinition
-    from verity.ir.types import Value
+    from verity.primitives.circuits.defs import PrimitiveDefinition
+    from verity.primitives.circuits.types import Value
 
     odd = PrimitiveDefinition("FlockLoweringTestOnly", 1, (("a", Value(8)),), Value(8), lambda a: a ^ 0x55, register=False)
     C = gf2.Circuit()
@@ -837,7 +853,7 @@ def test_frame_staging_commits_rows_and_outputs(tmp_path):
     import json
 
     import blake3
-    from verity.commitments.rowleaf import ROLE_X, blake3_row_key
+    from verity.primitives.commitments.rowleaf import ROLE_X, blake3_row_key
 
     s = InputSet.open(SLICES / "rope-head-d64")
     path = REG.module("rope-head").stage(s, 0, 1, tmp_path)
@@ -1012,7 +1028,7 @@ def test_hopper_wgmma_piece_is_the_ir_primitive():
     primitive on special-heavy vectors (NaN payloads, both infinities, subnormals, cancellation)."""
     import random
 
-    from verity.ml.prims import HopperBF16WgmmaDot16 as P
+    from verity_catalog.definitions.prims import HopperBF16WgmmaDot16 as P
 
     rng = random.Random(7)
     spec16 = [0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0x0001, 0x8001, 0x7F7F, 0xFF7F, 0x3F80]

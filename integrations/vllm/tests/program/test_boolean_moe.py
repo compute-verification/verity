@@ -3,7 +3,9 @@ Definitions (`trace.word_of`): the routed sum's coordinate on every word at one 
 against 8 specials and random pairs at two, and at OLMoE's eight slots on random rows, rows of special words, rows that cancel to a
 few ulps and rows that overflow; the router's exponential on special words, random words and words across its range, its
 probabilities and its top-k on random, tied and special logits, and its selection rounds on random, tied and special
-probabilities against the word rounds. They are pinned by gate count and program digest and pass `Q_word_v1{X=16, W=32}`'s cut
+probabilities against the word rounds; GLM-5.3's sigmoid router's per-expert score on special, edge and random words, its slots
+and `write_outputs` against the word slots on random, tied and mostly -inf selection scores, and the whole router on both
+launches on the kernel tests' rows. They are pinned by gate count and program digest and pass `Q_word_v1{X=16, W=32}`'s cut
 check."""
 from __future__ import annotations
 
@@ -13,17 +15,17 @@ import json
 import numpy as np
 import pytest
 
-from verity import evaluation as E
-from verity.evaluation import bits as BS
-from verity.evaluation.reference import standalone_call
-from verity.ir import boolean as BL
-from verity.ir import codec
-from verity.ir import partition_object as PO
-from verity.ir.defs import REGISTRY, CompositeDefinition, bind
-from verity.ir.refs import array_of, tuple_of
-from verity.ir.types import Array, Tuple
-from verity.ml.boolean import trace as TR
-from verity.ml.boolean.forms import ZERO
+from verity.primitives.circuits import evaluation as E
+from verity.primitives.circuits.evaluation import bits as BS
+from verity.primitives.circuits.evaluation.reference import standalone_call
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits import codec
+from verity.primitives.circuits import partition_object as PO
+from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.primitives.circuits.refs import array_of, tuple_of
+from verity.primitives.circuits.types import Array, Tuple
+from verity.primitives.circuits.boolean import trace as TR
+from verity.primitives.circuits.boolean.forms import ZERO
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_moe as BM
 from verity_vllm.program.registry import moe as M
@@ -36,9 +38,16 @@ PINS = {
     "NvExpf_v2": (11372, 21804, 880, "83b491c59b5f94f2d54d2361ba490041c994c9b0bb7964262a9526f6275aaeb8"),
     "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": (126243, 239434, 10631,
                                                   "b85ffb422ab659512bc2a9fe8078659d8154ae30f694fd33064142fbf66fbddd"),
+    "MoeRouterSigmoidScore_v2": (30839, 58793, 2452, "9802429379b926dcd20f692897ab08c824d2fbb50dee4696ce79b413d78113ff"),
+    "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='block'}": (258083, 492361, 20884,
+                                                                     "8eed9bd78d3b13ed68ba80dd27b95b0dfee1bb50d94addf8550925035e4c06ae"),
+    "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}": (259626, 494985, 21130,
+                                                                    "4a2e29c0dd16b1386d8f58a40d853977bae7051a0243b0587d85cd5f7fb3b38c"),
 }
-TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.NvExpf),
-           pytest.param(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4), marks=pytest.mark.slow)]
+TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.NvExpf), bind(BM.MoeRouterSigmoidScore),
+           pytest.param(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4), marks=pytest.mark.slow),
+           *[pytest.param(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=k), marks=pytest.mark.slow)
+             for k in ("block", "warp")]]
 
 _EXP = [0, 1, 2, 126, 127, 128, 133, 134, 135, 253, 254, 255]
 #: per sign: zero, subnormals, ones and their neighbours, the finite maximum and its neighbours, infinities and NaNs
@@ -256,4 +265,124 @@ def test_the_router_passes_the_word_querys_cut_check() -> None:
     """The router's Calls (the shift, each exponential's halves and MUFU, the normalization, the selection) compute no value
     twice (about 25 s)."""
     prog, _ = standalone_call(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4))
+    assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok
+
+
+# --- the sigmoid router ----------------------------------------------------------------------------------------------------------
+
+#: x: tanhf's range ends (|x/2| at 0x3F19999A and 0x41102CB4: x at 0x3F99999A and 0x41902CB4) within 3 ulps, of either sign, and
+#: around 1, 1.5, 2 and the smallest normal; with F32_SPECIALS
+SIGMOID_EDGES = np.array([(c + d) | s for c in (0x3F99999A, 0x41902CB4, 0x3F800000, 0x3FC00000, 0x40000000, 0x00800000)
+                          for d in range(-3, 4) for s in (0, 0x80000000)], np.uint32)
+
+
+def _score_words(rng, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """(x, b): F32_SPECIALS and SIGMOID_EDGES, n random words and n values in the sigmoid's ranges and below, against random
+    words, biases in [-1, 1] and every 37th bias ``-sigmoid(x)`` (the score's +-0)."""
+    x = np.concatenate([F32_SPECIALS, SIGMOID_EDGES, rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32),
+                        rng.uniform(-40, 40, n).astype(np.float32).view(np.uint32), rng.uniform(-1.3, 1.3, n).astype(np.float32).view(np.uint32)])
+    b = np.where(rng.integers(0, 4, len(x)) == 0, rng.integers(0, 1 << 32, len(x), dtype=np.uint64).astype(np.uint32),
+                 rng.uniform(-1, 1, len(x)).astype(np.float32).view(np.uint32))
+    b[::37] = [M.nv_sigmoid_bits(int(w)) ^ 0x80000000 for w in x[::37]]
+    return x, b
+
+
+def _agree2(target, args, word=None) -> None:
+    word = word or TR.word_of(target)
+    n = len(args[0])
+    got, want = _rows(BS.evaluate_words(target, *args), n), _rows(E.evaluate_batch(word, *args), n)
+    bad = np.flatnonzero((got != want).any(axis=1))
+    assert not bad.size, f"{target.id}: {bad.size} of {n} rows differ from {word.id}, first {bad[:5]}"
+
+
+def test_the_sigmoid_score_on_special_random_and_in_range_words() -> None:
+    _agree2(bind(BM.MoeRouterSigmoidScore), _score_words(np.random.default_rng(0x51), 2000))
+
+
+@pytest.mark.slow
+def test_the_sigmoid_score_on_many_words() -> None:
+    """100,000 words of each kind (about 60 s)."""
+    _agree2(bind(BM.MoeRouterSigmoidScore), _score_words(np.random.default_rng(0x52), 100_000))
+
+
+def _bias_slots(B, S, s, v):
+    """`MoeRouterSigmoidBias_v1`'s slots and `MoeRouterSigmoidNorm_v1` on given selection scores and second values."""
+    ids = [B.call(bind(M.MoeRouterFirst, E=S.E), s)]
+    pairs = [B.call(bind(M.MoeRouterPickPair, E=S.E), s, v, ids[0])]
+    for _ in range(1, S.TOPK):
+        ids.append(B.call(bind(M.MoeRouterBiasNext, E=S.E), s, pairs[-1][0], ids[-1]))
+        pairs.append(B.call(bind(M.MoeRouterPickPair, E=S.E), s, v, ids[-1]))
+    out = B.call(bind(M.MoeRouterSigmoidNorm, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=S.KERNEL), array_of([p[0] for p in pairs]),
+                 array_of([p[1] for p in pairs]))
+    return tuple_of(out, array_of(ids))
+
+
+BIAS_SLOTS = CompositeDefinition("BiasSlots", 1, ("E", "TOPK", "SCALE", "KERNEL"),
+                                 lambda S: ((("s", Array(S.E, F32)), ("v", Array(S.E, F32))),
+                                            Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))), _bias_slots, register=False)
+
+
+def _selection_scores(rng, n: int, E_: int) -> tuple[np.ndarray, np.ndarray]:
+    """(s, v), n rows of each kind, s as `MoeRouterBiasScore_v1` makes them (no NaN, no -0): random words, values in [-1, 1],
+    multiples of 0.125 (ties) and rows mostly -inf (fewer finite experts than slots, or none); v random words."""
+    s = np.concatenate([rng.integers(0, 1 << 32, (n, E_), dtype=np.uint64).astype(np.uint32),
+                        rng.uniform(-1, 1, (n, E_)).astype(np.float32).view(np.uint32),
+                        (rng.integers(-2, 3, (n, E_)) * 0.125).astype(np.float32).view(np.uint32),
+                        np.where(rng.integers(0, 4, (n, E_)) == 0, rng.uniform(-1, 1, (n, E_)).astype(np.float32).view(np.uint32),
+                                 np.uint32(0xFF800000))])
+    s = np.where(((s >> 23) & 0xFF == 0xFF) & (s & 0x7FFFFF != 0), np.uint32(0xFF800000), s)
+    s = np.where(s == 0x80000000, np.uint32(0), s)
+    return s, rng.integers(0, 1 << 32, s.shape, dtype=np.uint64).astype(np.uint32)
+
+
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+def test_the_bias_slots(kernel) -> None:
+    st = {"E": 6, "TOPK": 3, "SCALE": 2.5, "KERNEL": kernel}
+    _agree2(bind(BM.MoeRouterBiasTopK, **st), _selection_scores(np.random.default_rng(0x5B1), 200, 6), bind(BIAS_SLOTS, **st))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+@pytest.mark.parametrize("E_, TOPK", [(16, 8), (5, 5), (8, 1)])
+def test_the_bias_slots_on_many_rows(kernel, E_, TOPK) -> None:
+    """2,000 rows of each kind at 16 experts and 8 slots, 5 and 5 (every expert, a pick tree with padding), 8 and 1; 10 to 40 s
+    each."""
+    st = {"E": E_, "TOPK": TOPK, "SCALE": 2.5, "KERNEL": kernel}
+    _agree2(bind(BM.MoeRouterBiasTopK, **st), _selection_scores(np.random.default_rng(0x5B2 + E_), 2000, E_), bind(BIAS_SLOTS, **st))
+
+
+def _router_rows(E_: int, n: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    from tests.program.test_moe_router_sigmoid import rows
+
+    r = rows(E_, n, seed)
+    return np.array([x for x, _ in r], np.uint32), np.array([b for _, b in r], np.uint32)
+
+
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+def test_the_sigmoid_router(kernel) -> None:
+    """`MoeRouterSigmoidBias_v2` at 8 experts and 2 slots on the kernel tests' rows (ties, a deciding bias, the sigmoid's ranges,
+    non-finite logits and biases, fewer finite experts than slots and none)."""
+    _agree2(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=kernel), _router_rows(8, 300, 0x5C))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+def test_the_sigmoid_router_at_eight_slots(kernel) -> None:
+    """At 16 experts and 8 slots, 1,000 rows (about 20 s each)."""
+    _agree2(bind(BM.MoeRouterSigmoidBias, E=16, TOPK=8, SCALE=2.5, KERNEL=kernel), _router_rows(16, 1000, 0x5D))
+
+
+def test_the_sigmoid_routers_word_views() -> None:
+    assert TR.word_of(bind(BM.MoeRouterSigmoidScore)).id == "MoeRouterSigmoidScore_v1"
+    st = {"E": 256, "TOPK": 8, "SCALE": 2.5, "KERNEL": "block"}
+    assert SW.boolean_version(bind(M.MoeRouterSigmoidBias, **st)).id == "MoeRouterSigmoidBias_v2{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}"
+    assert TR.word_of(bind(BM.MoeRouterSigmoidBias, **st)).id == bind(M.MoeRouterSigmoidBias, **st).id
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+def test_the_sigmoid_router_passes_the_word_querys_cut_check(kernel) -> None:
+    """Each value the router reads is decoded in one of its Calls (each expert's score halves and MUFUs, the slots): the cut
+    check finds no value computed twice (about 60 s each)."""
+    prog, _ = standalone_call(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=kernel))
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok

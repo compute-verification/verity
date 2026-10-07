@@ -16,11 +16,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-pytest.importorskip("verity.ir.units")
+pytest.importorskip("verity.primitives.circuits.units")
 pytest.importorskip("verity_vllm.program.registry")
 from circuit_check import targets as TG  # noqa: E402
-from verity.ir.defs import bind  # noqa: E402
-from verity.ir.program import Program  # noqa: E402
+from verity.primitives.circuits.defs import bind  # noqa: E402
+from verity.primitives.circuits.program import Program  # noqa: E402
 
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
@@ -68,17 +68,45 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
             assert live["coins"] == ("live-os" if os.environ.get("FC_COINS") == "os" else "os-seed-prf")
 
 
-def _fp_class(dtype: str, K: int):
-    import importlib.util
-
+def _gemm_fp():
     spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[1] / "pod" / "gemm_fp.py")
     gemm_fp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemm_fp)
+    return gemm_fp
+
+
+def _fp_class(dtype: str, K: int):
     CS.cache_slot_circuits()
-    units = PU.partition_units(gemm_fp.program(dtype, K, 4), "q-word")
+    units = PU.partition_units(_gemm_fp().program(dtype, K, 4), "q-word")
     ((s, cl),) = units.classes().items()
     act, uc = units.activation(cl.definition), cl.representative
     return units, s, cl, act, uc, CS.sources(act, uc, CS.owners_of(units, cl.definition.id))
+
+
+def test_a_partitions_binding_and_owners_are_its_own_when_a_freed_partitions_address_is_reused(monkeypatch):
+    """`partition_binding` and `owners_of` cache per `PartitionUnits` object, so a partition freed while cached leaves no entry
+    that a later partition allocated at its address could read (test_wired_links' flat staging once bound the freed wired
+    partition's digest that way). Two programs alternate, each partition freed after its binding, with every address made
+    one (`id` constant in `class_statement`), so a cache keyed by address reads the other program's entry every time."""
+    import gc
+    import weakref
+
+    from verity.primitives.circuits import partition_object as PO
+
+    monkeypatch.setattr(CS, "id", lambda o: 0, raising=False)
+    gemm_fp = _gemm_fp()
+    programs = [gemm_fp.program("e4m3", K, 4) for K in (128, 256)]
+    bindings = len(CS._BINDINGS)
+    for i in range(16):
+        units = PU.partition_units(programs[i % 2], "q-word")
+        assert CS.partition_binding(units, "q-word")[0] == PO.digest(PO.build(units.program, units.query))
+        ((_s, cl),) = units.classes().items()
+        assert CS.owners_of(units, cl.definition.id)
+        assert len(CS._BINDINGS) == bindings + 1 and len(CS._OWNERS) == 1
+        gone = weakref.ref(units)
+        del units
+        gc.collect()
+        assert gone() is None and len(CS._BINDINGS) == bindings and not CS._OWNERS
 
 
 @pytest.mark.parametrize("dtype", ["e4m3", "nvf4", "mxf4"])
@@ -88,7 +116,7 @@ def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(
     block padding is read, the unit has the default layout's gates, and on circuit-check's vectors it equals the IR evaluator."""
     from circuit_check import checks as CK
     from circuit_check import vectors as V
-    from verity.evaluation.reference import signature_of
+    from verity.primitives.circuits.evaluation.reference import signature_of
 
     units, s, cl, act, uc, groups = _fp_class(dtype, 128)
     plain = CS.class_lowering(act, uc, "unit-class/plain", groups)
@@ -157,8 +185,8 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
     same values re-laid, from either layout to the other; on circuit-check's vectors it equals the IR evaluator."""
     from circuit_check import checks as CK
     from circuit_check import vectors as V
-    from verity.commitments.rowleaf import bit_row
-    from verity.evaluation.reference import signature_of
+    from verity.primitives.commitments.rowleaf import bit_row
+    from verity.primitives.circuits.evaluation.reference import signature_of
 
     units, _s, cl, act, uc, groups = _fp_class(dtype, 128)
     merged, joins, bits = CS.element_rows(act, uc, groups)
@@ -212,12 +240,12 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
     is neither other frame's. From the prover's file, every committed row's elements give core's bit-row digest, ``b || c`` with its salt, the frame leaf under the
-    hiding schema, and the header's root under the domain its binding names, using ``verity.commitments`` only."""
-    from verity.commitments import hm96
-    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
-    from verity.commitments.indexed import RangeIndexedDomain
-    from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.rowleaf import bit_row, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
+    hiding schema, and the header's root under the domain its binding names, using ``verity.primitives.commitments`` only."""
+    from verity.primitives.commitments import hm96
+    from verity.primitives.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
+    from verity.primitives.commitments.indexed import RangeIndexedDomain
+    from verity.primitives.commitments.merkle import CommitmentDomain
+    from verity.primitives.commitments.rowleaf import bit_row, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
     units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
     lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
@@ -334,7 +362,7 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
     Every shape stages, MXF4 K=2048's partial last block among them: rows that fit SHA-512's padding block (at most 111 bytes)
     have no compression before it, and the output row's (§16.13) is the statement's. The derivation agrees with the stager's
     own lowering and `element_rows` at K=128."""
-    from verity.commitments.rowleaf import sha512_row_v2_prefix
+    from verity.primitives.commitments.rowleaf import sha512_row_v2_prefix
 
     shapes = [(d, k) for d in ROW_BITS for k in (64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384)]
     new: dict[bytes, tuple] = {}
@@ -360,13 +388,17 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
 
 
 def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):
-    pkg, src = Path(CS.__file__).parent, tmp_path / "src"          # verity_flock's sources, as the stage key's code digest reads them
-    for f in pkg.rglob("*.py"):
-        (src / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
-        (src / f.relative_to(pkg)).write_bytes(f.read_bytes())
+    import verity
+
+    src = {}                                                       # the packages' sources, as the stage key's code digest reads them
+    for name, pkg in (("verity_flock", Path(CS.__file__).parent), ("verity", Path(verity.__file__).parent)):
+        src[name] = tmp_path / "src" / name
+        for f in pkg.rglob("*.py"):
+            (src[name] / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
+            (src[name] / f.relative_to(pkg)).write_bytes(f.read_bytes())
     find_spec = importlib.util.find_spec
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src)])
-                        if name == "verity_flock" else find_spec(name, *a))
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src[name])])
+                        if name in src else find_spec(name, *a))
 
     def fresh(s):
         (CS._CTX["out"] / s[:16]).mkdir(parents=True, exist_ok=True)
@@ -389,12 +421,35 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
 
     assert not cached("first") and built == [1]
     assert cached("again") and built == [1]                            # a cache hit composes nothing
-    sha = src / "sha512_circuit.py"
+    sha = src["verity"] / "primitives" / "commitments" / "gates" / "sha512.py"
     assert "CARRY_EVERY = 5" in sha.read_text()
     sha.write_text(sha.read_text().replace("CARRY_EVERY = 5", "CARRY_EVERY = 4"))
     assert not cached("sha512-parameter") and built == [1, 1]          # a SHA-512 parameter is in the key
-    (src / "class_statement.py").write_text((src / "class_statement.py").read_text() + "\n# another version\n")
+    cs = src["verity_flock"] / "class_statement.py"
+    cs.write_text(cs.read_text() + "\n# another version\n")
     assert not cached("code") and built == [1, 1, 1]                   # and so is the code's version
+
+
+def test_the_stage_keys_code_digest_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path: Path):
+    """Walking `verity`'s portions in path order made the digest depend on sys.path order and on a cwd directory that joined the
+    namespace; it is the same over any order, and moves with an edit or a portion that joins."""
+    for rel in ("upper/verity/ml/__init__.py", "upper/verity/ml/gemm.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
+                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(f"# {rel}\n")
+    find_spec = importlib.util.find_spec
+
+    def digest(*portions: str) -> str:
+        locs = [str(tmp_path / p / "verity") for p in portions]
+        monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=locs)
+                            if name == "verity" else find_spec(name, *a))
+        return CS._source_digest()
+
+    a = digest("upper", "lower")
+    assert digest("lower", "upper") == a
+    assert digest("cwd", "upper", "lower") != a                         # a directory joining from the cwd is a miss, never a hit
+    (tmp_path / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
+    assert digest("upper", "lower") != a
 
 
 def test_selftest_jobs_runs_the_case_processes_at_once_and_keeps_their_records_in_case_order(monkeypatch, tmp_path: Path):
@@ -488,6 +543,20 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
     assert CS.prove("flock-circuit", tmp_path, 4, 0, selftest="honest")["all_pass"] is True
     assert "--gpu" in seen[0] and seen[0][-2:] == ["--only", "gpu_paths_agree"]
     assert "--gpu" not in seen[1]
+
+
+def test_each_selftest_case_keeps_its_stderr_beside_the_class_records(monkeypatch, tmp_path: Path):
+    def run(cmd, **_kw):
+        case = cmd[cmd.index("--only") + 1] if "--only" in cmd else None
+        return CS.subprocess.CompletedProcess(cmd, 0, stdout=f'NEG\t{{"case": "{case}", "pass": false}}\n',
+                                              stderr=f"thread 'main' panicked: {case}: out of memory\n")
+
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    rec = CS.prove("flock-circuit", tmp_path, 16, 0, selftest="gpu_proofs_match_cpu", gpu=True)
+    assert rec["finished"] is True and rec["all_pass"] is False and "stderr_tail" not in rec   # a verdict: no tail in the record
+    CS.prove("flock-circuit", tmp_path, 16, 0, selftest=True)
+    assert (tmp_path / "selftest-gpu_proofs_match_cpu.err").read_text() == "thread 'main' panicked: gpu_proofs_match_cpu: out of memory\n"
+    assert (tmp_path / "selftest-all.err").read_text() == "thread 'main' panicked: None: out of memory\n"
 
 
 def test_a_verifier_pod_serves_every_point_of_a_gpu_session_on_the_same_processes(monkeypatch, tmp_path: Path):
