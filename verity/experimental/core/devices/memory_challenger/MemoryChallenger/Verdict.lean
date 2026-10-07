@@ -1,5 +1,5 @@
 import MemoryChallenger.Records
-import MemoryChallenger.LmsSign
+import MemoryChallenger.SignedMessage
 
 /-!
 # The verdict on a signed session
@@ -35,7 +35,7 @@ wrong size is refused (Python's `ValueError`, which `verdict` reads as no signat
 def lmsVerify (p : Lms.Params) (publicKey session record signature : ByteArray) : E Bool := do
   if publicKey.size ≠ 16 + p.N then return false
   let sig ← Lms.Signature.decode p signature
-  Lms.verify p publicKey (← Lms.memoryChallengerMessage (publicKey.extract 0 16) session record) sig
+  Lms.verify p publicKey (← memoryChallengerMessage (publicKey.extract 0 16) session record) sig
 
 /-- `LMS`: S1's scheme at its deployed parameters. -/
 def LMS : String := "lms-sha512/n64-w1-h20/v0"
