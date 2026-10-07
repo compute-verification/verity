@@ -513,6 +513,30 @@ def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
         SC.discover.cache_clear()
 
 
+def test_a_sidecar_of_a_package_nested_in_another_is_found_once(tmp_path, monkeypatch):
+    """`verity_flock` lives in `verity/ml/flock/python/`: walking `verity` too named its sidecar
+    `verity.ml.flock.python.verity_flock.X` beside `verity_flock.X`, and `load_pins` refused the one pins file as two."""
+    from circuit_check import sidecars as SC
+
+    inner = tmp_path / "synouter" / "lib" / "python" / "syninner"
+    inner.mkdir(parents=True)
+    (tmp_path / "synouter/__init__.py").write_text("")
+    (tmp_path / "synouter/own.py").write_text("")
+    (tmp_path / "synouter/own.circuit-check.json").write_text("{}")
+    (inner / "__init__.py").write_text("")
+    (inner / "mod.py").write_text("")
+    (inner / "mod.circuit-check.json").write_text('{"definitions": {"SynNested_v1": {"and": 1}}}')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.syspath_prepend(str(inner.parent))
+    monkeypatch.setattr(SC, "PACKAGES", ("synouter", "syninner"))
+    SC.discover.cache_clear()
+    try:
+        assert SC.discover() == {"synouter.own": {"json": (tmp_path / "synouter/own.circuit-check.json").resolve()},
+                                 "syninner.mod": {"json": (inner / "mod.circuit-check.json").resolve()}}
+    finally:
+        SC.discover.cache_clear()
+
+
 def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
     """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
     other package is never read, so its bindings would leave the task list without an error."""
