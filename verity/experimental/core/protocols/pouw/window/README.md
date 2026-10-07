@@ -10,17 +10,17 @@ pure move, to the same path under `verity/core/`; the Python keeps running until
 | `PouwWindow.Advice` | `KINDS`, `tiles`, `tile_in`, `tile_at`, `window_problem` (L4) and its reasons (`Problem.text`) |
 | `PouwWindow.Public` | `PUBLIC`, `REGISTERED` |
 | `PouwWindow.Json` | the entries read in `window.py`'s dict shape; the items written as Python writes them |
-| `PouwWindow.Difftest` | the difftest's evaluator and runner |
+| `PouwWindow.Difftest` | the difftest's table: one `Difftest.Fn` per function of `window.py` |
+
+`pouw-window-difftest` (`PouwWindow/DifftestMain.lean`) serves that table on the shared harness
+(`verity/experimental/core/difftest/`), and `tests/test_difftest.py`, the suite `verity-pouw-window-difftest`, which `check`
+runs after its Lean steps, holds each function to `window.py` on Hypothesis-drawn inputs, refusals included.
 
 Its properties are stated in `Security/Properties/Pouw.lean` (the package `security_properties`), and the proved ones
 are in `Security/Properties/Proofs/Pouw.lean`.
 
 ~~~text
-lake build                                                        the library and pouw-window-difftest
-python3 scripts/difftest_vectors.py REPO --out OUT                 OUT/difftest/{instances,python}.jsonl
-lake exe pouw-window-difftest OUT/difftest/instances.jsonl OUT/difftest/python.jsonl 12000
-python tools/verity/lean/check.py verity/experimental/core/protocols/pouw/window   the Lean check, the difftest among its runs
+lake build                                                         the library and pouw-window-difftest
+uv run tools/verity/check/suites.py verity-pouw-window-difftest    the difftest
+python tools/verity/lean/check.py verity/experimental/core/protocols/pouw/window   the Lean check
 ~~~
-
-`verity/experimental/protocols/pouw/tests/test_pouw_window_lean_difftest.py` holds the generated data to the SHA-256 the
-record pins.
