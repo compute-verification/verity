@@ -34,7 +34,7 @@ import sys
 import time
 from dataclasses import dataclass
 
-from verity.primitives.circuits.program import RUN, input_id
+from verity.ml.circuits.program import RUN, input_id
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
 from verity_vllm.check.match import supplied_inputs as SI
@@ -79,7 +79,7 @@ class Prog(PeerReads):
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False):
-        from verity.primitives.circuits.codec import program_digest
+        from verity.ml.circuits.codec import program_digest
         self.label = label
         self.compact = bool(compact)
         self.digest = desc.get("digest") or program_digest(desc)
@@ -100,7 +100,7 @@ class Prog(PeerReads):
             self.param_names = lr["params"]
             del lr
         else:
-            from verity.primitives.circuits.codec import decode_program
+            from verity.ml.circuits.codec import decode_program
             _spec_id, runs = self._node_functions()
             dec = decode_program(desc, _registry())
             root = dec.root
@@ -148,7 +148,7 @@ class Prog(PeerReads):
         self._segment()
 
     def _node_functions(self):   # the run-form decode's per-node spec id and operand runs; a subclass may return functions equal to these
-        from verity.primitives.circuits import codec, refs
+        from verity.ml.circuits import codec, refs
         return codec._spec_id, refs.runs
 
     def _bind_splits(self) -> None:

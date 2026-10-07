@@ -6,11 +6,11 @@
 
 Schemes (``--scheme``, repeatable, or ``all``):
 
-    frame-v3            ``verity.primitives.commitments.frame_v3``, word leaves: leaf = ``domain.leaf(rank, position, schema, value)``,
+    frame-v3            ``verity.ml.commitments.frame_v3``, word leaves: leaf = ``domain.leaf(rank, position, schema, value)``,
                         tree = domain-, level- and index-bound nodes, padded to a power of two
     frame-v3-sha256-row the same tree over ``sha256/row/v1`` row leaves (the value is one row of 16-bit words)
     frame-v3-blake3-row the same tree over ``blake3-keyed/row/v2`` row leaves (plain-Python BLAKE3: slow by design)
-    vllm-v1             ``verity.primitives.commitments.vllm_v1``: leaf = ``pos_leaf(value)`` (the host path), tree = node/lift,
+    vllm-v1             ``verity.ml.commitments.vllm_v1``: leaf = ``pos_leaf(value)`` (the host path), tree = node/lift,
                         no padding, root bound by the step root
     frame-v3-sha512     frame-v3 word leaves through SHA-512 (64-byte domain id, leaves, pads, nodes and root)
     frame-v3-sha512-row the SHA-512 frame over ``sha512/row/v1`` row leaves
@@ -40,12 +40,12 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.primitives.commitments import vllm_v1
-from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.merkle import CommitmentDomain
-from verity.primitives.commitments.rowleaf import ROLE_X
-from verity.primitives.commitments.scheme import CommitmentScheme
+from verity.ml.commitments import vllm_v1
+from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.rowleaf import ROLE_X
+from verity.ml.commitments.scheme import CommitmentScheme
 
 SCHEMES = ("frame-v3", "frame-v3-sha256-row", "frame-v3-blake3-row", "vllm-v1", "frame-v3-sha512", "frame-v3-sha512-row", "vllm-v1-sha512")
 DEFAULT_SCHEMES = ("frame-v3", "frame-v3-sha256-row", "vllm-v1")

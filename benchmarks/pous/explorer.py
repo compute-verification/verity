@@ -62,7 +62,7 @@ US_PER_KIB = 0.15
 Z99 = 2.3263478740408408
 
 #: ε_proof, the per-answer slack, by the adversary's effective call count D = d: lean's estimates at 64 KiB (from
-#: `verity/Security/Proofs/Pous/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment
+#: `Security/Proofs/Pous/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment
 #: value ≈ 0.21%)
 EPS_PROOF = (
     {"D": 0, "eps_proof_fraction": 0.0021, "status": "extracted", "source": "single-segment ε_proof(0) ≈ 0.21% from Chain/Family.lean's certificate (replaces the D = 1 placeholder 0.40%)"},
@@ -159,9 +159,9 @@ FINE = np.arange(int(1.002e5 / H_US) + 1) * H_US
 
 
 def call_ns(block_bytes: int) -> int:
-    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.protocols.accounting.space.pous.primitives.pi2_call_ns`, in bits): the
+    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.experimental.protocols.pous.primitives.pi2_call_ns`, in bits): the
     ideal-permutation model's unit, not the adversary's floor at the reference Feistel-SHAKE256 `Π₂`."""
-    from verity.protocols.accounting.space.pous.primitives import pi2_call_ns
+    from verity.experimental.protocols.pous.primitives import pi2_call_ns
 
     return pi2_call_ns(8 * block_bytes)
 

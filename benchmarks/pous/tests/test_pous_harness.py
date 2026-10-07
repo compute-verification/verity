@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 torch = pytest.importorskip("torch")
-pytest.importorskip("verity.protocols.accounting.space.pous")
+pytest.importorskip("verity.experimental.protocols.pous")
 
 ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
@@ -44,7 +44,7 @@ def _harness():
 
 
 def _small():
-    from verity.protocols.accounting.space.pous import band
+    from verity.experimental.protocols.pous import band
     return band.BandParams(16, 64 * 8, 12)          # 64-byte blocks, 1 KiB segments
 
 
@@ -95,8 +95,8 @@ class PyResponder:
 
 def _backend(params, flip_last: bool = False):
     """The reference codec as the twin: tags carry each row's segment id and the salt."""
-    from verity.protocols.accounting.space.pous import schemes
-    from verity.protocols.accounting.space.pous.labels import salt_value, tag
+    from verity.experimental.protocols.pous import schemes
+    from verity.experimental.protocols.pous.labels import salt_value, tag
 
     harness = _harness()
     from band_gpu.memory_challenger import scheme_of
@@ -135,7 +135,7 @@ def _backend(params, flip_last: bool = False):
 
 def _vectors(params):
     """The band's pinned whole-segment vector, at the small geometry, from the reference."""
-    from verity.protocols.accounting.space.pous import schemes
+    from verity.experimental.protocols.pous import schemes
 
     harness = _harness()
     b = params.blocks_per_segment * params.block_bytes
@@ -169,7 +169,7 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     m = body["metrics"]
     assert m["loop"]["tokens"] == [1, 8] and m["loop"]["tensors"] == 3 and set(m["loop"]["overhead"]) == {1, 8}
     honest, value, late, rec = m["audit"], m["value_control"], m["late_control"], m["recompute_control"]
-    from verity.protocols.accounting.space.pous import audit
+    from verity.experimental.protocols.pous import audit
 
     assert honest["audits_accepted"] == 2 and honest["k"] == audit.CHALLENGES and honest["responder"]["answered"] == 2 * audit.CHALLENGES
     assert set(honest["margin_s"]) >= {"min", "p50", "max"} and honest["limit_ns"] > honest["deadline_ns"]
@@ -256,7 +256,7 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     format), whose segments round-trip and whose certificate at the frozen point is
     `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the memory challenger process rebuilds it from its manifest;
     d = 4 has no certificate and is refused."""
-    from verity.protocols.accounting.space.pous import band, schemes
+    from verity.experimental.protocols.pous import band, schemes
 
     harness = _harness()
     from band_gpu.memory_challenger import params_of, scheme_of
