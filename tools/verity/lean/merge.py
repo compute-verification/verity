@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("lean_audit_for_merge", HERE / "audit.py")
+_spec = importlib.util.spec_from_file_location("lean_audit_for_merge", HERE / "check.py")
 A = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(A)
 

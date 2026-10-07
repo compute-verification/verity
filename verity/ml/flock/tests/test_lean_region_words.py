@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 @pytest.fixture(scope="module")
 def gemm(tmp_path_factory):
     """The GEMM coordinate statement's circuit and public file, from the evidence store as `ci.py` fetches them."""
-    sys.path.insert(0, str(LEAN.parent))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
     import ci  # noqa: PLC0415
 
     store = tmp_path_factory.mktemp("store")
