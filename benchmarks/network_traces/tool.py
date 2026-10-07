@@ -30,8 +30,8 @@ def parse_steady(argv: list[str]) -> dict:
 
 
 COVERT_SYNC = Tool(name="network_covert_sync", version="1", command=["bash", "benchmarks/network_traces/covert.sh"],
-                   closure=["benchmarks/network_traces/**", "verity/protocols/accounting/communication/**"],
+                   closure=["benchmarks/network_traces/**", "verity/protocols/accounting/communication/certifier/**"],
                    key_params=["policies"], produces=["run-files/v1"], parse=parse_covert)
 COVERT_STEADY = Tool(name="network_covert_steady", version="1", command=["python", "benchmarks/network_traces/covert.py"],
-                     closure=["benchmarks/network_traces/covert.py", "verity/protocols/accounting/communication/**"],
+                     closure=["benchmarks/network_traces/covert.py", "verity/protocols/accounting/communication/certifier/**"],
                      key_params=["policies", "windows", "seed"], produces=["run-files/v1"], parse=parse_steady)
