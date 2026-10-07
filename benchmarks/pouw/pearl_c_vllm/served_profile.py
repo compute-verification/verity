@@ -122,9 +122,9 @@ def _instrument() -> None:
 CATEGORIES = (
     ("pearlc:gemm", r"^gemm_pearlc|^gemm_ct"),
     ("pearlc:forming", r"^(stats_s5|form_s5|eprime|lines|words|words_u|gemm_words|pa|pb)$|^(stats_s5|form_s5|gemm_words)"),
-    ("pearlc:a_tree", r"^hash_rows|^hash_pad$|^hash_node_keys$|^seed_line_a$|^b3s_level_keys"),
-    ("pearlc:tile_hash", r"^hash_msg|^hash_leaf"),
-    ("pearlc:tree", r"^hash_nodes$|^hash_tree_small$|^hash_tree_leaves$"),
+    ("pearlc:a_tree", r"^s512_rows$|^s512_pads$|^s512_seeds$|^hm_leaves$|^s512_frame_leaves$"),
+    ("pearlc:tile_hash", r"^s512_tile_leaves$"),
+    ("pearlc:tree", r"^s512_nodes$|^s512_tree_small$"),
     ("pearlc:screen", r"^kernel$|screen"),
     ("fp8:quant", r"fp8_quant|scaled_fp8|segmented_max|dynamic_scaled|per_token_group_quant|quant"),
     ("attention", r"flash|fmha|attention|attn|FlashAttn|paged"),
