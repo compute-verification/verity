@@ -39,6 +39,8 @@ src/cluster/
 ├── ledger.py   the append-only, hash-chained ledger; state (the one source of lease and queue state), state.json,
 │               gpu-lease/usage/v1 ingest, history, quiet_report, failures, usage
 ├── nebius1.py  node 1's Kueue as the model sees it: pods, Workloads, DCGM's GPU-to-pod labels; read(), live and read-only
+├── kueue_shadow.py  node 1 with Kueue as its only scheduler, in shadow: the lease pools', check slots' and Lean slots' demand
+│               as bare Workloads in `vy-shadow`'s own cohort, and where Kueue's admission differs from what the node did
 ├── nebius2.py  node 2's gpu-lease as the model sees it: owner lines, wait files, preempted.log; read(), live and read-only
 ├── shadow.py   the planner beside gpu-lease: mirror into the ledger, plan, divergences; replay(); evaluate(), the pass bar
 ├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
@@ -89,6 +91,7 @@ uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
 uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
+python3 -m cluster kueue-shadow loop --out RECORD.jsonl --hours H   # on vy-nebius-1; `kueue-shadow down` removes it
 uv run cluster policy show [--node nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
 uv run cluster policy diff [--node nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
 uv run cluster policy override KEY VALUE --until 2026-10-04T10:30:00Z --by WHO --reason R [--apply]   # on KEY's node
