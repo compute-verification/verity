@@ -94,7 +94,7 @@ def edited(pkg: Path) -> None:
 
 
 def corrupted(pkg: Path) -> None:
-    relist(pkg, lambda d: [f"{'0' * 64 if f == SECURITY + 'Specs/Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
+    relist(pkg, lambda d: [f"{'0' * 64 if f == SECURITY + 'Models/Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
 
 
 def dropped(pkg: Path) -> None:
@@ -102,7 +102,7 @@ def dropped(pkg: Path) -> None:
 
 
 def added(pkg: Path) -> None:
-    (pkg / SECURITY / "Specs/Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
+    (pkg / SECURITY / "Models/Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
 
 
 def extra(pkg: Path) -> None:
@@ -115,9 +115,9 @@ def reordered(pkg: Path) -> None:
 
 @pytest.mark.parametrize("mutate, problems", [
     (edited, ["Grader/Registry.lean does not match its hash in TRUSTED.sha256"]),
-    (corrupted, [f"{SECURITY}Specs/Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
+    (corrupted, [f"{SECURITY}Models/Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
     (dropped, ["lake-manifest.json is trusted but not listed"]),
-    (added, [f"{SECURITY}Specs/Pous/Guarantees/Added.lean is trusted but not listed"]),
+    (added, [f"{SECURITY}Models/Pous/Guarantees/Added.lean is trusted but not listed"]),
     (extra, ["README.md is listed but the command does not hash it"]),
     (reordered, ["the files are listed in another order than the command's, or more than once"]),
 ], ids=lambda x: getattr(x, "__name__", None))
