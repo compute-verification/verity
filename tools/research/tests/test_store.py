@@ -170,6 +170,32 @@ def test_put_fetch_roundtrip_file_and_tree(store, tmp_path, capsys):
         store.fetch(nop)
 
 
+def test_a_file_appended_to_between_hashing_and_storing_stores_nothing(store, tmp_path, monkeypatch):
+    """Custody hard-links a run's files and hashes them before the store copies each in: a writer still appending to one (a cancelled
+    check's suite, 6 Oct) left a blob whose bytes weren't its name, and R2 then held those bytes under that key for good."""
+    from research.store import local
+
+    tree = _tree(tmp_path / "tree")
+    log = tree / "a" / "x.txt"
+    real = local.sha256_file
+
+    def hash_then_append(p):
+        out = real(p)
+        if Path(p) == log:
+            with open(log, "a") as f:
+                f.write("more")
+        return out
+    monkeypatch.setattr(local, "sha256_file", hash_then_append)
+    with pytest.raises(IntegrityError, match="changed between hashing and storing"):
+        store.put_artifact("run-record/v1", {"run_id": "x"}, tree=tree)
+    monkeypatch.setattr(local, "sha256_file", real)
+    objects = store.root / "objects" / "sha256"
+    assert not (objects / real(log)[0]).exists() and not (objects / hashlib.sha256(b"x").hexdigest()).exists()
+    assert not [p for p in objects.iterdir() if p.name.startswith(".tmp-")], "the rejected copy is left behind"
+    art = store.put_artifact("run-record/v1", {"run_id": "x"}, tree=tree)
+    assert (store.fetch(art) / "a" / "x.txt").read_text() == "xmore", "once the writer stops, the next publish stores it"
+
+
 def test_a_tree_another_fetch_landed_first_is_completed_never_replaced(store, tmp_path, monkeypatch):
     """Two processes fetching one tree into trees/ at once: the one whose rename loses must leave the winner's tree in place,
     since the winner has returned it and is reading it (16 xdist workers resolving one regression row's records did)."""
