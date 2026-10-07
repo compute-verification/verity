@@ -25,7 +25,6 @@ uv run tools/verity/check/suites.py flock -- -k tanh -x    # arguments after -- 
 uv run tools/verity/check/suites.py --quick                # without the tests marked slow
 uv run tools/verity/check/suites.py --fresh                # ignore the cache
 uv run tools/verity/check/suites.py --list                 # each suite's inputs, and whether a pass is cached
-uv run verity check tests --quick                          # the same runner through the `verity` command
 ~~~
 
 Inside one package, plain pytest works too: `cd verity/ml/flock && uv run pytest -m "not slow" -k tanh`. It doesn't cache and

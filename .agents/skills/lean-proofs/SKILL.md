@@ -45,8 +45,7 @@ bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Ma
 cd PKG && lake build                   once per checkout; incremental from then on
 lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
 lake build Pkg.Area.File               after editing a file others import, so they see the change
-python tools/verity/lean/audit.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part);
-                                       `verity check lean PKG` runs the same
+python tools/verity/lean/audit.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part)
 ~~~
 
 Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
