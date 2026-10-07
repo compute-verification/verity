@@ -59,8 +59,9 @@ ALLOWED = {
     "experimental.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets",
                                     "ml.commitments", "ml.crypto", "ml.randomness", "experimental.protocols.profile",
                                     "experimental.protocols.sampled_proofs"},
-    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service.
-    "experimental.protocols.certifier": {"ml.circuits", "ml.commitments", "experimental.protocols.sampled_proofs"},
+    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
+    # are LMS signatures (`ml.crypto.lms`).
+    "experimental.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "experimental.protocols.sampled_proofs"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
