@@ -33,7 +33,7 @@ def _suite(tmp_path: Path, monkeypatch, reads_outside: bool):
     (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
     (tmp_path / "pkg" / "data.txt").write_text("an input\n")
     where = "(ROOT / 'outside' / '{}')" if reads_outside else "(ROOT / 'pkg' / 'data.txt')"
-    head = "from pathlib import Path\nROOT = Path(__file__).resolve().parents[3]\n"
+    head = "from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\n"
     (tests / "conftest.py").write_text(head + f"{where.format('by_conftest.txt')}.read_text()\n")
     (tests / "test_reads.py").write_text(head + "".join(f"\ndef test_{i}():\n    {where.format('by_test.txt')}.read_text()\n"
                                                         for i in range(4)))
@@ -111,7 +111,7 @@ def test_the_guard_records_what_the_key_leaves_out(tmp_path, monkeypatch, worker
     (tmp_path / "other").mkdir()
     (tmp_path / "other" / "pyproject.toml").write_text("[project]\nname = 'other'\n")
     (tmp_path / "pkg" / "tests" / "test_uses.py").write_text(
-        "from pathlib import Path\nROOT = Path(__file__).resolve().parents[3]\n\n"
+        "from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\n\n"
         "def test_uses():\n    (ROOT / 'other' / 'pyproject.toml').read_text()\n    import iniconfig  # noqa: F401\n"
         "    try:\n        import surely_no_such_distribution  # noqa: F401\n    except ImportError:\n        pass\n")
     r = S.run(suite, ["pkg", "other/pyproject.toml"], [], tmp_path / "logs", workers, ["other/pyproject.toml"])
