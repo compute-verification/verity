@@ -1,4 +1,4 @@
-"""`tools/verity/lean/merge.py`: two branches' `lean-audit.json` merged as `audit.py --update` would write the merged tree's record,
+"""`tools/verity/lean/merge.py`: two branches' `lean-audit.json` merged as `check.py --update` would write the merged tree's record,
 and refused where a record can't say what that is; as a function, and as git's merge driver."""
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def thm(reads: list[dict], statement: str = "P.f n = n", h: str = "0000000000000
 
 
 def record(deps: dict | None = None, **guarantees: dict) -> dict:
-    """The record `audit.py --update` writes for a package whose guarantees are ``guarantees`` (name suffix: its facts)."""
+    """The record `check.py --update` writes for a package whose guarantees are ``guarantees`` (name suffix: its facts)."""
     facts = {"lean": "4.34.0", "modules": list(FILES), "imports": {}, "declarations": {}, "axioms": STD, "offenders": [],
              "declared_axioms": [], "escapes": [], "pins": {f"P.{n}": f for n, f in guarantees.items()}}
     fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, facts, FILES,

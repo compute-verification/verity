@@ -180,7 +180,7 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
 #: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
-#: An `audit.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
+#: A `check.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
 #: where it printed the head's whole lean-audit.json change as the same statements (`research.queue.reviewed`).
 LEAN_REVIEW = "lean_review"
 

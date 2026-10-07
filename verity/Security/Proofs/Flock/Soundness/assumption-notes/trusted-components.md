@@ -34,7 +34,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   - `reads`: per module, the definitions those statements depend on (followed through the `meaning` modules,
     `FlockSoundness` and `FlockLevel3`), and which pins read them. Some are in proof files (`LinkSound.lean`,
     `CompiledSound.lean`, `CompiledLock.lean`).
-  - The audit fails when a signature or a definition it reads changes, until `audit.py --update` rewrites the record.
+  - The audit fails when a signature or a definition it reads changes, until `check.py --update` rewrites the record.
     When a rewritten record lands on `main`, Daniel gets a DM showing it, and that is the check: a statement reviewer
     is optional, and nothing waits on one. A theorem cited but not pinned (`../ASSUMPTIONS.md` names them) is read in
     its source.
