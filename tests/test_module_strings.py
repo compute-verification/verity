@@ -227,7 +227,7 @@ def test_the_generated_modules_finder_is_still_there():
 
 def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     """The names come from the members' build configuration, so a renamed package keeps being checked; and each form is found."""
-    assert {"verity", "verity_vllm", "research", "circuit_check", "tools", "backends"} <= set(roots())
+    assert {"verity", "verity_vllm", "research", "circuit_check", "tools"} <= set(roots())
     assert dangling("attr", "research.cli", "main") is None
     assert dangling("attr", "tools.tc_probe.tool", "TC_PROBE") is None
     assert dangling("main", "research", None) is None

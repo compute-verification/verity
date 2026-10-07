@@ -264,17 +264,17 @@ def test_the_cluster_kinds_inputs_are_in_this_tree():
 
 def test_each_check_catches_a_dangling_path():
     """The detectors above find what a move would leave behind, on a toy tree."""
-    files = frozenset({"verity/ml/provers/flock/live/lib.rs", "verity/ml/provers/flock/README.md", "tools/check/x.py", "tools/check/data/a.json"})
-    assert rule_dangling(["verity/ml/provers/flock/", "!README.md"], files) == []
-    assert rule_dangling(["verity/ml/provers/flock/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
+    files = frozenset({"backends/flock/live/lib.rs", "backends/flock/README.md", "tools/check/x.py", "tools/check/data/a.json"})
+    assert rule_dangling(["backends/flock/", "!README.md"], files) == []
+    assert rule_dangling(["backends/flock/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
     assert rule_dangling(["tools/check/data/a.json"], files) == []
 
     from research.store.tool import Tool
 
-    tool = Tool(name="t", command=["bash", "verity/ml/provers/flock/run.sh"], closure=["verity/ml/provers/flock/live/**", "verity/**"],
+    tool = Tool(name="t", command=["bash", "backends/flock/run.sh"], closure=["backends/flock/live/**", "verity/**"],
                 after_land=["python", "tools/check/x.py"], merge_requires={"s": ["verity/flock/"]})
     assert tool_problems("t", tool, files) == ["closure glob 'verity/**' matches no tracked file",
-                                               "command names 'verity/ml/provers/flock/run.sh', which isn't tracked",
+                                               "command names 'backends/flock/run.sh', which isn't tracked",
                                                "merge_requires['s'] prefixes ['verity/flock/'] match no tracked file"]
     gkr = frozenset({"archive/gkr/gpu/tool.py", "archive/gkr/gpu/run.py"})
     tool = Tool(name="g", command=["python", "-m", "gpu.run"], closure=["archive/gkr/gpu/**"])
@@ -284,7 +284,7 @@ def test_each_check_catches_a_dangling_path():
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]
 
     text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / "tools" / "check" / "x.py"\n'
-            'B = ROOT / "tools" / "lean"\nC = "verity/ml/provers/flock/live"\nD = ("backends/gone/x.py", "data/a.json")\n'
+            'B = ROOT / "tools" / "lean"\nC = "backends/flock/live"\nD = ("backends/gone/x.py", "data/a.json")\n'
             'E = Path(__file__).parent / "data" / "b.json"\nF = "origin/main"\n')
     got = dangling_constants(files | {"tools/check/y.py"}, read=lambda f: text if f == "tools/check/y.py" else "")
     assert got == ["tools/check/y.py:4: tools/lean (join)", "tools/check/y.py:6: backends/gone/x.py (string)",

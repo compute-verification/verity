@@ -1,5 +1,5 @@
 """Backends never need an integration (README "Development": backends must be testable without installing a frontend or
-runtime integration).  Today one does: C-Flock takes the vLLM integration's registered Definitions and kernels where core has no
+runtime integration).  Today one does: C-Flock takes the vLLM integration's kernels, word query and program graph where core has no
 equivalent yet (the numerical bench, which did too, is a benchmark now, and a benchmark may compose an integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
 fails, and so does a listed site that is gone, so the list stays exact.
 
@@ -17,6 +17,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+#: where backends live: `backends/` and the provers `verity/ml/provers/` holds
+BACKENDS = ("backends", "verity/ml/provers")
 #: The integrations' import packages, from each distribution's wheel configuration.
 INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrations").glob("*/pyproject.toml"))
                          for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
@@ -28,35 +30,11 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: drop the use) and delete its line; a new line needs a reason the dependency cannot go through core.
 KNOWN = {
     ("verity/ml/provers/flock/python/verity_flock/boolean_export.py", "verity_vllm.pipeline.program_graph"),
-    ("verity/ml/provers/flock/python/verity_flock/boolean_export.py", "verity.ml.circuits.ops"),
     ("verity/ml/provers/flock/python/verity_flock/boolean_export.py", "verity_vllm.query"),
     ("verity/ml/provers/flock/python/verity_flock/boolean_export.py", "verity_vllm.query.word"),
     ("verity/ml/provers/flock/python/verity_flock/class_statement.py", "verity_vllm.pipeline.program_graph"),
     ("verity/ml/provers/flock/python/verity_flock/ir_lower.py", "verity_vllm.program.kernels"),
-    ("verity/ml/provers/flock/python/verity_flock/ir_lower.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/python/verity_flock/ir_sampling.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/python/verity_flock/partition_units.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/python/verity_flock/tail.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/python/verity_flock/tail_pieces.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/python/verity_flock/topp_word.py", "verity.ml.circuits.ops.topp_keep_builder"),
-    ("verity/ml/provers/flock/python/verity_flock/topp_word.py", "verity.ml.circuits.ops.topp_word_gates"),
-    ("verity/ml/provers/flock/tests/test_boolean_export.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/tests/test_boolean_export.py", "verity.ml.circuits.ops.prims"),
     ("verity/ml/provers/flock/tests/test_circuit.py", "verity_vllm.program.kernels"),
-    ("verity/ml/provers/flock/tests/test_circuit.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/tests/test_class_statement.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/tests/test_derive.py", "verity.ml.circuits.ops.prims"),
-    ("verity/ml/provers/flock/tests/test_flock_rows.py", "verity.ml.circuits.ops.prims"),
-    ("verity/ml/provers/flock/tests/test_ir_lowering.py", "verity.ml.circuits.ops.prims"),
-    ("verity/ml/provers/flock/tests/test_ir_lowering.py", "verity.ml.circuits.ops.sampling"),
-    ("verity/ml/provers/flock/tests/test_ir_sampling.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/tests/test_ir_sampling.py", "verity.ml.circuits.ops.prims"),
-    ("verity/ml/provers/flock/tests/test_lean_rope.py", "verity.ml.circuits.ops.prims"),
-    ("verity/ml/provers/flock/tests/test_lean_typed_statement.py", "verity.ml.circuits.ops.prims"),
-    ("verity/ml/provers/flock/tests/test_partition_units.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/tests/test_stage_typed.py", "verity.ml.circuits.ops.prims"),
-    ("verity/ml/provers/flock/tests/test_topp_word.py", "verity.ml.circuits.ops"),
-    ("verity/ml/provers/flock/tests/test_typed_statement.py", "verity.ml.circuits.ops.prims"),
 }
 
 
@@ -78,7 +56,7 @@ def _modules(path: Path, text: str) -> set[str]:
 @functools.cache
 def _sites() -> frozenset[tuple[str, str]]:
     sites = set()
-    for path in sorted((ROOT / "backends").rglob("*.py")):
+    for path in sorted(p for d in BACKENDS for p in (ROOT / d).rglob("*.py")):
         rel = path.relative_to(ROOT)
         if any(part.startswith(".") or part in SKIP_DIRS for part in rel.parts):
             continue
@@ -93,11 +71,11 @@ def test_the_integrations_are_found():
 
 
 def test_the_scan_sees_the_backends():
-    """The scan walks `backends/`: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
+    """The scan walks `BACKENDS`: a backend that moved out of them would leave its imports unchecked, and `KNOWN` would pass
     as sites of files that don't exist yet."""
     for name in ("verity_flock",):
         origin = Path(importlib.util.find_spec(name).origin).resolve()
-        assert origin.is_relative_to(ROOT / "backends"), f"{name} is at {origin}, outside the scanned backends/"
+        assert any(origin.is_relative_to(ROOT / d) for d in BACKENDS), f"{name} is at {origin}, outside the scanned {BACKENDS}"
     assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"
 
 
