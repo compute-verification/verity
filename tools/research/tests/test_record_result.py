@@ -243,7 +243,7 @@ def test_compare_is_descriptive_and_labels_ratios(tmp_path):
     assert any("workload contract" in cv for cv in rep["caveats"]) and any("not a confidence interval" in cv for cv in rep["caveats"])
     text = C.render(rep)
     assert "candidate/baseline" in text and "x0.4000" in text and "elf_sha256" in text
-    assert main(["compare", b["id"], c["id"], "--runs-dir", str(tmp_path)]) == 0
+    assert main(["compare", b["id"], c["id"], "--dirs", "--runs-dir", str(tmp_path)]) == 0
 
 
 def test_compare_flags_missing_validation_and_units(tmp_path):

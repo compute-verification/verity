@@ -335,6 +335,24 @@ def test_cancel_markers_classify_by_actor_and_need_delivery_or_matching_signal(t
     assert doc["class"] == "CANCELLED_MANUAL" and doc["certainty"] == "inferred"
 
 
+def test_a_cancel_of_a_large_group_keeps_its_pgid_and_classifies(tmp_path, monkeypatch):
+    from research.telemetry import cancel
+    members = [{"pid": 1000 + i, "comm": "python3", "starttime_ticks": 45_000_000 + i} for i in range(120)]
+    monkeypatch.setattr(cancel, "pgid_members", lambda pgid: members)
+    monkeypatch.setattr(cancel, "run_dir_of", lambda pid: str(tmp_path.resolve()))
+    d = _attempt(tmp_path, rc=143, sig=None, samples=[], pid=100)
+    a = argparse.Namespace(actor="manual", attempt_dir=str(d), fallback=None, target_pid=None, target_pgid=100, target_pod=None,
+                           expect_starttime=None, expect_comm=None, expect_run_dir=str(d), expect_nonempty=False, reason="r", signal=15,
+                           project=None, job=None, attempt=None, controller=None, deliver=False)
+    assert cancel.cancel(a) == 0
+    intent = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()][-1]
+    assert "truncated_fields" not in intent
+    assert intent["target"]["pgid"] == 100 and intent["target"]["members_total"] == 120 and intent["verified"] is True
+    intent["t_mono"] = 105.0
+    (d / "events.jsonl").write_text(json.dumps(intent) + "\n" + json.dumps(dict(intent, kind="cancel_result", delivered=True, t_mono=105.1)) + "\n")
+    assert classify(d)["class"] == "CANCELLED_MANUAL"
+
+
 def test_logs_cuda_enospc_and_checker_record(tmp_path):
     d = _attempt(tmp_path, rc=1, sig=None, samples=[])
     (d / "stderr.log").write_text("blah\ntorch.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 GiB\n")
@@ -741,6 +759,33 @@ def test_rule_7b_needs_both_the_counter_and_the_killed_line(tmp_path, monkeypatc
     d = _attempt(c, rc=137, sig=None, samples=_v1_samples(c, monkeypatch, scope="job_cgroup"), end=105.0)
     (d / "stdout.log").write_text(KILLED_LINE)
     assert classify(d)["class"] == "CGROUP_OOM_ATTRIBUTED"
+
+
+def _queue_attempt(tmp_path, run_id, *, sig, oom, unit=None):
+    """A `research run --queue` attempt: its cgroup is the scope `cluster-<run id>.scope` capped at 8 GiB (job.json), which the
+    sampler calls the pod's because the runner and the sampler share it with the workload."""
+    d = tmp_path / run_id
+    d.mkdir()
+    path = f"/user.slice/user-1001.slice/user@1001.service/app.slice/{unit or f'cluster-{run_id}.scope'}"
+    cg = [{**_cg(t, k), "cgroup": {**_cg(t, k)["cgroup"], "path": path}} for t, k in ((100, 0), (104, oom))]
+    _attempt(d, rc=128 + sig, sig=sig, samples=cg, end=105.0)
+    (d / "job.json").write_text(json.dumps({"ownership": {"job": run_id}, "environment": {"cgroup": {"path": path, "memory_max_bytes": 8 << 30}}}))
+    return d
+
+
+def test_a_queue_scope_systemd_stopped_after_an_oom_kill_is_an_oom_that_names_the_cap(tmp_path):
+    doc = classify(_queue_attempt(tmp_path, "r20261005-064854-bd63", sig=15, oom=1))
+    assert doc["class"] == "CGROUP_OOM_ATTRIBUTED" and doc["certainty"] == "established", doc["why"]
+    assert "MemoryMax=8G" in doc["why"] and "--mem-gb" in doc["why"] and "systemd" in doc["why"]
+    assert any(e["kind"] == "cgroup.queue_scope" and e["memory_max"] == "MemoryMax=8G" for e in doc["evidence"])
+    killed = classify(_queue_attempt(tmp_path, "r2", sig=9, oom=1))
+    assert killed["class"] == "CGROUP_OOM_ATTRIBUTED" and killed["certainty"] == "established" and "MemoryMax=8G" in killed["why"]
+
+
+def test_a_sigterm_with_no_kill_or_outside_the_runs_own_scope_stays_unknown_signal(tmp_path):
+    assert classify(_queue_attempt(tmp_path, "r1", sig=15, oom=0))["class"] == "UNKNOWN_SIGNAL"
+    other = classify(_queue_attempt(tmp_path, "r3", sig=15, oom=1, unit="cluster-r9.scope"))
+    assert other["class"] == "UNKNOWN_SIGNAL" and "MemoryMax" not in other["why"]
 
 
 def test_killed_re_matches_shell_kernel_and_subprocess_reports_not_prose():

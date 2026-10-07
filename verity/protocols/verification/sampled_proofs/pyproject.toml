@@ -11,5 +11,5 @@ inputs = ["verity", "verity/Security/Proofs/Flock/Soundness/Audit/Influence.lean
           "verity/Security/Proofs/Flock/Soundness/Audit/Law.lean",
           "verity/Security/Proofs/Flock/Soundness/Audit/Stratified.lean",
           "verity/Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
-          "backends/flock/verifier/lean/soundness/lake-manifest.json",
-          "backends/flock/verifier/lean/soundness/lean-toolchain", "catalog", "kernels"]
+          "verity/Security/Proofs/lake-manifest.json",
+          "verity/Security/Proofs/lean-toolchain", "catalog", "kernels"]

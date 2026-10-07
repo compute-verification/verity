@@ -17,7 +17,7 @@ verdict accepts. The statements here:
   proof of a `fast100` statement (owners: dec-open, dec-lig).
 * `TagsOk`, `RecordsLive`, `DrawOk`: what `DecodesOn` needs past #828's hypotheses. `wr` is a free parameter of the
   headline, and at a `wr` constant at an accepted transcript `DecodesOn` is false (an outcome with no rounds can't play
-  `repC`, which starts with a coin); `RecordsLive` says `wr` is the coin server's record of the outcome.
+  `repC`, which starts with a coin); `RecordsLive` says `wr` is the challenger's record of the outcome.
 * `decAt`, `opnAt`: the decoder and the openings at draw `S`, read off the table `T S R` and setupH's statement there.
 * `DecodesOnExec`: `DecodesOn` at #828's tables, the decoder `decAt`, `one := true`, no final messages, `capOfRoot`.
 -/
@@ -89,7 +89,7 @@ def TagsOk (I : Inputs) : Prop :=
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`wr` is the coin server's record of the live session**: whenever flock-verify accepts what `wr` writes for the
+/-- **`wr` is the challenger's record of the live session**: whenever flock-verify accepts what `wr` writes for the
 outcome `o` at draw `S`, the record carries the draw `dj S`, the proof files are `o`'s, and the record decodes to a
 session whose table's `root_B`, link points and rep streams' rounds are `o`'s. -/
 def RecordsLive (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
@@ -102,7 +102,7 @@ def RecordsLive (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
         sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = pick (o.rep0, o.rep1) r
 
-/-- **The coin server's draw at `S`**: it proves `S`, and setupH sets up at it with `mPts` link points. -/
+/-- **The challenger's draw at `S`**: it proves `S`, and setupH sets up at it with `mPts` link points. -/
 def DrawOk (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program = .ok st →
@@ -129,7 +129,7 @@ noncomputable def opnAt (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Input
   | .error _ => default
 
 /-- **The decoder is right at the headline's draws** (R11b): given the opening's and Ligerito's chunk lemmas, the
-tags, `wr` the coin server's record and the coin server's draws proving their units at `mPts` link points, `DecodesOn`
+tags, `wr` the challenger's record and the challenger's draws proving their units at `mPts` link points, `DecodesOn`
 holds at #828's tables with the decoder `decAt`, single coins as field elements, no final messages and `capOfRoot`. -/
 def DecodesOnExec : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)

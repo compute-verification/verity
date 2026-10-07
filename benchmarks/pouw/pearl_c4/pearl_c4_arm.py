@@ -155,7 +155,7 @@ class _Call:
         """What the harness does with this call (`bench.poison_dump`), for arm_smoke.py, which runs without it: every
         buffer of `transcript_buffers` poisoned with 0xA5, the weight side and the call launched once more on its operands
         as they stand, then `write_dump`.  write=False leaves both launches out: the no-write negative control, which the
-        reference replay must reject (server.md 11:50Z)."""
+        reference replay must reject (the panel rule, 11:50Z)."""
         for b in self.transcript_buffers.values():
             self.d.write(b.ptr, bytes([POISON]) * b.nbytes)
         if write:

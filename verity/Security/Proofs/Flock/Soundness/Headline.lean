@@ -17,7 +17,7 @@ Its cryptographic hypotheses are instances of three assumptions, each for the fi
 * `SHA512CRExpected` (`ecr/sha-512`) through `hCR` (`LinkCR`);
 * A3 (`uniform/io-getrandombytes`) through `hA3` (`UniformRandomBytes`).
 
-The others are the named obligations `assumptions/e2e-checklist.md` lists: W6 and `Layout.Aliased` (`pp.placed`,
+The others are the named obligations `assumption-notes/e2e-checklist.md` lists: W6 and `Layout.Aliased` (`pp.placed`,
 `pp.aliased`), `HmRowComputes` (`hHm`), the layout's facts (`lay`, `rs`, in place of `vb`), the serving roots' rewinding
 (`tr`, in place of `hExec`; `TreeRewind.ofNever` builds it from `hExec` at `δ_tree = 0`), `hConst` and `hZero`. The rest
 (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`) are numeric conditions and the strata's match. The budgets must bound
@@ -27,9 +27,9 @@ opening's verification, which Lean doesn't check (`ASSUMPTIONS.md`).
 It bounds wrong units of the rows' circuit. That a correct unit computes a Definition additionally needs the unit's
 certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boolean semantics in Lean.
 
-Its proof coins are the model's: uniform, drawn each round after the prover's message. That the coin server's round
+Its proof coins are the model's: uniform, drawn each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
-states, and which covers only per-round OS coins: M0's seed-derived coins are outside the headline.
+states, and which covers only per-round OS coins: the circuit prover's seed-derived coins are outside the headline.
 -/
 
 namespace FlockSoundness.Audit

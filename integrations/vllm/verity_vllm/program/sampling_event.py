@@ -27,7 +27,7 @@ def is_sampling_event(spec: str) -> bool:
     return family_of(spec) in SAMPLING_EVENT_FAMILIES
 
 
-#: the `TargetProfile.sampler_construction` a stochastic select family is bound under (`registry.sampling.select_for`): a shared-greedy
+#: the `TargetProfile.sampler_construction` a stochastic select family is bound under (`registry.sampling_vocab.select_for`): a shared-greedy
 #: restatement is `shared-greedy`; a plain select, and the one specialised on a constant split count, which has no shared-greedy form, are
 #: `greedy-check-per-stage` (tests/check/test_fold_sampler_construction.py pins this against the registry)
 CONSTRUCTION_OF = {"GumbelTopPTokenSelect_v1": "greedy-check-per-stage", "GumbelTokenSelect_v1": "greedy-check-per-stage",
