@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -453,3 +454,38 @@ def test_fetch_all_streams_the_run_instead_of_holding_it(tmp_path, monkeypatch):
         tracemalloc.stop()
     assert rec["preserved"] and (local / "big.bin").stat().st_size == len(blob)
     assert peak < 6 * (1 << 20), f"fetch --all held {peak / 2**20:.1f} MiB of a 24 MiB run in memory"
+
+
+def _tar_exits(tmp_path: Path, monkeypatch, rc: int) -> None:
+    """The machine's tar archives what it's given and then exits `rc`, as GNU tar exits 1 on a file a live run wrote as it read."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "tar").write_text(f'#!/bin/sh\n{shutil.which("tar")} "$@"\necho "tar: ./events.jsonl: file changed as we read it" >&2\n'
+                                 f"exit {rc}\n")
+    (bin_dir / "tar").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+
+
+def test_a_file_changed_as_tar_read_it_is_not_an_unreachable_machine(tmp_path, monkeypatch):
+    d, local = _fake_machine(tmp_path, monkeypatch, {"out/proof.bin": b"p" * 1000, "events.jsonl": b"{}\n"})
+    _tar_exits(tmp_path, monkeypatch, 1)
+    rec = remote.fetch(local, everything=True)
+    assert "last_fetch_error" not in rec and rec["observed_utc"], rec
+    assert rec["preserved"] and rec["fetched_marker"]["written"], "the sha256 verification, not tar's status, decides --all's copy"
+    rec = remote.fetch(local)
+    assert "last_fetch_error" not in rec, "the records-only fetch reads the same tar status"
+
+
+def test_a_fatal_tar_status_still_fails_the_fetch(tmp_path, monkeypatch):
+    d, local = _fake_machine(tmp_path, monkeypatch, {"a.txt": b"a"})
+    _tar_exits(tmp_path, monkeypatch, 2)
+    rec = remote.fetch(local, everything=True)
+    assert rec["last_fetch_error"]["rc"] == 2 and "preserved" not in rec and not (d / ".fetched").exists()
+
+
+def test_a_missing_run_dir_is_not_a_changed_file(tmp_path, monkeypatch):
+    d, local = _fake_machine(tmp_path, monkeypatch, {"a.txt": b"a"})
+    _tar_exits(tmp_path, monkeypatch, 1)
+    rec = json.loads((local / "remote.json").read_text())
+    (local / "remote.json").write_text(json.dumps({**rec, "remote_run_dir": str(d / "gone")}))
+    assert remote.fetch(local, everything=True).get("last_fetch_error"), "cd's status is never read as tar's"

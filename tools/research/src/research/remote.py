@@ -1791,11 +1791,14 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
         raise Refused(f"{local_dir} is not a launched remote run")
     ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     rd = rec["remote_run_dir"]
+    # tar -c exits 1 when a file changed as it was read (a live run's logs): the archive is still whole, the machine answered, and
+    # --all's sha256 verification decides whether the copy matches; only tar's fatal statuses (and cd's, and ssh's) fail the fetch
+    changed_ok = 'rc=$?; [ "$rc" -eq 1 ] && rc=0; exit "$rc"'
     if everything:
-        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
+        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && {{ tar -cf - .; {changed_ok}; }}"]
     else:
         names = " ".join(shlex.quote(n) for n in SMALL_FILES)
-        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && ls {names} 2>/dev/null | tar -cf - -T -"]
+        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && {{ ls {names} 2>/dev/null | tar -cf - -T -; {changed_ok}; }}"]
 
     def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory
         with tarfile.open(fileobj=stream, mode="r|") as tf:
