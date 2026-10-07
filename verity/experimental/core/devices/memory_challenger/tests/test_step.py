@@ -25,12 +25,18 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 REFUSALS = (D.Reject, ValueError, TypeError, OverflowError)
 
-#: how many traces each reference ran recorded a round answered before its challenge was sent, by reference
-BACKWARDS = {"step": 0, "drive": 0}
+#: how many of the traces a reference ran took each path: a round answered before its challenge was sent (`step`,
+#: `drive`), one answered exactly at its limit (`step_edge`, `drive_edge`), a round's deadline passing with nothing read
+#: (`deadline`), the driver's bound running out (`fuel`)
+HITS = {"step": 0, "drive": 0, "step_edge": 0, "drive_edge": 0, "deadline": 0, "fuel": 0}
 
 
 def _backwards(ch: Challenger) -> bool:
     return any(r.elapsed_ns < 0 for r in ch.c.rounds)
+
+
+def _edge(ch: Challenger) -> bool:
+    return any(r.elapsed_ns == ch.c.commitment.limit_ns for r in ch.c.rounds)
 
 
 class Challenger:
@@ -118,7 +124,8 @@ def step(v) -> dict:
     ch = Challenger(M._get(v, "config"))
     events = [event_of(e) for e in M.list_(v, "events")]
     out = {"actions": [ch.event(e) for e in events], "refused": ch.refused}
-    BACKWARDS["step"] += _backwards(ch)
+    HITS["step"] += _backwards(ch)
+    HITS["step_edge"] += _edge(ch)
     return out
 
 
@@ -158,6 +165,13 @@ def _early(ch: Challenger, draw) -> list[tuple]:
     return [("received", max(0, send - draw(st.integers(1, 100))), M.block(i, ch.c.commitment.block_bytes))]
 
 
+def _edge_answer(ch: Challenger, draw) -> list[tuple]:
+    """The open round's whole block, received exactly at its limit or a nanosecond past it."""
+    j, i, send = ch.c._open
+    return [("received", send + ch.c.commitment.limit_ns + draw(st.integers(0, 1)),
+             M.block(i, ch.c.commitment.block_bytes))]
+
+
 def _json(e: tuple) -> dict:
     if e[0] == "tick":
         return {"tick": e[1]}
@@ -170,19 +184,22 @@ def _json(e: tuple) -> dict:
 def step_inputs(draw) -> dict:
     """A config and events drawn against the Python's own state as they go: ticks, the open round's answer in chunks,
     stray bytes, the link's end, and the leaf state's answers, the clock mostly moving forward; an honest run sometimes
-    has one round answered before its send."""
+    has one round answered before its send, and one at its limit or a nanosecond past it."""
     if draw(st.integers(0, 9)) == 9:
         return {"config": draw(configs(valid=False)), "events": [{"tick": 0}]}
     cfg = draw(configs())
     ch = Challenger(cfg)
     now, events = draw(st.integers(0, 2 ** 40)), []
     if draw(st.booleans()):
-        early = draw(st.integers(0, 2 * cfg["k"] - 1))
+        early, edge = draw(st.integers(0, 2 * cfg["k"] - 1)), draw(st.integers(0, 2 * cfg["k"] - 1))
         while ch.phase in ("fresh", "running"):
             if ch.c._open is None:
                 new = [("tick", now)]
             elif ch.c._open[0] == early:
                 new = _early(ch, draw)
+            elif ch.c._open[0] == edge:
+                new = _edge_answer(ch, draw)
+                now = new[0][1]
             else:
                 new, now = _answer(ch, draw, now, pace=16)
             for e in new:
@@ -190,11 +207,13 @@ def step_inputs(draw) -> dict:
                 events.append(_json(e))
     for _ in range(draw(st.integers(0, 24))):
         kind = draw(st.sampled_from(["tick"] * 4 + ["answer"] * 4 + ["stray", "closed", "reserved", "reserved", "refused",
-                                                                      "late", "back", "early"]))
+                                                                      "late", "back", "early", "edge"]))
         if kind == "answer":
             new, now = _answer(ch, draw, now)
         elif kind == "early":
             new = _early(ch, draw) if ch.c._open is not None else [("tick", now)]
+        elif kind == "edge":
+            new = _edge_answer(ch, draw) if ch.c._open is not None else [("tick", now)]
         elif kind == "stray":
             new = [("received", now, draw(st.binary(min_size=1, max_size=8)))]
         elif kind == "late":
@@ -233,13 +252,13 @@ MALFORMED_EVENTS = st.sampled_from([{"tick": -1}, {"tick": "1"}, {"received": {"
 def test_step(server):
     """Sessions run to completion, ended late by a slow answer, an answer received before its send, a tick past the
     deadline or the link's end, signed at a leaf or refused one, and events no session expects."""
-    BACKWARDS["step"] = 0
+    HITS.update(step=0, step_edge=0)
     inputs = st.one_of(step_inputs(), step_inputs(), step_inputs(), step_inputs(),
                        st.builds(lambda v, e, i: v | {"events": v["events"][:i] + [e] + v["events"][i:]}, step_inputs(),
                                  MALFORMED_EVENTS, st.integers(0, 30)))
     stats = D.run(port("step", step, inputs), examples=300, server=server)
     assert stats.outputs > 200, stats
-    assert BACKWARDS["step"] > 20, BACKWARDS
+    assert HITS["step"] > 20 and HITS["step_edge"] > 5, HITS
 
 
 def test_a_session_signs_once_after_it_ends(server):
@@ -282,15 +301,22 @@ def _chunks(r) -> list[tuple[int, bytes]]:
 
 
 def drive(v) -> dict:
-    """What `drive` does over `MemoryWorld.scripted`: the events it feeds `step`, in its order, given that the peer answers
-    a round only once its challenge is sent and closes the link when its script for the round runs out short."""
+    """What `drive` does over `MemoryWorld.scripted`: the events it feeds `step`, in its order, at most
+    `1 + k (block_bytes + 2)` of them and then the link's end. The peer answers a round only once its challenge is sent,
+    a chunk at or past the round's deadline is never read (the wait moves the clock to the deadline, which a `stuck`
+    world leaves where it is), and the peer closes the link when its script for the round runs out short."""
     ch = Challenger(M._get(v, "config"))
     now = M.nat(v, "start")
     rounds = [_chunks(r) for r in M.list_(v, "rounds")]
     leaf = M._get(v, "leaf")
     leaf = ("refused", leaf["refused"]) if isinstance(leaf, dict) and isinstance(leaf.get("refused"), str) else (
         "reserved", M.nat(v, "leaf"))
-    sent, published, revealed, delivered = [], [], 0, 0
+    stuck = M._get(v, "stuck")
+    if not isinstance(stuck, bool):
+        raise D.Reject("stuck is a boolean")
+    n, limit = ch.c.commitment.block_bytes, ch.c.commitment.limit_ns
+    sent, published, revealed, delivered, fuel = [], [], 0, 0, 1 + ch.c.coins.k * (n + 2)
+    passed = False
 
     def feed(e):
         nonlocal revealed, delivered
@@ -303,18 +329,36 @@ def drive(v) -> dict:
             else:
                 feed(leaf)
 
+    def idle(deadline):
+        nonlocal now, passed
+        now, passed = now if stuck else max(now, deadline), True
+        feed(("tick", now))
+
     while ch.phase in ("fresh", "running"):
+        if fuel == 0:
+            HITS["fuel"] += 1
+            feed(("closed",))
+            break
+        fuel -= 1
         if ch.phase == "fresh" or ch.c._open is None:
             feed(("tick", now))
             continue
+        deadline = ch.c._open[2] + limit + 1
         chunks = rounds[revealed - 1] if revealed - 1 < len(rounds) else []
         if delivered < len(chunks):
-            now, b = chunks[delivered]
-            delivered += 1
-            feed(("received", now, b))
-        else:
+            if chunks[delivered][0] >= deadline:
+                idle(deadline)
+            else:
+                now, b = chunks[delivered]
+                delivered += 1
+                feed(("received", now, b))
+        elif sum(len(b) for _, b in chunks) < n:
             feed(("closed",))
-    BACKWARDS["drive"] += _backwards(ch)
+        else:
+            idle(deadline)
+    HITS["drive"] += _backwards(ch)
+    HITS["drive_edge"] += _edge(ch)
+    HITS["deadline"] += passed
     return {"sent": sent, "published": published, "refused": ch.refused}
 
 
@@ -322,7 +366,8 @@ def drive(v) -> dict:
 def drive_inputs(draw) -> dict:
     """A config, and a peer that answers each round in chunks, the last completing the block (sometimes late, tampered,
     or before the round's challenge was sent, whose send time is the clock's reading when the last round's answer came
-    in), or a last round cut short; then a leaf, past the key's last sometimes, or a refusal."""
+    in, or with its last chunk exactly at the limit or a nanosecond past it), or a last round cut short; then a leaf, past the key's last sometimes, or a refusal; and sometimes a world stuck
+    at its deadlines."""
     cfg = draw(configs())
     n, limit, start = cfg["block_bytes"], cfg["limit_ns"], draw(st.integers(0, 2 ** 40))
     now, rounds = start, []
@@ -333,26 +378,30 @@ def drive_inputs(draw) -> dict:
             b = b[:n - 1]
         cuts = sorted(draw(st.sets(st.integers(1, max(1, n - 1)), max_size=2))) if n > 1 else []
         pieces = [b[i:k] for i, k in zip([0, *cuts], [*cuts, len(b)]) if b[i:k]]
-        chunks, early = [], draw(st.integers(0, 2)) == 2
+        chunks, early, send = [], draw(st.integers(0, 2)) == 2, now
         if early:
             now = max(0, now - draw(st.integers(1, 100)))
         for p in pieces:
             if not early:
-                now += draw(st.one_of(st.integers(0, limit // 3 + 1), st.just(limit + 1)))
+                now += limit + 1 if draw(st.integers(0, 3)) == 3 else draw(st.integers(0, limit // 3 + 1))
             chunks.append({"at": now, "bytes": p.hex()})
+        edge = {3: 0, 2: 1}.get(draw(st.integers(0, 3)))
+        if not early and edge is not None and send + limit + edge >= (chunks[-2]["at"] if len(chunks) > 1 else send):
+            now = chunks[-1]["at"] = send + limit + edge
         rounds.append(chunks)
         if short:
             break
     leaf = draw(st.one_of(st.integers(0, 2 ** cfg["height"]), st.just({"refused": "held by another signer"})))
-    return {"config": cfg, "start": start, "rounds": rounds, "leaf": leaf}
+    return {"config": cfg, "start": start, "rounds": rounds, "leaf": leaf, "stuck": draw(st.integers(0, 1)) == 1}
 
 
 def test_drive(drive_server):
     """The driver's order of events over a scripted link and clock: the commitment published before the first challenge, a
     challenge's send time read before it is sent, an answer's receipt time after its bytes, the session signed once, and
-    a round whose receipt reads before its send ending the session late."""
-    BACKWARDS["drive"] = 0
+    a round whose receipt reads before its send ending the session late, a deadline passing with the answer unread, and a
+    world whose clock stays put at a deadline running the driver's bound out."""
+    HITS.update(drive=0, drive_edge=0, deadline=0, fuel=0)
     stats = D.run(port("drive", drive, drive_inputs(), exe="memory-challenger-drive", need_rejects=False), examples=100,
                   server=drive_server)
     assert stats.outputs == 100, stats
-    assert BACKWARDS["drive"] > 5, BACKWARDS
+    assert HITS["drive"] > 5 and HITS["drive_edge"] > 5 and HITS["deadline"] > 10 and HITS["fuel"] > 3, HITS

@@ -5,58 +5,62 @@ import MemoryChallenger.Step
 # The driver
 
 `step` run over a `Core.World Out`: the only IO of the memory challenger. It needs only an order: it reads the clock for
-a challenge before it sends the challenge (`tick`, then `send`), and for an answer after its bytes arrive (`read`, then
-`received`).
+a challenge before it sends the challenge (`tick`, then `send`), and for an answer after its bytes arrive (`readUntil`,
+then `received`).
 
-`World`'s link has no read with a deadline, so while a round is open the driver waits on a read and on `sleepUntil` of
-the round's deadline at once (`IO.waitAny`), each in a dedicated thread; a read that finishes first is the next event,
-and a sleep that does is a `tick` past the deadline. The read stays outstanding across rounds: bytes it returns with no
-round open are dropped by `step`, after any that had already arrived before a challenge.
+With no round open the next event is a `tick`. With one open it is the link's next bytes before the round's deadline
+(`readUntil (send_ns + limit_ns + 1)`), the end of the link (an empty read or an error), or, once the clock reads past the
+deadline with nothing arrived, a `tick`, which ends the session `LATE`. The link is read only with a round open, so bytes
+sent before a challenge are read after it, as the start of its answer: a peer learns nothing by sending early that it
+could not by guessing once the challenge arrives.
+
+The loop is bounded: every event but a deadline's `tick` either opens a round, adds at least one byte to its answer, or
+ends the session, so `1 + k · (block_bytes + 2)` events end any session whose `World` keeps `readUntil`'s contract (the
+clock reads at least the deadline once it returns `none`). A `World` that breaks it runs the loop out, and the session
+ends as at the end of the link: `LATE`.
 -/
 
 namespace MemoryChallenger
 
-/-- The next link event: its bytes and the clock read after them, or the end of the link (an empty read or an error). -/
-private def linkEvent (w : Core.World Out) (r : Except IO.Error ByteArray) : IO Event := do
-  match r with
-  | .ok b => if b.isEmpty then pure .closed else pure (.received (← w.clock) b)
-  | .error _ => pure .closed
+/-- What the driver does for an action other than `reserve`. -/
+private def emit (w : Core.World Out) : Action → IO Unit
+  | .send b => w.link.write b
+  | .publish o => w.publish o
+  | .reserve => pure ()
 
-private def read (w : Core.World Out) : BaseIO (Task (Except IO.Error ByteArray)) := IO.asTask w.link.read .dedicated
+/-- Perform `step`'s actions: a `reserve` asks `w` for a leaf and performs what the reservation's step does, which is at
+most a `publish` (`step` on `reserved` takes no `reserve`, so `emit` never sees one). -/
+def perform (cfg : Config) (w : Core.World Out) (s : State) (acts : List Action) : IO State :=
+  acts.foldlM (init := s) fun s a => match a with
+    | .reserve => do
+      let (s, more) := step cfg s (.reserved (← w.reserve))
+      more.forM (emit w)
+      pure s
+    | a => do emit w a; pure s
+
+/-- The next event of a session in state `s`. -/
+def nextEvent (cfg : Config) (w : Core.World Out) (s : State) : IO Event := do
+  match s.current with
+  | none => pure (.tick (← w.clock))
+  | some o =>
+    match ← (w.link.readUntil (o.sendNs + cfg.limitNs + 1)).toBaseIO with
+    | .ok none => pure (.tick (← w.clock))
+    | .ok (some b) => if b.isEmpty then pure .closed else pure (.received (← w.clock) b)
+    | .error _ => pure .closed
+
+/-- At most `fuel` more events, then the end of the link. -/
+def loop (cfg : Config) (w : Core.World Out) : Nat → State → IO State
+  | fuel, s =>
+    if s.phase == .done || s.phase == .signing then pure s else
+    match fuel with
+    | 0 => let (s, acts) := step cfg s .closed; perform cfg w s acts
+    | fuel + 1 => do
+      let (s, acts) := step cfg s (← nextEvent cfg w s)
+      loop cfg w fuel (← perform cfg w s acts)
 
 /-- Run one session over `w`: its last state. A refused reservation is in `State.refusal`. -/
-partial def drive (cfg : Config) (w : Core.World Out) : IO State := do
-  let rec perform (s : State) : List Action → IO State
-    | [] => pure s
-    | .send b :: rest => do w.link.write b; perform s rest
-    | .publish o :: rest => do w.publish o; perform s rest
-    | .reserve :: rest => do
-      let (s, acts) := step cfg s (.reserved (← w.reserve))
-      let s ← perform s acts
-      perform s rest
-  -- `sleeper` waits for the deadline of round `j`, the round open when it started.
-  let rec loop (s : State) (reader : Task (Except IO.Error ByteArray)) (sleeper : Option (Nat × Task (Except IO.Error Unit))) :
-      IO State := do
-    if s.phase == .done || s.phase == .signing then return s
-    if ← IO.hasFinished reader then
-      let (s, acts) := step cfg s (← linkEvent w reader.get)
-      return ← loop (← perform s acts) (← read w) sleeper
-    match s.current with
-    | none =>
-      let (s, acts) := step cfg s (.tick (← w.clock))
-      loop (← perform s acts) reader none
-    | some o =>
-      let sleeper ← match sleeper with
-        | some (j, t) => if j == o.j then pure t else IO.asTask (w.sleepUntil (o.sendNs + cfg.limitNs + 1)) .dedicated
-        | none => IO.asTask (w.sleepUntil (o.sendNs + cfg.limitNs + 1)) .dedicated
-      match ← IO.waitAny [reader.map (some ·), sleeper.map fun _ => none] with
-      | some r =>
-        let (s, acts) := step cfg s (← linkEvent w r)
-        loop (← perform s acts) (← read w) (some (o.j, sleeper))
-      | none =>
-        let (s, acts) := step cfg s (.tick (← w.clock))
-        loop (← perform s acts) reader none
-  let s ← loop {} (← read w) none
+def drive (cfg : Config) (w : Core.World Out) : IO State := do
+  let s ← loop cfg w (1 + cfg.coins.k * (cfg.blockBytes + 2)) {}
   w.link.close
   pure s
 

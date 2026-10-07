@@ -8,10 +8,6 @@
   "MemoryChallenger.DifftestMain": "the memory-challenger-difftest executable's entry point, one line; it serves MemoryChallenger.Difftest.table, audited under MemoryChallenger, a test and not a proof",
   "MemoryChallenger.DriveMain": "the memory-challenger-drive executable's entry point: the difftest's line protocol around MemoryChallenger.MemoryWorld.driveFn, audited under MemoryChallenger, a test and not a proof"
  },
- "escapes": {
-  "MemoryChallenger.drive.loop": "partial def: the driver's event loop, which runs until the session ends, as long as the link and the clock take; its properties are step's, which is total",
-  "MemoryChallenger.drive.perform": "partial def: performs one step's actions, and for a reserve the actions of the reservation's step, which holds no reserve"
- },
  "layers": {
   "MemoryChallenger": {
    "imports": [
