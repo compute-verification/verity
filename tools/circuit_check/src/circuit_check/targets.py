@@ -68,6 +68,7 @@ def load_registries() -> None:
     import verity_catalog.definitions.boolean.cast  # noqa: F401
     import verity_catalog.definitions.boolean.elementwise  # noqa: F401
     import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity_catalog.definitions.boolean.gf2k  # noqa: F401
     import verity.primitives.commitments.gates.lms  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
     import verity_catalog.definitions.boolean.mufu  # noqa: F401
@@ -90,6 +91,8 @@ def load_registries() -> None:
     import verity.protocols.accounting.space.pous.circuit  # noqa: F401  (P2's modular squaring on bits)
     import verity.protocols.accounting.space.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
     import verity.protocols.accounting.space.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
+    import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
+    import verity_flock.rec_residuals  # noqa: F401  (V*'s algebra: the inner verifier's checks on one rep)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -145,7 +148,8 @@ def _record(text: str) -> Any:
 
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
-    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers."""
+    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one
+    whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -155,6 +159,8 @@ def definition(spec: str) -> Any:
     fam, body = m[1], m[2]
     statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
     try:
+        if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
+            raise KeyError(spec)
         fn = W.specialization(fam, statics)
     except KeyError:
         fn = suite().get(spec.strip())
@@ -216,8 +222,9 @@ TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V
 BINDINGS: dict[str, set[str]] = {}
 #: the root functions a binding file may define, in catalog order (each file's in turn, this module first); ``_X_roots`` holds
 #: ``_X_bindings`` beside it as one binding when the file defines both
-ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_merkle_roots",
-                  "_lms_roots", "_pous_roots", "_kernel_roots", "_vocabulary_roots", "_pouw_roots")
+ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_gf2k_roots",
+                  "_merkle_roots", "_lms_roots", "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots",
+                  "_pouw_roots")
 
 
 def binding_files() -> list[tuple[str, dict[str, Any]]]:
