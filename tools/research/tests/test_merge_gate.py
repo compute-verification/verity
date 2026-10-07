@@ -282,7 +282,9 @@ def test_prepare_refuses_a_train_the_gate_would_refuse_for_a_stacked_base_it_doe
 def test_a_train_that_would_revert_a_landed_change_is_refused_unless_its_path_is_allowed(tmp_path, monkeypatch, capsys):
     """ci's #1142 train (`25157eb17`) undid #1012: #1142's merge of main dropped #1012's lines, and merging #1142 then removed
     them from main without a word. A line the train loses must be one a ref removes in a commit of its own."""
-    from research.merge import reverted
+    import pytest
+
+    from research.merge import Refused, reverted
 
     main, _feat, _tip = _repos(tmp_path)
     origin = _remote(tmp_path, main)
@@ -309,6 +311,17 @@ def test_a_train_that_would_revert_a_landed_change_is_refused_unless_its_path_is
         return _git(main, "commit-tree", _git(main, "merge-tree", "--write-tree", base, sha), "-p", base, "-p", sha, "-m", "t")
 
     assert reverted(main, base, onto_base(q), [("Q", q)]) == []
+    _git(main, "checkout", "-q", "-b", "Q2", "Q")
+    (main / "q2.txt").write_text("Q2\n")
+    _git(main, "add", "q2.txt")
+    _git(main, "commit", "-q", "-m", "Q2 stacked on Q")
+    q2 = _git(main, "rev-parse", "Q2")
+    _git(main, "checkout", "-q", "main")
+    assert reverted(main, base, onto_base(q2), [("Q", q), ("Q2", q2)]) == []
+    lost = reverted(main, base, onto_base(p), [("Q", q), ("P", p)])
+    assert len(lost) == 1 and lost[0].startswith("w.txt loses 1 line(s)") and "'landed'" in lost[0]
+    with pytest.raises(Refused, match="git log"):
+        reverted(main, base, onto_base(q), [("Q", q), ("bad", "f" * 40)])
     lost = reverted(main, base, onto_base(p), [("P", p)])
     assert len(lost) == 1 and lost[0].startswith("w.txt loses 1 line(s)") and "'landed'" in lost[0]
     monkeypatch.chdir(main)

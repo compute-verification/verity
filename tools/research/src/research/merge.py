@@ -933,17 +933,36 @@ def _removals(text: str) -> dict[str, Counter]:
     return out
 
 
+def _log_commits(repo: Path, args: list[str]):
+    """Each commit of `git log ARGS`, whose format starts with a NUL, as the text after it; `Refused` if the log fails."""
+    proc = subprocess.Popen(["git", "log", *args], cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            errors="surrogateescape", env=git_env())
+    buf: list[str] = []
+    for line in proc.stdout:
+        if line.startswith("\x00"):
+            if buf:
+                yield "".join(buf)
+            buf = [line[1:]]
+        elif buf:
+            buf.append(line)
+    if buf:
+        yield "".join(buf)
+    err = proc.stderr.read()
+    if proc.wait():
+        raise Refused(f"git log {' '.join(args)}: {err.strip()}")
+
+
 def reverted(repo: Path, base: str, tip: str, pins: list[tuple[str, str]], allow: tuple[str, ...] = ()) -> list[str]:
     """What the train ``tip`` removes from ``base`` that no ref of ``pins`` removes in a commit of its own (a non-merge commit
     of ``base..SHA``; a layout move's restack commit, trailer `Restack-move`, counts as none): a line a merge in a ref's history
     dropped, as #1142's merge of main dropped #1012's lines and its train `25157eb17` silently undid #1012. Lines match by
     content, wherever a ref's commit removed them, so a removal survives a move of its file. One line per path, none for a
-    path in ``allow``."""
+    path in ``allow``. One log of the refs' union, streamed a commit at a time: a log per ref held whole re-reads every commit
+    stacked refs share, and a train of stacked refs ran out of memory."""
     own: Counter = Counter()
-    for _label, sha in pins:
-        log = _git(repo, "log", "--no-merges", "-p", "-U0", "--no-renames", "--no-color", "--format=%x00%(trailers:key=Restack-move,valueonly)",
-                   f"{base}..{sha}").stdout
-        for commit in log.split("\x00")[1:]:
+    if pins:
+        for commit in _log_commits(repo, ["--no-merges", "-p", "-U0", "--no-renames", "--no-color",
+                                          "--format=%x00%(trailers:key=Restack-move,valueonly)", f"^{base}", *(s for _l, s in pins)]):
             trailer, _, patch = commit.partition("\n")
             if not trailer.strip():
                 for lines in _removals(patch).values():
