@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
 
 /-!
 # The fragment argument: the counting theorem (staging, nothing pinned)

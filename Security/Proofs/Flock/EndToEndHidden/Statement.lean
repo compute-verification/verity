@@ -9,7 +9,7 @@ statement at the drawn units. Their proofs are `Flock.SecurityProofs.EndToEndHid
 and `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn`.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Specs.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndHidden` does.
 -/
 
