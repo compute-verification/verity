@@ -43,6 +43,8 @@ def test_the_generator_covers_what_it_says():
         statuses = {a[1]["status"] for a in res["actions"] if a[0] == "publish"} - {None}
         crashed = any(a[0] == "crash" for a in res["actions"])
         outcomes[inst["path"], "crashed" if crashed else "faulted" if statuses else "accepted"] += 1
+        if inst["path"] == "duplicate-at-capacity":  # the duplicate is malformed, not the queue's overflow
+            assert "malformed" in statuses
         if inst["program"] is not None:
             vectors.check_honest(inst, res)
             assert not statuses and not crashed

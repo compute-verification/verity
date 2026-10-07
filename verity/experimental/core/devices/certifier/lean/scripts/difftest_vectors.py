@@ -33,12 +33,12 @@ tick of both grids, each a little after its boundary. A path then perturbs it (`
 several buckets, a link backlog at or over one or four buckets, a refused connection, a request forwarded late (past
 the slack, or only past its anchor's egress bucket) or never, a queue past Q on either grid, a sync outside Σ_sync,
 valid syncs that don't cover the server (frames ready after their eligibility), the five malformed inputs (an event
-without a position, a position seen twice, an event longer than a frame, an event on a stream with no released request,
-bytes left at a stream's end), link bytes that aren't frames (partial, padding, unknown kinds, a length past the frame,
-an early end), the online prover in place of the given syncs (with or without given ones before it, a prior history and
-an envelope outside Σ_sync), the prover with an ingress tick read early, so that the first event of the request it
-releases is read before the request's anchor bucket (which the prover refuses at its next declaration), or several at
-once. Every reading is integer nanoseconds at least `MARGIN` from every grid
+without a position, a position seen twice (also while the queue holds exactly Q), an event longer than a frame, an
+event on a stream with no released request, bytes left at a stream's end), link bytes that aren't frames (partial,
+padding, unknown kinds, a length past the frame, an early end), the online prover in place of the given syncs (with or
+without given ones before it, a prior history and an envelope outside Σ_sync), the prover with an ingress tick read
+early, so that the first event of the request it releases is read before the request's anchor bucket (which the prover
+refuses at its next declaration), or several at once. Every reading is integer nanoseconds at least `MARGIN` from every grid
 boundary and every boundary plus the slack, where Python's float seconds and Lean's integers could part.
 """
 from __future__ import annotations
@@ -62,10 +62,11 @@ MS = 1_000_000
 MARGIN = 10_000
 RHOS = [Fraction(1), Fraction(2), Fraction(1, 2), Fraction(1, 3), Fraction(3, 2)]
 PATHS = ["honest", "honest", "honest", "late-tick", "stall", "backlog", "overrun", "refused", "late-forward",
-         "undelivered", "overflow-egress", "overflow-ingress", "advice", "no-id", "duplicate", "long", "no-request",
-         "trailing", "slow-server", "link-garbage", "prover", "prover", "prover-after-syncs", "early-tick", "chaos", "chaos"]
+         "undelivered", "overflow-egress", "overflow-ingress", "advice", "no-id", "duplicate", "duplicate-at-capacity",
+         "long", "no-request", "trailing", "slow-server", "link-garbage", "prover", "prover", "prover-after-syncs",
+         "early-tick", "chaos", "chaos"]
 PERTURBATIONS = [p for p in dict.fromkeys(PATHS)
-                 if p not in ("honest", "chaos", "prover", "prover-after-syncs", "early-tick")]
+                 if p not in ("honest", "chaos", "prover", "prover-after-syncs", "early-tick", "duplicate-at-capacity")]
 
 
 # --- the world the proxy runs in ------------------------------------------------------------------------------------
@@ -540,6 +541,16 @@ class Trace:
             t = self.within(self.tau_in, b, 0.5, 0.9)
             burst = encode_frame(DATA, x.stream, b"more", self.B_in) * (self.Q_in + self.r_in + 1)
             self.extra.append((t, 0, ["link", t, burst.hex()]))
+        elif path == "duplicate-at-capacity":  # a duplicate of a queued frame while the queue holds exactly Q
+            reads = sorted((t, i, k) for i, y in enumerate(xs) for k, t in enumerate(y.times))
+            bucket = lambda t: (t - self.origin) // (self.tau * MS)
+            q = 2 if len(reads) > 1 and bucket(reads[0][0]) == bucket(reads[1][0]) and rng.random() < 0.5 else 1
+            t, i, _ = reads[q - 1]
+            _, j, k = rng.choice(reads[:q])
+            self.Q = q
+            dup = self.at(t + MARGIN)
+            data = b"id: %d\ndata: dup\n\n" % xs[j].positions[k]
+            self.extra.append((dup, 0, ["upstream", xs[i].stream, dup, data.hex()]))
         elif path == "early-tick":  # the request's tick read early, and its first event read before its anchor's bucket
             x = min(xs, key=lambda y: y.positions[0] if y.positions else 1 << 60)
             t = x.release[-1]
