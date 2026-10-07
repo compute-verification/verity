@@ -221,6 +221,21 @@ def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
     assert (tree / "c" / ".lake" / "packages" / "dep").is_dir() and (deps / ka / "dep").is_dir()
 
 
+def test_the_packages_proving_a_spec_get_their_own_copies_beside_it(repo, tmp_path):
+    """audit.py builds each package a spec's `proved_in` names as its own root. With only the spec's copy, the prover's
+    dependencies were fetched cold in the tree at every run (`Security/Proofs`: ArkLib)."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (repo / "a" / "lean-audit.json").write_text(json.dumps({"proved_in": ["../c"]}))
+    ka, kc = LC.LA.deps_key(repo / "a"), LC.LA.deps_key(repo / "c")
+    for k in (ka, kc):
+        (deps / k / "dep").mkdir(parents=True)
+    assert LC.audit_records("a", deps, tree) == 0
+    assert json.loads((tree / LC.LINKS).read_text()) == {"a": ka, "c": kc}
+    assert (tree / "a" / ".lake" / "packages" / "dep").is_dir() and (tree / "c" / ".lake" / "packages" / "dep").is_dir()
+    assert LC.audit_records("c", deps, tree) == 0
+    assert json.loads((tree / LC.LINKS).read_text()) == {"c": kc} and not (tree / "a" / ".lake" / "packages").exists()
+
+
 def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, tmp_path, monkeypatch, capsys):
     """Never the `audit` pool, where hour-long audits hold every slot, nor the one LEAN_SLOT_POOL names, nor the one LEAN_SLOT
     says its caller holds; audit.py holds the slot's lock itself. A node whose SLOTS lists no `build` refuses it, even with an

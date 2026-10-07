@@ -17,9 +17,10 @@ is `lean-records/local`. `--tree` names another only under `lean-records/`. The 
 of the audit's (taken once per manifest and toolchain, else fetched cold), never links, so what Lake writes there stays out of
 what the audit keeps. That bounds Lake's own writes, not compile-time code: audit.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
-included, as any build this user runs by hand can. A tree keeps one package's copy (about 170k inodes, 8 GB), so auditing
-another package that fetches dependencies there drops it first. `--update` writes the record back into this checkout, but not
-in a recorded run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
+included, as any build this user runs by hand can. A tree keeps the copies of one package and of those its `proved_in`
+names (about 170k inodes, 8 GB each), so auditing another package that fetches dependencies there drops them first.
+`--update` writes the record back into this checkout, but not in a recorded run, whose source tree the commit's other runs
+share: there it is in the run's `lean-audit/audit-*/`.
 
 Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no tests. The kind is written into the
 `audit.json` and each package's `report.json` it leaves (`--out`, else the run's `lean-audit/`, else a temporary directory) and,
@@ -333,11 +334,14 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             t0 = time.monotonic()
             links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
             n = sync(closure(pkg), files, tree)
-            for other in [p for p in links if p != pkg and LA.deps_key(tree / pkg)]:
+            # audit.py builds each package `proved_in` names as its own root, with its own dependencies
+            built = [pkg, *LA.provers(pkg)]
+            for other in [p for p in links if p not in built and any(LA.deps_key(tree / q) for q in built)]:
                 unlink(other, tree, links)
-            if not link(pkg, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / pkg)):
-                links[pkg] = k
-                log(f"lean-records: {pkg}: its dependencies are fetched cold, once for this tree")
+            for p in built:
+                if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
+                    links[p] = k
+                    log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
             (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
             run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
             out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
