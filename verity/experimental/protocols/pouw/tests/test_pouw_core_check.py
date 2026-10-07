@@ -52,21 +52,59 @@ EXPECT = {
     "record-level-huge": "level:", "record-level-step": ("public-value:", "level:"), "record-work": "public-value: work",
     "record-check": "public-value: check", "record-sampling": "public-value: sampling", "record-root-w": "public-value: root_W",
     "record-no-w-root": "public-value: root_W", "record-population": "population:", "record-law": "law:",
-    "record-law-kind": "law:", "record-query": "query:", "record-scheme": "scheme:", "answer-keys": "evidence: keys",
-    "answer-protocol-type": "evidence: protocol", "answer-verdict": "evidence: verdict",
-    "answer-commitment-type": "evidence: commitment", "answer-shape": "evidence: an accepted answer",
-    "answer-profile": "evidence: profile", "answer-profile-delta": "evidence: profile",
-    "answer-profile-draw": "evidence: profile", "answer-public": "evidence: public", "answer-public-law": "evidence: public",
+    "record-law-kind": "law:", "record-query": "query:", "record-scheme": "scheme:",
+    "answer-keys": "evidence: answer: not in the form Answer.toJson writes",
+    "answer-protocol-type": "evidence: answer.protocol: not a string",
+    "answer-verdict": "evidence: answer.verdict: not accept, reject or undecided",
+    "answer-commitment-type": "evidence: answer.commitment: not a string",
+    "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
+    "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
+    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset or stratified draw",
+    "answer-public": "evidence: public: keys are not draw",
+    "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",
     "answer-null": "outcome: for registration null", "answer-reject": "service: the audit's reject",
     "answer-undecided": "service: the audit's undecided", "answer-programs": "profile: programs",
     "answer-programs-two": "profile: programs", "answer-level-query": "profile: its levels",
     "answer-level-size": "profile: its levels", "answer-level-draw": "profile: its levels",
     "answer-level-bernoulli": "profile: its levels", "answer-level-stratified": "profile: its levels",
-    "answer-level-name": "profile: its levels", "answer-levels-two": "profile: its levels", "answer-delta": "profile: delta",
-    "answer-drawn": "profile: drawn", "answer-draw-k": "draw: subset:", "answer-draw-population": "draw: subset:",
-    "answer-units-order": "draw: its", "answer-units-range": "draw: its", "answer-units-count": "draw: its",
-    "answer-unsorted-lists": None, "noncanonical-record": "commitment: not canonical JSON",
+    "answer-level-name": "evidence: profile: not in the form toJson writes", "answer-levels-two": "profile: its levels",
+    "answer-delta": "profile: delta", "answer-drawn": "profile: drawn", "answer-draw-k": "draw: subset:",
+    "answer-draw-population": "draw: subset:", "answer-units-order": "draw: its", "answer-units-range": "draw: its",
+    "answer-units-count": "draw: its", "answer-unsorted-lists": "evidence: profile: not in the form toJson writes",
+    "answer-commitment-odd": "evidence: odd-length hex", "answer-commitment-upper": "evidence: not lowercase hex",
+    "answer-commitment-empty": "outcome: for registration null", "answer-verdict-type": "evidence: answer.verdict: not a string",
+    "answer-verdict-missing": "evidence: answer: verdict missing", "answer-reason-type": "evidence: answer.reason: not a string",
+    "answer-public-missing": "evidence: answer: public missing",
+    "answer-public-null": "evidence: answer: an accept has no reason",
+    "answer-reject-public": "evidence: answer: a reject has a reason, and neither",
+    "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "draw: bernoulli:1/2 over",
+    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over", "answer-public-stratified": "draw: stratified:",
+    "answer-public-work": "draw: work:", "answer-public-work-bare": "draw: work:",
+    "answer-public-law-other": "evidence: public.draw.law: not subset, bernoulli, stratified or work",
+    "answer-public-law-type": "evidence: public.draw.law: not a string",
+    "answer-public-subset-closure": "evidence: public.draw: keys are not k, law, population, units",
+    "answer-public-stratum-keys": "evidence: public.draw.strata[0]: keys are not k, template, units",
+    "answer-public-stratum-range": "evidence: public.draw.strata[0].units: not a range [lo, hi]",
+    "answer-public-stratum-work": "evidence: public.draw.strata[0].work: not a natural number",
+    "answer-public-closure-type": "evidence: public.draw.closure: not a list",
+    "answer-public-p-type": "evidence: public.draw.p: not a string",
+    "answer-public-units-type": "evidence: public.draw.units: not a list",
+    "answer-public-unit-type": "evidence: public.draw.units: not a natural number",
+    "answer-public-population-type": "evidence: public.draw.population: not a natural number",
+    "answer-drawn-extra": "evidence: profile: not in the form toJson writes",
+    "answer-drawn-type": "evidence: profile.drawn.unit: not a natural number",
+    "answer-linked-type": "evidence: profile.linked: not a boolean",
+    "answer-programs-type": "evidence: profile.programs: not a list",
+    "answer-program-type": "evidence: profile.programs: not a string",
+    "answer-level-keys": "evidence: profile.levels[0]: not in the form toJson writes",
+    "answer-level-missing": "evidence: profile.levels[0]: size missing",
+    "answer-level-null-query": "profile: its levels", "answer-level-null-draw": "profile: its levels",
+    "answer-level-strata-keys": "evidence: profile.levels[0].draw: not in the form toJson writes",
+    "answer-level-draw-two": "evidence: profile.levels[0].draw: not in the form toJson writes",
+    "answer-level-bernoulli-lowest": 'evidence: profile.levels[0].draw.bernoulli: "2/4" is not in lowest terms',
+    "answer-delta-type": "evidence: profile.delta: not a string", "answer-level-renamed": "profile: its levels",
+    "noncanonical-record": "commitment: not canonical JSON",
     "noncanonical-answer": "evidence: not canonical JSON", "float-answer": "evidence: canonical JSON: a non-integer number",
     "utf8-record": "commitment: not UTF-8", "honest": None,
 }
@@ -77,8 +115,8 @@ def _answer(inst: dict) -> dict:
 
 
 def test_every_mutation_hits_its_refusal():
-    """Each mutation, over enough cases to cover it several times, is answered with the refusal it aims at; an honest
-    window and one whose lists only need sorting are accepted."""
+    """Each mutation, over enough cases to cover it several times, is answered with the refusal it aims at, and an honest
+    window is accepted."""
     assert set(EXPECT) == set(vectors.NAMES) | {"honest"}
     seen: dict[str, int] = {}
     for seed in range(2 * 10 * len(vectors.NAMES) // 9 + 10):
@@ -110,6 +148,19 @@ def test_an_accepted_window_publishes_exactly_pouw_public():
         tw = case["params"]["check"]["tile_work"]
         assert k == Wd.k_prime(Fraction(case["params"]["eps"]), Fraction(case["params"]["delta"]), w.credited * tw, w.n, tw)
         assert rec["population"] == w.n == a["profile"]["levels"][0]["size"]
+
+
+def test_every_answer_reads_back():
+    """An answer is what `Core.Answer.ofJson` reads back, so an accept's public outputs are never `null`, and an accept's
+    profile is what `Core.Integrity.ofJson` reads back."""
+    accepted = 0
+    for seed in range(0, 600, 3):
+        a = _answer(vectors.instance(seed))
+        assert CC.answer_of(a)["verdict"] == a["verdict"]
+        if a["verdict"] == "accept":
+            accepted += 1
+            assert a["public"] is not None and CC.integrity_json(CC.integrity(a["profile"])) == a["profile"]
+    assert accepted
 
 
 def test_the_digest_is_one_stages():

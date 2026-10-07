@@ -9,8 +9,8 @@
    "why": "4,000 generated windows on which PouwCheck.protocol answers what core_check.py answers, byte for byte: honest registrations and service answers, and one mutation each aimed at every refusal (the parameters, the registration, the answer, and each rule of the check)",
    "args": ["{difftest/cases.jsonl}", "{difftest/python.jsonl}", "4000"],
    "data": {
-    "difftest/cases.jsonl": "5afe2f9174a084ad18d29ecdb203c46ad05d655c3867a93cca4952f8e2fcb8ac",
-    "difftest/python.jsonl": "1a962e128684a58d81e2986c923996dc33eb6a11b8ea5f7d4812aad0b04784b1"
+    "difftest/cases.jsonl": "8b1496f8af11f8c9e36cf812123d64fbecc7b89201c511cf501328d5f4627716",
+    "difftest/python.jsonl": "208dc7c2c194cbc9dc96a71f5b996f4530c86f32e47646b309248ef5f1992419"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }

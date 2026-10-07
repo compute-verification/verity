@@ -10,8 +10,9 @@ import PouwCheck.Json
   of tile counts, the window's context and the check query's SHA-512.
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
-* `Evidence`: the proof service's answer for a registration, in the core interface's answer form: the protocol, the
-  registration it is for, and what it said (on acceptance, the integrity profile and the subset draw).
+* `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
+  registration it is for, and what it said (on acceptance, the integrity profile and the verifier's draw as one-stage's
+  `draw.py` writes it).
 
 Each decoder refuses with `core_check.py`'s message, and `Core.Protocol.answer` prefixes it with the input's name.
 -/
@@ -25,7 +26,6 @@ def scheme : String := "frame-v3-sha512/hm96-sha512"
 def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
 def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "query", "range"]
 def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
-def answerKeys : List String := ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 
 /-- The `check` item: the tile template, its work per tile, the commitment scheme and the public bound on entries. -/
 structure CheckItem where
@@ -144,64 +144,93 @@ def registrationOf (b : ByteArray) : V Registration := do
 def Registration.digest (c : Registration) : ByteArray :=
   Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
 
-/-! The integrity profile read back from `Core.Integrity.toJson`'s form. -/
+/-! The service's draw, as one-stage's `draw.py` writes it. -/
 
-def strings? (j : Json) : Option (Array String) :=
-  match j with
-  | .arr xs => xs.mapM str?
-  | _ => none
-
-def drawOf? (j : Json) : Option Core.Draw :=
-  match keys j with
-  | some ["subset"] => (nat? (get j "subset")).map .subset
-  | some ["bernoulli"] => do (Core.Ratio.ofString (← str? (get j "bernoulli")) "bernoulli").toOption.map .bernoulli
-  | some ["law", "strata"] => do
-    guard (get j "law" == .str "stratified")
-    let .arr ss := get j "strata" | none
-    let strata ← ss.mapM fun s => do
-      guard (keys s == some ["k", "name", "size"])
-      pure (⟨← str? (get s "name"), ← nat? (get s "size"), ← nat? (get s "k")⟩ : Core.Stratum)
-    pure (.stratified strata)
-  | _ => none
-
-def levelOf? (j : Json) : Option Core.Level := do
-  guard (keys j == some ["draw", "name", "query", "size"])
-  let query ← match get j "query" with
-    | .null => some none
-    | .str q => some (some q)
-    | _ => none
-  let draw ← match get j "draw" with
-    | .null => some none
-    | d => (drawOf? d).map some
-  pure { name := ← str? (get j "name"), query, size := ← nat? (get j "size"), draw }
-
-def integrityOf? (j : Json) : Option Core.Integrity := do
-  guard (keys j == some ["covered", "delta", "drawn", "levels", "linked", "prescribed", "programs"])
-  let .obj drawn := get j "drawn" | none
-  let drawn ← drawn.toArray.mapM fun (k, v) => do pure (k, ← nat? v)
-  let .arr levels := get j "levels" | none
-  let .bool linked := get j "linked" | none
-  pure { programs := ← strings? (get j "programs"), prescribed := ← strings? (get j "prescribed"), linked,
-         covered := ← strings? (get j "covered"), levels := ← levels.mapM levelOf?,
-         delta := ← (Core.Ratio.ofString (← str? (get j "delta")) "delta").toOption, drawn }
-
-/-- The service's draw: `subset:k` over a population, and the units it drew. -/
-structure SubsetDraw where
+/-- A stratum of a stratified or work draw: its template, its units as `[lo, hi)` ranges, its `k`, and a work
+stratum's work and floor. -/
+structure DrawStratum where
+  template : String
+  units : Array (Nat × Nat)
   k : Nat
+  work : Option (Nat × Nat)
+  deriving DecidableEq, Repr
+
+/-- The draw's law: `subset:k`, `bernoulli:p` (`p` as written), `stratified:k` or `work:k` with their strata, and a work
+draw's closure. -/
+inductive Law where
+  | subset (k : Nat)
+  | bernoulli (p : String)
+  | stratified (k : Nat) (strata : Array DrawStratum)
+  | work (k : Nat) (strata : Array DrawStratum) (closure : Option (Array Nat))
+  deriving DecidableEq, Repr
+
+/-- `parse_law`'s spelling. -/
+def Law.name : Law → String
+  | .subset k => s!"subset:{k}"
+  | .bernoulli p => s!"bernoulli:{p}"
+  | .stratified k _ => s!"stratified:{k}"
+  | .work k _ _ => s!"work:{k}"
+
+/-- The verifier's draw: its law, over a population, and the units it drew. -/
+structure UnitDraw where
+  law : Law
   population : Nat
   units : Array Nat
   deriving DecidableEq, Repr
 
-def subsetDrawOf? (j : Json) : Option SubsetDraw := do
-  guard (keys j == some ["draw"])
+def keysAre (j : Json) (ks : List String) (ctx : String) : V Unit :=
+  unless keys j == some ks do throw s!"{ctx}: keys are not {", ".intercalate ks}"
+
+def natsOf (j : Json) (k ctx : String) : V (Array Nat) := do
+  (← Flock.J.arr j k ctx).mapM (Flock.J.asNat · s!"{ctx}.{k}")
+
+def rangeOf (j : Json) (ctx : String) : V (Nat × Nat) :=
+  match j with
+  | .arr #[lo, hi] => do pure (← Flock.J.asNat lo ctx, ← Flock.J.asNat hi ctx)
+  | _ => throw s!"{ctx}: not a range [lo, hi]"
+
+def stratumOf (work : Bool) (j : Json) (ctx : String) : V DrawStratum := do
+  keysAre j (if work then ["floor", "k", "template", "units", "work"] else ["k", "template", "units"]) ctx
+  let template ← Flock.J.str j "template" ctx
+  let units ← (← Flock.J.arr j "units" ctx).mapM (rangeOf · s!"{ctx}.units")
+  let k ← Flock.J.nat j "k" ctx
+  let w ← if work then do pure (some (← Flock.J.nat j "work" ctx, ← Flock.J.nat j "floor" ctx)) else pure none
+  pure ⟨template, units, k, w⟩
+
+def strataOf (work : Bool) (j : Json) (ctx : String) : V (Array DrawStratum) := do
+  let mut strata := #[]
+  for s in ← Flock.J.arr j "strata" ctx do
+    strata := strata.push (← stratumOf work s s!"{ctx}.strata[{strata.size}]")
+  pure strata
+
+/-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s). -/
+def drawOf (j : Json) : V UnitDraw := do
+  keysAre j ["draw"] "public"
   let d := get j "draw"
-  guard (keys d == some ["k", "law", "population", "units"] && get d "law" == .str "subset")
-  let .arr units := get d "units" | none
-  pure ⟨← nat? (get d "k"), ← nat? (get d "population"), ← units.mapM nat?⟩
+  let ctx := "public.draw"
+  let law ← Flock.J.str d "law" ctx
+  let ks ← match law with
+    | "subset" => pure ["k", "law", "population", "units"]
+    | "bernoulli" => pure ["law", "p", "population", "units"]
+    | "stratified" => pure ["k", "law", "population", "strata", "units"]
+    | "work" => pure ((if Flock.J.has d "closure" then ["closure"] else []) ++ ["k", "law", "population", "strata", "units"])
+    | _ => throw s!"{ctx}.law: not subset, bernoulli, stratified or work"
+  keysAre d ks ctx
+  let population ← Flock.J.nat d "population" ctx
+  let l ← match law with
+    | "subset" => do pure (.subset (← Flock.J.nat d "k" ctx))
+    | "bernoulli" => do pure (.bernoulli (← Flock.J.str d "p" ctx))
+    | "stratified" => do pure (.stratified (← Flock.J.nat d "k" ctx) (← strataOf false d ctx))
+    | _ => do
+      let k ← Flock.J.nat d "k" ctx
+      let strata ← strataOf true d ctx
+      let closure ← if Flock.J.has d "closure" then some <$> natsOf d "closure" ctx else pure none
+      pure (.work k strata closure)
+  pure ⟨l, population, ← natsOf d "units" ctx⟩
 
 /-- What the service said. -/
 inductive Said where
-  | accept (profile : Core.Integrity) (draw : SubsetDraw)
+  | accept (profile : Core.Integrity) (draw : UnitDraw)
   | reject (reason : String)
   | undecided (reason : String)
 
@@ -211,28 +240,14 @@ structure Evidence where
   commitment : Option String
   said : Said
 
+/-- `Core.Answer.ofJson`, then on acceptance `Core.Integrity.ofJson` of its profile and `drawOf` of its public outputs
+(which `Answer.ofJson` has already found present, as it has the reason of any other answer). -/
 def evidenceOf (b : ByteArray) : V Evidence := do
-  let j ← Core.canonicalJson b
-  unless keys j == some answerKeys do throw s!"keys are not {", ".intercalate answerKeys}"
-  let some protocol := str? (get j "protocol") | throw "protocol is not a string"
-  let verdict ← match get j "verdict" with
-    | .str "accept" => pure Core.Verdict.accept
-    | .str "reject" => pure .reject
-    | .str "undecided" => pure .undecided
-    | _ => throw "verdict is not accept, reject or undecided"
-  let commitment ← match get j "commitment" with
-    | .null => pure none
-    | .str s => pure (some s)
-    | _ => throw "commitment is not null or a string"
-  let shape := "an accepted answer has public outputs and a profile and no reason; any other has a reason and neither"
-  match verdict, get j "reason", get j "public", get j "profile" with
-  | .accept, .null, pub, prof =>
-    if pub == .null || prof == .null then throw shape
-    let some profile := integrityOf? prof | throw "profile is not an integrity profile"
-    let some draw := subsetDrawOf? pub | throw "public is not {draw} with a subset draw {k, law, population, units}"
-    pure ⟨protocol, commitment, .accept profile draw⟩
-  | .reject, .str r, .null, .null => pure ⟨protocol, commitment, .reject r⟩
-  | .undecided, .str r, .null, .null => pure ⟨protocol, commitment, .undecided r⟩
-  | _, _, _, _ => throw shape
+  let a ← Core.Answer.ofJson (← Core.canonicalJson b)
+  let said ← match a.verdict with
+    | .accept => do pure (.accept (← Core.Integrity.ofJson (a.profile.getD .null)) (← drawOf (a.published.getD .null)))
+    | .reject => pure (.reject (a.reason.getD ""))
+    | .undecided => pure (.undecided (a.reason.getD ""))
+  pure ⟨a.protocol, a.digest.map Flock.hexOf, said⟩
 
 end PouwCheck

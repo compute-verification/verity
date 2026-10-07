@@ -12,9 +12,10 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
-* **Evidence**: the service's answer for that registration, in the core interface's answer form (`answer`'s, with
-  protocol one-stage's): its verdict, the registration digest it is for, and on acceptance the integrity profile and the
-  draw ``{"draw": {"k", "law": "subset", "population", "units"}}``.
+* **Evidence**: the service's answer for that registration, read as `Core.Answer.ofJson` and `Core.Integrity.ofJson`
+  read it (only what `toJson` writes, in the shapes `answer` returns): its verdict, the registration digest it is for,
+  and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's draw as one-stage's
+  `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, each item the verifier's own at the
   registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
   query and scheme), the service accepted this registration, and its profile and draw are of the registered partition's N
@@ -77,10 +78,16 @@ def canonical(b: bytes) -> Any:
     return x
 
 
+def _quote(s: str) -> str:
+    """Lean's `String.quote`."""
+    esc = {"\n": "\\n", "\t": "\\t", "\\": "\\\\", '"': '\\"'}
+    return '"' + "".join(esc.get(c) or (f"\\x{ord(c):02x}" if ord(c) <= 31 or ord(c) == 0x7f else c) for c in s) + '"'
+
+
 def _nat_of(s: str, ctx: str) -> int:
     if s and all(c in "0123456789" for c in s) and (len(s) == 1 or s[0] != "0"):
         return int(s)
-    raise Refused(f'{ctx}: "{s}" is not a natural number in canonical form')
+    raise Refused(f"{ctx}: {_quote(s)} is not a natural number in canonical form")
 
 
 def ratio(s: str, ctx: str) -> Fraction:
@@ -91,11 +98,11 @@ def ratio(s: str, ctx: str) -> Fraction:
     if len(parts) == 2:
         n, d = _nat_of(parts[0], ctx), _nat_of(parts[1], ctx)
         if d <= 1:
-            raise Refused(f'{ctx}: "{s}" has denominator {d}')
+            raise Refused(f"{ctx}: {_quote(s)} has denominator {d}")
         if math.gcd(n, d) != 1:
-            raise Refused(f'{ctx}: "{s}" is not in lowest terms')
+            raise Refused(f"{ctx}: {_quote(s)} is not in lowest terms")
         return Fraction(n, d)
-    raise Refused(f'{ctx}: "{s}" is not a ratio n/d')
+    raise Refused(f"{ctx}: {_quote(s)} is not a ratio n/d")
 
 
 def _nat(x: Any) -> bool:
@@ -177,76 +184,211 @@ def digest(c: dict) -> bytes:
     return hashlib.sha512(c["format"].encode() + b"\0" + c["bytes"]).digest()
 
 
-def _strings(x: Any) -> bool:
-    return isinstance(x, list) and all(_str(s) for s in x)
+# ---- the evidence, as `Core.Answer.ofJson` and `Core.Integrity.ofJson` read it (with `Flock.J`'s messages) ------------
+
+def _get(j: Any, k: str, ctx: str) -> Any:
+    if not isinstance(j, dict) or k not in j:
+        raise Refused(f"{ctx}: {k} missing")
+    return j[k]
 
 
-def _draw_json(d: Any) -> Any:
-    """A level's draw as `Core.Draw.toJson` writes it, or `Refused`."""
-    if d is None:
-        return None
-    if isinstance(d, dict) and sorted(d) == ["subset"] and _nat(d["subset"]):
-        return {"subset": d["subset"]}
-    if isinstance(d, dict) and sorted(d) == ["bernoulli"] and _str(d["bernoulli"]):
-        return {"bernoulli": str(ratio(d["bernoulli"], "bernoulli"))}
-    if isinstance(d, dict) and sorted(d) == ["law", "strata"] and d["law"] == "stratified" and isinstance(d["strata"], list) \
-            and all(isinstance(s, dict) and sorted(s) == ["k", "name", "size"] and _str(s["name"]) and _nat(s["size"])
-                    and _nat(s["k"]) for s in d["strata"]):
-        return {"law": "stratified", "strata": [dict(s) for s in d["strata"]]}
-    raise Refused("a draw")
+def _has(j: Any, k: str) -> bool:
+    return isinstance(j, dict) and k in j
 
 
-def integrity(j: Any) -> dict:
-    """`Core.Integrity` read back from its JSON, written again as `Integrity.toJson` writes it."""
-    keys = ["covered", "delta", "drawn", "levels", "linked", "prescribed", "programs"]
-    try:
-        if not (isinstance(j, dict) and sorted(j) == keys and _strings(j["covered"]) and _str(j["delta"])
-                and isinstance(j["drawn"], dict) and all(_nat(v) for v in j["drawn"].values())
-                and isinstance(j["levels"], list) and isinstance(j["linked"], bool) and _strings(j["prescribed"])
-                and _strings(j["programs"])):
-            raise Refused("shape")
-        levels = []
-        for lv in j["levels"]:
-            if not (isinstance(lv, dict) and sorted(lv) == ["draw", "name", "query", "size"] and _str(lv["name"])
-                    and (lv["query"] is None or _str(lv["query"])) and _nat(lv["size"])):
-                raise Refused("level")
-            levels.append({"draw": _draw_json(lv["draw"]), "name": lv["name"], "query": lv["query"], "size": lv["size"]})
-        delta = ratio(j["delta"], "delta")
-    except Refused:
-        raise Refused("profile is not an integrity profile") from None
-    return {"covered": sorted(j["covered"]), "delta": str(delta), "drawn": dict(j["drawn"]), "levels": levels,
-            "linked": j["linked"], "prescribed": sorted(j["prescribed"]), "programs": list(j["programs"])}
+def _as_str(v: Any, ctx: str) -> str:
+    if not _str(v):
+        raise Refused(f"{ctx}: not a string")
+    return v
 
 
-def _subset_draw(j: Any) -> dict:
-    d = j.get("draw") if isinstance(j, dict) and sorted(j) == ["draw"] else None
-    if not (isinstance(d, dict) and sorted(d) == ["k", "law", "population", "units"] and d["law"] == "subset"
-            and _nat(d["k"]) and _nat(d["population"]) and isinstance(d["units"], list) and all(_nat(u) for u in d["units"])):
-        raise Refused("public is not {draw} with a subset draw {k, law, population, units}")
+def _as_nat(v: Any, ctx: str) -> int:
+    if not _nat(v):
+        raise Refused(f"{ctx}: not a natural number")
+    return v
+
+
+def _as_arr(v: Any, ctx: str) -> list:
+    if not isinstance(v, list):
+        raise Refused(f"{ctx}: not a list")
+    return v
+
+
+def _as_bool(v: Any, ctx: str) -> bool:
+    if not isinstance(v, bool):
+        raise Refused(f"{ctx}: not a boolean")
+    return v
+
+
+def _str_at(j: Any, k: str, ctx: str) -> str:
+    return _as_str(_get(j, k, ctx), f"{ctx}.{k}")
+
+
+def _nat_at(j: Any, k: str, ctx: str) -> int:
+    return _as_nat(_get(j, k, ctx), f"{ctx}.{k}")
+
+
+def _arr_at(j: Any, k: str, ctx: str) -> list:
+    return _as_arr(_get(j, k, ctx), f"{ctx}.{k}")
+
+
+def _unhex(s: str) -> str:
+    """`Flock.unhex`, keeping the hex: `hexOf` writes back exactly what it accepts."""
+    if len(s) % 2:
+        raise Refused("odd-length hex")
+    if any(c not in "0123456789abcdef" for c in s):
+        raise Refused("not lowercase hex")
+    return s
+
+
+def _exactly(written: Any, j: Any, ctx: str) -> None:
+    if _canon(written) != _canon(j):
+        raise Refused(f"{ctx}: not in the form toJson writes")
+
+
+def _core_draw(j: Any, ctx: str) -> dict:
+    """`Core.Draw.ofJson`, as `Draw.toJson` writes it."""
+    if _has(j, "bernoulli"):
+        d: dict = {"bernoulli": str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
+    elif _has(j, "subset"):
+        d = {"subset": _nat_at(j, "subset", ctx)}
+    elif _has(j, "strata"):
+        c = f"{ctx}.strata"
+        d = {"law": "stratified", "strata": [{"name": _str_at(s, "name", c), "size": _nat_at(s, "size", c),
+                                              "k": _nat_at(s, "k", c)} for s in _arr_at(j, "strata", ctx)]}
+    else:
+        raise Refused(f"{ctx}: not a bernoulli, subset or stratified draw")
+    _exactly(d, j, ctx)
     return d
 
 
-def evidence(b: bytes) -> dict:
-    """The service's answer for the registration, in the core interface's answer form."""
-    j = canonical(b)
-    if not isinstance(j, dict) or sorted(j) != list(ANSWER_KEYS):
-        raise Refused(f"keys are not {', '.join(ANSWER_KEYS)}")
-    if not _str(j["protocol"]):
-        raise Refused("protocol is not a string")
-    if j["verdict"] not in VERDICTS:
-        raise Refused("verdict is not accept, reject or undecided")
-    if not (j["commitment"] is None or _str(j["commitment"])):
-        raise Refused("commitment is not null or a string")
-    accepted = j["verdict"] == "accept"
-    shaped = (j["reason"] is None and j["public"] is not None and j["profile"] is not None) if accepted else \
-        (_str(j["reason"]) and j["public"] is None and j["profile"] is None)
-    if not shaped:
-        raise Refused("an accepted answer has public outputs and a profile and no reason; any other has a reason and neither")
-    out = {"protocol": j["protocol"], "verdict": j["verdict"], "commitment": j["commitment"], "reason": j["reason"]}
-    if accepted:
-        out["profile"] = integrity(j["profile"])
-        out["draw"] = _subset_draw(j["public"])
+def _level(j: Any, ctx: str) -> dict:
+    """`Core.Level.ofJson`."""
+    name = _str_at(j, "name", ctx)
+    q = _get(j, "query", ctx)
+    query = None if q is None else _as_str(q, f"{ctx}.query")
+    size = _nat_at(j, "size", ctx)
+    d = _get(j, "draw", ctx)
+    lv = {"name": name, "query": query, "size": size, "draw": None if d is None else _core_draw(d, f"{ctx}.draw")}
+    _exactly(lv, j, ctx)
+    return lv
+
+
+def integrity(j: Any, ctx: str = "profile") -> dict:
+    """`Core.Integrity.ofJson`: `drawn` as (level, count) pairs in level order, for the levels it names."""
+    levels: list[dict] = []
+    for lv in _arr_at(j, "levels", ctx):
+        levels.append(_level(lv, f"{ctx}.levels[{len(levels)}]"))
+    counts = _get(j, "drawn", ctx)
+    drawn = [(lv["name"], _nat_at(counts, lv["name"], f"{ctx}.drawn")) for lv in levels if _has(counts, lv["name"])]
+
+    def strs(k: str) -> list[str]:
+        return [_as_str(v, f"{ctx}.{k}") for v in _arr_at(j, k, ctx)]
+    p = {"programs": strs("programs"), "prescribed": strs("prescribed")}
+    p["linked"] = _as_bool(_get(j, "linked", ctx), f"{ctx}.linked")
+    p["covered"] = strs("covered")
+    p["levels"] = levels
+    p["delta"] = ratio(_str_at(j, "delta", ctx), f"{ctx}.delta")
+    p["drawn"] = drawn
+    _exactly(integrity_json(p), j, ctx)
+    return p
+
+
+def integrity_json(p: dict) -> dict:
+    """`Core.Integrity.toJson`."""
+    return {"programs": p["programs"], "prescribed": sorted(p["prescribed"]), "linked": p["linked"],
+            "covered": sorted(p["covered"]), "levels": p["levels"], "delta": str(p["delta"]), "drawn": dict(p["drawn"])}
+
+
+def answer_of(j: Any, ctx: str = "answer") -> dict:
+    """`Core.Answer.ofJson`: only what `Answer.toJson` writes, in the shapes `answer` returns."""
+    verdict = _str_at(j, "verdict", ctx)
+    if verdict not in VERDICTS:
+        raise Refused(f"{ctx}.verdict: not accept, reject or undecided")
+    protocol = _str_at(j, "protocol", ctx)
+    reason = _get(j, "reason", ctx)
+    if reason is not None:
+        _as_str(reason, f"{ctx}.reason")
+    com = _get(j, "commitment", ctx)
+    if com is not None:
+        com = _unhex(_as_str(com, f"{ctx}.commitment"))
+    pub, prof = _get(j, "public", ctx), _get(j, "profile", ctx)
+    if verdict == "accept":
+        if not (reason is None and pub is not None and prof is not None):
+            raise Refused(f"{ctx}: an accept has no reason, and both its public outputs and its profile")
+    elif not (reason is not None and pub is None and prof is None):
+        raise Refused(f"{ctx}: a {verdict} has a reason, and neither public outputs nor a profile")
+    if sorted(j) != list(ANSWER_KEYS):
+        raise Refused(f"{ctx}: not in the form Answer.toJson writes")
+    return {"protocol": protocol, "verdict": verdict, "reason": reason, "commitment": com, "public": pub, "profile": prof}
+
+
+_DRAW_KEYS = {"subset": ["k", "law", "population", "units"], "bernoulli": ["law", "p", "population", "units"],
+              "stratified": ["k", "law", "population", "strata", "units"],
+              "work": ["k", "law", "population", "strata", "units"]}
+
+
+def _keys_are(j: Any, ks: list[str], ctx: str) -> None:
+    if not isinstance(j, dict) or sorted(j) != ks:
+        raise Refused(f"{ctx}: keys are not {', '.join(ks)}")
+
+
+def _nats_at(j: Any, k: str, ctx: str) -> list[int]:
+    return [_as_nat(v, f"{ctx}.{k}") for v in _arr_at(j, k, ctx)]
+
+
+def _range(v: Any, ctx: str) -> tuple[int, int]:
+    if not (isinstance(v, list) and len(v) == 2):
+        raise Refused(f"{ctx}: not a range [lo, hi]")
+    return _as_nat(v[0], ctx), _as_nat(v[1], ctx)
+
+
+def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
+    out: list[dict] = []
+    for s in _arr_at(j, "strata", ctx):
+        c = f"{ctx}.strata[{len(out)}]"
+        _keys_are(s, ["floor", "k", "template", "units", "work"] if work else ["k", "template", "units"], c)
+        st = {"template": _str_at(s, "template", c), "units": [_range(r, f"{c}.units") for r in _arr_at(s, "units", c)],
+              "k": _nat_at(s, "k", c)}
+        if work:
+            st["work"], st["floor"] = _nat_at(s, "work", c), _nat_at(s, "floor", c)
+        out.append(st)
     return out
+
+
+def unit_draw(j: Any) -> dict:
+    """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s)."""
+    _keys_are(j, ["draw"], "public")
+    d, ctx = j["draw"], "public.draw"
+    law = _str_at(d, "law", ctx)
+    if law not in _DRAW_KEYS:
+        raise Refused(f"{ctx}.law: not subset, bernoulli, stratified or work")
+    _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
+    out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
+    if law == "bernoulli":
+        out["p"] = _str_at(d, "p", ctx)
+    else:
+        out["k"] = _nat_at(d, "k", ctx)
+    if law in ("stratified", "work"):
+        out["strata"] = _strata(law == "work", d, ctx)
+    if "closure" in d:
+        out["closure"] = _nats_at(d, "closure", ctx)
+    out["units"] = _nats_at(d, "units", ctx)
+    return out
+
+
+def law_name(d: dict) -> str:
+    """`parse_law`'s spelling of a draw's law."""
+    return f"bernoulli:{d['p']}" if d["law"] == "bernoulli" else f"{d['law']}:{d['k']}"
+
+
+def evidence(b: bytes) -> dict:
+    """The service's answer for the registration (`answer_of`), and on acceptance its profile and draw."""
+    a = answer_of(canonical(b))
+    if a["verdict"] == "accept":
+        a["profile"] = integrity(a["profile"])
+        a["draw"] = unit_draw(a.pop("public"))
+    return a
 
 
 # ---- the check -----------------------------------------------------------------------------------------------------------
@@ -307,19 +449,19 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     prof, draw = e["profile"], e["draw"]
     if prof["programs"] != [rec["program"]]:
         return "reject", f"profile: programs {', '.join(prof['programs'])}, not the registered {rec['program']}", None
-    if prof["levels"] != [{"draw": {"subset": k}, "name": LEVEL, "query": rec["partition"], "size": w.n}]:
+    if prof["levels"] != [{"name": LEVEL, "query": rec["partition"], "size": w.n, "draw": {"subset": k}}]:
         return "reject", f"profile: its levels are not the registered partition's {w.n} units drawn subset:{k}", None
-    if prof["delta"] != str(p["delta"]):
+    if prof["delta"] != p["delta"]:
         return "reject", f"profile: delta {prof['delta']}, not the window's {p['delta']}", None
-    if prof["drawn"] != {LEVEL: k}:
-        return "reject", f"profile: drawn {_canon(prof['drawn'])}, not {k} units", None
-    if draw["k"] != k or draw["population"] != w.n:
-        return "reject", f"draw: subset:{draw['k']} over {draw['population']}, not subset:{k} over {w.n}", None
+    if prof["drawn"] != [(LEVEL, k)]:
+        return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
+    if not (draw["law"] == "subset" and draw["k"] == k) or draw["population"] != w.n:
+        return "reject", f"draw: {law_name(draw)} over {draw['population']}, not subset:{k} over {w.n}", None
     units = draw["units"]
     if len(units) != k or any(b <= a for a, b in zip(units, units[1:])) or (units and units[-1] >= w.n):
         return "reject", f"draw: its {len(units)} units are not {k} ascending distinct units below {w.n}", None
     public = {**{i: items[i] for i in Wd.REGISTERED}, "verdict": True, "drawn": list(units)}
-    return "accept", None, (public, prof)
+    return "accept", None, (public, integrity_json(prof))
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
@@ -355,5 +497,6 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "canonical", "case",
-           "check", "commitment", "digest", "evidence", "integrity", "line", "params", "ratio"]
+__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
+           "case", "check", "commitment", "digest", "evidence", "integrity", "integrity_json", "law_name", "line", "params",
+           "ratio", "unit_draw"]

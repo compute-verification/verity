@@ -142,6 +142,38 @@ MUTATIONS = [
     ("answer-draw-k", "answer", "public.draw.k", None), ("answer-draw-population", "answer", "public.draw.population", None),
     ("answer-units-order", "answer", "public.draw.units", None), ("answer-units-range", "answer", "public.draw.units", None),
     ("answer-units-count", "answer", "public.draw.units", None), ("answer-unsorted-lists", "answer", "profile.covered", ["z", "a"]),
+    ("answer-commitment-odd", "answer", "commitment", None), ("answer-commitment-upper", "answer", "commitment", None),
+    ("answer-commitment-empty", "answer", "commitment", ""), ("answer-verdict-type", "answer", "verdict", 1),
+    ("answer-verdict-missing", "answer", "verdict", _DROP), ("answer-reason-type", "answer", "reason", 5),
+    ("answer-public-missing", "answer", "public", _DROP), ("answer-public-null", "answer", "public", None),
+    ("answer-reject-public", "answer", "verdict", "reject"), ("answer-profile-type", "answer", "profile", [1]),
+    ("answer-public-bernoulli", "answer", "public.draw", None),
+    ("answer-public-bernoulli-unreduced", "answer", "public.draw", None),
+    ("answer-public-stratified", "answer", "public.draw", None), ("answer-public-work", "answer", "public.draw", None),
+    ("answer-public-work-bare", "answer", "public.draw", None),
+    ("answer-public-law-other", "answer", "public.draw.law", "uniform"),
+    ("answer-public-law-type", "answer", "public.draw.law", 3),
+    ("answer-public-subset-closure", "answer", "public.draw.closure", [0]),
+    ("answer-public-stratum-keys", "answer", "public.draw", None),
+    ("answer-public-stratum-range", "answer", "public.draw", None),
+    ("answer-public-stratum-work", "answer", "public.draw", None),
+    ("answer-public-closure-type", "answer", "public.draw", None),
+    ("answer-public-p-type", "answer", "public.draw", None),
+    ("answer-public-units-type", "answer", "public.draw.units", "all"),
+    ("answer-public-unit-type", "answer", "public.draw.units", None),
+    ("answer-public-population-type", "answer", "public.draw.population", "8"),
+    ("answer-drawn-extra", "answer", "profile.drawn.tile", 1), ("answer-drawn-type", "answer", "profile.drawn.unit", "3"),
+    ("answer-linked-type", "answer", "profile.linked", 1), ("answer-programs-type", "answer", "profile.programs", "p"),
+    ("answer-program-type", "answer", "profile.programs", [1]),
+    ("answer-level-keys", "answer", "profile.levels.0.extra", 1),
+    ("answer-level-missing", "answer", "profile.levels.0.size", _DROP),
+    ("answer-level-null-query", "answer", "profile.levels.0.query", None),
+    ("answer-level-null-draw", "answer", "profile.levels.0.draw", None),
+    ("answer-level-strata-keys", "answer", "profile.levels.0.draw",
+     {"law": "stratified", "strata": [{"k": 1, "name": "t", "size": 2, "x": 0}]}),
+    ("answer-level-draw-two", "answer", "profile.levels.0.draw", {"bernoulli": "1/2", "subset": 3}),
+    ("answer-level-bernoulli-lowest", "answer", "profile.levels.0.draw", {"bernoulli": "2/4"}),
+    ("answer-delta-type", "answer", "profile.delta", 1), ("answer-level-renamed", "answer", "profile", None),
     ("noncanonical-record", None, None, None),
     ("noncanonical-answer", None, None, None), ("float-answer", None, None, None), ("utf8-record", None, None, None),
 ]
@@ -197,7 +229,41 @@ def _derived(name: str, case: dict, rng: random.Random):
         return rec["law"]["k"] + 1
     if name == "answer-draw-population":
         return rec["population"] * 2
-    units = ans["public"]["draw"]["units"]
+    if name == "answer-commitment-odd":
+        return ans["commitment"][:-1]
+    if name == "answer-commitment-upper":
+        return ans["commitment"].upper()
+    if name in ("answer-public-null", "answer-level-null-query", "answer-level-null-draw"):
+        return None
+    if name == "answer-level-renamed":
+        prof = ans["profile"]
+        return {**prof, "drawn": {"tile": prof["drawn"][CC.LEVEL]}, "levels": [{**prof["levels"][0], "name": "tile"}]}
+    units, n, k = ans["public"]["draw"]["units"], rec["population"], rec["law"]["k"]
+    stratum = {"k": k, "template": "t0", "units": [[0, n]]}
+    work = {**stratum, "floor": 1, "work": 3}
+    if name == "answer-public-bernoulli":
+        return {"law": "bernoulli", "p": "1/2", "population": n, "units": units}
+    if name == "answer-public-bernoulli-unreduced":
+        return {"law": "bernoulli", "p": "2/4", "population": n, "units": units}
+    if name == "answer-public-p-type":
+        return {"law": "bernoulli", "p": 1, "population": n, "units": units}
+    if name == "answer-public-stratified":
+        return {"k": k, "law": "stratified", "population": n, "strata": [stratum], "units": units}
+    if name == "answer-public-work":
+        return {"closure": units[:1], "k": k, "law": "work", "population": n, "strata": [work], "units": units}
+    if name == "answer-public-work-bare":
+        return {"k": k, "law": "work", "population": n, "strata": [work], "units": units}
+    if name == "answer-public-stratum-keys":
+        return {"k": k, "law": "stratified", "population": n, "strata": [{"template": "t0", "units": [[0, n]]}],
+                "units": units}
+    if name == "answer-public-stratum-range":
+        return {"k": k, "law": "stratified", "population": n, "strata": [{**stratum, "units": [[0]]}], "units": units}
+    if name == "answer-public-stratum-work":
+        return {"k": k, "law": "work", "population": n, "strata": [{**work, "work": "3"}], "units": units}
+    if name == "answer-public-closure-type":
+        return {"closure": "none", "k": k, "law": "work", "population": n, "strata": [work], "units": units}
+    if name == "answer-public-unit-type":
+        return units[:-1] + [-1]
     if name == "answer-units-order":
         return list(reversed(units)) if len(units) > 1 else units + units
     if name == "answer-units-range":

@@ -104,20 +104,6 @@ def Public.entries (pub : Public) : List (String × Json) :=
 
 def Public.toJson (pub : Public) : Json := Json.mkObj pub.entries
 
-/-- The profile's one level: the registered partition's N units, drawn subset:K′. -/
-def IsUnitLevel (l : Core.Level) (partition : String) (n k : Nat) : Prop :=
-  l.name = unitLevel ∧ l.query = some partition ∧ l.size = n ∧
-    match l.draw with
-    | some (.subset k') => k' = k
-    | _ => False
-
-instance instDecidableIsUnitLevel (l : Core.Level) (partition : String) (n k : Nat) :
-    Decidable (IsUnitLevel l partition n k) := by
-  unfold IsUnitLevel
-  have : Decidable (match l.draw with | some (.subset k') => k' = k | _ => False) := by
-    split <;> infer_instance
-  infer_instance
-
 /-- Strictly ascending. -/
 def Ascending : List Nat → Prop
   | a :: b :: t => a < b ∧ Ascending (b :: t)
@@ -154,16 +140,16 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
   | .reject r => .reject s!"service: {r}"
   | .undecided r => .undecided s!"service: {r}"
   | .accept prof draw =>
-    if prof.programs.toList ≠ [c.program] then
+    if prof.programs ≠ #[c.program] then
       .reject s!"profile: programs {", ".intercalate prof.programs.toList}, not the registered {c.program}"
-    else if ¬ (prof.levels.size = 1 ∧ ∀ l ∈ prof.levels.toList, IsUnitLevel l c.partition n k) then
+    else if prof.levels ≠ #[{ name := unitLevel, query := some c.partition, size := n, draw := some (.subset k) }] then
       .reject s!"profile: its levels are not the registered partition's {n} units drawn subset:{k}"
     else if prof.delta ≠ p.delta then
       .reject s!"profile: delta {prof.delta.toString}, not the window's {p.delta.toString}"
-    else if prof.drawn.toList ≠ [(unitLevel, k)] then
+    else if prof.drawn ≠ #[(unitLevel, k)] then
       .reject s!"profile: drawn {cs (drawnJson prof.drawn)}, not {k} units"
-    else if draw.k ≠ k ∨ draw.population ≠ n then
-      .reject s!"draw: subset:{draw.k} over {draw.population}, not subset:{k} over {n}"
+    else if draw.law ≠ .subset k ∨ draw.population ≠ n then
+      .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else .accept ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ prof
