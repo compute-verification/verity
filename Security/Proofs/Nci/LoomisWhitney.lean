@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Analysis.Real.Sqrt
-import Specs.Nci.Guarantees
+import Models.Nci.Guarantees
 
 /-!
 # The discrete Loomis–Whitney inequality
