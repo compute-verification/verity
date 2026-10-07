@@ -265,7 +265,7 @@ keep_in = {"integrations/vllm/**" = ["census", "census/*"]}
 # is in the library namespace `verity_pouw`, which its registration names.
 keep_dotted = ["verity_pouw.ncp_linear"]
 # Rewritten although excluded above: data keyed by repository path (their pinned digests must not change).
-include = ["fixtures/artifacts.json", "backends/flock/tests/fixtures/randomness_lean.json",
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "backends/flock/tests/fixtures/randomness_lean.json",
            "verity/ml/flock/tests/fixtures/randomness_lean.json",
            "experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",
            "verity/experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",
