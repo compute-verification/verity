@@ -51,7 +51,7 @@ open Finset Pouw.Fp8Atom Pouw.PearlC.Fp4
 open Classical in
 /-- **Per block.** The live products in X-block `b` are at most the (product, side) pairs whose X-part reads `b`. -/
 def _root_.Pouw.Guarantees.TileBound.BlockCount : Prop :=
-  ∀ {K : Type*} [Field K] {m k n : ℕ} {τ : Type*} [Fintype τ] {β : Type*} [Fintype β] (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.CrossOn liveX liveY) (B : XBlocks m k β) (b : β),
+  ∀ {K : Type*} [Field K] {m k n : ℕ} {τ : Type*} [Fintype τ] {β : Type*} (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.CrossOn liveX liveY) (B : XBlocks m k β) (b : β),
     Fintype.card {x // LiveIn B liveX liveY b x} ≤ Fintype.card {q // SideIn P B b q}
 
 end Pouw.TileBound

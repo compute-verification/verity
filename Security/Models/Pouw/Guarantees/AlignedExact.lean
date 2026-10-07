@@ -13,7 +13,7 @@ open Finset Classical
 row-seed assignments with an all-exact `a × b` block number at most `C(m, a)·C(n, b)·θ^a` times all row-seed
 assignments. -/
 def _root_.Pouw.Guarantees.AlignedExact.RegionCountGivenLe : Prop :=
-  ∀ {m n : ℕ} {ρ κ : Type*} [Fintype ρ] [Fintype κ] (f : Fin m → Fin n → ρ → κ → Prop) (a b : ℕ) (θ : ℚ) (hθ : 0 ≤ θ) (hf : RowCompat f b θ) (c : Fin n → κ),
+  ∀ {m n : ℕ} {ρ κ : Type*} [Fintype ρ] (f : Fin m → Fin n → ρ → κ → Prop) (a b : ℕ) (θ : ℚ) (hθ : 0 ≤ θ) (hf : RowCompat f b θ) (c : Fin n → κ),
     ((univ.filter fun R : Fin m → ρ => HasRegion f a b (R, c)).card : ℚ) ≤
     (m.choose a : ℚ) * (n.choose b) * θ ^ a * Fintype.card (Fin m → ρ)
 
