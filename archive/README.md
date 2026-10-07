@@ -10,7 +10,7 @@ C-Flock is the one active backend family. The others are frozen: kept, still in 
 
 | directory | family | status | what is here |
 |---|---|---|---|
-| `flock/` | C-Flock | active | binary-field proofs of committed relations, hash leaves included, with upstream Flock: the Python package `verity_flock`, the Rust crate `live/` (built inside an upstream Flock checkout), and the verifier of record, `../verity/ml/flock/verifier/` (`PROTOCOL.md` and the Lean verifier) |
+| `../verity/ml/flock/`, `../verity/core/service/flock/` | C-Flock | active | binary-field proofs of committed relations, hash leaves included, with upstream Flock: the Python package `verity_flock`, the Rust crate `live/` (built inside an upstream Flock checkout), and the verifier of record: its specification, `../verity/ml/flock/verifier/PROTOCOL.md`, and the Lean verifier, `../verity/core/service/flock/` |
 | `gkr/` | A-GKR | frozen | data-parallel GKR with LogUp-GKR lookups (`gkr/PROTOCOL.md`): the CPU prover `verity-gkr` (Rust), the GPU prover `gkr/gpu/`, kernel studies (`gkr/packed/`, `gkr/tensor/`), the independent Rust verifier `gkr/verifier/` |
 | `direct/`, `ligero-verify/`, `ligerito-verify/` | B-Ligero | frozen | direct local constraints (`direct/PROTOCOL.md`): the Ligero prover `direct/ligero/` (torch), the Plonky3 diagnostic crate `verity-direct`, the encoders `direct/encode/`, Ligerito `direct/ligerito/`, and independent Rust verifiers for the Ligero and Ligerito proofs |
 | `sp1/` | D-SP1 | frozen | the SP1 zkVM checker guest, its host and the Python driver `verity_sp1` |

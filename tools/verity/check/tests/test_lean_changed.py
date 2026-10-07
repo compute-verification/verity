@@ -212,7 +212,7 @@ def _facts(definition: str) -> dict:
 
 
 def _recorded(facts: dict) -> dict:
-    """The policy `audit.py --update` writes for package `c` from ``facts`` (`facts_of`'s hashes of the canonical forms)."""
+    """The policy `check.py --update` writes for package `c` from ``facts`` (`facts_of`'s hashes of the canonical forms)."""
     sha = {r["id"]: hashlib.sha256(r["canon"].encode()).hexdigest() for r in facts["canon"]}
     f = json.loads(json.dumps(facts["facts"]))
     for name, p in f["pins"].items():
