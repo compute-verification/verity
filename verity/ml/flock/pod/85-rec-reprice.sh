@@ -19,8 +19,8 @@
 #                prover that sends its proofs though the witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk
 #                of the last
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
-#                --coins os, which Lean's tags refuse while they pin hm96 leaves; ZK_LEAN=1: also today's --zk session;
-#                LEVELS=none: neither of V*'s)
+#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
+#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, serve, replay and Lean never hold one.
@@ -500,7 +500,7 @@ lean)
     echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $PI --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
-    /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit --circuit $DD/stage/circuit.txt \
+    /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \
       --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2> $O/lean/inner.err
     echo "inner lean exit $?"
   fi
