@@ -6,12 +6,7 @@ statement table's own tests (`archive/sp1/common/src/gateset.rs`: `pad_serve_man
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from verity.ml.circuits.ops import pad_prims as PP  # noqa: E402
+from verity.ml.circuits.ops import pad_prims as PP
 
 
 def test_bit_gates_truth_tables_and_absorption():
