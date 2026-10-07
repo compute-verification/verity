@@ -4,6 +4,7 @@ import VStar.RecOpen
 import VStar.Unit
 import VStar.InnerRepCheck
 import VStar.Stream
+import VStar.PyJson
 import VStar.Compose
 import VStar.Json
 import VStar.Cli

@@ -6,7 +6,7 @@ import VStar.Unit
 # The `flock-circuit` file of a unit (`verity_flock.circuit.compose`)
 
 For a template lowered to one unit per instance with no cut, no public input and `sha512/row/v1` rows (V*'s statements):
-line 1 `flock-circuit <unit>`, line 2 `META` and its canonical JSON, then the sections `CIRCUIT <name> <lines>` of the unit,
+line 1 `flock-circuit <unit>`, line 2 `META` and its JSON (`pyDumps`), then the sections `CIRCUIT <name> <lines>` of the unit,
 `sha512x3` and `hm96` (`ir_lower.netlist` without `LEAVES`). META holds the rows (each port's words and compressions, its
 prefix, midstate and padding), the slot ranges and the block size they give (`placeRanges`, `vusPerBlock`), the leaf maps,
 the all-zero instance's outputs and each row's `b ‖ c` under a zero salt (`dummy`), the rows' wires, and the statement's
@@ -180,7 +180,7 @@ def zeroSaltBc (p : Row) (ws : Array Nat) : ByteArray :=
 
 /-- The unit's lowering text (`Lowering.text`: its netlist with `LEAVES`): SHA-256, bytes. -/
 def unitDigests (u : UnitC) (l : Laid) : Except String Digests := do
-  let lv ← Flock.canon u.leaves
+  let lv ← pyDumps u.leaves
   pure ((emitNet hashPut u.name l (some lv)).run {}).2
 
 /-- The file's first two lines. -/
@@ -227,7 +227,7 @@ def metaHead (u : UnitC) (l : Laid) (sub : Sub) (b : Bindings) (unitSha256 : Str
     ("per_vu", Json.mkObj [("unit", nat 1), (SHA_NET, nat nSha), (HM_NET, nat nHm)]), ("lookups", Json.mkObj []),
     ("wires", Json.arr (rowWires ports).toArray), ("program_digests", b.programDigests), ("program_sha512", str b.program),
     ("partition", Json.mkObj [("rule", str PARTITION_V1), ("digest", str b.partition)])]
-  pure (s!"{FORMAT_CIRCUIT} {u.name}\nMETA " ++ (← Flock.canon m) ++ "\n")
+  pure (s!"{FORMAT_CIRCUIT} {u.name}\nMETA " ++ (← pyDumps m) ++ "\n")
 
 /-- The file after its head: each section's `CIRCUIT` line and text. -/
 def emitSections {m : Type → Type} [Monad m] (put : String → m Unit) (u : UnitC) (l : Laid) : m Unit := do
