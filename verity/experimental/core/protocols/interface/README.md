@@ -54,7 +54,6 @@ profile type and JSON.
 ## Properties
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
-actual parameters, every input covered and assumptions as named `Prop`s. `Security/Properties` is a Lake package of
-its own (`security_properties`), which requires each program by path, as `security` (Mathlib only) may not. They gate
-promotion into `verity/core/`, not the port. `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`;
+actual parameters, every input covered and assumptions as named `Prop`s. They gate promotion into `verity/core/`, not
+the port. `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`;
 `core-protocol-example` runs it.
