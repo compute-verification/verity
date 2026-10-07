@@ -1,6 +1,7 @@
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
 import Proofs.Pouw.Fp8Atom.H1TGammaProofs
 import Models.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
+import Models.Pouw.Guarantees.Fp8Atom
 
 /-!
 # `DistinctLiveH1T` from the one-flip clauses and `H1TRunningWords`
@@ -76,3 +77,7 @@ theorem h1tRunningOfDistinct (hD : DistinctLiveH1T) : H1TRunningWords := by
 theorem h1tGammaRunning (hR : H1TRunningWords) : H1TGamma := h1tGamma (h1tDistinctLive hR)
 
 end Pouw.Fp8Atom.H1T.Proofs
+
+theorem Pouw.SecurityProofs.Fp8Atom.H1T.H1tDistinctLive : Pouw.Guarantees.Fp8Atom.H1T.H1tDistinctLive := @Pouw.Fp8Atom.H1T.Proofs.h1tDistinctLive
+
+theorem Pouw.SecurityProofs.Fp8Atom.H1T.H1tRunningOfDistinct : Pouw.Guarantees.Fp8Atom.H1T.H1tRunningOfDistinct := @Pouw.Fp8Atom.H1T.Proofs.h1tRunningOfDistinct
