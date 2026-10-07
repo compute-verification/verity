@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_audit", HERE.parent / "audit.py")
+spec = importlib.util.spec_from_file_location("lean_audit", HERE.parent / "check.py")
 A = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(A)
 
@@ -943,7 +943,7 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
     monkeypatch.delenv("LEAN_NUM_THREADS", raising=False)
     cpu = min(os.sched_getaffinity(0))
     code = (f"import importlib.util, os\nos.sched_setaffinity(0, {{{cpu}}})\n"
-            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parent / 'audit.py')!r})\n"
+            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parent / 'check.py')!r})\n"
             "A = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(A)\nprint(A.lake_env()['LEAN_NUM_THREADS'])\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "1"

@@ -1777,7 +1777,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 def main(argv: list[str]) -> int:
     global TOOL
-    ap = argparse.ArgumentParser(prog="audit.py", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
     ap.add_argument("--root", type=Path, default=Path.cwd(), help="--all: where to look for lean-audit.json (default .)")

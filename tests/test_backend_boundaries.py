@@ -17,6 +17,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+#: The backends' tree: C-Flock, the backend in development.
+BACKENDS = ROOT / "verity" / "ml" / "flock"
 #: The integrations' import packages, from each distribution's wheel configuration.
 INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrations").glob("*/pyproject.toml"))
                          for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
@@ -78,7 +80,7 @@ def _modules(path: Path, text: str) -> set[str]:
 @functools.cache
 def _sites() -> frozenset[tuple[str, str]]:
     sites = set()
-    for path in sorted((ROOT / "backends").rglob("*.py")):
+    for path in sorted(BACKENDS.rglob("*.py")):
         rel = path.relative_to(ROOT)
         if any(part.startswith(".") or part in SKIP_DIRS for part in rel.parts):
             continue
@@ -93,11 +95,11 @@ def test_the_integrations_are_found():
 
 
 def test_the_scan_sees_the_backends():
-    """The scan walks `backends/`: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
+    """The scan walks C-Flock's tree: a backend that moved out of it would leave its imports unchecked, and `KNOWN` would pass
     as sites of files that don't exist yet."""
     for name in ("verity_flock",):
         origin = Path(importlib.util.find_spec(name).origin).resolve()
-        assert origin.is_relative_to(ROOT / "backends"), f"{name} is at {origin}, outside the scanned backends/"
+        assert origin.is_relative_to(BACKENDS), f"{name} is at {origin}, outside the scanned {BACKENDS.relative_to(ROOT)}/"
     assert not KNOWN or any((ROOT / f).exists() for f, _ in KNOWN), "no file KNOWN lists exists: it names pre-move paths"
 
 
