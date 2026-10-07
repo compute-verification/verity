@@ -1,0 +1,31 @@
+[project]
+name = "verity-flock"
+version = "0.1.0"
+description = "Flock backend family: the committed GEMM-coordinate relation and its keyed-BLAKE3 row leaves in one binary-field proof (flock-pure), with the pinned unit lowering."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-vllm", "verity-numerical", "numpy", "blake3>=1.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["python/verity_flock"]
+
+[tool.uv.sources]
+verity = { workspace = true }
+verity-vllm = { workspace = true }
+verity-numerical = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: tests import B-Ligero (through verity_numerical) and circuit-check's targets, read the census, and check the Lean
+# verifier's stratified draw against the one-stage protocol's, and the Lean spec of verity.ml.randomness against its pinned vectors.
+inputs = ["Security", "archive/direct", "benchmarks/census", "verity/ml/randomness/tests", "verity/experimental/protocols/sampled_proofs", "tools/verity/circuit_check"]
+parallel = true
+# Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
+artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
+             "Security/.lake/packages/mathlib/.lake/build"]

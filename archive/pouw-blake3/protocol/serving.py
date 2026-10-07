@@ -14,7 +14,7 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   kernel directory is the runtime's; naming, gating and selecting one is here, so a bench or a ledger names a variant
   without importing a runtime.
 
-Stdlib and `verity` only (``verity/tests/test_boundaries.py``).
+Stdlib and `verity` only (``tests/test_boundaries.py``).
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from verity.primitives.crypto.blake3 import blake3
+from verity.ml.crypto.blake3 import blake3
 
 
 @dataclass(frozen=True)
