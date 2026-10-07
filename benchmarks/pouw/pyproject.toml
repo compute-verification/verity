@@ -15,8 +15,9 @@ research = { workspace = true }
 verity-vllm = { workspace = true }
 
 [tool.verity.tests]
-# Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python.
-inputs = ["verity/ml/flock/python"]
+# Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python; the price twins read
+# the repository's Lean record and the lifted guarantees' statements (harness/price_twins.py's REPO_AUDIT).
+inputs = ["verity/ml/flock/python", "Security/lean-audit.json", "Security/Models/Pouw/Guarantees"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
