@@ -5,7 +5,7 @@ import Mathlib.GroupTheory.Index
 /-!
 # Zero knowledge: masked and padded openings are uniform
 
-The statistical core of the public-circuit zero-knowledge proof of masked Flock (M1 and M2; the proof is
+The statistical core of the public-circuit zero-knowledge proof of masked Flock (C-Flock ZK; the proof is
 `docs/zk-proof-public.md` in the Project store, §4.1's T2–T4 and Lemma B's steps (ii) and (viii)), and the numeric step of
 its Goldreich–Kahan abort bound (T7). `README.md` §3 lists the first as to be proved, not assumed: "uniformity of opened
 columns of a padded Reed–Solomon codeword when the queries are at most the padding".
@@ -18,7 +18,7 @@ columns of a padded Reed–Solomon codeword when the queries are at most the pad
   degrees below the number of points reaches every vector of values.
 * `padded_openings_uniform`: the two together. Every vector of opened values is reached by the same number of paddings,
   whatever the message part is.
-* `level0_openings_uniform`: the instance at M1's level 0, whose padding is `(X_L + κ)·μ` with `μ` a combination of the first
+* `level0_openings_uniform`: the instance at C-Flock ZK's level 0, whose padding is `(X_L + κ)·μ` with `μ` a combination of the first
   `t` novel-basis polynomials (`flock-zk-b684b12.patch`, `zk::lane_codeword`): at most `t` distinct opened positions of a
   lane are uniform when `X_L + κ` vanishes at none of them.
 * `gk_ratio_le_third`: `3·p·b ≤ 1 − (1 − p)·b` for `b = (1 − p/2)^4` and `p ≤ 1`, the step of T7 after the negative
@@ -103,9 +103,10 @@ theorem padded_openings_uniform {F ι : Type*} [Field F] [Fintype F] [DecidableE
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **M1's level 0.** A lane's padding is `(X_L + κ)·μ`, `μ` a combination of the first `t` novel-basis polynomials
-(`zk::lane_codeword`, `t = t_pad`). At at most `t` distinct opened positions `x` where `g = X_L + κ` vanishes at none, every
-vector of opened values is reached by `|F|^t / |F|^#positions` paddings, whatever the lane's message values `base` are. -/
+/-- **C-Flock ZK's level 0.** A lane's padding is `(X_L + κ)·μ`, `μ` a combination of the first `t` novel-basis
+polynomials (`zk::lane_codeword`, `t = t_pad`). At at most `t` distinct opened positions `x` where `g = X_L + κ`
+vanishes at none, every vector of opened values is reached by `|F|^t / |F|^#positions` paddings, whatever the lane's
+message values `base` are. -/
 theorem level0_openings_uniform (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (t : ℕ) (ht : t ≤ 2 ^ L)
     {ι : Type} [Fintype ι] [DecidableEq ι] (hι : Fintype.card ι ≤ t) (x : ι → F) (hx : Function.Injective x)
     (g : ι → F) (hg : ∀ i, g i ≠ 0) (base y : ι → F) :

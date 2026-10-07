@@ -503,7 +503,7 @@ column storage, whole lower labels as separators, meet in the middle through `Pâ
 `tests/` covers:
 
 - round trips on every backend and shape;
-- known-answer vectors for `F`, `Î `, `P_T`, `H` and whole segments (`fixtures/vectors.json`; the 64 KB segment with
+- known-answer vectors for `F`, `Î `, `P_T`, `H` and whole segments (`tests/fixtures/vectors.json`; the 64 KB segment with
   `VERITY_POUS_SLOW=1`);
 - `H` recomputed from the spec's text;
 - the RFC 6962 tree and the timed and simulated audits;
@@ -521,7 +521,7 @@ column storage, whole lower labels as separators, meet in the middle through `Pâ
   one word for word in the Lean file) and restates it on the verifier's clock. Fuzzed and scripted traces (answers at
   and one nanosecond past each deadline, wrong, pipelined, stale and dropped answers) must agree with it action for
   action, and Lean `ContMachine`s run against the verifier must get `contRecords`' verdicts and `contAccepts`;
-- the Lean vectors (`fixtures/lean_vectors.json`).
+- the Lean vectors (`tests/fixtures/lean_vectors.json`).
 
 The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean's `c1'`, `topLabel'`, `transpose`,
 `decodeLower`, `tagOf`, the decoder, `bandGraph` and `colRound` on small cases. It proves by `rfl` that its generic
