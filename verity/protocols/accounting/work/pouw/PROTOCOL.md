@@ -141,11 +141,12 @@ window this way.
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
 `hm96-sha512/row/v2` row at index e: the leaf is hm96-sha512's tree leaf of `commit_string(key, x, salt_e)`, where x is
-the entry row's `sha512/row/v2` digest over its 2,432 bits, salt_e is 192 fresh bytes and key is the pinned default
+the entry row's `sha512/row/v2` digest over its 2,688 bits, salt_e is 192 fresh bytes and key is the pinned default
 (`Entry`, `entry_bc`, `entry_leaf`).
 
-**An entry row** is 304 bytes (152 u16 words, 19 128-bit words). Each integer is a u64, little-endian, and each digest
-starts on a 128-bit word:
+**An entry row** is 336 bytes (168 u16 words, 21 128-bit words). Each integer is a u64, little-endian, and each digest
+starts on a 128-bit word. The call's place in its pass (tile0, cols, m) follows root_h3, so the fields before it keep their
+offsets and only the record moves, and the -h3 root and what a unit computes from it sit together:
 
 ~~~text
 bytes     0..8    kind      0 none, 1 call, 2 filler
@@ -157,20 +158,38 @@ bytes     0..8    kind      0 none, 1 call, 2 filler
          48..112  root_a    A's side root (64 bytes)
         112..176  root_b    B's side root
         176..240  root_h3   a call's pass's -h3 tile-tree root; zero for the filler and for none
-        240..304  record    a call's record: SHA-512 of its RFC 8785 canonical JSON; zero for the filler and for none
+        240..248  tile0     the call's first tile in its pass; zero for the filler and for none
+        248..256  cols      the call's tile columns ⌈n/64⌉: 1..2^(D_B − 6), 64·cols >= n_b; zero for the filler and none
+        256..264  m         the call's rows: a multiple of 16 in n_a..2^D_A, tile0 + ⌈m/64⌉·cols <= 2^40; zero likewise
+        264..272  zero      so the record starts on a 128-bit word
+        272..336  record    a call's record: SHA-512 of its RFC 8785 canonical JSON; zero for the filler and for none
 ~~~
 
-An empty entry is the zero row. A call's record is the committer's own description of the call, including `keep`: for
-each side, the places in the call of the rows the side tree holds. The entry binds the record only by its SHA-512, so no
-tile reads it.
+An empty entry is the zero row. A call's record is the committer's own description of the call: its `shape` [m, k, n],
+its `tile0`, and `keep`, for each side the places in the call of the rows the side tree holds, strictly increasing. The
+entry binds the record only by its SHA-512, so no tile reads it; tile0, cols and m are the record's, in the row, so a tile
+reads them.
 
 **A side tree** is dense: it holds only the rows its call keeps (a row the scheme refused is no tile's), in order. So the
 call's n_a·n_b tiles are the products of A's rows and B's, row-major, and index u of the range [lo, hi) is A row
-u div n_b and B row u mod n_b (`tile_in`). The filler's sides are zero rows: n_b = min(2^D_B, max(⌈√fill⌉, ⌈fill/2^D_A⌉))
+u div n_b and B row u mod n_b (`tile_in`). The filler's sides are zero rows (index field included): n_b = min(2^D_B, max(⌈√fill⌉, ⌈fill/2^D_A⌉))
 and n_a = ⌈fill/n_b⌉. Its range covers N − N_real ≤ n_a·n_b tiles. Every side tree has 2^D leaves, with D_A = 13 (the
 served batch is at most 8,192 tokens) and D_B = 17. Leaf i < n is row i's frame-v3 leaf under the row's own schema. Every
 leaf from n on is frame-v3's pad leaf of the side domain at its rank: frame-v3 pads any tree to a power of two this way,
 so a side root is `tree_levels` over the n row leaves followed by 2^D − n pad leaves (`side_levels`, `side_path`).
+
+**A side row** is the call's operand row, then its place in the call (`side_row`): I for an A row (< 2^13), J for a B row
+(< 2^17), a u32 in one 128-bit word. The operand words keep their offsets, and the row's schema is its role's, as before:
+
+~~~text
+words     0..k/2          the k E4M3 codes, two a word, low first
+          k/2..k/2+64     P's 64 BF16 words
+          k/2+64..+66     the index I or J, a u32, low word first
+          k/2+66..+72     zero
+~~~
+
+That is k/2 + 72 words, 2,120 at k = 4,096 (33,920 bits). A's rows are `hm96-sha512/row-seg/v1` (role X), B's
+`hm96-sha512/row/v2` (role W).
 
 **The side domains** are one per window and side, with no entry index and no row count:
 
@@ -205,28 +224,38 @@ call's root_h3 to the root the pass published.
 rows: its A row and its B row through its entry's side roots, and its pass's -h3 leaf through root_h3. It compares, in
 gates, the leaf's x with the -h3 leaf its own tile's words give, so the tile it proves is the tile the pass served. The
 read is not at position t. Window tile t is one word, (I, J) = (keep_a[i], keep_b[j]) of its call for
-(i, j) = `tile_in(entry, t)`, and the pass's leaf holding it is
+(i, j) = `tile_in(entry, t)`. The unit reads I from its A row's index field and J from its B row's, and tile0, cols and m
+from its entry row, and the pass's leaf holding the word is (`tile_read`)
 
 ~~~text
-p    the call's first tile in the pass + (I div 64)·⌈n/64⌉ + (J div 64)
-at   (I mod 64) | (J mod 64) << 6 | (rows/16 − 1) << 12, rows the tile's height (64, or the call's short last tile row)
+p     tile0 + (I div 64)·cols + (J div 64)
+at    (I mod 64) | (J mod 64) << 6 | (rows/16 − 1) << 12
+rows  min(64, m − 64·(I div 64)), the tile's height: 64, or the call's short last tile row (16 | m)
 ~~~
 
-So up to 4,096 window tiles read one leaf, and the leaf a unit computes is its word's 64 x 64 tile's (the output of
-`Pc8TileLeafH3`, not on main yet, from the word and the tile's other messages as advice), not `Pc8TileHidden`'s 1 x 1
-digest. I, J, the call's first tile and its shape are in its record only, so the entry row does not yet give a unit p
-and at from what it reads.
+with I < m and J < 64·cols. The pass's tiles are in workload order, then each call's 64 x 64 tiles row-major, so this
+is `audit.tile_refs`'s tile holding (I, J). Up to 4,096 window tiles read one leaf, and the leaf a unit computes is its
+word's 64 x 64 tile's (the output of `Pc8TileLeafH3`, not on main yet, from the word and the tile's other messages as
+advice), not `Pc8TileHidden`'s 1 x 1 digest; `served_zk/stage_tile.py` refuses a window of indexed side rows, which
+`Pc8TileHidden` does not read.
+
+The side rows' indices are bound to the record in the window's reference only: the window statement in gates reads the P
+entry rows, not the up to 2^13 + 2^17 side rows under each entry or the record's preimage. `window_problem`, given the
+records and the side rows' indices, holds each call's indices to its record's keep, strictly increasing, and its tile0,
+cols and m to its shape, so i -> I and j -> J are injective and no two window tiles read one word.
 
 **The window statement** (L4, `window_problem`) holds on the P entry rows and the pass's published tile root when all of
 the following hold:
 
-- each row is an entry row: 304 bytes, a known kind, and a zero word at 40..48;
+- each row is an entry row: 336 bytes, a known kind, and zero words at 40..48 and 264..272;
 - each entry satisfies the layout (`layout_problem`): its range is 40-bit, an empty entry is the zero row, a call's or
-  the filler's sides hold 1..2^D rows, and the filler's root_h3 and record are zero;
+  the filler's sides hold 1..2^D rows, the filler's root_h3, record, tile0, cols and m are zero, and a call's m, cols
+  and pass tiles are in the table's bounds;
 - the kinds are the calls (at least one), then one filler, then empty entries;
 - the calls' and the filler's ranges are nonempty and contiguous from 0;
 - a call's range is exactly its n_a·n_b tiles, and the filler's is at most its n_a·n_b;
 - every call's root_h3 is the pass's tile root;
+- the calls' pass tiles [tile0, tile0 + ⌈m/64⌉·cols) are in order and disjoint;
 - the ranges end at N, and the registered level is `bucket` of the calls' tiles N_real.
 
 **The tile instances' public inputs.** The K′ drawn tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each

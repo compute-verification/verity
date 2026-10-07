@@ -30,18 +30,21 @@ tiles, so a draw of K′ without replacement misses it with probability at most 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
 an `Entry` row committed in one window root registered before the draw.  A call's sides are dense: each side tree holds only
 the rows its tiles keep (a row the scheme refused is no tile's), in order, so its tiles are the products of A's rows and
-B's, row-major, and index u of its range is (u div n_b, u mod n_b); the rows' places in the call stay in its record, which
-the entry binds by SHA-512.  A call's entry also holds the root of its pass's -h3 tile tree, where each drawn tile's served
-leaf is read.  The filler entry holds zero rows on both sides and the range [N_real, N).  `tile_at` maps a drawn index to
-its entry and rows, and `window_problem` is the window statement (L4) in Python over the entry rows: the rows are entry
-rows, the ranges tile [0, N) in order, each call's range is its tiles, the filler covers the rest, every call's -h3 root is
-the pass's, and the registered level is `bucket` of the real tiles.  It is not proved yet: no Program states it.
+B's, row-major, and index u of its range is (u div n_b, u mod n_b); each side row carries its place in the call (I, J), and
+the call's record, which the entry binds by SHA-512, lists them (``keep``).  A call's entry also holds the root of its
+pass's -h3 tile tree, where each drawn tile's served leaf is read, and the call's place in that pass (tile0, cols, m), so a
+unit computes the leaf and its word in it from the rows it reads (`tile_read`).  The filler entry holds zero rows on both
+sides and the range [N_real, N).  `tile_at` maps a drawn index to its entry and rows, and `window_problem` is the window
+statement (L4) in Python over the entry rows: the rows are entry rows, the ranges tile [0, N) in order, each call's range
+is its tiles, the filler covers the rest, every call's -h3 root is the pass's, the calls' pass tiles are ordered and
+disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
+holds those to the entries.  It is not proved yet: no Program states it.
 
 **The layout for gates** (`note:proofs/20261006T1940Z-draft-units-to-inner-layout`, §2) is specified in PoUW's PROTOCOL.md,
-"The served audit window": the entry row (`Entry`, 304 bytes), the dense side trees of 2^D leaves (`DEPTHS`) padded with
-frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`, `side_path`), and the tile instances'
-public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`, `public_inputs`); `tests/vectors/window.json`
-pins them.
+"The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
+leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
+`side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
+`public_inputs`); `tests/vectors/window.json` pins them.
 """
 from __future__ import annotations
 
@@ -192,20 +195,28 @@ DEPTHS = {"a": 13, "b": 17}
 #: the window root's port, and the schema its entry rows are committed under
 PORT = "entries"
 ENTRY_SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
-ENTRY_BYTES = 304
+ENTRY_BYTES = 336
 ENTRY_WORDS = ENTRY_BYTES // 2
 ENTRY_BITS = 8 * ENTRY_BYTES
 KIND_CODE = {"none": 0, "call": 1, "filler": 2}
 _HEAD = struct.Struct("<6Q")
+#: tile0, cols, m and a zero u64, after root_h3
+_PASS = struct.Struct("<4Q")
+_PASS_AT = 240
 _DIGEST = 64
 _ZERO = bytes(_DIGEST)
 _HM = hm96.SHA512
+#: the pass's tiles are 64 x 64 (`audit.tile_refs` over Pearl-C's tiles), and a short last tile row is whole 16-row
+#: ticket subtiles (Pearl-C's domain: 16 | m)
+TILE = 64
+ROW_STEP = 16
 
 
 @dataclass(frozen=True)
 class Entry:
     """One entry of the window root, as its committed bit row holds it (PROTOCOL.md's layout): its kind, its tile range
-    [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, and a call's record's SHA-512.  `row` and
+    [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, a call's record's SHA-512, and where the call
+    sits in its pass: its first tile there `tile0`, its tile columns `cols` = ⌈n/64⌉ and its rows `m`.  `row` and
     `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
 
     kind: str
@@ -217,6 +228,9 @@ class Entry:
     root_b: bytes = _ZERO
     root_h3: bytes = _ZERO
     record: bytes = _ZERO
+    tile0: int = 0
+    cols: int = 0
+    m: int = 0
 
     def row(self) -> bytes:
         if self.kind not in KIND_CODE:
@@ -225,12 +239,13 @@ class Entry:
             raise ValueError("an entry's roots and record are 64-byte digests")
         try:
             head = _HEAD.pack(KIND_CODE[self.kind], self.lo, self.hi, self.n_a, self.n_b, 0)
+            at = _PASS.pack(self.tile0, self.cols, self.m, 0)
         except struct.error as e:
             raise ValueError(f"an entry's integers are u64s: {e}") from None
-        return head + self.root_a + self.root_b + self.root_h3 + self.record
+        return head + self.root_a + self.root_b + self.root_h3 + at + self.record
 
     def words(self) -> list[int]:
-        """The row as its 152 u16 words, little-endian."""
+        """The row as its 168 u16 words, little-endian."""
         return list(struct.unpack(f"<{ENTRY_WORDS}H", self.row()))
 
     @classmethod
@@ -240,12 +255,15 @@ class Entry:
         if len(row) != ENTRY_BYTES:
             raise ValueError(f"an entry row is {ENTRY_BYTES} bytes, not {len(row)}")
         code, lo, hi, n_a, n_b, pad = _HEAD.unpack_from(row)
+        tile0, cols, m, pad2 = _PASS.unpack_from(row, _PASS_AT)
         kind = {v: k for k, v in KIND_CODE.items()}.get(code)
         if kind is None:
             raise ValueError(f"kind {code} is none of {KINDS} ({sorted(KIND_CODE.values())})")
         if pad:
             raise ValueError("its bytes 40..48 are not zero")
-        return cls(kind, lo, hi, n_a, n_b, row[48:112], row[112:176], row[176:240], row[240:304])
+        if pad2:
+            raise ValueError("its bytes 264..272 are not zero")
+        return cls(kind, lo, hi, n_a, n_b, row[48:112], row[112:176], row[176:240], row[272:336], tile0, cols, m)
 
     @classmethod
     def from_words(cls, words: Sequence[int]) -> "Entry":
@@ -255,12 +273,13 @@ class Entry:
 
     def to_json(self) -> dict[str, Any]:
         return {"kind": self.kind, "lo": self.lo, "hi": self.hi, "n_a": self.n_a, "n_b": self.n_b, "root_a": self.root_a.hex(),
-                "root_b": self.root_b.hex(), "root_h3": self.root_h3.hex(), "record": self.record.hex()}
+                "root_b": self.root_b.hex(), "root_h3": self.root_h3.hex(), "tile0": self.tile0, "cols": self.cols,
+                "m": self.m, "record": self.record.hex()}
 
     @classmethod
     def from_json(cls, x: Mapping[str, Any]) -> "Entry":
         return cls(x["kind"], x["lo"], x["hi"], x["n_a"], x["n_b"], bytes.fromhex(x["root_a"]), bytes.fromhex(x["root_b"]),
-                   bytes.fromhex(x["root_h3"]), bytes.fromhex(x["record"]))
+                   bytes.fromhex(x["root_h3"]), bytes.fromhex(x["record"]), x["tile0"], x["cols"], x["m"])
 
 
 def record_digest(record: Mapping[str, Any]) -> bytes:
@@ -268,9 +287,16 @@ def record_digest(record: Mapping[str, Any]) -> bytes:
     return hashlib.sha512(canonical_json(record)).digest()
 
 
+def pass_tiles(entry: Entry) -> int:
+    """A call's tiles in its pass: ⌈m/64⌉ tile rows of `cols` tiles."""
+    return -(-entry.m // TILE) * entry.cols
+
+
 def layout_problem(entry: Entry) -> str | None:
     """Why an entry's values are not the layout's, or None: its range in [0, 2^40); an empty entry the zero row; a call's or
-    the filler's sides 1..2^D rows; the filler's -h3 root and record zero."""
+    the filler's sides 1..2^D rows; the filler's -h3 root, record, tile0, cols and m zero; a call's m in whole 16s up to
+    2^D_A and at least n_a, its cols 1 to 2^(D_B − 6) with 64·cols at least n_b, and its pass tiles
+    [tile0, tile0 + ⌈m/64⌉·cols) within 2^40."""
     if not (entry.lo < 1 << T_BITS and entry.hi < 1 << T_BITS):
         return f"its range [{entry.lo}, {entry.hi}) is not of {T_BITS}-bit indices"
     if entry.kind == "none":
@@ -278,10 +304,41 @@ def layout_problem(entry: Entry) -> str | None:
     for side, n in (("a", entry.n_a), ("b", entry.n_b)):
         if not 1 <= n <= 1 << DEPTHS[side]:
             return f"side {side} holds {n} rows, not 1 to 2^{DEPTHS[side]}"
-    if entry.kind == "filler" and any(entry.root_h3):
-        return "the filler's -h3 root is not zero"
-    if entry.kind == "filler" and any(entry.record):
-        return "the filler's record is not zero"
+    if entry.kind == "filler":
+        if any(entry.root_h3):
+            return "the filler's -h3 root is not zero"
+        if any(entry.record):
+            return "the filler's record is not zero"
+        if entry.tile0 or entry.cols or entry.m:
+            return "the filler's tile0, cols and m are not zero"
+        return None
+    if not (1 <= entry.m <= 1 << DEPTHS["a"] and entry.m % ROW_STEP == 0 and entry.n_a <= entry.m):
+        return f"its m {entry.m} is not a multiple of {ROW_STEP} from n_a = {entry.n_a} to 2^{DEPTHS['a']}"
+    if not (1 <= entry.cols <= 1 << (DEPTHS["b"] - 6) and entry.n_b <= TILE * entry.cols):
+        return f"its cols {entry.cols} is not 1 to 2^{DEPTHS['b'] - 6} with 64·cols >= n_b = {entry.n_b}"
+    if entry.tile0 + pass_tiles(entry) > 1 << T_BITS:
+        return f"its pass tiles [{entry.tile0}, {entry.tile0 + pass_tiles(entry)}) are not of {T_BITS}-bit indices"
+    return None
+
+
+def record_problem(entry: Entry, record: Mapping[str, Any]) -> str | None:
+    """Why a call's record is not its entry's, or None: the entry binds its SHA-512; its ``shape`` [m, k, n] and ``tile0``
+    give the entry's m, cols = ⌈n/64⌉ and tile0; and its ``keep``, each side's places in the call of the rows its side tree
+    holds, is n_a strictly increasing indices of [0, m) and n_b of [0, n)."""
+    try:
+        if record_digest(record) != entry.record:
+            return "its record is not the one the entry binds"
+        m, _k, n = record["shape"]
+        tile0, keep = record["tile0"], record["keep"]
+        if (entry.tile0, entry.cols, entry.m) != (tile0, -(-n // TILE), m):
+            return f"its tile0, cols and m are not its record's {tile0}, ⌈{n}/64⌉ and {m}"
+        for side, count, top in (("a", entry.n_a, m), ("b", entry.n_b, n)):
+            rows = list(keep[side])
+            if len(rows) != count or any(not isinstance(i, int) or isinstance(i, bool) for i in rows) \
+                    or rows != sorted(set(rows)) or (rows and not 0 <= rows[0] <= rows[-1] < top):
+                return f"its record's side-{side} keep is not {count} increasing indices of [0, {top})"
+    except (KeyError, TypeError, ValueError):
+        return "its record has no shape [m, k, n], tile0 and keep {a, b}"
     return None
 
 
@@ -305,6 +362,26 @@ def entry_leaf(dom: CommitmentDomain, e: int, bc: bytes) -> bytes:
 SIDE_DOMAIN = "verity/pouw/window/side-domain/v1"
 #: the frame's owner, as C-Flock's statement domains have it
 OWNER = -1
+#: a side row's index field: the row's place in its call (I < 2^13 for A, J < 2^17 for B) as a u32, two u16 words low
+#: first, then six zero words, so the field is one 128-bit word after the row's operand words
+SIDE_INDEX_WORDS = 8
+
+
+def side_row(words: Sequence[int], index: int) -> list[int]:
+    """A side tree's row: the operand row's u16 words (fp8-p: k/2 code words, then P's 64), then its index field."""
+    if len(words) % SIDE_INDEX_WORDS:
+        raise ValueError(f"a side row's operand words are whole 128-bit words, not {len(words)} u16 words")
+    if not (isinstance(index, int) and not isinstance(index, bool) and 0 <= index < 1 << 32):
+        raise ValueError(f"a side row's index is a u32, not {index!r}")
+    return [int(w) for w in words] + [index & 0xFFFF, index >> 16] + [0] * (SIDE_INDEX_WORDS - 2)
+
+
+def side_index(row: Sequence[int]) -> int:
+    """The index a side row holds; raises ValueError unless its index field is a u32 and zeros."""
+    field = [int(w) for w in row[-SIDE_INDEX_WORDS:]]
+    if len(row) <= SIDE_INDEX_WORDS or any(field[2:]) or any(not 0 <= w < 1 << 16 for w in field[:2]):
+        raise ValueError("the row's last 128-bit word is not a u32 index and zeros")
+    return field[0] | field[1] << 16
 
 
 def side_domain(window_domain: bytes, side: str) -> CommitmentDomain:
@@ -381,12 +458,29 @@ def tile_at(entries: Sequence[Entry], t: int) -> tuple[int, int, int]:
     raise ValueError(f"index {t} is in no entry's range")
 
 
-def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes, bits: int = GRID_BITS) -> str | None:
+def tile_read(entry: Entry, i: int, j: int) -> tuple[int, int]:
+    """(p, at): the -h3 leaf a call's tile reads and its word's place in that leaf, from the entry row and the two side
+    rows' indices I and J alone.  p = tile0 + (I div 64)·cols + (J div 64), the pass's tile holding (I, J); at =
+    (I mod 64) | (J mod 64) << 6 | (rows/16 − 1) << 12, rows = min(64, m − 64·(I div 64)) that tile's height."""
+    if entry.kind != "call" or not (0 <= i < entry.m and 0 <= j < TILE * entry.cols):
+        raise ValueError(f"({i}, {j}) is not a word of the call's m x 64·cols")
+    rows = min(TILE, entry.m - TILE * (i // TILE))
+    return entry.tile0 + (i // TILE) * entry.cols + j // TILE, i % TILE | (j % TILE) << 6 | (rows // ROW_STEP - 1) << 12
+
+
+def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes, bits: int = GRID_BITS,
+                   records: Sequence[Mapping[str, Any] | None] | None = None,
+                   indices: Sequence[Mapping[str, Sequence[int]] | None] | None = None) -> str | None:
     """The window statement (L4) on the committed entry rows, or None: `bound` rows, each an entry row of the layout
     (`Entry.from_row`, `layout_problem`); the calls, then one filler, then empty entries; the ranges tile [0, work.n) in
     order; a call's range is its tiles; the filler's holds the rest, within its rows; every call's -h3 root is `root_h3`,
-    the pass's published tile commitment; and the level is `bucket` of the calls' tiles.  Credited tiles are only the
-    calls'."""
+    the pass's published tile commitment; the calls' pass tiles are in order and disjoint; and the level is `bucket` of
+    the calls' tiles.  Credited tiles are only the calls'.
+
+    The gates read the entry rows only.  Given the calls' `records` (per entry, None past the calls) it also holds each to
+    its entry (`record_problem`), and given each entry's side rows' `indices` (`side_index`, per side) it holds a call's to
+    its record's keep and the filler's to zero: so i -> I and j -> J are injective, and no two window tiles read one
+    word."""
     if len(root_h3) != _DIGEST:
         raise ValueError("the pass's -h3 tile root is 64 bytes")
     if len(rows) != bound:
@@ -405,7 +499,7 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
     calls = kinds.index("filler") if "filler" in kinds else -1
     if calls < 1 or kinds[:calls] != ["call"] * calls or kinds[calls + 1:] != ["none"] * (bound - calls - 1):
         return "the entries are the calls, then one filler, then empty entries"
-    at = 0
+    at = in_pass = 0
     for e, entry in enumerate(entries[:calls + 1]):
         if entry.lo != at or entry.hi <= at:
             return f"entry {e}: its range does not start where the last ended, or is empty"
@@ -414,14 +508,34 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
             return f"entry {e}: its range is {size} tiles, not its {tiles(entry)} tiles"
         if entry.kind == "call" and entry.root_h3 != root_h3:
             return f"entry {e}: its -h3 root is not the pass's tile commitment"
+        if entry.kind == "call" and entry.tile0 < in_pass:
+            return f"entry {e}: its pass tiles start at {entry.tile0}, before the last call's end {in_pass}"
         if entry.kind == "filler" and size > tiles(entry):
             return f"entry {e}: the filler's range is {size} tiles, beyond its {tiles(entry)}"
         at = entry.hi
+        in_pass = entry.tile0 + pass_tiles(entry) if entry.kind == "call" else in_pass
     real = entries[calls].lo
     if at != work.n:
         return f"the ranges end at {at}, not the padded count {work.n}"
     if bucket(real, bits) != work:
         return f"{real} real tiles are level {bucket(real, bits).level}, not the registered level {work.level}"
+    if records is not None:
+        if len(records) != bound or any(r is not None for r in records[calls:]):
+            return f"{len(records)} records, not one per call and None past the calls"
+        for e in range(calls):
+            why = record_problem(entries[e], records[e])
+            if why:
+                return f"entry {e}: {why}"
+    if indices is not None:
+        if records is None:
+            raise ValueError("the side rows' indices are held to the calls' records, so give both")
+        for e, entry in enumerate(entries[:calls + 1]):
+            got = indices[e] if e < len(indices) else None
+            for side, count in (("a", entry.n_a), ("b", entry.n_b)):
+                want = list(records[e]["keep"][side]) if entry.kind == "call" else [0] * count
+                if got is None or [int(i) for i in got[side]] != want:
+                    return f"entry {e}: its side-{side} rows' indices are not " + \
+                        ("its record's keep" if entry.kind == "call" else "zero")
     return None
 
 
@@ -506,6 +620,6 @@ def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: 
 
 __all__ = ["DEPTHS", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT",
            "PUBLIC_PORTS", "REGISTERED", "T_BITS", "Work", "bucket", "entry_bc", "entry_digest", "entry_leaf", "floor_point",
-           "instance_ts", "k_prime", "layout_problem", "level", "levels", "on_grid", "pad_node", "point", "public_inputs",
-           "record_digest", "sampling", "session_cap", "sessions", "side_domain", "side_levels", "side_path", "tile_at",
-           "tile_in", "tiles", "window_problem"]
+           "instance_ts", "k_prime", "layout_problem", "level", "levels", "on_grid", "pad_node", "pass_tiles", "point",
+           "public_inputs", "record_digest", "record_problem", "sampling", "session_cap", "sessions", "side_domain",
+           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]

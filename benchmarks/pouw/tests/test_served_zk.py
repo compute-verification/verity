@@ -88,7 +88,8 @@ def served():
 
 def _calls(words) -> list[dict]:
     """Two calls of the same rows: 2·M·N = 24 real tiles, grid level 23, padded to 26 with a filler entry of 1 x 2 zero rows."""
-    return [{"record": {"matmul": m, "shape": [16, K, N], "weight": 2, "real_rows": M + 1}, "words": words} for m in (5, 9)]
+    return [{"record": {"matmul": m, "shape": [16, K, N], "tile0": m, "weight": 2, "real_rows": M + 1}, "words": words}
+            for m in (5, 9)]
 
 
 def _weights() -> list[bytes]:
@@ -170,7 +171,9 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
             leaves = SC.side_leaves(dom, schema, priv[e][side]["bcs"])
             root = tree_levels(dom, leaves + [dom.pad(r) for r in range(len(leaves), dom.count)])[-1][0]
             assert root == (entries[e].root_a if side == "a" else entries[e].root_b)
-    assert priv[0]["b"]["bcs"][2] == L.commit("fp8-p", SC.SIDES["b"], words["b"][2], priv[0]["b"]["salts"][2])
+    assert priv[0]["b"]["bcs"][2] == L.commit("fp8-p", SC.SIDES["b"], Wd.side_row(words["b"][2], 2), priv[0]["b"]["salts"][2])
+    assert [Wd.side_index(r) for r in priv[0]["a"]["words"]] == advice["records"][0]["keep"]["a"]
+    assert (call.tile0, call.cols, call.m, entries[1].tile0) == (5, 1, 16, 9) and filler.m == filler.tile0 == 0
     salts = {e: {s: priv[e][s]["salts"] for s in "ab"} for e in range(3)}
     again, advice2, _ = SC.commit_window(params, _calls(words), public["items"]["root_W"], root_h3,
                                          {**salts, "entries": priv["entries"]})
