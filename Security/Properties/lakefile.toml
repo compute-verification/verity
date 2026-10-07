@@ -1,7 +1,7 @@
-# The properties of code the verifier runs, stated against its Lean function and proved: `Properties.<Area>` states them
-# over the definitions (`security`) and the code (`nci_check`, required by path), and `Properties.Proofs.<Area>` proves
-# them. Its own package because `security` requires only Mathlib, no code package may require `Security`, and its
-# proofs need only Mathlib, not `security_proofs`' ArkLib. Its modules sit beside the trusted text's (`srcDir = ".."`).
+# The security analysis's properties of the Lean code: what each component's executable Lean does, stated against its
+# functions (`Pouw`: PoUW's window; `Nci`: the NCI check). It may require `security` (Definitions, Models) and the code it
+# states properties of, never `security_proofs`. Its modules sit beside the trusted text's (`srcDir = ".."`) under a root
+# of their own, `Properties`: `Properties.<Protocol>` states, `Properties.Proofs.<Protocol>` proves.
 name = "security_properties"
 srcDir = ".."
 defaultTargets = ["Properties"]
@@ -15,9 +15,13 @@ name = "security"
 path = ".."
 
 [[require]]
+name = "pouw_window"
+path = "../../verity/experimental/core/protocols/pouw/window"
+
+[[require]]
 name = "nci_check"
 path = "../../verity/experimental/core/protocols/network/nci/lean"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Nci", "Properties.Proofs.Nci"]
+roots = ["Properties.Pouw", "Properties.Proofs.Pouw", "Properties.Nci", "Properties.Proofs.Nci"]

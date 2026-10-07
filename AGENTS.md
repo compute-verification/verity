@@ -28,7 +28,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `benchmarks/census/`: data only. Core never reads it; it takes such numbers as parameters.
 - `verity/ml/kernels/` (`verity.ml.kernels`): fast code, each kernel checked against its Definition.
 - `verity/experimental/` (`verity.experimental`): what is under development or kept for study (private circuits, multiproofs,
-  sampled proofs' plans and consumers). `verity` never imports it.
+  sampled proofs' plans and consumers). `verity` never imports it. Core's Lean ports go under `experimental/core/`, each
+  held to today's Python by `experimental/core/difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
 - `verity/ml/flock/` (`verity_flock`): C-Flock, the proof system.
   - Its patches on upstream Flock, the CUDA prover, and the zero-knowledge prover (`live/`, `flock-circuit --zk`).
   - `verifier/`: the verifier of record, written in Lean, with upstream's Rust verifier as a cross-check.
@@ -166,9 +167,9 @@ Landing:
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
-    `Properties/` is the nested package `security_properties` (Mathlib, no ArkLib): properties of code stated against its
-    Lean function (`Properties.<Area>`, spec by its own `layers`) and proved (`Properties.Proofs.<Area>`), apart because
-    it requires the code by path, which `security` may not.
+    `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
+    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
+    `security_proofs`.
   - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's analysis is all
