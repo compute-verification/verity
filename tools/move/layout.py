@@ -200,6 +200,7 @@ class Run:
         self.notes: dict[str, list[str]] = defaultdict(list)    # kind -> things for a person to look at
         self.moved: dict[str, str] = {}             # new path -> old path, for files this run moves
         self.texts: dict[str, str] = {}             # new path -> text as it will be written
+        self.dropped: list[str] = []                # old paths of the files [drop] deletes
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
