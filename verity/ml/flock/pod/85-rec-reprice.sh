@@ -14,7 +14,8 @@
 #   STEP=vstage  (CPU) V*'s statements over the inner's last proxied session (verity_flock.rec_vstage) into data/$TAG/v: the
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
-#                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt", each under forged-<kind>/), JOBS at once
+#                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
+#                JOBS at once
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions (a forgery's: one, by a
 #                prover that sends its proofs though the witness fails, FC_ZK_SELF_CHECK=skip), and upstream's replay --zk
 #                of the last
@@ -28,7 +29,7 @@
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
-#      FORGE="message sum comb top top-salt" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
+#      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage, lean)  INNER_LOOPBACK=1 (inner)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
@@ -467,7 +468,7 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
   vjob verifier --levels none --no-algebra
   [ -f $V/acc-salts.bin ] || { tail -20 $O/vstage/verifier.err; exit 1; }
   { want alg && echo alg --levels none
-    for f in ${FORGE-message sum comb top top-salt}; do echo forged-$f --forge $f; done
+    for f in ${FORGE-message sum comb top top-salt coef dirs}; do echo forged-$f --forge $f; done
     for l in $ALL; do want L$l && echo L$l --levels $l --no-algebra; done; } | xargs -P ${JOBS:-4} -L 1 bash -c 'vjob "$@"' _
   (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage/sizes.txt
   ;;
@@ -496,8 +497,7 @@ lean)
   mkdir -p $O/lean
   for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
     want $l || continue
-    PI=; [ -f $C/public-inputs.bin ] && PI="--public-inputs $C/public-inputs.bin"
-    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $PI --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
+    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \

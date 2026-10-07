@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # V*'s algebra (lane rec-v0): rec-algebra's InnerRepCheck (GfResiduals_v1{S}) on each rep of an inner session (80-rec-inner.sh's
 # out/inner, with its claims.json) staged as one C-Flock statement (verity_flock.rec_residuals: w the prover's private row, v
-# the verifier's public input port, the residuals registered by the verifier as zero), proved with --zk at a full draw (both
-# instances; serve/prove on loopback, the server's keyed coins), and verified by Lean's flock-verify verify --zk under the
-# verifier's program, partition, registered reads and public inputs, and by the live build's replay --zk. Then the same circuit
+# a value the verifier registers itself, the residuals registered by the verifier as zero; no public input), proved with --zk
+# at a full draw (both instances; serve/prove on loopback, the server's keyed coins), and verified by Lean's flock-verify
+# verify --zk under the verifier's program, partition and registered reads, and by the live build's replay --zk. Then the same circuit
 # with the verifier's v at a forged inner transcript (rep 0's first challenge coin flipped: rec_inner.py forge --what
 # challenge) beside the honest w, which both verifiers must reject. Run from the verity tree (research run --cwd source).
 # Outputs under out/: host.txt, stage.json, time-stage.txt, honest/ and forged/ (time-prove.txt, prove.txt/.err, serve.log,
@@ -46,13 +46,12 @@ prove() {
   local SESS=$(find $D/sessions -name session.json -printf '%h\n' | sort | head -1)
   [ -n "$SESS" ] || { echo "$1: no session"; return 1; }
   /usr/bin/time -v -o $D/time-lean.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin \
-    --partition $C/partition.json --program $C/program.json --registered $C/registered.json --public-inputs $C/public-inputs.bin \
-    --session $SESS > $D/lean.log 2>&1
+    --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $SESS > $D/lean.log 2>&1
   echo "$1 lean exit $?"
   $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS > $D/replay.txt 2>&1
   echo "$1 replay exit $?"
   cp $C/registered.json $C/partition.json $D/
-  du -sb $C/inst.bin $C/pub.bin $C/public-inputs.bin $C/circuit.txt > $D/sizes.txt
+  du -sb $C/inst.bin $C/pub.bin $C/circuit.txt > $D/sizes.txt
 }
 
 prove honest

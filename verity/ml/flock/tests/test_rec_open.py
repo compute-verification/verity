@@ -133,7 +133,7 @@ def test_the_definition_computes_the_reference():
 
     cases = _cases()
     d = R.definition(8, 1)
-    assert d.id == "RecOpen_v3{LANES=8,H=1}"
+    assert d.id == "RecOpen_v4{LANES=8,H=1}"
     port = lambda i: np.array([np.array(_bits(c[i]), dtype=np.uint8).reshape(-1, 16) for c in cases])
     res = np.asarray(evaluate_batch(d, port(0), port(1), port(4), port(5), port(2)))
     res = res.reshape(len(cases), R.OUT_WORDS + R.ACC_WORDS, 16)
