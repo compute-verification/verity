@@ -31,6 +31,7 @@ import itertools
 import json
 import random
 import shutil
+import struct
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +39,7 @@ import pytest
 import verity_difftest as DT
 from hypothesis import strategies as st
 
+from verity.experimental.protocols.pouw.circuit import words as W
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.boolean.trace import word_of
@@ -56,6 +58,7 @@ from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
 from verity_vllm.program.registry import dsa as DSA
 from verity_vllm.program.registry import moe as MOE
+from verity_vllm.program.registry import pouw_rows as PR
 from verity_vllm.program.registry import prims as VP
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry import topp_word_gates as TW
@@ -88,6 +91,9 @@ _FLOAT_IDS = frozenset(p.id for p in FLOATS)
 TCS = (P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16, P.HopperE4m3QgmmaDot32, P.BlackwellE4m3QmmaDot32, P.BlackwellE5m2QmmaDot32,
        P.BlackwellNvf4OmmaDot64, P.BlackwellMxf4OmmaDot64)
 _TC_IDS = frozenset(p.id for p in TCS)
+#: E4's PoUW and NCP word primitives (`Evaluate.Words`)
+WORDS = tuple(getattr(W, n) for n in W.__all__ if n.startswith("Pouw")) + (PR.NcpAbsMax, PR.NcpRneClampI7, PR.NcpDot16I7)
+_E4_IDS = frozenset(p.id for p in WORDS)
 
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
@@ -97,7 +103,8 @@ def _in_scope(fn: PrimitiveDefinition) -> bool:
     m = input_id(fn.id)
     if m:
         return m[0] == RUN
-    return BL.is_gate(fn) or getattr(fn, "family", None) == "Const" or fn.id in _SCALAR_IDS | _FLOAT_IDS | _TC_IDS
+    return (BL.is_gate(fn) or getattr(fn, "family", None) == "Const"
+            or fn.id in _SCALAR_IDS | _FLOAT_IDS | _TC_IDS | _E4_IDS)
 
 
 def python_answer(desc: dict, inputs: list) -> dict:
@@ -621,7 +628,7 @@ def _batch_call(fn: PrimitiveDefinition, n: int) -> dict:
 
 @functools.cache
 def _batch_text(fid: str, n: int) -> str:
-    return json.dumps(_batch_call(next(p for p in FLOATS + TCS if p.id == fid), n))
+    return json.dumps(_batch_call(codec.lookup_primitive(REGISTRY, fid), n))
 
 
 def _flat(v) -> list[int]:
@@ -1144,3 +1151,193 @@ def test_the_traced_steps_are_the_lean_primitives(server):
         x = [_bits_of(col, w) for col, w in zip(_columns(rows), widths)]
         kind, out = server.call("evaluate", request(json.loads(_traced_batch_text(fn.id, len(rows))), x))
         assert kind == "output" and _words(json.loads(out), [32] * len(rows)) == want, fn.id
+
+
+# ---- E4: PoUW's and NCP's word primitives -------------------------------------------------------------------------------
+
+#: the operand words of each width the word primitives' grids take: the ends, the sign bit and its neighbours, and for the
+#: hash words the alternating patterns; widths 4, 7 and 8 whole where the grid stays small
+U32_EDGES = (*EDGES[32], 0x55555555, 0xAAAAAAAA, 0x12345678, 0xFEDCBA98)
+I7_EDGES = (0x00, 0x01, 0x1F, 0x3F, 0x40, 0x41, 0x7E, 0x7F)
+U8_EDGES = (0x00, 0x01, 0x1F, 0x20, 0x3F, 0x40, 0x7F, 0x80, 0x81, 0xC0, 0xFE, 0xFF)
+#: the rotation and byte counts: every count of a 64-bit word, past it, and the words whose low bits are 0 or 63
+SHIFTS = (*range(0, 66), 127, 128, 0x7FFFFFFF, 0x80000000, 0xFFFFFFC0, 0xFFFFFFFF)
+#: the int7 boundaries of `NcpRneClampI7`: every k + 1/2 for |k| <= 64 and its neighbouring words, and the clamp's ±63.5
+_HALVES = tuple(struct.unpack("<I", struct.pack("<f", k + 0.5))[0] for k in range(-65, 65))
+RNE_SWEEP = tuple(sorted({*F32_SWEEP, *(h + d & 0xFFFFFFFF for h in _HALVES for d in (-1, 0, 1))}))
+#: 576-bit accumulators of `live_row`'s sum: zero, one, the largest term's scale 2^558, a wrap from the top, and a value
+#: just under 2^576
+SQ_EDGES = (0, 1, 1 << 300, 1 << 558, (1 << 571) - 1, 1 << 575, (1 << 576) - 1, (1 << 576) - W.sq300(0x7F7FFFFF))
+
+
+def _word_edges(fn: PrimitiveDefinition, i: int, t) -> tuple[int, ...]:
+    """Operand `i`'s grid words: whole small domains for one- and two-operand primitives, else each width's edges."""
+    name = fn.params[i][0]
+    if fn in (W.PouwRotl64Lo, W.PouwRotl64Hi) and name == "c" or fn is W.PouwNoiseByte and name == "c":
+        return SHIFTS
+    if fn is PR.NcpRneClampI7:
+        return RNE_SWEEP
+    if t.w == 32 and fn in (W.PouwF32SqrtRn, PR.NcpAbsMax, W.PouwSqAcc):
+        return F32_SWEEP if len(fn.params) == 1 else F32_EDGES
+    if fn is W.PouwI32ToF32Rn:
+        return I32_EDGES + F32_EDGES
+    if t.w == 576:
+        return SQ_EDGES
+    if t.w == 16:
+        return tuple(range(1 << 16))
+    small = len(fn.params) <= 2
+    return {4: tuple(range(16)), 7: tuple(range(128)) if small else I7_EDGES, 8: tuple(range(256)) if small else U8_EDGES,
+            32: U32_EDGES}[t.w]
+
+
+def _word_grid(fn: PrimitiveDefinition) -> list[list[tuple]]:
+    """Every combination of the operands' grid words, in rows grouped by the first operand (by the last for the 576-bit
+    sums, whose first operand has few words)."""
+    cols = [_word_edges(fn, i, t) for i, (_, t) in enumerate(fn.params)]
+    if len(cols) == 1:
+        return [[(a,) for a in cols[0]]]
+    return [[(a, *r) for r in itertools.product(*cols[1:])] for a in cols[0]] if len(cols[0]) > 8 else [
+        [r for r in itertools.product(*cols)]]
+
+
+#: the word primitives of scalar operands, gridded by `_word_grid`; the others (16-entry arrays, the windows, the salt-dead
+#: bits on their atoms, and `PouwSqGe` and `PouwWindowWord`, whose second operand is computed from the first) by families
+WORD_ARRAYS = (W.PouwNegBetaSum16, W.PouwDot16U8S8, PR.NcpDot16I7)
+WORD_FAMILIES = (*WORD_ARRAYS, W.PouwBlackwellE4m3Window, W.PouwHopperE4m3Window, W.PouwBlackwellE4m3SaltDead,
+                 W.PouwHopperE4m3SaltDead, W.PouwSqGe, W.PouwWindowWord)
+WORD_SCALARS = tuple(fn for fn in WORDS if fn not in WORD_FAMILIES)
+
+
+def test_word_primitives_on_their_edge_grids(server):
+    """Every word primitive of scalar operands on every combination of its operands' grid words (the int7, u8 and E2M1
+    operands of the one- and two-operand primitives whole, `PouwBf16Neg` on every word), each answer also the Python
+    primitive's own evaluator's."""
+    counts = {fn.id: _agree_on(server, fn, _word_grid(fn)) for fn in WORD_SCALARS}
+    assert len(counts) == 31 and counts["PouwETilde_v1"] == 16 * 256 and counts["PouwFormX_v1"] == 128 * 256, counts
+    assert sum(counts.values()) == 429_696, sum(counts.values())
+
+
+def _sixteen(rng: random.Random, edges: tuple[int, ...]) -> list[tuple]:
+    """16-entry operands: zeros, each end and its alternation with zero, every edge at position 0 and 15 over zeros, and
+    four draws."""
+    out = [(0,) * 16] + [(e,) * 16 for e in edges] + [tuple(e if i % 2 else 0 for i in range(16)) for e in edges]
+    out += [tuple(e if i in (0, 15) else 0 for i in range(16)) for e in edges]
+    return out + [tuple(rng.randrange(1 << 8) & (0x7F if max(edges) < 0x80 else 0xFF) for _ in range(16)) for _ in range(4)]
+
+
+def _word_family(fn: PrimitiveDefinition) -> list[list[tuple]]:
+    rng = random.Random(f"words{fn.id}")
+    if fn in WORD_ARRAYS:
+        edges = I7_EDGES if fn is PR.NcpDot16I7 else U8_EDGES
+        vs = _sixteen(rng, edges)
+        if fn is W.PouwNegBetaSum16:
+            return [[(acc, v) for v in vs] for acc in U32_EDGES]
+        pairs = [(x, y) for x in vs for y in vs[:: max(1, len(vs) // 12)]]
+        return [[(acc, x, y) for x, y in pairs] for acc in U32_EDGES]
+    if fn in (W.PouwBlackwellE4m3Window, W.PouwHopperE4m3Window):
+        finite = [c for c in range(256) if c & 0x7F != 0x7F]
+        z, one, big = (0,) * 128, (0x38,) * 128, (0x7E,) * 128
+        alt = tuple(0x7E | (0x80 if i % 2 else 0) for i in range(128))
+        rows = [(z, z), (one, one), (big, big), (big, alt), (one, tuple(0xB8 for _ in range(128)))]
+        rows += [(_put(z, p, x), _put(z, p, y)) for p in (0, 31, 32, 127) for x in E4M3_EDGES for y in (0x38, 0x7F, 0xFF, 0x7E)]
+        rows += [(tuple(rng.choice(finite) for _ in range(128)), tuple(rng.choice(finite) for _ in range(128))) for _ in range(24)]
+        return [rows]
+    if fn in (W.PouwBlackwellE4m3SaltDead, W.PouwHopperE4m3SaltDead):
+        return [[(acc, cb) for cb in range(256)] for acc in F32_EDGES] + [[(acc, cb) for acc in F32_SWEEP] for cb in E4M3_EDGES]
+    if fn is W.PouwSqGe:
+        ths = lambda x: {W.up48(W.sq300(x)) + d for d in (-1, 0, 1)} | set(EDGES[64])  # noqa: E731
+        return [[(x, th) for x in F32_SWEEP for th in sorted(ths(x)) if 0 <= th < 1 << 64]]
+    if fn is W.PouwWindowWord:
+        xs = [0, (1 << 480) - 1, *(rng.getrandbits(480) for _ in range(6)), sum(m << 32 * m for m in range(15))]
+        return [[(x, m) for x in xs for m in range(16)]]
+    raise AssertionError(fn.id)
+
+
+@pytest.mark.slow
+def test_word_primitives_on_their_families(server):
+    """The 16-entry accumulators under every edge accumulator over structured and drawn entries, the windows over
+    backgrounds and specials at the atom boundaries, the salt-dead bits on every noise byte under each edge accumulator and
+    on every one-operand accumulator word under each E4M3 edge, `PouwSqGe` at each threshold's boundary, and every mask's
+    word of `PouwWindowWord`; each answer also the Python primitive's own evaluator's."""
+    counts = {fn.id: _agree_on(server, fn, _word_family(fn)) for fn in WORD_FAMILIES}
+    assert counts["PouwBlackwellE4m3SaltDead_v1"] == 35 * 256 + 14 * len(F32_SWEEP), counts
+
+
+ROW_PRIM_VECTORS = Path(__file__).resolve().parents[6] / "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean"
+#: each vector list's prefix in `RowPrimVectors` by the primitive it pins
+ROW_PRIM_LISTS = {"sqrt": W.PouwF32SqrtRn, "sqacc": W.PouwSqAcc, "sqceil": W.PouwSqCeil, "sqge": W.PouwSqGe,
+                  "etilde": W.PouwETilde, "bf16neg": W.PouwBf16Neg}
+
+
+def test_the_pinned_row_prim_vectors(server):
+    """The vectors `Security`'s `RowPrimVectors` pins for the six row primitives (written from the Python by
+    `row_prims_vectors.py`, `PouwETilde` on its whole domain): Lean's words are the pinned ones. 24 of `PouwSqCeil`'s
+    pin the Python's mask of an `n` of 2^32 or more, which no `Value<32>` input holds: both sides refuse them."""
+    import re
+
+    text = ROW_PRIM_VECTORS.read_text()
+    total, wide = 0, []
+    for name, body in re.findall(r"def ([a-z0-9]+?)\d+ : List \([^)]*\) := \[(.*?)\]\n", text, re.S):
+        fn = ROW_PRIM_LISTS[name]
+        vs = [tuple(int(w, 16) for w in v.split(", ")) for v in re.findall(r"\(([0-9A-Fa-fx, ]+)\)", body)]
+        assert all(len(v) == len(fn.params) + 1 for v in vs), name
+        fits = [v for v in vs if all(x < 1 << t.w for x, (_, t) in zip(v, fn.params))]
+        wide += [request(json.loads(_batch_text(fn.id, 1)), [[x] for x in v[:-1]]) for v in vs if v not in fits]
+        assert _agree_on(server, fn, [[v[:-1] for v in fits]]) == len(fits)
+        kind, out = server.call("evaluate", request(json.loads(_batch_text(fn.id, len(fits))), _columns([v[:-1] for v in fits])))
+        assert json.loads(out) == [v[-1] for v in fits], name
+        total += len(fits)
+    assert total == 906 + 91 + 151 - 24 + 368 + 4096 + 64, total
+    assert agree(server, wide) == (0, 24)
+
+
+def _word_leaf_w(t) -> int:
+    return t.w if not isinstance(t, Array) else t.elem.w
+
+
+@st.composite
+def word_requests(draw) -> dict:
+    """A word primitive on four rows, each leaf drawn from its width's edges or its whole range; one request in ten has a
+    word out of its range, which both sides refuse."""
+    fn = draw(st.sampled_from(WORDS))
+
+    def leaf(w):
+        edges = {7: I7_EDGES, 8: U8_EDGES, 32: U32_EDGES, 576: SQ_EDGES}.get(w, (0, 1, (1 << w) - 1))
+        return draw(st.one_of(st.sampled_from(edges), st.integers(0, (1 << w) - 1)))
+
+    rows = [tuple(leaf(t.w) if not isinstance(t, Array) else tuple(leaf(t.elem.w) for _ in range(t.n)) for _, t in fn.params)
+            for _ in range(4)]
+    desc = json.loads(_batch_text(fn.id, len(rows)))
+    x = _columns(rows)
+    if draw(st.integers(0, 9)) == 0:
+        i = draw(st.integers(0, len(x) - 1))
+        w = _word_leaf_w(fn.params[i][1])
+        x[i][draw(st.integers(0, len(x[i]) - 1))] = draw(st.sampled_from([1 << w, (1 << w) + 1, -1]))
+    return request(desc, x)
+
+
+WORD_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=word_requests(), package=PKG)
+
+
+@pytest.mark.slow
+def test_word_primitives_drawn(server):
+    stats = DT.run(WORD_PORT, examples=2000, seed=0, server=server)
+    assert stats.outputs >= 1500 and stats.rejects >= 100, stats
+
+
+def _refused_leaves(fns) -> list[dict]:
+    """A word of 2^w, -1, or a boolean for the first leaf of each operand of each primitive, the others 0."""
+    cases = []
+    for fn in fns:
+        desc = json.loads(_batch_text(fn.id, 1))
+        for i, (_, t) in enumerate(fn.params):
+            for bad in (1 << _word_leaf_w(t), -1, True):
+                x = [[0] * t2.leaves for _, t2 in fn.params]
+                x[i][0] = bad
+                cases.append(request(desc, x))
+    return cases
+
+
+def test_word_words_out_of_range_are_refused(server):
+    cases = _refused_leaves(WORDS)
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 89)

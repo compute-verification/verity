@@ -2,6 +2,7 @@ import Flock.Program
 import Evaluate.Scalar
 import Evaluate.Casts
 import Evaluate.TC.Dots
+import Evaluate.Words
 
 /-!
 # The primitives the evaluator implements
@@ -162,6 +163,56 @@ def dots : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
    ("BlackwellMxf4OmmaDot64_v1", fp4 2, f32,
     fun xs => blackwellMxf4Dot64 xs[0]! (seg xs 1 64) (seg xs 65 64) (seg xs 129 2) (seg xs 131 2))]
 
+private def quaternary (f : Nat → Nat → Nat → Nat → Nat) : Array Nat → Nat := fun xs => f xs[0]! xs[1]! xs[2]! xs[3]!
+
+/-- PoUW's and NCP's word primitives by id (`verity.experimental.protocols.pouw.circuit.words`, the vLLM integration's
+`pouw_rows`), with the signatures the registry holds for them. -/
+def words : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
+  open Words in
+  let u32 := Ty.value 32
+  let u8 := Ty.value 8
+  let i7 := Ty.value 7
+  let sq := Ty.value 576
+  let a16 := Ty.array 16 u8
+  let win := #[("a", .array 128 u8), ("b", .array 128 u8)]
+  let sha (name : String) (f : Nat → Nat) :=
+    [(s!"PouwSha512{name}Hi_v1", #[("hi", u32), ("lo", u32)], u32, binary (shaHi f)),
+     (s!"PouwSha512{name}Lo_v1", #[("hi", u32), ("lo", u32)], u32, binary (shaLo f))]
+  [("PouwXor32_v1", #[("a", u32), ("b", u32)], u32, binary xor32),
+   ("PouwChi32_v1", #[("a", u32), ("b", u32), ("c", u32)], u32, ternary chi32),
+   ("PouwRotl64Lo_v1", #[("lo", u32), ("hi", u32), ("c", u32)], u32, ternary rotl64Lo),
+   ("PouwRotl64Hi_v1", #[("lo", u32), ("hi", u32), ("c", u32)], u32, ternary rotl64Hi),
+   ("PouwAdd64Lo_v1", #[("alo", u32), ("blo", u32)], u32, binary add64Lo),
+   ("PouwAdd64Hi_v1", #[("ahi", u32), ("alo", u32), ("bhi", u32), ("blo", u32)], u32, quaternary add64Hi)] ++
+  sha "BigSigma0" bigSigma0 ++ sha "BigSigma1" bigSigma1 ++ sha "SmallSigma0" smallSigma0 ++ sha "SmallSigma1" smallSigma1 ++
+  [("PouwCh32_v1", #[("e", u32), ("f", u32), ("g", u32)], u32, ternary ch32),
+   ("PouwMaj32_v1", #[("a", u32), ("b", u32), ("c", u32)], u32, ternary maj32),
+   ("PouwPackBE4_v1", #[("b0", i7), ("b1", i7), ("b2", i7), ("b3", i7)], u32, quaternary packBE4),
+   ("PouwNoiseByte_v1", #[("w", u32), ("c", u32)], u8, binary noiseByte),
+   ("PouwFormX_v1", #[("a", i7), ("e", u8)], u8, binary formX),
+   ("PouwFormX3_v1", #[("a", i7), ("e1", u8), ("e2", u8)], u8, ternary formX3),
+   ("PouwAdd8_v1", #[("b", i7), ("f", u8)], u8, binary add8),
+   ("PouwSub8_v1", #[("b", i7), ("f", u8)], u8, binary sub8),
+   ("PouwAddSub8_v1", #[("b", i7), ("f", u8), ("g", u8)], u8, ternary addSub8),
+   ("PouwNegBetaSum16_v1", #[("acc", u32), ("y", a16)], u32, fun xs => negBetaSum16 xs[0]! (seg xs 1 16)),
+   ("PouwDot16U8S8_v1", #[("acc", u32), ("x", a16), ("y", a16)], u32, fun xs => dot16U8S8 xs[0]! (seg xs 1 16) (seg xs 17 16)),
+   ("PouwI32ToF32Rn_v1", #[("z", u32)], f32, unary i32ToF32Rn),
+   ("PouwF32SqrtRn_v1", #[("a", f32)], f32, unary f32SqrtRn),
+   ("PouwETilde_v1", #[("e", e2m1), ("ae", u8)], bf16, binary eTilde),
+   ("PouwBf16Neg_v1", #[("a", bf16)], bf16, unary bf16NegWord),
+   ("PouwSqAcc_v1", #[("acc", sq), ("x", f32)], sq, binary sqAccWord),
+   ("PouwSqCeil_v1", #[("t", sq), ("n", u32)], .value 64, binary sqCeilWord),
+   ("PouwSqGe_v1", #[("x", f32), ("th", .value 64)], bit, binary sqGeWord),
+   ("PouwBlackwellE4m3Window_v1", win, .value 480, fun xs => window TC.blackwellE4m3Dot32 (seg xs 0 128) (seg xs 128 128)),
+   ("PouwHopperE4m3Window_v1", win, .value 480, fun xs => window TC.hopperE4m3Dot32 (seg xs 0 128) (seg xs 128 128)),
+   ("PouwWindowWord_v1", #[("x", .value 480), ("m", .value 4)], f32, binary windowWord),
+   ("PouwBlackwellE4m3SaltDead_v1", #[("acc", f32), ("cb", u8)], bit, binary (endsAgree TC.blackwellE4m3Dot32)),
+   ("PouwHopperE4m3SaltDead_v1", #[("acc", f32), ("cb", u8)], bit, binary (endsAgree TC.hopperE4m3Dot32)),
+   ("NcpAbsMax_v1", #[("m", f32), ("x", f32)], f32, binary ncpAbsMax),
+   ("NcpRneClampI7_v1", #[("q", f32)], i7, unary ncpRneClampI7),
+   ("NcpDot16I7_v1", #[("acc", u32), ("a", .array 16 i7), ("b", .array 16 i7)], u32,
+    fun xs => ncpDot16I7 xs[0]! (seg xs 1 16) (seg xs 17 16))]
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -170,7 +221,7 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   | none, none, some (w, b) => some (.gate fun _ => b, #[], .value w)
   | none, none, none =>
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
-    else ((scalars ++ floats ++ dots).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
+    else ((scalars ++ floats ++ dots ++ words).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2
