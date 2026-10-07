@@ -24,7 +24,9 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   security analysis, under `Security/`: a definition or statement in `Definitions/<Area>/` or
   `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
   `security_proofs` in `Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
-  `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. No new package: an area is a directory in each tree.
+  `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
+  `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
+  `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.

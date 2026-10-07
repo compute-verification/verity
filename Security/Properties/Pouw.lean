@@ -6,8 +6,8 @@ import PouwWindow
 The properties of the executable window (`verity/experimental/core/protocols/pouw/window/`, the port of
 `verity/experimental/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
 function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and the refusal is
-exactly the inputs off its domain. Each is a `Prop`; `Properties.Proofs.Pouw` proves the ones it can, and the others
-are open.
+exactly the inputs off its domain. Each is a `Prop`, and `Properties.Proofs.Pouw` proves
+every one, on Lean core.
 
 The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 multiply-adds (an FP8 tile), ε = 1/2, and δ
 from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.

@@ -40,6 +40,7 @@ members = [
     "verity-numerical",
     "verity-ops",
     "verity-pouw-benchmarks",
+    "verity-pouw-window-difftest",
     "verity-sp1",
     "verity-tc-probe",
     "verity-tc-probe-fp4",
@@ -1794,6 +1795,11 @@ requires-dist = [
     { name = "verity", editable = "." },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-pouw-window-difftest"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/protocols/pouw/window" }
 
 [[package]]
 name = "verity-sp1"
