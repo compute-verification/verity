@@ -190,6 +190,13 @@ def test_a_late_round_ends_the_session_with_no_retry():
     assert judge(*on_time).accepted
 
 
+def test_a_clock_that_runs_backwards_ends_the_session_late_as_the_verdict_judges_it():
+    c, signed, signer = session(spend=lambda j: -1 if j == 2 else 20_000)
+    assert signed.ended == mc.LATE and len(signed.rounds) == 3 and signed.rounds[-1].elapsed_ns == -1
+    v = judge(c, signed, signer)
+    assert not v.accepted and v.late == 1
+
+
 def test_openings_must_match_the_revealed_indices():
     c, signed, signer = session()
     opened = list(c.openings())
