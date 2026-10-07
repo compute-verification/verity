@@ -30,6 +30,7 @@ members = [
     "verity-circuit-check",
     "verity-cli",
     "verity-commitments-benchmarks",
+    "verity-core-firewall",
     "verity-difftest",
     "verity-direct",
     "verity-flock",
@@ -1608,6 +1609,23 @@ requires-dist = [
     { name = "verity", editable = "." },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
+]
+
+[[package]]
+name = "verity-core-firewall"
+version = "0.1.0"
+source = { virtual = "verity/experimental/core/service/firewall" }
+dependencies = [
+    { name = "hypothesis" },
+    { name = "verity-difftest" },
+    { name = "verity-flock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "hypothesis", specifier = ">=6.100" },
+    { name = "verity-difftest" },
+    { name = "verity-flock" },
 ]
 
 [[package]]
