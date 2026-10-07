@@ -140,7 +140,7 @@ the IR's input primitive of that binding time (§5.2). A body's `params` and `re
 - `bindings` holds the same values keyed by static name. Canonical JSON sorts its keys, so the static order is read from the
   key.
 - The root's key is `Root[<readable id of the program function>]_v1`. A readable id abbreviates dict statics to a 12-digit hex
-  hash, so a reader treats it as opaque; it is well formed like any static-free composite's.
+  hash (the first 12 hex digits of SHA-512), so a reader treats it as opaque; it is well formed like any static-free composite's.
 
 Example (the descriptor vector): `TRow_v1{N=4,OP={"fn":"TAdd32_v1"},C={"f64":"0x1.8000000000000p+0"},D={"dict":{"a":[1,"x"],"k":2}}}`.
 
