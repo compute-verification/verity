@@ -7,7 +7,7 @@ posix_fadvise(DONTNEED) on every shard, which needs no root and leaves pages ano
 page of a file resident to a process that neither owns it nor may write it (Linux >= 5.0), so the residency fractions mean
 something only when the job owns the model's files.
 
-  python load_time.py --model DIR --out OUT_DIR [--plan default|quick] [--tp 8]
+  python load_time.py --model DIR --out OUT_DIR [--plan default|quick|fastsafetensors] [--tp 8]
 
 writes OUT_DIR/summary.json after each configuration and OUT_DIR/<config>.log with the child's output.
 """
@@ -151,6 +151,22 @@ def cache_env(root: Path) -> dict:
     return {k: str(root / v) for k, v in d.items()}
 
 
+def cudart_dir(root: Path) -> Path:
+    """A directory holding only `libcudart.so`, linked to the CUDA runtime torch loads.
+
+    fastsafetensors dlopens the unversioned name, which the CUDA wheels don't ship and the job's image doesn't put on the
+    loader path; putting all of CUDA_HOME's lib64 there instead would also put its cuBLAS and NCCL ahead of torch's.
+    """
+    import nvidia.cuda_runtime
+
+    lib = next(Path(p) / "lib" / "libcudart.so.12" for p in nvidia.cuda_runtime.__path__)
+    d = root / "cudart"
+    d.mkdir(parents=True, exist_ok=True)
+    if not (d / "libcudart.so").exists():
+        (d / "libcudart.so").symlink_to(lib)
+    return d
+
+
 def run_config(ns, files, name, *, page, caches: Path, load_format="auto", eager=False) -> dict:
     if page == "cold":
         evict(files)
@@ -159,6 +175,8 @@ def run_config(ns, files, name, *, page, caches: Path, load_format="auto", eager
     if page == "cold" and rec["resident_before"] > 0.05:
         rec["evict_failed"] = True
     env = {**os.environ, **cache_env(caches), "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "INFO", "PYTHONUNBUFFERED": "1"}
+    if load_format == "fastsafetensors":
+        env["LD_LIBRARY_PATH"] = os.pathsep.join(filter(None, [str(cudart_dir(caches.parent)), env.get("LD_LIBRARY_PATH")]))
     cmd = [sys.executable, __file__, "--child", "--model", ns.model, "--tp", str(ns.tp), "--load-format", load_format]
     if eager:
         cmd.append("--eager")
@@ -242,9 +260,13 @@ def driver(ns: argparse.Namespace) -> None:
     save()
 
     warm = scratch / "caches-a"
-    plan = [("warm-page_cold-compile_graphs", dict(page="warm", caches=warm)),
-            ("warm-page_warm-compile_graphs", dict(page="warm", caches=warm)),
-            ("warm-page_eager", dict(page="warm", caches=warm, eager=True))]
+    plan = [("warm-page_cold-compile_graphs", dict(page="warm", caches=warm))]
+    if ns.plan == "fastsafetensors":
+        plan += [("warm-page_warm-compile_graphs_fastsafetensors", dict(page="warm", caches=warm, load_format="fastsafetensors")),
+                 ("cold-page_warm-compile_graphs_fastsafetensors", dict(page="cold", caches=warm, load_format="fastsafetensors"))]
+    else:
+        plan += [("warm-page_warm-compile_graphs", dict(page="warm", caches=warm)),
+                 ("warm-page_eager", dict(page="warm", caches=warm, eager=True))]
     if ns.plan == "default":
         plan += [("warm-page_warm-compile_graphs_fastsafetensors", dict(page="warm", caches=warm, load_format="fastsafetensors")),
                  ("cold-page_warm-compile_graphs", dict(page="cold", caches=warm)),
@@ -268,7 +290,7 @@ def main() -> None:
     ap.add_argument("--model", required=True)
     ap.add_argument("--out")
     ap.add_argument("--tp", type=int, default=8)
-    ap.add_argument("--plan", choices=["default", "quick"], default="default")
+    ap.add_argument("--plan", choices=["default", "quick", "fastsafetensors"], default="default")
     ap.add_argument("--read-threads", type=int, default=16)
     ap.add_argument("--child-timeout-s", type=int, default=2700)
     ap.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
