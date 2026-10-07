@@ -91,10 +91,10 @@ def evict(files: list[Path]) -> None:
 
 def read_all(files: list[Path], threads: int) -> dict:
     def one(f: Path) -> int:
-        n = 0
+        n, buf = 0, memoryview(bytearray(16 << 20))
         with open(f, "rb", buffering=0) as h:
-            while chunk := h.read(16 << 20):
-                n += len(chunk)
+            while k := h.readinto(buf):
+                n += k
         return n
 
     t = time.monotonic()
@@ -145,6 +145,8 @@ def run_config(ns, files, name, *, page, caches: Path, load_format="auto", eager
         evict(files)
     rec = {"config": name, "page_cache": page, "compile_cache_dir": caches.name, "load_format": load_format,
            "enforce_eager": eager, "resident_before": round(resident(files), 4)}
+    if page == "cold" and rec["resident_before"] > 0.05:
+        rec["evict_failed"] = True
     env = {**os.environ, **cache_env(caches), "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "INFO", "PYTHONUNBUFFERED": "1"}
     cmd = [sys.executable, __file__, "--child", "--model", ns.model, "--tp", str(ns.tp), "--load-format", load_format]
     if eager:
@@ -208,6 +210,9 @@ def driver(ns: argparse.Namespace) -> None:
         save()
         print(json.dumps(rec), flush=True)
     shutil.rmtree(scratch, ignore_errors=True)
+    failed = [r["config"] for r in summary["configs"] if r["rc"] != 0]
+    if failed or summary["resident_after_evict"] > 0.05:
+        sys.exit(f"load_time: failed configs {failed}; resident after evict {summary['resident_after_evict']}")
 
 
 def main() -> None:

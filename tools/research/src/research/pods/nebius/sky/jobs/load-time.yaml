@@ -48,7 +48,7 @@ run: |
   rc=0
   PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" --run-record \
     --declared-output 'out/*' -- \
-    bash -c 'python "$SRC/benchmarks/load_time/load_time.py" --model "$MODEL" --plan "$PLAN" --out "$RESEARCH_RUN_DIR/out"' || rc=$?
+    bash -c '/workspace/jobs/venv312/bin/python "$SRC/benchmarks/load_time/load_time.py" --model "$MODEL" --plan "$PLAN" --out "$RESEARCH_RUN_DIR/out"' || rc=$?
   cd / && rm -rf "$SRC"
   exit "$rc"
 
