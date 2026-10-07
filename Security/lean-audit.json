@@ -1,6 +1,9 @@
 {
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
+ "exempt": {
+  "Properties": "the core protocols' properties: modules of security_proofs (`Proofs/lakefile.toml`, library `Properties` under `srcDir = \"..\"`), whose audit builds and replays them; nothing of this package imports them"
+ },
  "assumptions": [
   "Models.Core.Assumptions",
   "Models.Nci.Assumptions",

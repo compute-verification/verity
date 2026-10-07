@@ -34,7 +34,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `claims`: the ids of security claims.
     - `private_circuits`, and multiproofs (`commitments`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
-  (Lean below). `Properties/` starts empty.
+  (Lean below). `Properties/` holds each core protocol's properties, stated over `Protocol.Accepts` of its Lean code:
+  modules of `security_proofs` (library `Properties`), so far `Properties.Firewall`.
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit, commits its values while serving, and proves.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
