@@ -55,5 +55,12 @@ profile type and JSON.
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
 actual parameters, every input covered and assumptions as named `Prop`s. They gate promotion into `verity/core/`, not
-the port. `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`;
-`core-protocol-example` runs it.
+the port. Each protocol's properties are one Lake package of their own (top, 1791398433.071889):
+- `Security/Properties/<Protocol>.lean` holds the statements, as module `Properties.<Protocol>`.
+- `Security/Properties/<Protocol>/` holds the package (`properties_<protocol>`, `srcDir = "../.."`), its
+  `lean-audit.json`, and the proofs (`Properties.<Protocol>.Proofs`).
+- The package requires its code by path, plus `security` or `security_proofs` only if its statements read them.
+- Code never requires any of these packages, and no two protocols share a lakefile.
+
+`CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`; `core-protocol-example`
+runs it.
