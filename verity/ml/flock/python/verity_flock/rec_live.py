@@ -61,6 +61,7 @@ import json
 import os
 import socket
 import struct
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -723,16 +724,29 @@ class Proxy:
 
 
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
-          sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict) -> list[dict]:
+          sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict, firewall=None,
+          parts: list[str] | None = None, stream: str = "rec", budget: int | None = None, release: dict | None = None,
+          now_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000) -> list[dict]:
     """Accept connections on ``listen`` until ``sessions`` of them have each carried a session, one connection each (several:
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
     (`Proxy.write`); one that stops (a refusal, or a connection that ends without ``Finish``: closed, reset, or cut inside a
     frame) has only the coin server's record, ``public.json``, and counts as one of the ``sessions``. ``ready`` is called
     with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
-    ``out/schedule.json`` before the first is served."""
+    ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
+    opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
+    algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
+    the firewall serves none of its outer sessions, and a finished session lets them be served, in that order, each once.
+    ``budget`` is the stream's failure budget (the challenger's stream's ``budget``); once the stream has stopped at it, a
+    connection is closed before anything is served and ``serve`` returns. ``release`` (``{"windows_ms": [one a
+    statement]}``, public) is each recursive session's release schedule, its ``start_ms`` the time (``now_ms``) its
+    connection was accepted, so that no release time depends on how long the inner session took. A recursive session the
+    firewall cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
+    closes the connection unserved, and ``serve`` raises."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
+    if firewall is not None and parts is None:
+        raise ValueError("serve with a firewall opens each recursive session with its statements in their order (parts)")
     check_schedule(schedule)
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / "schedule.json").write_text(json.dumps(schedule, indent=1))
@@ -743,6 +757,21 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             ready(addr)
         while len(res) < sessions:
             conn, _ = srv.accept()
+            sid = None
+            if firewall is not None:
+                from .firewall import Refused
+                try:
+                    sid = firewall.open(stream, parts, budget, None if release is None else {"start_ms": now_ms(), **release})
+                except Refused as e:
+                    conn.close()
+                    print("STOPPED\t" + json.dumps({"session": len(res), "refused": str(e)}), flush=True)
+                    res.append({"session": None, "refused": str(e), "rounds": 0, "firewall": None})
+                    if done:
+                        done(res[-1])
+                    break
+                except BaseException:
+                    conn.close()
+                    raise
             proxy = Proxy(CoinServer(rand), schedule=schedule)
             try:
                 with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
@@ -758,22 +787,27 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             if proxy.verdict is None and proxy.stopped is None:
                 proxy.stop("rec proxy: the session ended without Finish")
                 print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
+            d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
             if proxy.stopped is not None:
-                d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
                 d.mkdir(parents=True, exist_ok=True)
                 (d / "public.json").write_text(json.dumps(proxy.coins.record(), indent=1))
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
-                if done:
-                    done(res[-1])
+                if firewall is not None:
+                    firewall.stop(sid, "inner", proxy.stopped)
             else:
-                sess = proxy.write(out if sessions == 1 else Path(out) / f"s{len(res)}")
+                sess = proxy.write(d)
                 rec = proxy.coins.record()
                 res.append({"session": str(sess), "rounds": len(rec["rounds"]), "message_rows": rec["message_rows"],
                             "coins": sum(r["n"] for r in rec["rounds"]), "tops": sum(len(r["tops"]) for r in rec["rounds"]),
                             "top_nodes": sum(len(t) for r in rec["rounds"] for t in r["tops"]),
                             "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()}})
-                if done:
-                    done(res[-1])
+                if firewall is not None:
+                    firewall.finish(sid)
+            if firewall is not None:
+                (d / "firewall.json").write_text(json.dumps({"kind": "firewall/v0/session", "session": sid}))
+                res[-1]["firewall"] = sid
+            if done:
+                done(res[-1])
     return res
 
 
@@ -789,6 +823,14 @@ def main(argv=None) -> int:
     ap.add_argument("--schedule-for", metavar="STATEMENT",
                     help="print the schedule of a statement (flock-circuit statement's output, or its STATEMENT record) and exit")
     ap.add_argument("--schedule-of", help="print a coin server record's (public.json) schedule and exit")
+    ap.add_argument("--firewall", metavar="DIR", help="the firewall's state: each session opens a recursive session on it")
+    ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
+    ap.add_argument("--parts", metavar="L0,L1,...,alg",
+                    help="each recursive session's V* statements in their order, the only order served (required with --firewall)")
+    ap.add_argument("--budget", type=int, help="the stream's failure budget, the challenger's stream's (--firewall)")
+    ap.add_argument("--release-windows-ms", metavar="W0,W1,...",
+                    help="the release schedule's public window a statement, in ms: statement j leaves at the connection's time "
+                         "plus W0 + ... + Wj (--firewall)")
     a = ap.parse_args(argv)
     if a.schedule_for:
         print(json.dumps(schedule_for(statement_of(Path(a.schedule_for).read_text())), indent=1))
@@ -798,8 +840,18 @@ def main(argv=None) -> int:
         return 0
     if not a.out or not a.schedule:
         ap.error("--out and --schedule are required (rec_live --schedule-for STATEMENT derives the schedule)")
+    release = None if a.release_windows_ms is None else {"windows_ms": [int(w) for w in a.release_windows_ms.split(",")]}
+    if (a.parts is not None or a.budget is not None or release is not None) and not a.firewall:
+        ap.error("--parts, --budget and --release-windows-ms need --firewall")
+    if a.firewall and a.parts is None:
+        ap.error("--firewall needs --parts: each recursive session's V* statements in their order (L0–L6,alg at K = 4096)")
+    fw = None
+    if a.firewall:
+        from .firewall import Firewall
+        fw = Firewall(Path(a.firewall))
     serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
-          done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True), schedule=json.loads(Path(a.schedule).read_text()))
+          done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True), schedule=json.loads(Path(a.schedule).read_text()),
+          firewall=fw, parts=None if a.parts is None else a.parts.split(","), stream=a.stream, budget=a.budget, release=release)
     sys.stdout.flush()
     return 0
 
