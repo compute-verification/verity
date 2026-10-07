@@ -9,7 +9,8 @@
 # prints the run id; `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds COMMIT's branch.
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
-# temporary credential, which cannot mint the run's custody key, and a shell that skips the store-backed tests.
+# temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, and a COMMIT that
+# can't land on origin/main as it is, whose check `research merge` would never take.
 set -euo pipefail
 [ $# -ge 2 ] || { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
@@ -19,6 +20,13 @@ commit=$1 machine=$2; shift 2
 root=$(git rev-parse --show-toplevel)
 sha=$(git -C "$root" rev-parse --verify "$commit^{commit}")
 git -C "$root" fetch -q origin main
+# check.py's `landable`: research merge lands only a head whose own tree is what merging it into main gives
+if ! git -C "$root" merge-base --is-ancestor origin/main "$sha"; then
+  merged=$(git -C "$root" merge-tree --write-tree origin/main "$sha" 2>/dev/null | head -1) || merged=
+  [ "$merged" = "$(git -C "$root" rev-parse "$sha^{tree}")" ] || {
+    echo "train: ${sha:0:12} can't land on origin/main as it is (merging it gives another tree), so research merge would never take" \
+         "its check; prepare it onto origin/main (research merge --train --prepare BRANCH --onto origin/main ...)" >&2; exit 1; }
+fi
 tree="${TMPDIR:-/tmp}/train-${sha:0:12}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
 git -C "$root" worktree add -q --detach "$tree" "$sha"
