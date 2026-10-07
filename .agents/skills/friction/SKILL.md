@@ -38,7 +38,8 @@ Say what you fixed in the PR description. It needs no note.
 ## 2. Ask, when you can't tell
 
 A change is near the line when it changes what other agents must do or what a gate accepts, touches another lane's
-in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
+in-flight files, spends money past its `budgets.toml` line, deletes others' work, or changes agreed semantics or acceptance
+criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
 - one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
@@ -100,6 +101,12 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
+  rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
+  This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
+- 2026-10-06 (8:00 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
+  `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
+  question.
 - 2026-10-06 (9:49 AM PDT): the repository becomes the minimal, DRY implementation of the system as now decided. Every
   owner removes the smells it finds in its own files without asking: code serving a retired question, two sources of
   truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired process,
@@ -111,9 +118,9 @@ Newest first. Each is Daniel's unless it names the coordinator.
   Daniel's to settle later. A certificate cites the Lean assumptions it rests on by name. The circuit templates, input
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:
-  `verity/ml/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
-  frozen numerical work goes to `archive/`, and `verity/experimental/protocols/accounting/{work,space,communication}/<name>` flattens
-  to `verity/experimental/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
+  `backends/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
+  frozen numerical work goes to `archive/`, and `verity/protocols/accounting/{work,space,communication}/<name>` flattens
+  to `verity/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
   recommendation to make, and the full tree is being settled with Daniel. "Network transparency" is "network
   accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci

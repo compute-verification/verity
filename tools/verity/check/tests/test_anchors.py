@@ -15,7 +15,7 @@ sys.modules[spec.name] = A
 spec.loader.exec_module(A)
 
 LIB = '''from pathlib import Path
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data" / "table.json"
 BUILD = ROOT / "pkg" / "target" / "release"
 HERE = Path(__file__).parent
@@ -61,12 +61,12 @@ def test_the_evaluator_reads_each_anchored_form():
 
     assert at("Path(__file__)") == "a/b/c.py"
     assert at("Path(__file__).resolve().parents[1]") == "a"
-    assert at("Path(__file__).parents[3]") == ""
-    assert at("Path(__file__).parents[4]") == A.OUTSIDE
+    assert at("Path(__file__).parents[2]") == ""
+    assert at("Path(__file__).parents[3]") == A.OUTSIDE
     assert at("Path(__file__).parent / '..' / 'x' / 'y.json'") == "a/x/y.json"
     assert at("Path(__file__).parent.joinpath('d', 'e')") == "a/b/d/e"
     assert at("Path(__file__).with_name('k.toml')") == "a/b/k.toml"
-    assert at("Path(__file__).parents[3] / 'tools/x'") == "tools/x"
+    assert at("Path(__file__).parents[2] / 'tools/x'") == "tools/x"
     assert at("Path(p)") is None and at("ROOT / 'x'") is None
     names["ROOT"] = ""
     assert at("ROOT / 'x'") == "x"

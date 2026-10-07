@@ -44,9 +44,20 @@ def _imports(name: str) -> list[tuple[int, str]]:
     return out
 
 
+def _core(name: str) -> bool:
+    """`name` is core as it was before the move: under `verity`, except what the move put there from outside it (experimental,
+    the catalog, the kernels, C-Flock), with core's own protocols and claims, which moved under `verity.experimental`."""
+    def under(prefix: str) -> bool:
+        return name == prefix or name.startswith(prefix + ".")
+    moved_in = ("verity.experimental", "verity.ml.circuits.ops", "verity.ml.circuits.silicon", "verity.ml.circuits.targets",
+                "verity.ml.kernels", "verity.ml.flock")
+    return under("verity") and (not any(map(under, moved_in))
+                                or any(map(under, ("verity.experimental.protocols", "verity.experimental.claims"))))
+
+
 def _allowed(mod: str) -> bool:
     top = mod.split(".")[0]
-    if top == "verity" or top in sys.stdlib_module_names or top == "__future__" or top in THIRD_PARTY:
+    if _core(mod) or top in sys.stdlib_module_names or top == "__future__" or top in THIRD_PARTY:
         return True
     if mod == REG or mod == CATALOG or mod.startswith(CATALOG + "."):
         return True
