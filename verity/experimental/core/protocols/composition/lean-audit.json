@@ -1,0 +1,6 @@
+{
+ "roots": ["CoreComposition", "CompositionDifftest"],
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

@@ -1,0 +1,10 @@
+{
+ "roots": ["CoreOnsite"],
+ "exempt": {
+  "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "OnsiteDifftest": "the onsite-difftest executable's entry point, one line; it serves Core.CompositionDifftest.answer, audited under CompositionDifftest"
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}
