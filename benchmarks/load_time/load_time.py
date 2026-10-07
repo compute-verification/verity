@@ -3,7 +3,9 @@
 Each configuration runs in a fresh process; the driver records the wall time from spawn to a constructed `vllm.LLM`
 and to its first 8-token generation, the phases vLLM logs (weights load, torch.compile, graph capture, engine init),
 and the fraction of the model's files resident in the page cache before and after (mincore). Eviction is
-posix_fadvise(DONTNEED) on every shard, which needs no root and leaves pages another process maps.
+posix_fadvise(DONTNEED) on every shard, which needs no root and leaves pages another process maps. mincore reports every
+page of a file resident to a process that neither owns it nor may write it (Linux >= 5.0), so the residency fractions mean
+something only when the job owns the model's files.
 
   python load_time.py --model DIR --out OUT_DIR [--plan default|quick] [--tp 8]
 
@@ -22,21 +24,27 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+#: phase -> pattern over rank 0's and the engine core's lines; a phase logged more than once (CUDA graphs are captured once to
+#: profile memory and once for serving) keeps every value
 PHASES = {
-    "weights_load_s": r"Loading weights took ([\d.]+) seconds",
-    "model_load_s": r"Model loading took [\d.]+ GiB (?:memory )?and ([\d.]+) seconds",
+    "weights_load_s": r"Loading weights took ([\d.]+) s",
+    "model_load_s": r"Model loading took [\d.]+ GiB (?:memory )?and ([\d.]+) s",
     "dynamo_s": r"Dynamo bytecode transform time: ([\d.]+) s",
-    "compile_total_s": r"torch\.compile takes ([\d.]+) s in total",
+    "compile_graph_s": r"Compiling a graph for .* takes ([\d.]+) s",
+    "compile_total_s": r"torch\.compile (?:takes|took) ([\d.]+) s in total",
+    "profile_run_s": r"Initial profiling/warmup run took ([\d.]+) s",
     "graph_capture_s": r"Graph capturing finished in ([\d.]+) secs?",
-    "init_engine_s": r"init engine \(profile, create kv cache, warmup model\) took ([\d.]+) seconds",
+    "init_engine_s": r"init engine \(profile, create kv cache, warmup model\) took ([\d.]+) s",
 }
-CACHE_HIT = r"Directly load the compiled graph|load the compiled graph\(s\) .* from the cache"
+CACHE_HIT = r"[Dd]irectly load|[Ll]oad(?:ed|ing)? (?:the )?(?:AOT )?compiled .* from|from the cache"
+RANK0 = re.compile(r"^(?:\((?:Worker_TP0|EngineCore)[ \w=]*\) )?(?:INFO|WARNING|DEBUG)", re.M)
 
 
 def model_files(model: Path) -> list[Path]:
@@ -116,16 +124,19 @@ def child(ns: argparse.Namespace) -> None:
     print("LOADTIME " + json.dumps({"import_s": round(t_import - t0, 2), "construct_s": round(t_ready - t_import, 2),
                                     "first_generate_s": round(t_gen - t_ready, 2),
                                     "text": out[0].outputs[0].text}), flush=True)
-    os._exit(0)
+    shutdown = getattr(getattr(llm.llm_engine, "engine_core", None), "shutdown", None)
+    if shutdown:
+        shutdown()
 
 
 def parse(log: str) -> dict:
     phases = {}
+    lines = "\n".join(line for line in log.splitlines() if RANK0.match(line))
     for k, rx in PHASES.items():
-        vals = [float(v) for v in re.findall(rx, log)]
+        vals = [float(v) for v in re.findall(rx, lines)]
         if vals:
-            phases[k] = max(vals)
-    phases["compile_cache_hit"] = bool(re.search(CACHE_HIT, log))
+            phases[k] = vals[0] if len(vals) == 1 else vals
+    phases["compile_cache_hit"] = bool(re.search(CACHE_HIT, lines))
     m = re.findall(r"^LOADTIME (.*)$", log, re.M)
     if m:
         phases.update(json.loads(m[-1]))
@@ -151,19 +162,56 @@ def run_config(ns, files, name, *, page, caches: Path, load_format="auto", eager
     cmd = [sys.executable, __file__, "--child", "--model", ns.model, "--tp", str(ns.tp), "--load-format", load_format]
     if eager:
         cmd.append("--eager")
+    log_path = Path(ns.out) / f"{name}.log"
     t = time.monotonic()
-    try:
-        p = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                           timeout=ns.child_timeout_s)
-        log, rc = p.stdout, p.returncode
-    except subprocess.TimeoutExpired as e:
-        log, rc = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), "timeout"
+    # its own session, so the engine core and TP workers it forks are reaped with it; the log is a file, not a pipe, so an
+    # orphan holding it open can't stall the wait
+    with open(log_path, "w") as log_file:
+        p = subprocess.Popen(cmd, env=env, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            rc = p.wait(timeout=ns.child_timeout_s)
+        except subprocess.TimeoutExpired:
+            rc = "timeout"
     rec["wall_s"] = round(time.monotonic() - t, 2)
     rec["rc"] = rc
-    rec.update(parse(log))
+    rec["reaped"] = reap(p.pid)
+    rec["gpu_free_wait_s"] = wait_gpus_free()
+    rec.update(parse(log_path.read_text(errors="replace")))
     rec["resident_after"] = round(resident(files), 4)
-    (Path(ns.out) / f"{name}.log").write_text(log)
     return rec
+
+
+def reap(pgid: int) -> int:
+    """Kill what's left of the child's process group (an engine core or TP worker it didn't shut down); how many were left."""
+    left = [int(p) for p in os.listdir("/proc") if p.isdigit() and _pgid(int(p)) == pgid]
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            break
+        for _ in range(30):
+            if not any(_pgid(p) == pgid for p in left):
+                return len(left)
+            time.sleep(1)
+    return len(left)
+
+
+def _pgid(pid: int) -> int | None:
+    try:
+        return os.getpgid(pid)
+    except ProcessLookupError:
+        return None
+
+
+def wait_gpus_free(limit_s: int = 300) -> float:
+    t = time.monotonic()
+    while time.monotonic() - t < limit_s:
+        used = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                              capture_output=True, text=True).stdout.split()
+        if all(int(u) < 1024 for u in used):
+            break
+        time.sleep(2)
+    return round(time.monotonic() - t, 1)
 
 
 def driver(ns: argparse.Namespace) -> None:
@@ -211,8 +259,8 @@ def driver(ns: argparse.Namespace) -> None:
         print(json.dumps(rec), flush=True)
     shutil.rmtree(scratch, ignore_errors=True)
     failed = [r["config"] for r in summary["configs"] if r["rc"] != 0]
-    if failed or summary["resident_after_evict"] > 0.05:
-        sys.exit(f"load_time: failed configs {failed}; resident after evict {summary['resident_after_evict']}")
+    if failed:
+        sys.exit(f"load_time: failed configs {failed}")
 
 
 def main() -> None:
