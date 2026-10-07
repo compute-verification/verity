@@ -942,6 +942,19 @@ def test_tc_words_out_of_range_are_refused(server):
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 25)
 
 
+def test_the_mxf4_grid_floor(server):
+    """`grid_floor` = -174 on `test_models`' d19 vectors: 1.0 x 1.0 at 2^-150 in the first block (the subnormal 0x80, anchored
+    below the floor) and -1.0 x 1.0 in the second at 2^-168 down to 2^-175. The term -2^-174 (scales 40, 40) is the one that
+    tells -174 from -173, which none of the grids, the sweep or the captures reach."""
+    fn = P.BlackwellMxf4OmmaDot64
+    z = (0,) * 31
+    one, a, b = (0x2,) + (0,) * 63, (0x2, *z, 0xA, *z), (0x2, *z, 0x2, *z)
+    rows = [(0, one, one, (56, 56), (56, 56))] + [(0, a, b, (56, s), (56, t)) for s, t in
+                                                  ((43, 43), (41, 41), (41, 40), (40, 40), (40, 39))]
+    assert _agree_on(server, fn, [rows]) == 6
+    assert [fn.evaluate(*_flat(r)) for r in rows] == [0x80, 0x7F, 0x7F, 0x7F, 0x7F, 0x80]
+
+
 # ---- E3: the captures ---------------------------------------------------------------------------------------------------
 
 def _hexwords(s: str, digits: int) -> tuple[int, ...]:
