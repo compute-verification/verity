@@ -25,17 +25,18 @@ def test_construction_version_hashes_the_integration_sources():
 
 
 def test_construction_version_changes_with_a_listed_source_and_refuses_a_missing_one(tmp_path):
+    root = tmp_path / "integrations" / "vllm"
     for rel in ds._CONSTRUCTION_SOURCES:
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(os.path.join(INTEGRATION, rel), tmp_path / rel)
-    a = ds.construction_version([], root=str(tmp_path))
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(os.path.join(INTEGRATION, rel), root / rel)
+    a = ds.construction_version([], root=str(root))
     assert a == ds.construction_version([])
-    edited = tmp_path / ds._CONSTRUCTION_SOURCES[-1]
+    edited = root / ds._CONSTRUCTION_SOURCES[-1]
     edited.write_bytes(edited.read_bytes() + b"\n# edited\n")
-    assert ds.construction_version([], root=str(tmp_path))["sources_sha256"] != a["sources_sha256"]
+    assert ds.construction_version([], root=str(root))["sources_sha256"] != a["sources_sha256"]
     edited.unlink()
     with pytest.raises(FileNotFoundError, match=ds._CONSTRUCTION_SOURCES[-1]):
-        ds.construction_version([], root=str(tmp_path))
+        ds.construction_version([], root=str(root))
 
 
 @pytest.mark.parametrize("quantization,dtype,expected", [(None, torch.bfloat16, "bfloat16"), ("fp8", torch.bfloat16, "fp8")])
