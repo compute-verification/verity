@@ -2,7 +2,7 @@
  "schema": "verity-pouw/pearl-c-u-vectors/v1",
  "status": "cpu-pinned",
  "status_detail": "equal to pearl-c-h100's CPU reference and, on these cells, to the H100 kernel's gate fixture; silicon confirmation waits for the joint H100 request's B1 capture",
- "module": "verity/protocols/accounting/work/pouw/schemes/pearl_c_u.py",
+ "module": "verity/experimental/protocols/pouw/schemes/pearl_c_u.py",
  "problem": {
   "shape": [256, 384, 1024],
   "case": "gpu-check",
@@ -10,7 +10,7 @@
   "weight": 1,
   "rows": [0, 63, 64, 127, 128, 255],
   "cols": [0, 127, 128, 255, 256, 383],
-  "inputs": "verity/protocols/accounting/work/pouw/tests/pearl_c_vectors.py rows / rows_f32, as archive/pouw-blake3/pearl_c/fixture.py builds them"
+  "inputs": "verity/experimental/protocols/pouw/tests/pearl_c_vectors.py rows / rows_f32, as archive/pouw-blake3/pearl_c/fixture.py builds them"
  },
  "gate": {
   "check_json_sha256": "3a750bd195ffebefc57044b4ebff92fdf4b345d877df8aee05c60e26fabccc72",
