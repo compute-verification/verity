@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[4]
+ROOT = HERE.parents[3]
 LEAN = ROOT / "verity" / "Security"
 SCRIPT = HERE / "lean" / "scripts" / "fp8atom_vectors.py"
 POLICY = json.loads((LEAN / "lean-audit.json").read_text())

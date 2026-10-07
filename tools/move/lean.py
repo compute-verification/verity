@@ -34,7 +34,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "lean"))
+sys.path.insert(0, str(HERE.parent / "verity" / "lean"))
 import layout as L  # noqa: E402
 
 POLICY = "lean-audit.json"
