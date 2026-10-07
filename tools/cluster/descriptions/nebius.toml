@@ -95,7 +95,7 @@ until = "2026-10-07T12:00:00Z"
 [policy.vy-nebius-1]
 owner = "infra"
 direct-gpus = "none"            # /etc/vy/direct-gpus: gpu-lease's direct runs get no GPU (the 30 Sep cutover)
-direct-cpus = "0-95,128-159"    # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones
+direct-cpus = "0-159"           # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones (96-127 since 6 Oct)
 user-cpuset = { delegate = "cpu cpuset memory pids" }   # user@.service.d/vy-cpuset.conf, so a user scope's AllowedCPUs holds (#855)
 # /workspace/research/locks/lean-slots (lean_slot.py): the cap of 4, split by infra and proofs (16:25Z)
 lean-slots = { check = 2, audit = 2 }
@@ -155,8 +155,9 @@ memory = { nominal = 0 }
 [policy.vy-nebius-2]
 owner = "infra"
 user-cpuset = { delegate = "cpu cpuset memory pids" }
-# merge-check slot d pauses through every booked window but those marked slot-d=runs (infra, 1 Oct)
-check-slots = { d = "0-47 windows=/workspace/pouw/fill/windows lead=30" }
+# merge-check slots d and e pause through every booked window but those marked slot-d=runs (infra, 1 Oct); d is the lander's
+# train checks' alone (only=trains), so a lane's quick tier never holds the slot a train waits for (top, 6 Oct)
+check-slots = { d = "0-47 windows=/workspace/pouw/fill/windows lead=30 only=trains", e = "48-79 windows=/workspace/pouw/fill/windows lead=30" }
 # /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on slot d's cores
 fill.cpu-sets = { bc-e6a46970-b6ef-5738-af64-182b143075d4 = "0-47 4 40" }
 # /workspace/pouw/fill/windows: the booked timed windows, as `fill.window."START" = MINUTES` (START in UTC, to the minute).

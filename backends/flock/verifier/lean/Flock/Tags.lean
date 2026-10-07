@@ -182,8 +182,10 @@ def leafSchemeHm96 : Json :=
 
 /-- The identity of PR #83's statement from `eb90718f`; `seedInjection` is true only in the selftest harness's build. From
 `68ae79f2` (`sha512Text`) its text names the round digest, the statement digest and Σ as SHA-512, as they are since
-`eb90718f`. -/
-def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) (statement : String := "verity/flock-circuit") : Json :=
+`eb90718f`. `coinDerivation` names `verity.primitives.randomness`'s hash: SHA-256 up to verity `f5df3bbc`, SHA-512 (its v2)
+after. -/
+def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) (statement : String := "verity/flock-circuit")
+    (coinDerivation : String := "sha256 (verity.randomness)") : Json :=
   let h := if sha512Text then "sha512" else "sha256"
   Json.mkObj [("statement", s statement), ("backend", s "C-interactive"),
     ("proof_class", s "NON_ZK_PROOF"), ("profile", s "fast100"), ("reps", n 2), ("commitments", s "one root, both reps (R1)"),
@@ -191,7 +193,7 @@ def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) (statement 
     ("hashes", Json.mkObj [("merkle", s "hm96-sha512 (every Ligerito level)"),
       ("round_digest", s s!"{h} (framing: the coin server retains every round's bytes and the replay compares them)"),
       ("statement_digest", s h), ("sigma", s h), ("coin_commitment", s "sha512"),
-      ("coin_derivation", s "sha256 (verity.randomness)"), ("frame_v3_tree", s "sha512 (frame-v3-sha512)"),
+      ("coin_derivation", s coinDerivation), ("frame_v3_tree", s "sha512 (frame-v3-sha512)"),
       ("transcript", s "none (live verifier coins)"), ("row_leaf_in_circuit", s "hm96-sha512/row/v1 over sha512/row/v1")]),
     ("hooks", hooksNoMask)]
 
@@ -277,23 +279,51 @@ def circuitTypes210d32e1Selftest : Tags :=
     name := "verity/flock-circuit/types@210d32e1+seed-injection", identity := identityHm96 true true "verity/flock-circuit/types",
     liveOs := false }
 
-/-- The identity of a statement with hidden outputs: `967b8d06`'s text (or the typed statement's), naming them. -/
-def identityHidden (seedInjection : Bool) (statement : String := "verity/flock-circuit") : Json :=
-  (identityHm96 seedInjection true statement).setObjVal! "outputs" (s (hiddenOutputsText "hm96-sha512/row/v1"))
+/-- The identity of a statement with hidden outputs: `967b8d06`'s text (or the typed statement's), naming them, and the coins'
+derivation (`identityHm96`'s `coinDerivation`). -/
+def identityHidden (seedInjection : Bool) (statement : String := "verity/flock-circuit")
+    (coinDerivation : String := "sha512 (verity.randomness)") : Json :=
+  (identityHm96 seedInjection true statement coinDerivation).setObjVal! "outputs" (s (hiddenOutputsText "hm96-sha512/row/v1"))
 
-/-- `verity/flock-circuit` (PROTOCOL.md §16.13): `967b8d06`'s statement with every output hidden, an `hm96-sha512/row/v1` row
-hashed in the circuit after the input rows; the public file holds every row's `b ‖ c` and no output word. -/
+/-- `verity/flock-circuit` (PROTOCOL.md §16.13) up to verity `f5df3bbc`: `967b8d06`'s statement with every output hidden, an
+`hm96-sha512/row/v1` row hashed in the circuit after the input rows; the public file holds every row's `b ‖ c` and no output
+word. Its coins derive through `verity.primitives.randomness` v1 (SHA-256), and the identity says so. -/
+def circuitF5df3bbc : Tags :=
+  { circuit967b8d06 with
+    name := "verity/flock-circuit@f5df3bbc", identity := identityHidden false (coinDerivation := "sha256 (verity.randomness)"),
+    hiddenOutputs := true }
+
+/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
+def circuitF5df3bbcSelftest : Tags :=
+  { circuitF5df3bbc with
+    name := "verity/flock-circuit@f5df3bbc+seed-injection",
+    identity := identityHidden true (coinDerivation := "sha256 (verity.randomness)"), liveOs := false }
+
+/-- `verity/flock-circuit/types` (PROTOCOL.md §16.13) up to verity `f5df3bbc`: `210d32e1`'s typed statement with hidden outputs,
+its coins from `verity.primitives.randomness` v1 (SHA-256). -/
+def circuitTypesF5df3bbc : Tags :=
+  { circuitTypes210d32e1 with
+    name := "verity/flock-circuit/types@f5df3bbc",
+    identity := identityHidden false "verity/flock-circuit/types" "sha256 (verity.randomness)", hiddenOutputs := true }
+
+def circuitTypesF5df3bbcSelftest : Tags :=
+  { circuitTypesF5df3bbc with
+    name := "verity/flock-circuit/types@f5df3bbc+seed-injection",
+    identity := identityHidden true "verity/flock-circuit/types" "sha256 (verity.randomness)", liveOs := false }
+
+/-- `verity/flock-circuit` (PROTOCOL.md §16.13): `f5df3bbc`'s statement with its coins from `verity.primitives.randomness` v2
+(SHA-512), as the identity says. -/
 def circuit : Tags :=
-  { circuit967b8d06 with name := "verity/flock-circuit", identity := identityHidden false, hiddenOutputs := true }
+  { circuitF5df3bbc with name := "verity/flock-circuit", identity := identityHidden false }
 
 /-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
 def circuitSelftest : Tags :=
   { circuit with name := "verity/flock-circuit+seed-injection", identity := identityHidden true, liveOs := false }
 
-/-- `verity/flock-circuit/types` (PROTOCOL.md §16.13): `210d32e1`'s typed statement with hidden outputs. -/
+/-- `verity/flock-circuit/types` (PROTOCOL.md §16.13): `f5df3bbc`'s typed statement with its coins from
+`verity.primitives.randomness` v2 (SHA-512). -/
 def circuitTypes : Tags :=
-  { circuitTypes210d32e1 with
-    name := "verity/flock-circuit/types", identity := identityHidden false "verity/flock-circuit/types", hiddenOutputs := true }
+  { circuitTypesF5df3bbc with name := "verity/flock-circuit/types", identity := identityHidden false "verity/flock-circuit/types" }
 
 def circuitTypesSelftest : Tags :=
   { circuitTypes with
@@ -303,7 +333,8 @@ def circuitTypesSelftest : Tags :=
 /-- The versions this verifier knows, by name. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
   circuitE51e2b86, circuitE51e2b86Selftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes210d32e1,
-  circuitTypes210d32e1Selftest, circuit, circuitSelftest, circuitTypes, circuitTypesSelftest]
+  circuitTypes210d32e1Selftest, circuitF5df3bbc, circuitF5df3bbcSelftest, circuitTypesF5df3bbc, circuitTypesF5df3bbcSelftest,
+  circuit, circuitSelftest, circuitTypes, circuitTypesSelftest]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 

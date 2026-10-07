@@ -84,6 +84,11 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
     assert CHECK.choose([N1, N2], {N1: machine([slot("c", HOLDER)], [waiter()]), N2: tied})[0] == N1   # a tie: the first listed
     spoken = machine([slot("a")], [waiter()])                                      # a free slot the waiter ahead takes next
     assert CHECK.placement(spoken)[:2] == (False, 1) and CHECK.placement(spoken, priority=True)[:2] == (True, 0)
+    trains = machine([{**slot("d"), "trains": True}, slot("e", HOLDER)])           # node 2's d is only=trains
+    assert CHECK.placement(trains) == (False, 0, "check slots: e held; 0 waiting ahead; no Lean audit cap")
+    assert CHECK.placement(trains, priority=True)[:2] == (True, 0)
+    with pytest.raises(ValueError, match="every slot in .* is for train checks"):
+        CHECK.placement(machine([{**slot("d"), "trains": True}]))
 
 
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
@@ -128,6 +133,22 @@ def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, ca
     assert calls[-1][calls[-1].index("--on") + 1] == N2
     assert CHECK.record(["--on", N1]) == 0 and len(asked) == 2                     # one machine named: no reading
     assert calls[-1][calls[-1].index("--on") + 1] == N1
+
+
+def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
+    """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots (#1344). The quick
+    tier takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
+    from research import queue as Q
+
+    n1 = machine([slot("a", HOLDER), slot("c", HOLDER)], [waiter() for _ in range(10)], pools=lean())
+    n2 = machine([slot("d"), slot("e", HOLDER)], pools=lean(free=0, waiting=2))
+    got, why = Q.place("auto", ROOT, read=lambda names: {N1: n1, N2: n2})
+    assert got == N2 and why.startswith("a check slot and a Lean check slot are free (check slots: d free, e held; 0 waiting ahead")
+    assert CHECK.choose([N1, N2], {N1: n1, N2: n2})[1].startswith("the fewest waiting ahead")       # a check's pick: no room on n2
+    n2_lean_unread = n2 | {"lean": {"error": "PermissionError: /workspace/research/locks/lean-slots"}}
+    assert Q.place(f"{N1},{N2}", ROOT, read=lambda names: {N1: n1, N2: n2_lean_unread})[0] == N2
+    got, why = Q.place("auto", ROOT, read=lambda names: {n: "exit 255: no route to host" for n in names})
+    assert got is None and why == f"no machine's slots could be read; skipped {N1}: exit 255: no route to host; skipped {N2}: exit 255: no route to host"
 
 
 def test_read_slots_runs_the_payload_on_each_machine_and_names_why_one_can_t_be_read():

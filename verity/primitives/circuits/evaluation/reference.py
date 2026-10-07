@@ -1,7 +1,7 @@
 """The plain-integer reference: what every kernel is checked against.
 
 `evaluate_region` / `evaluate_call` are the gate-by-gate oracle of `verity.primitives.circuits.evaluate`, re-exported unchanged (the code
-moves here once no importer of the old path is left).  `evaluate(target, *args)` runs one instance of a target on plain
+moves here once no importer of the old path is left).  `evaluate(target, *args)` runs a target on one input of plain
 ints: a primitive through its evaluator, a composite specialization through the oracle on a one-call Program.
 
 A target is an IR Definition (`PrimitiveDefinition`, a static-free `CompositeDefinition`, a complete
@@ -101,7 +101,7 @@ class RegisteredTable:
 
 
 def refuse_registered_tables(target_id: str, inputs: Sequence[Any], who: str) -> None:
-    """Raise, by name, for a `RegisteredTable` among ``inputs``: ``who`` takes arrays, one row per instance."""
+    """Raise, by name, for a `RegisteredTable` among ``inputs``: ``who`` takes arrays, one row per input."""
     for j, a in enumerate(inputs):
         if isinstance(a, RegisteredTable):
             raise TypeError(f"{target_id} argument {j}: {who} takes arrays, not the registered table {a.name!r} "
@@ -264,7 +264,7 @@ def _evaluate_with_tables(t: Any, args: Sequence[Any]) -> tuple[int, ...]:
 
 
 def evaluate(target: Target, *args: Any) -> tuple[int, ...]:
-    """One instance of ``target`` on plain ints (one int per ``Value`` parameter, a flat int sequence per aggregate
+    """``target`` on one input of plain ints (one int per ``Value`` parameter, a flat int sequence per aggregate
     parameter, in leaf order); returns the output leaves.  Raises whatever the reference raises outside its domain.
 
     An aggregate parameter that holds a registered table may take a `RegisteredTable` instead of its words: a primitive then

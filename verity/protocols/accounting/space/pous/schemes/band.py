@@ -13,7 +13,7 @@ The same statement at fewer rounds (`FAMILY_ROUNDS`) gives three more certificat
 deadline: `BandMultiMeetsFamilyD2`, `k = 97` at `D = 2` (`Δ + RTT < 724.5 µs`) for every `d ≥ 2`,
 `BandMultiMeetsFamilyD1`, `k = 93` at `D = 1` (`Δ + RTT < 483 µs`) for every `d ≥ 1`, and `BandMultiMeetsFamilyD0`,
 `k = 89` at `D = 0` (`Δ + RTT < 241.5 µs`) for every `d` (at `D = 0` the responder makes no `Π₂` call, so the band
-needs no bound on its in-degree). The verifier audits under them only when asked for that `k` (`protocol.Verifier`); a
+needs no bound on its in-degree). The verifier audits under them only when asked for that `k` (`protocol.MemoryChallenger`); a
 band with `d < 5` has no `D = 5` certificate but has these.  Each deadline-to-`D` conversion here counts whole `Π₂` calls
 and holds in the ideal-permutation model only (`CHAIN_CLAIMS`).
 

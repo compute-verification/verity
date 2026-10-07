@@ -9,10 +9,10 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 ends. Its pieces are proved or frozen apart: the per-rep runs (`zk_rep_plays`, `zk_rep_run`), the verdict
 (`ZkTableVerdict`) and the table being the executable's (`TablesAtZKLive`, taken here as a hypothesis).
 
-* `nXZ`, `decAtZ`, `opnAtZ`: M0's `nX`, `decAt` and `opnAt` at `--zk`: the table's number of extra claims, the decoder
-  `decZ` at the table's dimensions, and the openings `opnZ` at the statement setupH sets up at the record's draw under
-  the `--zk` tags and its `--zk` schedule, on the first two proof files.
-* `RunsZCLive`: given `TablesAtZKLive`, the tags (`TagsOk`), `wr` the coin server's record and its draw at each of the
+* `nXZ`, `decAtZ`, `opnAtZ`: the non-ZK session's `nX`, `decAt` and `opnAt` at `--zk`: the table's number of extra
+  claims, the decoder `decZ` at the table's dimensions, and the openings `opnZ` at the statement setupH sets up at the
+  record's draw under the `--zk` tags and its `--zk` schedule, on the first two proof files.
+* `RunsZCLive`: given `TablesAtZKLive`, the tags (`TagsOk`), `wr` the challenger's record and its draw at each of the
   law's draws, `RunsZC` holds at the law's draws (`RunsOnZC`) at `tablesAtZK` with those, no tail and `capOfRoot`.
 -/
 
@@ -47,7 +47,7 @@ noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : I
 
 /-- **`RunsZC` at the live `--zk` tables, at the law's draws** (R11b's message half at `--zk`). Given that wherever
 flock-verify accepts the `--zk` table is the executable's (`TablesAtZKLive`), on untyped one-table inputs under the tags
-`TagsOk` fixes, with `wr` the coin server's record of the live `--zk` session and each of the law's draws proving its
+`TagsOk` fixes, with `wr` the challenger's record of the live `--zk` session and each of the law's draws proving its
 units at `mPts` link points (`DrawOkZK` at `L.draw ω`: the link points depend on `|S|`, so no `mPts` holds at every
 draw), `RunsZC` holds at the law's draws (`RunsOnZC`) at the tables `tablesAtZK` under `hm96-sha512/v1` (`hs512`), with
 the decoder `decAtZ`, the openings `opnAtZ`, no tail and `capOfRoot`. The reference setup `y₀` is data. -/
