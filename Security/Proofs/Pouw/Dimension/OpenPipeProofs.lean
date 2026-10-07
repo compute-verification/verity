@@ -1,6 +1,6 @@
-import Specs.Pouw.Assumptions.Dimension.OpenPipe
+import Models.Pouw.Assumptions.Dimension.OpenPipe
 import Proofs.Pouw.Dimension.ForestProofs
-import Specs.Pouw.Guarantees.Dimension
+import Models.Pouw.Guarantees.Dimension
 
 /-!
 # The open quadratic pipe: proofs

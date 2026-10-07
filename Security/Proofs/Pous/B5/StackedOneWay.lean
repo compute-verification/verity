@@ -8,8 +8,8 @@ import Mathlib.Data.List.Chain
 import Mathlib.Tactic.GCongr
 import Mathlib.Tactic.Linarith
 import Definitions.Pous
-import Specs.Pous.Assumptions
-import Specs.Pous.Guarantees
+import Models.Pous.Assumptions
+import Models.Pous.Guarantees
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Pebbling.FischClaims1314
