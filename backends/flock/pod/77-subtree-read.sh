@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The subtree read (`verity.ml.boolean.merkle.MerkleSubtreeRead`, read_gadget.py): its slot types against the references, the
+# The subtree read (`verity.primitives.commitments.gates.merkle.MerkleSubtreeRead`, read_gadget.py): its slot types against the references, the
 # merkle tests (slow ones included), circuit-check of its two bindings, and every read of a run of 1, 16 or 256 cells in a store
 # of 2^30 to 2^33 cells built whole and tallied (`read_gadget.py measure`). Run from the verity tree (research run --cwd source);
 # CPU only. Outputs under out/ (flat): host.txt, check.json, pytest.log, circuit-check.json and .log, measure.jsonl,
@@ -28,7 +28,7 @@ RUN="$UV run -q --frozen --extra torch-cpu"
 $RUN python -c 'import circuit_check, verity_flock, xdist' > $O/env.log 2>&1 || { tail -30 $O/env.log; exit 1; }
 $RUN python backends/flock/pod/read_gadget.py check > $O/check.json || { cat $O/check.json; exit 1; }
 
-( $RUN python -m pytest -q -p no:cacheprovider -n 6 packages/verity/tests/ml/test_boolean_merkle.py > $O/pytest.log 2>&1
+( $RUN python -m pytest -q -p no:cacheprovider -n 6 verity/primitives/commitments/tests/test_boolean_merkle.py > $O/pytest.log 2>&1
   echo "pytest	$?" >> $O/rc.tsv ) &
 ( $RUN python -m circuit_check -j 2 --out $O/circuit-check.json \
     'MerkleSubtreeRead_v1{ARITY=2,D=2,J=1}' 'MerkleSubtreeRead_v1{ARITY=4,D=1,J=0}' > $O/circuit-check.log 2>&1

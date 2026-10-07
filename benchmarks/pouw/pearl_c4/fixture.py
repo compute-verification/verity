@@ -1,5 +1,5 @@
 """The device check's fixture for pearl_c4.cu: inputs and every buffer the kernels write, at a small shape, from the numpy
-twin (`twin.py`) and `verity_pouw.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
+twin (`twin.py`) and `verity.protocols.accounting.work.pouw.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
 byte for byte.
 
   uv run python benchmarks/pouw/pearl_c4/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
@@ -21,11 +21,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from verity.commitments.turboshake import turboshake128
-from verity_pouw import audit as AU
-from verity_pouw.protocol import Context, Matmul, Shape
-from verity_pouw.schemes import pearl_c as C
-from verity_pouw.schemes import pearl_c4 as F
+from verity.primitives.crypto.turboshake import turboshake128
+from verity.protocols.accounting.work.pouw import audit as AU
+from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+from verity.protocols.accounting.work.pouw.schemes import pearl_c4 as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import twin as T  # noqa: E402

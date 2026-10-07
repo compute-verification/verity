@@ -2,7 +2,7 @@
 statement with R hidden-index Merkle reads of depth D per VU, as ``verity/flock-circuit`` statements for C-Flock's CPU prover
 (``76-read-gadget.sh``).
 
-    python read_gadget.py check                                       each slot type against `verity.ml.boolean.merkle`'s references
+    python read_gadget.py check                                       each slot type against `verity.primitives.commitments.gates.merkle`'s references
     python read_gadget.py stage --k K --reads none|A:D:L:R --n N --sets DIR --out DIR
                                                                       circuit.txt, tables/, inst-N.bin, pub-N.bin; prints the
                                                                       statement's shape (JSON)
@@ -12,7 +12,7 @@ statement with R hidden-index Merkle reads of depth D per VU, as ``verity/flock-
                                                                       against the sum of their parts, and the rows C-Flock lays
                                                                       each slot type out in: measure.jsonl, measure-summary.json
 
-A read is `verity.ml.boolean.merkle`'s circuit cut into slots of L levels each (a slot type ``merkle<A>x<L>``, like
+A read is `verity.primitives.commitments.gates.merkle`'s circuit cut into slots of L levels each (a slot type ``merkle<A>x<L>``, like
 ``sha512x3``): a slot takes the current digest (16 ports of 32 bits), L (A - 1) sibling digests and a 32-bit port whose low
 L log2(A) bits are the L digits, and gives the digest L levels up (16 ports of 32 bits); the D / L slots of a read are chained
 by wires, the last one's output the root. A read's position, path and leaf are its slots' inputs, which here are wired from the
@@ -31,10 +31,10 @@ import sys
 from array import array
 from pathlib import Path
 
-from verity.ir import boolean as BL
-from verity.ml.boolean import merkle as M
-from verity.ml.boolean import forms as F
-from verity.ml.boolean.forms import Circuit
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.commitments.gates import merkle as M
+from verity.primitives.circuits.boolean import forms as F
+from verity.primitives.circuits.boolean.forms import Circuit
 
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
@@ -89,7 +89,7 @@ def node_circuit(A: int) -> tuple[Circuit, list[str], list[str]]:
 
 
 def check() -> dict:
-    """Each slot type against `verity.ml.boolean.merkle`'s references on random digests, digits and commit strings."""
+    """Each slot type against `verity.primitives.commitments.gates.merkle`'s references on random digests, digits and commit strings."""
     rng, out = random.Random(SEED), {}
 
     def run(C, ins, outs, bits, want, name):

@@ -10,7 +10,7 @@ class: an interior-looking Call whose output another module reads is required be
 from __future__ import annotations
 
 import pytest
-from verity.proofs.query import ValueRef, boundary
+from verity_vllm.query.units import ValueRef, boundary
 from verity_vllm.correspondence.reader_for_query import Correspondence, implementation_prefix, parse_call_name
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView

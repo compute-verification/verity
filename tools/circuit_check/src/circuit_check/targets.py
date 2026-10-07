@@ -55,33 +55,33 @@ def _authored(d: Any) -> bool:
 
 
 def load_registries() -> None:
-    """Register every Definition and kernel: core's `verity.ml`, and each module of the vLLM registry and kernel registry."""
+    """Register every Definition and kernel: core's `verity_catalog.definitions`, and each module of the vLLM registry and kernel registry."""
     global _LOADED
     if _LOADED:
         return
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
 
-    import verity.ml.boolean.attention  # noqa: F401
-    import verity.ml.boolean.cast  # noqa: F401
-    import verity.ml.boolean.elementwise  # noqa: F401
-    import verity.ml.boolean.gemm  # noqa: F401
-    import verity.ml.boolean.merkle  # noqa: F401
-    import verity.ml.boolean.mufu  # noqa: F401
-    import verity.ml.boolean.scalar  # noqa: F401
-    import verity.ml.boolean.universal  # noqa: F401
-    import verity.ml.gemm  # noqa: F401
-    import verity.ml.kernels  # noqa: F401
-    import verity.ml.prims  # noqa: F401
+    import verity_catalog.definitions.boolean.attention  # noqa: F401
+    import verity_catalog.definitions.boolean.cast  # noqa: F401
+    import verity_catalog.definitions.boolean.elementwise  # noqa: F401
+    import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity.primitives.commitments.gates.merkle  # noqa: F401
+    import verity_catalog.definitions.boolean.mufu  # noqa: F401
+    import verity_catalog.definitions.boolean.scalar  # noqa: F401
+    import verity_experimental.private_circuits.universal  # noqa: F401
+    import verity_catalog.definitions.gemm  # noqa: F401
+    import verity_kernels.tc  # noqa: F401
+    import verity_catalog.definitions.prims  # noqa: F401
     import verity_vllm.program.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
-    import verity_pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
-    import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
-    import verity_pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
-    import verity_pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
-    import verity_pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity.protocols.accounting.work.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits, the six `pc4` and `pc8` rows call)
+    import verity.protocols.accounting.work.pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
+    import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
+    import verity.protocols.accounting.work.pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -232,20 +232,20 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 def _pouw_roots() -> list[Any]:
     """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
-    it (`verity_pouw.circuit.ncp2`), for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check
+    it (`verity.protocols.accounting.work.pouw.circuit.ncp2`), for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check
     their template partitions and the Z separator. Beside them, the model Program's rows at a PoUW site, without and with the
-    bias (`verity_vllm.program.registry.pouw_rows`), and Pearl-C4's tile check (`verity_pouw.circuit.pc4`): its unit
+    bias (`verity_vllm.program.registry.pouw_rows`), and Pearl-C4's tile check (`verity.protocols.accounting.work.pouw.circuit.pc4`): its unit
     templates at k = 64 with a one-word tile (small enough to lower whole), and its weight side, call side and whole check at
-    one row a side; and Pearl-C's (`verity_pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
+    one row a side; and Pearl-C's (`verity.protocols.accounting.work.pouw.circuit.pc8`) the same way at k = 128 (one promotion window), its templates
     on the H100's and sm_120's records and its roots on sm_120's.  Both checks' hiding tiles and roots (``hidden``: the tile
-    digest, `verity_pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The row units cut along k
-    (`verity_pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
+    digest, `verity.protocols.accounting.work.pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes.  The row units cut along k
+    (`verity.protocols.accounting.work.pouw.circuit.rowk`, ``Shape.row_k``) in two segments: Pearl-C4's pieces at k = 128 and its roots, Pearl-C's
     pieces at k = 256 on the H100's and sm_120's records and at k = 64 unpromoted, and its roots on sm_120's, plain and
     hiding."""
     from dataclasses import replace
 
-    from verity.ir.defs import bind
-    from verity_pouw.circuit import ncp2, pc4, pc8, rowk
+    from verity.primitives.circuits.defs import bind
+    from verity.protocols.accounting.work.pouw.circuit import ncp2, pc4, pc8, rowk
     from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
@@ -276,10 +276,10 @@ def _pouw_roots() -> list[Any]:
 
 
 def _core_roots() -> list[Any]:
-    from verity.ir.defs import bind
-    from verity.ml import gemm as G
-    from verity.ml import kernels as K
-    from verity.ml import prims as P
+    from verity.primitives.circuits.defs import bind
+    from verity_catalog.definitions import gemm as G
+    from verity_kernels import tc as K
+    from verity_catalog.definitions import prims as P
 
     A, H = P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16
     return [bind(G.DotBf16, K=64, DOT=A), bind(G.DotBf16, K=48, DOT=H), bind(G.GemmCoordinate, K=64, DOT=A),
@@ -291,16 +291,16 @@ def _core_roots() -> list[Any]:
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
+    """The Boolean BF16 coordinate and dot (`verity_catalog.definitions.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
     coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s rows at I = 8
     (`verity_vllm.program.registry.boolean_silu`: `SiluMul_v3` and `SiluMul_v4`, and v4's word view, the served
     `SiluMul_v2` of `registry.act`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
     `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
     RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
     and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`), and GLM-5.3's sigmoid `noaux_tc` router at 8
-    experts, 2 slots, on both of its kernels, on bits and its word view (`registry.moe.MoeRouterSigmoidBias_v1`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
-    operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator, selects, max /
-    min and E4M3 cast (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
+    experts, 2 slots, on both of its kernels, on bits and its word view (`registry.moe.MoeRouterSigmoidBias_v1`); the steps, the cast, attention's softmax operations (`verity_catalog.definitions.boolean.attention`), the element-wise
+    operations (`verity_catalog.definitions.boolean.elementwise`), the MUFU operations (`verity_catalog.definitions.boolean.mufu`), the comparator, selects, max /
+    min and E4M3 cast (`verity_catalog.definitions.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
     static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which
     reaches its head and halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its
     tree, which reach every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served
@@ -316,10 +316,10 @@ def _boolean_roots() -> list[Any]:
     two heads of 8. MLA (`registry.mla`): Triton's one-split decode at one head of two keys over a 16 + 16 latent (a partial
     block, so its masked columns), which reaches the head, the block, the score and every element; the absorb bmm at two heads,
     K = 32, N = 3; the shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean import attention as BAT
-    from verity.ml.boolean import gemm as BG
-    from verity.ml.boolean import mufu as BM
+    from verity.primitives.circuits.defs import bind
+    from verity_catalog.definitions.boolean import attention as BAT
+    from verity_catalog.definitions.boolean import gemm as BG
+    from verity_catalog.definitions.boolean import mufu as BM
     from verity_vllm.program.registry import act
     from verity_vllm.program.registry import boolean_activation as BA
     from verity_vllm.program.registry import boolean_dense as BDN
@@ -370,31 +370,31 @@ def _boolean_roots() -> list[Any]:
 
 def _boolean_gather_roots() -> list[Any]:
     """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
-    that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity.ml.boolean.cast`) is static-free."""
-    from verity.ir.defs import bind
+    that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity_catalog.definitions.boolean.cast`) is static-free."""
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.program.registry import boolean_gather as BGA
 
     return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
 
 
 def _universal_roots() -> list[Any]:
-    """Protocol 2's universal unit (`verity.ml.boolean.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
+    """Protocol 2's universal unit (`verity_experimental.private_circuits.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
     with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean.universal import UniversalUnit
+    from verity.primitives.circuits.defs import bind
+    from verity_experimental.private_circuits.universal import UniversalUnit
 
     return [bind(UniversalUnit, G=16, N_IN=16, N_OUT=8), bind(UniversalUnit, G=64, N_IN=64, N_OUT=32)]
 
 
 def _merkle_roots() -> list[Any]:
-    """The hidden-index Merkle reads (`verity.ml.boolean.merkle`). The read, binary and 4-ary, at one level (a level is two or
+    """The hidden-index Merkle reads (`verity.primitives.commitments.gates.merkle`). The read, binary and 4-ary, at one level (a level is two or
     three SHA-512 compressions: deeper reads repeat it); about two minutes each; the 4-ary one checks the slot multiplexers among
     three siblings that the binary swap does not have. The subtree read binary over a run of two cells one level below the root,
     the smallest with every part (the cells' hm96 leaves, a run node over them in cell order, a level above it: eight
     compressions), and 4-ary over one cell (its leaf under a 4-ary level); its 4-ary run node is the 4-ary level's node without
     the slots, which the unit tests check against the reference at J = 1."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean.merkle import MerkleRead, MerkleSubtreeRead
+    from verity.primitives.circuits.defs import bind
+    from verity.primitives.commitments.gates.merkle import MerkleRead, MerkleSubtreeRead
 
     return [bind(MerkleRead, ARITY=2, D=1), bind(MerkleRead, ARITY=4, D=1),
             bind(MerkleSubtreeRead, ARITY=2, D=2, J=1), bind(MerkleSubtreeRead, ARITY=4, D=1, J=0)]
@@ -411,9 +411,9 @@ def _kernel_roots() -> list[Any]:
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean import gemm as BG
-    from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
+    from verity.primitives.circuits.defs import bind
+    from verity_catalog.definitions.boolean import gemm as BG
+    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
     from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, fp8_moe, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling
     from verity_vllm.program.registry import serve3, spec
     from verity_vllm.program.registry import value_inputs as VI
@@ -588,7 +588,7 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
     Definition, or the error)."""
-    from verity.ml.prims import BlackwellE4m3QmmaDot32
+    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import prims as P
@@ -656,8 +656,8 @@ def call_families() -> set[str]:
 def boolean_call_families(word_calls: set[str]) -> set[str]:
     """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
-    from verity.evaluation import ScalarReference
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits import boolean as BL
     from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
 
     out: set[str] = set()
@@ -674,7 +674,7 @@ def boolean_call_families(word_calls: set[str]) -> set[str]:
 def catalog(by_unit: list | None = None) -> list[Any]:
     """The roots: every primitive, every static-free composite, and the bindings above; with ``by_unit``, each binding's
     (units, roots) appended to it."""
-    from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+    from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     load_registries()
     roots: list[Any] = []
@@ -706,8 +706,8 @@ def catalog(by_unit: list | None = None) -> list[Any]:
 
 def reachable(roots: Iterable[Any]) -> dict[str, Any]:
     """Every Definition (primitive, complete specialisation) or reference reachable from ``roots``, by id."""
-    from verity.evaluation import ScalarReference
-    from verity.ir.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 
     out: dict[str, Any] = {}
     stack = list(roots)
@@ -736,7 +736,7 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
     """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
     smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
     the Program on bits calls)."""
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits import boolean as BL
 
     by: dict[str, list[Any]] = {}
     for fn in found.values():
