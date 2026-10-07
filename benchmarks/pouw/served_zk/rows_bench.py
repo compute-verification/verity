@@ -4,7 +4,7 @@ frame-v3-sha512 tree (hm96_rows.cu), beside -h2's BLAKE3 frame-b3s rows on GPU 1
 Llama-3.1-8B's four linears with m = 32 (decode_served.py's shapes): a microbenchmark whose step figures are projections.
 
 Gates before any timing, per shape, from outputs poisoned to 0xA5: hm96_rows.cu's x (sha512/row-seg/v1 and sha512/row/v2),
-b ‖ c, the hm96 leaf and the frame-v3-sha512 root equal Python's (verity.primitives.commitments: rowleaf, hm96.SHA512,
+b ‖ c, the hm96 leaf and the frame-v3-sha512 root equal Python's (verity.ml.commitments: rowleaf, hm96.SHA512,
 merkle) under salts that are C-Flock's ChaCha20 stream (zk_hooks::LeafSalts, recomputed here); each no-write control (the
 launch left out) leaves them unequal.
 
@@ -55,10 +55,10 @@ import sys
 import time
 from pathlib import Path
 
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments import merkle as MK
-from verity.primitives.commitments import rowleaf as RL
-from verity.primitives.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments import hm96
+from verity.ml.commitments import merkle as MK
+from verity.ml.commitments import rowleaf as RL
+from verity.ml.commitments.indexed import RangeIndexedDomain
 
 HERE = Path(__file__).resolve().parent
 M_REAL, LAYERS = 32, 32

@@ -37,10 +37,10 @@ this window).  Nothing is claimed exact beyond the R = 2 statement above.
 """
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import bind, composite
+from verity.ml.circuits.defs import bind, composite
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16
-from verity.primitives.circuits.types import Array
+from verity.ml.circuits.types import Array
 
 SEMANTIC_ID = "tp2/AllReduceSumBf16@v1"
 
