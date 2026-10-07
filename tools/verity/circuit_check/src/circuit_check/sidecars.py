@@ -46,14 +46,17 @@ def _roots() -> list[tuple[str, Path]]:
 
 @cache
 def discover() -> dict[str, dict[str, Path]]:
-    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name."""
+    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name. A package
+    nested in another's tree (`verity_flock` under `verity/`) names its own sidecars: the deepest root claims each file."""
     out: dict[str, dict[str, Path]] = {}
+    claimed: set[Path] = set()
     with CC.internal():
-        for pkg, root in _roots():
+        for pkg, root in sorted(_roots(), key=lambda r: len(r[1].parts), reverse=True):
             for kind in ("py", "json"):
                 for p in sorted(root.rglob(f"*{SUFFIX}.{kind}")):
-                    if "__pycache__" in p.parts:
+                    if "__pycache__" in p.parts or p in claimed:
                         continue
+                    claimed.add(p)
                     stem = p.name[:-len(f"{SUFFIX}.{kind}")]
                     parts = [pkg, *p.relative_to(root).parent.parts]
                     mod = ".".join(parts if stem == "__init__" else [*parts, stem])

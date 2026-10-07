@@ -513,6 +513,27 @@ def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
         SC.discover.cache_clear()
 
 
+def test_a_package_nested_in_another_names_its_own_sidecars(tmp_path, monkeypatch):
+    """`verity_flock` lives under `verity/` (`verity/ml/flock/python/verity_flock`): its sidecars are its modules', found once,
+    not also as `verity.ml.flock.python.verity_flock.*` (whose pins would then clash with themselves)."""
+    from circuit_check import sidecars as SC
+
+    inner = tmp_path / "synouter/sub/python/synin"
+    inner.mkdir(parents=True)
+    for d in (tmp_path / "synouter", inner):
+        (d / "__init__.py").write_text("")
+    (inner / "mod.py").write_text("")
+    (inner / "mod.circuit-check.json").write_text("{}")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.syspath_prepend(str(tmp_path / "synouter/sub/python"))
+    monkeypatch.setattr(SC, "PACKAGES", ("synouter", "synin"))
+    SC.discover.cache_clear()
+    try:
+        assert SC.discover() == {"synin.mod": {"json": (inner / "mod.circuit-check.json").resolve()}}
+    finally:
+        SC.discover.cache_clear()
+
+
 def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
     """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
     other package is never read, so its bindings would leave the task list without an error."""
