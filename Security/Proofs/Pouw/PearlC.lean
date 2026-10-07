@@ -1,4 +1,4 @@
-import Specs.Pouw.Guarantees.PearlC
+import Models.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceFp4Gamma
 import Proofs.Pouw.PearlC.Fp4IssueGamma
