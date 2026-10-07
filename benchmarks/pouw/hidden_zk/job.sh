@@ -14,6 +14,7 @@
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
+#      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
