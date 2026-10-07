@@ -531,6 +531,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
     `--record` sends it then."""
     lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
+        if FLOCK_VERIFIER.is_dir():
+            return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: backends/flock/verifier/lean is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing backends/flock/ requires "

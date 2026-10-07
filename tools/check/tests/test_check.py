@@ -14,6 +14,7 @@ spec.loader.exec_module(CHECK)
 
 
 def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
@@ -795,10 +796,25 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     assert any(x.startswith("flock_upstream=art:") for x in cmd)
 
 
+def test_the_trees_lean_steps_run_rather_than_skip():
+    """On this tree, wherever the layout puts the Lean verifier's package (`FLOCK_LEAN`), the Lean steps are the build, the
+    unit-cut conformance, the audit and the agreement; a tree with the verifier but no package there fails rather than skips."""
+    assert (CHECK.FLOCK_LEAN / "lakefile.toml").is_file()
+    steps = CHECK.lean_steps(ROOT / "nowhere")
+    assert [n for n, _, _ in steps] == ["lean-build", "lean-unit-cut", "lean-audit", "lean-agreement"]
+    assert all(not isinstance(argv, str) for _, argv, _ in steps[:3])
+
+
+def test_a_verifier_without_its_lean_package_fails_rather_than_skips(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "moved-away")
+    [(name, detail, _)] = CHECK.lean_steps(tmp_path)
+    assert name == "lean" and isinstance(detail, str) and not detail.startswith("skipped:")
+
+
 def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agreements_cache():
     """A file of the Lean verifier's own package, wherever the layout puts it (`FLOCK_LEAN`), needs the agreement and the
-    red-team grant to merge, is read by the agreement (so a change to it misses a cached pass), and the tree's Lean steps run
-    rather than skip: a rule or a path that still named the package's old place would pass such a change unchecked."""
+    red-team grant to merge and is read by the agreement (so a change to it misses a cached pass): a rule that still named
+    the package's old place would pass such a change unchecked."""
     from research.merge import rule_touches
     from research.queue import Rules
 
@@ -811,5 +827,3 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
     rules = Rules.parse((ROOT / "tools" / "check" / "queue.toml").read_text())
     assert rule_touches(list(next(r for r in rules.grants if r.role == "red-team").paths), changed)
     assert CHECK.agreement_closure(changed) == changed
-    assert (CHECK.FLOCK_LEAN / "lakefile.toml").is_file()
-    assert [n for n, _, _ in CHECK.lean_steps(ROOT / "nowhere")][:3] == ["lean-build", "lean-unit-cut", "lean-audit"]
