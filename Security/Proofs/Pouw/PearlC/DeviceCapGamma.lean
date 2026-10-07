@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceRev1Gamma
 import Definitions.Pouw.PearlC.DevicePrices
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # The unpromoted record, the cap, and γ at sm_120's prices (the TT_OUT restatements lane's file)
@@ -149,3 +150,9 @@ theorem pearlCSampledSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
     (by norm_num) hTT
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.DomainDevUnpromoted : Pouw.Guarantees.PearlC.DomainDevUnpromoted := @Pouw.PearlC.pearlCDomainDev_unpromoted
+
+theorem Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GammaUnpromotedCap1000_8192 := @Pouw.PearlC.pearlCGammaUnpromotedCap1000_8192
+
+theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevCapAnti : Pouw.Guarantees.PearlC.TTOutPearlCDevCapAnti := @Pouw.PearlC.ttOutPearlCDev_cap_anti
