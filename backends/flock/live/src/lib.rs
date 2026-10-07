@@ -33,9 +33,13 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
+pub mod firewall;
+#[cfg(feature = "sha512")]
+pub mod firewall_transcript;
 pub mod glue;
 pub mod proved_scope;
 pub mod pure_block;
+pub mod release;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;

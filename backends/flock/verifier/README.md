@@ -47,6 +47,9 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
   decodes the program and evaluates the query itself (§16.10).
 - `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its recorded cases.
+- `verity/flock-circuit+plain-leaves`: the same statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`,
+  §16.16), a recursive session's inner statement (`FLOCK_PLAIN_LEAVES=1`), ZK off. `statement` prints its identity and
+  digest, but `verify` refuses it, with or without `--zk`, until a soundness headline covers plain leaves.
 - `verity/flock-circuit/types` (and `+seed-injection`): the typed statement (§16.11) with hidden outputs (§16.13);
   `verity/flock-circuit/types@210d32e1` is its form with public outputs.
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
@@ -178,6 +181,32 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
 - Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's
   `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates, the
   refusals word for word, the malformed parameters).
+- The firewall's contract (`Flock.Firewall.Contract`, `flock-firewall contract`), the property every firewall's sessions
+  must have, beside the inner phase's program (`Flock.Firewall.run`, which `test_firewall_agreement.py` holds the proxy
+  to): `firewall_agree.py` runs the inner phase's firewall (`rec_live.Proxy`) and the contract on the same transcript
+  (`verity_flock.firewall_transcript`) over 22 cases: the honest sessions accepted by both, the red team's six on #1270
+  refused by both or sent as the schedule places them, and tamper controls the firewall passes and the contract refuses.
+  The contract holds each transcript to the verifier's public input (`flock-firewall contract --public FILE`,
+  `verity/firewall-public/v0`: the schedule, the relations, the statement's values and the names of the firewall's own
+  values), never to the transcript's own copy; without one it refuses whatever leans on it. `test_firewall_contract.py`
+  also cuts each of review r6's leaks on #1323 at its item (`firewall_agree.leaks`: the commitments' count and place, a
+  tape number naming another's value, the public input from the transcript, a name of the firewall's choosing), and runs
+  the contract on every session of `test_firewall_agreement.py`. `--sessions`
+  replays recorded sessions from their coins and salts. The K = 4096 sessions it replayed before (`r20261006-070620-e02d`'s,
+  4 of 4 accepted by both) are `rec/inner-transcript/v0`'s, from before rec-step3's tops and level0, and today's firewall
+  refuses their schedule. A v1 session at that size has been recorded since (`r20261006-021550-4e4b`, rec-reprice's
+  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The
+  outer phase: `firewall_outer_agree.py` runs the contract on the outer firewall's transcripts (`FC_FIREWALL_TRANSCRIPT`,
+  `live/PROTOCOL.md` §10.4), each honest one accepted and each `FC_FIREWALL_TAMPER` control cut where the firewall stopped, for its
+  control's reason, with every check's outcome recomputed from its affine form over the tape's pads, all under one public
+  input: the honest sessions' (`public-<k>.json`, the same in each), which every control's agrees with. The contract doesn't
+  yet hold the outer phase's order and count: with no schedule it decides each outer item alone. The harness holds them
+  against the honest sessions instead. Every honest session's item sequence is one and the same, and each control's is the
+  same up to its cut, with its held-back candidate where those items leave in an honest session. A public input that
+  carries the outer sequence, for the contract to hold, is not written yet. On RoPE d64 at m = 25, CPU gated sessions,
+  60 of 60 as expected (`r20261006-134729-fddc`: 10 relations, 265 statement values, 383 values of the firewall's own
+  computation, and one item sequence of 1,454 items), and each of 21 of its sessions with items dropped, swapped,
+  duplicated or moved, or with an early `finish`, a miss at the item it moves (12 of them accepted by the contract).
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agreed 27 of 27, and set 14 (a shared-row RoPE file whose six
   instances repeat three rows) 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included, before
   §16.15; both are D12 now (a unit reading two input groups, a shared-row file), so the Lean verifier refuses every

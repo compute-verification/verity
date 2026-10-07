@@ -21,11 +21,14 @@ structure Setup where
   publics : ByteArray → V Unit
   /-- the proof's Merkle trees (§14) -/
   merkle : MerkleScheme
+  /-- every opening carries `opened_salts`, empty for an unsalted scheme, as PR #83's prover writes it from `2908d078` on
+  (§16.16); its earlier unsalted openings carry none -/
+  openedSalts : Bool := false
   deriving Inhabited
 
 def Setup.ofCircuit (st : Stmt) : Setup :=
   { m := st.m, kLog := st.c.kLog, digest := st.digest.extract 0 32, fold := st.circuitFold,
-    extra := st.extraClaims, merkle := st.merkle,
+    extra := st.extraClaims, merkle := st.merkle, openedSalts := st.tags.hm96Rows,
     publics := fun p => if p.size == 0 then pure () else throw "S8: the circuit statement commits no public words" }
 
 def pcsParams (ms : MerkleScheme) (sch : Schedule) : PcsParams := ⟨sch.m.toUInt64, 1, sch.k0.toUInt64, 1, none, ms.pcsIndex⟩
@@ -36,7 +39,7 @@ def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session
   let name := s!"{t}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
   let extras ← st.extra sess.points
-  let saltLen : Option Nat := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes
+  let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
   let shape : Shape := { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen, saltLen }
   let p ← decodeProof shape bytes
   if p.params != pcsParams st.merkle sch then throw "R7/F2: the proof's PCS parameters are not the pinned fast100 parameters"

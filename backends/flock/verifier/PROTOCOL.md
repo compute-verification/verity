@@ -1531,6 +1531,28 @@ the one theorem: at every statement, with or without `--zk`, it states the headl
 hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several). The live server refuses the same
 statements with the same reason (`backends/flock/live`'s `proved_scope`), also after the session's checks: its verdict is
 the refusal, and `without_refusal` keeps the session's verdict otherwise.
+`flock-firewall` is a separate executable that accepts no proof, and an accept from `contract` means what
+`Contract.holds_*` states, outside `flock_verify_sound`.
+
+### 16.16 Plain leaves (`verity/flock-circuit+plain-leaves`, a recursive session's inner statement)
+
+§16.13's statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`, §14): a recursive session's inner
+statement, staged under `FLOCK_PLAIN_LEAVES=1`, whose firewall commits every tree top under a salt of its own, so a leaf
+needs none. `Tags.withPlainLeaves` changes three things.
+
+- META `leaf_scheme` is pinned to upstream's `leaf_scheme_plain` object (`verity_flock.circuit.LEAF_SCHEME_PLAIN`):
+  `{"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
+  "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}`.
+- The identity's `leaf_scheme` is that object, and its `hashes.merkle` is `"sha512 (every Ligerito level)"`, as upstream's
+  `identity` writes them for such a statement. Everything else is §16.13's identity, and on `--coins os` its live-OS form.
+- Every opening carries an empty `opened_salts`, as every opening of PR #83's prover does from `2908d078` on
+  (`Setup.openedSalts`, set on every hm96-row statement); `631567f7`'s unsalted openings carry none. Every level's leaf and
+  node are SHA-512 (`merkle_hash` 2).
+
+The verifier identifies the statement (`statement` prints its identity and digest), but `verify` refuses any
+statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without `--zk`, until a soundness headline
+covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
+`--zk` refuses it too.
 
 ## 17. Acceptance, assumptions and trust
 

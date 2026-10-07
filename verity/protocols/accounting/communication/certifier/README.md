@@ -6,13 +6,16 @@ A spec-level reference for network accounting's timing channel:
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest, with the window's
   frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
+- one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
+  certified records, and a host-side verifier of record (no circuit proves the check yet);
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it has seen by then;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
 
-It is pure Python. It imports only the standard library and `verity`, for the record digests' `tagged_sha256` and
-`tagged_sha512` and `canonical_json_bytes`. The certificate's signature scheme is a parameter: the certifier's
+It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
+`tagged_sha512` and `canonical_json_bytes`, and in `service` the proof service, the hm96 leaves and the check's
+Definition. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean package.
 
