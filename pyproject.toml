@@ -42,7 +42,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "infra/cluster", "archive/sp1", "benchmarks/numerical", "integrations/vllm", "verity/ml/flock", "tools/verity/circuit_check", "tools/verity/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "archive/gkr", "archive/direct", "benchmarks/pouw", "benchmarks/network_traces", "tools/verity/cli", "verity/experimental/core/difftest"]
+members = ["tools/research", "infra/cluster", "archive/sp1", "benchmarks/numerical", "integrations/vllm", "verity/ml/flock", "tools/verity/circuit_check", "tools/verity/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "archive/gkr", "archive/direct", "benchmarks/pouw", "benchmarks/network_traces", "tools/verity/cli", "verity/experimental/core/difftest", "verity/experimental/core/protocols/composition"]
 
 [tool.uv.sources]
 research = { workspace = true }
