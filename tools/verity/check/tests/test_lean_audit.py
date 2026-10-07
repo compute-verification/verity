@@ -29,11 +29,15 @@ spec.loader.exec_module(CHECK)
 #: policy names under "reads" is missing (an input the key would not cover) or a package it requires by path is not in the tree,
 #: fetches its git dependencies into .lake/packages, and notes what ran
 FAKE_AUDIT = r'''
-import json, sys
+import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
 named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo"))]
+for pkg in list(named):                                 # as check.py does, the packages a spec's `proved_in` names beside it
+    for d in json.loads((pkg / "lean-audit.json").read_text()).get("proved_in", []):
+        if (q := Path(os.path.normpath(pkg / d))) not in named:
+            named.append(q)
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []
@@ -414,6 +418,32 @@ def test_packages_of_one_manifest_and_toolchain_both_build_warm(tmp_path, monkey
     rc, ran, _doc = _run(tmp_path, 2)
     assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold", "pkg/c warm"]
     assert (tmp_path / "cache" / "lean-deps" / LA.deps_key(root / "pkg/a") / "dep" / "built").exists()
+
+
+def test_a_package_proving_a_spec_is_audited_beside_it_on_its_kept_dependencies_and_build(tmp_path, monkeypatch):
+    """check.py audits the packages a spec's `proved_in` names beside it, each built as its own root. Narrowed to the spec
+    (`--package`, a shard), the audit took and kept only the spec's: `Security/Proofs` rebuilt cold, 1,865 s of
+    r20261006-163809-de0f's 2,696 s."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    c = {"pkg/c/lakefile.toml": "", "pkg/c/lean-toolchain": "v1\n", "pkg/c/C.lean": "", "pkg/c/lean-audit.json": "{}",
+         "pkg/c/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "def"},
+                                                              {"name": "a", "type": "path", "dir": "../a"}]})}
+    for f, text in c.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    tracked = LA.COMMON.tracked_files()
+    monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None: sorted([*tracked, *c]))
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"proved_in": ["../c"]}))
+    cache = tmp_path / "cache"
+    run = lambda n: LA.run(tmp_path / f"out{n}", cache / "lean-audit", cache / "lean-deps", log=lambda s: None, only=["pkg/a"])
+    lines = lambda n, f: sorted((tmp_path / f"out{n}" / f).read_text().split("\n")[:-1])
+    assert run(1) == 0 and lines(1, "ran.txt") == ["pkg/a cold", "pkg/c cold"]
+    assert (cache / "lean-deps" / LA.deps_key(root / "pkg/c") / "dep" / "built").exists()
+    assert (cache / "lean-builds" / LA.build_key("pkg/c", root) / "lib/lean/C.olean").is_file()
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
+    assert run(2) == 0 and lines(2, "ran.txt") == ["pkg/a warm", "pkg/c warm"]
+    assert lines(2, "builds.txt") == ["pkg/a warm", "pkg/c warm"]
 
 
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):

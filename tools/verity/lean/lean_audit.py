@@ -618,16 +618,19 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     builds = WarmBuilds(deps.parent / "lean-builds")
     passed: set[Path] = set()
     audited: list[str] = []
+    held: list[str] = []
     failed: list[str] = []
     try:
         union = sorted({f for p in missed for f in inputs(p, files)})
         scratch_tree(work, union)
         audited = sorted(missed)
-        with ThreadPoolExecutor(max_workers=max(1, len(audited))) as ex:
-            list(ex.map(lambda p: warm.take(work / p, log), audited))
+        # check.py audits a package its `proved_in` names beside it, building it as its own root
+        held = sorted({*audited, *(q for p in audited for q in provers(p))})
+        with ThreadPoolExecutor(max_workers=max(1, len(held))) as ex:
+            list(ex.map(lambda p: warm.take(work / p, log), held))
         if not fresh:
-            for p in sorted({*audited, *(d for q in audited for d in path_deps(q))}):
-                builds.take(work, p, p in audited, log)
+            for p in sorted({*held, *(d for q in held for d in path_deps(q))}):
+                builds.take(work, p, p in held, log)
         env = {**os.environ, "LEAN_NUM_THREADS": str(COMMON.cores())}
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
@@ -650,11 +653,11 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             failed = [f"audit.py exit {r.returncode}"]
         # a pass vouches for its dependencies; so does a failure only in fetching them (Lake clones every dependency, each at
         # the revision the manifest pins, before it compiles anything): keeping those, a retry fetches only what is missing
-        passed = {work / p for p in audited if p in reports and (not reports[p].get("failures") or transient(reports[p]))}
+        passed = {work / p for p in held if p in reports and (not reports[p].get("failures") or transient(reports[p]))}
     finally:
         warm.give_back(passed)
         if not fresh:
-            builds.give_back(work, {work / p for p in audited if p in reports and not reports[p].get("failures")})
+            builds.give_back(work, {work / p for p in held if p in reports and not reports[p].get("failures")})
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 
