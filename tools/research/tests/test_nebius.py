@@ -602,7 +602,7 @@ def queued(p: subprocess.Popen) -> str:
 @needs_flock
 def test_under_the_agent_a_request_queues_at_once_with_its_flags_and_takes_exactly_the_gpus_it_is_granted(tmp_path):
     """GPU 0 is free, so gpu-lease's own rules would take it; under the agent it takes the granted GPU 2.  The wait file carries
-    what the agent's planner reads (tools/cluster's nebius2.job_of)."""
+    what the agent's planner reads (infra/cluster's nebius2.job_of)."""
     env = {**gpu_env(tmp_path), "GPU_LEASE_AGENT_POLL_S": "0.05"}
     gl = tmp_path / "gl"
     agent = hold_agent_lock(gl)
@@ -2265,7 +2265,7 @@ def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
 def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_1(tmp_path):
     """submit's `place` asks `cluster submit` for node 2 with the row's research question and prints the placed.jsonl line; a
     refusal exits 3, and a queue that gives no answer prints nothing and exits 0, so it never holds a row back. The queue is a
-    stand-in `cluster` package that echoes its arguments (tools/cluster's own tests cover the placement)."""
+    stand-in `cluster` package that echoes its arguments (infra/cluster's own tests cover the placement)."""
     src = tmp_path / "cluster-src"
     (src / "src" / "cluster").mkdir(parents=True)
     (src / "descriptions").mkdir()
@@ -2288,7 +2288,7 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
     r = place(src, gpus="9")
     assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
-    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to tools/cluster's editable install
+    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to infra/cluster's editable install
     (silent / "src" / "cluster").mkdir(parents=True)
     (silent / "src" / "cluster" / "__init__.py").write_text("")
     (silent / "src" / "cluster" / "__main__.py").write_text("import sys\nsys.exit('no queue here')\n")
