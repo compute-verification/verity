@@ -9,7 +9,8 @@ A job is a `[[job]]` table:
 - `merge_requires`: optional, the changed paths for which `research merge` needs this job to have passed;
 - `needs`: optional, the earlier jobs of its group whose output it reads in the checkout, so a shard that runs it runs them.
 - `after`: optional, a job in another group that must end first: this one starts once it has passed or been skipped, and is
-  stopped if it fails. The job it names has no `after` of its own.
+  stopped if it fails. The job it names has no `after` of its own;
+- `part`: optional, one of `PARTS`, the part of the check (`check.py PART...`) the job belongs to (`select`).
 
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
@@ -33,10 +34,12 @@ ROOT = Path(__file__).resolve().parents[2]
 PATH = ROOT / "tools" / "check" / "ci.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
 FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
-          "after": str}
+          "after": str, "part": str}
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
 SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json"}
+#: the parts a check runs alone (`check.py PART...`)
+PARTS = ("tests", "circuits", "lean")
 
 
 class DeclarationError(ValueError):
@@ -53,6 +56,7 @@ class Job:
     merge_requires: tuple[str, ...] = ()
     needs: tuple[str, ...] = ()
     after: str | None = None
+    part: str | None = None
 
 
 def _toml(text: str, source: str) -> dict:
@@ -84,6 +88,8 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: merge_requires must be non-empty path strings")
         if t["group"] < 1:
             raise DeclarationError(f"{where}: group must be 1 or more")
+        if "part" in t and t["part"] not in PARTS:
+            raise DeclarationError(f"{where}: part {t['part']!r} isn't one of {', '.join(PARTS)}")
         if t["name"] in seen:
             raise DeclarationError(f"{where}: duplicate name")
         if t["owner"] not in handles:
@@ -93,7 +99,7 @@ def parse(text: str, handles: set[str], source: str = "ci.toml") -> list[Job]:
             raise DeclarationError(f"{where}: needs {bad}, which aren't earlier jobs of its group")
         seen.add(t["name"])
         jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
-                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after")))
+                        tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part")))
     if not jobs:
         raise DeclarationError(f"{source}: declares no job")
     by = {j.name: j for j in jobs}
@@ -159,6 +165,22 @@ def parse_plans(text: str, jobs: list[Job], source: str = "ci.toml") -> dict[int
                 if j.name in held and (missing := [n for n in (*j.needs, *[j.after] * bool(j.after)) if whole.get(n) != [k]]):
                     raise DeclarationError(f"{where}: shard {k} runs {j.name}, which needs {', '.join(missing)} in the same shard")
         out[len(shards)] = tuple(tuple(s) for s in shards)
+    return out
+
+
+def select(jobs: list[Job], parts: list[str]) -> set[str]:
+    """The jobs a check of ``parts`` runs: those of each part, and every job they `need` or run `after`.  DeclarationError for
+    a part that isn't one of `PARTS`, or when a job declares no part (it would silently be in none)."""
+    if bad := [p for p in parts if p not in PARTS]:
+        raise DeclarationError(f"no part {', '.join(bad)}: the parts are {', '.join(PARTS)}")
+    if loose := [j.name for j in jobs if j.part is None]:
+        raise DeclarationError(f"ci.toml's {', '.join(loose)} declare no part, so a check of parts can't tell whether to run them")
+    by = {j.name: j for j in jobs}
+    todo, out = [j.name for j in jobs if j.part in parts], set()
+    while todo:
+        if (n := todo.pop()) not in out:
+            out.add(n)
+            todo += [*by[n].needs, *[by[n].after] * bool(by[n].after)]
     return out
 
 

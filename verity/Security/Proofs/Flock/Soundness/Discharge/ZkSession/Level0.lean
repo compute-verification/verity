@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
 import Proofs.Flock.Soundness.SoundnessPad
 
 /-!
-# M1's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
+# C-Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
 
 Under `--zk` the prover sends level 0's out-of-domain value, its lane rounds' messages and the rep's extra-lane sums
 `e^r` masked: `v' = v + h` with `h` a pad (§2: one `F` pad for the OOD value, four per lane message
@@ -237,9 +237,9 @@ def ligTail (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (e r : ℕ) (b
         (padColumn A lv₀.logLen lv₀.logCols t c₀ initial ρ (extraLane sch.k0 e r) ybar C₀) 0 st
       recursiveRounds A n b initial sch.ext rest { st with prev := C₁, prevLevel := lv₁ }
 
-/-- **M1's masked level 0** for rep `r` (§1, §7): `Model.ligeritoPad` with the OOD value, the lane messages and `e^r`
-masked by the pads `P`, the claim carried as a form, and the restart `T'` received after `ρ` and before `ybar`. Returns
-the lane-phase row `claim_k + Σ_i ρ_i·e_i − T'` and the verdict of levels 1+, run from `T'`. -/
+/-- **C-Flock ZK's masked level 0** for rep `r` (§1, §7): `Model.ligeritoPad` with the OOD value, the lane messages and
+`e^r` masked by the pads `P`, the claim carried as a form, and the restart `T'` received after `ρ` and before `ybar`.
+Returns the lane-phase row `claim_k + Σ_i ρ_i·e_i − T'` and the verdict of levels 1+, run from `T'`. -/
 def ligeritoPadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Schedule) (t : ℕ) (c₀ : F) (r : ℕ) (T : F)
     (b : ℕ → F) (C₀ : Oracle F) : Game (LinK K np × Bool) := do
   let n := sch.m - 7

@@ -12,7 +12,8 @@ entry points, and directories of roots (the R19 regression harness).  A root she
 Shell scripts are entry points: the census never deletes one.  A module that only a non-root shell runs is non-live and must be kept
 by name in the keep-list.
 
-STATIC REACHABILITY: an ast import graph over every `.py` under the integration root.  Edges: `import a.b`, `from a.b import c`
+STATIC REACHABILITY: an ast import graph over every `.py` under the integration root but circuit-check's sidecars (`SIDECAR`, which
+circuit-check loads by path).  Edges: `import a.b`, `from a.b import c`
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
 literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
 prefixes (`f"verity_vllm.program.registry.{m}"` + every short literal of the same file that completes to a module), path literals
@@ -70,6 +71,10 @@ PROTECTED = (
 RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.check.fold_compare",
                                     "verity_vllm.check.root_policy", "verity_vllm.properties.golden", "verity_vllm.check.operand_provenance")
 
+#: a circuit-check sidecar (`circuit_check.sidecars.SUFFIX`, which this suite cannot import): its name is no module name, so nothing
+#: imports it; circuit-check's discovery (`sidecars.discover`) loads it by path
+SIDECAR = ".circuit-check.py"
+
 ARTIFACT_DELETE_SCOPES = ("verity_vllm/ops/fixtures/",)
 #: Unreferenced by name but read through a name pattern (file -> the reader).
 ARTIFACT_KEEP: dict[str, str] = {
@@ -91,6 +96,8 @@ def py_files() -> list[Path]:
         for p in sorted((ROOT / top).rglob("*.py")):
             if "__pycache__" in p.parts or p.resolve() == Path(__file__).resolve():
                 continue                                             # this tool names modules in string literals; it is not a consumer
+            if p.name.endswith(SIDECAR):
+                continue
             out.append(p)
     return out
 

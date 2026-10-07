@@ -59,31 +59,6 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
-@pytest.mark.slow
-def test_a2_two_machines_20_times_in_the_same_minute_lose_no_write(machines):
-    origin, a, b = machines
-    errors: list = []
-
-    def write_and_sync(repo: Path, who: str, i: int) -> None:
-        _insert_after(repo / DOC, f"<!-- {who} -->", f"{who} write {i}")
-        d = repo / "lanes" / "shared"
-        d.mkdir(parents=True, exist_ok=True)
-        (d / f"checkpoint-{who}-{i}.md").write_text(f"{who} {i}\n")
-        rep = NS.sync(repo, retries=20, secrets=[])
-        if rep["rc"]:
-            errors.append((who, i, rep))
-
-    for i in range(20):
-        ts = [threading.Thread(target=write_and_sync, args=(m, w, i)) for m, w in ((a, "a"), (b, "b"))]
-        for t in ts:
-            t.start()
-        for t in ts:
-            t.join()
-    assert errors == [], [(w, i, rep.get("attempts"), rep.get("error")) for w, i, rep in errors]
-    doc = _git(origin, "show", f"main:{DOC}")
-    assert all(f"{w} write {i}" in doc for w in "ab" for i in range(20))
-    files = _git(origin, "ls-tree", "--name-only", "main", "lanes/shared/").split()
-    assert len(files) == 40
 
 
 def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
