@@ -8,12 +8,12 @@ import json
 
 import pytest
 
-from verity.primitives.circuits import codec
+from verity.ml.circuits import codec
 from verity_vllm.query import query_artifact as QA
-from verity.primitives.circuits.codec import canonical_json
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
-from verity.primitives.circuits.program import Program
+from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
+from verity.ml.circuits.program import Program
 from verity_vllm.program.registry import b1
 
 Q1 = {"op": "override", "base": {"op": "default", "w": 32},

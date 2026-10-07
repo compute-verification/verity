@@ -9,9 +9,9 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity_kernels.tc import group_sum_total_batch
-from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+from verity.ml.kernels.tc import group_sum_total_batch
+from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 from verity_vllm.program.kernels.derived_rows import f2fp_bf16, fma_rn, mul_rn, tc_dot32_e4m3
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.fp8 import MIN_SCALE_BITS, weight_blocks

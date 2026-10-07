@@ -22,7 +22,7 @@ import math
 
 import torch
 
-from verity.primitives.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape

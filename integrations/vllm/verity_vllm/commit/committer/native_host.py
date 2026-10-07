@@ -1223,13 +1223,13 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 _sys.path.insert(0, src_dir)
             import hidden_gpu as HG  # CMT-2 driver: JIT-builds hidden_gpu_tree.cu on first use
 
-            # [R18 infra, F-r17-tp-06] the module that LOADED must be this tree's, and so must verity.primitives.circuits / verity_vllm / vllm-poc as
+            # [R18 infra, F-r17-tp-06] the module that LOADED must be this tree's, and so must verity.ml.circuits / verity_vllm / vllm-poc as
             # this process resolves them: PRECHECK_FAIL_SOURCE_IDENTITY by name at the import site, before the extension is built or used
             from verity_vllm.pipeline import source_identity as _sid
 
             _sid.assert_loaded_module_is_ours(HG, "hidden_gpu", _tree)
             # [R18 infra, r18-int-2; rev S-r18-1 n1] the document of THIS check (hidden_gpu loaded:true from its resolved path, plus
-            # verity.primitives.circuits / verity_vllm / vllm-poc as loaded in this process) is written beside the attempt when the driver names the
+            # verity.ml.circuits / verity_vllm / vllm-poc as loaded in this process) is written beside the attempt when the driver names the
             # dir ($VERITY_SOURCE_IDENTITY_DIR, set by commit_delta from --out): <dir>/source_identity.gpu_ext_load.json.  The start-of-run
             # record has hidden_gpu loaded:false; this one is the evidence that what LOADED at the import site was this tree's.
             _sid_dir = os.environ.get("VERITY_SOURCE_IDENTITY_DIR")
@@ -2390,7 +2390,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                             "rule": "derived-row rule (candidate, NOT verified here): phi = registry exact model of the pinned norm kernel over the bound "
                                     "source row (R2e residual / R2b embedding bf16 row) + registered weight row; opening = source-row leaf + weight "
                                     "opening + replay; verifier + binding/value tests not implemented in this lane",
-                            "count": None, "bytes": None, "evidence": "source rows bound above; exact-model conformance from verity.primitives.circuits registry (row-4 work)"})
+                            "count": None, "bytes": None, "evidence": "source rows bound above; exact-model conformance from verity.ml.circuits registry (row-4 work)"})
         for src in self.sources:
             classes.extend(src.declaration_classes())
         notes = ["binds ONLY naturally materialised values (module outputs in HBM); FA2 interior (hidden-fa2) and norm kernel interiors "
