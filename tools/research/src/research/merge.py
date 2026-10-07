@@ -158,7 +158,11 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The job names ``commit``'s own `tools/check/ci.toml` declares, or why they can't be read."""
     import tomllib
 
-    r = _git(repo, "show", f"{commit}:tools/check/ci.toml", check=False)
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/check/ci.toml",
+                                  lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
+    r = _git(repo, "show", f"{commit}:{path or 'tools/check/ci.toml'}", check=False)
     try:
         jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", [])] if r.returncode == 0 else None
     except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
