@@ -24,7 +24,7 @@ Each tick, with the brain absent (local rules):
   - shrink: fence a pool GPU that has been free for `$VY_POOL_IDLE_S` with nobody waiting for it, then delete its holder;
     delete pending holders nobody waits for.
 With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
-`python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from tools/cluster), the pool's `max`, `borrow` and
+`python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from infra/cluster), the pool's `max`, `borrow` and
 `borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
 without a restart (a read that takes longer than `POLICY_TIMEOUT_S` fails, and everything it started is killed). A key it lacks keeps the environment's value; while it fails or answers a `max` or `borrow` that isn't a
 whole number of the node's GPUs, the three it last answered stay (the environment's, before it ever has). Each change is logged

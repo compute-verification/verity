@@ -28,7 +28,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_catalog.definitions import mufu
+from verity.ml.circuits.ops import mufu
 from verity_vllm.program.kernels import rms_triton_model as RM
 from verity_vllm.program.kernels.fa2_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
 
@@ -56,7 +56,7 @@ _TABLES: dict[str, RM.RmsTables] = {}
 
 
 def tables_dir(kernel: str = "triton") -> str:
-    """Where both kernels' MUFU.SQRT / MUFU.RCP / MUFU.RSQ delta tables live: core's (``verity_catalog.definitions.mufu.TABLE_DIR``)."""
+    """Where both kernels' MUFU.SQRT / MUFU.RCP / MUFU.RSQ delta tables live: core's (``verity.ml.circuits.ops.mufu.TABLE_DIR``)."""
     return mufu.TABLE_DIR
 
 
