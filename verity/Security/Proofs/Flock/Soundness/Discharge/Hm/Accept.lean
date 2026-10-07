@@ -68,7 +68,7 @@ theorem rowSlots_entry {ports : Array Port} {p k : ℕ} (hp : p < ports.size) (h
   rw [rowSlots_get hp, slotsOf, getElem!_pos _ k (by simp [hk])]
   simp
 
-/-- Compression `k` of port `p`'s row: its slot is one of the VU's `sha512x3` slots, and its place in the slot is below 3. -/
+/-- Compression `k` of port `p`'s row: its slot is one of the template instance's `sha512x3` slots, and its place in the slot is below 3. -/
 theorem rowSlot_lt {ports : Array Port} {p k : ℕ} (hp : p < ports.size) (hk : k < ports[p]!.chunks) :
     ((HmRow.rowSlots ports).2[p]!)[k]!.1 < (HmRow.rowSlots ports).1 ∧ ((HmRow.rowSlots ports).2[p]!)[k]!.2 < 3 := by
   have hsz : (HmRow.rowSlots ports).2.size = ports.size := by
@@ -84,11 +84,12 @@ variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info
 set_option hygiene false in
 local notation "𝒖" => done.getD unit default
 
-/-- **A row's `b ‖ c` in a satisfying witness of the accepted template statement.** At VU `g`, port `p`'s row: if it is
-not segmented (`hs`) and its words fill its chunks, at least one (`hn`, `hw`) and the block holds Δ's copies into the slots' inputs (the first
-compression's `cv` the row prefix's midstate, each later `cv` the previous compression's output, the `hm96` slot's `cv`
-the last output and its `pad` the padding block), then the 128 bytes the block holds at `bcCol` are the commit string of
-the `2 · words` row bytes at `Typed.msgCol` and the 192 salt bytes at `saltCol`. -/
+/-- **A row's `b ‖ c` in a satisfying witness of the accepted template statement.** At template instance `g`, port `p`'s
+row: if it is not segmented (`hs`) and its words fill its chunks, at least one (`hn`, `hw`) and the block holds Δ's
+copies into the slots' inputs (the first compression's `cv` the row prefix's midstate, each later `cv` the previous
+compression's output, the `hm96` slot's `cv` the last output and its `pad` the padding block), then the 128 bytes the
+block holds at `bcCol` are the commit string of the `2 · words` row bytes at `Typed.msgCol` and the 192 salt bytes at
+`saltCol`. -/
 theorem row_bc_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked types ls info words unit = .ok done)
     (hul : unit < ls.size) (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)

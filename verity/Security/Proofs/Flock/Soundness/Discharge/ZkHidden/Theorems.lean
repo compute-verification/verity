@@ -46,7 +46,7 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
 
 theorem zk_schedOK : ZkSchedOK := zk_schedOK'
 
-/-- **A one-table hidden-output `--zk` acceptance at the coin server's draw sets the draw up**: with `ZkSchedOK`, a
+/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**: with `ZkSchedOK`, a
 `DrawSetupZKH` at `dj S`. -/
 theorem drawSetupZKH_of_accepts (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)

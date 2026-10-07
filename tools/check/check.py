@@ -2,6 +2,9 @@
 
     uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
+    ... PART...                                             only those parts (`tests`, `circuits`, `lean`: each job's `part` in
+                                                            ci.toml) and what their jobs need, after the preflight; outside a
+                                                            recorded run, since no gate takes part of a check
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -95,8 +98,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     `--fresh`)
     circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
                     existence probe and loaded library its own check read or resolved (the Definitions it reached, their builds
-                    and modules' import closures, its `targets.py` bindings and its pins) is unchanged, with the checker's own
-                    version; one after a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
+                    and modules' import closures, its bindings and its pins, in `targets.py` or a Definition module's sidecar) is
+                    unchanged, with the checker's own version; one after a read the tracer cannot see (a program it starts) is
+                    not stored (`circuit_check.cache`)
     lean-audit      per package (`lean_audit.py`): a pass is reused while the content of the package, its path dependencies,
                     `tools/lean/` and its toolchain and manifest is unchanged, wherever the package is (a move is no miss, and
                     its kept build follows it); a miss is audited on a scratch tree holding only those, so a read outside them
@@ -151,8 +155,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-#: the Lean verifier of record, and `ci.py`, its agreement job against upstream's Rust verifier
+#: `ci.py`, the agreement job of the Lean verifier against upstream's Rust verifier, and its other scripts
 FLOCK_VERIFIER = ROOT / "backends" / "flock" / "verifier"
+#: the Lean verifier of record, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
+#: the Lean package away from the scripts rewrites it)
+FLOCK_LEAN = ROOT / "backends" / "flock" / "verifier" / "lean"
 #: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
 VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
                       "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY",
@@ -525,8 +532,10 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  `research merge` requires it for a change under `backends/flock/` (`tools/check/tool.py`), and
     `--record` sends it then."""
-    lean = FLOCK_VERIFIER / "lean"
+    lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
+        if FLOCK_VERIFIER.is_dir():
+            return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: backends/flock/verifier/lean is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing backends/flock/ requires "
@@ -683,7 +692,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
         return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
-    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_VERIFIER / "lean" / ".lake" / "build" / "bin" / "flock-verify"),
+    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
@@ -879,12 +888,21 @@ def shard(spec: str) -> dict:
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
-    files = tracked_files(ROOT)
-    if files is None:
-        raise DECLARATION.DeclarationError("--shard: this tree's files can't be listed, so its Lake packages aren't known")
-    parts_of = {"lean-audit": _lean_audit().packages(files)}
+    parts_of = _parts_of()
     return {"k": k, "n": n, "parts": DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1],
             "all": DECLARATION.all_parts(JOBS, parts_of)}
+
+
+def _parts_of() -> dict[str, list[str]]:
+    files = tracked_files(ROOT)
+    if files is None:
+        raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
+    return {"lean-audit": _lean_audit().packages(files)}
+
+
+def shard_parts() -> list[str]:
+    """Every part an unsharded check covers on this tree (`declaration.all_parts`)."""
+    return DECLARATION.all_parts(JOBS, _parts_of())
 
 
 def _rev(rev: str) -> str | None:
@@ -1033,7 +1051,7 @@ def agreement_closure(files: list[str]) -> list[str]:
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
     if any("require" in (ROOT / f).read_text() for f in root if (ROOT / f).is_file()):
         nested = ()
-    return [f for f in files if f.startswith(pre) and f != lean + "lean-audit.json" and not f.startswith(nested or ("\0",))]
+    return [f for f in files if f.startswith((pre, lean)) and f != lean + "lean-audit.json" and not f.startswith(nested or ("\0",))]
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
@@ -1342,6 +1360,20 @@ def main(argv: list[str]) -> int:
             return 2
         rest = rest[:i] + rest[i + 2:]
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
+    picked = [a for a in rest if a in DECLARATION.PARTS]
+    rest = [a for a in rest if a not in DECLARATION.PARTS]
+    if picked:
+        if sharded or os.environ.get("RESEARCH_RUN_ID"):
+            print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
+                  file=sys.stderr)
+            return 2
+        try:
+            chosen = DECLARATION.select(JOBS, picked)
+            sharded = {"parts": [p for p in shard_parts() if p.partition(":")[0] in chosen]}
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        print(f"check: parts {', '.join(picked)}: {', '.join(j.name for j in JOBS if j.name in chosen)}", flush=True)
     n = None
     if rest[:1] == ["--cores"] and len(rest) == 2 and rest[1].isdigit():
         n, rest = int(rest[1]), []

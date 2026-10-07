@@ -30,12 +30,9 @@ PerWindow.lean  the last two over the run's first `m` whole windows: the factor 
                                          per link-window
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
-Difftest.lean        tested: the definitions evaluated on an instance (expectedRow, and Accepted of constantRate
-                               and StatusComplete by decide), in the shape of the Python audit's results
-NetTimingDifftest.lean         the difftest's run (`runs` in lean-audit.json): every instance against the Python audit's
-                               results
-../../../protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py    the difftest's data: 10,000 random instances and the Python audit's results on them
-lean-audit.json                the policy and guarantee records for tools/lean/audit.py
+Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftest runs, equal to the
+                               definitions above: four theorems, not guarantees (below)
+../../lean-audit.json          the guarantee records (`security`'s lock) for tools/lean/audit.py
 CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
 ~~~
 
@@ -44,21 +41,21 @@ lake exe cache get                                          # Mathlib's prebuilt
 lake build                                                  # NetTiming (the default target)
 python3 ../../../../tools/lean/audit.py .                      # Verity's Lean audit
 lake env lean CheckAxioms.lean                              # the axioms of the 35 statements, 16 witnesses and 3 lemmas
-# the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
-uv run python ../../../protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py ../../../protocols/accounting --out /tmp/dt
-lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000
+# the difftest is the certifier program's: see its package, ../../../protocols/accounting/communication/certifier/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Specs/NetworkCertifier/Assumptions.lean` and
 `../../Specs/NetworkCertifier/Guarantees.lean`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
-as `docs/…` and `internal/…` name the network-transparency project store, where the covert-capacity note
+as `docs/…` and `internal/…` name network accounting's project store, where the covert-capacity note
 (`docs/network-transparency/timing-channel.md`) and the reviews live.
 
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 4 guarantees' records, whose meaning it follows through those three (`meaning`). It then
-runs the difftest (`runs`): on 10,000 random instances, the definitions give what the Python audit gives.
+record, a kernel replay, and the guarantees' records, whose meaning it follows through those three (`meaning`) and the
+certifier program's modules. The difftest (`runs` in the certifier program's own `lean-audit.json`) checks that on 10,000
+random instances the program gives what the Python audit gives; `Code.lean` proves the program equal to these
+definitions.
 When a changed record lands on `main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
 
 ## The model
@@ -124,7 +121,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds the four guarantees, the theorems whose bounds the calibration reports
+The lock (`lean-audit.json`'s `guarantees`) holds four guarantees: the theorems whose bounds the calibration reports
 (`verity.protocols.accounting.communication.certifier.calibration`, `PROTOCOL.md`'s "Capacity"), each listed as `NetTiming.SecurityProofs.G` and
 proved by the lemma of the same statement whose name it spells in UpperCamelCase:
 
@@ -132,6 +129,26 @@ proved by the lemma of the same statement whose name it spells in UpperCamelCase
   `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerWindow`;
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
+
+**The program's agreements, proved and audited, not guarantees.** Four theorems tie the difftest to these definitions
+(`NetTiming.SecurityProofs.Code`): the difftest holds the Python audit
+to the certifier program (`verity/protocols/accounting/communication/certifier/lean/`, Lean core only, `NetworkCertifier`), and
+these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
+definitions, relating them by their fields, since `security` requires nothing but Mathlib
+(`tests/test_lean_packages.py`) and so `Specs/` cannot name the program:
+
+- `CodeExpectedRow`: `NetworkCertifier.expectedRow` is `expectedRow` for clock syncs with the same δ and ρ and frames with the same
+  payloads, anchors and logical indices (the difftest's `rows`, `diff` and `mismatch`);
+- `CodeAcceptedConstantRate`: `NetworkCertifier.Accepted` of `NetworkCertifier.constantRate` is `Accepted` of `constantRate` for observations
+  with the same rows and complete statuses, operators giving the same ingress on them, related frames and advice naming
+  the same values (`accepted`);
+- `CodeStatusComplete`: `NetworkCertifier.StatusComplete` is `StatusComplete` for observations with the same complete statuses
+  (`complete`);
+- `CodeSyncSet`: every sync set of the program has a reference sync set with the same values and conversely (`advice`).
+
+They aren't guarantees because `four_names` holds every `NetTiming` guarantee to `SecurityProofs.G : Guarantees.G`,
+and a `Guarantees` module can't state them: it would have to import the program. They are built and checked like every
+declaration, and no citation may call them guarantees.
 
 **Proved and audited, not guarantees.** The other 31 statements in `Guarantees.lean` are lemmas: nothing relies on them
 as proved (README "Glossary"), so they have no record. Each is still `SecurityProofs.G : Guarantees.G`, built and checked

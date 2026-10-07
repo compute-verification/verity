@@ -1,0 +1,31 @@
+# The Security/ move's renames: what `tools/move/rename.py --map tools/move/security_map.toml` renames, after
+# `layout.py` has moved `verity/Security/` to `Security/` (the Notion hub's Security page, draft of 7 Oct 2026).
+#
+# `Specs/` becomes `Models/`: proofs' sort (note:20261007T0350Z-draft-specs-sort) puts 68 of its 77 modules in Models/
+# (Lean models of verifiers that still run as Python), and the other 9 (Core's and NCI's, no code, and PoUW's HonestCap,
+# out) have no other home yet. Definitions/ and Proofs/ keep their names. Properties/ starts with C-Flock's claims, lifted
+# out of Proofs/ by `audit.py --lift` after the move, as are the two declaration-level splits. Declarations keep their
+# names, so no guarantee changes: `audit.py --update --moved` on the result prints each as the same statement.
+#
+# `Specs` is renamed as a whole word (`Specs.Pouw`, `Specs/`, `"Specs"`, `import Specs`), never inside an identifier.
+
+[words]
+
+[[words_in]]
+files = ["**"]
+[words_in.words]
+"Specs" = "Models"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps and tests, changelogs, the rulings), the frozen
+# backends, files whose bytes a digest pins, and the research harness's recorded moves.
+exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py",
+           "benchmarks/numerical/python/verity_numerical/redteam/z3_babybear.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]

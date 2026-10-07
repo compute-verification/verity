@@ -2,9 +2,9 @@ import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.CoinBinding
 
 /-!
-# The coin step: a committed coin is fresh when the prover moves (live/PROTOCOL.md §9, M2)
+# The coin step: a committed coin is fresh when the prover moves (live/PROTOCOL.md §9, C-Flock ZK)
 
-Under M2 the verifier commits to every coin of the session before the prover's first message
+Under C-Flock ZK the verifier commits to every coin of the session before the prover's first message
 (`coin-tree/hm96-sha512/v1`): round `j`'s block of coins is chained into a digest `x_j`, and its leaf is the hm96 leaf
 `H(lp ‖ x_j ⊕ M·y_j ‖ H(sp ‖ y_j))` under a fresh salt `y_j`; the root of the leaves is sent first, and round `j`'s
 coins, `T_n`, the salt and the path are opened only after the prover's round-`j` message. So the prover's message may

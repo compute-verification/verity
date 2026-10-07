@@ -1,6 +1,6 @@
-"""The arm interface (v0): what a PoUW prover arm gives the harness, and what the harness gives it. Its contract, and what the
-harness does with each member, is published in the project store (`internal/pouw/rtx-pro/workers/6-harness.md`, "Arm
-interface"); this module is that contract in code, and `check_arm` is what the harness enforces before it runs an arm.
+"""The arm interface (v0): what a PoUW prover arm gives the harness, and what the harness gives it. This module is its
+contract, and what the harness does with each member, in code, and `check_arm` is what the harness enforces before it runs
+an arm.
 
 An arm is any object with the members of `BenchArm` (v0.6; `Arm`, its old name, is a deprecated alias: the vLLM API's
 `Arm` is a bench mode at the serving level, not a prover under test); the harness loads it by ``module:Class`` (``--arm``),
@@ -25,7 +25,7 @@ before anything is timed: no .FTZ and no FP32 MUFU outside ptxas's pinned IEEE s
 approximate div/sqrt build, and only from a pinned toolkit.
 
 The record may also name the arm's reference ``verifier`` (v0.4), which `verify.py` runs after timing, in the same run, on
-the transcripts the timed code emitted (server.md 08:35Z: a measured panel row needs the verifier's acceptance of its own
+the transcripts the timed code emitted (panel rule (b), 08:35Z: a measured panel row needs the verifier's acceptance of its own
 run's transcript). ``ctx["out_dir"]`` is the run's directory, and ``ctx["transcripts_dir"]`` its ``transcripts/``, where an
 arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention). The declaration (`check_verifier`):
 
@@ -37,7 +37,7 @@ arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention
   ``per: "run"`` once for the run (identical commands of several arms run once).
 - ``commit`` (optional): the verifier's git commit, when it isn't the run's source commit.
 - ``control`` (optional, v0.5): the negative control's transcript, like ``transcript`` (``{arm}`` and ``{shape}``): what the
-  arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (panel rule, server.md 11:50Z).
+  arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (panel rule, 11:50Z).
 
 An arm with ``dump(dev, call, shape, dir)`` (v0.5) lets the harness make its transcripts (`bench.poison_dump`, after the
 timed items): the harness fills every buffer of ``call.transcript_buffers`` (default ``call.outputs``; name what a setup

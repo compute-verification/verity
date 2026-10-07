@@ -145,7 +145,7 @@ def test_the_clean_up_removes_the_noise_up_to_the_peels_bf16_roundings(fmt):
 @pytest.mark.parametrize("fmt", FMTS)
 def test_the_chain_is_exact_on_the_domain(fmt):
     """Every C̃ word is the exact dot product rounded once toward zero: nothing the chain drops depends on the order.
-    Rounding therefore binds no word to its order, and the design's defense is salt-dependence (``fp4-design.md`` §6)."""
+    Rounding therefore binds no word to its order, and the design's defense is salt-dependence."""
     s, ctx = V.scheme(fmt, True), V.ctx_of("exact", (16, 1024, 16), 1, 2)
     tile = s.tiles(ctx.matmul.shape)[0]
     ops = s.encode(ctx, s.noise(ctx), V.rows("exact", "A", 16, 1024)[:4], V.rows("exact", "B", 16, 1024)[:4],
@@ -218,9 +218,9 @@ def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
 
 
 def test_a_checkpoint_that_needs_gamma_folded_registers_only_with_it():
-    """70B registrations fold γ (research store docs/pouw/keyed-transforms.md §14: the cast moves Llama-3.1-70B's layer 0
-    update by 158% unfolded).  The rotation folds γ, so its stacks pass as they are; an unrotated checkpoint declares
-    `GAMMA_FOLD`, and is still curated only.  A folded but unrotated checkpoint takes no V/O or interleave."""
+    """70B registrations fold γ (the cast moves Llama-3.1-70B's layer 0 update by 158% unfolded).  The rotation folds γ,
+    so its stacks pass as they are; an unrotated checkpoint declares `GAMMA_FOLD`, and is still curated only.  A folded
+    but unrotated checkpoint takes no V/O or interleave."""
     s = get("pearl-c-nvfp4-v0")
     vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
     for stack in F.REGISTRATION_STACKS:
@@ -359,7 +359,7 @@ def test_row_rules_and_debit(fmt):
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
-    # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
+    # share; MXFP4 chains hold identity atoms (about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
     assert clean.total == clean.forming + clean.identity + clean.split and (clean.identity == 0) == (fmt == "nvfp4")
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
@@ -402,7 +402,7 @@ def witness_elements(s, ops) -> int:
 @pytest.mark.parametrize("blocks", (2, 4))
 def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(blocks):
     """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
-    witness's salt-dead and unneeded elements (not every element of a screened block, server.md 11:32Z), no block pair
+    witness's salt-dead and unneeded elements (not every element of a screened block), no block pair
     is screened, and the tile stays under ρ."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
     assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
@@ -546,8 +546,7 @@ def spike_row(i: int, k: int = 1024, s: float = 8.9, top: float | None = None) -
 
 def narrow_cell_row(i: int, k: int = 1024, s: float = 8.9) -> list[int]:
     """One max per block at s·ρ, and every other code, ρ's samples included, at the centre of a narrow E2M1 cell (0,
-    ±0.5, ±1 or ±1.5 of s/6), in a rank-one pattern: no code is near-deterministic at ε = 5%, yet the split pays
-    (theory-pearl-c4-domain.md §6.1)."""
+    ±0.5, ±1 or ±1.5 of s/6), in a rank-one pattern: no code is near-deterministic at ε = 5%, yet the split pays."""
     u, rs = s / 6, 1 if i % 2 else -1
     v = [rs * _SIGN[t] * (_SAMPLE[t] if t % 8 == 0 else _CELL[t]) * u for t in range(k)]
     for b in range(k // 16):
@@ -562,7 +561,7 @@ def formed(f: F.Fmt, rows, role_e: int, role_f: int, k: int):
 
 @pytest.mark.parametrize("family", [spike_row, narrow_cell_row], ids=["spike", "narrow-cell"])
 def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
-    """F1′ (theory §6.2): the assessor's spike rows, which the support witness reads as salt-live (every other item 0),
+    """F1′: the assessor's spike rows, which the support witness reads as salt-live (every other item 0),
     and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the cap, while
     the Gaussian side carries nothing."""
     f, k, n = F.NVFP4, 1024, 4096
@@ -597,8 +596,8 @@ def test_c_charges_at_least_the_first_reading(family):
 
 def test_b_tilde_rows_are_charged_at_the_overfit_factor():
     """B̃'s F1′ is charged at F1_B_OVERFIT = 10 times its expectation per window, capped at the window's MACs (a layout
-    chosen after the salt for B̃'s residual is shared by all n weight rows and gains up to 6.8× on narrow weights,
-    theory §6.10); A′'s at 1×.  R1 reads B rows the same way."""
+    chosen after the salt for B̃'s residual is shared by all n weight rows and gains up to 6.8× on narrow weights);
+    A′'s at 1×.  R1 reads B rows the same way."""
     f, k, n = F.NVFP4, 1024, 4096
     assert F.F1_B_OVERFIT == 10
     a, e_a = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "A", 2, k)], F.ROLE_EA, F.ROLE_FA, k)
@@ -622,7 +621,7 @@ def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
 
 
 def test_f1_prime_puts_the_correction_inside_the_expectation():
-    """κ inside (ratings.md 15:18Z condition 1): a cheater routes each row after the salt, so F1′ charges
+    """κ inside (the assessor's FP4 condition 1, 15:18Z): a cheater routes each row after the salt, so F1′ charges
     E[max(0, R − κ)] per route, never less than max(0, E[R] − κ), and κ = 0 leaves S_w as it was."""
     f = F.NVFP4
     p = [0.0] * 16 + [0.45] * 112
@@ -635,8 +634,9 @@ def test_f1_prime_puts_the_correction_inside_the_expectation():
 
 
 def test_f1_prime_reads_the_exact_noise_law():
-    """p_t under the exact law given E (ratings.md 15:18Z condition 2): the pmf of Σ (2E_r)(2F_r) has the Gaussian's
-    variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled by 12."""
+    """p_t under the exact law given E (the assessor's FP4 condition 2, 15:18Z): the pmf of Σ (2E_r)(2F_r) has the
+    Gaussian's variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled
+    by 12."""
     e = tuple(F.line(b"\x05" * 32, F.ROLE_EA, 0))
     lo, pmf = F.noise_law(e)
     assert sum(pmf) == pytest.approx(1.0) and lo == -(len(pmf) - 1) // 2
@@ -712,10 +712,10 @@ def r1_tile():
 
 
 def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
-    """R1 (ratings.md 15:18Z condition 4): the spike row's own F1′ passes ρ·(its cell credit), so it must be declared
-    excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it fails the
-    tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest prover's
-    declaration finds exactly row 0."""
+    """R1 (the assessor's FP4 condition 4, 15:18Z): the spike row's own F1′ passes ρ·(its cell credit), so it must be
+    declared excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it
+    fails the tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest
+    prover's declaration finds exactly row 0."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
     assert all(F.row_passes(s.fmt, F.parse_row(r, k)) for r in a_rows + b_rows)
@@ -747,7 +747,7 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
 
 
 def test_b_ovf_discounts_credit_by_its_pinned_table():
-    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b; condition 7): creditOf less ⌈β(n_b)·mnk⌉, β the table
+    """B-OVF (the assessor's B, 18:45Z; condition 7): creditOf less ⌈β(n_b)·mnk⌉, β the table
     measured on each bucket's R1 boundary (`beta_final.py`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from
     4,096 up."""
     assert F.B_OVF == ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
@@ -806,15 +806,15 @@ def test_a_drawn_tile_evaluates_each_rows_f1_once():
 
 
 def strassen_c_L(m: int, k: int, n: int) -> float:
-    """The c_L F2 pinned before the catalogue (bc-d9842080, 13:35Z; ratings.md 15:18Z): Strassen–Winograd at W1's int8
-    leaf of 2 slots, depth capped by log2(k/16) alone."""
+    """The c_L F2 pinned before the catalogue (bc-d9842080, 13:35Z; the assessor's FP4 conditions, 15:18Z):
+    Strassen–Winograd at W1's int8 leaf of 2 slots, depth capped by log2(k/16) alone."""
     return min((2 * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75
                 for L in range(1, (k // 16).bit_length())), default=2.0)
 
 
 def test_f2_depth_cost_is_the_pinned_catalogue_minimum():
     """c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form (the assessor's
-    20:00Z ruling; fast-matmul-catalogue-audit.md §4): 0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
+    20:00Z ruling): 0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
     formula gave 0.808 / 0.707 / 0.619 / 0.542.  At the domain's corner (m = 2^24, k = 2^16, n = 2^18, the claimed n
     cap) 0.270 against Strassen's 0.421; rectangular shapes read their own entries; F2 fires only past f_A + f_B = 1.915
     at 8k³, far from honest tiles' 0.13–0.30."""
@@ -904,9 +904,9 @@ def test_scale_bytes_have_one_encoding_and_no_zero():
     assert counts == {"bytes": 6, "outside_range": 4, "min": 0, "max": 0xB8, "bit7": 2, "zero": 1, "nan": 1}
 
 
-#: The four rows the decode's 28-row `nvf4Specials` table adds (bc-5a715b19's review, research store
-#: internal/pouw-fp8/pearl-c4-scale-decode/): (accumulator, a, b, sa, sb), codes and bytes packed little-endian, as the
-#: Lean `Vec`.  Each is a NaN accumulator with one scale byte that sets bit 7.
+#: The four rows the decode's 28-row `nvf4Specials` table adds (bc-5a715b19's review): (accumulator, a, b, sa, sb),
+#: codes and bytes packed little-endian, as the Lean `Vec`.  Each is a NaN accumulator with one scale byte that sets
+#: bit 7.
 NAN_BIT7_SPECIALS = (
     (0xFFACB8FF, 0xD012B2233DC6403271C58AC78DFF95B32950DA366B5B32A97D33B2DECE69A903,
      0x932E07AB6589BD2774DC10686F6F47C3F71883659810A8DEEA135E394A8BA32E, 0x28DB5712, 0x4F2C4D74),
@@ -980,13 +980,13 @@ def test_d_sb_rejects_a_non_finite_input_word(word):
     assert W.check_opened(s, record, tile, a, b, None) == "A row 5 is malformed: non-finite FP32 word"
 
 
-def lifecycle(s: F.PearlC4, real=20):
+def lifecycle(s: F.PearlC4, real=20, salt_key=None):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails D-NF; B passes."""
     rows_a = V.rows("work-life", "A", real, K) + [F.bf16_row([0] * K)] * (32 - real)
     rows_a[3] = spiked(rows_a[3], value=2.0 ** 16)
     rows_b = V.rows("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(s, {9: rows_b})
+    prover = Prover(s, {9: rows_b}, salt_key=salt_key)
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
@@ -1005,8 +1005,85 @@ def test_the_work_law_audits_pearl_c4():
     assert any("A row 3 is credited but fails" in v.reason for v in hides.audit.verdicts if not v.ok)
 
 
+#: -h3's row seeds under Pearl-C4's seed-A label: (unit, row) -> seed, at salt bytes 0 … 31, root_B bytes 32 … 63 and the
+#: leaf blake3("pearl-c row leaf")
+ROW_SEEDS = {(7, 3): "c6bf5c2d438504c44f5dda34ec27840d2403852bc8bbad0afac759da47fe3fb5",
+             (7, 200): "5efa282aa56b5f5b4b48fec6c4d8142a619385b2bae0c20f77bde37d4a2af0a3",
+             (2 ** 32 - 1, 3): "70d1c4a7113aec65a3a3e443253fc5de2922be2390c03ecb1d31297076e9c9ff",
+             (2 ** 32 - 1, 200): "facaf01038342577857bbc390cb1aa84323eb3e24908104cc6e0eef01a3b2b91"}
+
+
+def test_h3_row_seeds_are_pearl_cs_layout_under_pearl_c4s_label():
+    """-h3's row seed is the pinned bytes: `pearl_c.row_seed`'s message under `pearl-c4/v0/seed-A`, the one-row unit's
+    seed_A (`unit_seed_a`, which `noise` keys a unit by) at index unit · 2^32 + row, so never Pearl-C's seed; a unit or
+    row of 2^32 or more is refused."""
+    from verity.primitives.crypto.blake3 import blake3, keyed
+
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    for (unit, row), seed in ROW_SEEDS.items():
+        got = F.row_seed(salt, leaf, root_b, unit, row)
+        assert got.hex() == seed and got == F.unit_seed_a(salt, leaf, root_b, unit << 32 | row) != C.row_seed(salt, leaf, root_b, unit, row)
+        assert got == keyed(blake3(b"pearl-c4/v0/seed-A"), salt + leaf + root_b + (unit << 32 | row).to_bytes(8, "little"))
+    ctx = V.ctx_of("seeds", (16, K, 16), 3, 9)
+    assert F.PearlC4().noise(ctx).seed_a == keyed(blake3(F.LABELS["seed-A"]), ctx.salt + ctx.root_a + ctx.root_b + (3).to_bytes(8, "little"))
+    for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
+        with pytest.raises(ValueError, match="must each be below 2"):
+            F.row_seed(salt, leaf, root_b, unit, row)
+
+
+def test_h3_draws_each_rows_e_a_from_its_own_digest():
+    """`PearlC4(hashing="h3")` is `pearl_c`'s -h3: hm96-sha512 trees, the SHA-512 leaf and tickets, and row i's E_A is line
+    0 of `row_seed` over row i's SHA-512 digest (`pearl_c.row_digest`), so it moves with that row's bytes and position
+    alone and not with root_A, which keys only the tickets.  B's side and seed_B are h0's."""
+    from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
+
+    s, h0 = V.scheme("nvfp4", True, "h3"), V.scheme("nvfp4", True)
+    assert (s.name, s.commitment_hash) == ("pearl-c-nvfp4-v0-h3", "hm96-sha512")
+    assert SchemeId.parse(s.name).hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"] and W.row_cap(s)
+    assert hash_format(h0) is HASH_FORMATS["h0"] and not W.row_cap(h0) and h0.commitment_hash == "sha256"
+    assert dict(s.certificate.parameters)["hashing"] == "h3" and "hashing" not in dict(h0.certificate.parameters)
+    assert "cr/sha-512" in s.certificate.claims and "cr/sha-512" not in h0.certificate.claims
+    for bad in ("h1", "h2", "h3s"):
+        with pytest.raises(ValueError):
+            F.PearlC4(hashing=bad)
+    ctx = V.ctx_of("h3-rows", (16, K, 16), 3, 9, wide=True)
+    a, b = V.rows("h3-rows", "A", 16, K), V.rows("h3-rows", "B", 16, K)
+    tile, noise = s.tiles(ctx.matmul.shape)[0], s.noise(ctx)
+    assert noise == h0.noise(ctx)
+    seeds = s.row_seeds(ctx, a, tile.rows)
+    assert seeds == [F.row_seed(ctx.salt, C.row_digest(a[i]), ctx.root_b, 3, i) for i in range(16)] and len(set(seeds)) == 16
+    ops, ops0 = s.encode(ctx, noise, a, b, tile), h0.encode(ctx, noise, a, b, tile)
+    assert ops.e_a == [F.line(x, F.ROLE_EA, 0) for x in seeds] != ops0.e_a
+    assert ops.e_b == ops0.e_b and ops.b.codes == ops0.b.codes and ops.pb == ops0.pb
+    checked = s.checked(ctx, ops)
+    assert s.digest(ctx, noise, checked) == C.leaf(checked, "h3") != C.leaf(checked)
+    assert s.tickets(noise, checked) == C.PearlC(hashing="h3").tickets(noise, checked) != h0.tickets(noise, checked)
+    other = list(a)
+    other[5] = a[6]
+    e = s.encode(ctx, noise, other, b, tile).e_a
+    assert [i for i in range(16) if e[i] != ops.e_a[i]] == [5] and e[5] != ops.e_a[6]
+    moved = Context(ctx.salt, ctx.matmul, bytes(64), ctx.root_b)
+    assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
+
+
+def test_the_work_law_audits_pearl_c4_under_h3():
+    """The work law on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
+    and h0's verifier refuses the transcript's openings (another tree hash).  Each row's seed reads the hiding roots, so
+    whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest
+    prover gives up nothing (`volunteer`)."""
+    s = V.scheme("nvfp4", True, "h3")
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=bytes(32))
+    splits = {9: W.Split(K)}
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
+    assert W.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
+    assert W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
+    h0 = W.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, E.challenger(), 8)
+    assert not h0.audit.accepted and {v.reason for v in h0.audit.verdicts if not v.ok} == {"activation opening"}
+
+
 def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
-    """V-EX (theory §6.13, the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
+    """V-EX (the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
     earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row
     the rules exclude stays excluded."""
     s = V.scheme("nvfp4", True)
