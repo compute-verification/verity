@@ -1,5 +1,5 @@
 name = "lms"
-defaultTargets = ["Lms", "lms-difftest"]
+defaultTargets = ["Lms", "lms-difftest", "lms-sign-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -15,3 +15,7 @@ name = "Lms"
 [[lean_exe]]
 name = "lms-difftest"
 root = "Lms.DifftestMain"
+
+[[lean_exe]]
+name = "lms-sign-difftest"
+root = "Lms.SignDifftestMain"
