@@ -32,7 +32,7 @@ PARTS = {
     ("FrameV3Node", (2,)): (167630, 818406, 16011),
 }
 #: (D, SCHEMA) -> the read's gates (`SpecializedDefinition.gates`): the size a unit holding it is cut to
-READS = {(1, ROW): 1659756, (13, SEG): 13658304, (17, ROW): 17668695}
+READS = {(1, ROW): 1659755, (13, SEG): 13658304, (17, ROW): 17668695}
 
 
 def _hex(x: str) -> bytes:
@@ -177,6 +177,26 @@ def test_reads_open_the_hiding_leaves_at_their_rank() -> None:
         root = F.node_ref(dom, 0, 0, other, _hex(h["leaf"]))
         rows = [F.arguments(root, dom, value, rank, [other]), F.arguments(root, dom, value, rank ^ 1, [other])]
         assert evaluate_bits(F.read(1, schema), *_columns(rows)).reshape(-1).tolist() == [1, 0]
+
+
+@pytest.mark.slow
+def test_a_read_at_d_b_opens_the_library_tree_and_refuses_wrong_positions() -> None:
+    """About a minute and a half: the read at D_B = 17, whose leaf takes a three-byte uint and whose nodes switch from two-byte
+    to one-byte indices at level 8, opens `MerkleTree`'s paths of a 2^16 + 1-leaf tree at its edge positions, and refuses each
+    with its low or high position bit flipped. No shallower read reaches either width change."""
+    n = (1 << 16) + 1
+    d = domain(n, "gates/frame-v3/d17")
+    rng = random.Random("frame-v3-d17")
+    values = {p: rng.randbytes(64) for p in range(n)}
+    tree = MerkleTree(d, values, lambda p: ROW)
+    rows, want = [], []
+    for p in (0, 255, 256, 65535, 65536):
+        o = tree.open(p)
+        assert len(o.path) == merkle_depth(n) == 17 and o.value == values[p]
+        for q in (p, p ^ 1, p ^ 1 << 16):
+            rows.append(F.arguments(tree.commitment.root, d.domain_id, values[p], q, o.path))
+            want.append(int(q == p))
+    assert evaluate_bits(F.read(17, ROW), *_columns(rows)).reshape(-1).tolist() == want
 
 
 def _x_bits(x: int, B: int) -> list[int]:

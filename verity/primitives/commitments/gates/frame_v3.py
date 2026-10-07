@@ -284,8 +284,13 @@ def _refs(c: Coll) -> list:
 
 
 def _body(B, S, root, domain, value, pos, path):
-    zero, one = (B.call(BL.constant(b)).refs[0] for b in (0, 1))
-    const = lambda v, w: [one if v >> j & 1 else zero for j in range(w)]  # noqa: E731
+    bits_of: dict[int, object] = {}
+
+    def const(v: int, w: int) -> list:
+        for b in sorted({v >> j & 1 for j in range(w)} - bits_of.keys()):
+            bits_of[b] = B.call(BL.constant(b)).refs[0]
+        return [bits_of[v >> j & 1] for j in range(w)]
+
     bits = _refs(pos)
     n = index_bytes(S.D)
     cur = B.call(bind(FrameV3Leaf, B=n, SCHEMA=S.SCHEMA), domain, value, Coll(Array(8 * n, BIT), TR._refs(bits + const(0, 8 * n - S.D))))
