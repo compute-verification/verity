@@ -32,7 +32,6 @@ template <int FMT> struct Fmt;
 template <> struct Fmt<NVFP4> { static constexpr int BLK = 16; static constexpr uint32_t ONE = 0x38383838u; };
 template <> struct Fmt<MXFP4> { static constexpr int BLK = 32; static constexpr uint32_t ONE = 0x7F7Fu; };
 
-constexpr uint8_t D_LINE = 0x24;
 constexpr float TOP = 2688.0f, DELTA = 0.25f, FOUR = 4.0f;
 constexpr uint32_t FLOOR_BITS = 0x2F800000u, K_BETA_BITS = 0x3EA920A7u, SIXTH_BITS = 0x3E2AAAABu;
 constexpr uint32_t NOISE_F_SCALE = 0x18181818u;
@@ -112,6 +111,31 @@ DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); 
 DEV uint32_t swz128(int r, int c) { return r * 128 + ((c ^ (r & 7)) << 4); }
 
 // ---------------------------------------------------------------- noise lines and F's transpose
+// Prototype arms for the line's hash (LINE_ARM, the measurement only): 0 TurboSHAKE128 (below), 1 SHA-512 with one
+// compression per line (its first 16 bytes), 2 SHA-512 with one compression per four lines (block index/4, quarter index%4);
+// SHA-512's H_"pearl-c4/v2/line"(seed ‖ role ‖ u32 LE) from the label block's precomputed state.
+#ifndef LINE_ARM
+#define LINE_ARM 0
+#endif
+__constant__ uint64_t LINE_MID[8] = {0xfdb83079a0e69062ull, 0x016df33feb42c07eull, 0x2947f8bafd5eee91ull,
+                                     0x5c158735900dc8c1ull, 0xf3ad12a7257a2c36ull, 0x0fe5ee6d0ba4bc58ull,
+                                     0x695f5fc8ee46c6ebull, 0x5acf3747d183fa80ull};
+DEV uint64_t bswap64(uint64_t x) { return rs_be64((uint32_t)x, (uint32_t)(x >> 32)); }
+DEV void line_block(const uint64_t* seed, int role, uint32_t c, uint64_t st[8]) {
+  uint64_t w[16];
+#pragma unroll
+  for (int i = 0; i < 8; i++) st[i] = LINE_MID[i];
+#pragma unroll
+  for (int i = 0; i < 4; i++) w[i] = bswap64(seed[i]);
+  w[4] = (uint64_t)(uint8_t)role << 56 | (uint64_t)(c & 0xFF) << 48 | (uint64_t)(c >> 8 & 0xFF) << 40 |
+         (uint64_t)(c >> 16 & 0xFF) << 32 | (uint64_t)(c >> 24) << 24 | 0x80ull << 16;
+#pragma unroll
+  for (int i = 5; i < 15; i++) w[i] = 0;
+  w[15] = 8 * (128 + 37);
+  rs_compress(st, w);
+}
+#if LINE_ARM == 0
+constexpr uint8_t D_LINE = 0x24;
 // line(seed, role, index) = TurboSHAKE128(seed (32 B) | role | index u32 LE, 0x24, 16 bytes)
 DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
   uint64_t s[25];
@@ -124,6 +148,22 @@ DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
   ph::keccak_p<12>(s);
   return make_ulonglong2(s[0], s[1]);
 }
+#elif LINE_ARM == 1
+DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
+  uint64_t st[8];
+  line_block(seed, role, (uint32_t)idx, st);
+  return make_ulonglong2(bswap64(st[0]), bswap64(st[1]));
+}
+#else
+DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
+  uint64_t st[8];
+  line_block(seed, role, (uint32_t)idx >> 2, st);
+  const int q = idx & 3;
+  const uint64_t lo = q == 0 ? st[0] : q == 1 ? st[2] : q == 2 ? st[4] : st[6];
+  const uint64_t hi = q == 0 ? st[1] : q == 1 ? st[3] : q == 2 ? st[5] : st[7];
+  return make_ulonglong2(bswap64(lo), bswap64(hi));
+}
+#endif
 // p0 seed, p1 out; i0 role, i1 count
 extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
   const int idx = blockIdx.x * blockDim.x + threadIdx.x;
