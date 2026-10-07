@@ -21,7 +21,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kernels import load, ncp_route_u_tiles  # noqa: E402
+from verity.ml.kernels import load, ncp_route_u_tiles  # noqa: E402
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
 from verity.protocols.accounting.work.pouw.schemes import ncp  # noqa: E402
 

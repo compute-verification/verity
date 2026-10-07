@@ -26,7 +26,7 @@ _BLOCKS: dict[int, np.ndarray] = {}
 def mufu_tanh(x: np.ndarray, table: np.ndarray | None = None, lo: int | None = None) -> np.ndarray:
     """`MufuTanh_v1` on every word of `x`: NaN -> nan_out, |x| >= saturate_from -> +-1, |x| < identity_below -> x, else the measured
     table at |x| with the sign of x.  `table` (the shard's words from `lo`) replaces the lazily decoded blocks."""
-    from verity_catalog.definitions import mufu
+    from verity.ml.circuits.silicon.definitions import mufu
 
     rules = mufu.MUFU_TANH_RULES
     u = np.asarray(x, dtype=np.uint32)
@@ -57,7 +57,7 @@ def mufu_tanh(x: np.ndarray, table: np.ndarray | None = None, lo: int | None = N
 def softcap_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16, check: bool, softcap_mul: int,
                   scale_log2: int, tanh: Callable[[np.ndarray], np.ndarray]):
     """`AttnBlockSoftcap_v2{D, NVIS, FIRST, BN, CAP, DOT, CHECK}` vectorised over rows.  Returns (m_new, l, o, nonfinite)."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
 
     BN = kb.shape[1]
     Rn = q.shape[0]
@@ -99,7 +99,7 @@ def softcap_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST
 def softcap_head_states(q, k, v, BN: int, *, cap: float, masked_from: int, dot16, inv, tanh=mufu_tanh) -> dict[str, np.ndarray]:
     """`AttentionHeadSoftcap_v2{T, D, BN, CAP, DOT, INV, MASKED_FROM}` vectorised over rows: q (R, D), k / v (R, T, D) bf16 words.
     Returns ``out`` (R, D) bf16 words and ``nonfinite`` (R,)."""
-    from verity_vllm.program.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
+    from verity.ml.circuits.ops.dense import softcap_mul_bits, softcap_scale_log2_bits
 
     q, k, v = (np.ascontiguousarray(x, dtype=np.uint16) for x in (q, k, v))
     Rn, T, Dh = k.shape
@@ -149,8 +149,8 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray], dot_id
 
 def check_targets(rng=None) -> list:
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import fa2_softcap, hopper
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import fa2_softcap, hopper
+    from verity.ml.circuits.ops import prims as P
 
     # T = 40, BN = 16: three blocks; MASKED_FROM 2 leaves blocks 1 and 0 unguarded, 0 guards every block
     return [bind(fa2_softcap.AttentionSoftcapV2, T=40, NH=2, KVH=1, D=16, BN=16, CAP=50.0, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum,

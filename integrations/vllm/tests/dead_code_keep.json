@@ -16,13 +16,13 @@
   "verity_vllm.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
   "verity_vllm.linear.api": "see verity_vllm.linear",
   "verity_vllm.linear.vllm_site": "see verity_vllm.linear; benchmarks/pouw's e2e.py, profile_decode.py and vllm_bench.py attach through it",
-  "verity_vllm.program.registry.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
-  "verity_vllm.program.registry.quarantine.collective.allreduce": "see quarantine.collective",
-  "verity_vllm.program.registry.quarantine.collective.allreduce_difftest": "see quarantine.collective",
-  "verity_vllm.program.registry.quarantine.act": "re-exports registry.act's SiluMul_v2 / SiluMulBf16_v2 (promoted) for the properties-admission adapter",
-  "verity_vllm.program.registry.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
-  "verity_vllm.program.registry.quarantine.act.silu_mul_bf16": "see quarantine.act",
-  "verity_vllm.program.registry.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
-  "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py"
+  "verity.ml.circuits.ops.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
+  "verity.ml.circuits.ops.quarantine.collective.allreduce": "see quarantine.collective",
+  "verity_vllm.properties.difftests.allreduce_difftest": "see quarantine.collective",
+  "verity.ml.circuits.ops.quarantine.act": "re-exports registry.act's SiluMul_v2 / SiluMulBf16_v2 (promoted) for the properties-admission adapter",
+  "verity.ml.circuits.ops.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
+  "verity.ml.circuits.ops.quarantine.act.silu_mul_bf16": "see quarantine.act",
+  "verity_vllm.properties.difftests.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
+  "verity.ml.circuits.ops.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py"
  }
 }

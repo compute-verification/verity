@@ -17,9 +17,9 @@ import struct
 
 from verity.primitives.circuits.defs import primitive
 from verity.primitives.circuits.types import Array, Value
-from verity_catalog.definitions import prims as _prims
-from verity_catalog.silicon import cast as _cast
-from verity_catalog.silicon import fp32 as _fp32
+from verity.ml.circuits.silicon.definitions import prims as _prims
+from verity.ml.circuits.silicon import cast as _cast
+from verity.ml.circuits.silicon import fp32 as _fp32
 
 U32, U8, I7, F32, BF16, E2M1 = Value(32), Value(8), Value(7), Value(32), Value(16), Value(4)
 M32 = (1 << 32) - 1
@@ -213,7 +213,7 @@ def PouwI32ToF32Rn(z: int) -> int:
 
 @primitive("PouwF32SqrtRn", 1, [("a", F32)], F32, conformance="protocol-defined")
 def PouwF32SqrtRn(a: int) -> int:
-    """sqrt.rn.f32 (`verity_catalog.silicon.fp32.sqrt`, ρ's root in Pearl's statistics): nearest even, √−0 = −0, √+inf = +inf; a NaN
+    """sqrt.rn.f32 (`verity.ml.circuits.silicon.fp32.sqrt`, ρ's root in Pearl's statistics): nearest even, √−0 = −0, √+inf = +inf; a NaN
     or a negative nonzero operand gives the GPU's NaN word 0x7FFFFFFF."""
     a &= M32
     if (a >> 23) & 0xFF == 0xFF:

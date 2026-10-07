@@ -1,4 +1,4 @@
-"""Lane NUMERIC: the reference-mode kinds of `verity_vllm/program/registry/ref_prims.py`.
+"""Lane NUMERIC: the reference-mode kinds of `verity/ml/circuits/ops/ref_prims.py`.
 
 Three layers, kept separate (brief boundary 5 — semantics vs evidence):
   1. **definition consistency** — the numpy twins equal the gate-by-gate IR evaluation of the registered bodies on
@@ -34,9 +34,9 @@ from verity.primitives.circuits import codec  # noqa: E402
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, bind  # noqa: E402
 from verity.primitives.circuits.evaluate import evaluate_call  # noqa: E402
 from verity.primitives.circuits.program import Program  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
-from verity_vllm.program.registry import prims as P  # noqa: E402
-from verity_vllm.program.registry import ref_prims as R  # noqa: E402
+from verity.ml.circuits.ops import b1  # noqa: E402
+from verity.ml.circuits.ops import prims as P  # noqa: E402
+from verity.ml.circuits.ops import ref_prims as R  # noqa: E402
 from verity_vllm.program.kernels import ref_prims_twins
 
 torch = pytest.importorskip("torch")

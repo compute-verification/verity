@@ -83,7 +83,7 @@ def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | Non
     from verity.primitives.circuits.evaluation.reference import standalone_call
     from verity.primitives.circuits.defs import bind
     from verity.primitives.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
 
     spec = bind(b1.RMSNormFusedCuda if kernel == "cuda" else b1.RMSNormTriton, N=N, EPS=eps)
     prog, call = standalone_call(spec)

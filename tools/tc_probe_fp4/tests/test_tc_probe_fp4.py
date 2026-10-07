@@ -38,8 +38,8 @@ import t1_merged as T  # noqa: E402
 import tool  # noqa: E402
 import w1_price as W  # noqa: E402
 
-from verity_catalog.silicon import models as M  # noqa: E402
-from verity_catalog.silicon.term import PRODUCT_WIDTH  # noqa: E402
+from verity.ml.circuits.silicon import models as M  # noqa: E402
+from verity.ml.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
 
 
 @pytest.fixture

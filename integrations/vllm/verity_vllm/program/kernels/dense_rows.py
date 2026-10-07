@@ -151,7 +151,7 @@ def mul_vec_f32(x, w, **_s):
 @functools.lru_cache(maxsize=None)
 def _mean_layout(N: int) -> np.ndarray:
     """[blocks, 128 threads, registers] element index per register of `MeanTriton`'s body (N for a masked lane)."""
-    from verity_vllm.program.registry import dense
+    from verity.ml.circuits.ops import dense
     spt = dense.size_per_thread(N)
     blocks = [[[i if i < N else N for i in dense.thread_elements(c0, t, spt)] for t in range(dense.THREADS)]
               for c0 in range(0, N, dense.BLOCK_SIZE)]
@@ -183,7 +183,7 @@ def mean_triton(x, *, N, **_s):
 # ---- the logits soft cap ---------------------------------------------------------------------------------------------------
 
 def bf16_div_scalar(x, *, C, **_s):
-    from verity_vllm.program.registry.dense import reciprocal_bits
+    from verity.ml.circuits.ops.dense import reciprocal_bits
     return D.f2fp_bf16(D.mul_rn(_widen(x), np.uint32(reciprocal_bits(float(C)))))
 
 
@@ -193,7 +193,7 @@ def bf16_mul_scalar(x, *, C, **_s):
 
 @functools.lru_cache(maxsize=1)
 def _tanh_table() -> np.ndarray:
-    from verity_vllm.program.registry.dense import tanh_f32_bits
+    from verity.ml.circuits.ops.dense import tanh_f32_bits
     words = np.arange(1 << 16, dtype=np.uint32) << 16
     return D.f2fp_bf16(np.asarray([tanh_f32_bits(int(w)) for w in words], dtype=np.uint32))
 
@@ -408,7 +408,7 @@ def gemm_dot_rows(dot_of: Callable[[dict], str], x: np.ndarray, w: np.ndarray, *
 
 def _targets():
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import dense
+    from verity.ml.circuits.ops import dense
     return {
         "SquareBf16_v1": [bind(dense.SquareBf16, N=16)], "SquareF32_v1": [bind(dense.SquareF32, N=16)],
         "MeanTriton_v1": [bind(dense.MeanTriton, N=2304), bind(dense.MeanTriton, N=20)],

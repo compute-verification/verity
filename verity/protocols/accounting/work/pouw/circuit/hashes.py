@@ -20,7 +20,7 @@ from typing import Sequence, Union
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.refs import Coll, array_of
 from verity.primitives.circuits.types import Array
-from verity_catalog.definitions.prims import const
+from verity.ml.circuits.silicon.definitions.prims import const
 
 from . import words as W
 

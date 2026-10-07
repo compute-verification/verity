@@ -68,7 +68,7 @@ ALLOWLIST = {
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "catalog/verity_catalog/definitions/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "verity/ml/circuits/silicon/definitions/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
@@ -181,7 +181,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "kernels/")
+UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "verity/ml/kernels/")
 
 
 def _testpaths(tracked: list[str]) -> list[str]:

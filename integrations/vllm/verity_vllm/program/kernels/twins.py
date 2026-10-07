@@ -1,6 +1,6 @@
 """verity_vllm/program/kernels/twins.py — vectorized twins of the registered numerical bodies, bit-exact against the gate evaluator.
 
-A *twin* re-implements one registered composite (`verity_vllm/program/registry/b1.py`) for speed — numpy over whole operands,
+A *twin* re-implements one registered composite (`verity/ml/circuits/ops/b1.py`) for speed — numpy over whole operands,
 or the numerics lane's C++ models through ctypes — and is admissible only where its output words are IDENTICAL to
 `verity.primitives.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
 declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
@@ -52,7 +52,7 @@ from verity.primitives.circuits.evaluation import self_check
 from verity.primitives.circuits.defs import SpecializedDefinition, bind
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
-from verity_vllm.program.registry import b1, prims as P
+from verity.ml.circuits.ops import b1, prims as P
 from verity_vllm.program.kernels import prims_twins
 
 SCHEMA = "verity-gen/twins/v1"

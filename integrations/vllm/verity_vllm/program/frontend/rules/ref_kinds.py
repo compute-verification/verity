@@ -1,6 +1,6 @@
 """Derive-lane width-conversion composites for reference mode.
 
-NUMERIC's `verity_vllm/program/registry/ref_prims.py` (vocabulary `verity-ref-vocab/1`) is the reference vocabulary; the
+NUMERIC's `verity/ml/circuits/ops/ref_prims.py` (vocabulary `verity-ref-vocab/1`) is the reference vocabulary; the
 provisional `DeriveRef{Dot,Linear,BiasAdd,Add,Mul,Relu}F32` composites that carried S1 before it landed were
 retired (their semantics are `LinearRef_v1{DT="f32"}` / `AddRef` / `MulRef` / `ReluRef`, which NUMERIC defined
 identically — sequential f32 fma chain from +0, `F32MaxRef(x, +0)`). What remains here are the two element-wise
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from verity.primitives.circuits.defs import Builder, CompositeDefinition
 from verity.primitives.circuits.refs import Coll
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import prims as P
 from verity.primitives.circuits.types import Array, Value
 
 F32 = Value(32)

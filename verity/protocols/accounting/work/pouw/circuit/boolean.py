@@ -22,7 +22,7 @@ Each is traced from a builder over core's `forms` (`verity.primitives.circuits.b
 live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); a backend whose lowering
 takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
 
-* the windows: the 15 calls of the atom's own builder (`verity_catalog.definitions.boolean.gemm`) that build a window's masked words, on a
+* the windows: the 15 calls of the atom's own builder (`verity.ml.circuits.silicon.definitions.boolean.gemm`) that build a window's masked words, on a
   view of the circuit that keeps its own AND memo (`_Shared`), so atom j's 32 products, and every part of its step that
   doesn't read the accumulator, are built once for its 2^j words on any circuit, C-Flock's (which has no common-subexpression
   pass) included: on sm_120 102,409 ANDs where the 15 calls are 145,651.
@@ -54,9 +54,9 @@ from __future__ import annotations
 
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.types import Array
-from verity_catalog.silicon import fp
-from verity_catalog.definitions.boolean import gemm as BG
-from verity_catalog.definitions.boolean import scalar as BS
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.silicon.definitions.boolean import gemm as BG
+from verity.ml.circuits.silicon.definitions.boolean import scalar as BS
 from verity.primitives.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
                                      or_reduce, shl_window, sub)
 from verity.primitives.circuits.boolean.trace import definition

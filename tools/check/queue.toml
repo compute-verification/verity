@@ -19,5 +19,5 @@ by = "the vLLM coordinator"
 # level3 and the verifier's, under the security analysis's proofs since the Lean move).
 [[grant]]
 role = "red-team"
-paths = ["backends/flock/", "verity/Security/Proofs/Flock/", "verity/Security/Proofs/Flock.lean", "!README.md", "!PROTOCOL.md", "!*/tests/*"]
+paths = ["verity/ml/provers/flock/", "verity/Security/Proofs/Flock/", "verity/Security/Proofs/Flock.lean", "!README.md", "!PROTOCOL.md", "!*/tests/*"]
 by = "a red-team lane (proofs spawns one per PR: ask @proofs)"

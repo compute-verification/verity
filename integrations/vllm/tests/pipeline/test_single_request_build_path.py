@@ -29,7 +29,7 @@ from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 #: #101's Build on `edac1cf6` (main 432edb3b + #297; run r20260928-160311-303b): `build_request/` (the derived request Program) and
@@ -166,7 +166,7 @@ def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
 def test_every_consumers_registry_holds_every_registered_definition():
     """GP-01, the Match, the query views and the descriptor equivalence each look Definitions up through their own entry point: in a
     fresh interpreter each one's registry holds every Definition and primitive the registry package registers."""
-    want = _run("from verity_vllm.program.registry.catalog import load\nprint(len(load()[0].defs))")
+    want = _run("from verity.ml.circuits.ops.catalog import load\nprint(len(load()[0].defs))")
     assert want.returncode == 0, want.stderr[-2000:]
     n = int(want.stdout.split()[-1])
     for setup in ("import verity_vllm.pipeline.global_program as m; from verity.primitives.circuits.defs import REGISTRY as R",

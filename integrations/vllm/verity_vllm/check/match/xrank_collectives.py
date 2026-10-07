@@ -27,7 +27,7 @@ FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}         
 def collective_family(kind: str, world: int) -> str:
     """[lane vllm-tp-n] the received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
     selector (`b1_tp2.all_reduce` / `all_gather`): `AllReduce2_v1` / `AllGather2_v1` at world 2, `AllReduce_v2` / `AllGather_v1` beyond."""
-    from verity_vllm.program.registry import b1_tp2 as TP2
+    from verity.ml.circuits.ops import b1_tp2 as TP2
     sel = {"all_reduce": TP2.all_reduce, "all_gather": TP2.all_gather}.get(kind)
     return sel(int(world), 1).id.split("{", 1)[0] if sel else kind
 EMBED_MARKERS = ("embed_tokens", "embedding", "wte")
@@ -108,7 +108,7 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
     recv: Tensor|None, recv_member, why}]}.  Same pick order on every rank (same seed, same layout names).  Bit-exact rules per kind."""
     import torch
 
-    from verity_vllm.program.registry.b1_tp2 import allreduce_order
+    from verity.ml.circuits.ops.b1_tp2 import allreduce_order
 
     res: dict[str, Any] = {"result": None, "world": world, "picks": 0, "equal": 0, "mismatches": [], "missing": [], "by_family": {}, "by_stratum": {},
                            "rule": ("per pick (site, step, row subset): all_reduce -> committed received (each rank) == bf16(f32(part_rank0) + f32(part_rank1)) elementwise "

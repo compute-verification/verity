@@ -11,13 +11,13 @@ import pytest
 
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
-from verity_kernels.tc import f2fp_bf16_batch, group_sum_total_batch
-from verity_catalog.definitions.prims import HopperBF16WgmmaDot16
-from verity_catalog.silicon.models import HOPPER_BF16_M16N8K16
+from verity.ml.kernels.tc import f2fp_bf16_batch, group_sum_total_batch
+from verity.ml.circuits.silicon.definitions.prims import HopperBF16WgmmaDot16
+from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import moe as M
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import moe as M
+from verity.ml.circuits.ops import prims as P
 from verity_vllm.program.frontend import targets as T
 
 E, K, N = 3, 64, 5

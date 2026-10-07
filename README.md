@@ -41,7 +41,7 @@ Each layer may depend on the layers below it:
 ~~~text
 integrations/vllm, benchmarks/
 ---------------------------------------------------------------------------
-backends/flock               archive/                  kernels/, experimental/
+verity/ml/provers/flock               archive/                  verity/ml/kernels/, experimental/
   C-Flock, the proof system,   kept, not developed:      (untrusted)
   and its Lean verifier        gkr, direct, sp1, vole
 ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ verity, the core library:
 
 ### Circuits
 
-`verity.primitives.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding the circuit and a SHA-512 digest that names it. `verity_catalog.definitions` holds the primitive circuits for NVIDIA accelerators, and `verity.primitives.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, not a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total by default: they match the hardware on every input bit pattern, NaN and infinity included. Core owns every primitive circuit and all silicon semantics; applications define only their own Definitions. Every new or changed circuit passes `circuit-check`.
+`verity.primitives.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding the circuit and a SHA-512 digest that names it. `verity.ml.circuits.silicon.definitions` holds the primitive circuits for NVIDIA accelerators, and `verity.primitives.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, not a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total by default: they match the hardware on every input bit pattern, NaN and infinity included. Core owns every primitive circuit and all silicon semantics; applications define only their own Definitions. Every new or changed circuit passes `circuit-check`.
 
 A partition divides a circuit's gates into proof units, each gate in exactly one. It is the result of a named, versioned query that the auditor evaluates itself (`verity/partition/v1`), and it fixes what the developer must commit: every value read across a unit boundary, plus the inputs and outputs.
 
@@ -82,7 +82,7 @@ Which parts of a circuit are checked, how they are sampled and what must be comm
 
 ### The proof system and the proof service
 
-C-Flock (`backends/flock`) is the proof system: it proves statements over arbitrary Boolean circuits, and its verifier of record is written in Lean, with upstream Flock's Rust verifier as a cross-check. It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an integration. The proof systems before it (A-GKR, B-Ligero, D-SP1 and the VOLE backend) are in `archive/`: kept, and still in the benchmark tables, but not developed.
+C-Flock (`verity/ml/provers/flock`) is the proof system: it proves statements over arbitrary Boolean circuits, and its verifier of record is written in Lean, with upstream Flock's Rust verifier as a cross-check. It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an integration. The proof systems before it (A-GKR, B-Ligero, D-SP1 and the VOLE backend) are in `archive/`: kept, and still in the benchmark tables, but not developed.
 
 Every accounting protocol (PoUW, PoUS, network accounting) uses one proof service. A protocol states what is committed, which units need proofs, the public Program each must pass and what it does with the outcome; the service owns commitments, live coins and the record, the selection, proving, verifying and the integrity profile. On the developer's side it is the workers behind the firewall; on the auditor's, the challenger and the verifier, with network certifiers and memory challengers placed in the developer's site. Every protocol is zero-knowledge, and everything hashes with SHA-512.
 
@@ -93,8 +93,8 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 ## Repository structure
 
 - [`verity/`](verity/README.md): the core library: `verity.primitives.circuits` and the [circuit format](verity/primitives/circuits/PROTOCOL.md), `verity.primitives.commitments` (commitments to the records), and `verity.protocols` (the protocols and the integrity profile an audit returns)
-- `catalog/`: `verity_catalog`, exact hardware semantics (`silicon`), the primitive circuits' Definitions and the targets; `kernels/` (`verity_kernels`) holds the fast code checked against them, and `experimental/` (`verity_experimental`) what is under development or kept for study
-- [`backends/flock/`](backends/flock/README.md): C-Flock, the proof system; the proof systems before it are in [`archive/`](archive/README.md)
+- `catalog/`: `verity.ml.circuits`, exact hardware semantics (`silicon`), the primitive circuits' Definitions and the targets; `verity/ml/kernels/` (`verity.ml.kernels`) holds the fast code checked against them, and `experimental/` (`verity_experimental`) what is under development or kept for study
+- [`verity/ml/provers/flock/`](verity/ml/provers/flock/README.md): C-Flock, the proof system; the proof systems before it are in [`archive/`](archive/README.md)
 - [`backends/flock/verifier/`](backends/flock/verifier/README.md): the verifier of record, written in Lean
 - [`verity/protocols/verification/sampled_proofs/`](verity/protocols/verification/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`verity/protocols/accounting/space/pous/`](verity/protocols/accounting/space/pous/README.md): proofs of useful space
@@ -131,7 +131,7 @@ from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import Program, query
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.partition_object import program_sha512
-from verity_catalog.definitions.gemm import GEMM_AMPERE, Gemm
+from verity.ml.circuits.silicon.definitions.gemm import GEMM_AMPERE, Gemm
 
 gemm = bind(Gemm, K=64, N=8, **GEMM_AMPERE)   # x[64] @ W[8, 64]^T in BF16, as an A100's tensor cores compute it
 x, W = [0x3F80] * 64, [0x3F80] * (8 * 64)     # BF16 encodings of 1.0, with W flattened row by row
@@ -178,7 +178,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Boolean Definition**: a Definition whose gates are only gates in the sense above (`verity.primitives.circuits.boolean.is_boolean`); its meaning is its gates. A *word Definition* has gates that output a w-bit word, whose meaning is registry code; the word library migrates to Boolean Definitions under new versions of the same names.
 - **Word view**: a Boolean Definition read with each element's bits packed into one integer (`verity.primitives.circuits.boolean.word_type`); under it, `GemmCoordinate_v3` takes and returns exactly what the word Definition `GemmCoordinate_v2` does.
 - **Value**: the bit a gate takes in one run. The transcript is all of them (`verity.primitives.circuits.evaluate.ExecutionTranscript`), and the value of an element or port is the transcript read at its gates, in order. Gates, wires, ports and elements are structure, and so are shapes such as batch size and sequence length, public until a private-circuit protocol; values are data, even those that are the same in every run. Everything else a program or a request brings is a value like any bit a run computes: the weights, a program's constants (eps, the attention scale, a softcap) and tables (`gelu_tanh_bf16`, `tanh_rn`), and a request's parameters (temperature, top-p, Philox positions). Values are always hidden: a value is committed under a hiding leaf and touched only inside a zero-knowledge proof, never treated as part of the program the verifier holds. The messages between prover and verifier are the *proof transcript*.
-- **Subcircuit template**: a named template with typed parameters, such as `gemm_coordinate(K, semantics)` or `rmsnorm(d, semantics)`. Shape and numeric (silicon) semantics are both parameters; a semantics value is an instruction id of `verity_catalog.silicon.instructions.INSTRUCTIONS`.
+- **Subcircuit template**: a named template with typed parameters, such as `gemm_coordinate(K, semantics)` or `rmsnorm(d, semantics)`. Shape and numeric (silicon) semantics are both parameters; a semantics value is an instruction id of `verity.ml.circuits.silicon.instructions.INSTRUCTIONS`.
 - **Subcircuit**: a subcircuit template with every parameter bound, such as `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits, and a benchmark cell measures one.
 - **Input**: one concrete assignment of values to a subcircuit's input gates, that is, to the elements of its input ports, with the output the chip produced recorded alongside.
 - **Input set**: a batch of inputs for one subcircuit, with their provenance (captured or synthetic).
@@ -221,7 +221,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 |---|---|
 | "Candidate A", "Candidate B"; the `candidate` feature and label keys, `CandidateA`, `CandidateB`, `account_candidate_a` | the archived proof systems A-GKR, B-Ligero |
 | the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not C-Flock) |
-| `verity_catalog.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
+| `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
 | "backend", "backend family", "configured backend" for C-Flock; `backends/` (the directory C-Flock still lives in), `verity_flock.backend`, `BACKENDS` | the proof system |
 | "IR", "Verity IR", "IR primitives", "IR evaluator"; `verity.ir` | circuit, Program; `verity.primitives.circuits` |

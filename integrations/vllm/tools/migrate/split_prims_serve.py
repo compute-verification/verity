@@ -1,6 +1,6 @@
 """Split the primitives, composites and serving family's registry modules into Definitions, twins and vocabulary.
 
-The family's Definition modules stay in `verity_vllm/program/registry/` and import only `verity` and other Definition modules
+The family's Definition modules stay in `verity/ml/circuits/ops/` and import only `verity` and other Definition modules
 (`DEFINITION_MODULES`; `pouw_rows` is the one exception, `BOUNDARY_EXCEPTIONS`). What is not a Definition leaves the registry for
 the integration package: four modules whole (`WHOLE`), and named top-level parts of five more into new modules (`PARTS`):
 

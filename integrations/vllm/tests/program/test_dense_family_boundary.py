@@ -11,15 +11,15 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity_vllm.program.registry"
-REGISTRY_DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+REGISTRY = "verity.ml.circuits.ops"
+REGISTRY_DIR = Path(__file__).resolve().parents[4] / "verity" / "ml" / "circuits" / "ops"
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "gemm_bias", "layer_norm", "gelu_erf_table")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, and `sampling.bit_at` (`UnpackF32_v1`)
 READS = ("prims", "b1", "sampling")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity_catalog"
+CATALOG = "verity.ml.circuits"
 MOVED = {"rope_difftest": "verity_vllm.properties.difftests", "rope_gptj_difftest": "verity_vllm.properties.difftests",
          "rmsnorm_fused_sweep": "verity_vllm.program.kernels", "gemm_targets": "verity_vllm.program.frontend"}
 

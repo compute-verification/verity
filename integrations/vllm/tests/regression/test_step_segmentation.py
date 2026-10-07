@@ -63,9 +63,9 @@ def _flat_request(family: str):
     from verity.primitives.circuits.program import Program
     from verity.primitives.circuits.refs import tuple_of
     from verity.primitives.circuits.types import Array, Tuple, Value
-    from verity_vllm.program.registry import b1, sampling
-    from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry.prims import BF16, F32, I32
+    from verity.ml.circuits.ops import b1, sampling
+    from verity.ml.circuits.ops import prims as P
+    from verity.ml.circuits.ops.prims import BF16, F32, I32
     V, I64 = 8, Value(64)
     greedy = family == "TokenSelect_v1"
 

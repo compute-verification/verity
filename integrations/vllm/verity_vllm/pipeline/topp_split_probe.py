@@ -1,4 +1,4 @@
-"""[R16 stoch] GPU-truth fixture for `TopPMask_v1{V,S}` (`verity_vllm.program.registry.topp_split`) across EVERY split geometry the vLLM
+"""[R16 stoch] GPU-truth fixture for `TopPMask_v1{V,S}` (`verity.ml.circuits.ops.topp_split`) across EVERY split geometry the vLLM
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
 test uses (F-stoch-01 follow-up: the model was fitted at S=32 only).
 
@@ -44,7 +44,7 @@ DRAIN_BATCHES = (64, 18, 17, 9, 8, 7, 6, 5, 4, 3, 2, 1)
 def drain_batches(num_sm: int) -> tuple[int, ...]:
     """The drain's batch sizes on a device of `num_sm` SMs, descending: DRAIN_BATCHES plus B and B + 1 for every B at which
     splits_for(B, num_sm) != splits_for(B + 1, num_sm), up to the split pipeline's largest batch."""
-    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
+    from verity.ml.circuits.ops.topp_geometry import SPLIT_MAX_BATCH, splits_for
     edges = {b for n in range(1, SPLIT_MAX_BATCH) if splits_for(n, num_sm) != splits_for(n + 1, num_sm) for b in (n, n + 1)}
     return tuple(sorted(set(DRAIN_BATCHES) | edges, reverse=True))
 
@@ -72,7 +72,7 @@ def gen_random(seed: int, V: int) -> np.ndarray:
 def gen_ties(seed: int, V: int, S: int, k: int, keep_frac: float, head: int = 8, group_bias: int | None = None, plateau: float = 3.5) -> tuple[np.ndarray, float]:
     """Row with `k` identical plateau logits at lanes spread over the S slices (+ boundary pairs), and the p that puts the top-p
     boundary `keep_frac` of the way into the plateau.  `group_bias` (0/1) puts every plateau lane on a thread of that Z group."""
-    from verity_vllm.program.registry.topp_geometry import spt_for
+    from verity.ml.circuits.ops.topp_geometry import spt_for
     g = np.random.default_rng(seed)
     x = (g.standard_normal(V) * 1.0 - 6.0).astype(f32)             # tail: small mass
     slice_len = (V + S - 1) // S
@@ -339,8 +339,8 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
 
 def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
     """Model vs fixture: masked row (keep), stats, per-lane Z group, drain batches.  Returns the report dict (ok = every check passed)."""
-    from verity_vllm.program.registry import topp_split as TS
-    from verity_vllm.program.registry import topp_geometry
+    from verity.ml.circuits.ops import topp_split as TS
+    from verity.ml.circuits.ops import topp_geometry
     dd = Path(d)
     man = json.loads((dd / "manifest.json").read_text())
     z = np.load(dd / "fixture.npz")

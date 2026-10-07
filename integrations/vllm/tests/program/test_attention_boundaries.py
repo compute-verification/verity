@@ -35,7 +35,7 @@ OTHER_FAMILIES = {
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity_catalog"
+CATALOG = "verity.ml.circuits"
 
 
 def _catalog(name: str) -> bool:
@@ -107,10 +107,10 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
         "from verity.primitives.circuits.defs import composite\n"
-        "from verity_vllm.program.registry import prims as P, targets\n"
-        "from verity_vllm.program.registry.b1 import ZERO16, fa2_kblock_n\n"
+        "from verity.ml.circuits.ops import prims as P, targets\n"
+        "from verity.ml.circuits.ops.b1 import ZERO16, fa2_kblock_n\n"
         "from verity_vllm.config import X\n\n\n"
-        "def f():\n    from verity_vllm.program.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
+        "def f():\n    from verity.ml.circuits.ops import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
     assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == [
-        "imports verity_vllm.config", "imports verity_vllm.program.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"]
+        "imports verity_vllm.config", "imports verity.ml.circuits.ops.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"]

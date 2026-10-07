@@ -64,7 +64,7 @@ for name, (q, h) in {"gemm_plain": (4, 0), "gemm_fast": (4, 0), "gemm_ct": (4, 0
     r = funcs[name]
     if r["QGMMA"] < q or r["QGMMA"] % q or r["HGMMA"] != h:
         problems.append(f"{name}: {r['QGMMA']} QGMMA, {r['HGMMA']} HGMMA (want a multiple of {q}, and {h})")
-json.dump({"kernels": funcs, "problems": problems}, open(f"{out}/sass.json", "w"), indent=1)
+json.dump({"verity/ml/kernels": funcs, "problems": problems}, open(f"{out}/sass.json", "w"), indent=1)
 if problems:
     sys.exit("REFUSED: " + "; ".join(problems))
 print(f"pearl_c.cubin: {len(funcs)} kernels; GEMMs " + ", ".join(f"{n} {funcs[n]['regs']} regs {funcs[n]['QGMMA']} QGMMA"

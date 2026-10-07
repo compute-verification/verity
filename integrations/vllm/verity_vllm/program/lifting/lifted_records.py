@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from verity_vllm.program.registry.lifted import (LIFTED_RULES_VERSION, N_OUT_HISTOGRAM_MAX_SETS, USE_KIND_LIFTED, W_MAX, W_MAX_LIFTED,
+from verity.ml.circuits.ops.lifted import (LIFTED_RULES_VERSION, N_OUT_HISTOGRAM_MAX_SETS, USE_KIND_LIFTED, W_MAX, W_MAX_LIFTED,
                                                  W_MAX_LIFTED_STATUS, check_lag, width_summary_a44)
 
 

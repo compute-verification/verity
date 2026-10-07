@@ -28,8 +28,8 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops.prims import BF16
 from verity.primitives.circuits.types import Array, Record
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
@@ -224,8 +224,8 @@ def _fp8_fields(fields: list[tuple[str, Any]], G: int, g: int) -> list[tuple[str
     g)][cdiv(H, g)]` and `w2_ws [E][cdiv(H, g)][cdiv(I, g)]` on the rank's g-block grid (`fp8_moe_block`): the shapes vLLM's
     `Fp8MoEMethod.create_weights` gives `w13_weight_scale_inv` / `w2_weight_scale_inv`.  The router `gate_w` and the norms stay bf16
     (`quant_refusal` admits the router only in `modules_to_not_convert`)."""
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
-    from verity_vllm.program.registry.prims import F32
+    from verity.ml.circuits.ops.fp8 import E4M3, weight_blocks
+    from verity.ml.circuits.ops.prims import F32
 
     def cdiv(a: int, b: int) -> int:
         return -(-a // b)

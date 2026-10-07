@@ -33,7 +33,7 @@ TARGET = "fp8-ada-mma-draft/2026-09-22"
 INSTRUCTION = "sm89.mma.m16n8k32.e4m3"
 MODEL = "ada_e4m3_m16n8k32"
 ANCHOR = "rtx4090"
-GOLDEN = "catalog/tests/fixtures/golden/ada_e4m3_m16n8k32.json"
+GOLDEN = "verity/ml/circuits/silicon/tests/fixtures/golden/ada_e4m3_m16n8k32.json"
 FAMILIES = ("randn_zero_acc", "randn_random_acc", "uniform_bits", "adder_width_cancellation", "zero_products_nonzero_acc",
             "acc_only_lsb_walk", "specials")
 
@@ -72,7 +72,7 @@ def dlog(did: str, status: str, **over) -> dict:
 
 
 def write_log(root: Path, entries: list[dict]) -> None:
-    log = root / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json"
+    log = root / "verity" / "ml" / "circuits" / "silicon" / "discrepancy_log.json"
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(json.dumps({"schema": "verity/discrepancy-log/v0", "entries": entries}))
 
@@ -367,8 +367,8 @@ def test_registry_ahead_of_evidence_is_noted(store, repo):
 def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned():
     """No store: the registry may assert at most PINNED (TRUSTED and above are computed), every status is a ladder level, and a
     dossier reference, when set, is a store artifact id."""
-    from verity_catalog.silicon.instructions import INSTRUCTIONS
-    from verity_catalog.targets.target import TARGETS
+    from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+    from verity.ml.circuits.targets.target import TARGETS
 
     for ins in INSTRUCTIONS.values():
         assert ins.status.upper() in Level.__members__, f"{ins.id}: status {ins.status!r} is not a trust-ladder level"
@@ -531,7 +531,7 @@ def test_subject_resolution_covers_constants_names_and_instructions():
 
 
 def test_the_real_discrepancy_log_has_a_regression_tile_decision_for_every_entry():
-    log = json.loads((REPO_ROOT / "catalog" / "verity_catalog" / "silicon" / "discrepancy_log.json").read_text())
+    log = json.loads((REPO_ROOT / "verity" / "ml" / "circuits" / "silicon" / "discrepancy_log.json").read_text())
     for e in log["entries"]:
         assert e["id"] in REGRESSION_TILES, f"{e['id']}: decide its regression tiles (possibly none) in REGRESSION_TILES"
         if e["status"] == "resolved" and e["id"] not in ("D3",):
@@ -577,7 +577,7 @@ def test_canary_seed_changes_the_tiles_but_the_plan_shape_stays(canary):
 def test_canary_bf16_anchor_prefers_its_own_capture_directory(canary):
     plan = canary.canary_plan("sm80.mma.m16n8k16.bf16", REPO_ROOT)
     assert "D2" in plan.regression
-    assert plan.replays == ("catalog/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",)
+    assert plan.replays == ("verity/ml/circuits/silicon/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",)
     assert {"adder_width_cancellation", "acc_only_lsb_walk", "zero_products_nonzero_acc", "specials"} <= set(plan.families)  # pin-bf16: BF16 has them too
     assert "fp8_floor_probe" not in plan.families                                             # the D15(b) probe is FP8-only
 
@@ -645,7 +645,7 @@ def test_tc_probe_tool_declaration_keys_the_canary_flag():
 def test_a_capture_replay_counts_the_model_and_the_other_tile_positions() -> None:
     """``tc_probe --replay-capture`` compares the hardware with the recorded words and with the declared model; a replay is clean only
     if all three counts are zero (lane wgmma-bf16: veritor's H100 wgmma capture, the reference of sm90.wgmma.m64n8k16.bf16)."""
-    clean = {"file": "catalog/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz", "records": 44046, "mismatches": 0,
+    clean = {"file": "verity/ml/circuits/silicon/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz", "records": 44046, "mismatches": 0,
              "model_mismatches": 0, "other_positions_nonzero": 0, "pipeline": "veritor tc-hopper-2026-09-07"}
     assert trust._replay_summary("capture_replay", clean)["mismatches"] == 0
     assert trust._replay_summary("capture_replay", {**clean, "model_mismatches": 3})["mismatches"] == 3
@@ -659,7 +659,7 @@ def test_the_sm120_fp8_steps_are_anchored_on_the_pro_6000_and_the_arch_default_i
     """The target names its conformance device, and trust matches evidence to it by SKU family, whether asked by target or by
     instruction id.  The e5m2 id has no target: its registry entry names the device, and the sm_120 default anchor (the RTX
     5090) stays for every other sm_120 instruction."""
-    from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+    from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 
     for name in ("fp8-sm120-mma-draft/2026-09-30", "sm120.mma.m16n8k32.e4m3"):
         s = trust.subjects(name)

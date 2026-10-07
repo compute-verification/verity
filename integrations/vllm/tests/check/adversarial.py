@@ -38,8 +38,8 @@ import numpy as np
 
 from verity.primitives.circuits.defs import bind, composite
 from verity.primitives.circuits.refs import Coll as _Coll, concat
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import prims as P
 from verity.primitives.circuits.types import Array
 
 from verity_vllm.check import operand_provenance as provenance
@@ -150,7 +150,7 @@ def layer_of(hint: str) -> int | None:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# hostile definitions (what a lane can author in ITS OWN module; NOT under verity_vllm/program/registry/quarantine)
+# hostile definitions (what a lane can author in ITS OWN module; NOT under verity/ml/circuits/ops/quarantine)
 # ---------------------------------------------------------------------------------------------------------
 
 

@@ -320,7 +320,7 @@ def compare_dense(job: dict[str, Any]) -> dict[str, Any]:
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import fp8 as F
+    from verity.ml.circuits.ops import fp8 as F
 
     a = _load(job["paths"])
     K, N = job["K"], job["N"]
@@ -436,7 +436,7 @@ def moe_launches(work: Path, name: str, inter: int, M: int, hot: int, seed: int,
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
     from vllm.model_executor.layers.fused_moe.config import fp8_w8a8_moe_quant_config
     from vllm.model_executor.layers.fused_moe.fused_moe import fused_experts
-    from verity_vllm.program.registry.fp8_moe import check_statics
+    from verity.ml.circuits.ops.fp8_moe import check_statics
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
     w1 = _e4m3(gen, (NUM_EXPERTS, 2 * inter, HIDDEN))
@@ -510,7 +510,7 @@ def compare_act(a: dict[str, np.ndarray], p0: int, p1: int, reference: bool, rec
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
     from verity_vllm.program.kernels.fp8_moe_rows import silu_mul_fp8_block_quant_rows
-    from verity_vllm.program.registry import fp8_moe as MO
+    from verity.ml.circuits.ops import fp8_moe as MO
 
     q, s = silu_mul_fp8_block_quant_rows(a["gu"][p0:p1], G=GROUP)
     bad = ~((q == np.asarray(a["A"][p0:p1])).all(axis=1) & (s == np.asarray(a["As"][p0:p1])).all(axis=1))
@@ -531,8 +531,8 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     from verity.primitives.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.kernels.fp8_moe_rows import moe_expert_fp8_block_row
-    from verity_vllm.program.registry import fp8 as F
-    from verity_vllm.program.registry import fp8_moe as MO
+    from verity.ml.circuits.ops import fp8 as F
+    from verity.ml.circuits.ops import fp8_moe as MO
 
     rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     out = {"phase": "moe", "case": job["case"], "launch": job["launch"], "pair_range": job["pair_range"]}
@@ -600,8 +600,8 @@ def bind_check(statics: set[tuple[int, bool]]) -> dict[str, Any]:
     """The Programs bind at every GLM-5.3 shape, with the weight-scale rows each reads."""
     from verity.primitives.circuits.evaluation.batch import type_shape
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import fp8 as F
-    from verity_vllm.program.registry import fp8_moe as MO
+    from verity.ml.circuits.ops import fp8 as F
+    from verity.ml.circuits.ops import fp8_moe as MO
 
     out: dict[str, Any] = {}
     for name, K, N in DENSE:

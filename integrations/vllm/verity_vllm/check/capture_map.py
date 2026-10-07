@@ -293,7 +293,7 @@ def main(a: CheckOptions | CountsOptions | IdsOptions) -> int:
     if a.cmd == "counts":
         print(json.dumps({"all routes": counts(cmap, env), **{r: counts(cmap, env, (r,)) for r in cmap.get("routes", {})}}, indent=1))
         return 0
-    from verity_vllm.program.registry import catalog
+    from verity.ml.circuits.ops import catalog
 
     registry, errors = catalog.load()
     doc = json.loads(Path(a.inventory).read_text())

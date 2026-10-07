@@ -1,7 +1,7 @@
 """What authenticating the boundary values against Verity's leaf-Merkle roots costs A-GKR and B-Ligero.
 
 A relation-only proof (``authentication = excluded``, both PROTOCOL.md files) is not a Verity proof: the batch's
-``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity_catalog.targets.target``: "boundary words are
+``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity.ml.circuits.targets.target``: "boundary words are
 authenticated as packed words against the object's Merkle roots").  This module reads the real K=1536 obligation
 (``fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json``) for the leaf structure -- nothing about
 leaf sizes, tree depths or hash framing is hard-coded -- and costs four ways of paying for that binding.

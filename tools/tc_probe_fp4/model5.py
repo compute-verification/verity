@@ -4,7 +4,7 @@
 Provenance: written for lane fp4-5090 from the read-only autoproof sources ``fp4-ref/src/native.rs`` (the model),
 ``fp4-ref/src/bitref.rs`` (the independent bit-level datapath) and ``spec/SEMANTICS.lock.v1.json`` (the adopted parameters:
 W1=42, W2=36, RZ, hot-group clip at 2^-19), measured there on an RTX 5090 (1,574,998 / 1,574,998 dots).  No code is shared
-with ``verity_catalog.silicon`` or with autoproof; everything below is re-derived from the description.  It stays a HYPOTHESIS until the
+with ``verity.ml.circuits.silicon`` or with autoproof; everything below is re-derived from the description.  It stays a HYPOTHESIS until the
 probe in this directory reproduces it on our own silicon under our own harness.
 
 The model, per instruction (K = 64, four groups of 16):

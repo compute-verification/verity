@@ -103,7 +103,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
                          "verity_vllm/program/frontend/targets.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
-                         "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
+                         "verity_vllm/program/frontend/export_ops.py", "verity/ml/circuits/ops/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
                          "verity_vllm/program/frontend/rules/vllm_sampling.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
@@ -196,7 +196,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     assumption about the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the
     select's 6th operand, computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then
     anchors S itself.  A workload of several requests keeps the derived input above."""
-    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for, splits_for_v1
+    from verity.ml.circuits.ops.topp_geometry import SPLIT_MAX_BATCH, splits_for, splits_for_v1
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -400,7 +400,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                   "hint": (f"the row's sampling policy is {sampling} (source: {sampling.get('source')}); this builder binds the token-select "
                                            f"kinds {sorted(SAMPLERS_BOUND)} only ({'; '.join(f'{k}: {v}' for k, v in SAMPLERS_BOUND.items())}). A stochastic "
                                            f"row needs a token-select Definition for the pinned BI sampler and a rule that emits it — not the greedy argmax. "
-                                           f"[X-06] `GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity_vllm.program.registry.sampling; seed/pos/temperature as "
+                                           f"[X-06] `GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity.ml.circuits.ops.sampling; seed/pos/temperature as "
                                            f"bound inputs) is exact to `_temperature_kernel` -> `_gumbel_sample_kernel` for top_p == 1 / no top_k; the top-p "
                                            f"mask (`topk_topp_triton._topp_sb_{{stats,step,mask}}_kernel`) has no exact Definition (F-dense-02) and no "
                                            f"wrapper authors the stochastic select yet."),

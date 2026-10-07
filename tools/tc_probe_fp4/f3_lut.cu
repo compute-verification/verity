@@ -9,7 +9,7 @@
 //
 // Arms, per thread one activation row x one column group of C columns, chained over `iters` repeats of one K = 64 atom:
 //   dots    the lookups and the unpacking only; each block's group dots accumulate in int32 (the table's own price)
-//   exact   the lookups, then per column the atom BlockScaledAlignAdd (verity_catalog.silicon BLACKWELL_SM120_NVF4) on the CUDA cores:
+//   exact   the lookups, then per column the atom BlockScaledAlignAdd (verity.ml.circuits.silicon BLACKWELL_SM120_NVF4) on the CUDA cores:
 //           the block scales' products, participation, and the five-way align-add truncated toward zero onto the common grid,
 //           RZ to binary32 (words bit-exact against the atom for every finite accumulator)
 //   native  OMMA m16n8k64 kind::mxf4nvf4 4X ue4m3 on the same rows and columns (the unit, and the words' reference on the card)

@@ -22,8 +22,8 @@ import os
 import numpy as np
 import pytest
 
-from verity_vllm.program.registry import topp_split as TS
-from verity_vllm.program.registry import topp_geometry
+from verity.ml.circuits.ops import topp_split as TS
+from verity.ml.circuits.ops import topp_geometry
 
 f32 = np.float32
 HERE = os.path.dirname(os.path.abspath(__file__))

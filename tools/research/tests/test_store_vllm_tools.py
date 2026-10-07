@@ -45,7 +45,7 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
         assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity")),
-                             "catalog/**", "kernels/**", "experimental/**"]
+                             "catalog/**", "verity/ml/kernels/**", "experimental/**"]
         for k in t.produces:
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces

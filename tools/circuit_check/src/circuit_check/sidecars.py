@@ -1,6 +1,6 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
-    fp8.py                    a Definition module (`verity_vllm.program.registry.fp8`)
+    fp8.py                    a Definition module (`verity.ml.circuits.ops.fp8`)
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: binding functions (``_boolean_roots`` and the other
                               names of `targets.ROOT_FUNCTIONS`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries
     fp8.circuit-check.json    its pins (`checks`' lowering counts by kind: ``definitions``, ``pieces``, ``units``)
@@ -28,7 +28,7 @@ from . import cache as CC
 
 REPO = Path(__file__).resolve().parents[4]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
-PACKAGES = ("verity", "verity_catalog", "verity_kernels", "verity_experimental", "verity_vllm", "verity_numerical")
+PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity_experimental", "verity_vllm", "verity_numerical")
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines
 SHARED_PINS = Path(__file__).with_name("pins.json")

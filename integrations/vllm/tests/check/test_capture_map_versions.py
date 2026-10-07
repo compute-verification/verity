@@ -24,7 +24,7 @@ from verity_vllm.commit import capture_map as CM
 from verity_vllm.program.boolean import boolean_version
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import catalog
+from verity.ml.circuits.ops import catalog
 
 MAP = Path(__file__).parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 CMAP = CM.load(MAP)

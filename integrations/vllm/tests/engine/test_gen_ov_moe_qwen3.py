@@ -40,8 +40,8 @@ from verity_vllm.observe.fold.patterns.gemm import GemmLaunch
 from verity_vllm.observe.fold.patterns.target import gemm_target_of, pinned_num_sms
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe as MOE
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import moe as MOE
+from verity.ml.circuits.ops import prims as P
 
 C = Q3.C
 H, I, E, TOPK, NL = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["NL"]

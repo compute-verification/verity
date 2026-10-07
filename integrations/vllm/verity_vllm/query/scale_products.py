@@ -17,9 +17,9 @@ from collections import Counter
 from functools import lru_cache
 from typing import Any, Callable, Mapping
 
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.registry import fp8_vocab
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import fp8
+from verity.ml.circuits.ops import fp8_vocab
+from verity.ml.circuits.ops import prims as P
 
 FAMILY = "scale_products"
 MEMBER = "scale_products"

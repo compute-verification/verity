@@ -23,7 +23,7 @@ that shortens the Program (R17-27).  This module is the SEMANTIC core: the spec'
 independently written three-state reference machine (SERVING / LAG / INACTIVE), the checker's recurrence over a RAW transcript
 (`recurrence`), the named invariants (`invariants`), rev's Match-side checks (M-0445: `check_transcript`), the slot <-> engine-iteration map
 (revb R1: `slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.  The registered gates
-(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity_vllm/program/registry/lifted.py` (`continuation_chain`); the
+(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity/ml/circuits/ops/lifted.py` (`continuation_chain`); the
 R17-1 lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
 
 Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`; the lifted tool's `a_r` is the first event with `r = 0`).
@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Iterable, Sequence
 
-from verity_vllm.program.registry import lifted as L
+from verity.ml.circuits.ops import lifted as L
 from verity_vllm.program.lifting import lifted_records
 
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (spec s1: recorder, builder, Match share one version)

@@ -23,7 +23,7 @@ _WORD = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
 
 
 def _definitions() -> dict[str, Any]:
-    from verity_vllm.program.registry import dense
+    from verity.ml.circuits.ops import dense
     return {d.id: d for d in (
         dense.SquareBf16, dense.SquareF32, dense.MeanTriton, dense.AddScalarF32, dense.AddScalarBf16, dense.AddWidenedBf16, dense.RsqrtF32,
         dense.ScaleRowBf16, dense.ScaleRowF32, dense.MulVecF32, dense.NarrowF32ToBf16, dense.GeluTanhMul, dense.Bf16DivScalar,

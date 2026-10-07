@@ -10,10 +10,10 @@ from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.constants import program_data
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import b1, hopper
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import value_inputs as VI
+from verity.ml.circuits.ops import b1, hopper
+from verity.ml.circuits.ops import fa2_check_inf as F2
+from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops import value_inputs as VI
 
 
 def _bf16(rng, n: int, scale: float = 1.0) -> list[int]:

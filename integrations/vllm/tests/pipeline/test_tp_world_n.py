@@ -13,7 +13,7 @@ from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.evaluate import evaluate_region
 from verity.primitives.circuits.layout import resolve
 from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import b1_tp2 as TP2, prims as P
+from verity.ml.circuits.ops import b1_tp2 as TP2, prims as P
 from verity_vllm.program.frontend import collective_kinds
 
 
@@ -202,7 +202,7 @@ def test_link_three_synthetic_ranks():
     assert link["ranks"] == [0, 1, 2] and link["world_size"] == 3 and link["by_status"] == {"linked": 2}
     ar, ag = link["links"]
     assert ar["definition"]["id"] == "AllReduce_v2{WORLD=3,N=32}" and set(ar["required_writes"]) == {"0", "1", "2"}
-    assert ar["definition"]["module"] == "verity_vllm.program.registry.b1_tp2"
+    assert ar["definition"]["module"] == "verity.ml.circuits.ops.b1_tp2"
     assert ag["definition"]["id"] == "AllGather_v1{WORLD=3,N=8}"
     # world 2 of the same synthetic run keeps the recorded gather identity
     sh2 = {r: CL.extract_rank_shard(_rank_events(r, 2), rank=r) for r in range(2)}

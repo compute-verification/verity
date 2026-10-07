@@ -8,9 +8,9 @@ from typing import Any
 import numpy as np
 
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import value_inputs as VI
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops import value_inputs as VI
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major

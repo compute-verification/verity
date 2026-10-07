@@ -1,5 +1,5 @@
 """Batch forms of a served tile's replay for `served_debit.py`: every place a Pearl-C v1 tile's check runs the device's E4M3
-atom one word at a time, run over all of the tile's words at once on numpy (`verity_kernels.tc.group_sum_total_batch`, the
+atom one word at a time, run over all of the tile's words at once on numpy (`verity.ml.kernels.tc.group_sum_total_batch`, the
 atom's bit-exact batch form).
 
 - `_pairs`: `pearl_c.chain` on every (a, b) pair of two lists of code rows: C̃'s words (`checked`), the fused columns of the peel factors
@@ -11,7 +11,7 @@ atom's bit-exact batch form).
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
 range, or an input is not the shape the batch takes, it calls the scalar reference instead, so a rejection (and any other
 exception) is the reference's own.  FP32 adds and products are numpy float32's, IEEE nearest-even with subnormals kept, as
-`verity_catalog.definitions.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
+`verity.ml.circuits.silicon.definitions.fp32` takes them; `install` refuses a process whose floating-point unit flushes subnormals.
 
 `install(scheme)` puts them in place of the scalar functions for a Pearl-C v1 scheme on a promoted device, with the `blake3`
 package's BLAKE3 (the same digests) for the plain-Python one, and returns the function that puts the scalar ones back:
@@ -23,8 +23,8 @@ import functools
 from collections.abc import Sequence
 
 import numpy as np
-from verity_kernels import tc as K
-from verity_catalog.silicon import fp32
+from verity.ml.kernels import tc as K
+from verity.ml.circuits.silicon import fp32
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P

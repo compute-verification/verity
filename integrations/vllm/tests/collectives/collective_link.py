@@ -210,20 +210,20 @@ def _geom(v: dict | None) -> tuple | None:
 
 def _definition_for(kind: str, count: int | None, world: int | None, rows: dict[int, dict]) -> dict:
     if kind == "all_reduce":
-        from verity_vllm.program.registry import b1_tp2 as TP2
-        from verity_vllm.program.registry.quarantine.collective.allreduce import all_reduce_sum_bf16
+        from verity.ml.circuits.ops import b1_tp2 as TP2
+        from verity.ml.circuits.ops.quarantine.collective.allreduce import all_reduce_sum_bf16
         R = int(world) if world else len(rows)
         if R > 2:
-            sp, module = (TP2.all_reduce(R, int(count)) if count else None), "verity_vllm.program.registry.b1_tp2"
+            sp, module = (TP2.all_reduce(R, int(count)) if count else None), "verity.ml.circuits.ops.b1_tp2"
         else:
-            sp, module = (all_reduce_sum_bf16(int(count), R) if count else None), "verity_vllm.program.registry.quarantine.collective.allreduce"
+            sp, module = (all_reduce_sum_bf16(int(count), R) if count else None), "verity.ml.circuits.ops.quarantine.collective.allreduce"
         return {"id": sp.id if sp else None, "module": module, "conformance": sp.defn.conformance if sp else None,
                 "operands": [f"x{r} = rank {r}'s operand view" for r in range(R)], "output": "every rank's result view (journaled write on each rank)"}
     if kind == "all_gather":
-        from verity_vllm.program.registry import b1_tp2 as TP2
+        from verity.ml.circuits.ops import b1_tp2 as TP2
         R = int(world) if world else len(rows)
         sp = TP2.all_gather(R, int(count)) if count and R >= 2 else None       # [lane vllm-tp-n] AllGather2_v1{N} at world 2, AllGather_v1{WORLD,N} above
-        return {"id": sp.id if sp else None, "module": "verity_vllm.program.registry.b1_tp2",
+        return {"id": sp.id if sp else None, "module": "verity.ml.circuits.ops.b1_tp2",
                 "conformance": "reference rearrangement (reshape of the per-rank parts; no gates)",
                 "operands": [f"x{r} = rank {r}'s operand view" for r in sorted(rows)], "output": "the concatenation, on every rank"}
     if kind == "vocab_shard_lookup":
@@ -234,7 +234,7 @@ def _definition_for(kind: str, count: int | None, world: int | None, rows: dict[
             VS = op.get("shape", [None])[0]
             H = op.get("shape", [None, None])[1] if len(op.get("shape", [])) > 1 else None
             per_rank[str(r)] = f"EmbeddingShard_v1{{VS={VS},H={H},START={st.get('org_vocab_start_index')}}}"
-        return {"id": per_rank, "module": "verity_vllm.program.registry.b1_tp2", "conformance": "exact-model-tested (TA1 TP=2 commit)",
+        return {"id": per_rank, "module": "verity.ml.circuits.ops.b1_tp2", "conformance": "exact-model-tested (TA1 TP=2 commit)",
                 "operands": ["tok (I32)", "this rank's table shard"], "output": "the masked row, rank-local (no communicator)"}
     return {"id": None, "module": None, "conformance": None}
 

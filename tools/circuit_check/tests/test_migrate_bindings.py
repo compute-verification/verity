@@ -36,7 +36,7 @@ TINY = {"H": 32}
 
 
 def _local() -> Any:
-    from verity_catalog.definitions import prims as P
+    from verity.ml.circuits.silicon.definitions import prims as P
 
     return P.F32ToBf16Rn
 
@@ -44,8 +44,8 @@ def _local() -> Any:
 def _core_roots() -> list[Any]:
     """Core's GEMM Definitions at K = 64 over the Ampere step, and two casts."""
     from verity.primitives.circuits.defs import bind
-    from verity_catalog.definitions import gemm as G
-    from verity_catalog.definitions import prims as P
+    from verity.ml.circuits.silicon.definitions import gemm as G
+    from verity.ml.circuits.silicon.definitions import prims as P
 
     A = P.AmpereBF16TcDot16
     rows = [bind(d, K=64, DOT=A) for d in (G.DotBf16, G.GemmCoordinate)]
@@ -57,7 +57,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny configurations."""
     from verity.primitives.circuits.defs import bind
     from verity.primitives.commitments.gates import merkle as M
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
 
     n = TINY["H"] // 2
     return [
@@ -96,23 +96,23 @@ def planned(tmp_path, monkeypatch):
     monkeypatch.setattr(MB, "TARGETS", p)
     src = MB.Source(TARGETS)
     doc = MB._doc_digest(MB.ast.get_docstring(src.top["_core_roots"]))
-    monkeypatch.setattr(MB, "DOCS", {"_core_roots": (doc, {"verity_catalog.definitions.gemm": "Core's GEMM Definitions at K = 64."})})
+    monkeypatch.setattr(MB, "DOCS", {"_core_roots": (doc, {"verity.ml.circuits.silicon.definitions.gemm": "Core's GEMM Definitions at K = 64."})})
     return MB.plan()
 
 
 def test_each_binding_goes_to_the_module_that_defines_what_it_binds(planned):
     moved, _targets, summary = planned
     assert {m: sorted(v) for m, v in moved.items()} == {
-        "verity_catalog.definitions.gemm": ["_core_roots"], "verity_catalog.definitions.prims": ["_core_roots"],
-        "verity_vllm.program.registry.b1": ["_model_roots"], "verity_numerical.bench.templates": ["TEMPLATE_PARAMS"]}
-    assert summary["undocumented"] == ["verity_catalog.definitions.prims#_core_roots"]
+        "verity.ml.circuits.silicon.definitions.gemm": ["_core_roots"], "verity.ml.circuits.silicon.definitions.prims": ["_core_roots"],
+        "verity.ml.circuits.ops.b1": ["_model_roots"], "verity_numerical.bench.templates": ["TEMPLATE_PARAMS"]}
+    assert summary["undocumented"] == ["verity.ml.circuits.silicon.definitions.prims#_core_roots"]
 
 
 def test_a_split_root_function_makes_the_roots_the_original_made(planned):
     """The comprehension over two modules' Definitions is split between them; each part imports only what it reads, and the
     local ``A`` goes where it is read."""
     moved, targets, _summary = planned
-    gemm, prims = moved["verity_catalog.definitions.gemm"]["_core_roots"], moved["verity_catalog.definitions.prims"]["_core_roots"]
+    gemm, prims = moved["verity.ml.circuits.silicon.definitions.gemm"]["_core_roots"], moved["verity.ml.circuits.silicon.definitions.prims"]["_core_roots"]
     assert "for x in (P.E4m3ToF32,)" in prims and "for x in (G.DotBf16,)" in gemm
     assert "import gemm" not in prims and "defs import bind" not in prims and "A = " not in prims
     assert "A = P.AmpereBF16TcDot16" in gemm and '"""Core\'s GEMM Definitions at K = 64."""' in gemm
@@ -125,7 +125,7 @@ def test_a_split_root_function_makes_the_roots_the_original_made(planned):
 
 def test_a_model_entry_moves_with_its_comment_and_what_it_reads_and_a_core_one_reading_the_checker_stays(planned):
     moved, targets, summary = planned
-    b1 = moved["verity_vllm.program.registry.b1"]["_model_roots"]
+    b1 = moved["verity.ml.circuits.ops.b1"]["_model_roots"]
     assert "# the residual at half the tiny width" in b1 and "from circuit_check.targets import TINY" in b1
     assert 'n = TINY["H"] // 2' in b1 and "merkle" not in b1
     assert [label for label, _make in _run(b1, "_model_roots")] == ["ResidualAdd_v1"]
@@ -162,7 +162,7 @@ def test_a_migrated_targets_py_has_nothing_to_move(tmp_path, monkeypatch):
 def test_the_task_lists_differences_ignore_which_file_names_a_unit():
     t = {"definitions": [{"id": "A_v1", "as_call": False, "gates": 3, "units": ["_core_roots"]}], "templates": [],
          "root_errors": [], "pins": {"pieces": {"A_v1": {"and": 1}}}}
-    moved = {**t, "definitions": [{**t["definitions"][0], "units": ["verity_catalog.definitions.gemm.circuit-check#_core_roots"]}]}
+    moved = {**t, "definitions": [{**t["definitions"][0], "units": ["verity.ml.circuits.silicon.definitions.gemm.circuit-check#_core_roots"]}]}
     assert MB.differences(t, moved) == []
     regated = {**t, "definitions": [{**t["definitions"][0], "gates": 4}]}
     assert MB.differences(t, regated) == [f"definitions: A_v1: {t['definitions'][0]} became {regated['definitions'][0]}"]
@@ -171,7 +171,7 @@ def test_the_task_lists_differences_ignore_which_file_names_a_unit():
 
 #: the source roots the migration reads and writes, copied whole
 COPIED = ("tools/circuit_check", ".", "integrations/vllm/verity_vllm", "verity/protocols/accounting/work/pouw",
-          "benchmarks/numerical/python", "backends/flock/python")
+          "benchmarks/numerical/python", "verity/ml/provers/flock/python")
 
 
 @pytest.mark.slow

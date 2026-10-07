@@ -48,7 +48,7 @@ from verity_vllm.config import option
 from verity_vllm.program.frontend.rules.family import _field_intervals, expand_leaves, match_program, node_leaf_id
 from verity.primitives.circuits.layout import FunctionCall
 from verity.primitives.circuits.refs import Refs, runs
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 from verity.primitives.circuits.types import Array, Tuple as TupleT, Type
 
 from verity_vllm.observe.events import ViewDesc

@@ -27,11 +27,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.primitives.circuits import Program, bind  # noqa: E402
 from verity.primitives.circuits.defs import REGISTRY  # noqa: E402
-from verity_vllm.program.registry import b1, lifted as L, pad_prims as PP, prims as P  # noqa: E402
+from verity.ml.circuits.ops import b1, lifted as L, pad_prims as PP, prims as P  # noqa: E402
 from verity_vllm.program.lifting import lifted_records
 from verity_vllm.program.lifting import lifted_compose
 from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
-from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
+from verity.ml.circuits.ops.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs  # noqa: E402
 from verity.primitives.circuits.types import Array, Value  # noqa: E402
 from verity_vllm.pipeline import global_program as GP  # noqa: E402

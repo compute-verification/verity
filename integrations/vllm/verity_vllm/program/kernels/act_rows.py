@@ -20,8 +20,8 @@ EVALUATOR = ("verity_vllm.program.kernels.act_rows.silu_mul_expf_rows (SiluMul_v
 @lru_cache(maxsize=None)
 def silu_expf_mid_table() -> np.ndarray:
     """`cvt.rn.bf16.f32(f / (1.0f + expf(-f)))` on each of the 65,536 bf16 gate words, `SiluMulBf16_v2`'s interior."""
-    from verity_vllm.program.registry import act
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import act
+    from verity.ml.circuits.ops import prims as P
     return np.array([P.f32_to_bf16_rn_bits(act.silu_f32_bits(g << 16), P.BF16_NAN_F2FP) for g in range(1 << 16)], dtype=np.uint16)
 
 
@@ -44,7 +44,7 @@ def silu_mul_expf(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[st
 
 def check_targets(rng) -> list:
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import act
+    from verity.ml.circuits.ops import act
     return [bind(act.SiluMul, I=8)]
 
 

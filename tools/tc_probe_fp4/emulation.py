@@ -1,7 +1,7 @@
 """``fp4_emulation_1ad1aaa2`` as ``E``, imported under the module name it was written against.
 
 The file is 1ad1aaa2's verbatim (``t1_merged.emulation_gate`` checks its bytes), so it still imports the pinned models as
-``verity.ml.tc.models``, which are ``verity_catalog.silicon.models`` now, and puts the tree's former source directory on
+``verity.ml.tc.models``, which are ``verity.ml.circuits.silicon.models`` now, and puts the tree's former source directory on
 ``sys.path``, which no longer exists and comes off again.
 """
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from verity_catalog.silicon import models
+from verity.ml.circuits.silicon import models
 
 sys.modules.setdefault("verity.ml.tc.models", models)
 

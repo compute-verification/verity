@@ -205,7 +205,7 @@ def _check_main(args) -> int:
     # [lane vllm-tp-n] world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N});
     # a mismatch is a named finding.  Diagnostics travel with it: how many received values equal the f32-accumulate-then-round-once
     # alternative (`alt_f32_once_equal`) and the ascending rank-order chain (`alt_ascending_equal`) -- never a relabel, facts for the finding.
-    from verity_vllm.program.registry.b1_tp2 import allreduce_order
+    from verity.ml.circuits.ops.b1_tp2 import allreduce_order
     order = allreduce_order(world)
     prov["definition_order"] = ("world 2: bf16(f32(part0) + f32(part1)); world > 2: acc = part[order[0]]; acc = bf16(f32(acc) + f32(part[r])) "
                                 f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order)")

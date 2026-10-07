@@ -8,7 +8,7 @@ import pytest
 
 from verity.primitives.circuits.defs import REGISTRY
 from verity.primitives.circuits import library as L
-from verity_catalog.definitions import prims  # noqa: F401  (registers the listed Definitions)
+from verity.ml.circuits.silicon.definitions import prims  # noqa: F401  (registers the listed Definitions)
 
 #: `digest()` of VERSION 1. A change to the list needs a new VERSION, then this pin.
 DIGEST_V1 = ("7ac81522d1edaa83a20ec16442120fb3f608eee3ded8b8b9310a6396e05c8a93"
@@ -45,11 +45,11 @@ def test_the_digest_is_pinned():
 
 def test_every_core_primitive_declares_only_library_tables():
     from verity.primitives.circuits.defs import PrimitiveDefinition
-    from verity_catalog.definitions import mufu  # noqa: F401  (registers the MUFU primitives)
+    from verity.ml.circuits.silicon.definitions import mufu  # noqa: F401  (registers the MUFU primitives)
 
     names = {t.name for t in L.TABLES}
     declared = {d.id: d.tables for d in REGISTRY.defs.values()
-                if isinstance(d, PrimitiveDefinition) and d.evaluate.__module__.startswith(("verity.", "verity_catalog.")) and d.tables}
+                if isinstance(d, PrimitiveDefinition) and d.evaluate.__module__.startswith(("verity.", "verity.ml.circuits.")) and d.tables}
     assert set(declared) >= {"MufuEx2Ftz_v1", "MufuRcpFtz_v1", "MufuTanh_v1"}
     for fid, tables in declared.items():
         assert all(kind == L.LIBRARY and n in names for n, kind in tables), fid

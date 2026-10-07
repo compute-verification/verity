@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_gather`: the Boolean vocabulary gathers and embedding agree with `GatherBf16x{V}_v1` and
+"""`verity.ml.circuits.ops.boolean_gather`: the Boolean vocabulary gathers and embedding agree with `GatherBf16x{V}_v1` and
 `Embedding_v1` on edge and random tokens (negative, past the vocabulary, at every chunk boundary), are pinned by gate count and
 program digest, and cut under `Q_word_v1{X=16,W=32}` into one unit of 16 output bits per gather, with no gate two gathers compute.
 The gathers over more than 1024 words are trees of Calls whose chunk Definition takes seconds to compile, so their tests are
@@ -17,8 +17,8 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import REGISTRY, bind
 from verity.primitives.circuits.boolean.trace import word_of
-from verity_vllm.program.registry import boolean_gather as BGA
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import boolean_gather as BGA
+from verity.ml.circuits.ops import prims as P
 from verity_vllm.query import word as W
 
 SERVED_VOCAB = 49152

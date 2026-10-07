@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity_vllm.config import option
-from verity_vllm.program.registry import b1, prims  # noqa: F401  (registration)
+from verity.ml.circuits.ops import b1, prims  # noqa: F401  (registration)
 
 STATUSES = ("exact-model-tested", "model-untested", "not-yet-established", "superseded",
             # lane NUMERIC (additive): kinds of `ref_prims.py` whose semantics IS the evaluator's arithmetic (GUIDANCE §43.2 (B));

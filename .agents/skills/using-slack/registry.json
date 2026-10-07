@@ -87,7 +87,7 @@
         "tools/native_peak/",
         "tools/tc_probe/",
         "tools/tc_probe_fp4/",
-        "catalog/verity_catalog/definitions/"
+        "verity/ml/circuits/silicon/definitions/"
       ]
     },
     {

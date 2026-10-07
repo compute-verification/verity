@@ -14,10 +14,10 @@ from verity.primitives.circuits.evaluation.reference import standalone_call
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import moe
+from verity.ml.circuits.ops import moe
 from verity_vllm.program.kernels import moe_twins
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import ref_prims as R
+from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops import ref_prims as R
 
 NEG_INF, PINF, QNAN = 0xFF800000, 0x7F800000, 0x7FC00000
 TIERS = ((128, 8), (256, 8), (384, 8), (512, 8), (512, 22), (768, 16), (896, 16), (1024, 16))   # SigmoidBiasTiers

@@ -11,7 +11,7 @@ from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
-from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
+from verity.ml.circuits.ops.fp8 import QUANT_GROUPS, weight_blocks
 
 
 # -- [R15 fp8] the block-scaled FP8 linear: dynamic per-token-group activation quant + the blockwise CUTLASS scaled GEMM -----------------

@@ -7,8 +7,8 @@ import random
 
 import pytest
 
-import verity_catalog.definitions.prims  # noqa: F401  (the one-stage tests' primitives)
-import verity_catalog.definitions.scalar  # noqa: F401
+import verity.ml.circuits.silicon.definitions.prims  # noqa: F401  (the one-stage tests' primitives)
+import verity.ml.circuits.silicon.definitions.scalar  # noqa: F401
 from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.types import Array, Value as Bits

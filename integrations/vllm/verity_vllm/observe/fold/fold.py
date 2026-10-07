@@ -12,7 +12,7 @@ Implemented by lane L4.  Contract:
 
 Root parameters (in order):
     prompt  : one `Array(LP_r, I32)` per request (in `header.workload["requests"]` order) from `Root(role="prompt_token")`;
-    weights : `verity_vllm.program.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
+    weights : `verity.ml.circuits.ops.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
               events through `profile.weight_field(name)`; a Root whose field is None is a Note: nothing is written
               under its view, so a later read of it is Unresolved (raised under an accepted profile) — the M1 log's
               120 per-layer fp8 `_k/_v/_q/_prob_scale` fp32 scalars are such roots and nothing reads them;
@@ -98,7 +98,7 @@ from verity.primitives.circuits.defs import (
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.refs import Affine, Coll, Refs, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 from verity_vllm.program.replay import replayer
 from verity.primitives.circuits.types import Array, Record, Type, Value
 from verity.primitives.circuits.types import Tuple as TupleT

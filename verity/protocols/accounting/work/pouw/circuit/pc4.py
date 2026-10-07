@@ -63,10 +63,10 @@ from verity.primitives.circuits.defs import CompositeDefinition, SpecializedDefi
 from verity.primitives.circuits.partition import CutVerdict
 from verity.primitives.circuits.refs import array_of, tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity_catalog.definitions.prims import (BlackwellNvf4OmmaDot64, Bf16ToF32, E4m3ToF32, F2fpBf16, F32ToE2m1Sat, F32ToE4m3Sat,
+from verity.ml.circuits.silicon.definitions.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
+from verity.ml.circuits.silicon.definitions.prims import (BlackwellNvf4OmmaDot64, Bf16ToF32, E4m3ToF32, F2fpBf16, F32ToE2m1Sat, F32ToE4m3Sat,
                              HopperBF16WgmmaDot16, const)
-from verity_catalog.definitions.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectBf16, SelectI32
+from verity.ml.circuits.silicon.definitions.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectBf16, SelectI32
 
 from ..protocol import DomainError
 from ..schemes import pearl_c as C

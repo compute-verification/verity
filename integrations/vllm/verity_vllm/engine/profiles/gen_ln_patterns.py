@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import act, layer_norm
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import act, layer_norm
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (BiasAdd, GeometryError, RotaryEmbedding, _fmt, _group_compute, _positions_ok, as_float,

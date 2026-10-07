@@ -13,7 +13,7 @@ from verity.primitives.circuits.types import Array, Record
 from verity_vllm.check import root_policy
 from verity_vllm.engine import run_facts
 from verity_vllm.observe.events import DispatchEnter, Root, RunHeader, TritonLaunch, ViewDesc
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.circuits.ops.prims import BF16
 
 NH, DN, DR, DV, L = 2, 3, 2, 2, 4                       # heads, QK_NOPE, QK_ROPE, V_HEAD, KV_LORA
 ROWS, HS = NH * (DN + DV), (DN + DV) * L

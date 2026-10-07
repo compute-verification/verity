@@ -32,7 +32,7 @@ DECLARED_ENV = env.ENGINE
 CASES = {
     "B0": {"repo": "HuggingFaceTB/SmolLM2-135M"},
     # [E1 NIGHT 2026-09-12, G3; PROPOSED] the second-model cases: SMOL360 = SmolLM2-360M (B0's architecture, larger), QWEN05 = Qwen2.5-0.5B (B1's
-    # architecture at head dim 64); registry configs verity_vllm.program.registry.b1.{SMOL360,QWEN05}_CONFIG.
+    # architecture at head dim 64); registry configs verity.ml.circuits.ops.b1.{SMOL360,QWEN05}_CONFIG.
     "SMOL360": {"repo": "HuggingFaceTB/SmolLM2-360M"},
     "QWEN05": {"repo": "Qwen/Qwen2.5-0.5B"},
     "B1": {"repo": "Qwen/Qwen2.5-1.5B"},

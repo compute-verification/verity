@@ -231,10 +231,10 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     assert dangling("attr", "research.cli", "main") is None
     assert dangling("attr", "tools.tc_probe.tool", "TC_PROBE") is None
     assert dangling("main", "research", None) is None
-    assert dangling("import", "verity_catalog.definitions.boolean.gemm", None) is None
-    assert dangling("import", "verity_catalog.definitions.no_such_module", None) == "no such module"
+    assert dangling("import", "verity.ml.circuits.silicon.definitions.boolean.gemm", None) is None
+    assert dangling("import", "verity.ml.circuits.silicon.definitions.no_such_module", None) == "no such module"
     assert dangling("attr", "research.cli", "no_such_attr") == "tools/research/src/research/cli.py binds no no_such_attr"
-    assert dangling("main", "verity_catalog.definitions", None) == "a package without __main__.py"
+    assert dangling("main", "verity.ml.circuits.silicon.definitions", None) == "a package without __main__.py"
     assert dangling("import", "numpy.linalg", None) is None
     text = ('importlib.import_module("verity.gone")\n"python -m verity_vllm.gone"\n[sys.executable, "-m", "research.gone"]\n'
             'x = "circuit_check.gone:main"\n')

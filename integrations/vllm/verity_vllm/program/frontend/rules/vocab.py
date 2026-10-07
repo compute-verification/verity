@@ -12,16 +12,16 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from verity.primitives.circuits.defs import bind as ir_bind
-from verity_vllm.program.registry import act as _act
-from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
-from verity_vllm.program.registry import fa2_check_inf as _f2
-from verity_vllm.program.registry import fa3_check_inf as _f3
-from verity_vllm.program.registry import fp8 as _fp8
-from verity_vllm.program.registry import fp8_vocab as _fp8_vocab
-from verity_vllm.program.registry import moe as _moe
-from verity_vllm.program.registry import pouw_rows as _pouw_rows
+from verity.ml.circuits.ops import act as _act
+from verity.ml.circuits.ops import b1, gemm_bias as _gemm_bias
+from verity.ml.circuits.ops import fa2_check_inf as _f2
+from verity.ml.circuits.ops import fa3_check_inf as _f3
+from verity.ml.circuits.ops import fp8 as _fp8
+from verity.ml.circuits.ops import fp8_vocab as _fp8_vocab
+from verity.ml.circuits.ops import moe as _moe
+from verity.ml.circuits.ops import pouw_rows as _pouw_rows
 from verity_vllm.program.frontend import targets as _targets
-from verity_vllm.program.registry import value_inputs as _vi
+from verity.ml.circuits.ops import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
 
@@ -63,7 +63,7 @@ class Vocabulary:
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
-    from verity_vllm.program.registry import fa2_check_inf as _f2v  # noqa: PLC0415
+    from verity.ml.circuits.ops import fa2_check_inf as _f2v  # noqa: PLC0415
     return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
@@ -127,11 +127,11 @@ PROFILE_B1_EAGER = Vocabulary(
         "residual_add": "ResidualAdd_v1{N}",
     })
 
-# -- reference: NUMERIC's reference kinds (`verity_vllm/program/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
+# -- reference: NUMERIC's reference kinds (`verity/ml/circuits/ops/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
 # The reference kinds define the arithmetic (sequential f32 chains, one DT rounding at stated points); agreement with torch
 # CPU is measured over a tested domain (docs/data/ref-prims/), never assumed. The vocabulary version pins NUMERIC's
 # `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body source).
-from verity_vllm.program.registry import ref_prims as RP
+from verity.ml.circuits.ops import ref_prims as RP
 
 
 def _ref_doc(d) -> str:
@@ -179,13 +179,13 @@ REFERENCE_CPU_F32 = Vocabulary(
 
 # -- profile "b1-eager-v2": the same Ampere eager profile over the v2 skeleton (`Serve_v2`/`Serve_v3`: `Gemm_v2{K,N,DOT}`,
 # `Attention_v2{..,BN,DOT,INV}`, the `NORM` bundle) + the `pad-serve@1` kinds of the padded circuit (`serve3.py`) ------------
-from verity_vllm.program.registry import b1_tp2 as TP2
-from verity_vllm.program.registry import pad_prims as PP
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
-from verity_vllm.program.registry import sampling_vocab
-from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
-from verity_vllm.program.registry import layer_norm as _LN
+from verity.ml.circuits.ops import b1_tp2 as TP2
+from verity.ml.circuits.ops import pad_prims as PP
+from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops import sampling as _sampling  # [R15 stoch]
+from verity.ml.circuits.ops import sampling_vocab
+from verity.ml.circuits.ops import topp_words as _topp_words  # the keep word as word gates at a constant S
+from verity.ml.circuits.ops import layer_norm as _LN
 
 
 def _norm_v2(role: str):
@@ -235,11 +235,11 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # UNFUSED under the eager batch-invariant profile when a model's norm is `forward_native` (`ir.ops.rms_norm` / `fused_add_rms_norm` as
 # an ATen chain on an f32 copy), its activation is GeGLU, its attention has a logit soft cap, or its logits are soft-capped. Every kind
 # is op-shaped (an ATen CUDA kernel on a bf16 / f32 row, a Triton reduction, a softcapped FA2 head) — nothing here names a model; the
-# Definitions live in `verity_vllm.program.registry.dense` (promoted from `quarantine.dense`, the X-08 pattern: same name / version / body, so the
+# Definitions live in `verity.ml.circuits.ops.dense` (promoted from `quarantine.dense`, the X-08 pattern: same name / version / body, so the
 # specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
 def _dense_kinds() -> tuple[dict, dict]:
-    from verity_vllm.program.registry import dense as DN
-    from verity_vllm.program.registry import tables as _tables
+    from verity.ml.circuits.ops import dense as DN
+    from verity.ml.circuits.ops import tables as _tables
     kinds = {
         "scale_tensor": lambda N: ir_bind(b1.Bf16MulScalarTensor, N=N),
         "gelu_tanh_mul": lambda I: ir_bind(DN.GeluTanhMul, I=I),
@@ -303,14 +303,14 @@ _DNK, _DNN = _dense_kinds()
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     """[R17-42 route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
     registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
-    from verity_vllm.program.registry import moe_pad as _mp  # noqa: PLC0415
+    from verity.ml.circuits.ops import moe_pad as _mp  # noqa: PLC0415
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
-    from verity_vllm.program.registry import fa2_softcap as _f2s  # noqa: PLC0415
+    from verity.ml.circuits.ops import fa2_softcap as _f2s  # noqa: PLC0415
     return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 # -- profile "b1-eager-v3" [CB-A 2026-09-18]: the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —

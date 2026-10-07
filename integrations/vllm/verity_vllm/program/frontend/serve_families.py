@@ -4,8 +4,8 @@ attention geometry a semantic profile declares and the `BN` static it binds, and
 from __future__ import annotations
 
 from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.b1 import BN, Serve, ServeV4, fa2_kblock_n
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops.b1 import BN, Serve, ServeV4, fa2_kblock_n
 
 
 #: [E7 D54] the pinned attention kernel source the geometry rule below is read from

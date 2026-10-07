@@ -14,8 +14,8 @@ from __future__ import annotations
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.refs import tuple_of
 from verity.primitives.circuits.types import Array, Tuple
-from verity_vllm.program.registry import boolean_rope
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.circuits.ops import boolean_rope
+from verity.ml.circuits.ops.prims import BF16
 
 SEMANTIC_ID = "ref_prims/RoPEGptJ@v2"
 

@@ -18,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from verity_vllm.program.registry import lifted as L
+from verity.ml.circuits.ops import lifted as L
 from verity.primitives.circuits.types import Value
 
 

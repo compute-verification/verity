@@ -52,8 +52,8 @@ def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
     """cc 12.0 (the RTX PRO 6000): vLLM has no tuned family for it, so a Triton launch takes the default tiling (the pinned vLLM keeps
     the bf16 linear on cuBLASLt there), and the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is core's HOPPER_BF16_M16N8K16: the
     Definition is Hopper's `Gemm_v2`."""
-    from verity_catalog.silicon.instructions import INSTRUCTIONS
-    from verity_catalog.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
+    from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+    from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
 
     bw = GT.REGISTERED["blackwell_consumer"]
     assert bw.compute_capabilities == ((12, 0),) and bw.vllm_arch_family is None and GT.vllm_tuned_gemm_arch_family((12, 0)) is None
@@ -77,7 +77,7 @@ def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     of the compute_80 PTX on the Hopper step, so its attention is the H100 forced-FA2 chain (`BN=fa2_kblock_n(D)`,
     `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
     `Attention_v3`; a declared FA3 is refused by name."""
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
     from verity_vllm.program.frontend import targets as TG
 
     assert PRO6000_TP.tensor_core_family == "blackwell_consumer" and PRO6000_TP.effective_flash_attn_version() == 2

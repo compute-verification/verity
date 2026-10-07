@@ -668,7 +668,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
 
 
-RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["backends/flock/", "!README.md"]\n'
+RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["verity/ml/provers/flock/", "!README.md"]\n'
 
 
 def _move_main(world: World, files: dict[str, str]) -> str:
@@ -787,7 +787,7 @@ def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     `lean-audit.json` the granted head didn't change included."""
     q = _carrying(world, RULES + RED_TEAM)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    flock = {"backends/flock/x.py": "x = 1\n"}
+    flock = {"verity/ml/provers/flock/x.py": "x = 1\n"}
     world.gh.put(1, old := world.change(flock))
     _grant(world, 1, old, "red-team")
     assert [m.pr for m in q.sync()[0]] == [1]
@@ -795,7 +795,7 @@ def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     world.gh.put(1, new := world.change(flock))
     assert [m.head for m in q.sync()[0]] == [new]
     assert f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} (restack; no lean-audit.json change)" in world.logs
-    for extra, why in (({"backends/flock/y.py": "y = 1\n"}, "its change against origin/main differs (backends/flock/y.py)"),
+    for extra, why in (({"verity/ml/provers/flock/y.py": "y = 1\n"}, "its change against origin/main differs (verity/ml/provers/flock/y.py)"),
                        ({"a.txt": "a, too\n"}, "its change against origin/main differs (a.txt)"),
                        ({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
                         "its lean-audit.json patch isn't byte-identical (pkg/lean-audit.json)")):
@@ -812,7 +812,7 @@ def test_a_grant_on_a_head_git_cannot_compare_carries_nothing(world):
 
     q = _carrying(world, RULES + RED_TEAM)
     q.sync()                                                    # the clone first: a local clone hardlinks every object there is
-    flock = {"backends/flock/x.py": "x = 1\n"}
+    flock = {"verity/ml/provers/flock/x.py": "x = 1\n"}
     unseen = world.change(flock)                                # on the origin, but never a PR head the queue fetched
     ghost = "0123456789abcdef" * 2 + "01234567"
     for h in (unseen, ghost):
@@ -862,10 +862,10 @@ def test_a_submodule_pinned_elsewhere_is_another_change_whatever_git_is_told_to_
 
     _git(world.dev, "config", "diff.ignoreSubmodules", "all")
     a, b = (_git(world.dev, "commit-tree", "origin/main^{tree}", "-m", m) for m in ("a", "b"))
-    old = _gitlink(world, "backends/flock/vendored", a)
+    old = _gitlink(world, "verity/ml/provers/flock/vendored", a)
     _move_main(world, {"d.txt": "landed meanwhile\n"})
-    new, restacked = _gitlink(world, "backends/flock/vendored", b), _gitlink(world, "backends/flock/vendored", a)
-    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (backends/flock/vendored)")
+    new, restacked = _gitlink(world, "verity/ml/provers/flock/vendored", b), _gitlink(world, "verity/ml/provers/flock/vendored", a)
+    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (verity/ml/provers/flock/vendored)")
     assert carry(world.dev, "origin/main", old, restacked) == (True, "restack; no lean-audit.json change")
     assert Rules.parse(RULES + RED_TEAM).needs(world.dev, "origin/main", new) == {"red-team"}
 

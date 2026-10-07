@@ -9,8 +9,8 @@ from verity.primitives.circuits.liveness import dead_gates
 from verity_vllm.program.frontend.correspond import compare_bodies, correspond
 from verity_vllm.program.frontend.provenance import registry_version
 from verity.primitives.circuits.refs import Coll, Concat, Strided, array_of
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import F32
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops.prims import F32
 from verity.primitives.circuits.types import Array
 
 from tests.program.test_running_example import Id16, Relu16, make_program
@@ -123,4 +123,4 @@ def test_registry_version_is_stable_and_names_the_vocabulary():
     v1, v2 = registry_version(), registry_version()
     assert v1["digest"] == v2["digest"] and len(v1["digest"]) == 64
     assert v1["primitives"] > 20 and v1["composites"] >= 20
-    assert set(v1["sources"]) == {"verity_vllm.program.registry.prims", "verity_vllm.program.registry.b1"}
+    assert set(v1["sources"]) == {"verity.ml.circuits.ops.prims", "verity.ml.circuits.ops.b1"}

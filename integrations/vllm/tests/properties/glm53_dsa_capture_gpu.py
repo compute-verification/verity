@@ -317,8 +317,8 @@ def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
 
 def rope_forms_exact(x1: int, x2: int, c: int, s: int) -> dict[str, int]:
     """`rope_forms` of one quadruple through core's exact bit functions (the non-flushing forms)."""
-    from verity_catalog.definitions.fp32 import f32_add_bits as add, f32_fma_bits as fma, f32_mul_bits as mul, f32_sub_bits as sub
-    from verity_catalog.definitions.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
+    from verity.ml.circuits.silicon.definitions.fp32 import f32_add_bits as add, f32_fma_bits as fma, f32_mul_bits as mul, f32_sub_bits as sub
+    from verity.ml.circuits.silicon.definitions.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
 
     X1, X2, Cc, Ss = ((v & 0xFFFF) << 16 for v in (x1, x2, c, s))
     n = 0x80000000
@@ -721,7 +721,7 @@ def phase_rope(o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any]) -> d
     `RoPEHeadGptJ_v1` on a sample of them against the L_a/H_a candidate words."""
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import ref_prims as RP
+    from verity.ml.circuits.ops import ref_prims as RP
 
     pos = o["pos"].cpu().numpy()
     cs_rows = _u16(o["cs"])[pos]
@@ -872,7 +872,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity_vllm.program.registry import dsa
+    from verity.ml.circuits.ops import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     if lst is None:
@@ -990,7 +990,7 @@ def compare_kslots(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache slots [r0, r1): their bytes and scale against `DsaIndexerKRow_v1{128,64,1e-06}` (the reference itself)."""
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.circuits.ops import dsa
 
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS)
@@ -1009,7 +1009,7 @@ def compare_qtok(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [r0, r1): index_q_fp8 and index_weights_out against `DsaIndexerQ_v1{32,128,64}` (the reference itself)."""
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.circuits.ops import dsa
 
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE)
@@ -1028,7 +1028,7 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, the reference on the first two."""
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.circuits.ops import dsa
 
     a = _load(job["paths"])
     kr, kc, kg = job["keys"]
@@ -1055,7 +1055,7 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One (token, head) of FA3's sparse output against `SparseMlaHead_v1{T,...}` (the reference itself)."""
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import sparse_mla as M
+    from verity.ml.circuits.ops import sparse_mla as M
 
     a = _load(job["paths"])
     h, T = job["head"], job["T"]
@@ -1124,9 +1124,9 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
-    from verity_vllm.program.registry import ref_prims as RP
-    from verity_vllm.program.registry import sparse_mla as M
+    from verity.ml.circuits.ops import dsa
+    from verity.ml.circuits.ops import ref_prims as RP
+    from verity.ml.circuits.ops import sparse_mla as M
 
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
     targets = {f"DsaIndexerKRow_v1{{D={D},ROPE={ROPE},EPS={K_EPS}}}": lambda: bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS),

@@ -22,10 +22,10 @@ import pearl_c_vectors as V
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import partition_object as PO
 from verity.primitives.circuits.program import Program
-from verity_catalog.definitions.fp32 import F32FmaV2
-from verity_catalog.definitions.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
-from verity_catalog.definitions.scalar import I32Le
-from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.ml.circuits.silicon.definitions.fp32 import F32FmaV2
+from verity.ml.circuits.silicon.definitions.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
+from verity.ml.circuits.silicon.definitions.scalar import I32Le
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.primitives.randomness import derive
 from verity.protocols.accounting.work.pouw.circuit import pc8, plan
 from verity.protocols.accounting.work.pouw.circuit.anchors import TileAnchors

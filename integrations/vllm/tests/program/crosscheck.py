@@ -19,8 +19,8 @@ from verity.primitives.circuits.layout import FunctionCall
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.refs import Coll
 from verity.primitives.circuits.types import Array, Record
-from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.registry.b1 import B1_CONFIG as C
+from verity.ml.circuits.ops import b1, prims as P
+from verity.ml.circuits.ops.b1 import B1_CONFIG as C
 
 
 from verity.primitives.circuits.defs import CompositeDefinition

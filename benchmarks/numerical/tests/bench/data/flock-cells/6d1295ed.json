@@ -398,7 +398,7 @@
     "binary_sha256": "dc0a66b463e7d24cd6eb13dc0958c6dd9efeba9ce0d13dbab83c1cf08739ceb9",
     "commit": "a6a6e5488ea897ab11b3ee143e0307c5b5ececd7",
     "configuration": "Flock(scheme=frame-v3/blake3-keyed/row/v2, profile=flock-128-r2, statement=block)",
-    "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch",
+    "flock": "succinctlabs/flock b684b12 + verity/ml/provers/flock/flock-link-b684b12.patch",
     "lowering_sha256": "da1bbe2cdbf02971f0d7f12f6d5a3caabefb658af95afeeff44d001ff30dddba",
     "lowering_version": "41158d749e5c41c7aea8ea94db23c5919e7869c8f1acb2eb008a3a77f71e4230",
     "name": "flock-pure-gpu",

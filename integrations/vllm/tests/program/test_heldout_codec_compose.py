@@ -12,7 +12,7 @@ What is checked, per program (`Serve{TINY}` as the control, `ServeHopper{TINY}`,
    (DC's `test_v1_kv_cache_arguments_alias_...` claim, now on the ported/sharded definition sets);
 3. the equivalence is discriminating across bindings: `ServeHopper{TINY}` vs `Serve{TINY}` is a `Mismatch`
    (definition sets differ), and so is `ServeTP2` vs `Serve`;
-4. a *fresh* process that imports only `verity.primitives.circuits` (not `verity_vllm.program.registry.hopper`) can or cannot decode the Hopper
+4. a *fresh* process that imports only `verity.primitives.circuits` (not `verity.ml.circuits.ops.hopper`) can or cannot decode the Hopper
    descriptor -- the descriptor carries every composite body but only *names* its primitives, and the CLI
    `verity-vllm descriptor-equivalence` loads with the process's `REGISTRY` (`_load`).
 """
@@ -29,7 +29,7 @@ from verity.primitives.circuits.codec import SCHEMA_V0, canonical_json, decode_p
 from verity.primitives.circuits.defs import REGISTRY, bind
 from verity_vllm.program.descriptor_equivalence import Mismatch, compare
 from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import b1, b1_tp2, hopper
+from verity.ml.circuits.ops import b1, b1_tp2, hopper
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
@@ -91,15 +91,15 @@ def _fresh_decode(path: Path, imports: str) -> subprocess.CompletedProcess:
 
 def test_hopper_descriptor_decodes_in_a_fresh_process_only_if_the_binding_module_is_imported(tmp_path):
     """The descriptor names `HopperBF16WgmmaDot16` / `Fa3InvSum` as primitives; they exist in `REGISTRY` only after
-    `verity_vllm.program.registry.hopper` is imported. `verity.primitives.circuits` itself imports neither `registry.b1` nor `registry.hopper`,
+    `verity.ml.circuits.ops.hopper` is imported. `verity.primitives.circuits` itself imports neither `registry.b1` nor `registry.hopper`,
     so `verity-vllm descriptor-equivalence --old <hopper descriptor>` depends on what the process imported."""
     P = Program(PROGRAMS["ServeHopper{TINY}"]())
     desc = encode_program(P)
     path = tmp_path / "hopper-tiny.json"
     path.write_text(canonical_json({k: v for k, v in desc.items() if k != "annotations"}).decode())
     bare = _fresh_decode(path, "import verity.primitives.circuits")
-    with_b1 = _fresh_decode(path, "import verity.primitives.circuits, verity_vllm.program.registry.b1")
-    with_hopper = _fresh_decode(path, "import verity.primitives.circuits, verity_vllm.program.registry.hopper")
+    with_b1 = _fresh_decode(path, "import verity.primitives.circuits, verity.ml.circuits.ops.b1")
+    with_hopper = _fresh_decode(path, "import verity.primitives.circuits, verity.ml.circuits.ops.hopper")
     assert with_hopper.returncode == 0, with_hopper.stderr[-800:]
     # Record the facts for the report; the finding (if any) is the CLI's dependence on the importer.
     report = {"bare": (bare.returncode, bare.stderr.strip().splitlines()[-1] if bare.stderr.strip() else ""),
@@ -107,4 +107,4 @@ def test_hopper_descriptor_decodes_in_a_fresh_process_only_if_the_binding_module
               "with_hopper": (with_hopper.returncode, with_hopper.stdout.strip())}
     print(json.dumps(report))
     if bare.returncode != 0 or with_b1.returncode != 0:
-        pytest.xfail(f"a fresh process without `verity_vllm.program.registry.hopper` cannot decode the Hopper descriptor: {report}")
+        pytest.xfail(f"a fresh process without `verity.ml.circuits.ops.hopper` cannot decode the Hopper descriptor: {report}")

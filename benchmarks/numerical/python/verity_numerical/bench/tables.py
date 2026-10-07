@@ -6,7 +6,7 @@ Reads ``bench-result/v1``, ``native-peak/v1`` and ``instance-equiv/v1`` artifact
 store (``research.store.LocalStore``), applies the frozen validity predicate (:func:`reject_reasons`) and renders:
 
 * **Table 1** -- the candidate proof systems (:data:`CANDIDATES`): definitional, no performance, no status;
-* **Table 2** -- headline proving overhead by target: one row per ``verity_catalog.targets.target.TARGETS`` entry, one
+* **Table 2** -- headline proving overhead by target: one row per ``verity.ml.circuits.targets.target.TARGETS`` entry, one
   column per candidate; a cell is the *best valid* implementation of that candidate (min ``t.total``) run on the row's
   native device SKU, printed as ``R_native_spec / R_proved`` with ``R_proved = 2KB / t.total``;
 * **Table 3** -- the prover phase decomposition of every populated Table 2 cell (the six buckets, joints, ``Other``).
@@ -29,8 +29,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from verity_catalog.silicon.instructions import INSTRUCTIONS
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import census, contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
@@ -991,7 +991,7 @@ def build(store: Any) -> Tables:
                  "backend": backend, "profile": fp.get("profile"), "proof_class": fp.get("proof_class")}
         if target is None:
             problems = contract.validate(meta)
-            T.rejected.append({**entry, "reasons": [f"profile {fp.get('profile')!r} is not a target of verity_catalog.targets.target"]
+            T.rejected.append({**entry, "reasons": [f"profile {fp.get('profile')!r} is not a target of verity.ml.circuits.targets.target"]
                                + ([_contract_reason(problems)] if problems else [])})
             continue
         labels = store.labels(art_id)

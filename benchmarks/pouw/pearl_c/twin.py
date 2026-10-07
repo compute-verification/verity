@@ -26,7 +26,7 @@ import multiprocessing
 from pathlib import Path
 
 import numpy as np
-from verity_kernels.tc import group_sum_total_batch
+from verity.ml.kernels.tc import group_sum_total_batch
 from verity.protocols.accounting.work.pouw.audit import ROW_SCHEMA, Epoch, Workload, activation_binding, rows_domain, transcript_domain
 from verity.protocols.accounting.work.pouw.protocol import Matmul
 from verity.protocols.accounting.work.pouw.protocol import Shape as MShape

@@ -599,7 +599,7 @@ from verity_vllm.check.match import global_match as gm  # noqa: E402
 from verity_vllm.check.match import sampler_geometry as SG  # noqa: E402
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture
-from verity_vllm.program.registry.topp_geometry import splits_for  # noqa: E402
+from verity.ml.circuits.ops.topp_geometry import splits_for  # noqa: E402
 
 NSM = 4   # a num_SMs at which S discriminates 1 vs 2 live rows: splits_for(1, 4) = 4, splits_for(2, 4) = 2 (142 SMs gives 32 for both)
 

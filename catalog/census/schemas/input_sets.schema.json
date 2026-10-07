@@ -32,7 +32,7 @@
       "target": {
         "type": "string",
         "minLength": 1,
-        "description": "legacy: the verity_catalog.targets.target name"
+        "description": "legacy: the verity.ml.circuits.targets.target name"
       },
       "dataset": {
         "type": "string",

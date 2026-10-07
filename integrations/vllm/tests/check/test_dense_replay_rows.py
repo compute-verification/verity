@@ -13,7 +13,7 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
 from verity_vllm.program.kernels import ir_rows
 from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
-from verity_vllm.program.registry import dense
+from verity.ml.circuits.ops import dense
 from verity_vllm.query.call_scope import specialization
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import spec_family

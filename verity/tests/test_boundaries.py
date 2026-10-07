@@ -48,14 +48,14 @@ ALLOWED = {
 }
 #: Import names core never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity_catalog", "verity_kernels", "verity_experimental", "verity_sp1", "verity_vllm", "verity_numerical",
+FORBIDDEN_EXTERNAL = ("verity.ml.circuits", "verity.ml.kernels", "verity_experimental", "verity_sp1", "verity_vllm", "verity_numerical",
                       "verity_flock", "verity_torch", "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax",
                       "onnx", "catalog", "kernels", "experimental", "archive", "backends", "benchmarks", "frontends",
                       "integrations", "tools", "veritor")
 #: The one edge out of core: PoUW's schemes and circuits are stated over the catalog's silicon models and Definitions (the
 #: tensor-core steps, FP32 and the casts its verifier recomputes), which live in the catalog by ruling, while the scheme
 #: stays in core.  Nothing else in core imports the catalog.
-EXCEPTIONS = {"protocols.accounting.work.pouw": {"verity_catalog"}}
+EXCEPTIONS = {"protocols.accounting.work.pouw": {"verity.ml.circuits"}}
 #: Core's third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or ``verity``.  A
 #: protocol imports none: it is the standard library and core, and the application composes protocols.
 DEPENDENCIES = {"numpy"}

@@ -26,9 +26,9 @@ from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit
 from verity_vllm.program.kernels import twins  # noqa: F401  (registers RoPE_v1's kernel, which the served shapes' word side runs)
 from verity_vllm.program.kernels.twins import rand_bf16, tie_pairs_mul
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_rope as R
-from verity_vllm.program.registry import ref_prims
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import boolean_rope as R
+from verity.ml.circuits.ops import ref_prims
 
 U16 = np.uint16
 HALVES = [R.RopeOut, R.RopeOutAdd]

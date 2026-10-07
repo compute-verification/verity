@@ -17,8 +17,8 @@ from verity.primitives.circuits.cut import call_scope
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.registry import fp8_vocab
+from verity.ml.circuits.ops import fp8
+from verity.ml.circuits.ops import fp8_vocab
 from verity_vllm.query import word as W
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]

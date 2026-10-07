@@ -65,7 +65,7 @@ _define_once("unified_cache_pad(Tensor live, Tensor zero, int slot) -> ()", "uni
 # for this event -- [R16 stoch, coord M-0169] a DERIVED input of the workload (S_t = SplitsFor_v1(|live(t)|, num_SMs)) the request wrapper
 # reads from its request-owned `splits` Input, not a static.  [single-request workloads] A single-request workload passes `splits=None`
 # and `S` = SplitsFor_v1(1, num_SMs), the constant split count of its every event.  Not a vLLM op: a stand-in with an explicit schema like
-# `unified_cache_pad`; the frontend rule `GumbelTopPTokenSelect[vllm]` binds it to `GumbelTopPTokenSelect_v1{V}` (verity_vllm.program.registry.sampling;
+# `unified_cache_pad`; the frontend rule `GumbelTopPTokenSelect[vllm]` binds it to `GumbelTopPTokenSelect_v1{V}` (verity.ml.circuits.ops.sampling;
 # S its 6th operand).
 _define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
              "gumbel_topp_token_select",

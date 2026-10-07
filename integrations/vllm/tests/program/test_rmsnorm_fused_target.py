@@ -23,7 +23,7 @@ from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 from verity_vllm.program.frontend import targets as T
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 

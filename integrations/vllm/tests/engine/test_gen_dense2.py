@@ -18,7 +18,7 @@ from verity_vllm.engine.profiles import profile_module_for_case
 
 gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
 phi3 = importlib.import_module("verity_vllm.engine.profiles.derived_PHI3_MINI")
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 REPO = Path(__file__).resolve().parents[2]
 PROFILES = REPO / "workloads"

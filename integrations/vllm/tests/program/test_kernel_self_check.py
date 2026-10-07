@@ -43,7 +43,7 @@ def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
 
     statics = {"T": 20, "NH": 2, "KVH": 1, "D": 16, "BN": 16}
     target = bind(b1.AttentionV3, **statics)

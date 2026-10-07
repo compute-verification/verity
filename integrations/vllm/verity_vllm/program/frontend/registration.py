@@ -7,7 +7,7 @@ from __future__ import annotations
 from verity.primitives.circuits.refs import Affine, Coll
 from verity.primitives.circuits.types import Record, Type, Value
 
-from verity_vllm.program.registry.tables import table_type
+from verity.ml.circuits.ops.tables import table_type
 
 
 class Registration:

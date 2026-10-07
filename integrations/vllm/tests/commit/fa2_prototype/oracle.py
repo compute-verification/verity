@@ -1,4 +1,4 @@
-"""Verity-semantics replay producer: the registry Definition `AttentionHead_v3{T, D, BN}` (`verity_vllm/program/registry/b1.py`)
+"""Verity-semantics replay producer: the registry Definition `AttentionHead_v3{T, D, BN}` (`verity/ml/circuits/ops/b1.py`)
 evaluated gate by gate by the IR oracle (`verity.primitives.circuits.evaluate.evaluate_call`), with the committed stream of
 `encoding.py` read out of the execution transcript by walking the call tree.
 
@@ -29,7 +29,7 @@ import numpy as np
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.evaluate import evaluate_call
 from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 from .encoding import NLANES, RowLayout
 
@@ -80,7 +80,7 @@ preload_mufu_tables_low_peak()
 
 _STANDALONE = CompositeDefinition("Standalone", 1, ("FN",), lambda S: S.FN.signature(),
                                   lambda B, S, *args: B.call(S.FN, *args),
-                                  doc="root wrapper: one call of F over Input gates (as `verity_vllm.program.registry.crosscheck`)",
+                                  doc="root wrapper: one call of F over Input gates (as `verity.ml.circuits.ops.crosscheck`)",
                                   register=False)
 
 

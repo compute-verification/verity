@@ -13,8 +13,8 @@ from verity.primitives.circuits.constants import program_data
 from verity.primitives.circuits.program import Program
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
-from verity_vllm.program.registry import dense as DN
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import dense as DN
+from verity.ml.circuits.ops import prims as P
 from verity_vllm.program.kernels.serve3_reference import materialize
 
 BF = torch.bfloat16

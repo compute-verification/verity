@@ -35,7 +35,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from fractions import Fraction
 
-from verity_catalog.silicon import fp32
+from verity.ml.circuits.silicon import fp32
 
 from . import pearl_kw as P
 from .pearl_c_device import H100, Device, Prices

@@ -772,7 +772,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))
     if not isinstance(low, IL.Lowering):
         rec["compared"] = 0
-        rec["correspondence"] = "the sampling lane's reference is backends/flock/tests/test_ir_sampling.py (lane_reference)"
+        rec["correspondence"] = "the sampling lane's reference is verity/ml/provers/flock/tests/test_ir_sampling.py (lane_reference)"
         return rec
     params, _ = signature_of(d)
     n = max(1, min(opts.vectors, opts.lane_budget // max(1, low.units.n)))

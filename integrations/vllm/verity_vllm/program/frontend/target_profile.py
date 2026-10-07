@@ -77,7 +77,7 @@ class TargetProfile:
                            conformance on committed bytes; fused region == composed relations NOT established; Daniel's ruling M-0285).
                            Omitted from `to_json()` when None: eager profiles serialise (and digest) exactly as before.
     fp8_block_gemm      -> [R15 fp8] env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
-                           (`kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
+                           (`verity/ml/kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
                            DeepGEMM, CUTLASS, ...).  `"cutlass"` -> `VLLM_USE_DEEP_GEMM=0` (both DeepGEMM kernels excluded; on cc 9.x
                            the selector takes `CutlassFp8BlockScaledMMKernel`, the sm90 blockwise CUTLASS GEMM whose arithmetic is the
                            registered `ScaledMmFp8Block_v1`); None = vLLM's own selection (DeepGEMM JIT when its toolchain exists —
@@ -103,7 +103,7 @@ class TargetProfile:
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.program.registry.moe_pad`; its lift of record is the
+                           weights, the TOPK slot outputs selected by the router ids (`verity.ml.circuits.ops.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's

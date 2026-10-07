@@ -25,7 +25,7 @@ import pytest
 
 FIXTURE = Path(__file__).parent / "fixtures" / "moe_fp8_split.json"
 FAMILY = ("moe", "moe_pad", "moe_difftest", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boolean_fp8_moe", "nvfp4", "boolean_gather")
-MODULES = tuple(f"verity_vllm.program.registry.{m}" for m in FAMILY)
+MODULES = tuple(f"verity.ml.circuits.ops.{m}" for m in FAMILY)
 
 
 def _home(d) -> str | None:

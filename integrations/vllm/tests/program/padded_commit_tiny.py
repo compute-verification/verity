@@ -53,7 +53,7 @@ from verity.primitives.circuits import query_ast as GS
 from verity.primitives.circuits import partition as PT
 from verity.primitives.circuits.codec import encode_program, program_digest
 from verity.primitives.circuits.evaluate import evaluate_region
-from verity_vllm.program.registry import b1, lifted as L
+from verity.ml.circuits.ops import b1, lifted as L
 from verity_vllm.program.kernels import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 

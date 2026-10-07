@@ -7,7 +7,7 @@ import dataclasses
 import math
 from dataclasses import dataclass
 
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, rows_operand

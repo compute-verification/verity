@@ -16,10 +16,10 @@ STATIC REACHABILITY: an ast import graph over every `.py` under the integration 
 circuit-check loads by path).  Edges: `import a.b`, `from a.b import c`
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
 literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
-prefixes (`f"verity_vllm.program.registry.{m}"` + every short literal of the same file that completes to a module), path literals
+prefixes (`f"verity.ml.circuits.ops.{m}"` + every short literal of the same file that completes to a module), path literals
 (`verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
 root is LIVE.  `verity_vllm/engine/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
-`registry.catalog.load()` imports every module of `verity_vllm.program.registry` but `quarantine` (`pkgutil`): they are reachable from it.
+`registry.catalog.load()` imports every module of `verity.ml.circuits.ops` but `quarantine` (`pkgutil`): they are reachable from it.
 
 CLASSES (per module of the census packages):
     LIVE       static_reachable or dynamically_imported
@@ -218,7 +218,7 @@ class Graph:
                     if m.startswith(pkg + "."):
                         self.add(src_mod, m)
                 continue
-            if pkg == "verity_vllm.program.registry":                    # registry.catalog.load(): every module of it but quarantine
+            if pkg == "verity.ml.circuits.ops":                    # registry.catalog.load(): every module of it but quarantine
                 for m in self.file_of:
                     if m.rsplit(".", 1)[0] == pkg and m != pkg + ".quarantine":
                         self.add(src_mod, m)

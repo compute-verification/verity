@@ -2,7 +2,7 @@
 
 The commitment engine (C0, `tests/commit/semantic_layout.py`) hashes ONLY packed value bytes; the identity of
 a leaf is its POSITION in a layout that is derived by arithmetic from static context.  This module fixes that layout for the
-interior values of `Attention_v3{T, NH, KVH, D, BN}` (`verity_vllm/program/registry/b1.py::AttnBlockV3 / AttentionHeadV3`).
+interior values of `Attention_v3{T, NH, KVH, D, BN}` (`verity/ml/circuits/ops/b1.py::AttnBlockV3 / AttentionHeadV3`).
 
 Value word
     fp32 stage -> the 4 little-endian bytes of the IEEE-754 bit pattern (u32); bf16 stage -> 2 bytes (u16).  No conversion.

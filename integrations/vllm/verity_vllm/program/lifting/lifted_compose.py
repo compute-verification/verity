@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from verity_vllm.program.registry.lifted import BOUNDARY_PREFIX, check_lag, lift_request_component, lift_type
+from verity.ml.circuits.ops.lifted import BOUNDARY_PREFIX, check_lag, lift_request_component, lift_type
 
 
 def lift_component(component: Any, eos: Sequence[int], *, max_tokens: int, lag: int, boundary_prefix: str = BOUNDARY_PREFIX) -> Any:

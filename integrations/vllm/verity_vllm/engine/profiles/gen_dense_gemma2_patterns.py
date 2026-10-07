@@ -1,5 +1,5 @@
 """[GEN dense / ov-dense] Gemma-2's eager-unfused ATen chain -> the lane's quarantined Definitions
-(`verity_vllm.program.registry.quarantine.dense`, one `SEMANTIC_ID` per module, each difftested on the pod).
+(`verity.ml.circuits.ops.quarantine.dense`, one `SEMANTIC_ID` per module, each difftested on the pod).
 
 vLLM d9105ea80 runs `Gemma2ForCausalLM` in eager mode with `VLLM_BATCH_INVARIANT=1`; nothing of the norm / GeGLU / softcap
 is fused into the b1 kernels the base profile knows, so the raw log shows the ATen ops themselves (one decode step, layer L):
@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry.quarantine.dense import (add_scalar_bf16, add_scalar_f32, add_widened_bf16, bf16_div_scalar,
+from verity.ml.circuits.ops.quarantine.dense import (add_scalar_bf16, add_scalar_f32, add_widened_bf16, bf16_div_scalar,
                                                 bf16_mul_scalar, bf16_mul_scalar_tensor, bf16_tanh, gelu_tanh_mul, mean_triton,
                                                 mul_vec_f32, narrow_f32_bf16, rsqrt_f32, scale_row_bf16, scale_row_f32,
                                                 square_bf16, square_f32)

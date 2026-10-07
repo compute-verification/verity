@@ -14,12 +14,12 @@ from verity.primitives.circuits.codec import decode_program, encode_program
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.types import Array
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import topp_split as TS
-from verity_vllm.program.registry import topp_keep_builder as TKB
-from verity_vllm.program.registry import topp_word_gates as TWGates
-from verity_vllm.program.registry import topp_words as TWG
-from verity_vllm.program.registry.prims import BIT, F32
+from verity.ml.circuits.ops import sampling as SM
+from verity.ml.circuits.ops import topp_split as TS
+from verity.ml.circuits.ops import topp_keep_builder as TKB
+from verity.ml.circuits.ops import topp_word_gates as TWGates
+from verity.ml.circuits.ops import topp_words as TWG
+from verity.ml.circuits.ops.prims import BIT, F32
 
 f32 = np.float32
 #: #169's constructed rows (`test_topp_split_halves`): ordinary logits at V = 3000, S = 16, p = 0.5, the step kernels' partials

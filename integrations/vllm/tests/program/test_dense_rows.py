@@ -17,7 +17,7 @@ from verity.primitives.circuits.defs import bind
 from verity_vllm.program.kernels import dense_rows as DR
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels import rows
-from verity_vllm.program.registry import b1, dense
+from verity.ml.circuits.ops import b1, dense
 
 ALL_BF16 = np.arange(1 << 16, dtype=np.uint16)
 #: the 256 bf16 words with an all-ones exponent field (+-inf, NaN), 16 per instance of N=16 over `ALL_BF16`

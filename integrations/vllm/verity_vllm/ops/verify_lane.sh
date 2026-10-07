@@ -81,7 +81,7 @@ EOF2
 log "sampling seed: $SEED"
 
 # 2. the lane's tests in the fresh checkout (laptop limits: pytest -x, 10 min cap)
-( cd "$WT" && timeout 600 "$PY" -m pytest tests/observe verity_vllm/program/registry/quarantine -q -p no:cacheprovider --junitxml="$RUN_DIR/tests.xml" 2>&1 | tail -3 | tee -a "$RUN_DIR/verify_lane.log" ) || log "pytest failed or timed out"
+( cd "$WT" && timeout 600 "$PY" -m pytest tests/observe verity/ml/circuits/ops/quarantine -q -p no:cacheprovider --junitxml="$RUN_DIR/tests.xml" 2>&1 | tail -3 | tee -a "$RUN_DIR/verify_lane.log" ) || log "pytest failed or timed out"
 "$PY" - "$RUN_DIR/tests.xml" "$RUN_DIR/tests.json" <<'EOF' || true
 import json, sys, xml.etree.ElementTree as ET
 try:

@@ -32,10 +32,10 @@ import verity_vllm
 from verity.primitives.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import prims as P
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.registry.hopper import Fa3InvSum
+from verity.ml.circuits.ops.hopper import Fa3InvSum
 
 PACKAGE = Path(verity_vllm.__file__).parent
 DEFAULT = TargetProfile().numerics_profile

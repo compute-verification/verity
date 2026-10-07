@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.fp8 import E4M3_NAN, MIN_SCALE_BITS
-from verity_vllm.program.registry.prims import f32_of
+from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops.fp8 import E4M3_NAN, MIN_SCALE_BITS
+from verity.ml.circuits.ops.prims import f32_of
 
 
 def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:

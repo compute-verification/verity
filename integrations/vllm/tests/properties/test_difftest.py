@@ -13,7 +13,7 @@ import pytest
 
 from verity_vllm.properties import admission as difftest
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 
 def _bf16_add_ref(a: np.ndarray, b: np.ndarray) -> np.ndarray:

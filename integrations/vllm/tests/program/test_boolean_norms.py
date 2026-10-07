@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_norms`: the served RMSNorms on bits.
+"""`verity.ml.circuits.ops.boolean_norms`: the served RMSNorms on bits.
 
 The leaf pieces are Boolean and pinned; the split output word keeps every AND, and the squares pay none for the decodes they
 return. Each piece agrees with its word primitives on special words (every bf16 word for the squares) and on random ones. Both
@@ -24,13 +24,13 @@ from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import PrimitiveDefinition, bind
 from verity.primitives.circuits.parts import n_members
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.silicon import fp
-from verity_catalog.definitions.boolean import mufu as MU
+from verity.ml.circuits.silicon.definitions.boolean import elementwise as EW
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.silicon.definitions.boolean import mufu as MU
 from verity.primitives.circuits.boolean import trace as TR
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_norms as BN
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import boolean_norms as BN
+from verity.ml.circuits.ops import prims as P
 from verity_vllm.query import word as QW
 from verity_vllm.query.cross_call import members_check
 
@@ -293,7 +293,7 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-#: the MUFU statics as proofs' Boolean Definitions (`verity_catalog.definitions.boolean.mufu`), which the switch binds
+#: the MUFU statics as proofs' Boolean Definitions (`verity.ml.circuits.silicon.definitions.boolean.mufu`), which the switch binds
 CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
 TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
 

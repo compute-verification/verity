@@ -173,7 +173,7 @@ def _held(spec, n: int) -> int:
 
 @pytest.mark.parametrize("n", [1, 200, 5000])
 def test_peak_bytes_bounds_what_evaluate_bits_holds(n: int) -> None:
-    from verity_catalog.definitions.boolean import gemm as BG
+    from verity.ml.circuits.silicon.definitions.boolean import gemm as BG
 
     for spec in (bind(_random(0)), bind(_random(3)), bind(_wide_adder(1024))):
         assert _held(spec, n) <= BS.peak_bytes(spec, n)

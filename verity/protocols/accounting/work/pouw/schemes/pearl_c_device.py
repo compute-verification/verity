@@ -1,6 +1,6 @@
 """Pearl-C's device record: the hardware facts a Pearl-C instance is stated on, as one scheme parameter.
 
-Every checked value goes through two tensor-core steps (``verity_catalog.silicon`` models): the FP8 atom (E4M3 x E4M3 into an FP32
+Every checked value goes through two tensor-core steps (``verity.ml.circuits.silicon`` models): the FP8 atom (E4M3 x E4M3 into an FP32
 accumulator, k = 32) that C̃, the fused A′·F_B and B̃·F_A, G and the forming atom run on, and the BF16 step (k = 16) that
 the peel accumulates into C̃'s word.  Beside them the record holds the promotion period G (atoms per fresh +0 accumulator,
 promoted by one FP32 nearest-even add), the W1 prices (`Prices`) that `wref`, `credit_of`, `job_cost` and the debit read,
@@ -28,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from fractions import Fraction
 
-from verity_catalog.silicon.models import (BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16,
+from verity.ml.circuits.silicon.models import (BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16,
                                  HOPPER_E4M3_K32, GroupSum)
 
 

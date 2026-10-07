@@ -22,8 +22,8 @@ from verity.primitives.circuits.defs import PrimitiveDefinition, Registry
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.refs import Coll, concat, tuple_of
 from verity.primitives.circuits.types import Array, Tuple, Value
-from verity_catalog.definitions.prims import const
-from verity_catalog.definitions.scalar import I32Add
+from verity.ml.circuits.silicon.definitions.prims import const
+from verity.ml.circuits.silicon.definitions.scalar import I32Add
 
 PATH = Path(__file__).parent / "qcall_vectors.json"
 BIT, V32, V64 = BL.BIT, Value(32), Value(64)

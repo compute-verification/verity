@@ -16,7 +16,7 @@ from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 
 def _attention_parts_claiming_the_launch(node, ctx):

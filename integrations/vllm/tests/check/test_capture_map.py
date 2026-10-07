@@ -19,7 +19,7 @@ from verity_vllm.check.capture_map import check, check_target
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.pipeline import cli
-from verity_vllm.program.registry import catalog
+from verity.ml.circuits.ops import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "glm_moe_dsa"

@@ -68,7 +68,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "manifest-verify": ("verity_vllm.query.manifest.verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
-    "mla-capture": ("verity_vllm.program.registry.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
+    "mla-capture": ("verity_vllm.properties.difftests.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
     "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),

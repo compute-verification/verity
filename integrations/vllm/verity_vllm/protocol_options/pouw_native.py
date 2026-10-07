@@ -32,8 +32,8 @@ from verity.protocols.accounting.work.pouw.circuit import ncp2
 from verity.protocols.accounting.work.pouw.circuit import reference as R
 from verity.protocols.accounting.work.pouw.circuit.ncp2 import D, Shape
 
-from verity_kernels.tc import f32_to_bf16_rn_batch
-from verity_catalog.definitions.scalar import F32_NAN_PTX
+from verity.ml.kernels.tc import f32_to_bf16_rn_batch
+from verity.ml.circuits.silicon.definitions.scalar import F32_NAN_PTX
 from verity_vllm.protocol_options import pouw_circuit as PC
 
 M32 = 0xFFFFFFFF

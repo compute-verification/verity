@@ -30,9 +30,9 @@ from verity.primitives.circuits import Program, bind
 from verity.primitives.circuits.codec import encode_program, program_digest
 from verity.primitives.circuits.defs import composite
 from verity.primitives.circuits.refs import array_of, tuple_of
-from verity_vllm.program.registry import b1, lifted as L, moe, moe_pad as MP, prims as P
+from verity.ml.circuits.ops import b1, lifted as L, moe, moe_pad as MP, prims as P
 from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.prims import BF16, F32, I32
+from verity.ml.circuits.ops.prims import BF16, F32, I32
 from verity.primitives.circuits.types import Array, Tuple
 
 E, VPT, H, I = 4, 2, 16, 16

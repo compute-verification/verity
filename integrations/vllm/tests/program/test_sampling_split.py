@@ -25,9 +25,9 @@ REPO = VLLM.parents[1]
 REG = VLLM / "verity_vllm" / "program" / "registry"
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 TASKS = REPO / "tools" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
-PKG = "verity_vllm.program.registry"
+PKG = "verity.ml.circuits.ops"
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity_catalog"
+CATALOG = "verity.ml.circuits"
 
 DEFINITION_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry")
 TWIN_MODULES = ("sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins")
@@ -70,7 +70,7 @@ def family_definitions() -> dict[str, object]:
     import importlib
 
     from verity.primitives.circuits.defs import FunctionDefinition
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.circuits.ops.catalog import load
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}

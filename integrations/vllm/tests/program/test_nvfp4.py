@@ -9,12 +9,12 @@ import pytest
 
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
-from verity_catalog.definitions.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
-from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4
+from verity.ml.circuits.silicon.definitions.prims import BlackwellNvf4OmmaDot64, F32ToE4m3Sat
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import nvfp4 as N4
+from verity.ml.circuits.ops import nvfp4 as N4
 from verity_vllm.program.kernels import nvfp4_twins
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import prims as P
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.query import word as W
 

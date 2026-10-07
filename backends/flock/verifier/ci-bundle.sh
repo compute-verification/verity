@@ -25,9 +25,9 @@ for spec in 9294e161:netlist-vectors.patch:HEAD 19c7269a:circuit-vectors.patch:9
   git -C "$REPO" worktree add -q --detach "$T/wt-$c" "$c"
   git -C "$REPO" show "$at:backends/flock/verifier/$p" > "$T/$c.patch"
   git -C "$T/wt-$c" apply "$T/$c.patch"
-  cp -r "$T/wt-$c/backends/flock/live" "$T/live/$c"
-  if [ -f "$T/wt-$c/backends/flock/flock-sha512-b684b12.patch" ]; then
-    cp "$T/wt-$c/backends/flock/flock-sha512-b684b12.patch" "$T/live/$c/flock.patch"
+  cp -r "$T/wt-$c/verity/ml/provers/flock/live" "$T/live/$c"
+  if [ -f "$T/wt-$c/verity/ml/provers/flock/flock-sha512-b684b12.patch" ]; then
+    cp "$T/wt-$c/verity/ml/provers/flock/flock-sha512-b684b12.patch" "$T/live/$c/flock.patch"
     # eb90718f's and e51e2b86's selftest records pin seed_injection: true, so their replay binaries are the harness build
     case "$c" in eb90718f|e51e2b86|25519ba1|967b8d06) echo "sha512 seed-injection" > "$T/live/$c/features" ;; *) echo sha512 > "$T/live/$c/features" ;; esac
   fi

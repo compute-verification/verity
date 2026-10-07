@@ -17,7 +17,7 @@ from verity.primitives.circuits import codec
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.boolean import trace as TR
 from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_attention as BAt
+from verity.ml.circuits.ops import boolean_attention as BAt
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

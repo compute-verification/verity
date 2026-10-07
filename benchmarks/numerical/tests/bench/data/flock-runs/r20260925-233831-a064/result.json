@@ -53,7 +53,7 @@
     ],
     "lowering_sha256": "da1bbe2cdbf02971f0d7f12f6d5a3caabefb658af95afeeff44d001ff30dddba",
     "lowering_version": "738559678d74173e00f97fa2ea4a18d9b487dd8d0457289df31558efdfe0c45a",
-    "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch"
+    "flock": "succinctlabs/flock b684b12 + verity/ml/provers/flock/flock-link-b684b12.patch"
    },
    "toolchain": {
     "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",

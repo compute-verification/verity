@@ -536,7 +536,7 @@ leaves and the multiproofs open every leaf (~depth siblings per distinct row, 28
 `included-hash` every VU still hashes its own two rows; `included-hash-shared` (8e) hashes each distinct row once per
 sub-batch.
 
-* Merkle: `kernels/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
+* Merkle: `verity/ml/kernels/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
   host `blake3`, so `verify_path` is unchanged and the host path remains the CPU fallback). Before it, the transfer
   of `U` to the host (0.37 s) and host hashing (0.28 s) were 65% of the GPU-side prover; now 2 ms.
 * Hints: `hints_torch.py` vectorises `gen_step` (20 ms per 4096 units vs 2.6 s in Python); the gate asserts equality

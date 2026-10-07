@@ -1,7 +1,7 @@
 """Pearl-C's GPU check fixture, built off the pod (needs verity and numpy): inputs at a small shape and every buffer the
 kernels write, for both formings and the plain baseline.  Forming, lines and hashes come from
 `verity.protocols.accounting.work.pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
-`verity_kernels.tc.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
+`verity.ml.kernels.tc.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
 `checked`, `digest`, `tickets`) and must agree.  The hashing is format -h1, the verifier's: BLAKE3 messages and leaves,
 and A's rows and the tile leaves committed as `verity.protocols.accounting.work.pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
 forming's seed_A is its unit's over its own A rows' root (`pearl_c.unit_seed_a`), as the device derives it, so E_A's lines,
@@ -31,9 +31,9 @@ sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "work" / "
 
 import pearl_c_vectors as CV  # noqa: E402
 from verity.primitives.crypto.blake3 import blake3, keyed  # noqa: E402
-from verity_kernels.tc import group_sum_total_batch  # noqa: E402
-from verity_catalog.silicon import fp32  # noqa: E402
-from verity_catalog.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
+from verity.ml.kernels.tc import group_sum_total_batch  # noqa: E402
+from verity.ml.circuits.silicon import fp32  # noqa: E402
+from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
 from verity.primitives.commitments import MerkleTree  # noqa: E402
 from verity.primitives.commitments.merkle import tree_levels  # noqa: E402
 from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
@@ -383,7 +383,7 @@ def ieee_inputs(seed: int = 20260930) -> tuple[np.ndarray, np.ndarray]:
 
 def ieee_reference(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """ieee_ops' six words per element (x / y, 448 / x, x / 448, 1 / x, sqrt x, bf16(x) / bf16(y)) and ieee_q's 448 / x, each
-    correctly rounded with subnormals kept (`verity_catalog.silicon.fp32`)."""
+    correctly rounded with subnormals kept (`verity.ml.circuits.silicon.fp32`)."""
     bx, by = rne_bf16(x).astype(np.uint32) << 16, rne_bf16(y).astype(np.uint32) << 16
     ops = np.array([[fp32.div(int(a), int(b)), fp32.div(F448, int(a)), fp32.div(int(a), F448), fp32.div(ONE, int(a)),
                      fp32.sqrt(int(a)), int(rne_bf16(np.array([fp32.div(int(p), int(q))], np.uint32))[0])]

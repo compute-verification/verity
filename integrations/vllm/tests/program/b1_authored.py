@@ -5,7 +5,7 @@
     Commitment positions -> physical authentication locations for those values,
                             not semantic components of gate outputs.
 
-Every composite of TA1's hand-built program from `RMSNormTriton` up to `Serve` (`verity_vllm/program/registry/b1.py`)
+Every composite of TA1's hand-built program from `RMSNormTriton` up to `Serve` (`verity/ml/circuits/ops/b1.py`)
 written as `@function`s over tensors: `ops.<Prim>` for the registered primitives, `ops.Gemm(K=, N=)` etc. for
 the registered leaf composites (`DotBf16`, `Gemm`, `BiasAdd`, `RoPE`, `SiluMul`, `Embedding`, `TokenSelect` — the
 same corrected TA1 definitions on both sides), `batch`/`bind` for the structural forms, and torch views
@@ -20,8 +20,8 @@ leaf. Needs torch (the pod); `tests/program/test_b1_authored.py` skips without i
 import torch
 
 from verity.primitives.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import BF16, F32, I32
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops.prims import BF16, F32, I32
 from verity.primitives.circuits.types import Array, Tuple as TupleT
 from verity_vllm.program.frontend.torch_frontend import Arr, Bound, Dep, Prim, Registered, Tup, batch, bind, function, ops
 
@@ -448,7 +448,7 @@ def ServeV4(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
 
 
 # -- CF1: the factored definitions (composition.md §2) — the same bodies, the accidental constants and hard-coded ------
-# -- callees as statics (`verity_vllm/program/registry/b1.py`: DotBf16_v2 … Serve_v2) ------------------------------------------
+# -- callees as statics (`verity/ml/circuits/ops/b1.py`: DotBf16_v2 … Serve_v2) ------------------------------------------
 #
 # `DOT` (the k16 tensor-core step), `BN` (kBlockN), `INV` (the softmax epilogue inverse sum) and the serving-level
 # records `GEMM = {"DOT"}`, `ATTENTION = {"BN", "DOT", "INV"}`, `NORM = {"L0", "FUSED"}` are declared statics, so
@@ -645,7 +645,7 @@ def ServeV2(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
         -> Arr["STEPS + 1", I32]:
     """Greedy serving of one request with the profile's implementation records as statics (b1.ServeV2): the Ampere
     program is `ServeV2` under `GEMM_AMPERE` / `ATTENTION_FA2` / `norm_bundle(C)`, the Hopper one differs in `GEMM` and
-    `ATTENTION` only (`verity_vllm.program.registry.hopper.GEMM_HOPPER`, `.ATTENTION_FA3`)."""
+    `ATTENTION` only (`verity.ml.circuits.ops.hopper.GEMM_HOPPER`, `.ATTENTION_FA3`)."""
     caches, finals = _forward_positions_v2(C, GEMM, ATTENTION, NORM, prompt, weights, 0, LP, None)
     tok = FinalV2(finals[-1][0], finals[-1][1], weights["norm"], weights["embed"], C=C, GEMM=GEMM, NORM=NORM, name=f"t={LP - 1}/final")
     toks = [tok]

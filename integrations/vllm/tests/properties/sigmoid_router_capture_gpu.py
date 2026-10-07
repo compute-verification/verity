@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity_catalog.definitions import mufu as MU
+from verity.ml.circuits.silicon.definitions import mufu as MU
 from verity_vllm.program.kernels import derived_rows as DR
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v1"
@@ -388,7 +388,7 @@ _PROGRAMS: dict[str, Any] = {}
 
 def _program(launch: str):
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import moe
+    from verity.ml.circuits.ops import moe
 
     if launch not in _PROGRAMS:
         _PROGRAMS[launch] = bind(moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=SCALE, KERNEL=launch)

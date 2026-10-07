@@ -46,7 +46,7 @@ def _tp_rank_program(rank=(2, 0), n=3):
 
 
 def _serve_program(**over):
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
     C = dict(b1.B0_CONFIG)
     C.update(NL=2, V=64, MAX_POS=64)
     C.update(over)

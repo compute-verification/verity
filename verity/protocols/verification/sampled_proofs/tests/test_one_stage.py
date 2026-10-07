@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-import verity_catalog.definitions.prims  # noqa: F401  (with verity_catalog.definitions.scalar, the primitives partition_vectors.json's descriptor names)
-import verity_catalog.definitions.scalar  # noqa: F401
+import verity.ml.circuits.silicon.definitions.prims  # noqa: F401  (with verity.ml.circuits.silicon.definitions.scalar, the primitives partition_vectors.json's descriptor names)
+import verity.ml.circuits.silicon.definitions.scalar  # noqa: F401
 from verity.primitives.circuits import codec, partition_object as PO
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.primitives.circuits.program import Program
@@ -663,7 +663,7 @@ def test_audit_record_under_the_work_law():
 
 
 def test_work_sizes_are_the_lean_verifiers():
-    """The sizes `backends/flock/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
+    """The sizes `verity/ml/provers/flock/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
     `flock-verify draw --work K`: strata of 3, 3 and 4 units doing 3, 1 and 0 (W = 12), and its floor cases."""
     sizes, works = (3, 3, 4), (3, 1, 0)
     total = sum(w * n for w, n in zip(works, sizes))

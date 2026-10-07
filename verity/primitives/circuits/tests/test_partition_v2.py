@@ -27,9 +27,9 @@ from verity.primitives.circuits.refs import tuple_of
 from verity.primitives.circuits.types import Array, Tuple, Value
 from verity.primitives.commitments import advice as A
 from verity.primitives.commitments.frame_v3.vectors import expand
-from verity_catalog.definitions.fp32 import Bf16Add
-from verity_catalog.definitions.prims import const
-from verity_catalog.definitions.scalar import Bf16GtStrict, SelectBf16
+from verity.ml.circuits.silicon.definitions.fp32 import Bf16Add
+from verity.ml.circuits.silicon.definitions.prims import const
+from verity.ml.circuits.silicon.definitions.scalar import Bf16GtStrict, SelectBf16
 
 PATH = Path(__file__).parent / "partition_v2_vectors.json"
 V1 = json.loads((Path(__file__).parent / "partition_vectors.json").read_text())

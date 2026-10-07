@@ -21,16 +21,16 @@ from verity.primitives.circuits.evaluation import bits as BS
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import bind
-from verity_catalog.definitions.boolean import gemm as BG
+from verity.ml.circuits.silicon.definitions.boolean import gemm as BG
 from verity.primitives.circuits.boolean import trace as TR
-from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.ml.circuits.silicon.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.registry import boolean_fp8 as BF
-from verity_vllm.program.registry import fp8 as F
-from verity_vllm.program.registry import fp8_vocab
+from verity.ml.circuits.ops import boolean_fp8 as BF
+from verity.ml.circuits.ops import fp8 as F
+from verity.ml.circuits.ops import fp8_vocab
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
 from tests.program import test_fp8_profile as FP

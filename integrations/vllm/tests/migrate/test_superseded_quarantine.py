@@ -25,12 +25,12 @@ def _load():
 
 
 M = _load()
-Q = "verity_vllm.program.registry.quarantine"
-QDIR = "integrations/vllm/verity_vllm/program/registry/quarantine"
-REG = "integrations/vllm/verity_vllm/program/registry"
+Q = "verity.ml.circuits.ops.quarantine"
+QDIR = "verity/ml/circuits/ops/quarantine"
+REG = "verity/ml/circuits/ops"
 PKG = f"{M.DEST}/{M.PACKAGE}"
 REAL_PROMOTED_LANES = M.PROMOTED_LANES
-R = "verity_vllm.program.registry"
+R = "verity.ml.circuits.ops"
 
 PROMOTE = (M.Promotion("ln/norm.py", "norm.py", edits=((f"from {Q}.ln._common import BF16\n", "BF16 = 16\n"),)),
            M.Promotion("ln/gelu.py", "act.py"))
@@ -74,7 +74,7 @@ FILES = {
     "integrations/vllm/tests/program/fixtures_query.py": f"def f():\n    from {Q}.ov_moe import moe as Q\n    return Q\n",
     "integrations/vllm/tests/lint/allowlists/p11_names.json": (
         '{\n  "entries": [\n'
-        '    {"file": "verity_vllm/program/registry/quarantine/act/silu_mul.py", "kind": "doc-round"},\n'
+        '    {"file": "verity/ml/circuits/ops/quarantine/act/silu_mul.py", "kind": "doc-round"},\n'
         '    {"file": "verity_vllm/program/registry/quarantine/ln/__init__.py", "kind": "doc-date"}\n  ]\n}\n'),
     "integrations/vllm/tests/lint/allowlists/p10_size.json": (
         '{\n  "entries": [\n'
@@ -83,7 +83,7 @@ FILES = {
     "integrations/vllm/tests/dead_code_keep.json": (f'{{\n "modules": {{\n  "verity_vllm.linear": "kept",\n  "{Q}.ln.norm": "promoted",\n'
                                                     f'  "{Q}.act.silu_mul": "moves"\n }}\n}}\n'),
     "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json": f'{{"adapter": "{Q}.act.silu_mul_difftest"}}\n',
-    "tools/circuit_check/src/circuit_check/targets.py": ('def _model_roots():\n    from verity_vllm.program.registry import b1\n'
+    "tools/circuit_check/src/circuit_check/targets.py": ('def _model_roots():\n    from verity.ml.circuits.ops import b1\n'
                                                          '    return [\n        # the superseded one\n'
                                                          '        ("Old_v1", lambda: bind(b1.OldV1, N=8)),\n'
                                                          '        ("Old_v2", lambda: bind(b1.Old, N=8)),\n    ]\n'),
@@ -126,7 +126,7 @@ def test_promote_only_promotes_and_moves_no_lane(tmp_path, capsys):
         f"from {Q}.act import silu_mul as S\nfrom {Q} import collective as QC\n"
         f"from {R} import act as gelu, norm\nMODULE = \"{Q}.act.silu_mul\"\nNORM = \"{R}.norm\"\n")
     entries = json.loads((root / "integrations/vllm/tests/lint/allowlists/p11_names.json").read_text())["entries"]
-    assert entries == [{"file": "verity_vllm/program/registry/quarantine/act/silu_mul.py", "kind": "doc-round"}]
+    assert entries == [{"file": "verity/ml/circuits/ops/quarantine/act/silu_mul.py", "kind": "doc-round"}]
     assert json.loads((root / "integrations/vllm/tests/dead_code_keep.json").read_text())["modules"] == {
         "verity_vllm.linear": "kept", f"{Q}.act.silu_mul": "moves"}
 
@@ -162,7 +162,7 @@ def test_apply_promotes_and_moves_the_lanes_and_rewrites_what_names_them(tmp_pat
     assert (root / "integrations/vllm/tests/test_lanes.py").read_text() == (
         f"from {M.PACKAGE}.act import silu_mul as S\nfrom {M.PACKAGE} import collective as QC\n"
         f"from {R} import act as gelu, norm\nMODULE = \"{M.PACKAGE}.act.silu_mul\"\nNORM = \"{R}.norm\"\n")
-    assert "from verity_vllm.program.registry import moe as Q" in (root / "integrations/vllm/tests/program/fixtures_query.py").read_text()
+    assert "from verity.ml.circuits.ops import moe as Q" in (root / "integrations/vllm/tests/program/fixtures_query.py").read_text()
 
     assert (root / REG / "norm.py").read_text() == FILES[f"{QDIR}/ln/norm.py"].replace(f"from {Q}.ln._common import BF16\n", "BF16 = 16\n")
     assert (root / REG / "act.py").read_text() == FILES[f"{REG}/act.py"] + (
@@ -309,7 +309,7 @@ def test_delete_removes_the_definition_its_circuit_check_binding_and_its_pins(tm
 
 
 def test_delete_refuses_a_version_something_still_references(tmp_path, monkeypatch, capsys):
-    root = _tree(tmp_path, {f"{REG}/hopper.py": "from verity_vllm.program.registry import b1\nPORT = b1.OldV1\n",
+    root = _tree(tmp_path, {f"{REG}/hopper.py": "from verity.ml.circuits.ops import b1\nPORT = b1.OldV1\n",
                             "integrations/vllm/manifests/map.json": '{"definitions": ["Old_v1"]}\n'})
     monkeypatch.setattr(M, "DELETE", {"Old_v1": M.Retirement("old-v1", "old-v2", "replaced.", "verity@abc")})
     before = _contents(root)

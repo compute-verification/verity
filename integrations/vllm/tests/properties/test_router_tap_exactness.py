@@ -87,7 +87,7 @@ def test_the_verify_cli(tmp_path):
 def test_the_irs_outputs_are_the_record_routers_on_every_edge_row(E, renorm):
     from verity.primitives.circuits.evaluation import evaluate
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import moe
+    from verity.ml.circuits.ops import moe
 
     kernel_order = bind(moe.MoeRouterTopKNorm if renorm else moe.MoeRouterTopK, E=E, TOPK=8, VPT=8)
     for name, row in edge_rows(E, random.Random(5)).items():

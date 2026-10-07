@@ -17,7 +17,7 @@ from verity.primitives.circuits.codec import encode_program
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.program import Program
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe
+from verity.ml.circuits.ops import moe
 
 NAN, PINF, NINF, PZ, NZ = 0x7FC0, 0x7F80, 0xFF80, 0x0000, 0x8000
 

@@ -25,12 +25,12 @@ from circuit_check import sidecars as SC
 from circuit_check import targets as TG
 from verity.primitives.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.primitives.circuits.types import Array
-from verity_catalog.definitions.prims import F32
+from verity.ml.circuits.silicon.definitions.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
-from verity_vllm.program.registry import lifted as L
-from verity_vllm.program import registry as R
+from verity.ml.circuits.ops import lifted as L
+from verity.ml.circuits import ops as R
 
 #: the fewest entries an indexable constant has to be a table
 MIN_ENTRIES = 16

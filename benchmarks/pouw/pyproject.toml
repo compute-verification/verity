@@ -3,7 +3,7 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 description = "PoUW's benchmarks and their tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-vllm", "numpy", "blake3>=1.0", "verity-catalog", "verity-kernels"]
+dependencies = ["research", "verity", "verity-vllm", "numpy", "blake3>=1.0"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -16,7 +16,7 @@ verity-vllm = { workspace = true }
 
 [tool.verity.tests]
 # Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python.
-inputs = ["backends/flock/python"]
+inputs = ["verity/ml/provers/flock/python"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

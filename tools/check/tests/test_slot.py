@@ -450,7 +450,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
 
 
 def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypatch, tmp_path):
-    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside backends/flock/ still runs
+    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside verity/ml/provers/flock/ still runs
     the agreement step, with the pinned build and inputs as the run's inputs."""
     spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)

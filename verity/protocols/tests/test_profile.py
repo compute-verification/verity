@@ -19,7 +19,7 @@ import pytest
 from verity.primitives.circuits import Program, bind
 from verity.primitives.circuits import query_ast as G
 from verity.primitives.circuits.partition import Level, members_per_parent, validate_partition
-from verity_catalog.definitions import gemm
+from verity.ml.circuits.silicon.definitions import gemm
 from verity.protocols.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 
 

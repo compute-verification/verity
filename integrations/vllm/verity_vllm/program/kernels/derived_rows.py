@@ -5,7 +5,7 @@ serving semantics that the commit store does not materialise (lane VU-ACQUIRE, G
 may select values that live *inside* the kernel-aligned leaves the adapter commits.  Replay can only serve
 such a plan if the interior value can be produced fast and bit-exactly from committed neighbours.  This
 module provides that production path for four derived classes, as numpy twins of the registered gate
-semantics (`verity_vllm.program.registry.b1` / `prims`) in the `rmsnorm_fused_sweep` pattern:
+semantics (`verity.ml.circuits.ops.b1` / `prims`) in the `rmsnorm_fused_sweep` pattern:
 
   * ``rmsnorm_triton_rows``   — the batch-invariant Triton `_rms_norm_kernel` reduction tree; emits the
     per-row scalars ``(sum, mean_eps, rms, inv)`` — `inv` is the gate
@@ -40,8 +40,8 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops import prims as P
 
 # ---------------------------------------------------------------------------------------------------------
 # bit helpers (numpy on uint32 / int64 encodings)
@@ -459,7 +459,7 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 # `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16` (SASS HGMMA.64xNx16.F32.BF16) as `veritor.core.silicon_total.
 # HOPPER_BF16_WGMMA_K16` defines it -- one group of all sixteen products plus the accumulator, 26-bit adder, exponent floor
 # -133 (lane HP's H100 re-measurement, docs/data/tc-hopper-2026-09-07: 307,281,920 output words, 0 mismatches; `scale-d = 0`
-# measured equal to acc = +0).  The registered scalar primitive is `verity_catalog.definitions.prims.HopperBF16WgmmaDot16`; this twin
+# measured equal to acc = +0).  The registered scalar primitive is `verity.ml.circuits.silicon.definitions.prims.HopperBF16WgmmaDot16`; this twin
 # is checked word for word against it in tests/program/test_derived_rows.py.
 #
 # The k-CHAIN of the Hopper GEMM of record (`Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`, gemm_targets.REGISTERED['hopper']) is
@@ -560,7 +560,7 @@ def dot_bf16_for(dot_prim_id: str):
 # [R16 fp8] Hopper FP8 tensor-core k32 step, vectorised (veritor.core.silicon HOPPER_E4M3_K32 / silicon_total_fp8
 # HOPPER_E4M3_WGMMA_K32: ONE group of 32 exact e4m3 products + the accumulator, 14-bit truncating adder, exponent
 # floor -139; pinned on an H100 2026-09-08, 144,543,744 words, 0 mismatches) and the two block-scaled FP8 linear
-# families of the Qwen3-4B-FP8 Program (`verity_vllm/program/registry/fp8.py`: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}).
+# families of the Qwen3-4B-FP8 Program (`verity/ml/circuits/ops/fp8.py`: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}).
 # The scalar Definitions are the reference; these twins are checked word-for-word against them and against the saved
 # H100 kernel words (`tests/program/data/fp8_block_operands.npz`) in tests/program/test_derived_rows_fp8.py.
 # ---------------------------------------------------------------------------------------------------------

@@ -35,7 +35,7 @@ One instance per tile at position ``(r % M, (r // M) % 8)`` with the rest of the
 other output word must come back ``+0`` (``other_positions_nonzero``).  Step ``s`` of every instance is one launch; the hardware's own
 D of step ``s`` is the C of step ``s + 1`` -- a mismatch propagates, as it would in a real chain, and is located at its first step.
 
-Domain check (``verity_catalog.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
+Domain check (``verity.ml.circuits.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
 transition is a valid output, D8): instances with a non-finite operand word or a non-finite hardware accumulator before the last step
 are ``out of domain``.  Positive tiers must have none; the negative tier's ``reject`` rows must trip it (its ``wrong`` rows must
 have ``hardware != claimed`` and ``hardware == correct``).
@@ -71,9 +71,9 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity_catalog.silicon import silicon as S
-from verity_catalog.silicon.cast import f32_to_bf16_word
-from verity_catalog.targets import target as T
+from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+from verity.ml.circuits.targets import target as T
 
 N = P.N
 FIRST_MISMATCHES = 20
@@ -241,7 +241,7 @@ class Synthetic:
     relation: str          # the digest prefix
     target: str
     instruction: str
-    model: object          # verity_catalog.silicon.models.GroupSum
+    model: object          # verity.ml.circuits.silicon.models.GroupSum
     operands: object       # (rng, shape) -> int64 words
     dtype: object          # the operand word dtype
     epilogue: str | None

@@ -40,7 +40,7 @@ MUT=${N3_MUTATION:-}
 $PY312 - "$WL" "$N/workload.json" "$MUT" "$N/schedules.json" "$D" <<'EOF' || { log "N3: no schedule (see above)"; exit 2; }
 import glob, json, sys
 from verity_vllm.pipeline.build import declared_live_counts
-from verity_vllm.program.registry.topp_split import splits_for
+from verity.ml.circuits.ops.topp_split import splits_for
 nsms = {int(g["num_sms"]) for p in glob.glob(f"{sys.argv[5]}/build_request*/result.json")
         for g in [((json.load(open(p)).get("sampling") or {}).get("geometry") or {})] if g.get("num_sms") is not None}
 if len(nsms) != 1:

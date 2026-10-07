@@ -43,7 +43,7 @@ TARGETS = HERE / "src" / "circuit_check" / "targets.py"
 PINS = HERE / "src" / "circuit_check" / "pins.json"
 #: the source roots this tree's packages import from, ahead of any installed copy
 PATHS = ("tools/circuit_check/src", ".", "catalog", "kernels", "experimental", "integrations/vllm", "benchmarks/numerical/python",
-         "backends/flock/python")
+         "verity/ml/provers/flock/python")
 #: `targets.py`'s own: what no one module owns (every kernel's and vocabulary kind's self-check bindings)
 SHARED = ("_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots")
 #: split by hand (`POUW`)
@@ -51,13 +51,13 @@ BY_HAND = ("_pouw_roots",)
 #: packages whose sidecars may import only the core and themselves (`test_boundaries.py`, `test_protocol_boundaries.py`)
 NO_CHECKER = ("verity",)
 
-_R = "verity_vllm.program.registry."
+_R = "verity.ml.circuits.ops."
 #: a root function's docstring split by module, each part one paragraph (`_docstring` wraps it), with the digest of the
 #: docstring it splits (`_doc_digest`); what said that a module's other Definitions are static-free (roots of their own,
 #: `targets.catalog`) is left out
 DOCS: dict[str, tuple[str, dict[str, str]]] = {
     "_boolean_roots": ("12c4223fdfc84cb3", {
-        "verity_catalog.definitions.boolean.gemm": "The Boolean BF16 coordinate and dot on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3 "
+        "verity.ml.circuits.silicon.definitions.boolean.gemm": "The Boolean BF16 coordinate and dot on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3 "
                                   "coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128.",
         _R + "boolean_silu": "`silu_and_mul`'s rows at I = 8: `SiluMul_v3` and `SiluMul_v4` (v4's word view is the served "
                              "`SiluMul_v2` of `registry.act`); `SiluMulBf16_v3` is static-free.",
@@ -185,7 +185,7 @@ def _pouw_roots() -> list[Any]:
 def _pouw_roots() -> list[Any]:
     """The model Program's rows at a PoUW site, without and with the bias."""
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import pouw_rows
+    from verity.ml.circuits.ops import pouw_rows
 
     return [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
             bind(pouw_rows.NcpLinearCoordinate, K=64)]

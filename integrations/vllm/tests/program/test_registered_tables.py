@@ -13,8 +13,8 @@ from verity.primitives.circuits.constants import REGISTRATION, inputs, program_d
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.types import Array, Value
-from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry import tables as T
+from verity.ml.circuits.ops import dense as D
+from verity.ml.circuits.ops import tables as T
 
 
 def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
@@ -46,7 +46,7 @@ def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     d = tmp_path / "p.json"
     d.write_text(json.dumps(encode_program(prog)))
     code = ("import json, sys; from verity.primitives.circuits.codec import decode_program, program_digest; from verity.primitives.circuits.defs import REGISTRY; "
-            "import verity_vllm.program.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
+            "import verity.ml.circuits.ops.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
             "print(program_digest(decode_program(json.load(open(sys.argv[1])), REGISTRY)))")
     out = subprocess.run([sys.executable, "-c", code, str(d)], capture_output=True, text=True, check=True).stdout.split()
     assert out == [program_digest(prog)]
@@ -89,9 +89,9 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     """The strict lift's operand widths (`operand_widths.leaf_widths`) are one run per parameter for `TableRead27x2_v1`, not a list
     of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
     active, a ⊥ and an invalid table word as the flat widths do."""
-    from verity_catalog.definitions import scalar as SC
-    from verity_vllm.program.registry import lifted as L
-    from verity_vllm.program.registry import operand_widths as OW
+    from verity.ml.circuits.silicon.definitions import scalar as SC
+    from verity.ml.circuits.ops import lifted as L
+    from verity.ml.circuits.ops import operand_widths as OW
 
     assert OW.leaf_widths(T.table_read(27, 2).params).runs == ((1, 32), (1 << 28, 16))
     assert OW.leaf_widths(SC.SelectF32.params) == [1, 32, 32]

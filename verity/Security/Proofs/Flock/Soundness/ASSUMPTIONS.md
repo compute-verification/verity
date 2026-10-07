@@ -244,7 +244,7 @@ Boolean-semantics lemma replaces the per-template `RowsCert`.
 drawn after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session draws them under
 `FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
 then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
-`PROTOCOL.md` §7.1). The benches run M0 so by default (`backends/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
+`PROTOCOL.md` §7.1). The benches run M0 so by default (`verity/ml/provers/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
 `61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
 from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
 That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
@@ -276,7 +276,7 @@ prefix on the dummy witness, within `2·|LeafPos|·2^-193` both ways (`ZK.Table.
 vector and T1 on every pre-final leaf), and elsewhere Lemma B.
 Which verifiers: at each coin vector `zk_session_view` is honest-verifier zero knowledge for those fixed coins. It covers
 a verifier that chooses its coins only because the coin server commits every coin at `Hello`, before the prover's first
-message (`backends/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
+message (`verity/ml/provers/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
 uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
 No statement models that commitment yet, so this order of messages and the binding assumption are what the
 malicious-verifier claim rests on beyond the theorems.
@@ -294,7 +294,7 @@ malicious-verifier claim rests on beyond the theorems.
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
   `η`. `Randomness.lean` is the Lean spec of `verity.primitives.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
   `verity/primitives/randomness/tests/vectors.json`, and Python matches its vectors
-  (`backends/flock/tests/test_randomness_spec.py`).
+  (`verity/ml/provers/flock/tests/test_randomness_spec.py`).
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
   misses `B`), and `η` enters its bound.

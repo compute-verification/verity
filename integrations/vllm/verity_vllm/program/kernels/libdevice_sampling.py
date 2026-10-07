@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import option
 from verity_vllm.program.kernels import sampling_rng as R
-from verity_vllm.program.registry.sampling import LOG_INVALID_NAN
+from verity.ml.circuits.ops.sampling import LOG_INVALID_NAN
 
 F32 = np.float32
 FLT_MIN = np.float32(1.1754943508222875e-38)          # 2**-126, IR constant 0x3810000000000000

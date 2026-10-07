@@ -32,7 +32,7 @@ from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, gemm_pins_for, observe_target_profile, vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings import triton_launches as TL
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1, pouw_rows
+from verity.ml.circuits.ops import b1, pouw_rows
 from verity_vllm.program.kernels.serve3_reference import materialize
 
 BF = torch.bfloat16

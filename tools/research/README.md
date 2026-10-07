@@ -144,7 +144,7 @@ bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs th
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
-`lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
+`lean-agreement` for `verity/ml/provers/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
 needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached in
 the checkout with the landed commit appended, and can't change the exit code; `check`'s is `tools/check/post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.

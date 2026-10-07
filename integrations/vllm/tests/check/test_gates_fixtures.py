@@ -357,7 +357,7 @@ def test_G4_quarantine(tmp_path):
     r = gate(tmp_path, arts, "G4")
     assert r.status == "fail" and "quarantine.json missing" in r.reason
     arts = passing_artifacts()
-    arts["resolution.json"]["spec_modules"] = {"NewOp_v1{N=8}": "verity_vllm.program.registry.quarantine"}
+    arts["resolution.json"]["spec_modules"] = {"NewOp_v1{N=8}": "verity.ml.circuits.ops.quarantine"}
     assert G.quarantine_specs(arts["resolution.json"]) == ["NewOp_v1{N=8}"]
 
 

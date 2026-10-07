@@ -13,10 +13,10 @@ from verity.primitives.circuits.evaluation.reference import evaluate
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.boolean import trace as TR
 from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import b1, hopper
-from verity_vllm.program.registry import boolean_sparse_mla as BM
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import sparse_mla as M
+from verity.ml.circuits.ops import b1, hopper
+from verity.ml.circuits.ops import boolean_sparse_mla as BM
+from verity.ml.circuits.ops import fa3_check_inf as F3
+from verity.ml.circuits.ops import sparse_mla as M
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

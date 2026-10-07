@@ -280,9 +280,9 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
     repo = tmp_path / "repo"
     (repo / "tools/agree").mkdir(parents=True)
     (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
-                                              "command=['true'], merge_requires={'agreement': ['backends/flock/']})\n")
-    (repo / "backends/flock").mkdir(parents=True)
-    (repo / "backends/flock/a.py").write_text("x = 1\n")
+                                              "command=['true'], merge_requires={'agreement': ['verity/ml/provers/flock/']})\n")
+    (repo / "verity/ml/provers/flock").mkdir(parents=True)
+    (repo / "verity/ml/provers/flock/a.py").write_text("x = 1\n")
     git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
     git("init", "-q")
     git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
@@ -291,7 +291,7 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
 
     assert tools_registry.locate("agree", repo) == ("tools.agree.tool", "AGREE")
     assert merge.declaration(repo, "agree").name == "agree"
-    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["backends/flock/"]}
+    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["verity/ml/provers/flock/"]}
     (repo / "tools/agree/tool.py").unlink()
     with pytest.raises(json.JSONDecodeError):
         tools_registry.locate("agree", repo)
@@ -341,7 +341,7 @@ def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     _, key2 = tc.resolve_params(argv + ["--instruction", "mma.sync.m16n8k16"], REPO)
     assert key2["instruction"] == "mma.sync.m16n8k16"
     assert D.derivation_id(tc, {}, key, {"hw.family": "rtx4090"}, tc.key_conditions) != D.derivation_id(tc, {}, key2, {"hw.family": "rtx4090"}, tc.key_conditions)
-    _, key3 = tc.resolve_params(argv + ["--replay-golden", "catalog/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
+    _, key3 = tc.resolve_params(argv + ["--replay-golden", "verity/ml/circuits/silicon/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
     assert key3["replay_golden"].startswith("sha256:")
 
 
@@ -631,8 +631,8 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
 
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "catalog/verity_catalog/silicon",
-                          "catalog/verity_catalog/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
+    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "verity/ml/circuits/silicon",
+                          "verity/ml/circuits/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
                          cwd=REPO, capture_output=True, check=True).stdout
     subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
     assert (src_dir / "tools/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
@@ -652,7 +652,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
     assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "tools.tc_probe.tool:TC_PROBE"}
-    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "catalog/verity_catalog/silicon/silicon.py" in store["closure"]
+    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "verity/ml/circuits/silicon/silicon.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"

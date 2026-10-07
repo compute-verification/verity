@@ -13,8 +13,8 @@ from __future__ import annotations
 from verity.primitives.circuits.defs import CompositeDefinition, bind
 from verity.primitives.circuits.refs import array_of
 from verity.primitives.circuits.types import Array
-from verity_vllm.program.registry.b1_tp2 import AllGather2, AllReduce2
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.circuits.ops.b1_tp2 import AllGather2, AllReduce2
+from verity.ml.circuits.ops.prims import BF16
 
 SEMANTIC_ID = "tp2/Collectives2@v1"
 KINDS = ("random", "zeros", "max", "subnormal", "alternating")

@@ -88,7 +88,7 @@ EVALUATORS = {
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
     # evaluated by the core reference (`verity.primitives.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
-    "GumbelTopPTokenSelect_v1": "verity_vllm.program.registry.sampling.GumbelTopPTokenSelect{V} via verity.primitives.circuits.evaluation.evaluate (TemperatureScale -> "
+    "GumbelTopPTokenSelect_v1": "verity.ml.circuits.ops.sampling.GumbelTopPTokenSelect{V} via verity.primitives.circuits.evaluation.evaluate (TemperatureScale -> "
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
                                             "TargetProfile.sampler_construction = shared-greedy)",
@@ -101,9 +101,9 @@ EVALUATORS = {
                            "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
     "ScaledMmFp8BlockSharedScale_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ScaledMmFp8Block_v1's function and signature: "
                                       "each weight block's scale products once, registry.fp8.ScaledMmFp8BlockSharedScale)",
-    # [MAN-06f v3 unit 2, moe R16] the fused-MoE block relations (verity_vllm.program.registry.moe bodies; R13 moe_kernel_xcheck = the reference against
+    # [MAN-06f v3 unit 2, moe R16] the fused-MoE block relations (verity.ml.circuits.ops.moe bodies; R13 moe_kernel_xcheck = the reference against
     # the real kernels): every plane word is PRODUCED by an evaluated relation over committed plane words + registered expert weights
-    "MoeRouterTopK_v1": "verity_vllm.program.registry.moe.MoeRouterTopK evaluated per token with the registry's scalar primitives (f32 softmax in the kernel's "
+    "MoeRouterTopK_v1": "verity.ml.circuits.ops.moe.MoeRouterTopK evaluated per token with the registry's scalar primitives (f32 softmax in the kernel's "
                         "E/VPT-thread geometry + xor butterflies, NvExpf_v1 exp, F32Div rcp, non-finite -> 0, TOPK rounds of strict first-max argmax "
                         "masked to -10000.f) -> router_w f32 + router_ids i32",
     "MoeRouterTopKNorm_v1": "MoeRouterTopK then the renormalising epilogue (selected sum ascending from 0.f, denom = sum > 0 ? sum : 1, one F32Div, "
@@ -120,7 +120,7 @@ EVALUATORS = {
                         "(MoeExpertCoordinate_v2) -> up",
     "MoeExpertGemmW_v2": "derived_rows.dot_bf16_for(DOT) over W2[e], the committed routed weight into the f32 accumulator (one F32Mul), then "
                          "f2fp_bf16 (MoeExpertCoordinateW_v2) -> down",
-    # [reqval 287783ec6 / 9f7a75f6b; moe MOE-PAD-SPEC route A (3)] the PADDED fixed-slot block, one row per token (verity_vllm/program/registry/moe_pad.py
+    # [reqval 287783ec6 / 9f7a75f6b; moe MOE-PAD-SPEC route A (3)] the PADDED fixed-slot block, one row per token (verity/ml/circuits/ops/moe_pad.py
     # `_fixed_core`, node for node): MoeRouterTopK on the row's logits input (MoeFfnFixed_v1: on f2fp(dot_bf16(x, wg)) first); per slot e the
     # routed weight g_e = alpha_j where ids[j] == e else 0.0f (SelectF32 chain); EVERY slot body on its own fixed weights -- up = f2fp(dot_bf16(x,
     # W13[e])) (Gemm), act = silu_mul (SiluMul), down = f2fp(mul_rn(dot_bf16(act, W2[e]), g_e)) (MoeSlotDown = MoeExpertCoordinateW with the row
@@ -146,7 +146,7 @@ EVALUATORS = {
 #: holds complete operand sets recorded on the H100 by the R15 fp8 lane's `out/gen/sweep/evidence/fp8/mini_probe.py`: "p" (M=1, K=256,
 #: N=256; the swap_ab Pingpong CUTLASS variant) and "c" (M=4, K=384, N=256; the Cooperative variant), each = bf16 x, the kernel's xq / sx,
 #: the e4m3 w and f32 ws, the kernel's bf16 y.  The twins reproduce every word (tests/program/test_derived_rows_fp8.py) and agree with
-#: the gate-level Definitions gate by gate (`verity_vllm/program/registry/fp8.py`; the k32 step vs `veritor.core.silicon_total_fp8.tc_dot_total_e4m3`).
+#: the gate-level Definitions gate by gate (`verity/ml/circuits/ops/fp8.py`; the k32 step vs `veritor.core.silicon_total_fp8.tc_dot_total_e4m3`).
 _FP8_TWIN_PROVENANCE = {
     "fixture": "tests/program/data/fp8_block_operands.npz",
     "fixture_sha256": "80e176c0319f804ed574acb3ad63aa431ba03e3f55762fe07ae63477f2bf9a81",
@@ -159,7 +159,7 @@ _FP8_TWIN_PROVENANCE = {
               "tests/program/test_derived_rows_fp8.py::test_twins_match_the_definitions_gate_by_gate",
               "tests/program/test_derived_rows_fp8.py::test_tc_dot32_e4m3_matches_the_total_model_on_random_operands_and_accumulators",
               "tests/program/test_fp8.py::test_fp8_block_gemm_matches_kernel[p|c] (the Definitions vs the same words)"],
-    "definitions": "verity_vllm/program/registry/fp8.py: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}, HopperE4m3QgmmaDot32_v1 (the reference; the twins are checked against them, never the other way round)",
+    "definitions": "verity/ml/circuits/ops/fp8.py: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}, HopperE4m3QgmmaDot32_v1 (the reference; the twins are checked against them, never the other way round)",
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
 EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,
@@ -213,7 +213,7 @@ def token_select_first_max(logits: np.ndarray) -> int:
     return int(np.argmax(f))          # np.argmax returns the FIRST maximal index
 
 
-#: the registered stochastic selector's operands, in signature order (verity_vllm.program.registry.sampling.GumbelTopPTokenSelect): word width in bits
+#: the registered stochastic selector's operands, in signature order (verity.ml.circuits.ops.sampling.GumbelTopPTokenSelect): word width in bits
 _GUMBEL_TOPP_OPERANDS = (("logits", 16), ("top_p", 32), ("seed", 64), ("pos", 64), ("temp", 32), ("splits", 32))
 
 
@@ -225,7 +225,7 @@ def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]
     arrive as the committed / Const encodings; every operand is checked against the signature's leaf count before the walk (a slice
     that is not exactly one f32 word is a fault of the Program's wiring, named here, never a silent truncation)."""
     from verity.primitives.circuits.evaluation import evaluate
-    from verity_vllm.program.registry import sampling_topp_difftest as DT
+    from verity_vllm.properties.difftests import sampling_topp_difftest as DT
     V = int(statics["V"])
     if len(operands) != len(_GUMBEL_TOPP_OPERANDS):
         raise ValueError(f"GumbelTopPTokenSelect_v1 takes {len(_GUMBEL_TOPP_OPERANDS)} operands, the row wires {len(operands)}")
@@ -524,7 +524,7 @@ _PADDED_BLOCK_MEMO_MAX = 4
 
 def padded_moe_block(statics: dict[str, Any], args: list[np.ndarray], *, router_gemm: bool) -> dict[str, np.ndarray]:
     """`MoeFfnFixedL_v1{E,TOPK,VPT,H,I}(x, logits, w13, w2)` (and `MoeFfnFixed_v1(x, wg, w13, w2)` with `router_gemm`) on one token row --
-    the vectorised twin of `verity_vllm.program.registry.moe_pad._fixed_core`, statement for statement, built from the twins the MOE-01 evaluators
+    the vectorised twin of `verity.ml.circuits.ops.moe_pad._fixed_core`, statement for statement, built from the twins the MOE-01 evaluators
     already use (dot_bf16 / f2fp_bf16 / silu_mul_rows / mul_rn / add_rn / moe_router_topk).  Returns EVERY member a query may name on the
     row: `out` [H] bf16, `router_ids` [TOPK] i32, `router_w` [TOPK] f32, and per slot e `slot<e>/up` [2I] bf16, `slot<e>/act` [I] bf16,
     `slot<e>/down` [H] bf16, `slot<e>/g` [1] f32 (0.0f where the router did not pick e; the body is evaluated for EVERY slot, as the
@@ -687,7 +687,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import b1, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
+    from verity.ml.circuits.ops import b1, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

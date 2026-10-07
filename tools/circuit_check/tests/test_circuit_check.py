@@ -351,7 +351,7 @@ def _f32x2():
 
 def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
     from verity.primitives.circuits.types import Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
 
     fn = _composite("CircuitCheckRedundant", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
@@ -366,7 +366,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     node by node; the whole Definition's cut compares them)."""
     from verity.primitives.circuits.refs import array_of
     from verity.primitives.circuits.types import Array, Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
 
     fn = _composite("CircuitCheckRecompute", (_f32x2(), Array(2, Value(32))),
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -486,7 +486,7 @@ def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding():
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
     from verity.primitives.circuits.types import Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
 
     def body(B, S, x):
         B.call(P.F32Mul, x[0], x[1])
@@ -542,7 +542,7 @@ def test_a_kernel_wrong_only_on_edge_words_is_caught():
 
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
 
     add = IL.PIECES["F32Add_v1"]
     monkeypatch.setitem(IL.PIECES, "F32Mul_v1", lambda C, a, b: add(C, a, b))
@@ -551,7 +551,7 @@ def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
 
 
 def test_a_lowering_count_off_its_pin_is_named():
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
 
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)

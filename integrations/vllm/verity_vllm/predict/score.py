@@ -167,7 +167,7 @@ def predict_workload(phi: Phi) -> dict:
     from verity.primitives.circuits.defs import REGISTRY
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.circuits.ops.catalog import load as load_registry
     load_registry()
     reqs = phi.requests
     if any(int(r.get("n") or 1) != 1 for r in reqs):
@@ -248,7 +248,7 @@ def equivalence(pred_program, traced_desc: dict) -> dict:
     from verity.primitives.circuits.codec import decode_program
     from verity.primitives.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.circuits.ops.catalog import load as load_registry
     load_registry()
     t0 = time.time()
     try:

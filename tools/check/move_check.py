@@ -10,7 +10,7 @@ Every path git sees changed must be one of:
   `"../level3"`) being resolved against the file's own directory first;
 - an edit to a `*.py` file whose changed lines only rewrite the module of an `import M` / `from M import` line, from where
   a renamed module was to where it is now; in `PY_PATH_FILES`, also a path (a pathlib chain `ROOT / "a" / "b"` read as
-  `"a/b"`) or a dotted name (`backends.flock.tool:FLOCK_PURE`); in `research`'s sources, also the module of a `-m` line;
+  `"a/b"`) or a dotted name (`verity.ml.provers.flock.tool:FLOCK_PURE`); in `research`'s sources, also the module of a `-m` line;
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`;
@@ -51,7 +51,7 @@ import tomllib
 
 PATH_FILES = {"tools/check/ci.toml", "AGENTS.md", "fixtures/artifacts.json", "tools/research/src/research/pods/nebius/deploy.toml"}
 #: Python files that name the tree in strings: each may rewrite a path (a `ROOT / "a" / "b"` chain read as `"a/b"`) or a
-#: dotted name (`backends.flock.tool:FLOCK_PURE`, a module) to where it moved, besides its imports
+#: dotted name (`verity.ml.provers.flock.tool:FLOCK_PURE`, a module) to where it moved, besides its imports
 PY_PATH_FILES = {
     "tests/test_lean_packages.py",                                        # the Lean packages
     "tools/research/src/research/store/tools_registry.py",                # REGISTRY: tool -> dotted repo path

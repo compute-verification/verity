@@ -1,6 +1,6 @@
 # verity-vllm
 
-The Verity x vLLM integration: the Torch/vLLM-derived Programs (`verity_vllm.program.registry`, `verity_vllm.program.frontend`), the
+The Verity x vLLM integration: the Torch/vLLM-derived Programs (`verity.ml.circuits.ops`, `verity_vllm.program.frontend`), the
 runtime capture and Match/Commit machinery (`verity_vllm`), and the qualification sweep (`verity_vllm/ops`,
 `workloads/`).  Promoted from `veritor@0903f60d6` (release `r18-int-3`) as one working closure; see the Notion page
 "Veritor → Verity migration" for the decisions and the evidence index.
@@ -18,7 +18,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
   engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
-  program/            Program            registry/ frontend/ lifting/ kernels/ model.py workload.py compact.py dtypes.py
+  program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
@@ -54,7 +54,7 @@ constructor + a facts table).  Never: commit, decide what is required.
 primitive families through `verity.primitives.circuits.codec.register_lazy_family`), lowering (`frontend/`: the torch frontend, `derive`, `rules/`
 = lowering rules, the vLLM meta export, `target_profile`, the correspondence emitter `emit.py`, the collective export ops),
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
-and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
+and `verity/ml/kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
 proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core
 binds were promoted into `registry/`).
@@ -121,7 +121,7 @@ above would import.
 
 The stdlib-only core of `verity_ir` (`types refs defs program layout evaluate query codec parts query_codec`, `gateset`
 as `query_ast`) is `verity.primitives.circuits` in `verity`, and its `plan` is `verity_experimental.sampled_proofs.plan` in `verity/protocols/verification/sampled_proofs`; the on-demand primitive families
-veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/__init__.py` through `verity.primitives.circuits.codec.register_lazy_family`.
+veritor hardcoded in `codec.py` are registered by `verity/ml/circuits/ops/__init__.py` through `verity.primitives.circuits.codec.register_lazy_family`.
 
 ## Vocabulary (frozen; Notion "vLLM integration v2 — Draft 3" §12)
 
@@ -131,7 +131,7 @@ subcircuit, backend family and backend mean what the root README's Glossary says
 
 Core (Verity semantics, `verity`):
 
-- **Definition** — a registered function with a total evaluator on encodings (`verity_vllm.program.registry`).
+- **Definition** — a registered function with a total evaluator on encodings (`verity.ml.circuits.ops`).
 - **Call** — one application of a Definition inside a Program (retires "Program row", "instance" in prose; `instances.json.gz` stores Calls).
 - **Value** — an input or output of a Call (retires "Member" in prose; the serialized `member` / `output_member` field keeps its name).
 - **Program** — the sequence of Calls with its dataflow; `program_digest` covers the dataflow only.
@@ -172,7 +172,7 @@ Layers and where they live (Draft 3 §12.1):
 
 | layer | responsibility | today |
 | --- | --- | --- |
-| Program | Definitions, Calls, dataflow, `program_digest` | `verity_vllm/program/registry`, `verity_vllm/program/frontend` (lowering rules) |
+| Program | Definitions, Calls, dataflow, `program_digest` | `verity/ml/circuits/ops`, `verity_vllm/program/frontend` (lowering rules) |
 | query | Q(P), proof units, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record), `verity_vllm/check/poc_required_interface.py` |
 | runtime correspondence | Call ↔ module path / fx node / slot | `verity_vllm/correspondence`, `verity_vllm/program/lifting`, `verity_vllm/correspondence/reader_for_query.py`, `verity_vllm/correspondence/runtime.py` |
 | acquisition | acquisition plan, taps, hooks, collector | `verity_vllm/acquire` (`plan.py` ROUTE_OF_FAMILY, `install.py`, `stage.py`); hazard / analytic owners in `commit/committer/native_collect.py`, `commit/committer/native_host.py`, `commit/committer/hidden_gpu_src/` |

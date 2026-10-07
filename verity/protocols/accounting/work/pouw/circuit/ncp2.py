@@ -48,8 +48,8 @@ from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, Speci
 from verity.primitives.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.primitives.circuits.types import Array, Tuple, Value
 
-import verity_catalog.definitions.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
-import verity_catalog.definitions.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
+import verity.ml.circuits.silicon.definitions.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
+import verity.ml.circuits.silicon.definitions.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
 
 from ..protocol import DomainError
 from ..schemes.ncp import BETA, admissible_perm, shift_perm, word_perm

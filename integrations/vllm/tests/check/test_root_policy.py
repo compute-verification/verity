@@ -50,7 +50,7 @@ def test_m1_unverified_identity_fails_weights(events):
 
 def test_untied_config_against_tied_runtime_fails(events):
     from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import build_profile, with_geometry
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
 
     prof = build_profile(with_geometry({**b1.B0_CONFIG, "tie_word_embeddings": False}), profile_id="test-untied", case="B0")
     rep = root_policy.evaluate(_with_verified(events), SNAPS, prof, cos_sin=COS_SIN, weight_bytes=False)

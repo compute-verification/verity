@@ -13,7 +13,7 @@ from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefini
 from verity.primitives.circuits.layout import WIDE_FAN_IN
 from verity.primitives.circuits.refs import coll_concat
 from verity.primitives.circuits.types import Array, Value
-from verity_catalog.definitions import scalar as S
+from verity.ml.circuits.silicon.definitions import scalar as S
 
 ROW = 64
 NAME = "t_small"

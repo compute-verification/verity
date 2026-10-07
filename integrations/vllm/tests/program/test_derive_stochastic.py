@@ -29,7 +29,7 @@ from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 

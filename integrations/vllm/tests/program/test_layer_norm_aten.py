@@ -13,7 +13,7 @@ from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
-from verity_vllm.program.registry.layer_norm import LayerNormAten
+from verity.ml.circuits.ops.layer_norm import LayerNormAten
 from verity_vllm.program.kernels.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager-v3")

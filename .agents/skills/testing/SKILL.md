@@ -27,7 +27,7 @@ uv run tools/check/suites.py --fresh                # ignore the cache
 uv run tools/check/suites.py --list                 # each suite's inputs, and whether a pass is cached
 ~~~
 
-Inside one package, plain pytest works too: `cd backends/flock && uv run pytest -m "not slow" -k tanh`. It doesn't cache and
+Inside one package, plain pytest works too: `cd verity/ml/provers/flock && uv run pytest -m "not slow" -k tanh`. It doesn't cache and
 doesn't load the read guard.
 
 A pass is cached under a hash of the suite's inputs: its directory, the directories of the workspace packages it depends on,

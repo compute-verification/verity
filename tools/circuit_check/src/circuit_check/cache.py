@@ -277,7 +277,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity_vllm.program.registry.catalog", "load"), ("verity_vllm.program.boolean", "_load")})
+_ENUMERATORS = frozenset({("verity.ml.circuits.ops.catalog", "load"), ("verity_vllm.program.boolean", "_load")})
 
 
 def _enumerator(f) -> bool:

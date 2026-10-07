@@ -2,7 +2,7 @@
 +0 promotions are `pearl_c_debit.word_debit`'s, its C̃ `pearl_c.chain`'s, and only the exact certificates pass; a tile's
 verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units` against the device's `cap` times
 `credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
-and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity_catalog.silicon` raises), and neither does
+and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`verity.ml.circuits.silicon` raises), and neither does
 the replay.  A row's salt-dead counts are its elements whose code has one value over a sample of P3's support, by the
 scheme's own forming, and its other outputs `Pc8RowA`'s.  The split (`pc8.Shape.cap`) composes to the one-unit cap, its
 h0 is `PearlTileDigest`'s on honest and edge tiles, its units' rows are their ports' words, it computes every value in
@@ -24,7 +24,7 @@ from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bi
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits import partition_object as PO
 from verity.primitives.circuits.program import Program
-from verity_catalog.silicon import fp32
+from verity.ml.circuits.silicon import fp32
 from verity.primitives.randomness import derive
 from verity.protocols.accounting.work.pouw.circuit import cap, pc8, plan
 from verity.protocols.accounting.work.pouw.circuit import leaves as L

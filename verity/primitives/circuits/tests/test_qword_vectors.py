@@ -23,8 +23,8 @@ from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, Primi
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.refs import tuple_of
 from verity.primitives.circuits.types import Array, Tuple, Value
-from verity_catalog.definitions.prims import Bf16ToF32, F32ToBf16Rn, const
-from verity_catalog.definitions.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
+from verity.ml.circuits.silicon.definitions.prims import Bf16ToF32, F32ToBf16Rn, const
+from verity.ml.circuits.silicon.definitions.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
 
 PATH = Path(__file__).parent / "qword_vectors.json"
 BIT, BF16, V32, V64 = Value(1), Value(16), Value(32), Value(64)

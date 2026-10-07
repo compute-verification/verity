@@ -15,7 +15,7 @@ from verity_vllm.pipeline import components as C
 from verity_vllm.pipeline import global_program as G
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 SHAPES = ((3, 2), (5, 1))
 

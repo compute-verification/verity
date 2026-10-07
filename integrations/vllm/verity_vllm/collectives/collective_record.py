@@ -42,8 +42,8 @@ built from R of them.  Written from the ov-tp2 evidence (Qwen2.5-1.5B, TP=2, eag
     kind, op, module, reduce_op, dtype, count, world_size
     ranks[r]                    {event, operand, result, producer (= operand_last_touch), producer_instance, consumers, consumer_instances}
     definition                  the Verity function the launch instantiates: all_reduce → `AllReduceSumBf16_v1{N=count,R=2}` at world 2
-                                (quarantine, `verity_vllm.program.registry.quarantine.collective.allreduce`), `AllReduce_v2{WORLD,N}` above
-                                (`verity_vllm.program.registry.b1_tp2`); all_gather → `AllGather2_v1{N}` (a
+                                (quarantine, `verity.ml.circuits.ops.quarantine.collective.allreduce`), `AllReduce_v2{WORLD,N}` above
+                                (`verity.ml.circuits.ops.b1_tp2`); all_gather → `AllGather2_v1{N}` (a
                                 reference rearrangement, no gates); vocab_shard_lookup → `EmbeddingShard_v1{VS,H,START}` per rank
     required_writes[r]          the result view on each rank that the instance's output must be journaled to
     agreement                   per-field agreement across ranks (op, module, operand geometry, result geometry)

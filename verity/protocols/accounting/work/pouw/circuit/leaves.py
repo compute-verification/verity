@@ -105,7 +105,7 @@ and the tile digest each one port's v2 row, not padded to whole blocks, and a ro
 ‖ P_A,i or B̃_j ‖ P_B,j: the codes, the scales and P) one run's row-seg or v2 row, the row its readers commit.
 `words_*` are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
 ``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute every row's vector through its ports, commit
-each output row as its reader does, and compose each unit's statement rows (``backends/flock/tests/test_pouw_rows.py``).
+each output row as its reader does, and compose each unit's statement rows (``verity/ml/provers/flock/tests/test_pouw_rows.py``).
 The anchored inputs are no row: they are public input regions (`anchors.region_words`).
 
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the

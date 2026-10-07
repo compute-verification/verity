@@ -16,8 +16,8 @@ from verity_vllm.program.frontend import (Arr, DeadGateWarning, FrontendError, O
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
 from verity.primitives.circuits.refs import Affine, Concat, Explicit, Strided  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
-from verity_vllm.program.registry.prims import BF16, F32, I32  # noqa: E402
+from verity.ml.circuits.ops import b1  # noqa: E402
+from verity.ml.circuits.ops.prims import BF16, F32, I32  # noqa: E402
 
 meta = lambda *shape, dtype=torch.bfloat16: torch.empty(shape, dtype=dtype, device="meta")  # noqa: E731
 
@@ -185,7 +185,7 @@ def test_r1_two_bodies_in_one_program_are_rejected():
     # and the program-level check catches the same conflict on an already-built program (no first-wins on decode paths)
     from verity.primitives.circuits.defs import CompositeDefinition, Builder
     from verity.primitives.circuits.refs import Coll
-    from verity_vllm.program.registry.prims import Bf16Add, Bf16AddF2fp
+    from verity.ml.circuits.ops.prims import Bf16Add, Bf16AddF2fp
     from verity.primitives.circuits.types import Array
 
     def leaf(prim):
@@ -203,7 +203,7 @@ def test_r1_two_bodies_in_one_program_are_rejected():
 def test_r1_registry_version_in_provenance():
     rep = export_report(ex.Gemm, static={"K": 32, "N": 4}, dead_gates="ignore")
     reg = rep.provenance["registry"]
-    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity_vllm.program.registry.prims" in reg["sources"]
+    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity.ml.circuits.ops.prims" in reg["sources"]
     assert rep.provenance["torch"] == torch.__version__ and rep.provenance["mode"] == "authoring"
     assert rep.provenance["rules"] == []
 

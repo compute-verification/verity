@@ -21,7 +21,7 @@ def S():
     return mod
 
 
-REG = "verity_vllm.program.registry"
+REG = "verity.ml.circuits.ops"
 
 
 def test_a_moved_module_import_is_split_off(S):
@@ -63,7 +63,7 @@ def test_short_forms_are_rewritten_in_comments_only(S):
 
 
 def test_full_paths_are_rewritten_everywhere(S):
-    src = f'M = "{REG}.conformance"\nP = "integrations/vllm/verity_vllm/program/registry/targets.py"\n'
+    src = f'M = "{REG}.conformance"\nP = "verity/ml/circuits/ops/targets.py"\n'
     assert S.rewrite_python(src) == ('M = "verity_vllm.program.frontend.conformance"\n'
                                      'P = "integrations/vllm/verity_vllm/program/frontend/targets.py"\n')
 

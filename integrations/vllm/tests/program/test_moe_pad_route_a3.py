@@ -23,9 +23,9 @@ import pytest
 from verity.primitives.circuits import Program, bind
 from verity.primitives.circuits.codec import decode_program, encode_program, program_digest
 from verity.primitives.circuits.defs import REGISTRY, composite
-from verity_vllm.program.registry import b1, lifted as L, moe_pad as MP
+from verity.ml.circuits.ops import b1, lifted as L, moe_pad as MP
 from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.circuits.ops.prims import BF16
 from verity.primitives.circuits.types import Array
 
 from tests.program.test_moe_pad_stage2 import (BOT16, BOT32, OFF, ON, E, H, I, VPT, W13_T, W2_T, WG_T, X_T, MoeIndexedReadRef, run, token_for_route,

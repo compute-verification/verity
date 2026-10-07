@@ -23,10 +23,10 @@ import numpy as np
 import pytest
 
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_topp_difftest as D
-from verity_vllm.program.registry import topp_split as TS
-from verity_vllm.program.registry import topp_geometry
+from verity.ml.circuits.ops import sampling as SM
+from verity_vllm.properties.difftests import sampling_topp_difftest as D
+from verity.ml.circuits.ops import topp_split as TS
+from verity.ml.circuits.ops import topp_geometry
 
 f32 = np.float32
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -98,7 +98,7 @@ def test_the_operand_changes_the_result_where_the_geometry_matters():
 
 @pytest.mark.parametrize("bad", [0, 3, 5, 31, 33, 64, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF0])
 def test_a_split_count_the_pipeline_never_launches_keeps_no_lane(bad):
-    from verity_vllm.program.registry import sampling_rows as SR
+    from verity.ml.circuits.ops import sampling_rows as SR
     V = 64
     x = _row(V)
     word = _eval(SM.topp_mask_word(V), [x.view(np.uint32), _u32(_bits(0.9)), _u32(bad)])[0]

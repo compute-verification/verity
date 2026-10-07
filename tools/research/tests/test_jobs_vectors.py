@@ -109,7 +109,7 @@ OK = 'CHECK = Tool(name="check", produces=["check/v1"]'
 #: main's own layout: `preflight` after `merge_requires`
 MAINS = ('CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--extra", "torch-cpu", "python", '
          '"tools/check/check.py"],\n             produces=["check/v1"],\n'
-         '             merge_requires={"lean-agreement": ["backends/flock/", "!README.md", "!PROTOCOL.md"]},\n'
+         '             merge_requires={"lean-agreement": ["verity/ml/provers/flock/", "!README.md", "!PROTOCOL.md"]},\n'
          '             preflight=["tools/check/preflight.py"])\n')
 
 
@@ -138,7 +138,7 @@ def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
 @pytest.mark.parametrize(("tool_py", "pr", "state", "why"), [
     pytest.param(f"{OK}\n", 2, "stuck", f"{trains.TOOL_PY} on main doesn't parse (", id="unparseable"),
     pytest.param(f"{OK}, merge_requires=RULES)\n", 2, "stuck", RULES_UNREAD, id="merge_requires-a-name"),
-    pytest.param(f'{OK}, merge_requires={{"lean-agreement": "backends/flock/"}})\n', 2, "stuck", RULES_UNREAD,
+    pytest.param(f'{OK}, merge_requires={{"lean-agreement": "verity/ml/provers/flock/"}})\n', 2, "stuck", RULES_UNREAD,
                  id="merge_requires-of-a-string"),
     pytest.param('CHECK = Tool(name="check", produces=("check/v1",))\n', 2, "stuck",
                  f"{trains.TOOL_PY} on main has a produces this gate can't read", id="produces-a-tuple"),
@@ -154,7 +154,7 @@ def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
 ])
 def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state, why):
     """Python-only beside the vectors: a syntax error's why is Python's own message; a missing `merge_requires` asks for no
-    step, so a backends/flock/ change lands without lean-agreement."""
+    step, so a verity/ml/provers/flock/ change lands without lean-agreement."""
     s, tr, head = _train_on(tool_py, pr)
     assert tr.state == state, tr.why
     assert tr.why is None if why is None else tr.why.startswith(why), tr.why

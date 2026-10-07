@@ -189,7 +189,7 @@ def test_a_self_compare_round_trips():
     """A batch whose two arguments are the same multi-part sequence (the top-p keep word's NaN test, `x == x`): its second argument
     is written out, not as an alias to its own node, which a reader cannot resolve (PROTOCOL.md §4.5)."""
     from verity.primitives.circuits.refs import Affine, Coll, concat
-    from verity_catalog.definitions.scalar import BIT, F32, F32Eq
+    from verity.ml.circuits.silicon.definitions.scalar import BIT, F32, F32Eq
 
     F2 = Array(2, F32)
 

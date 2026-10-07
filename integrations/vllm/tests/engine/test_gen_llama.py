@@ -28,7 +28,7 @@ Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"

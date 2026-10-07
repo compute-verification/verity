@@ -170,7 +170,7 @@ def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path
 
 def test_bootstrap_writes_a_pth_for_each_distribution(tmp_path: Path) -> None:
     """A row's stages set PYTHONPATH to the tree, the core and research, so the catalog, the kernels and experimental (each a
-    distribution under its grouping, imported as verity_catalog, verity_kernels, verity_experimental) reach them through a .pth."""
+    distribution under its grouping, imported as verity.ml.circuits, verity.ml.kernels, verity_experimental) reach them through a .pth."""
     text = SCRIPT.read_text()
     start = text.index('for G in $DISTS; do\n')
     loop = text[start:text.index("\ndone\n", start) + len("\ndone")]

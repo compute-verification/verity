@@ -224,7 +224,7 @@ def test_a_dead_gate_joins_the_unit_it_reads():
 @pytest.mark.parametrize("name,E,committed", [("MoeRouterTopKOrdered", 64, 2 * 64 + 2), ("MoeRouterTopKOrderedNorm", 128, 2 * 128 + 2 + 8 + 1)])
 def test_the_ordered_router_commits_its_softmax_once_and_recomputes_nothing(name, E, committed):
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import moe
+    from verity.ml.circuits.ops import moe
     f = bind(getattr(moe, name), E=E, TOPK=8, VPT=8)
     G = W.Graph(f)
     R = W.units(G, 16, 32)
@@ -239,7 +239,7 @@ def test_a_recompute_fails_the_cut():
     from verity.primitives.circuits.defs import CompositeDefinition, bind
     from verity.primitives.circuits.refs import tuple_of
     from verity.primitives.circuits.types import Array, Tuple
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
     F32 = P.F32
 
     def body(B, S, x):
@@ -264,7 +264,7 @@ def test_a_value_computed_again_in_its_own_unit_is_redundant_not_a_recompute():
 
 def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
     from verity.primitives.circuits.defs import bind
-    from verity_vllm.program.registry import sampling as SM
+    from verity.ml.circuits.ops import sampling as SM
     G = W.Graph(bind(SM.GumbelTopPTokenSelect, V=16))
     R = W.units(G, 16, 32)
     (a, b), = G.recomputed                                            # temp == 0, in TemperatureScale and in GumbelSelectF32
@@ -276,7 +276,7 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
     # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
     from verity.primitives.circuits.defs import CompositeDefinition, bind
     from verity.primitives.circuits.types import Array
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
     f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
                                  lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
     G = W.Graph(f)

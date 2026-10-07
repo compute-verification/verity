@@ -3,7 +3,7 @@ Commit's cross-rank pass and the query compose read instead of spelling a family
 
 from __future__ import annotations
 
-from verity_vllm.program.registry.b1_tp2 import AllGather, AllGather2, AllReduce, AllReduce2, EmbeddingShard, all_gather, all_reduce
+from verity.ml.circuits.ops.b1_tp2 import AllGather, AllGather2, AllReduce, AllReduce2, EmbeddingShard, all_gather, all_reduce
 
 
 def collective_kind(family_or_id: str) -> str | None:

@@ -1,5 +1,5 @@
 """[r8 lane E-cleanup, 2026-09-18 — closes the M10 ADAPTER item] the FA2 scope of a model served with logit soft-capping
-(`attn_logit_softcapping > 0`: Gemma-2) -> the quarantined `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity_vllm.program.registry.quarantine.dense.softcap`,
+(`attn_logit_softcapping > 0`: Gemma-2) -> the quarantined `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity.ml.circuits.ops.quarantine.dense.softcap`,
 lane gemma 2026-09-17: exact `MufuTanh` over all 2^32 sm_89 words + FA2 difftest 25/25 bitwise, job 0917T223335-9ad747), or
 `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`.
 

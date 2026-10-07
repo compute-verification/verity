@@ -1,7 +1,7 @@
 """[R15 tp, moved here by P6 from `profiles/gen_llama_llama32_1b_tp2rank.py`] The rank-local fused embedding lookup of a tensor-parallel
 rank: vLLM's `_C.vocab_parallel_embedding(out[M,H], ids[M], shard[VS,H], START, END, padding, added_start, added_end)` (the fused kernel of
 `VocabParallelEmbedding` at tp_size > 1: `out[i] = shard[ids[i]-START]` if START <= ids[i] < END else 0) IS
-`EmbeddingShard_v1{VS,H,START}(ids, shard)` (the registered TP2 Definition, `verity_vllm.program.registry.b1_tp2`) -- the rank-local partial the
+`EmbeddingShard_v1{VS,H,START}(ids, shard)` (the registered TP2 Definition, `verity.ml.circuits.ops.b1_tp2`) -- the rank-local partial the
 embedding all-reduce consumes; one operand set, entirely in this rank's log.  Refuses padded shards and added-vocab ranges (not what
 `EmbeddingShard` states; derive_step's `bind_vocab_parallel_embeddings` refuses the same).  A `world > 1` fact of the architecture, not of
 any model: `profiles.generic.build_profile(role, world=N)` registers it for every rank profile."""
@@ -9,7 +9,7 @@ any model: `profiles.generic.build_profile(role, world=N)` registers it for ever
 from __future__ import annotations
 
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import b1_tp2
+from verity.ml.circuits.ops import b1_tp2
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import Embedding, PerRow, Shared, attribution_for, base_op, bound_args, hint_of, is_int, is_row_major, unsupported

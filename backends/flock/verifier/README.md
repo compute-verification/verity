@@ -56,7 +56,7 @@ one `VERDICT {"accepted", "session", "why"}` line per session and exits 0 iff al
 `hm96-test` (on PR #88's `hm96/vectors.json`) and `comp-check`. The toolchain is v4.34.0, the revision the soundness
 package's Mathlib and ArkLib pin, so that one build covers both.
 
-`backends/flock/tests/test_lean_verifier.py` pins the toolchain and rejects `native_decide`, `implemented_by`, `extern` and
+`verity/ml/provers/flock/tests/test_lean_verifier.py` pins the toolchain and rejects `native_decide`, `implemented_by`, `extern` and
 `unsafe` in the sources.
 
 ## Inputs and vectors
@@ -172,7 +172,7 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`), the honest sessions accepted, so digest and Σ are the
   prover's, and every negative refused, `output_row_committed_false` (an output row's `b ‖ c` not the circuit's outputs)
   included. `test_lean_hidden_outputs.py` verifies four of each set's cases (the honest session and the three false
-  statements) from a fetched fixture (`backends/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable
+  statements) from a fetched fixture (`verity/ml/provers/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable
   set needs a pinned upstream build with `flock-circuit replay` (the selftest's `record_replays_offline` already replays
   in process). `test_lean_registered_reads.py` stages its registered-read statements over a hidden-output RoPE circuit
   (`statement`, and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06`.

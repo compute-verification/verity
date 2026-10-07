@@ -9,13 +9,13 @@ module hint is REFUSED, fail closed: the cross-rank leg locates the peer by (ste
 the received geometry ([M, N] for all_reduce; [M, world*N] for all_gather along the trailing axis), world size 2 and, for all_gather, `dim`
 = -1 / last.  What it does NOT decide: the step/k numbering (the fold's, `fold._collective_prepare`), the rows' requests (the fold's
 attribution), the peer's value (a declared input; its linkage to the other rank's committed partial is the cross-rank leg's and root
-policy's, never the fold's assumption).  The Definitions are the registered TP2 composites (`verity_vllm.program.registry.b1_tp2`): the same ones the
+policy's, never the fold's assumption).  The Definitions are the registered TP2 composites (`verity.ml.circuits.ops.b1_tp2`): the same ones the
 rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so the two sides compare instance by instance.
 """
 
 from __future__ import annotations
 
-from verity_vllm.program.registry import b1_tp2
+from verity.ml.circuits.ops import b1_tp2
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major

@@ -6,7 +6,7 @@ case "gpu-check", unit index 5, weight 1, both formings.  Its rows `ROWS` and co
 tiles and the leaves' 64 x 64 ones.  Every value is computed by the pin and by `pearl_c`, which must agree.  Given the gate's
 check directory (build.sh's OUT/check), the cells must also equal the gate's expected buffers, whose SHA-256 are recorded.
 The `edge` K16 vectors are the pin's own on constructed operands (cancellation, subnormals, exponent gaps, overflow),
-checked against `verity_catalog.silicon`'s HOPPER_BF16_WGMMA_K16.
+checked against `verity.ml.circuits.silicon`'s HOPPER_BF16_WGMMA_K16.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 import pearl_c_vectors as CV
-from verity_catalog.silicon.models import HOPPER_BF16_WGMMA_K16
+from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_u as U

@@ -13,7 +13,7 @@ import itertools
 import pytest
 
 from verity_vllm.program.lifting import continuation as K
-from verity_vllm.program.registry import lifted as L
+from verity.ml.circuits.ops import lifted as L
 from verity_vllm.program.lifting import lifted_records
 
 EOS = (17,)

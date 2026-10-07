@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from verity.primitives.circuits import Program
-from verity_vllm.program.registry import lifted as L
+from verity.ml.circuits.ops import lifted as L
 from verity_vllm.program.kernels import serve3_reference as ref
 from tests.program import test_lifted_moe as PMOE
 from tests.program.test_lifted_moe import E, FFN, K, N, T_W13, T_W2, T_WR, T_X, TOPK, TWO, _bf16, _split, _walk
@@ -195,8 +195,8 @@ def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_w
 @pytest.mark.parametrize("norm", [False, True])
 def test_the_renormalising_router_keeps_a_bot_row_bot_and_an_active_row_bit_exact(norm):
     from verity.primitives.circuits import bind
-    from verity_vllm.program.registry import moe
-    from verity_vllm.program.registry.prims import BF16
+    from verity.ml.circuits.ops import moe
+    from verity.ml.circuits.ops.prims import BF16
     from verity.primitives.circuits.types import Array
     R = bind(moe.MoeRouterTopKNorm if norm else moe.MoeRouterTopK, E=E, TOPK=TOPK, VPT=2)
     T_L = Array(E, BF16)

@@ -24,9 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.primitives.circuits import Program, bind  # noqa: E402
 from verity.primitives.circuits.codec import program_digest  # noqa: E402
-from verity_vllm.program.registry import b1, serve3  # noqa: E402
+from verity.ml.circuits.ops import b1, serve3  # noqa: E402
 from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
-from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
+from verity.ml.circuits.ops.b1 import weights_type  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,

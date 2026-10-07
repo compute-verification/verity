@@ -164,12 +164,12 @@ def test_baked_constant_body_passes_tier_a(toy):
     assert a["status"] == "pass" and provenance.check(r, None)["status"] == "pass"
 
 
-@pytest.mark.xfail(strict=True, reason="HOLE-3: a Definition outside verity_vllm.program.registry that is not under *.quarantine.* is not a quarantine spec for G4")
+@pytest.mark.xfail(strict=True, reason="HOLE-3: a Definition outside verity.ml.circuits.ops that is not under *.quarantine.* is not a quarantine spec for G4")
 def test_hole3_unregistered_definition_outside_quarantine_is_a_quarantine_spec(toy):
     r, _ = _mutated(toy, "M06")
     mods = {m["spec"]: spec_module(r.body.nodes[m["node"]].fn) for m in r.instances}
     baked = {s: m for s, m in mods.items() if s.startswith("AdvBakedOutput")}
-    assert baked and all(not m.startswith("verity_vllm.program.registry") for m in baked.values())
+    assert baked and all(not m.startswith("verity.ml.circuits.ops") for m in baked.values())
     assert gates.quarantine_specs({"spec_modules": mods, "by_spec": {s: {} for s in mods}}) != []
 
 

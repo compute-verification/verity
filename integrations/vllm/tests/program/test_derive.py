@@ -20,7 +20,7 @@ from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.codec import program_digest
 from verity.primitives.circuits.refs import Coll
-from verity_vllm.program.registry import b1, prims as P
+from verity.ml.circuits.ops import b1, prims as P
 from verity_vllm.program.kernels.serve3_reference import materialize
 
 from verity_vllm.program.frontend import examples
@@ -525,7 +525,7 @@ PROF_V2 = dict(mode="profile", profile="b1-eager-v2")
 
 
 def _serve_v3_oracle_digest(C3, LP, D_MAX) -> str:
-    from verity_vllm.program.registry import serve3
+    from verity.ml.circuits.ops import serve3
     return program_digest(Program(serve3.serve_v3(C3, LP, D_MAX)))
 
 

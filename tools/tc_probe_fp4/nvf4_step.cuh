@@ -1,4 +1,4 @@
-// The NVFP4 atom on sm_120a, shared by f3_lut.cu and f2_strassen.cu: its align-add on integers (verity_catalog.silicon
+// The NVFP4 atom on sm_120a, shared by f3_lut.cu and f2_strassen.cu: its align-add on integers (verity.ml.circuits.silicon
 // BLACKWELL_SM120_NVF4, BlockScaledAlignAdd._transducer) for the CUDA-core routes, and the OMMA tile that is their unit.
 #pragma once
 

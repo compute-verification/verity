@@ -46,7 +46,7 @@ def scalar_kind(ctx, role: str, node, N: int, C: float) -> tuple[object, tuple[C
     another value)."""
     if not ctx.registered_values:
         return ctx.kind(role, node, N=N, C=C), ()
-    from verity_vllm.program.registry.dense import reciprocal_bits
+    from verity.ml.circuits.ops.dense import reciprocal_bits
     bits = reciprocal_bits(C) if role == "bf16_div_scalar" else int(np.float32(C).view(np.uint32))
     return ctx.kind(f"{role}_value", node, N=N), (ctx.supplied(role.removeprefix("bf16_"), 32, bits, node, distinct=True),)
 
@@ -58,10 +58,10 @@ def attention_scale(ctx, D: int, node, cap: float | None = None) -> tuple[Coll, 
     if not ctx.registered_values:
         return ()
     if cap is not None:
-        from verity_vllm.program.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
+        from verity.ml.circuits.ops.dense import softcap_mul_bits, softcap_scale_log2_bits
         return (ctx.supplied(f"softcap_mul_d{D}", 32, softcap_mul_bits(D, cap), node),
                 ctx.supplied("softcap_scale_log2", 32, softcap_scale_log2_bits(cap), node))
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
     return (ctx.supplied(f"scale_log2_d{D}", 32, b1._scale_log2_bits(D), node),)
 
 

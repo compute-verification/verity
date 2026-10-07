@@ -3,7 +3,7 @@ are the pinned vectors (``pouw_rows_vectors``), each row's bytes are the tensor'
 over `sha512/row-seg/v1` or `sha512/row/v2` at every padding and segment edge, the pinned row-seg rows are rebuilt from the
 spec and core's own row-seg vectors are PoUW's rows, each unit's statement rows are its ports' schemas, and the tile digest
 in gates is the pinned one and `pearl_c.leaf`.  C-Flock's tests recompute every row's vector through its own ports
-(``backends/flock/tests/test_pouw_rows.py``)."""
+(``verity/ml/provers/flock/tests/test_pouw_rows.py``)."""
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +19,7 @@ from verity.primitives.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_S
                                         nvfp4_row_bytes, row_bytes, sha512_row_seg_digest, sha512_row_seg_word_digest,
                                         sha512_row_v2_digest)
 from verity.primitives.circuits.evaluation import evaluate
-from verity_catalog.definitions.scalar import BitAnd, SelectBf16
+from verity.ml.circuits.silicon.definitions.scalar import BitAnd, SelectBf16
 
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
 from verity.protocols.accounting.work.pouw.circuit import pc4, pc8, rowk

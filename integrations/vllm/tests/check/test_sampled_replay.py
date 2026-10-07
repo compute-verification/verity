@@ -105,7 +105,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     W = lambda n: [["p", wp, woff[n][0], woff[n][1]]]  # noqa: E731
     vfields = [("eps", int(np.float32(float.fromhex(json.loads(EPS)["f64"])).view(np.uint32)))]
     if attn:
-        from verity_vllm.program.registry import b1
+        from verity.ml.circuits.ops import b1
         vfields.append((f"scale_log2_d{DH}", b1._scale_log2_bits(DH)))
     VAL = {n: [["p", 1, k, k + 1]] for k, (n, _b) in enumerate(vfields)}
     norm_t, norm_f = (f"RMSNormTriton_v3{{N={H}}}", f"RMSNormFusedCuda_v4{{N={H}}}") if registered else \
@@ -808,7 +808,7 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     and on an adversarial lane where the 26-bit and 25-bit adders round to DIFFERENT bf16 words: evaluate('Gemm_v2', Hopper DOT) returns
     the wgmma word, evaluate('Gemm_v1') / ('Gemm_v2', Ampere DOT) the mma.sync word."""
     from verity_vllm.program.kernels import derived_rows as D
-    from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
+    from verity.ml.circuits.ops.hopper import HopperBF16WgmmaDot16
     rng = np.random.default_rng(1701)
     K, N = 64, 8
     x = _bf16(rng, K, 1.0)
@@ -1041,7 +1041,7 @@ def test_rope_v1_wrong_cache_row_is_a_mismatch_the_position_is_the_programs_slic
 
 def test_rope_v1_evaluator_equals_the_registered_prims_on_the_replays_own_rows(rope_world):
     """The replay's RoPE_v1 branch == prims.RopeOut / RopeOutAdd per coordinate on the honest Program's own committed q / k words."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
     pi = rope_world.pi
     r = next(x for x in pi.rows if x["spec"].startswith("RoPE_v1") and "/query" in x["name"])
     d = pi.describe(r)
@@ -1631,7 +1631,7 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
     `HOPPER_WGMMA_FAMILY_VERSION`, restated by `registry.tc_total`) of the k16 step it replays through, so two Definitions of one
     name with different non-finite content are told apart on the record itself.  The strings are literals (EVALUATORS must import
     without verity.primitives.circuits); this test holds them equal to the constants the step is evaluated with."""
-    from verity_catalog.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
+    from verity.ml.circuits.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
 
     ampere = f"registry.tc_total {TC.AMPERE_BF16_DOT16_TOTAL.name} total family v{TC.TOTAL_FAMILY_VERSION}"
     hopper = f"registry.tc_total {TC.HOPPER_BF16_WGMMA_K16.name} family v{TC.HOPPER_WGMMA_FAMILY_VERSION}"
@@ -1643,12 +1643,12 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
 
 
 def test_moe_evaluators_equal_the_registered_definitions():
-    """[MAN-06f v3 unit 2] the numpy / scalar-primitive evaluators of the MoE families are the registered `verity_vllm.program.registry.moe`
+    """[MAN-06f v3 unit 2] the numpy / scalar-primitive evaluators of the MoE families are the registered `verity.ml.circuits.ops.moe`
     Definitions (the bodies R13 moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
     from verity.primitives.circuits.defs import bind
     from verity.primitives.circuits.program import Program
-    from verity_vllm.program.registry import moe as R
+    from verity.ml.circuits.ops import moe as R
     from verity_vllm.program.kernels.serve3_reference import materialize
 
     def ref(fn, inputs):

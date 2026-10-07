@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 """Verity-semantics reference for the FA2 attention chain (lane B-sem, R8) -- the P0 tap oracle.
 
-Implements `AttentionHead_v3{T, D, BN}` -> `AttnBlock_v3{D, NVIS, FIRST, BN}` (verity_vllm/program/registry/b1.py:727-822) with
-the registry primitives themselves (verity_vllm/program/registry/prims.py), so every emitted word is *the Definition's* word:
+Implements `AttentionHead_v3{T, D, BN}` -> `AttnBlock_v3{D, NVIS, FIRST, BN}` (verity/ml/circuits/ops/b1.py:727-822) with
+the registry primitives themselves (verity/ml/circuits/ops/prims.py), so every emitted word is *the Definition's* word:
 FTZ f32 ops, `x > y ? x : y` max, the measured MUFU.EX2 / MUFU.RCP tables, the measured Ampere m16n8k16 model,
 RNE bf16.  Emits every online-state version the kernel holds in registers (mapping: p0-tap-spec.md).
 
 Run:  cd integrations/vllm; PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --case p0b --out /tmp/p0b_ref.json
       PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --compare /tmp/p0b_ref.json /tmp/p0b_dump.json
-Needs the MUFU tables (core's, `verity_catalog.definitions.mufu.TABLE_DIR`).
+Needs the MUFU tables (core's, `verity.ml.circuits.silicon.definitions.mufu.TABLE_DIR`).
 Deterministic: inputs come from numpy PCG64(seed); no torch, no GPU.  All words are hex in the JSON (f32: 8 digits,
 bf16: 4 digits); ints `n_block`, `nvis`, `M`, `T`, `D`, `BN` are decimal.
 """
 from __future__ import annotations
 import argparse, json, sys
 import numpy as np
-from verity_vllm.program.registry import prims as P  # PYTHONPATH=.
+from verity.ml.circuits.ops import prims as P  # PYTHONPATH=.
 
 NEG_INF = 0xFF800000
 BF16_KEYS = {"q", "k", "v", "pb", "out"}

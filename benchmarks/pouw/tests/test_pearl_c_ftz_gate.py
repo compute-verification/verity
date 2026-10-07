@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE))
 
 import fixture as F  # noqa: E402
 import ftz_gate as G  # noqa: E402
-from verity_catalog.silicon import fp32  # noqa: E402
+from verity.ml.circuits.silicon import fp32  # noqa: E402
 
 RCP = "$__internal_0_$__cuda_sm20_rcp_rn_f32_slowpath"
 

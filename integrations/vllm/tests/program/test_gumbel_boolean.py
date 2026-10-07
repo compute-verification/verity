@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.gumbel_boolean`: the Boolean Gumbel select agrees with its word Definitions (`trace.word_of`).
+"""`verity.ml.circuits.ops.gumbel_boolean`: the Boolean Gumbel select agrees with its word Definitions (`trace.word_of`).
 `NvLogf_v3` agrees with `NvLogf_v2`, and the log1pf builder with `nv_log1pf_gpu`, on every special word, every exponent of
 both signs, the sweeps around their branch points, and random words. The uniform and noise of a Philox word agree on its
 edges (0, all ones, the floor, the f32 rounding of large words). `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
@@ -28,9 +28,9 @@ from verity.primitives.circuits.cut import separable
 from verity.primitives.circuits.defs import REGISTRY, bind
 from verity.primitives.circuits.boolean import trace as TR
 from verity.primitives.circuits.boolean.forms import Circuit
-from verity_vllm.program.registry import gumbel_boolean as GB
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_boolean as SB
+from verity.ml.circuits.ops import gumbel_boolean as GB
+from verity.ml.circuits.ops import sampling as SM
+from verity.ml.circuits.ops import sampling_boolean as SB
 from verity_vllm.query import word as W
 
 F32 = GB.F32

@@ -29,9 +29,9 @@ from verity.primitives.circuits import Program, bind
 from verity.primitives.circuits.codec import _spec_id, encode_program, program_digest
 from verity.primitives.circuits.defs import REGISTRY
 from verity_vllm.program import workload as W
-from verity_vllm.program.registry import b1, lifted as L
+from verity.ml.circuits.ops import b1, lifted as L
 from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.b1 import weights_type
+from verity.ml.circuits.ops.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs
 from verity.primitives.circuits.types import Array, Value
 

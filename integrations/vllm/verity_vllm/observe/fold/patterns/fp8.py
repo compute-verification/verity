@@ -11,7 +11,7 @@ selected is `CutlassFp8BlockScaledMMKernel` (`VLLM_USE_DEEP_GEMM=0`; the DeepGEM
 The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMmFp8BlockSharedScale_v1` by default (each weight
 block's scale products once), `ScaledMmFp8Block_v1` under `per-coordinate`; one function, one signature.
 
-Both registered Definitions (`verity_vllm.program.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
+Both registered Definitions (`verity.ml.circuits.ops.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
 `_QUANT_CONF` / `_BLOCK_CONF` conformance notes; out/gen/sweep/evidence/fp8/).  The GEMM Definition is the blockwise CUTLASS kernel's
 arithmetic (k32 steps, `s = FMUL(sfa, sfb)`, FFMA promotion per K-tile in ascending order) over the record target's e4m3 step
 (`frontend.targets.scaled_mm_fp8_block_spec`: the v1 forms on hopper, the version 3 forms over `GemmTarget.fp8_block_dot` elsewhere).
@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import fp8
+from verity.ml.circuits.ops import fp8
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major

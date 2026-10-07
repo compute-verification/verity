@@ -76,7 +76,7 @@ from functools import lru_cache
 
 from verity.primitives.crypto.blake3 import blake3, keyed
 from verity.primitives.crypto.turboshake import turboshake128
-from verity_catalog.silicon import fp32
+from verity.ml.circuits.silicon import fp32
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from ..serving import HASH_FORMATS

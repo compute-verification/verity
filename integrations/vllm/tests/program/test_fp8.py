@@ -1,4 +1,4 @@
-"""CPU tests of the FP8 registry (`verity_vllm/program/registry/fp8.py`, lane QZ) on saved H100 operands.
+"""CPU tests of the FP8 registry (`verity/ml/circuits/ops/fp8.py`, lane QZ) on saved H100 operands.
 
 Data (`tests/program/data/`, pod `qz-h100`, 2026-09-08):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
@@ -26,9 +26,9 @@ if sys.version_info < (3, 12):  # pragma: no cover
 from verity.primitives.circuits import Program, bind  # noqa: E402
 from verity_vllm.correspondence.capture_identities import _coll_range  # noqa: E402
 from verity.primitives.circuits.evaluate import evaluate_region  # noqa: E402
-from verity_vllm.program.registry import fp8 as F  # noqa: E402
+from verity.ml.circuits.ops import fp8 as F  # noqa: E402
 from verity_vllm.program.kernels import fp8_twins  # noqa: E402
-from verity_vllm.program.registry import prims as P  # noqa: E402
+from verity.ml.circuits.ops import prims as P  # noqa: E402
 
 DATA = Path(__file__).parent / "data"
 

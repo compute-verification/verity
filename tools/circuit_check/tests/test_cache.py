@@ -827,7 +827,7 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
     src = srcs[CC.TARGETS]
     assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
-    b1 = SC.path_of("verity_vllm.program.registry.b1", "py")
+    b1 = SC.path_of("verity.ml.circuits.ops.b1", "py")
     edited = CC._units_of(srcs[b1].replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
                                            '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
@@ -866,7 +866,7 @@ ON_DEMAND = [("definitions", "GatherBf16x1024u10_v1"), ("definitions", "GatherBf
 keys = sorted({*((kind, key) for kind, pins in CK.load_pins().items() for key in pins), *ON_DEMAND})
 owners = lambda: {f"{kind} {key}": SC.pin_owner(kind, key) for kind, key in keys}
 before = owners()
-from verity_vllm.program.registry import boolean_gather, prims, sampling
+from verity.ml.circuits.ops import boolean_gather, prims, sampling
 _ = bind(boolean_gather.gather_bf16(1100)).body
 boolean_gather.gather_bf16(64), prims.gather_bf16(1), sampling.bit_at(32)
 print(json.dumps({"before": before, "after": owners(), "built": [key for _, key in ON_DEMAND if key in REGISTRY.defs]}))
@@ -882,8 +882,8 @@ def test_a_pins_owner_is_what_its_key_names_not_what_the_process_built():
     got = json.loads(r.stdout)
     assert len(got["built"]) == 4, got["built"]
     assert got["before"] == got["after"], {k: (v, got["after"][k]) for k, v in got["before"].items() if got["after"][k] != v}
-    assert got["before"]["pieces GatherBf16x1_v1"] == "verity_vllm.program.registry.prims"
-    assert got["before"]["pieces BitAtx32_v1"] == "verity_vllm.program.registry.sampling"
+    assert got["before"]["pieces GatherBf16x1_v1"] == "verity.ml.circuits.ops.prims"
+    assert got["before"]["pieces BitAtx32_v1"] == "verity.ml.circuits.ops.sampling"
     assert got["before"]["definitions GatherBf16x1024u10_v1"] is None
 
 

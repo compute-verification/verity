@@ -21,15 +21,15 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 
   The module list is `verity/README.md`. Import from the owning module (`from verity.primitives.circuits import
   Program`); `verity` re-exports nothing. Each directory's tests sit beside it as their own suite.
-- `catalog/` (`verity_catalog`): what the trusted base reads by digest.
+- `catalog/` (`verity.ml.circuits`): what the trusted base reads by digest.
   - `silicon`: the exact hardware semantics.
   - `definitions`: the primitive circuits' Definitions.
   - `targets`.
   - `catalog/census/`: data only. Core never reads it; it takes such numbers as parameters.
-- `kernels/` (`verity_kernels`): fast code, each kernel checked against its Definition.
+- `verity/ml/kernels/` (`verity.ml.kernels`): fast code, each kernel checked against its Definition.
 - `experimental/` (`verity_experimental`): what is under development or kept for study (private circuits, multiproofs,
   sampled proofs' plans and consumers). `verity` never imports it.
-- `backends/flock/` (`verity_flock`): C-Flock, the proof system.
+- `verity/ml/provers/flock/` (`verity_flock`): C-Flock, the proof system.
   - Its patches on upstream Flock, the CUDA prover, and the zero-knowledge prover (`live/`, `flock-circuit --zk`).
   - `verifier/`: the verifier of record, written in Lean, with upstream's Rust verifier as a cross-check.
 - `integrations/vllm/` (`verity_vllm`): the vLLM integration. It builds each served workload's circuit, commits its
@@ -132,7 +132,7 @@ There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check
 - the Lean verifier's build and its partition check;
 - the Lean check;
 - `merge_requires` (`tools/check/tool.py`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
-  against upstream's Rust verifier, for `backends/flock/` (`check.py --record` sends what it needs).
+  against upstream's Rust verifier, for `verity/ml/provers/flock/` (`check.py --record` sends what it needs).
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.

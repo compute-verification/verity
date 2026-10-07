@@ -363,7 +363,7 @@ class ResolutionReport:
 
 def spec_module(spec: Any) -> str:
     """The module that defines a specialization's body (`defn.body` of a composite, `evaluate` of a primitive): the
-    registry a spec comes from — `verity_vllm.program.registry.quarantine.*` marks provisional numerical semantics (gate G4)."""
+    registry a spec comes from — `verity.ml.circuits.ops.quarantine.*` marks provisional numerical semantics (gate G4)."""
     defn = getattr(spec, "defn", spec)
     for attr in ("body", "evaluate"):
         fn = getattr(defn, attr, None)

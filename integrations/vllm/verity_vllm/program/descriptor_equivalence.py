@@ -391,7 +391,7 @@ def _load(path: str):
         desc = json.load(f)
     # IT-F5 (`independent-tests.md`): a descriptor names its primitives by id and `REGISTRY` holds only what the process
     # imported; every registry module is loaded so a Hopper / TP=2 / single-request stochastic descriptor decodes too.
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.circuits.ops.catalog import load
     load()
     d = decode_program(desc, REGISTRY)
     return d, {"path": path, "schema": desc.get("schema"), "digest": program_digest(desc), "bytes": None, "seconds_decode": round(time.time() - t0, 1)}
@@ -420,7 +420,7 @@ def main(a: Options) -> int:
     elif a.build:
         from verity.primitives.circuits.program import Program
         from verity.primitives.circuits.defs import bind
-        from verity_vllm.program.registry import b1
+        from verity.ml.circuits.ops import b1
         from verity.primitives.circuits.codec import encode_program, canonical_json
         cfg, LP, STEPS = a.build[0], int(a.build[1]), int(a.build[2])
         t0 = time.time()

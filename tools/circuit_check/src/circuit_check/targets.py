@@ -58,25 +58,25 @@ def _authored(d: Any) -> bool:
 
 
 def load_registries() -> None:
-    """Register every Definition and kernel: core's `verity_catalog.definitions`, and each module of the vLLM registry and kernel registry."""
+    """Register every Definition and kernel: core's `verity.ml.circuits.silicon.definitions`, and each module of the vLLM registry and kernel registry."""
     global _LOADED
     if _LOADED:
         return
     from verity.primitives.circuits.defs import REGISTRY
 
-    import verity_catalog.definitions.boolean.attention  # noqa: F401
-    import verity_catalog.definitions.boolean.cast  # noqa: F401
-    import verity_catalog.definitions.boolean.elementwise  # noqa: F401
-    import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity.ml.circuits.silicon.definitions.boolean.attention  # noqa: F401
+    import verity.ml.circuits.silicon.definitions.boolean.cast  # noqa: F401
+    import verity.ml.circuits.silicon.definitions.boolean.elementwise  # noqa: F401
+    import verity.ml.circuits.silicon.definitions.boolean.gemm  # noqa: F401
     import verity.primitives.commitments.gates.lms  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
-    import verity_catalog.definitions.boolean.mufu  # noqa: F401
-    import verity_catalog.definitions.boolean.scalar  # noqa: F401
+    import verity.ml.circuits.silicon.definitions.boolean.mufu  # noqa: F401
+    import verity.ml.circuits.silicon.definitions.boolean.scalar  # noqa: F401
     import verity_experimental.private_circuits.universal  # noqa: F401
-    import verity_catalog.definitions.gemm  # noqa: F401
-    import verity_kernels.tc  # noqa: F401
-    import verity_catalog.definitions.prims  # noqa: F401
-    import verity_vllm.program.registry as R
+    import verity.ml.circuits.silicon.definitions.gemm  # noqa: F401
+    import verity.ml.kernels.tc  # noqa: F401
+    import verity.ml.circuits.silicon.definitions.prims  # noqa: F401
+    import verity.ml.circuits.ops as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
@@ -295,7 +295,7 @@ def _kernel_roots() -> list[Any]:
 
 def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
     """`tanh_rn` (2^27 entries of two words) as parameter 1, probed at its ends and its regions' edges (`TANH_RN_REGIONS`)."""
-    from verity_vllm.program.registry import tables
+    from verity.ml.circuits.ops import tables
 
     from .vectors import TableProbe
 
@@ -304,7 +304,7 @@ def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
 
 def _tanh_rn_word(i: int) -> int:
     """The word of `tanh_rn`'s region whose low 27 bits are entry ``i`` (past HI where no region word has them)."""
-    from verity_vllm.program.registry import tables
+    from verity.ml.circuits.ops import tables
 
     return 0x38000000 | i if (0x38000000 | i) >= tables.TANH_RN_LO else 0x40000000 | i
 
@@ -330,10 +330,10 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
     Definition, or the error)."""
-    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32
+    from verity.ml.circuits.silicon.definitions.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,

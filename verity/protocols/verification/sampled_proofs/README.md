@@ -228,7 +228,7 @@ only inside a proof (`one_stage.registered`).
   (`audit.session_registered`) reads them off the accepted verdicts of record (the Lean verdict's `registered`), never
   off the registration; `benchmarks/one_stage`'s driver passes it.
 
-Pinned by `tests/test_registered.py` and, for the Lean verifier's check, `backends/flock/tests/test_lean_registered_reads.py`.
+Pinned by `tests/test_registered.py` and, for the Lean verifier's check, `verity/ml/provers/flock/tests/test_lean_registered_reads.py`.
 
 ### The partition
 

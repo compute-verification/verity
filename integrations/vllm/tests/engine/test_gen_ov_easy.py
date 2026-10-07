@@ -28,7 +28,7 @@ from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
 L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
 Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
 B7 = importlib.import_module("verity_vllm.engine.profiles.derived_B7")
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"

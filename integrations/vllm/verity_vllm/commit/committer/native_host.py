@@ -2375,7 +2375,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             # R10a / R10b (norm kernel interiors): DECLARED treatment only.  Every interior fp32 value of fused_add_rms_norm_kernel (squares,
             # cub block-reduction partials, variance/N, rsqrtf, x*rstd) and of the layer-0 Triton _rms_norm_kernel is a deterministic function
             # of the BOUND source row (the token's residual/embedding bf16 row, R2e / R2b) and the registered weight row under the pinned
-            # kernel's fixed reduction order = the registry's exact model (`verity_vllm/program/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
+            # kernel's fixed reduction order = the registry's exact model (`verity/ml/circuits/ops/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
             # conformant).  So the derived-value route applies with a ROW-sourced phi: opening = source-row leaf(s) + weight opening + op-by-op
             # replay; no interior word needs a leaf.  The verifier for that multi-source phi is NOT implemented in this lane -> the checker
             # reports 'derived-declared', never secure.  Alternative = M1-style export of 47.6 MB/request (not built).

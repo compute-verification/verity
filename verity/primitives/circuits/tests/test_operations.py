@@ -9,11 +9,11 @@ from verity.primitives.circuits import constants as K
 from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.types import Array
-from verity_catalog.definitions import gemm as G
-from verity_catalog.definitions import mufu
+from verity.ml.circuits.silicon.definitions import gemm as G
+from verity.ml.circuits.silicon.definitions import mufu
 from verity.primitives.circuits import operations as O
-from verity_catalog.definitions import prims as P
-from verity_catalog.definitions.boolean import cast, gemm, mufu as boolean_mufu, scalar  # noqa: F401  (register the listed Definitions)
+from verity.ml.circuits.silicon.definitions import prims as P
+from verity.ml.circuits.silicon.definitions.boolean import cast, gemm, mufu as boolean_mufu, scalar  # noqa: F401  (register the listed Definitions)
 
 #: `digest()` of VERSION 1. A change to the list needs a new VERSION, then this pin.
 DIGEST_V1 = ("5ae1023cdd6929e320d1a4b986c44812aee59d6a66bfc68547d89774cce92693"

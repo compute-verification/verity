@@ -28,7 +28,7 @@ from verity_vllm.program.kernels import dense_rows as DR
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels import kernel_registry as KR
 from verity_vllm.program.kernels import rows
-from verity_vllm.program.registry import b1, hopper
+from verity.ml.circuits.ops import b1, hopper
 
 K = 64
 DOTS = {"AmpereBF16TcDot16_v2": b1.P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16_v1": hopper.HopperBF16WgmmaDot16}

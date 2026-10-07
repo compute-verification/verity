@@ -6,5 +6,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # Test-only: tests register the catalog's Definitions before decoding, and tests/evaluation self-checks every registered kernel
 # against its Definition (the kernels and the silicon models they read).
-inputs = ["verity", "catalog", "kernels"]
+inputs = ["verity", "catalog", "verity/ml/kernels"]
 parallel = true

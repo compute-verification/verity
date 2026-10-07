@@ -6,7 +6,7 @@ extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each
 runs.  A test marked `xfail(strict=True)` documents an OPEN finding (F-pad-NN in LIFTING-REVIEW §5): it flips to a failure
 the moment pad fixes it, so the marker must then be removed.
 
-Skips cleanly on a tree without `verity_vllm.program.registry.lifted` (the module lives on lane/r16-pad); needs the in-tree MUFU
+Skips cleanly on a tree without `verity.ml.circuits.ops.lifted` (the module lives on lane/r16-pad); needs the in-tree MUFU
 tables like `test_serve3.py` for the LServe_v1 cases.
 """
 
@@ -21,12 +21,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-L = pytest.importorskip("verity_vllm.program.registry.lifted")
+L = pytest.importorskip("verity.ml.circuits.ops.lifted")
 
 from verity.primitives.circuits import Program  # noqa: E402
-from verity_vllm.program.registry import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
+from verity.ml.circuits.ops import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
 from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
-from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
+from verity.ml.circuits.ops.b1 import weights_type  # noqa: E402
 from tests.program import test_lifted_tiny as T  # noqa: E402  (pad's fixture harness: _lserve, EOS_FOR, Y_RAW, ...)
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs  # noqa: E402
 from verity.primitives.circuits.types import Array, Value  # noqa: E402

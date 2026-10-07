@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_catalog.silicon.models import HOPPER_E4M3_K32
+from verity.ml.circuits.silicon.models import HOPPER_E4M3_K32
 from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D

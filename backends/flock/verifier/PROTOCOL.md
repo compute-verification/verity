@@ -3,13 +3,13 @@
 **Status: phase 1 of lane `flock-verifier` (2026-09-26).** This document specifies the verifier that decides Flock sessions
 in verity: the 100-bit profile (`fast100`) run twice on one committed root, with live verifier coins, for the pure-block,
 IR frame and PR #83 circuit statements. Phase 2 implements it in Lean (levels 1–3 of the formal-verification plan). Upstream
-Flock's Rust verifier (succinctlabs/flock `b684b12`, with our live-coin layer `backends/flock/live`) is a cross-validation
+Flock's Rust verifier (succinctlabs/flock `b684b12`, with our live-coin layer `verity/ml/provers/flock/live`) is a cross-validation
 test in CI, not a production verifier: once the Lean verifier agrees with it on the whole corpus (§17), only the Lean
 verifier runs.
 
 **Sources.** The protocol is the Flock paper (Bünz, Rothblum, Wang, ePrint 2026/1329: §4, Appendices A–C). Upstream's code
 was read only for byte formats, constants and the order of operations; every place where the paper is silent or differs
-and the spec follows upstream's behaviour is listed in §19. Our statement layer (`backends/flock/live/src`) and the session
+and the spec follows upstream's behaviour is listed in §19. Our statement layer (`verity/ml/provers/flock/live/src`) and the session
 protocol are verity's own and are specified from that code.
 
 **Scope.** Interactive mode only: coins come from the verifier's live session record. Fiat–Shamir (C-fs), the union prover,
@@ -1488,7 +1488,7 @@ stays `NON_ZK_PROOF`. **Agreement:** README.
 
 ### 17.1 How the Lean verifier becomes the verifier of record
 
-Upstream's Rust verifier (below, with `backends/flock/live`'s `ReplayChallenger`) is the reference in a cross-validation test,
+Upstream's Rust verifier (below, with `verity/ml/provers/flock/live`'s `ReplayChallenger`) is the reference in a cross-validation test,
 run in CI on every change to the Lean verifier, the statements or the pinned files:
 
 1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
@@ -1522,19 +1522,19 @@ expectation):
 - **D7:** the `sha512x3` and `hm96` nets are the verifier's (`Flock.HmNets`); upstream checks only their port widths.
 - **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
   `967b8d06`) lets `units_per_vu = 0` through when a tail returns the outputs; the spec refuses it, as
-  `backends/flock/live`'s now does. No vector exercises it.
+  `verity/ml/provers/flock/live`'s now does. No vector exercises it.
 - **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
-  through when a tail returns the outputs; the spec refuses it, as `backends/flock/live`'s now does. No vector exercises it.
+  through when a tail returns the outputs; the spec refuses it, as `verity/ml/provers/flock/live`'s now does. No vector exercises it.
 - **D10:** the header's `identifier` (§16.10). Upstream ignores it (the public digest binds it); the spec refuses one that
-  is not the verifier's own `--identifier F`. No vector exercises it; `backends/flock/tests/test_lean_identifier.py` runs
+  is not the verifier's own `--identifier F`. No vector exercises it; `verity/ml/provers/flock/tests/test_lean_identifier.py` runs
   it on the Lean verifier.
 - **D11:** each expanded circuit's output groups end inside its slot, `col + words ≤ 2^{unit_log} / 128` (§16.5,
   `Net.ofRows`). Upstream's `IrUnitNet::parse` in every pinned build checks only that a group is an aligned power of two of
   words, and its `Composite::check` doesn't bound an output column, so upstream accepts a statement that moves an output
-  group past the slot; the spec refuses it, as `backends/flock/live`'s parser now does. Honest statements pass both: every
+  group past the slot; the spec refuses it, as `verity/ml/provers/flock/live`'s parser now does. Honest statements pass both: every
   writer (`ir_lower.layout`, `derive`, `tail.stage_layout`) closes its output groups before the constant row, so
   `128 · (col + words) ≤ constPos < useful ≤ 2^{unit_log}`. No vector exercises it;
-  `backends/flock/tests/test_lean_out_group_slot.py` runs it on the Lean verifier.
+  `verity/ml/provers/flock/tests/test_lean_out_group_slot.py` runs it on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

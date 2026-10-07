@@ -35,7 +35,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[4]
 LINE = 130
-REG = "verity_vllm.program.registry"
+REG = "verity.ml.circuits.ops"
 KER = "verity_vllm.program.kernels"
 
 
@@ -80,7 +80,7 @@ MOVES = [
     Move(f"{REG}.fp8_moe", f"{REG}.fp8_vocab", ("BATCH_INVARIANT_KB", "BATCH_INVARIANT_SWAP")),
 ]
 
-_R = "integrations/vllm/verity_vllm/program/registry"
+_R = "verity/ml/circuits/ops"
 EDITS = [
     Edit(f"{_R}/fp8.py", "MIN_SCALE_BITS = bits_of(np.float32(1.0) / (np.float32(448.0) * np.float32(512.0)))",
          "MIN_SCALE_BITS = bits_of(1.0 / (448.0 * 512.0))"),

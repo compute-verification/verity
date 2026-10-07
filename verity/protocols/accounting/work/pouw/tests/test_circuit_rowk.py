@@ -24,7 +24,7 @@ from verity.primitives.circuits.cut import CallGraph
 from verity.primitives.circuits.defs import CompositeDefinition
 from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.types import Value
-from verity_catalog.definitions.scalar import BitAnd, SelectBf16
+from verity.ml.circuits.silicon.definitions.scalar import BitAnd, SelectBf16
 from verity.protocols.accounting.work.pouw.circuit import leaves as L
 from verity.protocols.accounting.work.pouw.circuit import pc4, pc8, plan, rowk
 from verity.protocols.accounting.work.pouw.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports

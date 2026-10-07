@@ -8,7 +8,7 @@ from verity_vllm.observe.fold.resolve_log import short_label
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.resolver import Compute, Group, PerRow, Transparent, Unsupported
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 
 def _v(alloc, shape):

@@ -13,7 +13,7 @@ Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`ver
   and verifier model; soundness with the whole-proof bound at the batching of each cell it holds and the dominant term; the
   proximity bounds (regime, proven, machine-checked or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
 * **Table 2** -- end-to-end overhead ``N / P`` per subcircuit, hardware class and admissible commitment scheme (one line per
-  ``verity_catalog.targets.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
+  ``verity.ml.circuits.targets.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
   backend family (:data:`FAMILIES`).  ``N`` is the
   compute-bound datasheet estimate (:func:`native`); ``P`` is inputs per second end to end, committing the batch's values and
   then proving (:func:`throughput`).  A cell is the family's best admissible backend and statement (highest ``P``, ties to the lower
@@ -52,7 +52,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import claims as claims_registry
-from verity_catalog.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
@@ -1481,7 +1481,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
-                               "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity_catalog.targets.target")]})
+                               "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity.ml.circuits.targets.target")]})
             continue
         entries.append(Ctx(art, meta, labels, attempt, target, _FAMILY[cand.id], config, []))
     if not rules.legacy:

@@ -14,7 +14,7 @@ from verity.primitives.circuits.codec import canonical_json
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
 from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 Q1 = {"op": "override", "base": {"op": "default", "w": 32},
       "cases": [{"path": "//Gemm_v1{*}", "family": {"op": "members", "path": "//Gemm_v1{K=*,N=*}", "sel": "@batch:GemmCoordinate_v1", "k": 1}}]}

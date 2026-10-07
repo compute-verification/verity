@@ -26,7 +26,7 @@ lottery    uint256LE(J) <= τ·h·w·k   (`verity.protocols.accounting.work.pouw
 
 **Devices.**  ``b200`` (Pearl's: accumulation groups of 32 exact products plus the FP32 carry, 25 fractional bits below
 the group's largest exponent, truncated, δ = 1/2, W = 25) is ported exactly.  ``ada`` is our extension for the RTX 4090,
-not in Pearl's whitelist: its matmul is Verity's pinned ``sm89.mma.m16n8k32.e4m3`` model (`verity_catalog.silicon`, groups (16, 16),
+not in Pearl's whitelist: its matmul is Verity's pinned ``sm89.mma.m16n8k32.e4m3`` model (`verity.ml.circuits.silicon`, groups (16, 16),
 a 14-bit adder), δ = 1 and W = 13 as for Pearl's H100, and its census reads one magnitude per cell, as for B200.  Pearl's
 ``h100`` (a reset-and-promote replay over 128-product windows) is not ported.
 
@@ -57,7 +57,7 @@ from fractions import Fraction
 from functools import lru_cache
 
 from verity.primitives.crypto.blake3 import blake3, keyed
-from verity_catalog.silicon import models as tc_models
+from verity.ml.circuits.silicon import models as tc_models
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 

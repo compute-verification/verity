@@ -201,7 +201,7 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
 def ir_guard(m: int) -> int:
     """The IR model's `GuardNegInfZero_v1(m)` by the reference evaluator."""
     from verity.primitives.circuits.evaluation.reference import evaluate
-    from verity_vllm.program.registry import prims
+    from verity.ml.circuits.ops import prims
 
     return int(evaluate(prims.GuardNegInfZero, int(m))[0])
 
@@ -242,7 +242,7 @@ def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int
 def scale_log2_bits(c: dict[str, Any], D: int) -> int:
     """The f32 bits of the kernel's `scale_softmax_log2` for case `c` at head dim `D`, the IR's constant: softmax_scale * log2(e), or
     softcap * log2(e) with a softcap."""
-    from verity_vllm.program.registry import b1, dense
+    from verity.ml.circuits.ops import b1, dense
 
     return dense.softcap_scale_log2_bits(c["softcap"]) if c["softcap"] else b1._scale_log2_bits(D)
 
@@ -251,7 +251,7 @@ def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
     """The IR model's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
     unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
     from verity.primitives.circuits.evaluation.reference import evaluate
-    from verity_vllm.program.registry import prims
+    from verity.ml.circuits.ops import prims
 
     return int(evaluate(prims.F32MulFtz, ir_guard(m) if check else int(m), int(scale_log2))[0])
 

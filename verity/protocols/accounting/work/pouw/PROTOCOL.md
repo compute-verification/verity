@@ -204,7 +204,7 @@ docstring states every parameter.
   - on whole 16 × 16 tiles at k = 1,024: the FP10 norms, the noise, the quantized codes and the per-row scales, the
     accumulator, the extract, J, and the jackpot policy's verdict (one tile approved, one rejected for dead entries).
 - **The RTX 4090.** Pearl's whitelist has no Ada device, so `ada` is ours: Verity's pinned `sm89.mma.m16n8k32.e4m3`
-  atom (`verity_catalog.silicon`), with H100's structure (a fresh accumulator every 128 products, promoted by one FP32 add), δ = 1
+  atom (`verity.ml.circuits.silicon`), with H100's structure (a fresh accumulator every 128 products, promoted by one FP32 add), δ = 1
   and W = 13. With plain chained `mma.sync` instead, the 14-bit adder anchored at the running sum fails Pearl's
   unpredictable-summands census on honest inputs.
 - **What the protocol replaces.** The chain headers become the salt. The activation and weight roots stand in for
@@ -786,7 +786,7 @@ useful    U/(α_A·α_B), glue
     - Its `nvf4Specials` table has 28 rows (bc-5a715b19's review).
     - Four of those rows are NaN accumulators whose scale bytes set bit 7. They are valid scales under the hardware
       decode, and outside the model through the accumulator (a test); the card writes 0x7FFFFFFF.
-    - The pinned model (`verity_catalog.silicon.models._scale_dyadic`) reads the low 7 bits too. GPU 4 replayed all 17 bit-7
+    - The pinned model (`verity.ml.circuits.silicon.models._scale_dyadic`) reads the low 7 bits too. GPU 4 replayed all 17 bit-7
       vectors on the RTX PRO 6000 (run `r20260930-161935-83a8`), and every word matched.
   - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
@@ -944,7 +944,7 @@ useful    U/(α_A·α_B), glue
     cap-chunks with one digest and two), and
     the digest of two tiles, which the gates compute. `test_circuit_leaves.py` rebuilds every row-seg vector from the
     spec by hand and reads core's own row-seg vectors as PoUW's rows. C-Flock's ports commit every row byte for byte:
-    `backends/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and two v2
+    `verity/ml/provers/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and two v2
     rows and a tile through the Lean verifier's row constants; on C-Flock's writer/reader pairs (`ROW_SEG_PAIRS`: A′_i ‖
     P_A,i at k = 4,096, the fp8-p row at k = 1,024; `ROW_V2_PAIRS`: an ok row, a tile digest, B̃_j ‖ P_B,j and the
     registered fp8-p row at k = 1,024) PoUW's commit string is the writer's and the reader's. Each of the six units'

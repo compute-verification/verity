@@ -8,12 +8,12 @@ rules, but are not developed.
 
 ## What is fixed
 
-- The subcircuit is `verity_catalog.targets.target.FIRST`. Lanes do not change it.
+- The subcircuit is `verity.ml.circuits.targets.target.FIRST`. Lanes do not change it.
   The backend transition unit is one 16-product update with arbitrary finite
   `c`; the proof unit is `GemmCoordinate<K>` from `c_0 = 0` plus the epilogue.
 - Backend families must agree on profile, input/output bitstrings, supported domain,
   the exact function and proof-unit endpoints. Auxiliary witness layouts are theirs.
-- Semantic disagreements go into `catalog/verity_catalog/silicon/discrepancy_log.json` (an entry
+- Semantic disagreements go into `verity/ml/circuits/silicon/discrepancy_log.json` (an entry
   with an owner), then to the coordinator. Changing a reference
   implementation resolves nothing by itself.
 - Proof gadgets (selectors, quotient/remainder, leading-bit, lookup layouts,
@@ -65,7 +65,7 @@ Table 1  Candidate proof systems (definitional: no performance, no status)
          Candidate | Description | ZK | Verifier model | Soundness | Setup | Interaction | Security assumptions
          rows = tables.CANDIDATES: A-GKR (NON_ZK_PROOF), B-Ligero (COMPLETE_ZK_BACKEND; COMPLETE_HVZK_BACKEND
          as drill-down), SP1 (any sound class); ZK is No | HVZK | Malicious-verifier ZK (two variants allowed)
-Table 2  Headline proving overhead by target (one row per verity_catalog.targets.target.TARGETS)
+Table 2  Headline proving overhead by target (one row per verity.ml.circuits.targets.target.TARGETS)
          Device | Datatype / target | Native dense peak, spec | Native dense peak, measured | A-GKR | B-Ligero | SP1
 Table 3  Prover phase decomposition (one row per populated Table 2 cell, the same artifact)
          Device / target | Candidate | Total prover time | Witness | Encoding + commitment | Arithmetic | Lookup | ZK additional | Serialization | Other

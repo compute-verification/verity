@@ -210,10 +210,10 @@ def test_handles_and_subscriptions(registry, capsys):
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
-                     "catalog/verity_catalog/definitions/tc.py", "verity/primitives/circuits/cut.py", "AGENTS.md", "nowhere/x")
+                     "verity/ml/circuits/silicon/definitions/tc.py", "verity/primitives/circuits/cut.py", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
         ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
-        ["@circuits", "catalog/verity_catalog/definitions/tc.py"], ["@proofs", "verity/primitives/circuits/cut.py"],
+        ["@circuits", "verity/ml/circuits/silicon/definitions/tc.py"], ["@proofs", "verity/primitives/circuits/cut.py"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")

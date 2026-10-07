@@ -11,12 +11,12 @@ import pytest
 
 from verity.primitives.circuits.evaluation import evaluate
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import moe_difftest as MD
+from verity.ml.circuits.ops import b1
+from verity_vllm.properties.difftests import moe_difftest as MD
 from verity_vllm.properties.difftests import rope_difftest as RD
 from verity_vllm.properties.difftests import rope_gptj_difftest as RG
 from verity_vllm.properties.difftests import collectives_difftest as TD
-from verity_vllm.program.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
+from verity.ml.circuits.ops.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
 from verity_vllm.properties import admission as A
 
 

@@ -1,4 +1,4 @@
-"""The repository's `verity/annotations/v0` files (`verity.primitives.circuits.annotations`): core's `verity_catalog/definitions/annotations.json` and the vLLM
+"""The repository's `verity/annotations/v0` files (`verity.primitives.circuits.annotations`): core's `verity/ml/circuits/silicon/definitions/annotations.json` and the vLLM
 registry's `annotations.json`. Every entry is well formed; every Definition key resolves, and no guard is stale, in a program
 calling each specialization the circuit-check catalog reaches of that Definition; and each entry sits in its owner's file.
 
@@ -22,8 +22,8 @@ from verity.primitives.circuits.program import Program
 
 ROOT = Path(__file__).resolve().parents[3]
 FILES = {
-    "core": ROOT / "catalog" / "verity_catalog" / "definitions" / "annotations.json",
-    "vllm": ROOT / "integrations" / "vllm" / "verity_vllm" / "program" / "registry" / "annotations.json",
+    "core": ROOT / "verity" / "ml" / "circuits" / "silicon" / "definitions" / "annotations.json",
+    "vllm": ROOT / "verity" / "ml" / "circuits" / "ops" / "annotations.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")
 #: specializations of one Definition validated against, smallest first

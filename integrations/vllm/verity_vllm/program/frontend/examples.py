@@ -1,6 +1,6 @@
 """Authored examples for the torch frontend (acceptance material, frontend design §5–§6).
 
-Part 1 re-authors composites of TA1's registry (`verity_vllm/program/registry/b1.py`) in PyTorch. Their `Program`
+Part 1 re-authors composites of TA1's registry (`verity/ml/circuits/ops/b1.py`) in PyTorch. Their `Program`
 digests must equal the digests of TA1's hand-built definitions (same `Name_vN{statics}`, same parameter names,
 same body nodes and reference encodings). Part 2 is IFb's identity shapes (repeated argument, returned input,
 dead declared return). Part 3 is the fail-closed negatives.
@@ -13,8 +13,8 @@ import torch
 
 from verity.primitives.circuits.defs import CompositeDefinition, bind as ir_bind
 from verity.primitives.circuits.refs import tuple_of
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import BF16, F32, I32
+from verity.ml.circuits.ops import b1
+from verity.ml.circuits.ops.prims import BF16, F32, I32
 from verity.primitives.circuits.types import Array, Tuple, Value
 from verity_vllm.program.frontend.torch_frontend import Arr, Tup, batch, function, ops, scan
 

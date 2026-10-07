@@ -5,7 +5,7 @@ Established first (R13 tp step 1, `out/gen/sweep/evidence/tp/tp2_semantics/RESUL
 row-parallel linears compute two K/2-sharded `Gemm_v1` partials whose bf16 outputs are summed by ONE bf16 addition (the pynccl
 all-reduce, `bf16(f32(a)+f32(b))`, order-free for two ranks) — a different exact computation from TP1's single GEMM; column-parallel
 GEMMs, the vocab-parallel embedding (masked shard lookup + the same sum) and the lm_head all-gather (a concatenation) are
-bit-identical slices of the TP1 definitions.  The registered Definitions for these are `verity_vllm.program.registry.b1_tp2.{AllReduce2,
+bit-identical slices of the TP1 definitions.  The registered Definitions for these are `verity.ml.circuits.ops.b1_tp2.{AllReduce2,
 AllGather2, EmbeddingShard}` (exact-model-tested on B1 TP2 by the GEN tp2 lane; re-confirmed bit-exactly on Llama by step 1).
 
 Mechanism (no vLLM source is modified; generic — nothing here names a model):
@@ -61,7 +61,7 @@ def ensure_ops() -> None:
     # `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`.  World 2 keeps the binary ops above (recorded identities).
     @torch.library.custom_op("verity_tp::all_reduce", mutates_args=())
     def all_reduce(parts: list[torch.Tensor]) -> torch.Tensor:
-        from verity_vllm.program.registry.b1_tp2 import allreduce_order
+        from verity.ml.circuits.ops.b1_tp2 import allreduce_order
         order = allreduce_order(len(parts))
         acc = parts[order[0]]
         for r in order[1:]:

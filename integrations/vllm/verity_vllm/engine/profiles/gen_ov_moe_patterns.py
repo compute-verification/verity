@@ -39,10 +39,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.primitives.circuits.defs import bind
-from verity_vllm.program.registry import act as _ACT
-from verity_vllm.program.registry import moe as _MOE
+from verity.ml.circuits.ops import act as _ACT
+from verity.ml.circuits.ops import moe as _MOE
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+from verity.ml.circuits.ops.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, target_of,
@@ -436,7 +436,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         if (dot := T.moe_expert_dot(target_of(ctx)[0])) is not None:
             return unsupported(node, f"padded construction on a target whose fused_moe_kernel runs the k16 step {dot.id}: MoeFfnFixedL_v1's "
                                "expert bodies run the Ampere one", dot=dot.id)
-        from verity_vllm.program.registry import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
+        from verity.ml.circuits.ops import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
         if self.renormalize:
             return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
                                renormalize=True)

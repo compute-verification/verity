@@ -5,7 +5,7 @@ a shared input set each would benchmark on its own inputs -- the quiet non-compa
 prevent.  This module owns the dataset's byte layout, its loader, the build that regenerates it from the recipe in
 :mod:`verity_numerical.bench.instances_gen`, its verification against the pinned digests in ``manifest.json``, and the
 sensitivity statistic of the negatives.  The relation is not restated here: expected words are ``silicon.tc_dot_chain``
-+ ``cast.f32_to_bf16_word`` (``verity_catalog.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
++ ``cast.f32_to_bf16_word`` (``verity.ml.circuits.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
 
 Tiers (``fixtures/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
 
@@ -45,9 +45,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_catalog.silicon import silicon as S
-from verity_catalog.silicon.errors import InvalidArtifact
-from verity_catalog.targets.target import FIRST
+from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.targets.target import FIRST
 
 from . import instances_gen as G
 
@@ -353,15 +353,15 @@ def _git_head() -> str | None:
 
 
 def _source_digests() -> dict[str, str]:
-    import verity_catalog.silicon.cast as cast_mod
+    import verity.ml.circuits.silicon.cast as cast_mod
 
     import verity_numerical.reference.hawkeye_close as hk_mod
 
     files = {
         "verity_numerical/bench/instances.py": Path(__file__),
         "verity_numerical/bench/instances_gen.py": Path(G.__file__),
-        "verity_catalog/silicon/silicon.py": Path(S.__file__),
-        "verity_catalog/silicon/cast.py": Path(cast_mod.__file__),
+        "verity/ml/circuits/silicon/silicon.py": Path(S.__file__),
+        "verity/ml/circuits/silicon/cast.py": Path(cast_mod.__file__),
         "verity_numerical/reference/hawkeye_close.py": Path(hk_mod.__file__),
     }
     return {k: sha256_file(p) for k, p in files.items()}

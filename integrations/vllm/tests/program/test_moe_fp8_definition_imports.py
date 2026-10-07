@@ -3,7 +3,7 @@
 what lets them move to the catalog, which imports only `verity`, once the other families' modules are Definitions only too.
 
 An import is any import statement in the module, a function-level one included, with a relative one resolved against the registry
-package; `from verity_vllm.program.registry import m` imports the module `m`.
+package; `from verity.ml.circuits.ops import m` imports the module `m`.
 """
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity_vllm.program.registry"
-DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+REGISTRY = "verity.ml.circuits.ops"
+DIR = Path(__file__).resolve().parents[4] / "verity" / "ml" / "circuits" / "ops"
 FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boolean_fp8_moe", "nvfp4", "boolean_gather")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1
 #: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`) and the Boolean bit views
@@ -22,7 +22,7 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boo
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention")
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity_catalog"
+CATALOG = "verity.ml.circuits"
 
 
 def _imports(name: str) -> list[tuple[str, int]]:

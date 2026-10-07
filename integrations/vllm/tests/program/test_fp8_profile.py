@@ -83,7 +83,7 @@ def test_weights_record_carries_e4m3_weights_block_scales_and_head_norms():
     # a bf16 Llama-architecture configuration is untouched by the two facts
     C0 = dict(C)
     C0.pop("QK_NORM"), C0.pop("FP8_BLOCK")
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
     assert analytic.weights_type(C0) == analytic.weights_type(C0) and dict(analytic.weights_type(C0).fields)["layers"].elem == b1.layer_weights_type(C0)
 
 

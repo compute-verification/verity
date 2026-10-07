@@ -46,7 +46,7 @@ class FakeProbe:
 
     def __init__(self, ins: P.Instruction):
         self.ins = ins
-        from verity_catalog.silicon.total import tc_dot_total
+        from verity.ml.circuits.silicon.total import tc_dot_total
 
         pipe = ins.models[0].pipeline
         self.step = (lambda c, a, b: tc_dot_total(pipe, c, a, b)) if ins.fmt is P.BF16 else (lambda c, a, b: S.tc_dot(pipe, c, a, b))
@@ -264,7 +264,7 @@ def test_negative_tier_every_claimed_word_is_detected():
 
 
 def test_epilogue_words_are_the_targets_cast():
-    from verity_catalog.silicon.cast import f32_to_bf16_word
+    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 
     acc = np.array([0x3F800000, 0x3F808000, 0x3F818000, 0x7F7FFFFF, 0xFF800000, 0x7FC00001, 0x80000000, 0x00000001], np.uint32)
     y = IH.epilogue_words("f32_to_bf16", acc)

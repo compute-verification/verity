@@ -34,7 +34,7 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../.." 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no Verity tree above $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
 RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no tools/research/src beside $ROOT" >&2; exit 3; }
-DISTS="catalog kernels experimental"   # the distributions under their groupings: verity_catalog, verity_kernels, verity_experimental
+DISTS="catalog kernels experimental"   # the distributions under their groupings: verity.ml.circuits, verity.ml.kernels, verity_experimental
 for G in $DISTS; do [ -d "$CORE/$G" ] || { echo "BOOTSTRAP_FAIL_TREE: no $G beside $ROOT" >&2; exit 3; }; done
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
@@ -193,7 +193,7 @@ else:  # cpu mode: torch must import and run on the host; whether it also sees a
 check("vllm_import", lambda: __import__("vllm").__version__)
 check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__version__) or (_ for _ in ()).throw(RuntimeError(__import__("vllm").__version__)))
 check("verity_from_tree", lambda: under("verity.primitives.circuits", core))
-check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
+check("verity_vllm_from_tree", lambda: under("verity.ml.circuits.ops", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
 check("sampled_proofs_from_tree", lambda: under("verity_experimental.sampled_proofs.plan", experimental))   # the program tests import it
 def experimental_without_pythonpath():
@@ -206,7 +206,7 @@ def experimental_without_pythonpath():
     return r.stdout.strip()
 check("sampled_proofs_via_pth", experimental_without_pythonpath)   # the venv's verity-experimental.pth, for scripts whose PYTHONPATH omits it
 def distributions_from_tree():
-    return {d: under(f"verity_{d}", os.path.join(core, d)) for d in ("catalog", "kernels", "experimental")}
+    return {d: under(f"verity_{d}", os.path.join(core, d)) for d in ("catalog", "verity/ml/kernels", "experimental")}
 check("distributions_from_tree", distributions_from_tree)   # each through its .pth: a row's stages set their own PYTHONPATH
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))

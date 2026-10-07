@@ -54,7 +54,7 @@ def parse(argv: list[str]) -> dict:
 TC_PROBE = Tool(
     name="tc_probe", version="1",
     command=["python", "tools/tc_probe/tc_probe.py"],
-    closure=["tools/tc_probe/**", *package_paths(TREE, "verity_catalog", "silicon/**")],
+    closure=["tools/tc_probe/**", *package_paths(TREE, "verity.ml.circuits", "silicon/**")],
     key_params=["instruction", "arch", "pipeline", "sweep", "families", "seed", "n_random", "golden_per_family",
                 "replay_golden", "replay_special", "replay_instances", "instances_manifest", "canary"],
     key_conditions=["hw.family"],
@@ -121,7 +121,7 @@ def parse_instances(argv: list[str]) -> dict:
 INSTANCES_HW = Tool(
     name="instances_hw", version="1",
     command=["python", "tools/tc_probe/instances_hw.py"],
-    closure=["tools/tc_probe/**", *package_paths(TREE, "verity_catalog", "silicon/**", "targets/target.py"),
+    closure=["tools/tc_probe/**", *package_paths(TREE, "verity.ml.circuits", "silicon/**", "targets/target.py"),
              "benchmarks/numerical/python/verity_numerical/bench/instances.py", "benchmarks/numerical/python/verity_numerical/bench/instances_gen.py",
              "fixtures/bench-instances/v1/manifest.json"],
     key_params=["instances", "instruction", "arch", "root", "manifest", "range", "only_ids", "repeat", "sass_check"],

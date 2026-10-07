@@ -17,7 +17,7 @@ import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
 import test_pouw_pearl_c_debit as TD
 import test_pouw_pearl_c_u as TU
-from verity_catalog.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16,
+from verity.ml.circuits.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16,
                                  HOPPER_E4M3_K32)
 from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape, Tile
 from verity.protocols.accounting.work.pouw.schemes import get

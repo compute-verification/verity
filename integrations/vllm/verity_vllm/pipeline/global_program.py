@@ -32,7 +32,7 @@ from verity.primitives.circuits.defs import REGISTRY
 from verity_vllm.config import option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
-from verity_vllm.program.registry.catalog import load as _load_registry
+from verity.ml.circuits.ops.catalog import load as _load_registry
 
 # the request descriptors decode through the registry the Match reads (`program_compare._registry`): every registry module loaded
 for _e in _load_registry()[1]:
@@ -411,13 +411,13 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "SplitsFor_v1", "num_sms": nsm,
            "rule": "S_t = SplitsFor_v1(|live(t)|, num_SMs) per engine step t; |live(t)| = the requests with a logits row at t (declared chronology "
                    "and verified EOS stops, G6); every top-p TokenSelect of the fold at t carries S_t (its launch S); GM-01 fails by name otherwise",
-           "source": "verity_vllm.program.registry.topp_split.splits_for (vLLM _apply_topp_split doubling loop); num_SMs = applicability.components.num_sms",
+           "source": "verity.ml.circuits.ops.topp_split.splits_for (vLLM _apply_topp_split doubling loop); num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
     if nsm is None:
         out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): S_t = SplitsFor_v1(|live(t)|, num_SMs) "
                           "cannot be evaluated -- the Program does not model this row's sampler geometry (M-0571 (3))")
         return out
-    from verity_vllm.program.registry.topp_geometry import splits_for
+    from verity.ml.circuits.ops.topp_geometry import splits_for
     live = declared_live_counts(reqs)
     out["declared_live_counts"] = live
     out["declared_schedule"] = [int(splits_for(n, int(nsm))) if n > 0 else None for n in live]

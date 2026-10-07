@@ -22,7 +22,7 @@ import re
 from typing import Any, Callable
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1
+from verity.ml.circuits.ops import b1
 
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import (AttentionScope, BiasAdd, Embedding, FusedAddRMSNorm, GemmLaunch, KVCacheUpdate, LogitsGather,

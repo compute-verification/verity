@@ -42,7 +42,7 @@ COMMIT_COST = Tool(
     version="1",
     command=["python", "benchmarks/commitments/commit_cost.py"],
     closure=["benchmarks/commitments/**", *package_paths(TREE, "verity", "primitives/commitments/**", "errors.py"),
-             "kernels/hash_gpu/**"],
+             "verity/ml/kernels/hash_gpu/**"],
     key_params=["scheme", "leaves", "leaf_bytes", "impl"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse,

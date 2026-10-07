@@ -14,7 +14,7 @@ from verity.primitives.circuits.codec import descriptor_size  # noqa: E402
 from tests.program import b1_authored as A  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.circuits.ops import b1  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}

@@ -24,9 +24,9 @@ from verity.primitives.circuits import Program  # noqa: E402
 from verity.primitives.circuits.defs import composite  # noqa: E402
 from verity.primitives.circuits.layout import resolve  # noqa: E402
 from verity.primitives.circuits.refs import Coll, concat  # noqa: E402
-from verity_vllm.program.registry import lifted as L  # noqa: E402
+from verity.ml.circuits.ops import lifted as L  # noqa: E402
 from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
-from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
+from verity.ml.circuits.ops.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs  # noqa: E402
 from verity.primitives.circuits.types import Array, Value  # noqa: E402
 

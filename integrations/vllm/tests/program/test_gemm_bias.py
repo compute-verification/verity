@@ -28,7 +28,7 @@ from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import b1, gemm_bias, hopper
+from verity.ml.circuits.ops import b1, gemm_bias, hopper
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.query import required as RQ

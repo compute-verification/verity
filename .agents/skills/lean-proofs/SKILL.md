@@ -153,7 +153,7 @@ simp with that.
 
 ## Before the PR
 
-- `python tools/lean/audit.py PKG` passes for every package you touched, and `pytest backends/flock/tests
+- `python tools/lean/audit.py PKG` passes for every package you touched, and `pytest verity/ml/provers/flock/tests
   tools/lean/tests tools/check/tests/test_lean_*.py tests/test_lean_packages.py` passes.
 - The PR says which guarantees changed, if any, and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping

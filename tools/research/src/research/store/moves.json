@@ -1281,6 +1281,43 @@
         "verity/Security/Specs/Warden/": "verity/Security/Specs/NetworkCertifier/",
         "verity/protocols/accounting/communication/warden/": "verity/protocols/accounting/communication/certifier/"
       }
+    },
+    {
+      "paths": {
+        "catalog/verity_catalog/__init__.py": "verity/ml/circuits/__init__.py",
+        "catalog/verity_catalog/silicon/": "verity/ml/circuits/silicon/",
+        "catalog/verity_catalog/definitions/": "verity/ml/circuits/silicon/definitions/",
+        "catalog/verity_catalog/targets/": "verity/ml/circuits/targets/",
+        "catalog/tests/": "verity/ml/circuits/silicon/tests/",
+        "catalog/pyproject.toml": "verity/ml/circuits/silicon/pyproject.toml",
+        "integrations/vllm/verity_vllm/program/registry/": "verity/ml/circuits/ops/",
+        "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py": "integrations/vllm/verity_vllm/properties/difftests/layer_norm_difftest.py",
+        "integrations/vllm/verity_vllm/program/registry/moe_difftest.py": "integrations/vllm/verity_vllm/properties/difftests/moe_difftest.py",
+        "integrations/vllm/verity_vllm/program/registry/sampling_topp_difftest.py": "integrations/vllm/verity_vllm/properties/difftests/sampling_topp_difftest.py",
+        "integrations/vllm/verity_vllm/program/registry/mla_capture.py": "integrations/vllm/verity_vllm/properties/difftests/mla_capture.py",
+        "integrations/vllm/verity_vllm/program/registry/quarantine/act/silu_mul_difftest.py": "integrations/vllm/verity_vllm/properties/difftests/silu_mul_difftest.py",
+        "integrations/vllm/verity_vllm/program/registry/quarantine/collective/allreduce_difftest.py": "integrations/vllm/verity_vllm/properties/difftests/allreduce_difftest.py",
+        "integrations/vllm/tests/program/test_boolean_activation.py": "verity/ml/circuits/ops/tests/test_boolean_activation.py",
+        "integrations/vllm/tests/program/test_boolean_dense.py": "verity/ml/circuits/ops/tests/test_boolean_dense.py",
+        "integrations/vllm/tests/program/test_boolean_silu.py": "verity/ml/circuits/ops/tests/test_boolean_silu.py",
+        "integrations/vllm/tests/program/test_dsa.py": "verity/ml/circuits/ops/tests/test_dsa.py",
+        "integrations/vllm/tests/program/test_gateset_api.py": "verity/ml/circuits/ops/tests/test_gateset_api.py",
+        "integrations/vllm/tests/program/test_held_tables.py": "verity/ml/circuits/ops/tests/test_held_tables.py",
+        "integrations/vllm/tests/program/test_lifted_dense_b1.py": "verity/ml/circuits/ops/tests/test_lifted_dense_b1.py",
+        "integrations/vllm/tests/program/test_lifted_dense_b1_padrev.py": "verity/ml/circuits/ops/tests/test_lifted_dense_b1_padrev.py",
+        "integrations/vllm/tests/program/test_pad_prims.py": "verity/ml/circuits/ops/tests/test_pad_prims.py",
+        "integrations/vllm/tests/program/test_padded_commit_tiny.py": "verity/ml/circuits/ops/tests/test_padded_commit_tiny.py",
+        "integrations/vllm/tests/program/test_registered_value_chains.py": "verity/ml/circuits/ops/tests/test_registered_value_chains.py",
+        "integrations/vllm/tests/program/test_registry_one_process.py": "verity/ml/circuits/ops/tests/test_registry_one_process.py",
+        "integrations/vllm/tests/program/test_spec.py": "verity/ml/circuits/ops/tests/test_spec.py",
+        "integrations/vllm/tests/program/test_splits_for_v1.py": "verity/ml/circuits/ops/tests/test_splits_for_v1.py",
+        "integrations/vllm/tests/program/test_superseded_kept.py": "verity/ml/circuits/ops/tests/test_superseded_kept.py",
+        "integrations/vllm/tests/program/test_topp_split_halves.py": "verity/ml/circuits/ops/tests/test_topp_split_halves.py",
+        "kernels/": "verity/ml/kernels/",
+        "kernels/verity_kernels/": "verity/ml/kernels/",
+        "backends/flock/": "verity/ml/provers/flock/",
+        "backends/flock/verifier/": "backends/flock/verifier/"
+      }
     }
   ]
 }

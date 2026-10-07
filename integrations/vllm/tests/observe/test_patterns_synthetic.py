@@ -509,8 +509,8 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     import numpy as np
 
     from verity_vllm.observe.fold.resolver import Supplied
-    from verity_vllm.program.registry import b1
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.circuits.ops import b1
+    from verity.ml.circuits.ops import prims as P
 
     events, start = decode_step()
     se = step_events(events)
@@ -533,7 +533,7 @@ def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_th
     import dataclasses
 
     from verity_vllm.observe.fold.resolver import Supplied
-    from verity_vllm.program.registry import b1
+    from verity.ml.circuits.ops import b1
 
     events, start = decode_step(num_sms=188)
     se = step_events(events)
