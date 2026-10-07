@@ -1,5 +1,5 @@
 //! `vllm-v1` statements (`archive/direct/ligero/vllm_tree.py`, `leaf/vllm_v1.py`; core spec
-//! `verity/primitives/commitments/vllm_v1/PROTOCOL.md`): the published x / W digests are `vllm-v1` position
+//! `verity/ml/commitments/vllm_v1/PROTOCOL.md`): the published x / W digests are `vllm-v1` position
 //! leaves `SHA-256("verity/pos-leaf/v0" || u64be(len) || row)` computed in the relation; the verifier folds them (and the
 //! position leaves of the output words' little-endian bytes) through each port's statement multiproof into a `vllm-v1`
 //! tree (pairs `node`, an odd trailing child `lift`, no padding) and compares the port's step-root binding over the
@@ -98,7 +98,7 @@ pub fn port_digests(tree: usize, s: &Shape) -> ([u8; 32], [u8; 32], [u8; 32]) {
     (program, geo, layout)
 }
 
-/// `verity.primitives.commitments.vllm_v1.domain_digest` of the step domain of `t` (port `tree`).
+/// `verity.ml.commitments.vllm_v1.domain_digest` of the step domain of `t` (port `tree`).
 pub fn domain_digest(tree: usize, t: &TreeRef, s: &Shape) -> [u8; 32] {
     let (program, geo, layout) = port_digests(tree, s);
     identity(std::str::from_utf8(DOMAIN_TAG).unwrap(), &format!(

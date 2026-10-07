@@ -1,1 +1,0 @@
-"""Constructions, schemes and circuits under development or kept for study, by area (untrusted; `verity` never imports it)."""

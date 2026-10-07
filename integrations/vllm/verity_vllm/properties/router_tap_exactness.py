@@ -11,7 +11,7 @@ one block):
   (b) every word of every row is written: two tapped launches over tap buffers filled with `FILLS` agree on every word;
   (c) every word equals the ordered router's committed value (`MoeRouterTopKOrdered_v1` / `MoeRouterTopKOrderedNorm_v1`, the gate
       `query.router_softmax.slots` names for it) in the IR's own evaluation (`ir_row`: the gate's value in the
-      `verity.primitives.circuits.evaluate.evaluate_call` transcript), and the IR's outputs equal the op's, on every row;
+      `verity.ml.circuits.evaluate.evaluate_call` transcript), and the IR's outputs equal the op's, on every row;
   (d) the source (`router_softmax_source`) on vLLM's routing path -- `fused_topk` in a module the source knows as an MoE layer --
       leaves the outputs bit-identical, acquires nothing outside a committed step, acquires one `moe/L<k>/router_softmax` per launch
       inside one, equal to the op's words, refuses a launch of another geometry, and restores the patched op;
@@ -49,8 +49,8 @@ _CALLS: dict[tuple, Any] = {}
 def ir_row(E: int, TOPK: int, VPT: int, renormalize: bool, logits: list[int]) -> tuple[list[int], list[int], list[int]]:
     """(tap words, weights, ids) of one row in the IR: evaluate the ordered router as a standalone Call and read its committed interior
     gates (`query.router_softmax.slots`) from the transcript."""
-    from verity.primitives.circuits.evaluation.reference import standalone_call
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation.reference import standalone_call
+    from verity.ml.circuits.evaluate import evaluate_call
 
     key = (E, TOPK, VPT, renormalize)
     if key not in _CALLS:
