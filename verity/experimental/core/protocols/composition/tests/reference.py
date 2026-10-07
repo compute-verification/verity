@@ -13,14 +13,14 @@ The rule is the trial's onsite and remote over their components' statements, fro
   reasons explains nothing, and the epoch complies only with no reasons.
 
 Reduced to answers: a component that accepts records a statement with no reasons, one that rejects a statement with
-reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction. The port follows top's rule
-instead (Oct 7, binding), `verdict`, which changes the trial in two places:
+reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction, with one change already made:
+every component's reasons fail the product. Of the components' statements the trial's NCI fails the epoch on work's
+reasons alone (integrity's reach it through them), and space's or communication's reasons only zero their explained usage
+in the balance. The port follows top's rule (Oct 7, binding), `verdict`, which changes the reduction in one place more:
 
 * **reject dominates**: in the trial a missing statement leaves the product with no verdict even when another component's
   statement has failed (`gather` waits on), so a prover could hide a rejection by leaving another component undecided;
-  here any rejection rejects;
-* **every component counts**: the trial's NCI fails the epoch on work's reasons (integrity's among them) alone, and space's
-  or communication's reasons only zero their explained usage in the balance; here each component's rejection rejects.
+  here any rejection rejects.
 """
 
 from __future__ import annotations
