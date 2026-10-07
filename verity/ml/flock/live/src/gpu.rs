@@ -171,8 +171,8 @@ pub(crate) unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, le
 
 /// Every live round through the caller's handler instead of the rep's `LiveChallenger` (M1: the masking challenger in front of
 /// it, `crate::replay_round`). The device aborts on a refused coin, so a failed round is kept here instead: its message is
-/// recorded, the device gets zero coins, and no later round reaches the handler (nothing more is sent); the caller raises
-/// `failed` when the device returns.
+/// recorded, the device gets zero coins, and no later round reaches the handler (nothing more is sent); when the device returns,
+/// `failed` is the prover's error (`gpu_circuit::prove_circuit`).
 pub struct Rounds<'a> {
     pub handler: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128>,
     pub failed: Option<String>,
@@ -197,7 +197,7 @@ unsafe extern "C" fn rounds_cb(ctx: *mut c_void, content: *const u8, len: usize,
         None => catch_unwind(AssertUnwindSafe(|| (r.handler)(c, n as usize))).unwrap_or_else(|e| {
             let why = e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
                 .unwrap_or_else(|| "a live round failed".into());
-            eprintln!("LIVE-ROUND-FAILED\tround {}: {why} (nothing more is sent; raised when the device returns)", r.rounds - 1);
+            eprintln!("LIVE-ROUND-FAILED\tround {}: {why} (nothing more is sent; the prover's error when the device returns)", r.rounds - 1);
             r.failed = Some(why);
             vec![F128::ZERO; n as usize]
         }),
