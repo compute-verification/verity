@@ -4,6 +4,7 @@ and Pearl-C's h1 digests, and against `hash.cuh`'s kernels, through a thread-for
 from __future__ import annotations
 
 import hashlib
+import os
 import importlib.util
 import struct
 import sys
@@ -160,7 +161,7 @@ def test_rows_and_tree_in_one_launch_are_merkle_trees(m, rb):
 
 def verifier(path, *extra) -> "subprocess.CompletedProcess":
     import subprocess
-    env = {"PYTHONPATH": f"{Path(__file__).parents[3] / '.'}:{Path(__file__).parents[3] / 'verity/protocols/accounting/work/pouw'}",
+    env = {"PYTHONPATH": os.pathsep.join(str(Path(__file__).parents[3] / d) for d in (".", "catalog", "kernels")),
            "PATH": "/usr/bin:/bin"}
     return subprocess.run([sys.executable, str(HERE / "verify_h1.py"), *extra, "test", str(path)], capture_output=True, text=True,
                           env=env)

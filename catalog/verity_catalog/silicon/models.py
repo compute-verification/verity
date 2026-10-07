@@ -858,7 +858,7 @@ BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
 # The K=32 E2M1 row of Blackwell consumer (sm_120), ``kind::f8f6f4`` (SASS QMMA.16832): Hopper's BF16 adder (26 bits, floor
 # 2^-133) over one group of all 32 exact E2M1 products, not the block-scaled adder of the K=64 rows (OMMA) -- the instruction
 # fixes the arithmetic, not the element format.  autoproof's 1,400 RTX 5090 vectors of this instruction (zero accumulators)
-# do not tell the two apart; the RTX PRO 6000 capture does (tests/ml/test_models.py).  Also measured with 0 mismatches, and
+# do not tell the two apart; the RTX PRO 6000 capture does (catalog/tests/test_models.py).  Also measured with 0 mismatches, and
 # outside this object because a GroupSum has one dtype and no scales: e2m1 x e4m3 and e4m3 x e2m1, and kind::mxf8f6f4
 # .scale_vec::1X (QMMA.SF, UE8M0 entering as an exponent shift of each product).
 BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
@@ -879,7 +879,7 @@ BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
         "(the alternatives miss 176,662 / 385,736 / 384,745), both on GPU-5f1149a4; a 1024-step register chain (K = 32,768) "
         "on a second die, r20260930-073445-e2b6 (GPU-2b59d5fe, seed 20261004, gated on this model), 1,408 end words, "
         "0 mismatches. "
-        "NaN/inf accumulators are outside the model (record-only). Capture sample: tests/ml/fixtures/tc-sm120-k32-e2m1-2026-09-30"
+        "NaN/inf accumulators are outside the model (record-only). Capture sample: catalog/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30"
     ),
 )
 
