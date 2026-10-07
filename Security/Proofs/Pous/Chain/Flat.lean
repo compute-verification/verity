@@ -4153,7 +4153,7 @@ set_option relaxedAutoImplicit false
 /-!
 # P3 at 64 KB labels, over the tweaked model: the headline instance
 
-This is aligned with the reference implementation (`verity/protocols/accounting/space/pous`, `DISCREPANCIES.md` items 1
+This is aligned with the reference implementation (`verity/experimental/protocols/pous`, `DISCREPANCIES.md` items 1
 and 3):
 * **Labels** are 220 components of `wc = 2384` bits (298 B), i.e. `220·2384 = 524480` bits = 65,560 B.
 * **Salt and tag.** The salt is 24 bytes (`Coins = Bits 192`, `t = 192`), and segment `s` is keyed by
