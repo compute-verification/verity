@@ -143,7 +143,11 @@ def _canonical_json(data: bytes) -> tuple[dict, bytes]:
         raise WireError(FAIL_MALFORMED, "manifest is not canonical UTF-8 JSON") from error
     if type(value) is not dict:
         raise WireError(FAIL_MALFORMED, "manifest is not an object")
-    encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True,
+                             separators=(",", ":")).encode("utf-8")
+    except ValueError as error:
+        raise WireError(FAIL_MALFORMED, "manifest holds a value canonical JSON cannot") from error
     if encoded != data:
         raise WireError(FAIL_MALFORMED, "manifest is not canonical JSON")
     return value, encoded
@@ -399,6 +403,8 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
     for round j. `seen_audits` holds every `(epoch_id, audit_id)` pair this verifier has used, and gains this audit's.
     `private_root` is the root the verifier built from `W` itself, which a private setup's declared root must be.
     `w_bytes` is the `W` the verifier holds, which flag bit 1 compares each decoded payload with."""
+    if any(type(t) is not int or not 0 <= t < 1 << 64 for t in elapsed_ns):
+        raise ValueError("an elapsed time is not a record's u64")
     if not frames:
         raise WireError(FAIL_TRANSPORT, "empty transcript has no audit identity")
     try:

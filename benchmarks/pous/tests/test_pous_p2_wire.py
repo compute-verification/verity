@@ -194,3 +194,19 @@ def test_flag_bit_1_compares_each_payload_with_the_verifier_held_w():
     assert Wi.parse_final(final) == (False, 5, 1) and final[-1 - 2 * Wi.D] == 0x0F
     with pytest.raises(ValueError, match="held W"):
         _verify([*setup, opened, *audit[1:]], small)
+
+
+
+def test_a_manifest_json_cannot_hold_and_an_unrepresentable_elapsed_time_is_refused():
+    """A manifest with `1e999` (no float, spec §4) or a lone surrogate (not UTF-8) is malformed code 1, not a crash; an
+    elapsed time outside a record's u64 is the verifier's own error, refused before any FINAL."""
+    small, setup, audit = _small_session()
+    commitment = setup[0][-Wi.D:]
+    for manifest in (small["manifest"].replace('"segments":1', '"segments":1e999'),
+                     small["manifest"].replace('"p2-63b"', '"\\ud800"')):
+        m = manifest.encode()
+        commit = Wi.envelope(Wi.SETUP_COMMIT, len(m).to_bytes(4, "big") + m + commitment)
+        assert _verify([commit, *setup[1:], *audit], small) == (False, 1, 0)
+    for elapsed in ([1 << 64, 0], [-1, 0]):
+        with pytest.raises(ValueError, match="u64"):
+            Wi.verify_audit([*setup, *audit], elapsed, verifier_source=bytes.fromhex(small["audit_source"]), seen_audits=set())
