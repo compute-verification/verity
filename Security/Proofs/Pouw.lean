@@ -152,7 +152,7 @@ import Proofs.Pouw.Witness
 /-!
 # PoUW's proofs
 
-Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Specs.Pouw.Assumptions`'
+Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Models.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
 `Game`, `NCP`, `PearlC`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/
