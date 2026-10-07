@@ -41,8 +41,8 @@ DRAWLESS = "refused: a session without a draw: every soundness claim is about a 
 #: the sets whose form the soundness proof does not cover, and the reason the verifier refuses a case of them that passes
 #: every check for
 REFUSED = {("flat", "gemm-coordinate"): "a unit reading 2 input groups",
-           ("typed", "rope-head"): "verity/flock-circuit/types+seed-injection, a typed statement",
-           ("typed", "gemm-coordinate"): "verity/flock-circuit/types+seed-injection, a typed statement"}
+           ("typed", "rope-head"): "verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement",
+           ("typed", "gemm-coordinate"): "verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement"}
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
