@@ -40,7 +40,7 @@ def test_leans_evaluation_is_of_the_package_in_the_tree():
     """`ncp_lean.json` records the SHA-256 of the Lean sources it was evaluated from; they are the files of `lean/` now, so an
     edit to them fails here until `tests/ncp_lean.py` evaluates them again."""
     pinned = json.loads(NL.PINNED.read_text())["sources_sha256"]
-    lean = Path(__file__).resolve().parents[1] / "lean"
+    lean = Path(__file__).resolve().parents[5] / "Security"
     assert {f: hashlib.sha256((lean / f).read_bytes()).hexdigest() for f in pinned} == pinned
 
 

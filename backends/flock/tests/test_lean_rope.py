@@ -12,7 +12,7 @@ pytest.importorskip("verity_vllm.program.registry.prims")
 from verity_flock import lean_rows  # noqa: E402
 from verity_flock.templates import rope_head  # noqa: E402
 
-ROPE = Path(__file__).resolve().parents[1] / "verifier" / "lean" / "soundness" / "FlockSoundness" / "Rope"
+ROPE = Path(__file__).resolve().parents[3] / "verity" / "Security" / "Proofs" / "Flock" / "Soundness" / "Rope"
 
 
 def test_the_encoders_refuse_what_the_lean_decoders_cannot_read():
