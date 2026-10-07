@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 _ROOT_JOIN = "\x00root\x00"
 IDENT = re.compile(r"[A-Za-z_]\w*\Z")
 TEXT_LIMIT = 4 << 20
-#: old top-level paths that the move empties; a tracked file left under one has no row in the map
+#: old paths that the move empties, when the map has no [retired]; a tracked file left under one has no row in the map
 RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/direct/", "backends/ligero-verify/",
            "backends/ligerito-verify/", "backends/sp1/", "backends/vole/", "backends/redteam/", "backends/shared/",
            "backends/numerical/", "backends/README.md", "backends/AGENTS.md", "benchmarks/dot_product/",
@@ -88,10 +88,14 @@ class Layout:
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
         self.merged = set(data.get("distributions", {}).get("merged", []))
+        self.retired = tuple(data.get("retired", {}).get("paths", RETIRED))
+        self.drop = set(data.get("drop", {}).get("paths", []))
 
     # paths
     def file(self, p: str) -> str | None:
         """Where file `p` goes, or None when it stays."""
+        if p in self.drop:
+            return None
         if p in self.files:
             return self.files[p]
         for o, n in self.dirs:
@@ -220,11 +224,14 @@ class Run:
                     continue
                 self.binds[pkg] = {a.asname or a.name for n in body if isinstance(n, ast.ImportFrom) and n.module
                                    for a in n.names} | {n.name for n in body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
-        moves, left = [], []
+        moves, left, self.dropped = [], [], []
         for p in tracked:
+            if p in self.L.drop:
+                self.dropped.append(p)
+                continue
             new = self.L.file(p)
             if new is None:
-                if p.startswith(RETIRED) or p in RETIRED:
+                if p.startswith(self.L.retired) or p in self.L.retired:
                     left.append(p)
                 continue
             moves.append((p, new))
@@ -247,7 +254,11 @@ class Run:
             dst.parent.mkdir(parents=True, exist_ok=True)
             os.rename(self.root / old, dst)
         if not self.dry:
-            for d in sorted({posixpath.dirname(o) for o, _ in moves}, key=len, reverse=True):
+            for p in self.dropped:
+                (self.root / p).unlink()
+        self.changes["files dropped"] = len(self.dropped)
+        if not self.dry:
+            for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped)}, key=len, reverse=True):
                 for a in [d, *_ancestors(d)]:
                     try:
                         (self.root / a).rmdir()
@@ -290,8 +301,9 @@ class Run:
 
     def index(self, moves: list[tuple[str, str]]):
         dest = dict(moves)
-        self.new_files = {dest.get(p, p) for p in self.tracked_old}
-        self.old_of = {dest.get(p, p): p for p in self.tracked_old}
+        kept = self.tracked_old - set(self.dropped)
+        self.new_files = {dest.get(p, p) for p in kept}
+        self.old_of = {dest.get(p, p): p for p in kept}
         self.new_dirs = {d for p in self.new_files for d in _ancestors(p)}
         mods = set()
         for p in self.new_files | set(self.L.data.get("create", {})):
@@ -348,6 +360,7 @@ class Run:
         """Each pinned dependency bundle is keyed by its package's manifest and toolchain (`lean_audit.deps_key`), and a moved
         package's manifest names its path requirements' new directories. A bundle holds only the fetched packages, so when the
         manifest changed in nothing else the same bundle is pinned under the new key."""
+        pin = self.L.file(pin) or pin
         text = self._read(pin)
         if text is None:
             return
@@ -1331,9 +1344,11 @@ def load(path: Path) -> Layout:
 def unpinned_uv(root: Path) -> str | None:
     """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
     header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
-    m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", (root / "tools" / "check" / "pod_setup.sh").read_text(), re.M)
+    setup = next((p for p in (root / "tools" / "check" / "pod_setup.sh", root / "tools" / "verity" / "check" / "pod_setup.sh")
+                  if p.exists()), None)
+    m = setup and re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", setup.read_text(), re.M)
     if not m:
-        return "tools/check/pod_setup.sh pins no UV_VERSION"
+        return "pod_setup.sh pins no UV_VERSION"
     if not shutil.which("uv"):
         return f"uv isn't on the PATH (pod_setup.sh pins {m.group(1)})"
     got = subprocess.run(["uv", "--version"], capture_output=True, text=True).stdout.split()[1:2]

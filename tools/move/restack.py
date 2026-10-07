@@ -105,7 +105,8 @@ def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None
     """The environment the move's script runs in: this one, unless the uv on the PATH isn't the version `base`'s
     `tools/check/pod_setup.sh` pins, which layout.py refuses to `uv lock` with. Then a `uv` in `tmp` that runs the pinned
     version through `uv tool run` goes first on the PATH, so the restack doesn't depend on which uv the caller has."""
-    found = git("show", f"{base}:tools/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode()
+    found = git("show", f"{base}:tools/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode() or \
+        git("show", f"{base}:tools/verity/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode()
     m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", found, re.M)
     real = shutil.which("uv")
     if not m or not real:
