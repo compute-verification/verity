@@ -28,7 +28,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `benchmarks/census/`: data only. Core never reads it; it takes such numbers as parameters.
 - `verity/ml/kernels/` (`verity.ml.kernels`): fast code, each kernel checked against its Definition.
 - `verity/experimental/` (`verity.experimental`): what is under development or kept for study (private circuits, multiproofs,
-  sampled proofs' plans and consumers). `verity` never imports it.
+  sampled proofs' plans and consumers). `verity` never imports it. Core's Lean ports go under `experimental/core/`, each
+  held to today's Python by `experimental/core/difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
 - `verity/ml/flock/` (`verity_flock`): C-Flock, the proof system.
   - Its patches on upstream Flock, the CUDA prover, and the zero-knowledge prover (`live/`, `flock-circuit --zk`).
   - `verifier/`: the verifier of record, written in Lean, with upstream's Rust verifier as a cross-check.
