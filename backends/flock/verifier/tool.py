@@ -23,7 +23,7 @@ def parse(argv: list[str]) -> dict:
 FLOCK_AGREEMENT = Tool(
     name="flock_agreement", version="1",
     command=["bash", "backends/flock/verifier/ci-pod.sh"],
-    closure=["backends/flock/verifier/**"],
+    closure=["backends/flock/verifier/**", "backends/flock/verifier/lean/**"],
     key_params=["SEED", "FUZZ", "SETS"],
     key_conditions=[],
     caches=[],
