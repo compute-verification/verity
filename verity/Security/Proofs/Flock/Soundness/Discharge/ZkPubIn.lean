@@ -16,6 +16,7 @@ import Proofs.Flock.Soundness.Discharge.ZkPubIn.Count
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.ComposedJ
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.RunsJ
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Sound
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Custody
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -49,5 +50,6 @@ sites (`sitesShCP`, `sitesShCP_bcSite`) and `lay`, `rs` at `keyProgP` moved to i
 event (`DecodesOnZKJA`, `RunsOnZCJA`, `zk_headline_exec_tablesA`). `RunsJ`: `RunsOnZCJA` at `AcceptsZKP I own` and the
 canonical `J` tables (`runsZCJH_liveCP`), from the coin server's record and draw at `own` (`RecordsLiveZKJP`,
 `DrawOkZKHJP`). `Sound`: the canonical session with the verifier's public inputs is sound at the public transcript
-`Xpub pubOnes pubZeros XplurZC` (`zk_session_soundCP`), at `zk_session_soundC`'s bound.
+`Xpub pubOnes pubZeros XplurZC` (`zk_session_soundCP`), at `zk_session_soundC`'s bound. `Custody`: the same at the record's custody and the printed
+draw file (`drawOkZKHJP_of_file`, `zk_session_soundCP_custody_json`).
 -/

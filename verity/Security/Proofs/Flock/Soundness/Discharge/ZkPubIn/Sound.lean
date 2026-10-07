@@ -30,7 +30,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-set_option maxHeartbeats 1000000 in
 /-- **One canonical hidden-output `--zk --public-inputs F` sampled session of `J` tables is sound**
 (`Canonical.zk_session_soundC` at `AcceptsZKP I own`, `keyProgP` and the public transcript
 `Xpub pubOnes pubZeros XplurZC`): any number of input rows and groups, rows of any length, output rows of runs of output
