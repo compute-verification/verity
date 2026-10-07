@@ -14,9 +14,10 @@ from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3Q
 from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 from verity_vllm.program.kernels.derived_rows import f2fp_bf16, fma_rn, mul_rn, tc_dot32_e4m3
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.fp8 import MIN_SCALE_BITS, np_bf16_to_f32, np_f32_to_e4m3_sat, weight_blocks
+from verity_vllm.program.registry.fp8 import MIN_SCALE_BITS, weight_blocks
+from verity_vllm.program.kernels.fp8_twins import np_bf16_to_f32, np_f32_to_e4m3_sat
 from verity_vllm.program.registry.fp8_moe import check_act_statics, check_statics
-from verity_vllm.program.registry.moe import nv_expf_bits
+from verity_vllm.program.kernels.moe_twins import nv_expf_bits
 
 F32_ONE = 0x3F800000
 E4M3_NAN = 0x7F

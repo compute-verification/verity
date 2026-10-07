@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from verity.primitives.commitments.identity import identity_digest
+from verity.primitives.commitments.identity import identity_digest, identity_digest_sha512
 from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain
 from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
@@ -34,7 +34,11 @@ from verity.protocols.verification.sampled_proofs.one_stage import audit, draw a
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
-STAND_IN_BINDING = "verity/flock-ir-frame/binding/v1"   # M0's set-bound frame domains (verity_flock.ir_frame.BINDING_TAG)
+#: M0's set-bound frame domains (verity_flock.circuit.BINDING_TAG), each tag with its identity digest; v1 is M0's before
+#: 64-byte bindings, for a pinned tree that old (--binding)
+STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
+                     "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
+STAND_IN_BINDING = "verity/flock-circuit/binding/v2"
 STATEMENT_ID = "verity/flock-circuit"
 
 
@@ -67,6 +71,13 @@ def stage(set_dir: str, ns: list[int], out: Path, m0_path: str, tampered: bool =
     text = (out / "circuit.txt").read_text()
     meta = json.loads(text.split("\n", 2)[1][5:])
     return {"dir": out, "meta": meta, "pin": hashlib.sha512(text.encode()).hexdigest()}
+
+
+def hold_bound(st: dict, program, query) -> None:
+    """The verifier's own partition object and program beside a bound stage, which the Lean verifier then reads by content."""
+    (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
+    (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
+    st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
 
 
 def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
@@ -118,8 +129,8 @@ def stand_in_ports(name: str, content_digest: str, meta: dict, n: int) -> dict[s
     out = {}
     content = {} if hidden_outputs(meta) else {"content_digest": content_digest}
     for p, (schema, count) in ports(meta, n).items():
-        b = identity_digest(STAND_IN_BINDING, {"set": name, **content, "lo": 0, "hi": n, "port": p, "schema": schema})
-        out[p] = {"leaves": count, "domain": CommitmentDomain(bytes.fromhex(b), -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
+        b = STAND_IN_BINDINGS[STAND_IN_BINDING](STAND_IN_BINDING, {"set": name, **content, "lo": 0, "hi": n, "port": p, "schema": schema})
+        out[p] = {"leaves": count, "domain": CommitmentDomain(b, -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
     return out
 
 
@@ -199,6 +210,19 @@ def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
             "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
+
+
+def lean_refused(v: dict, names: str | None = None) -> bool:
+    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not at setup, where a missing
+    or unreadable input is refused, unless the refusal names `names`, a check Lean makes there."""
+    why = v.get("why") or ""
+    return v.get("accepted") is False and v.get("digest") is not None and bool(why) and (
+        names in why if names else not why.startswith("setup:"))
+
+
+def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
+    """Lean's draw check refused case `i` by `code` (U1, U3), not for a draw it could not read."""
+    return len(cases) > i and not cases[i]["ok"] and cases[i]["why"].startswith(f"{code}:")
 
 
 def proved_units(header: dict, live: dict) -> list[int]:
@@ -281,7 +305,8 @@ def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, re
     digest = hashlib.sha512(bytes(body)).hexdigest()
     registration = check(dict(rec, leaf_layer=digest), digest)
     lean_v = lean_verify(lean, dict(st, dir=stage), n, out)
-    return {"refused": registration.ok and lean_v["accepted"] is False, "registration_passes": registration.ok,
+    return {"refused": registration.ok and lean_refused(lean_v, names="do not hash to the header's"),
+            "registration_passes": registration.ok,
             "lean": lean_v.get("why")}
 
 
@@ -299,9 +324,12 @@ def main() -> int:
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
                     help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
+    ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
+                    help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()
     a.lean_verify = a.lean_verify or a.lean
     globals()["STATEMENT_ID"] = a.statement
+    globals()["STAND_IN_BINDING"] = a.binding
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     s = InputSet.open(a.set)
@@ -323,9 +351,7 @@ def main() -> int:
     t = time.time()
     st = stage(a.set, [4, n], out / "stage", a.m0_pythonpath, bind=bind)
     if a.bind:
-        (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
-        (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
-        st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
+        hold_bound(st, program, query)
     header = public_header(st["dir"], n)
     summary["stage_s"] = round(time.time() - t, 1)
     summary["template_program"] = {"statement": st["meta"]["program_digests"],
@@ -404,11 +430,11 @@ def main() -> int:
     lean_alt = lean_draw_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},
                                        {"record": draw, "statement": draw, "instances": len(draw["units"]) + 1},
                                        {"record": None, "statement": draw, "instances": len(draw["units"])}], out, "negatives")
-    neg["draw-altered-after-session (Lean U1)"] = {"refused": bool(lean_alt) and not lean_alt[0]["ok"], "lean": lean_alt[:1],
+    neg["draw-altered-after-session (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 0, "U1"), "lean": lean_alt[:1],
                                                    "proved-check": D.check_proved(altered, proved_units(header, live or {}),
                                                                                   (live or {}).get("instances", -1)).to_json()}
-    neg["instances-not-the-draw (Lean U3)"] = {"refused": len(lean_alt) > 1 and not lean_alt[1]["ok"], "lean": lean_alt[1:2]}
-    neg["draw-dropped-from-record (Lean U1)"] = {"refused": len(lean_alt) > 2 and not lean_alt[2]["ok"], "lean": lean_alt[2:3]}
+    neg["instances-not-the-draw (Lean U3)"] = {"refused": drawcheck_refused(lean_alt, 1, "U3"), "lean": lean_alt[1:2]}
+    neg["draw-dropped-from-record (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 2, "U1"), "lean": lean_alt[2:3]}
     for case in ("unit_draw_ignored_refused", "unit_draw_session"):
         p = run([a.bin, "selftest", "--instances", str(st["dir"] / "inst-4.bin"), "--circuit", str(st["dir"] / "circuit.txt"),
                  "--tables", str(st["dir"] / "tables"), "--only", case], out / f"selftest-{case}.log")
@@ -420,6 +446,8 @@ def main() -> int:
     tpart = P.partition(tprog, query)
     tbind = {"partition": P.digest(tpart), "program": tpart["program"], "indices": list(range(tn))} if a.bind else None
     tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True, bind=tbind)
+    if a.bind:
+        hold_bound(tst, tprog, query)
     theader = public_header(tst["dir"], tn)
     tlaw = D.parse_law("subset:2")
     twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
@@ -429,10 +457,11 @@ def main() -> int:
     trecord, tlive = session(a.bin, tst, tn, "subset:2", a.port + 1, out / "session-tampered")
     tres = audit_session(trec, R.receipt(trec, "one-stage-e2e verifier (a0.py)"), tst, theader, tlaw, trecord, tlive, a.lean,
                          a.lean_verify, out / "session-tampered", a.delta)
-    neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None,
+    tlean = tres.get("verdicts", {}).get("lean-verify", {})
+    neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None
+                                and lean_refused(tlean),
                                 "verifier": ((trecord or {}).get("verdict") or {}).get("why"),
-                                "lean": tres.get("verdicts", {}).get("lean-verify", {}).get("why"),
-                                "lean_refused": tres.get("verdicts", {}).get("lean-verify", {}).get("accepted") is False,
+                                "lean": tlean.get("why"), "lean_refused": lean_refused(tlean),
                                 "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
     summary["negatives"] = {k: v.get("refused", v.get("passed")) for k, v in neg.items()}

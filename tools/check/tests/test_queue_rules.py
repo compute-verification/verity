@@ -13,17 +13,20 @@ RULES = Rules.parse((ROOT / "tools" / "check" / "queue.toml").read_text(), "tool
 
 
 def _roles(*changed: str) -> set[str]:
-    return {r.role for r in RULES.grants if r.paths and rule_touches(list(r.paths), list(changed))}
+    return {r.role for r in RULES.grants if rule_touches(list(r.paths), list(changed))}
 
 
 def test_the_rules_parse_and_name_known_roles():
     assert {r.role for r in RULES.grants} <= set(vocab.GRANT_ROLES) and RULES.hold_label == "hold"
-    assert not any(r.lean_audit for r in RULES.grants)      # a changed guarantee alerts Daniel and waits on nobody
 
 
 def test_the_rules_ask_for_the_grants_applied_by_hand():
     assert _roles("integrations/vllm/verity_vllm/program/x.py") == {"vllm-coordinator"}
     assert _roles("backends/flock/verifier/lean/Flock/Tags.lean") == {"red-team"}
+    assert _roles("verity/Security/Proofs/Flock/Soundness/Headline.lean") == {"red-team"}   # C-Flock's proofs, moved
+    assert _roles("verity/Security/Proofs/Flock.lean") == {"red-team"}                       # and their umbrella
+    assert _roles("verity/Security/Proofs/Flock/Soundness/README.md", "verity/Security/Proofs/Pouw.lean") == set()
     assert _roles("backends/flock/README.md", "integrations/vllm/README.md") == set()
     assert _roles("backends/flock/python/tests/test_x.py") == set()                 # tests alone change no statement
     assert _roles("packages/verity/verity/ir/cut.py", "tools/research/src/research/queue.py") == set()
+    assert _roles("verity/Security/lean-audit.json") == set()        # a changed guarantee alerts Daniel and waits on nobody

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""`python3 tools/check/slot.py [--priority] [--by NAME] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
+"""`python3 tools/check/slot.py [--priority] [--by NAME] [--wait-max S] [--run-max S] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
 
 `check.py --record --on MACHINE` starts its check through this, so a lane's own check queues behind the train checks for a slot
 instead of spreading over every core the checks share (vy-nebius-1, 1 Oct: two unslotted checks on 0-127 at load 137).
 
 A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS overrides), one per line:
 
-    NAME CPUS [windows=FILE] [lead=MINUTES]      # e.g. `a 32-63`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
+    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains]   # e.g. `a 32-63`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
 
 The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's `flock` takes) is free and no window blocks is
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
 (`~/.cache/verity/tests-slot-NAME`), without LEASE_DIR and with LEASE_DEADLINE_FILE pointing nowhere. A slot with windows= is
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
-minutes: a check there would run into a whole-node timed measurement. With every slot busy it retries every POLL_S, reading
+minutes: a check there would run into a whole-node timed measurement. A slot with only=trains is taken only by a `--priority` waiter
+(the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
+reads the key as unknown and the slot as any other).  With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
@@ -23,6 +25,12 @@ lock is not in the line: it takes that slot whenever it frees.
 `python3 tools/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct).
+
+`--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
+its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
+being taken: inside a `research run` (RESEARCH_RUN_DIR), the run's timeout, which counted the wait too, becomes the time it has
+run so far plus SECONDS, through its harness's control file (research.telemetry.run's CONTROL_TIMEOUT). `research queue ready
+--on` sends both (#1344, #1282, #1314 timed out in node 1's line and were reported failed).
 
 `python3 tools/check/slot.py --status [--json]`: one line per slot, with who holds its lock (the pid in /proc/locks, when that
 process started, its command) or `free`, and the window that blocks it, if any, then a line for each of its windows open now or
@@ -47,6 +55,11 @@ from pathlib import Path
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
 LINE = "check-line"
 POLL_S = 20
+#: the exit of a waiter that gave up (`--wait-max`): CMD never ran
+NOT_STARTED = 75
+#: the run's timeout control file, relative to RESEARCH_RUN_DIR (research.telemetry.run.CONTROL_TIMEOUT)
+RUN_TIMEOUT = Path("control") / "timeout_s"
+USAGE = "usage: slot.py [--priority] [--by NAME] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 
 
 def cpulist(s: str) -> set[int]:
@@ -64,7 +77,8 @@ def parse(text: str) -> list[dict]:
         if len(f) < 2:
             continue
         opts = dict(x.split("=", 1) for x in f[2:])
-        slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30))})
+        slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30)),
+                      "trains": opts.get("only") == "trains"})
     return slots
 
 
@@ -169,10 +183,51 @@ def _read(p: Path) -> dict:
         return {}
 
 
+def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None]:
+    """--priority, --by NAME, --wait-max SECONDS and --run-max SECONDS (each > 0) from the arguments before `--`; SystemExit
+    with the usage on anything else."""
+    priority, vals, i = False, {}, 0
+    while i < len(opts):
+        if opts[i] == "--priority":
+            priority, i = True, i + 1
+        elif opts[i] in ("--by", "--wait-max", "--run-max") and i + 1 < len(opts):
+            vals[opts[i]], i = opts[i + 1], i + 2
+        else:
+            sys.exit(USAGE)
+    secs = {}
+    for k in ("--wait-max", "--run-max"):
+        try:
+            secs[k] = float(vals[k]) if k in vals else None
+        except ValueError:
+            sys.exit(f"slot: {k} {vals[k]!r} is not a number of seconds; {USAGE}")
+        if secs[k] is not None and not secs[k] > 0:
+            sys.exit(f"slot: {k} must be more than 0 seconds; {USAGE}")
+    return priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"]
+
+
+def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotonic) -> str:
+    """Make the `research run` in ``run_dir`` end ``run_max`` seconds from now: its timeout (from the run's start, its
+    status.json's `started_mono` on this machine's monotonic clock) becomes the time run so far plus ``run_max``. What was done,
+    in a line; outside a run, or without its start, nothing is changed and the run keeps the timeout it had."""
+    if not run_dir:
+        return f"slot: --run-max {run_max:g} s not applied: not in a `research run` (no RESEARCH_RUN_DIR)"
+    started = _read(Path(run_dir) / "status.json").get("started_mono")
+    if not isinstance(started, (int, float)):
+        return f"slot: --run-max {run_max:g} s not applied: {run_dir}/status.json has no started_mono; the run keeps its timeout"
+    t = round(mono() - started + run_max, 3)
+    ctl = Path(run_dir) / RUN_TIMEOUT
+    ctl.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ctl.with_name(f".{ctl.name}.{os.getpid()}")
+    tmp.write_text(json.dumps({"timeout_s": t, "actor": "timeout",
+                               "reason": f"slot.py --run-max: {run_max:g} s from taking check slot {slot}"}) + "\n")
+    os.replace(tmp, ctl)
+    return f"slot: the run's timeout is now {t:g} s from its start: {run_max:g} s from taking slot {slot}"
+
+
 def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[dict]:
     """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`) and its `upcoming`
     windows."""
-    return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"],
+    return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"], "trains": s.get("trains", False),
              "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
              "blocked": blocked(s, now), "upcoming": upcoming(s, now)} for s in slots]
 
@@ -182,7 +237,8 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     that came before it."""
     out = []
     for s in slot_docs(slots, lock_dir, now, proc):
-        out.append(f"{s['name']}  cores {s['cpus']}  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
+        out.append(f"{s['name']}  cores {s['cpus']}" + ("  trains only" if s["trains"] else "") + f"  {held_text(s['holder'])}"
+                   + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
         out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
     return out + waiters(lock_dir / LINE, now, before)
 
@@ -309,7 +365,7 @@ def allowed() -> set[int]:
     return os.sched_getaffinity(0)
 
 
-DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-95,128-159`, 2 Oct)"
+DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-159` on node 1 since 6 Oct)"
 
 
 def usable(slots: list[dict]) -> list[dict]:
@@ -341,9 +397,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
-    by = opts[opts.index("--by") + 1] if "--by" in opts[:-1] else None
-    if not cmd or set(opts) - {"--priority", "--by", by}:
-        sys.exit("usage: slot.py [--priority] [--by NAME] -- CMD...")
+    priority, by, wait_max, run_max = options(opts)
+    if not cmd:
+        sys.exit(USAGE)
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
@@ -356,21 +412,30 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         print(f"slot: skipping {out}: outside this process's cores; {DIRECT_CPUS_FIX}", file=sys.stderr, flush=True)
     if not slots:
         sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores; {DIRECT_CPUS_FIX}")
-    ticket, tfd = join(SLOTS.parent, priority="--priority" in opts, who=asker(by))
-    told = None
+    if not priority and all(s["trains"] for s in slots):
+        sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); a lane check runs on another machine")
+    ticket, tfd = join(SLOTS.parent, priority=priority, who=asker(by))
+    told, joined = None, now()
     while True:
         slots = usable(reread(slots)) or slots
         n = ahead(ticket)
-        got = None if n else take(slots, SLOTS.parent, now())
+        got = None if n else take(slots if priority else [s for s in slots if not s["trains"]], SLOTS.parent, now())
         if got:
             break
         why = f"{n} check(s) ahead in line" if n else \
-            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now()) or 'busy'}" for s in slots) + ")"
+            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now()) or ('for train checks' if s['trains'] and not priority else 'busy')}"
+                                                   for s in slots) + ")"
         if why != told:
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
             for ln in status(slots, SLOTS.parent, now(), before=ticket.name):
                 print(f"slot:   {ln}", file=sys.stderr, flush=True)
             told = why
+        if wait_max is not None and (now() - joined).total_seconds() >= wait_max:
+            ticket.unlink()
+            os.close(tfd)
+            print(f"slot: not started: no check slot within --wait-max {wait_max:g} s ({why}); exit {NOT_STARTED}",
+                  file=sys.stderr, flush=True)
+            return NOT_STARTED
         sleep(POLL_S)
     ticket.unlink()
     os.close(tfd)
@@ -386,6 +451,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"))
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
+    if run_max is not None:
+        print(limit_run(run_max, slot["name"], os.environ.get("RESEARCH_RUN_DIR")), file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
 
 

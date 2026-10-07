@@ -260,6 +260,71 @@ def test_price_twins_read_each_pin_s_statement_path_price_and_value_and_skip_wha
                                                                              Fraction(26680734301, 1376663200000))
 
 
+LIFTED = "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+LIFTED_G = "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+LIFTED_SOURCE = """namespace Pouw.Guarantees.PearlC
+
+open Pouw.PearlC Pouw.PearlC.Assumptions
+
+def GammaSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192)
+      ((1648180439 / 446072750000 : ℚ) : ℝ) εPearlC
+
+end Pouw.Guarantees.PearlC
+"""
+
+
+def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
+    lean = tmp_path / "Security"
+    (lean / "Specs" / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / "Specs" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
+             "reads": {"Specs.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+    return audit, lean
+
+
+def test_a_lifted_guarantee_s_twin_is_read_from_its_recorded_definition(tmp_path):
+    """A twin pinned as `X : G` is the twin its old theorem was: γ, cast, prices and cap read off `G`'s body."""
+    audit, lean = lifted_audit(tmp_path)
+    (row,) = P.extract(P.guarantees(audit), "t", {LIFTED: "l"}, P.lifted_definitions(audit, lean))
+    old = P.parse("Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192",
+                  PINS["Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"])
+    assert row == old | {"pin": LIFTED, "type_hash": "l", "source": "t", "status": "pinned"}
+
+
+@pytest.mark.parametrize("source, recorded, match", [
+    (LIFTED_SOURCE, False, "no Guarantees definition"),
+    (LIFTED_SOURCE.replace("def GammaSm120", "def OtherSm120"), True, "no Guarantees definition"),
+    (LIFTED_SOURCE.replace("namespace Pouw.Guarantees.PearlC\n", "namespace Pouw.Guarantees\n"), True, "no Guarantees definition"),
+    (LIFTED_SOURCE.replace("((1648180439 / 446072750000 : ℚ) : ℝ)", "γ"), True, "states no literal γ"),
+    (LIFTED_SOURCE.replace("(218 / 25 - ", "(16 - "), True, "prices the cast"),
+])
+def test_a_lifted_twin_without_a_recorded_definition_stating_its_gamma_fails_closed(tmp_path, source, recorded, match):
+    audit, lean = lifted_audit(tmp_path, source, recorded)
+    with pytest.raises(P.TwinError, match=match):
+        P.extract(P.guarantees(audit), "t", {}, P.lifted_definitions(audit, lean))
+    with pytest.raises(P.TwinError, match="no Guarantees definition"):
+        P.parse(LIFTED, P.guarantees(audit)[LIFTED])
+
+
+def test_every_pinned_twin_of_the_repository_is_its_audit_s_pin_and_states_its_gamma():
+    """The table's twins from the repository's audit name pins it holds, at their type hashes, and reading those pins now,
+    lifted guarantees included, gives the table's rows: a pin that moves or goes fails here until the table follows it."""
+    audit = json.loads(P.REPO_AUDIT.read_text())
+    defs = P.lifted_definitions(audit, P.REPO_AUDIT.parent)
+    table = [t for t in P.load() if t["source"] == P.REPO_SOURCE]
+    assert table and all(t["status"] == "pinned" for t in table)
+    assert LIFTED in {t["pin"] for t in table}
+    pins = P.guarantees(audit)
+    for t in table:
+        assert pins[t["pin"]]["type_hash"] == t["type_hash"], t["pin"]
+        assert P._jsonable(P.parse(t["pin"], pins[t["pin"]], defs)) | {"source": t["source"], "status": "pinned"} == t
+
+
 def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
     bad = {k: v for k, v in PINS.items() if "v2LoopCast8p72" in k}
     (name, pin), = bad.items()
@@ -272,7 +337,7 @@ def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
 
 
 @pytest.mark.parametrize("statement, path, reading, published, at", [
-    # the panel's published figures (docs/pouw/panel.md, 30 Sep 16:00Z), each from its pin, the larger of the two prices;
+    # the panel's published figures (30 Sep 16:00Z), each from its pin, the larger of the two prices;
     # v1's at its cap then, 1/400
     ("pearl-c-sm120/v1", "cast-32.06", "forming-credited", "0.77888%", "8"),
     ("pearl-c-sm120/v1", "cast-16", "forming-credited", "0.60019%", "1047/125"),

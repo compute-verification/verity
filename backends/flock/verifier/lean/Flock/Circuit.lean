@@ -40,7 +40,8 @@ inductive Kind where
 inductive Role where
   /-- chunk runs of input port `p`: run slot `q` holds `(vu, chunk)` or nothing (a padding run) -/
   | runs (p : Nat) (slots : Array (Option (Nat × Nat)))
-  /-- port `p`'s parent-tree compressions: per VU `chunks` slots, heap order (root first), the last a padding slot -/
+  /-- port `p`'s parent-tree compressions: per template instance `chunks` slots, heap order (root first), the last a
+padding slot -/
   | parents (p : Nat)
   | none
   deriving Inhabited, Repr
@@ -59,13 +60,13 @@ def Range.start (r : Range) : Nat := r.pos0 * 2 ^ r.slotLog
 def Range.slot (r : Range) (s : Nat) : Nat := (r.pos0 + s) * 2 ^ r.slotLog
 
 /-- A copy of every bit of output port `src.2.2` of slot `(src.1, src.2.1)` into input port `dst.2.2` of slot
-`(dst.1, dst.2.1)`, both per VU. -/
+`(dst.1, dst.2.1)`, both per template instance. -/
 structure Wire where
   dst : Nat × Nat × Nat
   src : Nat × Nat × Nat
   deriving Inhabited, Repr
 
-/-- A typed template's block (item 1e; #273's `TypedBlock`): the instance type's root is the unit, one slot per VU, beside
+/-- A typed template's block (item 1e; #273's `TypedBlock`): the instance type's root is the unit, one slot per template instance, beside
 its parts, each in a slot of its layout's range. Unit coordinates: the root's own region `[0, own)`, then each part from its
 base. -/
 structure TypedBlock where
@@ -75,7 +76,8 @@ structure TypedBlock where
   outs : Array (Nat × Nat)
   /-- the root's input columns, in input-bit order -/
   inCols : Array Nat
-  /-- per part, in item order: its layout's circuit, its slot among that circuit's slots in the VU, its base -/
+  /-- per part, in item order: its layout's circuit, its slot among that circuit's slots in the template instance, its
+base -/
   parts : Array (Nat × Nat × Nat)
   /-- per placed layout's circuit, its range's log size -/
   rangeLogs : Array (Nat × Nat)

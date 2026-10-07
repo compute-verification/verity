@@ -1,20 +1,22 @@
 """Pearl-C's work law (`pearl_c_work`; statement review item 5, red team F1, F2, F5–F8): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
-excluded rows fail, the debit under the cap), draws keyed by a beacon round after the commitment, and the audit."""
+excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's draw coin
+after the commitment, and the audit."""
 
 from __future__ import annotations
 
+import dataclasses
 import struct
 from fractions import Fraction
 
 import pytest
 
-import quicknet as Q
+import epoch_coins as E
 
 import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
 from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Workload
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape, Tile
+from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul, Shape, Tile
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
@@ -22,8 +24,6 @@ from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
 K = 128
-AFTER = Q.LATEST
-BEFORE = Q.recorded_before(AFTER)
 
 
 def record(real=20, excluded_a=(), excluded_b=(), k=K, kept=K) -> W.UnitRecord:
@@ -59,9 +59,9 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
     wref, credit = W.work(S, [r])
     assert wref == cell * 19 * 31 and credit == (1 - S.cap) * W.cell_credit(S, r) * 19 * 31
     assert W.work(S, [record(kept=64)])[0] == Fraction(S.wref(Shape(20, 64, 32)))
-    picks = W.draw(S, [r], AFTER, bytes(32), bytes(32), bytes(32), 200)
+    picks = W.draw(S, [r], W.draw_key(b"a coin", bytes(32), bytes(32), bytes(32)), 200)
     assert {(t.rows[0], t.cols[0]) for _, t in picks} == set(tiles) and all(r.credited(t)[0] for _, t in picks)
-    assert W.draw(S, [r], W.Beacon(6, b"another round"), bytes(32), bytes(32), bytes(32), 200) != picks
+    assert W.draw(S, [r], W.draw_key(b"another coin", bytes(32), bytes(32), bytes(32)), 200) != picks
 
 
 def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
@@ -177,15 +177,15 @@ def test_padding_stuffing_is_rejected():
     assert "A row 0 is not zero past the kept width" in W.check_opened(S, unit, tile, rows_a, rows_b, ops_for(rows_a, rows_b, k))
 
 
-def lifecycle(rows_a=None, real=20, scheme=S):
+def lifecycle(rows_a=None, real=20, scheme=S, salt_key=None):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails liveness; B passes."""
     if rows_a is None:
         rows_a = CV.rows_f32("work-life", "A", real, K) + [C.f32_row([0] * K)] * (32 - real)
         rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(scheme, {9: rows_b})
-    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    prover = Prover(scheme, {9: rows_b}, salt_key=salt_key)
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
 
@@ -196,10 +196,36 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
-    out = W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 8)
+    out = W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
     assert out.audit.accepted and len(out.audit.verdicts) == 9 and out.audit.selected[-1] == 0
     assert out.wref == W.cell_wref(S, records[0]) * 19 * 16 and out.audit.profile.work == int(out.wref)
     assert out.credit == (1 - S.cap) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
+
+
+def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
+    """Where the work law and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
+    tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
+    `weightOK` of each of a tile's columns and refuses the tile.  The work law is credit-sound there only while the
+    excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
+    count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
+    rows_a = CV.rows_f32("work-life", "A", 20, K) + [C.f32_row([0] * K)] * 12
+    rows_a[3] = spiked(rows_a[3])
+    rows_b = CV.rows_f32("work-life", "B", 16, K)
+    rows_b[5] = spiked(rows_b[5])
+    work = Workload((Matmul(3, Shape(32, K, 16), 9),))
+    prover = Prover(S, {9: rows_b})
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {3: rows_a})
+    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), (5,))]
+    out = W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
+    assert all(5 in t.cols for t in S.tiles(work.matmuls[0].shape))
+    assert out.audit.accepted and len(out.audit.verdicts) == 9
+    assert out.wref == W.cell_wref(S, records[0]) * 19 * 15 and out.credit == (1 - S.cap) * W.cell_credit(S, records[0]) * 19 * 15
+    credited_b = W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())
+    rejected = W.audit(S, epoch, prover, tr, SPLITS, [credited_b], E.challenger(), 8)
+    assert not rejected.audit.accepted and any(v.reason == "B row 5 is credited but fails the per-row rules"
+                                               for v in rejected.audit.verdicts)
 
 
 def test_r1_is_a_no_op_on_pearl_c():
@@ -230,7 +256,7 @@ def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     assert not hasattr(S, "tile_cap")
     records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+    assert W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
 def test_v_ex_is_a_no_op_on_pearl_c():
@@ -243,23 +269,31 @@ def test_v_ex_is_a_no_op_on_pearl_c():
         assert r.voluntary_a == r.voluntary_b == ()
         assert r.encode() == struct.pack(f"<QQIIIIIII{len(a)}I{len(b)}I", u.index, u.weight, s.m, s.k, s.n, r.real_rows,
                                          r.k_kept, len(a), len(b), *a, *b)
-    assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+    assert W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
-def test_audit_under_hashing_h1():
-    """The work law's audit is the same under hashing format -h1: its openings verify against frame-b3 roots."""
-    h1 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1")
-    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h1)
-    records = W.declare(h1, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    assert W.audit(h1, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
-    assert not W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+def test_audit_under_hashing_h3():
+    """The work law's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots, once
+    the honest prover has given up (`volunteer`) the A row over its row cap.  Each row's seed reads the hiding roots, so
+    which rows pass the row cap changes with the salts; under this salt key row 7 is over it, and a drawn tile holding
+    it fails until it is given up."""
+    h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
+    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3, salt_key=bytes(32))
+    declared = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    out = W.audit(h3, epoch, prover, tr, SPLITS, declared, E.challenger(), 4).audit
+    assert not out.accepted and any(v.reason.startswith("A row 7's replayed debit") for v in out.verdicts)
+    va, vb = W.volunteer(h3, epoch, tr, declared, {3: rows_a}, {9: rows_b})
+    assert (va, vb) == ({3: [7]}, {})
+    records = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, voluntary_a=va)
+    assert W.audit(h3, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
+    assert not W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
 def test_audit_rejects_what_the_red_team_found():
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     u = epoch.workload.matmuls[0]
-    audit = lambda records, splits=SPLITS, **kw: W.audit(S, epoch, prover, tr, splits, records, kw.pop("before", BEFORE),  # noqa: E731
-                                                         kw.pop("beacon", AFTER), 8, **kw)
+    audit = lambda records, splits=SPLITS, **kw: W.audit(S, epoch, prover, tr, splits, records,  # noqa: E731
+                                                         kw.pop("challenger", None) or E.challenger(), 8, **kw)
     reasons = lambda out: " | ".join(v.reason for v in out.audit.verdicts if not v.ok)  # noqa: E731
     hides = audit([W.UnitRecord(u, 20, K)])
     assert not hides.audit.accepted and "A row 3 is credited but fails" in reasons(hides)
@@ -268,8 +302,6 @@ def test_audit_rejects_what_the_red_team_found():
     pads = audit([W.UnitRecord(u, 32, K, (3,))])
     assert not pads.audit.accepted and "is credited but fails" in reasons(pads)
     honest = [W.UnitRecord(u, 20, K, (3,))]
-    assert "not at least 2 rounds after" in reasons(audit(honest, before=BEFORE + 3))
-    assert "does not verify" in reasons(audit(honest, beacon=type(AFTER)(AFTER.round, bytes(48))))
     wide = {9: W.Split(K + 2, (7,), b"calib")}
     assert "not its weight's split" in reasons(audit(honest, splits=wide))
     narrow = {9: W.Split(K + 1, (7,), b"calib")}
@@ -284,7 +316,7 @@ def test_split_check_gates_an_honest_split():
     split = {9: W.Split(K + 1, (7,), b"calib")}
     records = [W.UnitRecord(u, 20, K, (3,))]
     seen = []
-    out = W.audit(S, epoch, prover, tr, split, records, BEFORE, AFTER, 4, split_check=lambda w, sp: seen.append((w, sp)) or True)
+    out = W.audit(S, epoch, prover, tr, split, records, E.challenger(), 4, split_check=lambda w, sp: seen.append((w, sp)) or True)
     assert out.audit.accepted and seen == [(9, split[9])]
 
 
@@ -297,12 +329,84 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
         rows_a, rows_b = spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike)
         work = Workload((Matmul(0, Shape(t, k, t), 1),))
         prover = Prover(s, {1: rows_b})
-        epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+        epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
         tr = prover.prove(epoch, {0: rows_a})
         splits = {1: W.Split(k)}
         records = W.declare(s, epoch, {0: rows_a}, {1: rows_b}, splits)
         assert records == [W.UnitRecord(work.matmuls[0], t, k)]
-        out = W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 1)
+        out = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 1)
         assert out.audit.accepted == accepted
         if not accepted:
             assert "exceeds the cap" in out.audit.verdicts[0].reason
+
+
+def test_h3_caps_each_credited_row_as_well_as_the_tile():
+    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with the aligned spikes
+    among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the tile's.
+    h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and the audit then
+    accepts on the other 31 rows."""
+    k, m, n = 1024, 32, 4
+    h3, h0 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h0"))
+    assert W.row_cap(h3) and not W.row_cap(h0) and not W.row_cap(S)
+    rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
+    rows_b = spiked_rows(k, n, 900, 300.0)
+    work = Workload((Matmul(0, Shape(m, k, n), 1),))
+    splits = {1: W.Split(k)}
+    prover = Prover(h3, {1: rows_b}, salt_key=bytes(32))
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {0: rows_a})
+    records = W.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits)
+    assert records == [W.UnitRecord(work.matmuls[0], m, k)]
+    tile = h3.tiles(work.matmuls[0].shape)[0]
+    ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], epoch.weight_roots[1])
+    for s in (h3, h0):
+        ops = s.encode(ctx, s.noise(ctx), rows_a, rows_b, tile)
+        debit, cap = W._debit_cap(s, records[0], tile, ops, list(range(m)), list(range(n)))
+        row = W._debit_cap(s, records[0], tile, ops, [0], list(range(n)))
+        assert debit < cap * 3 / 4 and row[0] > 10 * row[1] and row[1] == cap / m
+    assert W.check_opened(h0, records[0], tile, rows_a, rows_b, ops) is None
+    out = W.audit(h3, epoch, prover, tr, splits, records, E.challenger(), 1)
+    assert not out.audit.accepted
+    assert out.audit.verdicts[0].reason.startswith("A row 0's replayed debit") and "the row cap" in out.audit.verdicts[0].reason
+    va, vb = W.volunteer(h3, epoch, tr, records, {0: rows_a}, {1: rows_b})
+    assert (va, vb) == ({0: [0]}, {})
+    given = W.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
+    again = W.audit(h3, epoch, prover, tr, splits, given, E.challenger(), 1)
+    assert again.audit.accepted and again.credit == (1 - h3.cap) * W.cell_credit(h3, given[0]) * (m - 1) * n
+
+
+def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():
+    """The draw coin is the epoch's, asked of the challenger once the verifier recorded the transcript and records roots
+    (`draw_after`): a foreign challenger's coin, a coin not under the commitment, the epoch's salt coin, a coin opened
+    before the commitment, another epoch's coin and an epoch with no coin commitment are each refused before any tile
+    is opened; the honest challenger's coin draws the tiles `draw_key` gives."""
+    epoch, prover, tr, rows_a, rows_b = lifecycle()
+    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    digest = W.records_root(epoch.salt, epoch.weights_root, SPLITS, records)
+    after = W.draw_after(tr.commitment.root, digest)
+    honest = E.challenger().open("draw", after)
+    out = W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
+    want = W.draw(S, records, W.draw_key(honest.coin, tr.commitment.root, digest, epoch.salt), 8)
+    assert out.audit.accepted and out.audit.selected[:8] == tuple(
+        next(r.id for r in W.Verifier(S, epoch).refs if (r.matmul, r.tile) == (p, t)) for p, t in want)
+    refused = (
+        ("coin does not open against the epoch's coin commitment", E.challenger(b"a foreign challenger")),
+        ("coin does not open against the epoch's coin commitment", E.Answering(dataclasses.replace(honest, coin=bytes(32)))),
+        ("coin is the epoch's 'salt' coin, not its 'draw' coin", E.Answering(E.challenger().open("salt", after))),
+        ("coin was not opened after what the verifier recorded", E.Answering(E.challenger().open("draw", b"before"))),
+        ("coin is epoch 8's, not epoch 7's", E.challenger(epoch=8)),
+    )
+    for reason, challenger in refused:
+        out = W.audit(S, epoch, prover, tr, SPLITS, records, challenger, 8)
+        assert not out.audit.accepted and out.audit.verdicts == (W.Verdict(-1, False, "the draw's " + reason),)
+    bare = Epoch.unverified(epoch.workload, epoch.weight_roots, b"beacon")
+    out = W.audit(S, bare, prover, tr, SPLITS, records, E.challenger(), 8)
+    assert not out.audit.accepted and "no coin commitment" in out.audit.verdicts[0].reason
+
+
+def test_a_challenger_opens_each_coin_once():
+    """No retry redraws: the second request for the draw coin is refused, whatever it follows."""
+    ch = E.challenger()
+    ch.open("draw", b"a commitment")
+    with pytest.raises(DomainError, match="already open"):
+        ch.open("draw", b"another commitment")

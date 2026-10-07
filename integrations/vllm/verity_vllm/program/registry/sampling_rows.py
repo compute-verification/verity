@@ -70,7 +70,7 @@ ftz = DR.ftz
 
 
 def add_rz_ftz_v1_model(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """[F-stoch-r17-01 WITNESS, test-only] `sampling.add_rz_ftz_v1_model` lane for lane: the `add.rz.ftz.f32` model `nv_log1pf` used up
+    """[F-stoch-r17-01 WITNESS, test-only] `sampling_twins.add_rz_ftz_v1_model` lane for lane: the `add.rz.ftz.f32` model `nv_log1pf` used up
     to R17, which is ftz(RN32(RN64(ftz(a) + ftz(b)))) -- round to NEAREST (its toward-zero correction was dead code: a double-ulp step
     that f32 rounding undoes).  Kept so the exhaustive comparison with the true RZ (`nv_log1pf` vs `nv_log1pf_v1_model`) stays runnable."""
     a, b = np.broadcast_arrays(ftz(_u32(a)), ftz(_u32(b)))
@@ -134,7 +134,7 @@ def nv_log1pf(a: np.ndarray) -> np.ndarray:
 
 
 def nv_log1pf_v1_model(a: np.ndarray) -> np.ndarray:
-    """[F-stoch-r17-01 WITNESS, test-only] `sampling.nv_log1pf_v1_model` lane for lane: log1pf with the RN model of `__fadd_rz`."""
+    """[F-stoch-r17-01 WITNESS, test-only] `sampling_twins.nv_log1pf_v1_model` lane for lane: log1pf with the RN model of `__fadd_rz`."""
     return _log1pf_from_sum(_u32(a), add_rz_ftz_v1_model(_u32(a), _u32(SP.ONE_BITS)))
 
 

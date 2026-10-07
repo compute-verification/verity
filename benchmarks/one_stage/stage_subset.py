@@ -1,6 +1,6 @@
-"""Stage a selection of an input set's instances for M0 (in the order given), as its own population: the frame domains bind
+"""Stage a selection of an input set's instances for the circuit prover (in the order given), as its own population: the frame domains bind
 the selection, because the set's name and content digest become `<name>@<tag>` and the SHA-256 of the original digest and the
-selected indices. Run in M0's tree (its `verity_flock`).
+selected indices. Run in the circuit prover's tree (its `verity_flock`).
 
     python stage_subset.py --input-set DIR --indices FILE --tag TAG --out DIR [--n N ...]
 """

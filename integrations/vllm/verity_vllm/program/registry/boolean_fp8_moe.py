@@ -20,8 +20,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
-
 from verity.primitives.circuits import boolean as BL
 from verity.primitives.circuits.defs import bind
 from verity.primitives.circuits.refs import Coll, concat, tuple_of
@@ -214,7 +212,7 @@ MoeExpertFp8GemmWV2 = EW.on_bits("MoeExpertFp8GemmW", 2, X.GEMM_STATICS, X.gemm_
                                  X.MoeExpertFp8GemmW, lifted=["DOT"])
 
 
-F1 = bits_of(np.float32(1.0))
+F1 = bits_of(1.0)
 
 
 def _result(B, S, gate, up):
