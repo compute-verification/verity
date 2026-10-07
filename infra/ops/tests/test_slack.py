@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from research import slack
+from verity_ops import slack
 
 REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
 TOKEN = "dummy-verity-bot"
@@ -209,10 +209,10 @@ def test_handles_and_subscriptions(registry, capsys):
 
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
-    rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
+    rc, out, _ = run(capsys, "owners", "infra/ops/verity_ops/slack.py", "tools/research/src/research/cli.py",
                      "catalog/verity_catalog/definitions/tc.py", "verity/primitives/circuits/cut.py", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
-        ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
+        ["@comms", "infra/ops/verity_ops/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
         ["@circuits", "catalog/verity_catalog/definitions/tc.py"], ["@proofs", "verity/primitives/circuits/cut.py"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
@@ -722,8 +722,8 @@ def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_i
     assert out.count("ok      @") == len(HANDLES) and "record" not in out and "wrote" not in out
 
 
-def test_research_slack_is_a_cli_subcommand(registry, capsys):
-    from research.cli import main
+def test_ops_slack_is_a_cli_subcommand(registry, capsys):
+    from verity_ops.cli import main
 
     assert main(["slack", "handles", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["schema"] == slack.SCHEMA
@@ -1333,11 +1333,11 @@ def test_a_listener_subscribes_and_reads_its_digest_and_a_wake_subscription_ring
     assert len(bells(fake, comms_box)) == 1
 
 
-def test_research_msg_is_the_front_door(registry, capsys):
-    from research import cli
+def test_ops_msg_is_the_front_door(registry, capsys):
+    from verity_ops import cli
     assert cli.main(["msg", "handles"]) == 0 and "@circuits" in capsys.readouterr().out
     assert cli.main(["msg", "send", "--as", "infra", "--text", "x", "--to", "@infra"]) == 2
-    assert capsys.readouterr().err.startswith("research msg: ")
+    assert capsys.readouterr().err.startswith("ops msg: ")
 
 
 

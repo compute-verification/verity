@@ -497,8 +497,8 @@ channels; `channels:history` for a public one), `reactions:write` (`close`), and
 Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
 Routing: each handle holder subscribes to its own inbox thread, not to the top level. The site's router
-(`/api/agent-slack/events`) rings the doorbells of the names a post addresses, by the rule in `route_targets` (`slack.py`),
-which `tests/slack_routing_vectors.json` pins for both.
+(`/api/agent-slack/events`) rings the doorbells of the names a post addresses, by the rule in `route_targets`
+(`infra/ops/verity_ops/slack.py`), which `infra/ops/tests/slack_routing_vectors.json` pins for both.
 
 ### Notes and evidence over MCP
 

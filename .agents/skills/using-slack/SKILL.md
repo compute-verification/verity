@@ -49,7 +49,7 @@ with, and everyone else reads it in their digest.
 
 `registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, the paths it `owns`), the
 channels and the named humans; `research msg handles` prints it. `research msg owners PATH...` names who owns each path (the
-longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`tools/research/src/research/slack.py`); every
+longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`infra/ops/verity_ops/slack.py`, run as `research msg` or `ops msg`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
 
 ## Setup

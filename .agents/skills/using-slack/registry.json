@@ -179,9 +179,9 @@
       "usergroup": null,
       "owns": [
         ".agents/skills/using-slack/",
-        "tools/research/src/research/slack.py",
-        "tools/research/tests/test_slack.py",
-        "tools/research/tests/slack_routing_vectors.json"
+        "infra/ops/verity_ops/slack.py",
+        "infra/ops/tests/test_slack.py",
+        "infra/ops/tests/slack_routing_vectors.json"
       ]
     },
     {

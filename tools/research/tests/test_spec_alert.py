@@ -7,7 +7,7 @@ from pathlib import Path
 
 import research.merge as merge
 import research.spec_alert as spec
-from research.slack import SlackError
+from verity_ops.slack import SlackError
 
 H1, H2, H3 = "a" * 64, "b" * 64, "c" * 64
 REG = {"humans": [{"name": "Daniel Reuter", "slack_user": "U0DANIEL"}], "channels": {"agent-alerts": {"id": "C0ALERTS"}}}
