@@ -48,7 +48,8 @@ PATHS = ("tools/circuit_check/src", ".", "catalog", "kernels", "experimental", "
 SHARED = ("_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots")
 #: split by hand (`POUW`)
 BY_HAND = ("_pouw_roots",)
-#: packages whose sidecars may import only the core and themselves (`test_boundaries.py`, `test_protocol_boundaries.py`)
+#: packages whose sidecars may import only the core and themselves (`test_boundaries.py`, `test_protocol_boundaries.py`);
+#: `verity.ml`, inside `verity`, is not one
 NO_CHECKER = ("verity",)
 
 _R = "verity.ml.circuits.ops."
@@ -561,7 +562,7 @@ def plan(strict: bool = True) -> tuple[dict[str, dict[str, str]], str, dict[str,
             summary.setdefault("undocumented", []).extend(f"{m}#{name}" for m in mods if m not in table)
         for mod in mods:
             try:
-                put(mod, name, render_fn(fn, by[mod], docs.get(mod), _package(mod)))
+                put(mod, name, render_fn(fn, by[mod], docs.get(mod), "verity.ml" if mod.startswith("verity.ml.") else _package(mod)))
             except LookupError as e:
                 summary["stays"].append(str(e))
                 by.setdefault(None, []).extend(by[mod])

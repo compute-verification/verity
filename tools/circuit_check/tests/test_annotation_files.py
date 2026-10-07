@@ -1,4 +1,4 @@
-"""The repository's `verity/annotations/v0` files (`verity.primitives.circuits.annotations`): core's `verity/ml/circuits/silicon/definitions/annotations.json` and the vLLM
+"""The repository's `verity/annotations/v0` files (`verity.primitives.circuits.annotations`): core's `verity/ml/circuits/silicon/definitions/annotations.json` and the ops
 registry's `annotations.json`. Every entry is well formed; every Definition key resolves, and no guard is stale, in a program
 calling each specialization the circuit-check catalog reaches of that Definition; and each entry sits in its owner's file.
 
@@ -23,7 +23,7 @@ from verity.primitives.circuits.program import Program
 ROOT = Path(__file__).resolve().parents[3]
 FILES = {
     "core": ROOT / "verity" / "ml" / "circuits" / "silicon" / "definitions" / "annotations.json",
-    "vllm": ROOT / "verity" / "ml" / "circuits" / "ops" / "annotations.json",
+    "ops": ROOT / "verity" / "ml" / "circuits" / "ops" / "annotations.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")
 #: specializations of one Definition validated against, smallest first
@@ -57,11 +57,11 @@ def _calling(fn) -> dict:
 
 
 def _owner(stem: str) -> str:
-    """Core's or the vLLM registry's: the module of the registered Definition's body (a specialization's body is built in
+    """Core's or the ops registry's: the module of the registered Definition's body (a specialization's body is built in
     `verity.primitives.circuits`), or of a primitive's evaluator."""
     d = REGISTRY.defs.get(stem)
     impl = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return "vllm" if getattr(impl, "__module__", "").startswith("verity_vllm") else "core"
+    return "ops" if getattr(impl, "__module__", "").startswith(("verity.ml.circuits.ops", "verity_vllm")) else "core"
 
 
 def _files():
