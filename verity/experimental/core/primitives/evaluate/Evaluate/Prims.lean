@@ -1,5 +1,6 @@
 import Flock.Program
 import Evaluate.Scalar
+import Evaluate.Casts
 
 /-!
 # The primitives the evaluator implements
@@ -10,6 +11,7 @@ Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands 
   for every n ≥ 2, `Not_v1`; and the input primitives `Input<w>_v1` (§5.2), whose gates take the values bound per run.
 - E1: the constant family `Const<w>[0x<hex>]_v1` (`verity.ml.circuits.ops.prims.const`, of which the constant bits are the
   1-bit members), and the scalar primitives of `Evaluate.Scalar`.
+- E2: the FP32 and BF16 arithmetic of `Evaluate.Fp32` and the casts of `Evaluate.Casts`.
 
 A primitive is recognized by its id and must declare the signature the registry holds for it, parameter names included
 (`codec.decode_program`'s check). Every other primitive is refused by name, never guessed: `RegisteredInput<w>_v1`
@@ -98,6 +100,46 @@ def scalars : List (String × Array (String × Ty) × Ty × (Array Nat → Nat))
    ("SelectF32_v1", #[("c", bit), ("a", f32), ("b", f32)], f32, ternary selectF32),
    ("SelectBf16_v1", #[("c", bit), ("a", bf16), ("b", bf16)], bf16, ternary selectBf16)]
 
+private def e4m3 := Ty.value 8
+private def e2m1 := Ty.value 4
+
+/-- The FP32 and BF16 arithmetic and the casts by id, with the signatures the registry holds for them
+(`verity.ml.circuits.ops.fp32`, `prims` and `mufu`, and the vLLM integration's `prims`, `ref_prims`, `moe`, `dsa` and
+`topp_word_gates`). -/
+def floats : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
+  open Fp32 Casts in
+  let ab := #[("a", f32), ("b", f32)]
+  let abc := #[("a", f32), ("b", f32), ("c", f32)]
+  let bf := #[("a", bf16), ("b", bf16)]
+  [("F32Add_v1", ab, f32, binary f32Add), ("F32Add_v2", ab, f32, binary f32AddV2),
+   ("F32Sub_v1", ab, f32, binary f32Sub), ("F32Sub_v2", ab, f32, binary f32SubV2),
+   ("F32Mul_v1", ab, f32, binary f32Mul), ("F32Mul_v2", ab, f32, binary f32MulV2),
+   ("F32Div_v1", ab, f32, binary f32Div), ("F32Div_v2", ab, f32, binary f32DivV2),
+   ("F32Fma_v1", abc, f32, ternary f32Fma), ("F32Fma_v2", abc, f32, ternary f32FmaV2),
+   ("F32AddFtz_v1", ab, f32, binary f32AddFtz), ("F32AddFtz_v2", ab, f32, binary f32AddFtzV2),
+   ("F32SubFtz_v1", ab, f32, binary f32SubFtz), ("F32SubFtz_v2", ab, f32, binary f32SubFtzV2),
+   ("F32MulFtz_v1", ab, f32, binary f32MulFtz), ("F32MulFtz_v2", ab, f32, binary f32MulFtzV2),
+   ("F32FmaFtz_v1", abc, f32, ternary f32FmaFtz), ("F32FmaFtz_v2", abc, f32, ternary f32FmaFtzV2),
+   ("F32FmaSubFtz_v1", abc, f32, ternary f32FmaSubFtz), ("F32FmaSubFtz_v2", abc, f32, ternary f32FmaSubFtzV2),
+   ("F32FmaRm_v1", abc, f32, ternary f32FmaRm), ("F32FmaRm_v2", abc, f32, ternary f32FmaRmV2),
+   ("F32Sqrt_v1", #[("x", f32)], f32, unary f32Sqrt),
+   ("F32CeilFtz_v1", #[("x", f32)], f32, unary f32CeilFtz),
+   ("I32ToF32_v1", #[("a", f32)], f32, unary i32ToF32),
+   ("F32Max_v1", ab, f32, binary f32Max),
+   ("F32MaxRef_v1", ab, f32, binary f32MaxRef),
+   ("F32GtStrict_v1", ab, bit, binary f32GtStrict),
+   ("GuardNegInfZero_v1", #[("m", f32)], f32, unary guardNegInfZero),
+   ("DivFullScaleA_v1", ab, f32, binary divFullScaleA), ("DivFullScaleA_v2", ab, f32, binary divFullScaleAV2),
+   ("Bf16Add_v1", bf, bf16, binary bf16Add), ("Bf16AddF2fp_v1", bf, bf16, binary bf16AddF2fp),
+   ("Bf16MulF32_v1", #[("a", bf16), ("s", f32)], bf16, binary bf16MulF32),
+   ("Bf16MulBf16_v1", bf, bf16, binary bf16MulBf16),
+   ("Bf16ToF32_v1", #[("a", bf16)], f32, unary bf16ToF32),
+   ("F32ToBf16Rn_v1", #[("a", f32)], bf16, unary f32ToBf16Rn),
+   ("F2fpBf16_v1", #[("a", f32)], bf16, unary f2fpBf16),
+   ("E4m3ToF32_v1", #[("x", e4m3)], f32, unary e4m3ToF32),
+   ("F32ToE4m3Sat_v1", #[("x", f32)], e4m3, unary f32ToE4m3Sat),
+   ("F32ToE2m1Sat_v1", #[("x", f32)], e2m1, unary f32ToE2m1Sat)]
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -106,7 +148,7 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   | none, none, some (w, b) => some (.gate fun _ => b, #[], .value w)
   | none, none, none =>
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
-    else (scalars.lookup id).map fun (params, ret, f) => (.gate f, params, ret)
+    else ((scalars ++ floats).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2
@@ -120,7 +162,7 @@ def ofDefn (d : Defn) : Flock.V Prim := do
     return .input w
   | none =>
     let some (p, params, ret) := byId? d.key
-      | throw s!"primitive {d.key}: not implemented by this evaluator (E0 and E1: the Boolean profile, the constants and the scalar primitives)"
+      | throw s!"primitive {d.key}: not implemented by this evaluator (E0 to E2: the Boolean profile, the constants, the scalar primitives, and the FP32 and BF16 arithmetic and casts that read no table)"
     if !(sameParams d.params params && d.ret == ret) then throw s!"primitive {d.key} signature differs from the registry"
     return p
 
