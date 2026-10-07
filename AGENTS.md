@@ -76,13 +76,13 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the check a merge
-requires, `verity check tests|lean|circuits` runs one part, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
+requires, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
 `verity --help` lists the rest.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run verity check tests                 # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu verity check     # the check a merge requires; --remote POD runs it on POD, recorded as an Attempt
+uv run tools/verity/check/suites.py       # every test suite whose inputs changed since it last passed; --quick skips slow tests
+uv run --extra torch-cpu verity check     # the check a merge requires; --remote records it as an Attempt on a pod
 ~~~
 
 ## Design rules
@@ -133,8 +133,7 @@ docstring what it catches that a cheaper test can't.
 ## Circuits
 
 Any change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) must pass
-`circuit-check` (`uv run circuit-check <definition|template|row>`, or `verity check circuits`); include its report in the
-PR. A new Definition needs a
+`circuit-check` (`uv run circuit-check <definition|template|row>`); include its report in the PR. A new Definition needs a
 small binding in its module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`; `circuit_check.sidecars`),
 which the suite enforces.
 
@@ -154,7 +153,7 @@ multi-core CPU pod. It covers:
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit; `verity check
---remote POD` is `check.py --record --on POD`.
+--remote` is `check.py --record --on auto`, or on the `--on POD` given.
 
 Landing:
 
@@ -192,7 +191,7 @@ Landing:
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The Lean check.** Every Lake package has a lock, `lean-audit.json` until lean renames it `lean-lock.json`, and `check` runs the Lean check on every declaration
-  (`tools/verity/lean/audit.py`, `verity check lean`):
+  (`tools/verity/lean/audit.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
   - an assumption is a named `Prop`, taken as a hypothesis;
