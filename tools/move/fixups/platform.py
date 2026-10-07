@@ -84,6 +84,9 @@ EDITS = [
     # the verifier's Lean package is no longer under its scripts' directory, and the agreement reads both
     ("tools/verity/check/check.py", 'return [f for f in files if f.startswith(pre) and f != lean + "lean-audit.json"',
      'return [f for f in files if f.startswith((pre, lean)) and f != lean + "lean-audit.json"'),
+    # the crate's tests find the repository from the crate's directory, not from their source file (they skip when a vector is missing)
+    *((f"verity/ml/flock/live/src/{f}.rs", '.join("../../../../../backends")', '.join("../../../..")')
+      for f in ("circuit", "lookup", "sha512_native")),
     # the stratified-draw check moved in beside the test, away from the Lean package `LEAN` names
     ("verity/ml/flock/tests/test_lean_verifier.py", 'LEAN.parent / "stratified_agree.py"',
      'Path(__file__).resolve().parent / "stratified_agree.py"'),
