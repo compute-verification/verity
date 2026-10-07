@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from verity_catalog.targets.target import NVFP4_SM120
+from verity.ml.circuits.targets.target import NVFP4_SM120
 from verity_numerical.bench import contract
 
 from .. import protocol as protocol_mod
@@ -589,7 +589,7 @@ def _violating_columns(s, tb, W, pub) -> set:
 
 def _gate_result(args, R, cen, agg, honest_ok, detail, report, failures) -> dict:
     """The gate as a contract-valid ``bench-result/v1``: the honest sweep's timings (sum over its proofs) and, in
-    ``validation.detail``, the tier counts ``tools/tc_probe/trust.py`` reads (criterion Tc)."""
+    ``validation.detail``, the tier counts ``benchmarks/tc_probe/trust.py`` reads (criterion Tc)."""
     interactive = R.interactive
     lay = R.layout(min(args.vus, args.batch // STEPS))
     cfg = R.cfg(lay.l)

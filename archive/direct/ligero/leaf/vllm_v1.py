@@ -1,5 +1,5 @@
 """``leaf = vllm-v1``: the operand rows hashed **in-circuit** as ``vllm-v1`` position leaves (lane b-ligero-vllm-v1):
-``pos_leaf(row) = SHA-256("verity/pos-leaf/v0" || u64be(len row) || row_bytes)`` (``verity.primitives.commitments.vllm_v1``, PROTOCOL.md
+``pos_leaf(row) = SHA-256("verity/pos-leaf/v0" || u64be(len row) || row_bytes)`` (``verity.ml.commitments.vllm_v1``, PROTOCOL.md
 §2 and §8.1).  The digest the relation publishes IS the ``vllm-v1`` tree leaf; the verifier folds it into the port's
 ``vllm-v1`` tree and checks the port's step-root binding natively (``vllm_tree.py``).
 
@@ -28,7 +28,7 @@ import hashlib
 from collections.abc import Sequence
 
 import numpy as np
-from verity.primitives.commitments import vllm_v1 as core
+from verity.ml.commitments import vllm_v1 as core
 
 from ..compile import Expr, LigeroCtx, P
 from .blake3 import _bits_raw, _const, _prod, row_bytes
@@ -229,7 +229,7 @@ class VllmV1Leaf:
         return leaf_bytes_many(digests)
 
     def reference_digest(self, rows: np.ndarray, *, word_bits: int, role: int) -> list[bytes]:
-        """``verity.primitives.commitments.vllm_v1.pos_leaf`` per row: what :meth:`leaf_bytes` of :meth:`native` must equal."""
+        """``verity.ml.commitments.vllm_v1.pos_leaf`` per row: what :meth:`leaf_bytes` of :meth:`native` must equal."""
         return [core.pos_leaf(bytes(r)) for r in row_bytes(np.asarray(rows, dtype=np.int64), word_bits)]
 
     # --- the in-circuit hash -----------------------------------------------------------------------------------------
