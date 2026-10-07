@@ -311,6 +311,20 @@ def test_a_lifted_twin_without_a_recorded_definition_stating_its_gamma_fails_clo
         P.parse(LIFTED, P.guarantees(audit)[LIFTED])
 
 
+def test_a_store_pin_the_repository_holds_lifted_is_one_twin_the_store_s(tmp_path):
+    """The store's pins keep their names from before the lift; the repository's lifted copy of one is the same pin, not
+    a second twin stating it."""
+    old = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+    audit, lean = lifted_audit(tmp_path)
+    (lean / "lean-audit.json").write_text(json.dumps(audit))
+    store = tmp_path / "store"
+    for rel in (P.LEAN_STORE, *P.STAGED):
+        (store / rel).parent.mkdir(parents=True, exist_ok=True)
+        (store / rel).write_text(json.dumps({"pins": {old: PINS[old]} if rel == P.LEAN_STORE else {}}))
+    (twin,) = P.build(store, lean / "lean-audit.json")["twins"]
+    assert (twin["pin"], twin["source"], twin["status"]) == (old, P.LEAN_STORE, "pinned")
+
+
 def test_every_pinned_twin_of_the_repository_is_its_audit_s_pin_and_states_its_gamma():
     """The table's twins from the repository's audit name pins it holds, at their type hashes, and reading those pins now,
     lifted guarantees included, gives the table's rows: a pin that moves or goes fails here until the table follows it."""
@@ -371,7 +385,7 @@ def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
     assert g["cap"] == "1/1000" and g["missing"] == [] and g["pins"] == ["pinned"]
     assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
     assert (g["published"], g["published_at"]) == (loop, "1047/125")
-    assert g["by_price"]["8"]["pin"] == f"Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_{n}"
+    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_{n}"
     assert all(P.lookup(t, "pearl-c-sm120/v1", path, n, n)["by_price"] == {} for path in ("cast-8", "cast-16", "cast-32.06"))
     assert P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", n, n)["published"] is not None
 
