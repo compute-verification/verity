@@ -9,7 +9,7 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
   digest, TurboSHAKE128, which is not computed) one of ``row/v2`` rows.
 - **The salts:** C-Flock's ChaCha20 stream under a key derived from the install's salt (`SALT_TAG`), the nonce the forward's
   serial in the install and the tree's place.  Each tree's domain names its k (or the tiles) and m₁₆, not the forward (v0).
-- **The roots:** each forward's, copied to a device ring (`ROOTS` forwards), whose SHA-512 over the forwards since the last
+- **The roots:** each forward's, copied to a device ring (`ROOTS` forwards), whose SHA-256 over the forwards since the last
   `take` the e2e's decode response reports.
 - **What it is not:** the scheme's own A root seeds forming (seed_A), so the statement's roots are in addition to its.  Prefill
   runs eagerly, so its rows are not committed here; nor are the fp8-p rows (the tile's inputs), which a prover commits after
@@ -122,15 +122,15 @@ class Statement:
         self.forwards += 1
 
     def take(self) -> dict:
-        """The forwards committed since the last take, and the SHA-512 of their roots in order (read after a sync)."""
+        """The forwards committed since the last take, and the SHA-256 of their roots in order (read after a sync)."""
         n, first = self.forwards - self.taken, self.taken
         self.taken = self.forwards
         if n > ROOTS:
-            return {"forwards": n, "roots_sha512": None, "wrapped": True}
+            return {"forwards": n, "roots_sha256": None, "wrapped": True}
         per = 64 * (len(self.ks) + 1)
         ring = bytes(self.ring.cpu().numpy())
         roots = b"".join(ring[per * ((first + i) % ROOTS):per * ((first + i) % ROOTS + 1)] for i in range(n))
-        return {"forwards": n, "roots_sha512": hashlib.sha512(roots).hexdigest()}
+        return {"forwards": n, "roots_sha256": hashlib.sha256(roots).hexdigest()}
 
     def poison(self) -> None:
         import torch
