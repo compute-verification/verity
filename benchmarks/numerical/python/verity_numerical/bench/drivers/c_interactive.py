@@ -1,12 +1,12 @@
-"""C-interactive (Flock, live verifier): ``backends/flock/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
+"""C-interactive (Flock, live verifier): ``verity/ml/flock/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
 
 A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
 writes its own instance files from it (``verity_flock.instances.write_set``); on a census frozen set the scripts rebuild it.
 
 The circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with ``--relation circuit:<template>``) runs
-``backends/flock/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).
+``verity/ml/flock/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).
 
-An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``backends/flock/pod/33-ir-cell.sh`` instead: the
+An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``verity/ml/flock/pod/33-ir-cell.sh`` instead: the
 cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity_flock.ir_bench``), and
 ``verity_flock.register`` names ``flock-ir-frame`` as the verifier binary.
 
@@ -25,10 +25,10 @@ BACKEND = "C-interactive"
 FAMILY = "C-Flock"
 INTERACTIVE = True
 RESULT = "result.json"
-SCRIPT = "backends/flock/pod/30-cell.sh"
-IR_SCRIPT = "backends/flock/pod/33-ir-cell.sh"
+SCRIPT = "verity/ml/flock/pod/30-cell.sh"
+IR_SCRIPT = "verity/ml/flock/pod/33-ir-cell.sh"
 IR_PREFIX = "irf:"
-CIRCUIT_SCRIPT = "backends/flock/pod/61-circuit-cell.sh"
+CIRCUIT_SCRIPT = "verity/ml/flock/pod/61-circuit-cell.sh"
 CIRCUIT_PREFIX = "circuit:"
 #: relations other than the template module's that ``cell plan --relation`` may name
 RELATIONS = (CIRCUIT_PREFIX,)
