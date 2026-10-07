@@ -1,5 +1,5 @@
 import Mathlib.Algebra.Polynomial.Roots
-import Specs.Pous.Guarantees
+import Models.Pous.Guarantees
 
 /-!
 # The digest is almost universal

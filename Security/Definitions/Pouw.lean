@@ -89,7 +89,7 @@ import Definitions.Pouw.Witness.Model
 /-!
 # PoUW's protocol: the definitions the statements read
 
-This layer, `Specs.Pouw.Assumptions` and `Specs.Pouw.Guarantees` are the trusted text: they import only each other,
+This layer, `Models.Pouw.Assumptions` and `Models.Pouw.Guarantees` are the trusted text: they import only each other,
 Mathlib and core's `Definitions.Core` (`Definitions.Pouw.PearlC.Defs` also Batteries), so their diff, with core's, is everything a
 statement reviewer reads.
 `Proofs.Pouw` holds the proofs and every lemma, which nobody reviews for meaning. A topic's modules keep their
