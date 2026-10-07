@@ -37,17 +37,27 @@ def State.update (s : State) (data : ByteArray) : State := Id.run do
     buf := data.extract off data.size
   return ⟨h, buf, s.len + data.size⟩
 
-/-- The digest: FIPS 180-4's padding (`0x80`, zeros, the 128-bit bit length) after the absorbed bytes. -/
-def State.finalize (s : State) : ByteArray := Id.run do
+/-- What `finalize` compresses after the whole blocks: the pending bytes then FIPS 180-4's padding (`0x80`, zeros, the
+128-bit bit length), one block or two. -/
+def State.padding (s : State) : ByteArray := Id.run do
   let mut data := s.buf.push 0x80
-  for _ in [0:(112 + 128 - data.size % 128) % 128] do data := data.push 0
+  data := data ++ ByteArray.mk (Array.replicate ((112 + 128 - data.size % 128) % 128) 0)
   let bits := s.len * 8
   for i in [0:16] do
     data := data.push ((bits >>> (8 * (15 - i))) % 256).toUInt8
+  return data
+
+/-- The chaining value as the digest: its eight words, big-endian. -/
+def digest (h : Array UInt64) : ByteArray :=
+  ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
+
+/-- The digest of everything absorbed. -/
+def State.finalize (s : State) : ByteArray := Id.run do
+  let data := s.padding
   let mut h := s.h
   for blk in [0:data.size / 128] do
     h := Flock.Sha512.compress h data (128 * blk)
-  return ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
+  return digest h
 
 def hash (msg : ByteArray) : ByteArray := (init.update msg).finalize
 

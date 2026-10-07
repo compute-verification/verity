@@ -56,15 +56,29 @@ def Expander.chunk (e : Expander) (s j : Nat) (purpose : UInt8) (i : Nat) : Byte
   (e.mid.update (Flock.be64 s.toUInt64 ++ Flock.be64 j.toUInt64 ++ ByteArray.mk #[purpose]
     ++ Flock.be32 i.toUInt32)).finalize
 
-/-- Bytes `[lo, hi)` of `stream_P`. -/
+/-- Bytes `[lo, hi)` of `stream_P`. A chunk's input after the prefix's midstate is 21 bytes, so with the prefix whole
+blocks (`pad128`) each chunk is one compression of the same padded block with its last four bytes, the counter, set: the
+block is built once per stream. -/
 def Expander.range (e : Expander) (s j : Nat) (purpose : UInt8) (lo hi : Nat) : ByteArray := Id.run do
   let first := lo / 64
   let mut out := ByteArray.emptyWithCapacity (hi - lo + 128)
-  for i in [first:(hi + 63) / 64] do out := out ++ e.chunk s j purpose i
+  let tail := e.mid.update (Flock.be64 s.toUInt64 ++ Flock.be64 j.toUInt64 ++ ByteArray.mk #[purpose] ++ Flock.be32 0)
+  let mut block := tail.padding
+  let at_ := tail.buf.size - 4
+  if block.size != 128 then
+    for i in [first:(hi + 63) / 64] do out := out ++ e.chunk s j purpose i
+  else
+    for i in [first:(hi + 63) / 64] do
+      for b in [0:4] do block := block.set! (at_ + b) (i >>> (8 * (3 - b))).toUInt8
+      out := out ++ Sha512.digest (Flock.Sha512.compress tail.h block 0)
   return out.extract (lo - 64 * first) (hi - 64 * first)
 
 def PURPOSE_K : UInt8 := 0x4b
 def PURPOSE_T : UInt8 := 0x74
+
+-- `range` is its chunks in order, after a prefix of whole blocks (one compression each) and after any other (`chunk`)
+#guard [128, 3].all fun n => let e := Expander.ofPrefix (zeros n)
+  e.range 5 7 PURPOSE_T 30 300 == ((List.range 5).foldl (· ++ e.chunk 5 7 PURPOSE_T ·) .empty).extract 30 300
 
 /-- The chunks a stream may have: its counter is a `u32be`. -/
 def STREAM_BYTES : Nat := 64 * 2 ^ 32
