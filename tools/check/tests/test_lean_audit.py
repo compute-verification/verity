@@ -442,8 +442,8 @@ def test_the_real_packages_and_their_inputs():
     pkgs = LA.packages(files)
     assert "verity/Security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/lean")]
     got = LA.inputs("verity/Security/Proofs", files)
-    assert "backends/flock/verifier/lean/level3/lean-audit.json" in got and "backends/flock/verifier/lean/FlockVerify.lean" in got
-    assert "tools/lean/audit.py" in got and not [f for f in got if f.startswith("backends/flock/verifier/lean/soundness/.lake")]
+    assert "verity/Security/lean-audit.json" in got and "backends/flock/verifier/lean/FlockVerify.lean" in got
+    assert "tools/lean/audit.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/lean/Replay.lean" in got and "tools/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/lean/tests/")]
 
@@ -551,7 +551,8 @@ def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_p
     entry = {"package": "pkg/a", "sha256": "ab" * 32, "bytes": 5}
     (tmp_path / "rec" / "lean-deps" / "lean-deps.json").write_text(json.dumps({"deps": {k: entry}}))
     heads = {f"objects/sha256/{'ab' * 32}": {"bytes": 5}}
-    tree = [types.SimpleNamespace(path=f"lean-deps/{k}.tar.gz", sha256="ab" * 32, bytes=5),
+    tree = [types.SimpleNamespace(path="out/audit/tool/lean-deps.json", sha256="12" * 32, bytes=7),     # the audit's copy of the pins
+            types.SimpleNamespace(path=f"lean-deps/{k}.tar.gz", sha256="ab" * 32, bytes=5),
             types.SimpleNamespace(path="lean-deps/lean-deps.json", sha256="cd" * 32, bytes=9)]
 
     class Store:
@@ -575,6 +576,9 @@ def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_p
     assert LA.pins() == {k: {**entry, "run": "r20260929-000000-abcd"}}                  # the stale manifest's pin is gone
     heads.clear()
     assert LA.pin("r20260929-000000-abcd") == 1 and "not on the remote" in capsys.readouterr().err
+    tree += [types.SimpleNamespace(path=f"again/{k}.tar.gz", sha256="ab" * 32, bytes=5),
+             types.SimpleNamespace(path="again/lean-deps.json", sha256="cd" * 32, bytes=9)]
+    assert LA.pin("r20260929-000000-abcd") == 1 and "2 bundle listings" in capsys.readouterr().err
 
 
 def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch):

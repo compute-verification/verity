@@ -2,6 +2,31 @@ import Definitions.Pouw.PearlC.Accum
 import Definitions.Pouw.PearlC.PeelExactP
 import Proofs.Pouw.PearlC.PeelExactProofs
 
+namespace Pouw.PearlC.Accum
+
+open Pouw.Fp8Atom Pouw.PearlC Matrix
+
+variable {m n k : Nat}
+
+theorem groupWordP_hopper : groupWordP hopperE4m3K32 = groupWord := rfl
+
+theorem totalP_hopper : totalP hopperE4m3K32 = total := rfl
+
+theorem chainP_hopper (G : Nat) : chainP hopperE4m3K32 G = chain G := rfl
+
+theorem ctChainP_hopper (G : Nat) : @ctChainP m n k hopperE4m3K32 G = @ctChain m n k G := rfl
+
+/-- Π's chain (`G = 4`) is the chain twin at `hopperE4m3K32`. -/
+theorem chainP_hopper_four : chainP hopperE4m3K32 4 = chain 4 := rfl
+
+/-- Π's `C̃` (`G = 4`) is the chain twin's at `hopperE4m3K32`. -/
+theorem ctChainP_hopper_four : @ctChainP m n k hopperE4m3K32 4 = @ctChain m n k 4 := rfl
+
+/-- The H100 record's ticket chain is Π's `C̃`. -/
+theorem chainAt_hopper : @chainAt m n k hopperE4m3K32 4 = @ctChain m n k 4 := rfl
+
+end Pouw.PearlC.Accum
+
 namespace Pouw.PearlC.AccumProofs
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.PearlC Pouw.PearlC.Accum Pouw.PearlC.PeelExact Pouw.PearlC.PeelExactP

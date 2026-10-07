@@ -78,7 +78,7 @@ except ImportError:                                                 # run as a s
 
 SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
-REGISTRY_REFS = ("origin/main", "origin/cursor/slack-routing-b252")   # where a checkout older than the registry finds it
+REGISTRY_REFS = ("origin/main",)                                  # where a checkout older than the registry finds it
 FRONT_DOOR = "agent-coordination"
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
@@ -668,7 +668,7 @@ def matches(filt: str, msg: dict, reg: dict, targets: list[str]) -> bool:
 def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset()) -> list[dict]:
     """Who gets `msg`, and how: each of `route_targets` is woken (`wake`, why `addressed`); then each other name in `book`
     (name -> route) whose `subscriptions` match it, by its first matching subscription's `deliver` (`wake`: now; `digest`:
-    when that name reads its digest).  A quiet post wakes no one, but still reaches digests.  Nothing in an inbox thread,
+    when that name reads its digest).  A quiet post wakes only the names it starts with, and still reaches digests.  Nothing in an inbox thread,
     and nothing by an unknown author, reaches anyone; the author never gets their own post."""
     targets = route_targets(msg, root, reg, inboxes)
     out = [{"name": t, "deliver": "wake", "why": "addressed"} for t in targets]
@@ -1012,11 +1012,18 @@ def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: 
     return "\n".join(lines)
 
 
+def _check_audience(to: list[dict], body: str, reg: dict) -> None:
+    if not to and (lead := lead_names(body, reg)):
+        raise SlackError(f"with no --to an announcement goes to every handle, but it starts with "
+                         f"{' '.join('@' + n for n in lead)}: pass them as --to, or move them off the start")
+
+
 def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
-    _post(client(ns), ch, h["handle"], announcement(h, to, _body(ns), ns.verify, ns.ships),
+    _check_audience(to, body := _body(ns), reg)
+    _post(client(ns), ch, h["handle"], announcement(h, to, body, ns.verify, ns.ships),
           route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1033,9 +1040,12 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
+        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
+        _check_audience(to, body, reg)
         text = announcement(h, to, body, ns.verify, ns.ships)
     else:
         if ns.verify or ns.ships:
@@ -1044,7 +1054,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
             body = body[m.end():]                                    # `--to @ci` with a body that starts `@ci` names it once
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
-    tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if ns.quiet else "") if t)
+    quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
+    tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
     return 0
 
@@ -1469,7 +1480,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             continue                                                 # a renamed name forwards into its successor's inbox
         counted.add(r["inbox_ts"])
         bells = [m for m in api.paged("conversations.replies", "messages", channel=r.get("channel") or ch, ts=r["inbox_ts"],
-                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"]]
+                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"] and m.get("username") == "router"]
         hours: dict[int, int] = {}
         for m in bells:
             hours[int(float(m["ts"]) // 3600)] = hours.get(int(float(m["ts"]) // 3600), 0) + 1
@@ -1763,7 +1774,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     except RouteError as e:
         if e.status != 400:
             raise
-        print(f"research slack: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
+        print(f"research msg: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
         out, fell_back = route.call("POST", "", old), True
     cid, ts = out.get("id"), out.get("ts")
     if not cid or not ts:
@@ -1824,7 +1835,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
-                   help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; fyi; ...)")
+                   help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; "
+                        "fyi, which implies --quiet; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
     p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed (digests still get it)")

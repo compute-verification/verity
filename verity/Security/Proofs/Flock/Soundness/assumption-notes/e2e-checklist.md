@@ -51,8 +51,9 @@ their finders' budgets (`hKS`, `hT`; `ASSUMPTIONS.md`, What is restated over the
 (`flock_batched_linkSoundE_pub`, from `flock_batched_linkSoundE`) and knowledge soundness.
 
 **The assumptions we intend to prove.** Each is one of the named hypotheses below, discharged by the PRs listed, and the
-skeleton's pins then lose that hypothesis. The pins need a named statement reviewer (red team, bc-f0bc7e75) each time.
-The last three rows are the hardness and platform assumptions, which stay.
+skeleton's pins then lose that hypothesis. Each time, Daniel gets a DM showing the rewritten records when they land on
+`main`, and that is the check: a statement reviewer is optional, and nothing waits on one. The last three rows are
+the hardness and platform assumptions, which stay.
 
 | Hypothesis | What it says | Owner | Discharged by |
 |---|---|---|---|
@@ -102,7 +103,7 @@ The headline is about SHA-512 throughout. These older paths say otherwise (red-t
 6). The Blake3 row leaf's setup lemmas are retired: `Refine.setup_wf` with its pin, and `blake3_regions_wf`,
 `parse_checkLayout`, `checkLayout_slots` and `pin_ok`, which only it used (`Refine/Setup.lean`). Each item below reaches
 past its own files, so it is retired by its owner before the headline is cited. Retiring a pinned theorem removes its
-pin, a changed record with a named statement reviewer.
+pin, a changed record, which Daniel gets as a DM when it lands on `main`.
 
 | Item | What it is | Owner | What it reaches |
 |---|---|---|---|

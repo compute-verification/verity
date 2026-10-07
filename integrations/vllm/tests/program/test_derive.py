@@ -21,7 +21,7 @@ from verity.primitives.circuits.program import Program
 from verity.primitives.circuits.codec import program_digest
 from verity.primitives.circuits.refs import Coll
 from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 from verity_vllm.program.frontend import examples
 from verity_vllm.program.frontend.correspond import correspond_rebound
@@ -246,7 +246,7 @@ def test_gpt2_greedy_request_reference_mode_tokens_match_torch():
     assert kinds["ArgmaxRef_v1"] == 3 and kinds["I64ToI32_v1"] == 4 and kinds["EagerAttentionRef_v1"] == 2 * (2 + 3 + 4)
     assert "IntCatNarrow[reference]_v1" in rep.provenance["rules_applied"]
     ids = torch.tensor([3, 17])
-    from verity_vllm.program.registry.serve3_reference import materialize
+    from verity_vllm.program.kernels.serve3_reference import materialize
     wbits = np.concatenate([_bits(dict(g.named_parameters())[w["name"]]) for w in rep.provenance["weights"]])
     t = materialize(rep.program, [[int(v) for v in ids.tolist()], [int(v) for v in wbits]])
     got = [int(t[o]) for o in rep.program.circuit.root_outputs()]

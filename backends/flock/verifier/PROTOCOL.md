@@ -280,20 +280,24 @@ M0 draws `os` coins under `FC_COINS=os`; `verify --coins os` binds its live-OS i
 The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
 `SHA-256("verity/flock-netlist/coin-commit/v1\0" ‖ nonce ‖ seed)` (as two F128 in the 16-LE-byte encoding, so the 32
 commitment bytes in order), and derives every coin. The SHA-512 statement (`631567f7`) commits with
-`SHA-512("verity/flock-circuit/coin-commit\0" ‖ nonce ‖ seed)`, sent as four F128; the derivation below stays SHA-256 (it is
-a derivation, not a commitment), with the domain `verity/flock-circuit/coins/v1`:
+`SHA-512("verity/flock-circuit/coin-commit\0" ‖ nonce ‖ seed)`, sent as four F128. The derivation below is
+`verity.primitives.randomness` v2, on SHA-512 (one hash, Daniel, 6 Oct), with the domain `verity/flock-circuit/coins/v1`:
 
 ~~~text
 frame(b bytes)  = 'b' ‖ be64(|b|) ‖ b
 frame(s string) = 's' ‖ be64(|utf8 s|) ‖ utf8 s
 frame(i nat)    = 'i' ‖ be64(|body|) ‖ body,  body = big-endian bytes of i without leading zeros (i = 0: one byte 00)
-derive(src, dom, ctx) = SHA-256("verity/randomness/derive/v1\0" ‖ frame(b src) ‖ frame(s dom)
+derive(src, dom, ctx) = first 32 bytes of SHA-512("verity/randomness/derive/v2\0" ‖ frame(b src) ‖ frame(s dom)
                                 ‖ frame(b (concat over keys of ctx in byte order: frame(s key) ‖ frame(value))))
-stream(key, parts, n) = first n bytes of  SHA-256(head ‖ be64(0)) ‖ SHA-256(head ‖ be64(1)) ‖ …
-                        head = "verity/randomness/stream/v1\0" ‖ key ‖ frame(b (concat frame(part)))
+stream(key, parts, n) = first n bytes of  SHA-512(head ‖ be64(0)) ‖ SHA-512(head ‖ be64(1)) ‖ …
+                        head = "verity/randomness/stream/v2\0" ‖ key ‖ frame(b (concat frame(part)))
 key    = derive(seed, "verity/flock-netlist/coins/v1", {"hello": s hello})
 coins_q(n) = stream(key, [s "coins", i q], 16 n)        q = 0, 1, 2, … in the order the server issued coin requests
 ~~~
+
+M0's identity names the derivation (`hashes.coin_derivation`): `sha512 (verity.randomness)` for v2. The sessions recorded
+before it name `sha256 (verity.randomness)` (the statements pinned `@f5df3bbc` and earlier) and derived with v1: SHA-256
+for SHA-512 and `v1` for `v2` in both tags, the whole 32-byte digest as the key, and 32-byte stream blocks.
 
 The link points are request `q = 0` (`2 · m_pts` coins in one request); every round's coins follow in the order the server
 handled them. The verdict reveals `seed`, `nonce`, `commitment` and the request count.
@@ -304,7 +308,7 @@ round's coins equal `coins_q`. The second needs every round's global request ind
 since `34c3d0815`, and `flock-circuit replay-coins` runs both checks. Older ones lack it (rounds are grouped by stream,
 and reps may interleave), so an auditor recomputes `q` only if the reps ran sequentially (points, then all of rep 0,
 then all of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
-pseudorandom (SHA-256 as a PRF); with `os` coins it needs neither.
+pseudorandom (SHA-512 as a PRF, `prf/sha-512`; SHA-256 for a v1 session); with `os` coins it needs neither.
 
 ### 7.3 The unit draw
 

@@ -32,10 +32,10 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `records-cpu/`), recorded by 60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 (TYPED=1 for `typed/`) at 455a01049
 #: (`art:dae0b537`, the same bytes)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs"
-SETS = {("flat", "rope-head"): "verity/flock-circuit+seed-injection",
-        ("flat", "gemm-coordinate"): "verity/flock-circuit+seed-injection",
-        ("typed", "rope-head"): "verity/flock-circuit/types+seed-injection",
-        ("typed", "gemm-coordinate"): "verity/flock-circuit/types+seed-injection"}
+SETS = {("flat", "rope-head"): "verity/flock-circuit@f5df3bbc+seed-injection",
+        ("flat", "gemm-coordinate"): "verity/flock-circuit@f5df3bbc+seed-injection",
+        ("typed", "rope-head"): "verity/flock-circuit/types@f5df3bbc+seed-injection",
+        ("typed", "gemm-coordinate"): "verity/flock-circuit/types@f5df3bbc+seed-injection"}
 CASES = {"honest": True, "output_claim_false": False, "output_row_committed_false": False, "digest_claim_false": False}
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 #: the sets whose form the soundness proof does not cover, and the reason the verifier refuses a case of them that passes

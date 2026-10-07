@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 # R11 for one-table sessions: the live audit simulated in the salted audit
 
 `ExecRefines` (`Event.lean`) is R11 at one strategy pair. This file proves it, with `bad = ⊥`, for the live audit whose
-session is one table's live session (`liveTable`, the coin server with retained round bytes, `Refine/Live.lean`) written
+session is one table's live session (`liveTable`, the challenger with retained round bytes, `Refine/Live.lean`) written
 out as a session directory by `wr`, against the audit with the salted session `batchedSessionL` on one-table plans. What
 it takes is `Decodes` (`Refine/LiveSim.lean`) at each draw and registration: on every live outcome flock-verify
 accepts, each rep's game runs on the tape decoded from its stream and its proof file, and the salted table's verdict on
@@ -23,8 +23,8 @@ those runs holds.
 
 What R11 still needs past this: `Decodes` itself, which is deterministic (R11b, the framing: the round bytes the coin
 server retains decode to the messages the proof files replay, and `wr` is the server's record); sessions of more than
-one table (M0's default is one, `--session-tables 1`); and that the coin server's session is `liveTable`, whose coins
-are uniform and drawn after each round's bytes (A6).
+one table (the circuit prover's default is one, `--session-tables 1`); and that the challenger's session is `liveTable`,
+whose coins are uniform and drawn after each round's bytes (A6).
 -/
 
 namespace FlockSoundness.Discharge.Exec
@@ -157,7 +157,7 @@ theorem live_le_sessionBL (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle.
 variable {n : ℕ} {Reg : Type}
 
 /-- **The live audit's session at one table**: `liveTable`, its outcome written out as the session directory by `wr`
-(the record the coin server writes, and the proof files). -/
+(the record the challenger writes, and the proof files). -/
 def liveOf (dg : ByteArray → ByteArray) (mPts N : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Transcript)
     (S : Finset (Fin n)) (R : Reg) : Game Transcript :=
   (liveTable dg mPts N).map (wr S R)
@@ -224,9 +224,9 @@ theorem execRefines_one (hdec : DecodesAll H E Lf T I wr opn dec one fin capOf)
 
 variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 
-/-- **The headline at the executable, for one-table sessions of the live coin server.** Let the verifier draw the units
+/-- **The headline at the executable, for one-table sessions of the challenger.** Let the verifier draw the units
 as in `Prog.flock_headline_L` (the live stratified draw under A3), let each draw's session be one table `T S R`, and let
-the live session be `liveTable` (the coin server, its coins uniform per round and drawn after the round's retained
+the live session be `liveTable` (the challenger, its coins uniform per round and drawn after the round's retained
 bytes), written out as a session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
 wrong units of the committed values of the simulated prover (`simAudit … τ`) with probability at most
 `miss(K) + ε_ks + δ_link`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`, so `Pr[bad] = 0`.

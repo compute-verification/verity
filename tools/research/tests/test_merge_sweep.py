@@ -102,6 +102,33 @@ def test_the_sweep_keeps_a_landed_branch_that_moved_past_its_landed_head(tmp_pat
     assert _heads(repo) == {"main", "A", "C", "D", "E"} and any(line.startswith("research merge: kept A") for line in lines)
 
 
+def test_the_sweep_closes_a_pr_whose_pinned_head_landed_and_whose_head_since_only_merged_main(tmp_path):
+    """#1273, #1274 and #1283 merged `main` into heads a tip had pinned (6 Oct): the tip lands them as the pinned heads, so the sweep
+    closes such a PR, saying so, and keeps its branch.  One whose head since adds content stays open."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "train", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge #3 ({tips['C'][:8]})", tips["C"])
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Merge train U (#3)", "train")
+    _git(repo, "push", "-q", "origin", "main")
+    landed = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "C")
+    _git(repo, "merge", "-q", "--no-ff", "--no-edit", tips["B"])
+    _git(repo, "push", "-q", "origin", "C")
+    gh.open[3]["headRefOid"] = moved = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "D")
+    (repo / "D2.txt").write_text("more\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "more")
+    _git(repo, "checkout", "-q", "main")
+    lines: list[str] = []
+    closed, _ = M.sweep(repo, gh=gh, log=lines.append)
+    assert 3 in closed and 4 not in closed
+    note = f"Merged into main at {landed[:12]} (Merge train U (#3)). Its head since, {moved[:12]}, adds nothing to main."
+    assert ("pr", "close", "3", "--comment", note) in gh.mutations
+    assert "C" in _heads(repo)
+
+
 def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
     repo, gh, _tips, _merge = _world(tmp_path)
     lines: list[str] = []
@@ -238,6 +265,74 @@ def test_a_merge_without_the_remote_skips_the_sweep(tmp_path, monkeypatch, capsy
     monkeypatch.chdir(repo)
     M._sweep_after(repo, "main", "origin")
     assert "no remote 'origin'; pull request sweep skipped" in capsys.readouterr().out
+
+
+# ---- the steps after a landing follow origin's main, not the push
+
+def _steps(monkeypatch) -> list[tuple]:
+    """Every after-landing step `caught_up` runs, in order: ("alert", old, new), ("mirror", sha), ("after_land", sha)."""
+    import research.spec_alert as S
+
+    ran: list[tuple] = []
+    monkeypatch.setattr(S, "alert", lambda _repo, old, new, **_k: ran.append(("alert", old, new)) or True)
+    monkeypatch.setattr(M, "push_mirror", lambda _repo, sha, _name: ran.append(("mirror", sha)) or True)
+    monkeypatch.setattr(M, "after_land", lambda _repo, _tool, sha, **_k: ran.append(("after_land", sha)))
+    monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "vy-nebius-1")
+    return ran
+
+
+def _marker(repo: Path) -> str:
+    out = _git(repo, "ls-remote", "origin", M.AFTER_LAND_REF)
+    return out.split()[0] if out else ""
+
+
+def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_merge_run_once(tmp_path, monkeypatch, capsys):
+    """#1206 (5 Oct) was the second landing to skip the spec DM, node 1's mirror and `post_train.py`: it reached main without
+    `research merge --push`.  Each `research merge` run catches them up from the marker, once, whoever runs it; a dry run runs
+    none, and a remote with no marker yet only gets one."""
+    repo, gh, _tips, merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    ran = _steps(monkeypatch)
+    monkeypatch.chdir(repo)
+    assert M.main(["--sweep"]) == 0
+    assert ran == [] and _marker(repo) == merge and f"had no {M.AFTER_LAND_REF}; set it to main ({merge[:12]})" in capsys.readouterr().out
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
+    for name in ("x", "y"):
+        (other / f"{name}.txt").write_text(name + "\n")
+        _git(other, "add", "-A")
+        _git(other, "commit", "-q", "-m", f"{name}, pushed by hand")
+    _git(other, "push", "-q", "origin", "main")
+    tip = _git(other, "rev-parse", "HEAD")
+    assert M.main(["--sweep", "--dry-run"]) == 0 and ran == [] and _marker(repo) == merge
+    assert M.main(["--sweep"]) == 0
+    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip)] and _marker(repo) == tip
+    assert f"last ran for {merge[:12]}; catching up 2 commit(s) of main to {tip[:12]}" in capsys.readouterr().out
+    assert M.main(["--sweep"]) == 0 and len(ran) == 3, "caught up once"
+
+
+def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_landings_it_missed_brought(tmp_path, monkeypatch,
+                                                                                                        capsys):
+    repo, gh, _tips, merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    before = _git(repo, "rev-parse", f"{merge}^1")
+    _git(repo, "push", "-q", "origin", f"{before}:{M.AFTER_LAND_REF}")       # the steps last ran before B's train landed
+    ran = _steps(monkeypatch)
+    assert M.main(["C", "--push"]) == 0, capsys.readouterr().err
+    tip = _git(repo, "rev-parse", "origin/main")
+    assert ran == [("alert", before, merge), ("mirror", merge), ("after_land", merge),    # the run's first catch-up: B's train
+                   ("alert", merge, tip), ("mirror", tip), ("after_land", tip)]          # the push's: C
+    assert _marker(repo) == tip
+
+
+def test_a_marker_main_does_not_hold_runs_nothing_and_says_how_to_reset_it(tmp_path, monkeypatch, capsys):
+    repo, gh, tips, _merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    _git(repo, "push", "-q", "origin", f"{tips['D']}:{M.AFTER_LAND_REF}")
+    ran = _steps(monkeypatch)
+    monkeypatch.chdir(repo)
+    assert M.main(["--sweep"]) == 0 and ran == [] and _marker(repo) == tips["D"]
+    assert f"last ran for {tips['D'][:12]}, which isn't in origin's main" in capsys.readouterr().out
 
 
 # ---- main to node 1's bare repository, once origin has it

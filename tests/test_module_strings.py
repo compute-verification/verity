@@ -31,6 +31,7 @@ HISTORY_PATHS = (
     "**/*vectors*.json",           # pinned vectors: what a run produced, by the names it had then
     "**/ledger/**",                # the frozen overhead ledger
     "**/CHANGELOG*",
+    "tools/move/*_map.toml",       # each move's map: the names it gave, which a later move may have renamed
 )
 #: JSON keys whose values record how a past run was invoked (its argv), not code a tool resolves now
 HISTORY_KEYS = frozenset({"argv", "command", "cmd", "invocation", "provenance", "history"})
@@ -47,7 +48,7 @@ EXEMPT = {
     ("integrations/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
         "probed",
     # a conformance row's record of how the 2026-09-07 NaN scan was made; the module has since gone
-    ("integrations/vllm/verity_vllm/program/registry/conformance.py", "verity_vllm.check.store_nan_scan"): "history",
+    ("integrations/vllm/verity_vllm/program/frontend/conformance.py", "verity_vllm.check.store_nan_scan"): "history",
     # the tool specs the preflight tests feed it, which name no tool on purpose
     ("tools/research/tests/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
     ("tools/research/tests/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",

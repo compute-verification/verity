@@ -1,56 +1,40 @@
 {
- "roots": [
-  "Proofs.Core",
-  "Proofs.Nci",
-  "Proofs.Pous",
-  "Proofs.Pouw",
-  "Proofs.Warden",
-  "Proofs.Flock"
- ],
+ "roots": ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock"],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Pous.Targets": "open targets: every pinned statement as a sorry stub",
   "Proofs.Pous.CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
-  "Proofs.Warden.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
-  "Proofs.Warden.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof",
-  "Proofs.Flock.Soundness.Discharge.Canonical.Gaps": "open targets: the statements the canonical headline's gaps need (a tail's outputs, public inputs, registered reads), sorry until they land; lake build FlockSoundness.Discharge.Canonical.All builds them",
+  "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
+  "Proofs.NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetTiming.Difftest.main, audited under NetTiming, a test and not a proof",
+  "Proofs.Flock.Soundness.Discharge.Canonical.Gaps": "open targets: the statements the canonical headline's gaps need (a tail's outputs, public inputs, registered reads), sorry until they land; lake build Proofs.Flock.Soundness.Discharge.Canonical.All builds them",
   "Proofs.Flock.Soundness.Discharge.Canonical.All": "imports Gaps.lean, whose open targets are sorry; every other canonical module is under the root"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
    "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
-   "args": [
-    "{conformance/steps.txt}",
-    "176549",
-    "{conformance/adds.txt}",
-    "5000"
-   ],
+   "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
    "data": {
     "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
     "conformance/steps.txt": "2d3c5317e24727543da4e12da608f9d8a1650538b4a6d4e65abf1047f58d9ce8"
    },
    "generate": [
     "python3",
-    "../../protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py",
+    "{repo}/verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py",
     "{repo}",
     "--out",
     "{out}"
    ]
   },
-  "Proofs.Warden.DifftestMain": {
+  "Proofs.NetworkCertifier.DifftestMain": {
    "why": "10,000 random instances on which NetTiming's definitions (expectedRow, and Accepted of constantRate and StatusComplete by decide) give what the Python audit gives: schedule.expected_grids, Audit.check_link with the first differing bucket, Audit.check_ingress_link, and each prefix's acceptance",
-   "args": [
-    "{difftest/instances.jsonl}",
-    "{difftest/python.jsonl}",
-    "10000"
-   ],
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "10000"],
    "data": {
     "difftest/instances.jsonl": "c048b4c1fcf4b2918611f2c249d46aead1cbd3124d068fe659645964ecc62601",
     "difftest/python.jsonl": "355d87108c136dd003c12c07f4026ec776d07922de7c1dbbe47381f48b74796f"
    },
    "generate": [
     "python3",
-    "../../protocols/accounting/communication/warden/lean/scripts/difftest_vectors.py",
+    "{repo}/verity/protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py",
     "{repo}",
     "--out",
     "{out}"
@@ -60,14 +44,12 @@
  "compile_time": {
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step, the tactic that steps through a successful computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "c86a84bed584d07dde045f113c2e8937b7d5887fb9cda37aebe771db55960a14"
+   "digest": "c8e7697dd01461092e5dda778796c82404aa9f23e79fa67b532c5123f96f8333"
   }
  },
  "layers": {
   "Proofs.Pouw.Dimension.Lifting": {
-   "imports": [
-    "Mathlib"
-   ],
+   "imports": ["Mathlib"],
    "except": [],
    "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
   }
@@ -82,11 +64,7 @@
   "watch": {
    "loomis-whitney": {
     "about": "Nci.SecurityProofs.loomis_whitney: the discrete Loomis-Whitney inequality, proved by hand",
-    "mentions": [
-     "Finset.card",
-     "Finset.image",
-     "HPow.hPow"
-    ],
+    "mentions": ["Finset.card", "Finset.image", "HPow.hPow"],
     "ack": [
      "Finset.card_pow_quotient_mul_pow_inter_subgroup_le",
      "Finset.le_card_quotient_mul_sq_inter_subgroup",
@@ -95,11 +73,7 @@
    },
    "A1-johnson-mca": {
     "about": "Assumptions.BCHKS25Thm46 (A1): the Johnson-range MCA bound the Ligerito folds assume",
-    "mentions": [
-     "CoreDefinitions.mcaError",
-     "CoreDefinitions.AffineLineGenerator",
-     "ReedSolomon.code"
-    ],
+    "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
     "ack": [
      "ProximityGap.rs_mcaError_le_of_le_relUDR",
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_mcaError_le",
@@ -119,20 +93,12 @@
    },
    "udr-mca": {
     "about": "the unique-decoding fallback for the MCA bound",
-    "mentions": [
-     "CoreDefinitions.mcaError",
-     "Code.relativeUniqueDecodingRadius"
-    ],
-    "ack": [
-     "ProximityGap.rs_mcaError_le_of_le_relUDR"
-    ]
+    "mentions": ["CoreDefinitions.mcaError", "Code.relativeUniqueDecodingRadius"],
+    "ack": ["ProximityGap.rs_mcaError_le_of_le_relUDR"]
    },
    "list-size": {
     "about": "ListSize.closeMsgs_card_le: the Johnson list bound, 25·2^r at rate 2^-r",
-    "mentions": [
-     "ReedSolomon.closePolynomialSet",
-     "Set.ncard"
-    ],
+    "mentions": ["ReedSolomon.closePolynomialSet", "Set.ncard"],
     "ack": [
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_finiteSlack_bounds",
      "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_rate_bounds",
@@ -179,10 +145,7 @@
    },
    "list-size-code": {
     "about": "ListSize.closeMsgs_card_le, stated as list decodability",
-    "mentions": [
-     "Code.IsListDecodable",
-     "ReedSolomon.code"
-    ],
+    "mentions": ["Code.IsListDecodable", "ReedSolomon.code"],
     "ack": [
      "OutOfDomSmpl.out_of_dom_smpl_1",
      "OutOfDomSmpl.out_of_dom_smpl_2",
@@ -193,9 +156,7 @@
    },
    "tensor-fold": {
     "about": "the fold union in LigeritoLevels (2^k - 1 pairs per level, paper Lemma 9)",
-    "mentions": [
-     "TensorMCA.tensorFoldBad"
-    ],
+    "mentions": ["TensorMCA.tensorFoldBad"],
     "ack": [
      "ReedSolomon.interleavedRS_tensorFoldBad_card_le_heightThree",
      "TensorMCA.hasFullTensorDecomposition_of_not_mem_bad",
@@ -207,107 +168,82 @@
    },
    "novel-basis": {
     "about": "Arith.Correct.xhat_poly, proved per instance for L ≤ 40 (level3)",
-    "mentions": [
-     "AdditiveNTT.novelPolynomialBasis"
-    ],
-    "ack": [
-     "AdditiveNTT.novelPolynomialBasis_is_basisVectors"
-    ]
+    "mentions": ["AdditiveNTT.novelPolynomialBasis"],
+    "ack": ["AdditiveNTT.novelPolynomialBasis_is_basisVectors"]
    },
    "collision-resistance": {
     "about": "SHA512CRStrict (cr/sha-512) and SHA512CRExpected (ecr/sha-512, A2), and the explicit collision finders",
-    "mentions": [
-     "CollisionResistance.crAdvantage"
-    ],
+    "mentions": ["CollisionResistance.crAdvantage"],
     "ack": []
    },
    "keyed-cr": {
     "about": "SHA512CRStrict and SHA512CRExpected, keyed form",
-    "mentions": [
-     "CollisionResistance.keyedCRAdvantage"
-    ],
+    "mentions": ["CollisionResistance.keyedCRAdvantage"],
     "ack": []
    },
    "rom-cr": {
     "about": "the random-oracle shadow of SHA512CRStrict (the birthday bound) and SHA512CRExpected (an expected-query birthday bound)",
-    "mentions": [
-     "CollisionResistance.romCRAdvantage"
-    ],
-    "ack": [
-     "CollisionResistance.romCRAdvantage_le_birthday"
-    ]
+    "mentions": ["CollisionResistance.romCRAdvantage"],
+    "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
    },
    "A3-uniform-bytes": {
     "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
-    "mentions": [
-     "IO.getRandomBytes"
-    ],
+    "mentions": ["IO.getRandomBytes"],
+    "ack": []
+   },
+   "A4-prf-sha512": {
+    "about": "A4 (KeyedStreamsUniform, prf/sha-512): verity.randomness's keyed streams at distinct indices pass a test as independent uniform streams do, up to eta, SHA-512's compression function keyed by a secret first block or by its chaining value being a PRF",
+    "mentions": ["PRFScheme.prfAdvantage"],
     "ack": []
    },
    "hm96-hiding": {
     "about": "Assumptions.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
-    "mentions": [
-     "PMF.tvDist",
-     "Matrix.mulVec"
-    ],
+    "mentions": ["PMF.tvDist", "Matrix.mulVec"],
     "ack": []
    },
    "pad-nonvanishing": {
     "about": "Assumptions.PadNonvanishing (zero knowledge): X_L + κ ≠ 0 on the level-0 domain, since Ŵ_cols(ω_q) is bit cols of q",
-    "mentions": [
-     "AdditiveNTT.normalizedW",
-     "Polynomial.eval"
-    ],
+    "mentions": ["AdditiveNTT.normalizedW", "Polynomial.eval"],
     "ack": []
    },
    "hm-row-computes": {
     "about": "HmRowComputes (circuit/hm96-sha512-row): the sha512x3 and hm96 slots compute SHA-512 and hm96's commit string, the value binding's circuit side (phase 2i)",
-    "mentions": [
-     "Sha512.compress",
-     "Sha512.hash"
-    ],
+    "mentions": ["Sha512.compress", "Sha512.hash"],
     "ack": []
    },
    "live-verifier-custody": {
     "about": "Assumptions.Zk.RecordCustodyZK (live-verifier): the record flock-verify verify --zk reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
-    "mentions": [
-     "IO.FS.readFile",
-     "IO.FS.writeFile"
-    ],
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
    },
    "live-verifier-custody-tables": {
     "about": "Assumptions.Zk.RecordCustodyZKJ (live-verifier): RecordCustodyZK at J tables, the record flock-verify verify --zk --session-tables J reads is the one the verifier's coin server wrote for the live session, and its draw file the one flock-verify draw printed for the verifier's own subset draw (PROTOCOL.md §17.2: nothing in the record authenticates its writer)",
-    "mentions": [
-     "IO.FS.readFile",
-     "IO.FS.writeFile"
-    ],
+    "mentions": ["IO.FS.readFile", "IO.FS.writeFile"],
     "ack": []
    }
   },
   "scan": {
    "Arklib": {
     "baseline": "scripts/axiom_baseline.json",
-    "sources": [
-     "ArkLib"
-    ]
+    "sources": ["ArkLib"]
    }
   }
  },
+ "guarantees": {},
  "dependencies": {
+  "Arklib": "dd87231a60935b888a323851a96eb3dc4d6b1dd859510a5eafccdaa0d1119015",
+  "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
   "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
+  "PolyFun": "d6c4bf9613dfeab9b80598baff217484de34ac616a0475184a5ce2aefad5a502",
   "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
+  "VCVio": "d8c0d42db31325df600f165e6fc5fd1ad5fb38da84ea81d52fcb92cc4dd73d22",
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
   "batteries": "5a2410f298248ea44bf4d2fba0cf6fa143c56a185230ef6f3d1d6e22effd58f8",
+  "cslib": "4fbda9ca9a3ebb5d9e1215ea17eca3ef36fb846b72ef716232fca52747cbfdb1",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "ee11c449f532ab29db1bb3478f8f5673f885a8a11f4b5338fbfc71a9fe7822a3",
+  "mathlib": "a856f08bc67dba8ef9c710e12ff284ed17fb2e2252607a191c7b6fa247cae89b",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
-  "toolchain": "03fc7216d49ae2ec6e8f09309ddd544a4ef90a222fd4856c142919aa4aac2ae0",
-  "Arklib": "a100ce185a5f9f8e2a6e1d3b0f1782f006d7e280c602619a98cee5c970de0331",
-  "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
-  "PolyFun": "d6c4bf9613dfeab9b80598baff217484de34ac616a0475184a5ce2aefad5a502",
-  "VCVio": "d8c0d42db31325df600f165e6fc5fd1ad5fb38da84ea81d52fcb92cc4dd73d22",
-  "cslib": "4fbda9ca9a3ebb5d9e1215ea17eca3ef36fb846b72ef716232fca52747cbfdb1"
+  "toolchain": "03fc7216d49ae2ec6e8f09309ddd544a4ef90a222fd4856c142919aa4aac2ae0"
  }
 }

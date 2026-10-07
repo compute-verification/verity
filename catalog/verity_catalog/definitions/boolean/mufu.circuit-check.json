@@ -1,0 +1,25 @@
+{
+ "definitions": {
+  "DivFullRcp_v2": {
+   "and": 1152
+  },
+  "DivFullScaleA_v3": {
+   "and": 531
+  },
+  "MufuEx2Ftz_v2": {
+   "and": 1073
+  },
+  "MufuRcpFtz_v2": {
+   "and": 902
+  },
+  "MufuSqrtFtz_v2": {
+   "and": 879
+  },
+  "MufuTanh_v2": {
+   "and": 1049
+  },
+  "RsqrtApprox_v2": {
+   "and": 1134
+  }
+ }
+}
