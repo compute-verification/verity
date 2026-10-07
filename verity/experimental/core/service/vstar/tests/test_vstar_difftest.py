@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -31,6 +32,8 @@ from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
 
 LEAN = Path(__file__).resolve().parents[1]
+#: inner sessions' shapes, ``M,K_LOG,CLAIMS`` separated by ``;``, whose whole stage `test_stage_is_byte_equal` compares
+STAGE = os.environ.get("VERITY_VSTAR_STAGE", "")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 HEX = "0123456789abcdef"
@@ -521,3 +524,62 @@ def test_inner_file_is_byte_equal(tmp_path):
     lean = _vstar(tmp_path, "inner", str(tmp_path / "s.json"), "rec-residuals/ü", str(tmp_path / "b.json"))
     assert lean == _inner_text({"S": S, "name": "rec-residuals/ü", **b}).encode()
 
+
+def _stage(sh: A.Shape) -> list[tuple[str, dict, object]]:
+    """`rec_vstage.stage`'s statements over an inner session of shape ``sh``: each one's directory, its bindings, and a
+    function writing its circuit as `stage` does. A level's bindings and text are `rec_outer.stage`'s (its Program over the
+    level's ``2 q`` openings, the template-instance partition of it, `compose` of the level's lowering); a part's text is
+    `rec_residuals.statement`'s, which computes its bindings again (the test checks they are these)."""
+    from verity.experimental.protocols.sampled_proofs.one_stage import partition as P
+
+    def bindings(defn, n: int, sub) -> dict:
+        program = P.population_program(defn, n)
+        return {"partition": P.digest(P.partition(program, P.template_instance_query(defn))),
+                "program": P.program_sha512(program), "program_digests": sub.program_digests(None)}
+
+    out = []
+    for level, lv in enumerate(A.fast100(sh.m).levels):
+        L, H, n = 1 << lv.lanes, lv.d - lv.cap, 2 * lv.q
+        b = bindings(R.definition(L, H), n, O.subcircuit(L, H))
+        out.append((f"L{level}", b, lambda L=L, H=H, b=b: FC.compose(O.lowering(L, H), O.subcircuit(L, H),
+                                                                       partition=b["partition"], program=b["program"])))
+    for j, p in enumerate(RR.parts(RR.spec(sh))):
+        name = f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}"
+        b = bindings(RR.definition(p.S), 2, RR.subcircuit(p.S, name))
+
+        def text(S=p.S, name=name, b=b) -> str:
+            st = RR.statement(S, name, 2)
+            assert (P.digest(st.part), st.prog) == (b["partition"], b["program"])
+            return st.text
+        out.append((f"alg/p{j}", b, text))
+    return out
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not STAGE, reason="V*'s whole stage, byte for byte (VERITY_VSTAR_STAGE=M,K_LOG,CLAIMS[;...]): Python's "
+                                      "builders take tens of minutes and gigabytes a shape, a CPU pod's job")
+@pytest.mark.parametrize("shape", [tuple(map(int, x.split(","))) for x in STAGE.split(";") if x] or [None])
+def test_stage_is_byte_equal(tmp_path, shape):
+    """Every statement of V* over an inner session of ``shape``, from `vstar stage`, against the file `rec_vstage.stage`
+    writes for it (`_stage`), byte for byte. With ``VERITY_VSTAR_STAGE_OUT`` set, each statement's digests go to
+    ``stage-M-K-C.json`` there."""
+    sh = A.Shape(*shape)
+    stage = _stage(sh)
+    (tmp_path / "b.json").write_text(json.dumps([b for _, b, _ in stage]))
+    p = subprocess.run([str(D.build(LEAN, "vstar")), "stage", *map(str, shape), str(tmp_path / "b.json"), str(tmp_path / "st")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    lean = json.loads(p.stdout)
+    assert [s["dir"] for s in lean] == [d for d, _, _ in stage]
+    record = []
+    for s, (d, b, text) in zip(lean, stage, strict=True):
+        data = (tmp_path / "st" / d / "circuit.txt").read_bytes()
+        assert (s["sha512"], s["bytes"]) == (hashlib.sha512(data).hexdigest(), len(data))
+        python = text().encode()
+        record.append({**s, "python_sha512": hashlib.sha512(python).hexdigest(), "python_bytes": len(python),
+                       "equal": data == python, "partition": b["partition"], "program": b["program"]})
+        del data, python
+    if out := os.environ.get("VERITY_VSTAR_STAGE_OUT"):
+        Path(out).mkdir(parents=True, exist_ok=True)
+        (Path(out) / f"stage-{'-'.join(map(str, shape))}.json").write_text(json.dumps(record, indent=1))
+    assert all(r["equal"] for r in record), [r["dir"] for r in record if not r["equal"]]
