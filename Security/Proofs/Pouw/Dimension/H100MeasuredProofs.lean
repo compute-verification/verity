@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.Dimension.H100Measured
+import Models.Pouw.Assumptions.Dimension.H100Measured
 
 /-!
 # `MH100`'s measured table satisfies `H32`: proof
