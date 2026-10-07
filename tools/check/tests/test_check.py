@@ -498,11 +498,11 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     closure = CHECK.agreement_closure(files)
     policy, other = "backends/flock/verifier/lean/lean-audit.json", "backends/flock/verifier/lean/Flock/lean-audit.json"
     assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
-    assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/Main.lean" in closure
+    assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/FlockVerify.lean" in closure
     assert "backends/flock/verifier/upstream.json" in closure
-    assert not [f for f in closure if f.startswith(("backends/flock/verifier/lean/soundness/", "backends/flock/verifier/lean/level3/"))]
-    assert [f for f in files if f.startswith("backends/flock/verifier/lean/soundness/")]
-    (tmp_path / "backends/flock/verifier/lean/soundness").mkdir(parents=True)
+    assert not [f for f in closure if f.startswith(("verity/Security/Proofs/", "verity/Security/Proofs/"))]
+    assert [f for f in files if f.startswith("verity/Security/Proofs/")]
+    (tmp_path / "verity/Security/Proofs").mkdir(parents=True)
     (tmp_path / "backends/flock/verifier/lean/lakefile.toml").write_text('[[require]]\nname = "x"\n')
     (tmp_path / "backends/flock/verifier/lean/soundness/lakefile.toml").write_text("")
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)

@@ -1,6 +1,6 @@
 """Export the P1 step template (``step_template.build_step``) as one 2^13-row slot of Flock's block R1CS ``A.z * B.z = z``.
 
-The slot is one copy of the soundness package's ``Rows`` (``backends/flock/verifier/lean/soundness/FlockSoundness/ExecRows.lean``)
+The slot is one copy of the soundness package's ``Rows`` (``verity/Security/Proofs/Flock/Soundness/ExecRows.lean``)
 in its column order, so a block of these slots is ``Rows.stack`` placed by ``stackPlace``: the 704 inputs (accumulator word,
 16 + 16 decoded operands) at 0..703, then the computed rows (the live ANDs, then one copy row per output bit that is not already
 a single committed bit), then the copy's constant at ``nIn + nComp = used - 1``. A computed row reads only earlier columns or
