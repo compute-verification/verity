@@ -72,7 +72,7 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     (home / "rustc").rename(rustc)
     key = CHECK.rust_tests_key(e)
     assert key, "the key's rustc runs under the script's pin, and never installs it"
-    (flock / "verifier" / "ci.py").write_text("changed")
+    (tmp_path / "backends" / "flock" / "verifier" / "ci.py").write_text("changed")
     (flock / "README.md").write_text("changed")
     assert CHECK.rust_tests_key(e) == key
     (flock / "live" / "src" / "lib.rs").write_text("fn b() {}")
@@ -217,7 +217,7 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["verity/ml/provers/flock/", "!README.md", "!PROTOCOL.md"]}
+    assert tool.CHECK.merge_requires == {"lean-agreement": ["verity/ml/provers/flock/", "backends/flock/", "!README.md", "!PROTOCOL.md"]}
     pin = __import__("json").loads((ROOT / "backends" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
@@ -358,7 +358,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
         "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['true'], "
         "merge_requires={'lean-agreement': ['verity/ml/provers/flock/', '!README.md']})\n")
     (tmp_path / "verity" / "ml" / "provers" / "flock").mkdir(parents=True)
-    (tmp_path / "backends" / "flock" / "verify.rs").write_text("fn main() {}\n")
+    (tmp_path / "verity" / "ml" / "provers" / "flock" / "verify.rs").write_text("fn main() {}\n")
     git("init", "-q", "-b", "main")
     git("add", "-A")
     git("commit", "-q", "-m", "base")
@@ -766,7 +766,7 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     git("add", "-A")
     git("commit", "-q", "-m", "base")
     (tmp_path / "verity" / "ml" / "provers" / "flock").mkdir(parents=True)
-    (tmp_path / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    (tmp_path / "verity" / "ml" / "provers" / "flock" / "é.py").write_text("x = 1\n")
     git("checkout", "-q", "-b", "pr")
     git("add", "-A")
     git("commit", "-q", "-m", "é")
@@ -789,6 +789,6 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert "check: changes under verity/ml/provers/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    assert "check: changes under verity/ml/provers/flock/, backends/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)
