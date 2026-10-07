@@ -1,5 +1,5 @@
 import MemoryChallenger.FrameV3
-import MemoryChallenger.LmsSign
+import MemoryChallenger.SignedMessage
 import MemoryChallenger.Records
 import MemoryChallenger.Verdict
 import MemoryChallenger.Protocol

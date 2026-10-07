@@ -98,7 +98,7 @@ def reveal (j index : Nat) : ByteArray := be 4 j ++ be 8 index
 def sign (cfg : Config) (s : State) (q : Nat) : E Out := do
   let unsigned : SignedSession := ⟨cfg.commitment, s.ended, s.rounds, cfg.scheme, cfg.key.publicKey, .empty⟩
   let record ← unsigned.message
-  let sig ← Lms.signAt cfg.key q (← Lms.memoryChallengerMessage cfg.key.I cfg.coins.session record)
+  let sig ← Lms.signAt cfg.key q (← memoryChallengerMessage cfg.key.I cfg.coins.session record)
   pure (.session { unsigned with signature := sig.encode } (s.rounds.map fun r => cfg.coins.opening r.j))
 
 private def finish (s : State) (ended : String) : State × List Action :=

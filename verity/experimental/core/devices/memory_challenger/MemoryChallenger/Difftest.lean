@@ -55,13 +55,13 @@ def messageFn (j : Json) : V Json := do
 def blockDigestFn (j : Json) : V Json := do pure (hexJ (blockDigest (← hex j "block")))
 
 def mcMessageFn (j : Json) : V Json := do
-  pure (hexJ (← Lms.memoryChallengerMessage (← hex j "I") (← hex j "session") (← hex j "record")))
+  pure (hexJ (← memoryChallengerMessage (← hex j "I") (← hex j "session") (← hex j "record")))
 
 /-- A test signer's key and its signature of `record` for `session` at leaf `q`, as `LmsSigner.sign` makes it with its
 leaf state at `q`. -/
 def signAtFn (j : Json) : V Json := do
   let k ← testKey (← hex j "secret") (← J.nat j "height" "input")
-  let m ← Lms.memoryChallengerMessage k.I (← hex j "session") (← hex j "record")
+  let m ← memoryChallengerMessage k.I (← hex j "session") (← hex j "record")
   let s ← Lms.signAt k (← J.nat j "q" "input") m
   pure (Json.mkObj [("public_key", hexJ k.publicKey), ("signature", hexJ s.encode)])
 
