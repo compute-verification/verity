@@ -1,0 +1,26 @@
+{
+ "roots": [
+  "Properties.Nci"
+ ],
+ "meaning": [
+  "Properties.Nci",
+  "Definitions.Core",
+  "Definitions.Nci",
+  "NciCheck.Check",
+  "Flock"
+ ],
+ "layers": {
+  "Properties.Nci": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "NciCheck.Check",
+    "Properties.Nci"
+   ],
+   "except": [],
+   "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  }
+ },
+ "guarantees": {}
+}

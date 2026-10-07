@@ -1,0 +1,23 @@
+# The properties of code the verifier runs, stated against its Lean function and proved: `Properties.<Area>` states them
+# over the definitions (`security`) and the code (`nci_check`, required by path), and `Properties.Proofs.<Area>` proves
+# them. Its own package because `security` requires only Mathlib, no code package may require `Security`, and its
+# proofs need only Mathlib, not `security_proofs`' ArkLib. Its modules sit beside the trusted text's (`srcDir = ".."`).
+name = "security_properties"
+srcDir = ".."
+defaultTargets = ["Properties"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "security"
+path = ".."
+
+[[require]]
+name = "nci_check"
+path = "../../verity/experimental/core/protocols/network/nci/lean"
+
+[[lean_lib]]
+name = "Properties"
+roots = ["Properties.Nci"]
