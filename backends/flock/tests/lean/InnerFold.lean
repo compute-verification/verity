@@ -8,14 +8,21 @@ session's public record, the fold points from each rep's recorded transcript), s
 record. `verity_flock.rec_vstage` hands `comb` to the algebra as a public input; its tests hold it to
 `tests/fixtures/inner_claims.json`, which `InnerClaims.lean` dumps while running the whole inner verifier.
 
-    lean --run InnerFold.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]
+    lean --run InnerFold.lean [--plain-leaves] [--partition FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]
 
 POINTS: `{"link": [[hex, ...], ...], "reps": [{"alpha", "beta", "lw": [64], "rho_in": [k_log - 6], "ts": [k_log - 6]}]}`.
 `os`: the statement's tags on the verifier's live OS coins (`verify --coins os`), else seeded coins.
 `--partition`: the verifier's copy of the `verity/partition/v1` object a circuit binds (`verify --partition`).
+`--plain-leaves`: the statement's tags with the inner statement's plain SHA-512 leaves (`leafSchemePlain`) in place of
+their own leaf-commitment scheme: a recursive session's inner statement, whose tree tops the firewall salts.
 -/
 
 open Lean Flock
+
+/-- META `leaf_scheme` of a recursive session's inner statement (`verity_flock.circuit.LEAF_SCHEME_PLAIN`). -/
+def leafSchemePlain : Json :=
+  Json.mkObj [("id", .str "flock-leaf/sha512-unsalted"), ("inner", .str "sha512 column digest"), ("salt_bytes", toJson (0 : Nat)),
+    ("use", .str "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off")]
 
 def hx (a : F128) : Json := .str a.toHex
 
@@ -40,6 +47,9 @@ def run (st : Setup) (pts : Json) : V Json := do
   return Json.mkObj [("m", .num st.m), ("k_log", .num st.kLog), ("extras", .arr (extras.map claimJson)), ("reps", .arr reps)]
 
 def main (args : List String) : IO UInt32 := do
+  let (args, plain) := match args with
+    | "--plain-leaves" :: rest => (rest, true)
+    | _ => (args, false)
   let (args, partFile) := match args with
     | "--partition" :: f :: rest => (rest, some f)
     | _ => (args, none)
@@ -47,9 +57,11 @@ def main (args : List String) : IO UInt32 := do
     | [sid, circuit, pub, points, "os"] => ([sid, circuit, pub, points], Coins.os)
     | _ => (args, Coins.seed)
   let [sid, circuit, pub, points] := args
-    | IO.eprintln "usage: lean --run InnerFold.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]"; return 2
+    | IO.eprintln "usage: lean --run InnerFold.lean [--plain-leaves] [--partition FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]"; return 2
   let some tags := Tags.find? sid | IO.eprintln s!"unknown statement {sid}"; return 2
   let tags := tags.withCoins coins
+  let tags := if plain then { tags with merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain }
+    else tags
   let circuitB ← IO.FS.readBinFile circuit
   let pubB ← IO.FS.readBinFile pub
   let pts ← match Json.parse (← IO.FS.readFile points) with
