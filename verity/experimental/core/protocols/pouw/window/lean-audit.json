@@ -1,19 +1,5 @@
 {
- "roots": ["PouwWindow"],
- "exempt": {
-  "PouwWindow.DifftestMain": "the difftest against window.py, under `runs`: compiled evaluation of PouwWindow.Difftest.main, audited under PouwWindow, a test and not a proof"
- },
- "runs": {
-  "PouwWindow.DifftestMain": {
-   "why": "12,000 random instances on which the window's Lean gives what window.py gives, refusals by their reason: the grid (on_grid, floor_point, pad, level, point, Work.at, bucket, levels), k_prime and the sampling item, window_problem with tile_at and tile_in, and PUBLIC, REGISTERED and KINDS",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "12000"],
-   "data": {
-    "difftest/instances.jsonl": "03c4fcf994b39a445aabc33b072eedbe23c9cf49f8f0b8581ef8ec2b85652a2b",
-    "difftest/python.jsonl": "72cae4c593fe7a350bd7da93648676efad6b148575b983c89724cb68bc6f5945"
-   },
-   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
-  }
- },
+ "roots": ["PouwWindow", "PouwWindow.DifftestMain"],
  "layers": {
   "PouwWindow.Grid": {
    "imports": [],

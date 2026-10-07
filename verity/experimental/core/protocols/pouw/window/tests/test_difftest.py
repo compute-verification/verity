@@ -1,39 +1,46 @@
-"""The difftest's Python half: random instances of `verity.experimental.protocols.pouw.window` and its answers on each, as
-`PouwWindow.Difftest.evaluate` reads and gives them (`PouwWindow/Difftest.lean` lists the ops).
+"""The window's Lean against `verity.experimental.protocols.pouw.window`, on the shared harness (`verity_difftest`): one
+`Port` per function of `window.py`, served by `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
-Instance `seed` is drawn from `random.Random(seed)`. The grid's numbers run over bits 0 … 6, n up to 2^60 and the integers
-at or below 0; K′'s parameters over realistic ε and δ (down to 2^-40), grid-derived and random work up to n = 2^60, cases
-where (1 − p)^K = δ exactly, and every way out of its domain; the windows are well-formed advice that is then, for most,
-mutated to reach each of `window_problem`'s refusals (`MUTATIONS`), with `tile_at` and `tile_in` on the ones it accepts.
+The inputs are drawn by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
+deterministic and shrinks. The grid's numbers run over bits 0 … 6, n up to 2^60 and the integers at or below 0; K′'s
+parameters over realistic ε and δ (down to 2^-40), grid-derived and random work up to n = 2^60, cases where (1 − p)^K = δ
+exactly, and every way out of its domain; the windows are well-formed advice that is then, for most, mutated to reach each
+of `window_problem`'s refusals (`MUTATIONS`), whose reason is its output, so the test holds which check refused. `tile_at`
+and `tile_in` run on windows it accepts. JSON floats are outside the harness's canonical form, so the entries' strictness
+on them is `test_pouw_window.py`'s.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import random
+import shutil
 from dataclasses import asdict
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
+import pytest
+import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.experimental.protocols.pouw import window as Wd
 
-COUNT = 12000
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-
-def answer(f: Callable[[], Any], shape: Callable[[Any], Any] = lambda v: v) -> dict:
-    try:
-        return {"ok": shape(f())}
-    except ValueError as e:
-        return {"refused": str(e)}
-
-
-def _work(w: Wd.Work) -> dict:
-    return asdict(w)
+LEAN = Path(__file__).resolve().parents[1]
+EXE = "pouw-window-difftest"
 
 
 def _frac(q: Fraction) -> list[int]:
     return [q.numerator, q.denominator]
+
+
+def _q(v: list[int]) -> Fraction:
+    return Fraction(v[0], v[1])
+
+
+def _work(v: dict) -> Wd.Work:
+    return Wd.Work(v["level"], v["credited"], v["n"])
 
 
 # ---- the grid -----------------------------------------------------------------------------------------------------------
@@ -51,23 +58,21 @@ def _number(rng: random.Random, bits: int) -> int:
     return rng.getrandbits(rng.randint(1, 60))
 
 
-def grid(rng: random.Random) -> tuple[dict, dict]:
-    bits, n = rng.randint(0, 6), 0
-    n = _number(rng, bits)
-    ell = rng.choice((rng.randint(0, 60), rng.randint(0, 2000), -rng.randint(1, 5)))
-    inst = {"op": "grid", "bits": bits, "n": n, "ell": ell}
-    return inst, {"on_grid": Wd.on_grid(n, bits), "floor_point": answer(lambda: Wd.floor_point(n, bits)),
-                  "pad": answer(lambda: Wd.pad(n, bits)), "level": answer(lambda: Wd.level(n, bits)),
-                  "point": answer(lambda: Wd.point(ell, bits)), "work_at": answer(lambda: Wd.Work.at(ell, bits), _work),
-                  "bucket": answer(lambda: Wd.bucket(n, bits), _work)}
+def grid_n(rng: random.Random) -> dict:
+    bits = rng.randint(0, 6)
+    return {"bits": bits, "n": _number(rng, bits)}
 
 
-def levels(rng: random.Random) -> tuple[dict, dict]:
+def grid_ell(rng: random.Random) -> dict:
+    return {"bits": rng.randint(0, 6), "ell": rng.choice((rng.randint(0, 60), rng.randint(0, 2000), -rng.randint(1, 5)))}
+
+
+def levels_in(rng: random.Random) -> dict:
     bits = rng.randint(0, 6)
     lo, hi = sorted((_number(rng, bits), _number(rng, bits)))
     if rng.random() < 0.2:
         lo, hi = hi, lo
-    return {"op": "levels", "bits": bits, "lo": lo, "hi": hi}, {"levels": answer(lambda: Wd.levels(lo, hi, bits))}
+    return {"bits": bits, "lo": lo, "hi": hi}
 
 
 # ---- the draw -----------------------------------------------------------------------------------------------------------
@@ -103,8 +108,7 @@ def _draw_params(rng: random.Random) -> tuple[Fraction, Fraction, int, int, int]
         p = eps * credited / n
         if p == 1:
             return eps, delta, credited, n, w
-        k = rng.randint(1, 30)
-        return eps, (1 - p) ** k, credited, n, w
+        return eps, (1 - p) ** rng.randint(1, 30), credited, n, w
     n, w = rng.randint(1, 1 << 30), rng.randint(1, 100)
     bad = rng.choice(("eps0", "eps>1", "eps<0", "delta0", "delta1", "delta>1", "delta<0", "n0", "n<0", "w0", "w<0",
                       "credited0", "credited<0", "credited>nw"))
@@ -117,28 +121,32 @@ def _draw_params(rng: random.Random) -> tuple[Fraction, Fraction, int, int, int]
             0 if bad == "n0" else -n if bad == "n<0" else n, 0 if bad == "w0" else -w if bad == "w<0" else w)
 
 
-def k_prime(rng: random.Random) -> tuple[dict, dict]:
+def k_prime_in(rng: random.Random) -> dict:
     eps, delta, credited, n, w = _draw_params(rng)
-    inst = {"op": "k_prime", "eps": _frac(eps), "delta": _frac(delta), "credited": credited, "n": n, "w_max": w}
-    return inst, {"k_prime": answer(lambda: Wd.k_prime(eps, delta, credited, n, w))}
+    return {"eps": _frac(eps), "delta": _frac(delta), "credited": credited, "n": n, "w_max": w}
 
 
-def sampling(rng: random.Random) -> tuple[dict, dict]:
+def _some_work(rng: random.Random, bits: int) -> Wd.Work:
+    return Wd.Work.at(rng.randint(0, 400), bits) if rng.random() < 0.6 else Wd.bucket(rng.randint(1, 1 << 40), bits)
+
+
+def sampling_in(rng: random.Random) -> dict:
     eps, delta, bits = _eps(rng), _delta(rng), rng.randint(0, 6)
     if rng.random() < 0.15:
         eps = rng.choice((Fraction(0), Fraction(2)))
-    work = Wd.Work.at(rng.randint(0, 400), bits) if rng.random() < 0.6 else Wd.bucket(rng.randint(1, 1 << 40), bits)
-    tile = rng.choice((1, 4096, rng.randint(1, 1 << 20), 0, -3))
-    inst = {"op": "sampling", "eps": _frac(eps), "delta": _frac(delta), "work": _work(work), "tile_work": tile, "bits": bits}
-    return inst, {"sampling": answer(lambda: Wd.sampling(eps, delta, work, tile, bits)), "to_json": work.to_json(tile)}
+    return {"eps": _frac(eps), "delta": _frac(delta), "work": asdict(_some_work(rng, bits)),
+            "tile_work": rng.choice((1, 4096, rng.randint(1, 1 << 20), 0, -3)), "bits": bits}
+
+
+def work_to_json_in(rng: random.Random) -> dict:
+    return {"work": asdict(_some_work(rng, rng.randint(0, 6))), "tile_work": rng.choice((1, 4096, rng.randint(-5, 1 << 20)))}
 
 
 # ---- the advice ---------------------------------------------------------------------------------------------------------
 
 def _side(rng: random.Random, big: bool) -> dict:
     rows = rng.randint(1, 64 if big else 8)
-    keep = sorted(rng.sample(range(rows), rng.randint(1, rows)))
-    return {"rows": rows, "keep": keep}
+    return {"rows": rows, "keep": sorted(rng.sample(range(rows), rng.randint(1, rows)))}
 
 
 def window_advice(rng: random.Random) -> tuple[list, Wd.Work, int, int]:
@@ -168,14 +176,14 @@ def _real(entries: list) -> int:
 
 
 def _bad_number(rng: random.Random, x: int) -> Any:
-    return rng.choice((x + 1, x - 1, -1 - x, float(x), str(x), None, [x], x == 1 or x == 0, 0.5))
+    return rng.choice((x + 1, x - 1, -1 - x, str(x), None, [x], x == 1 or x == 0, {"n": x}))
 
 
 def _mutate_side(rng: random.Random, side: dict) -> Any:
     rows, keep = side["rows"], side["keep"]
     m = rng.randint(0, 13)
     if m == 0:
-        return {**side, "rows": rng.choice((0, -1, float(rows), str(rows), True, None, [rows]))}
+        return {**side, "rows": rng.choice((0, -1, str(rows), True, None, [rows]))}
     if m == 1:
         return {"keep": keep}
     if m == 2:
@@ -189,7 +197,7 @@ def _mutate_side(rng: random.Random, side: dict) -> Any:
     if m == 6:
         return {**side, "keep": keep + keep[-1:]}
     if m == 7:
-        return {**side, "keep": [True] + keep[1:]} if keep[0] == 1 else {**side, "keep": [float(keep[0])] + keep[1:]}
+        return {**side, "keep": [True] + keep[1:]} if keep[0] == 1 else {**side, "keep": [None] + keep[1:]}
     if m == 8:
         return {**side, "keep": [str(keep[0])] + keep[1:]}
     if m == 9:
@@ -210,7 +218,7 @@ def _m_bound(rng, es, work, bound):
 def _m_kind(rng, es, work, bound):
     i = rng.randrange(len(es))
     es[i] = rng.choice(({**es[i], "kind": rng.choice(("Call", "", "filler ", 1, None, ["call"], {"k": 1}, True))},
-                        {k: v for k, v in es[i].items() if k != "kind"}, rng.choice((5, "call", [], None, 1.5))))
+                        {k: v for k, v in es[i].items() if k != "kind"}, rng.choice((5, "call", [], None, False))))
     return es, work, bound
 
 
@@ -292,90 +300,93 @@ def _m_work(rng, es, work, bound):
 MUTATIONS = (_m_bound, _m_kind, _m_order, _m_keep, _m_range, _m_tiles, _m_filler, _m_work)
 
 
-def window(rng: random.Random) -> tuple[dict, dict]:
+def window_in(rng: random.Random) -> dict:
     es, work, bound, bits = window_advice(rng)
     for _ in range(rng.choice((0, 0, 1, 1, 1, 1, 2))):
         try:
             es, work, bound = rng.choice(MUTATIONS)(rng, json.loads(json.dumps(es)), work, bound)
         except (KeyError, TypeError, ValueError, IndexError, AttributeError):
             pass  # a second mutation that the first left nothing to act on
-    check_bits = bits if rng.random() < 0.95 else rng.randint(0, 6)
-    problem = Wd.window_problem(es, work, bound, check_bits)
-    draws, within = [], []
-    if problem is None:
-        draws = [rng.randrange(work.n) for _ in range(5)] + [work.n + rng.randint(0, 3)]
-        within = [[rng.randrange(bound), rng.randrange(work.n + 2)] for _ in range(4)]
-    inst = {"op": "window", "entries": es, "work": _work(work), "bound": bound, "bits": check_bits, "draws": draws,
-            "within": within}
-    return inst, {"problem": problem,
-                  "tile_at": [answer(lambda t=t: Wd.tile_at(es, t), list) for t in draws],
-                  "tile_in": [answer(lambda e=e, t=t: Wd.tile_in(es[e], t), list) for e, t in within]}
+    return {"entries": es, "work": asdict(work), "bound": bound, "bits": bits if rng.random() < 0.95 else rng.randint(0, 6)}
 
 
-def constants() -> tuple[dict, dict]:
-    return {"op": "constants"}, {"PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED),
-                                 "KINDS": list(Wd.KINDS), "GRID_BITS": Wd.GRID_BITS}
+def tile_at_in(rng: random.Random) -> dict:
+    es, work, _, _ = window_advice(rng)
+    return {"entries": es, "t": rng.randrange(work.n) if rng.random() < 0.85 else work.n + rng.randint(0, 3)}
 
 
-OPS = ((grid, 0.25), (levels, 0.08), (k_prime, 0.27), (sampling, 0.1), (window, 0.30))
+def tile_in_in(rng: random.Random) -> dict:
+    es, work, bound, _ = window_advice(rng)
+    return {"entry": es[rng.randrange(bound)], "t": rng.randrange(work.n + 2)}
 
 
-def instance(seed: int) -> tuple[dict, dict]:
-    """Instance `seed` and the Python's answer on it."""
-    if seed == 0:
-        return constants()
-    rng = random.Random(seed)
-    r, acc = rng.random(), 0.0
-    for op, weight in OPS:
-        acc += weight
-        if r < acc:
-            return op(rng)
-    return window(rng)
+# ---- the ports ----------------------------------------------------------------------------------------------------------
+
+#: The reasons `window_problem` gives, each of which the run must reach, and "accepted" for None.
+REASONS = ("accepted", "not the bound", "kind is none of", "the calls, then one filler", "kept rows are not",
+           "does not start where", "not its", "the filler's range", "not the padded count", "not the registered level")
+SEEN: dict[str, set[str]] = {"window_problem": set(), "k_prime": set()}
+#: What each of those runs must reach, so that none is vacuous for one of its checks or regimes.
+REACHES = {"window_problem": set(REASONS), "k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"}}
 
 
-def line(obj: dict) -> str:
-    """One JSON line. A float is written with its fraction (`3.0`), never in exponent form, which Lean's reader would take
-    for an integer."""
-    if any(isinstance(x, float) and not (x == 0 or 1e-4 <= abs(x) < 1e16) for x in _leaves(obj)):
-        raise ValueError("a float json writes in exponent form")
-    return json.dumps(obj, separators=(",", ":"), sort_keys=True) + "\n"
+def window_problem(v: dict) -> str | None:
+    reason = Wd.window_problem(v["entries"], _work(v["work"]), v["bound"], v["bits"])
+    SEEN["window_problem"].update(r for r in REASONS if (r == "accepted") == (reason is None) and (reason is None or r in reason))
+    return reason
 
 
-def _leaves(x: Any):
-    if isinstance(x, dict):
-        for v in x.values():
-            yield from _leaves(v)
-    elif isinstance(x, list):
-        for v in x:
-            yield from _leaves(v)
-    else:
-        yield x
+def k_prime(v: dict) -> int:
+    eps, delta, credited, n, w = _q(v["eps"]), _q(v["delta"]), v["credited"], v["n"], v["w_max"]
+    try:
+        k = Wd.k_prime(eps, delta, credited, n, w)
+    except ValueError:
+        SEEN["k_prime"].add("refused")
+        raise
+    q = 1 - eps * credited / (n * w)
+    SEEN["k_prime"].update(x for x, hit in (("capped", k == n > 1), ("k > 10,000", k > 10_000), ("n > 2^50", n > 1 << 50),
+                                            ("exact", 0 < q and k < delta.denominator.bit_length() and q ** k == delta))
+                            if hit)
+    return k
 
 
-def write(out: Path, count: int = COUNT) -> dict[str, Path]:
-    """Both files for instances 0 … count − 1 under ``out/difftest``."""
-    d = out / "difftest"
-    d.mkdir(parents=True, exist_ok=True)
-    paths = {"difftest/instances.jsonl": d / "instances.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
-    with open(paths["difftest/instances.jsonl"], "w") as fi, open(paths["difftest/python.jsonl"], "w") as fp:
-        for seed in range(count):
-            inst, ans = instance(seed)
-            fi.write(line(inst))
-            fp.write(line(ans))
-    return paths
+def _port(fn: str, reference: Callable[[dict], Any], gen: Callable[[random.Random], dict], **kw) -> D.Port:
+    return D.Port(EXE, fn, reference=reference, inputs=st.randoms(use_true_random=False).map(gen), package=LEAN,
+                  rejects=(ValueError,), **kw)
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.experimental.protocols.pouw.window is tested")
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--count", type=int, default=COUNT)
-    a = ap.parse_args()
-    here = Path(Wd.__file__).resolve()
-    if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.experimental.protocols.pouw.window comes from {here}, not from the checkout {a.verity}")
-    write(a.out, a.count)
+PORTS = {
+    "on_grid": (_port("on_grid", lambda v: Wd.on_grid(v["n"], v["bits"]), grid_n, need_rejects=False), 500),
+    "floor_point": (_port("floor_point", lambda v: Wd.floor_point(v["n"], v["bits"]), grid_n), 500),
+    "pad": (_port("pad", lambda v: Wd.pad(v["n"], v["bits"]), grid_n), 500),
+    "level": (_port("level", lambda v: Wd.level(v["n"], v["bits"]), grid_n), 500),
+    "bucket": (_port("bucket", lambda v: asdict(Wd.bucket(v["n"], v["bits"])), grid_n), 500),
+    "point": (_port("point", lambda v: Wd.point(v["ell"], v["bits"]), grid_ell), 500),
+    "work_at": (_port("work_at", lambda v: asdict(Wd.Work.at(v["ell"], v["bits"])), grid_ell), 500),
+    "levels": (_port("levels", lambda v: Wd.levels(v["lo"], v["hi"], v["bits"]), levels_in), 500),
+    "k_prime": (_port("k_prime", k_prime, k_prime_in), 3000),
+    "sampling": (_port("sampling", lambda v: Wd.sampling(_q(v["eps"]), _q(v["delta"]), _work(v["work"]), v["tile_work"],
+                                                         v["bits"]), sampling_in), 1000),
+    "work_to_json": (_port("work_to_json", lambda v: _work(v["work"]).to_json(v["tile_work"]), work_to_json_in,
+                           need_rejects=False), 300),
+    "window_problem": (_port("window_problem", window_problem, window_in, need_rejects=False), 3000),
+    "tile_at": (_port("tile_at", lambda v: list(Wd.tile_at(v["entries"], v["t"])), tile_at_in), 1000),
+    "tile_in": (_port("tile_in", lambda v: list(Wd.tile_in(v["entry"], v["t"])), tile_in_in), 1000),
+    "constants": (D.Port(EXE, "constants", reference=lambda _: {
+        "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED), "KINDS": list(Wd.KINDS),
+        "GRID_BITS": Wd.GRID_BITS}, inputs=st.just({}), package=LEAN, need_rejects=False), 1),
+}
+
+server = D.server_fixture(PORTS["constants"][0])
 
 
-if __name__ == "__main__":
-    main()
+SLOW = {"window_problem"}
+
+
+@pytest.mark.parametrize("fn", [pytest.param(f, marks=pytest.mark.slow) if f in SLOW else f for f in sorted(PORTS)])
+def test_the_lean_is_the_python(fn: str, server) -> None:
+    port, examples = PORTS[fn]
+    SEEN.get(fn, set()).clear()
+    D.run(port, examples=examples, server=server)
+    if fn in REACHES:
+        assert SEEN[fn] == REACHES[fn]

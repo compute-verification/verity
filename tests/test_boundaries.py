@@ -65,15 +65,16 @@ ALLOWED = {
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli",
+FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
                       "benchmarks", "frontends", "infra", "integrations", "tools", "veritor")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, and the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``).
-SEPARATE = ("ml/flock", "ml/kernels/hash_gpu")
+#: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), and the Lean ports' differential test
+#: (``verity_difftest``, which their tests import, on Hypothesis).
+SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "experimental/core/difftest")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "experimental/claims")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
@@ -97,17 +98,11 @@ def _separate(rel: Path) -> bool:
 
 
 def _sources(root: Path = SRC) -> list[Path]:
-    """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake package
-    (a Lean package's scripts, such as its difftest's generator, are run by path) or its build directory (core's Lean
-    builds in ``verity/core/service/flock/.lake``), or a ``SEPARATE`` tree."""
+    """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
+    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree."""
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
-                  and not _separate(p.relative_to(SRC)) and not _in_lake_package(p))
-
-
-def _in_lake_package(path: Path) -> bool:
-    return any((d / "lakefile.toml").exists() or (d / "lakefile.lean").exists()
-               for d in path.parents if d.is_relative_to(SRC))
+                  and not _separate(p.relative_to(SRC)))
 
 
 def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)) -> list[tuple[str, int, bool]]:
