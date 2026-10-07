@@ -61,6 +61,8 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "tools/check/" = "tools/verity/check/"
 "tools/circuit_check/" = "tools/verity/circuit_check/"
 "tools/lean/" = "tools/verity/lean/"
+# the Lean check's entry point takes the check's name (ruling of 06:42Z); `lean-audit.json` keeps its name until it retires
+"tools/lean/audit.py" = "tools/verity/lean/check.py"
 
 # --- infra/: our machines, cluster, deploys and messaging
 "tools/cluster/" = "infra/cluster/"
@@ -174,6 +176,7 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 "tools.circuit_check" = "tools.verity.circuit_check"
 "tools.cluster" = "infra.cluster"
 "tools.lean" = "tools.verity.lean"
+"tools.lean.audit" = "tools.verity.lean.check"
 "tools.native_peak" = "benchmarks.native_peak"
 "tools.research.control" = "infra.control"
 "tools.tc_probe" = "benchmarks.tc_probe"
