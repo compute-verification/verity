@@ -16,6 +16,8 @@
   "CoreOnsite",
   "CoreRemote",
   "CoreProtocol.Protocol",
+  "CoreProtocol.Profile",
+  "CoreProtocol.Ratio",
   "CoreProtocol.Example",
   "Flock"
  ],
@@ -37,7 +39,7 @@
   }
  },
  "reads_exempt": {
-  "CoreProtocol": "the core interface (#1482) declares no spec yet: the properties read its `Protocol.answer` and `canonicalJson`, and the stubs' `Core.Example`, recorded under `meaning`",
+  "CoreProtocol.Example": "the stub components are the interface's toy protocol, `Core.Example`, under ids of their own (`Core.Composition.Stub.stub`) until each component's port replaces its stub; the interface keeps its example out of its spec. Its definitions are recorded under `meaning`",
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
@@ -298,6 +300,53 @@
     "Properties.Remote.undecidedIff"
    ]
   },
+  "CoreProtocol.Profile": {
+   "digest": "8c1556fc44f0e99511aecf9e17c98facc0cfc5ed9e216447fb7f66c197ae846f",
+   "definitions": {
+    "Core.Draw": "e3b3719b797723984bf1ee9cace4bffa0be755dda10212e97bd27c8ff1e18185",
+    "Core.Draw.bernoulli": "79ff4efbbfa3ce939d7c3fa39dbaa9686ce7a76d8b63369924227c3abd0cf74f",
+    "Core.Draw.stratified": "6bf508b1d8acc9dc0dac42677f1b076c33683ca24d1ec670a91d85df404a7dce",
+    "Core.Draw.subset": "aba3878bddc00f6cd95ca51ce0826e6a95318992a23c6b76f4c34db62a9cb534",
+    "Core.Draw.toJson": "e24b45870fba1364b3629ad19575f2f5a1759a3e31b027d038874cee8e0187b5",
+    "Core.Integrity": "0727c826facf67aa78ecef833adbd25166324156b8e2d0db0d05dfa5438a3368",
+    "Core.Integrity.covered": "a5d4700669f875b25a94758663ff6f6f58d01700b24d752cc197e3a0b55c4e49",
+    "Core.Integrity.delta": "6e273b9535d4fd4c22b7faedca097d5ebf35abaff95b184bbbbe68a45189cd9a",
+    "Core.Integrity.drawn": "f6b60be7277e1268d51a2c096b7fd7d84d33d85a0d974e81224cab3dd8f57bc1",
+    "Core.Integrity.levels": "e7f04ee6657057472ae486a7f2af843690e921b0d751525a44b863a4b4a4c544",
+    "Core.Integrity.linked": "01de397d570399886c310ac5baa07e96cb77be1b29018ec5f911c604db26fa17",
+    "Core.Integrity.prescribed": "86a654a82f1c8ecb41a582206699955fb3f023638d8e481eacce51f34a611d2a",
+    "Core.Integrity.programs": "ae011a24b03a28e6762f1be7ca71f093fe714b242f371eafa7514c2be649ca20",
+    "Core.Integrity.toJson": "77c310a504f28744b9729eb8cb9fb8b141e15f28504a2f9fa8df63b953f4e356",
+    "Core.Level": "c1acdacf2d9aed35d46a401177b6dcc8bdc3683b45648d2fc08dcc0c2ec72d37",
+    "Core.Level.draw": "24e82d90a3979c802a4bcc605c1d5f20f166e50edbcb90f380e78035ad21bed6",
+    "Core.Level.name": "9359fbcc849865a68a348d97393a66fc6977ba27f0f918a8cec3354e7b63d608",
+    "Core.Level.query": "5717cc628de65d2c0c299af94e3228a762cf8512a3973609cf3c5fc7d7487054",
+    "Core.Level.size": "214f06ac010ffebc42ffe79c952530d914f7b922eb1584df7c5336007d8f907f",
+    "Core.Level.toJson": "a54cad442fad1064cc966be1742bd40cc05b4e8963adcef83e9e5575c3727e87",
+    "Core.Stratum": "85dbb9fb8ac3fd4948cbe24596611827d9d75ba523a813fb85212eca347af4a4",
+    "Core.Stratum.k": "4dc07bf0f8b58fb53db0826f376e293dc884587911f9815dd2a47b5851e87c74",
+    "Core.Stratum.name": "6099388f83d6705cb9d8545d9b001010ab8cefc39be10e07ad7852133df46e06",
+    "Core.Stratum.size": "e52d5d0752fb25a35522939729e45d51186110b5f428a1efb3553cb2b02f62ee",
+    "Core.instReprDraw.repr": "ce3c23dc7d2ba207ab1444b0a105e963f735a8b76dbb7dee8d0b8348ef8fd8f9",
+    "_private.CoreProtocol.Profile.0.Core.sorted": "a95c8bdf00df44588829f8b4d07f2163af5d3b88e3d13de800ce5d1e5bcac7da"
+   },
+   "guarantees": [
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
   "CoreProtocol.Protocol": {
    "digest": "dd1183620cc6e920267ed4897f33d6d08dba48207403df8b47d7b5fdd01a3613",
    "definitions": {
@@ -345,6 +394,31 @@
     "Properties.Composition.publishesEach",
     "Properties.Composition.rejectDominates",
     "Properties.Composition.undecidedIff",
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "CoreProtocol.Ratio": {
+   "digest": "87dd2f9cb9473782b2fed375a9d7ed0632abc0c7336a1bc7bfd328d0d7a71c40",
+   "definitions": {
+    "Core.Ratio": "7c8d146908a79f0b204e2877c04bdf5371a1a591b5fdb155207eaa0027919ef3",
+    "Core.Ratio.den": "e55382b2df911a759d66e34c02b29457aa68dabe2390543da0957cc16104fd8b",
+    "Core.Ratio.num": "8de2230df9d9cd0e696d8fce6f4718e084cb7e460cc1cb186b2f10077859d462",
+    "Core.Ratio.toString": "7b9dc99348b88f5e0759b76017bd16cfe9769e5092decb03492c48f65bfc3d0a"
+   },
+   "guarantees": [
     "Properties.Onsite.acceptsIff",
     "Properties.Onsite.components",
     "Properties.Onsite.misfitRejects",
