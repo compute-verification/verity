@@ -80,10 +80,10 @@ def _session():
     a, b = bytes([1]) * 64 + bytes([3]) * 64, bytes([2]) * 64
     (oa, ca), (ob, cb) = _committed(a, 100), _committed(b, 200)
     s = "circuit/rep0"
-    public = {"link": {"roots": {"circuit": ca}},
+    public = {"tops": RL.TOPS, "link": {"roots": {"circuit": ca}},
               "rounds": [_round(s, 0, n=6, level0=1), _round(s, 1, commits=["00"], n=18, level0=1), _round(s, 2, [cb], ["00"], 3),
                          _round("circuit/rep1", 0, n=6, level0=1)]}
-    private = {"roots": {"circuit": oa}, "rounds": [{"stream": s, "k": 2, "tops": [ob]}]}
+    private = {"tops": RL.TOPS, "roots": {"circuit": oa}, "rounds": [{"stream": s, "k": 2, "tops": [ob]}]}
     return public, private, a, b
 
 
@@ -112,6 +112,21 @@ def test_a_top_that_does_not_open_its_commitment_is_refused(forge):
     else:
         op["salts"] = []
     with pytest.raises(ValueError, match="FIREWALL-REFUSED: tree top"):
+        V.tops(public, private, "circuit/rep0")
+
+
+@pytest.mark.parametrize("side", ["public", "private"])
+@pytest.mark.parametrize("name", [None, "", "hm96-sha512/v0/node-row"])
+def test_a_record_whose_tops_are_named_otherwise_is_refused_by_name(side, name):
+    """A record without `rec_live.TOPS` as its tops' name, in ``public.json`` or ``private.json`` (no name, as
+    ``rec_inner.py forge --what unsalted`` leaves it, an empty one, or v0's), is refused for that, though its tops open."""
+    public, private, _, _ = _session()
+    rec = {"public": public, "private": private}[side]
+    if name is None:
+        del rec["tops"]
+    else:
+        rec["tops"] = name
+    with pytest.raises(ValueError, match=r"^FIREWALL-REFUSED: tree top: the record's tops are not salted \(rec_live\.TOPS\)$"):
         V.tops(public, private, "circuit/rep0")
 
 
