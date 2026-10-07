@@ -17,11 +17,14 @@ The bucket (`LEAN_CACHE_BUCKET`, `verity-lean-cache`) holds everything under `ma
 overwritten or deleted:
 - `main/<toolchain>/<platform>/<package>/<manifest>/<rev>.sha256.json`: one record per published commit and package, the
   sha256 and size of every file `lake cache stage` wrote: Lake's `outputs.jsonl` (each module's input hash to its archive)
-  and one archive per module;
+  and one archive per module, then for each dependency the build compiled (ArkLib and the packages it brings; not Mathlib
+  and its own dependencies, which Mathlib's cache provides, nor a path dependency, a package of its own) its mappings
+  `dep.<scope>.jsonl` and its modules' artifacts;
 - `main/blobs/<sha256>`: each of those files under its own hash, shared across commits.
 
 The client downloads every file itself and checks it against the record before Lake sees it, then hands them to Lake
-(`lake cache unstage`). Lake never reads the bucket, because its hashes aren't cryptographic. A module whose input hash
+(`lake cache unstage`, then `lake cache unstage DIR <scope>` per dependency). Lake never reads the bucket, because its
+hashes aren't cryptographic. A module whose input hash
 has no checked file is built from source, as is every module after a mismatch, when the kill switch (the docs site's
 `/api/lean-cache/state`) is disabled, quarantines the scope or can't be reached, or when `LEAN_CACHE=off`. Lake's input
 hashes don't depend on where a checkout is, so a build published from `/build/verity` restores in any checkout.
@@ -60,6 +63,8 @@ TOP = "main/"
 BLOBS = TOP + "blobs/"
 RECORD = ".sha256.json"
 MAPPING = "outputs.jsonl"
+#: a staged dependency's mappings are `dep.<scope>.jsonl`, beside the root package's `outputs.jsonl`
+DEP = "dep."
 #: Lake's output of `build`, beside its stage
 BUILD_LOG = "build.log"
 #: where the sandbox binds a package's fetched dependencies read-only; `build` works on its own copy at `.lake/packages`
@@ -379,6 +384,11 @@ def lake_cache(ident: dict, env=os.environ) -> Path | None:
     return elan / "toolchains" / ident["toolchain"].replace("/", "--").replace(":", "---") / "lake" / "cache"
 
 
+def mapping(name: str) -> bool:
+    """Whether a staged file is a mappings file (the root package's or a dependency's) rather than an artifact."""
+    return name == MAPPING or (name.startswith(DEP) and name.endswith(".jsonl"))
+
+
 def fetched_deps(d: Path) -> bool:
     """Whether a package's non-path dependencies are in place (`lake` would otherwise clone them first)."""
     m = d / "lake-manifest.json"
@@ -412,28 +422,35 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
         raise CacheError(f"{record_key(ident, rev)} was listed but can't be read")
     rec = check_record(raw, ident, rev)
     local = lake_cache(ident, env)
+    deps = sorted(n[len(DEP):-len(".jsonl")] for n in rec["files"] if n != MAPPING and mapping(n))
     t0 = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="lean-cache-") as tmp:
         stage = Path(tmp) / "stage"
         stage.mkdir()
         todo = []
         for name, f in rec["files"].items():
-            mine = local / "artifacts" / name if local and name != MAPPING else None
+            mine = local / "artifacts" / name if local and not mapping(name) else None
             if mine and mine.is_file() and mine.stat().st_size == f["bytes"] and sha256(mine) == f["sha256"]:
                 shutil.copyfile(mine, stage / name)
             else:
                 todo.append((name, f))
         with ThreadPoolExecutor(THREADS) as ex:
             list(ex.map(lambda nf: s3.download(BLOBS + nf[1]["sha256"], stage / nf[0], nf[1]["sha256"], nf[1]["bytes"]), todo))
-        r = subprocess.run([*(lake or ["lake"]), "cache", "unstage", str(stage)], cwd=root / pkg, capture_output=True,
-                           text=True, env=_elan_env(env))
-        if r.returncode != 0:
-            log(f"lean-cache: {pkg}: `lake cache unstage` failed: {(r.stdout + r.stderr).strip()[-400:]}; building from source")
-            return False
+        for dep in [None, *deps]:
+            if dep is not None:
+                os.replace(stage / f"{DEP}{dep}.jsonl", stage / MAPPING)
+            r = subprocess.run([*(lake or ["lake"]), "cache", "unstage", str(stage), *([dep] if dep else [])],
+                               cwd=root / pkg, capture_output=True, text=True, env=_elan_env(env))
+            if r.returncode != 0:
+                log(f"lean-cache: {pkg}: `lake cache unstage`{f' of {dep}' if dep else ''} failed: "
+                    f"{(r.stdout + r.stderr).strip()[-400:]}; building from source")
+                return False
     got = sum(f["bytes"] for _, f in todo)
-    log(f"lean-cache: {pkg}: main's build at {rev[:12]} restored ({len(rec['files']) - 1} modules; {got >> 20} MiB in "
-        f"{len(todo)} files fetched and checked in {time.monotonic() - t0:.0f} s, {len(rec['files']) - len(todo)} already "
-        f"here); `lake build` unpacks them")
+    arts = sum(not mapping(n) for n in rec["files"])
+    log(f"lean-cache: {pkg}: main's build at {rev[:12]} restored ({arts} artifacts"
+        f"{f', with {len(deps)} dependencies ({', '.join(deps)})' if deps else ''}; {got >> 20} MiB in {len(todo)} files "
+        f"fetched and checked in {time.monotonic() - t0:.0f} s, {len(rec['files']) - len(todo)} already here); "
+        f"`lake build` unpacks them")
     return True
 
 
@@ -473,12 +490,72 @@ def out_dir(out: Path, pkg: str) -> Path:
     return out / urllib.parse.quote(pkg, safe="")
 
 
+def _scope(name: str) -> str:
+    """A manifest's package name as Lake scopes its cache (`«doc-gen4»` is `doc-gen4`)."""
+    return name.removeprefix("«").removesuffix("»")
+
+
+def unstaged(pkg: Path) -> set[str]:
+    """The cache scopes `build` stages no dependency mappings for: the package's own, each path dependency's (a package
+    with records of its own), and Mathlib's with every package in Mathlib's manifest (`lake exe cache get`, which
+    `setup.sh` runs, provides them)."""
+    m = json.loads((pkg / "lake-manifest.json").read_text()) if (pkg / "lake-manifest.json").is_file() else {}
+    skip = {_scope(m.get("name") or pkg.name)}
+    skip |= {_scope(p["name"]) for p in m.get("packages", []) if p.get("type") == "path"}
+    if any(p["name"] == "mathlib" for p in m.get("packages", [])):
+        skip.add("mathlib")
+        mm = pkg / ".lake" / "packages" / "mathlib" / "lake-manifest.json"
+        if mm.is_file():
+            skip |= {_scope(p["name"]) for p in json.loads(mm.read_text()).get("packages", [])}
+    return skip
+
+
+def dep_mappings(cache: Path, skip: set[str], header: str) -> dict[str, str]:
+    """{scope: mappings file} of each dependency Lake recorded outputs for in its cache ``cache``
+    (`outputs/<scope>/<input hash>.json`), other than those in ``skip``: ``header`` (the first line of the root package's
+    `outputs.jsonl`, the format's version) then one `[input hash, outputs]` line per module."""
+    found = {}
+    d = cache / "outputs"
+    for s in sorted(p.name for p in d.iterdir() if p.is_dir()) if d.is_dir() else []:
+        if s in skip or not NAME.match(s):
+            continue
+        lines = [header]
+        for f in sorted((d / s).glob("*.json")):
+            o = json.loads(f.read_text())
+            lines.append(json.dumps([f.stem, o["data"] if isinstance(o, dict) and "schemaVersion" in o else o],
+                                    separators=(",", ":")))
+        if len(lines) > 1:
+            found[s] = "\n".join(lines) + "\n"
+    return found
+
+
+def stage_deps(pkg: Path, out: Path, env: dict, lake: list[str]) -> int:
+    """Into ``out/stage``, beside the root package's stage: each dependency's mappings (`dep.<scope>.jsonl`) and the
+    artifacts they name, staged by Lake (`lake cache stage` writes its mappings as the stage's `outputs.jsonl`, so each goes
+    through a stage of its own first)."""
+    stage, tmp = out / "stage", out / "dep-stage"
+    header = (out / MAPPING).read_text().split("\n", 1)[0]
+    for scope, text in dep_mappings(out / "lake-cache", unstaged(pkg), header).items():
+        m = out / f"{DEP}{scope}.jsonl"
+        m.write_text(text)
+        shutil.rmtree(tmp, ignore_errors=True)
+        rc = subprocess.run([*lake, "cache", "stage", str(m), str(tmp)], cwd=pkg, env=env).returncode
+        if rc != 0:
+            return rc
+        for f in tmp.iterdir():
+            if f.name != MAPPING and not (stage / f.name).exists():
+                os.replace(f, stage / f.name)
+        os.replace(m, stage / m.name)
+    shutil.rmtree(tmp, ignore_errors=True)
+    return 0
+
+
 def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
     """Inside the build's sandbox: `lake build` ``pkg`` with Lake's cache writable under ``out``, then `lake cache stage`
-    the root package's outputs into ``out/stage``. Dependencies bound read-only at ``pkg/.lake/deps`` are built from a
-    writable copy at ``pkg/.lake/packages``, deleted after. Lake's output goes to this process's and to ``out/build.log``. Lake's
-    cache is deleted after: it holds copies of every dependency's artifacts too (1.5 GB for core's package against
-    Mathlib's 2 MB stage)."""
+    the root package's outputs into ``out/stage``, and each dependency's that Mathlib's cache doesn't provide
+    (`stage_deps`). Dependencies bound read-only at ``pkg/.lake/deps`` are built from a writable copy at
+    ``pkg/.lake/packages``, deleted after. Lake's output goes to this process's and to ``out/build.log``. Lake's cache is
+    deleted after: it holds copies of Mathlib's artifacts too (1.5 GB for core's package against Mathlib's 2 MB stage)."""
     out.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache"), "LEAN_CACHE": "off"}
     lake = lake or ["lake"]
@@ -499,7 +576,8 @@ def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
         if p.wait() != 0:
             return p.returncode
         shutil.rmtree(out / "stage", ignore_errors=True)
-        return subprocess.run([*lake, "cache", "stage", str(out / MAPPING), str(out / "stage")], cwd=pkg, env=env).returncode
+        rc = subprocess.run([*lake, "cache", "stage", str(out / MAPPING), str(out / "stage")], cwd=pkg, env=env).returncode
+        return rc or stage_deps(pkg, out, env, lake)
     finally:
         shutil.rmtree(out / "lake-cache", ignore_errors=True)
         if copied:
@@ -618,7 +696,9 @@ def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, pl
     if not s3.put(key, rec) and s3.get(key) != rec:
         raise CacheError(f"{key} was published meanwhile with other contents")
     up = sum(f["bytes"] for (n, f), was in zip(sorted(files.items()), new) if was)
-    log(f"lean-cache: {pkg}: published {key} ({len(files) - 1} modules; {sum(new)} new blobs, {up >> 20} MiB, in "
+    deps = sum(mapping(n) for n in files) - 1
+    log(f"lean-cache: {pkg}: published {key} ({len(files) - 1 - deps} artifacts, {deps} dependencies; {sum(new)} new "
+        f"blobs, {up >> 20} MiB, in "
         f"{time.monotonic() - t0:.0f} s)")
     return "published"
 
