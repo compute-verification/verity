@@ -19,7 +19,7 @@ REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
 REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
-              "verity/ml/provers/flock/python", "tools/circuit_check/src", "catalog", "kernels", "experimental"]
+              "verity/ml/provers/flock/python", "tools/circuit_check/src", "experimental"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
@@ -109,7 +109,7 @@ def test_a_workspace_root_that_is_a_package_is_reached_through_a_shim_never_the_
     _write(t, "core/__init__.py", "")
     _write(t, "core/ir/__init__.py", "")
     _write(t, "src/extra/__init__.py", "")
-    _write(t, "verity/ml/kernels/__init__.py", "")                         # a grouping directory with a PyPI name: must not import from the tree
+    _write(t, "kernels/__init__.py", "")                         # a grouping directory with a PyPI name: must not import from the tree
     _write(t, "tools/one/pyproject.toml", '[tool.hatch.build.targets.wheel]\npackages = ["one"]\n')
     _write(t, "tools/one/one/__init__.py", "")
     d = P.import_roots_dir(t)

@@ -129,6 +129,8 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py",                   # its synthetic trees borrow the old names
            "tools/check/tests/test_move_check.py",               # so do its synthetic moves
+           "tools/research/tests/test_jobs_dispatch.py", "tools/research/tests/test_merge_gate.py",
+           "tools/research/tests/test_jobs_vectors.py",          # and their synthetic trees, built a segment at a time
            "tools/research/src/research/store/moves.json",       # each move's old paths, kept as they were
            "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]       # verbatim at 1ad1aaa2: t1_merged.emulation_gate pins its bytes
 keep = []
