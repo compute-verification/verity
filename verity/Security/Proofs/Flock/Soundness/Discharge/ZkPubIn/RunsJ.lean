@@ -21,7 +21,7 @@ setupHidden's statement at `some own` where the original reads `AcceptsZK I` and
 namespace FlockSoundness.Discharge.ZkPubIn
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
-  HiddenExec Composed ZkHidden
+  HiddenExec Composed ZkHidden StrictCR
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.Canonical (formatOk formatOk_g_pos)
 
@@ -68,7 +68,7 @@ noncomputable def opnAtZHJP (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽
 /-- **A `DrawSetupHP` from setupHidden's acceptance with `own` at a canonical circuit** (`drawSetupHP_of_setupHidden`
 without `outNet = unitNet`: `0 < c.g` is `formatOk`'s, `formatOk_g_pos`). -/
 theorem drawSetupHP_of_setupHiddenC {I : Inputs} {own : ByteArray} {S : Finset (Fin n)} {d : Lean.Json}
-    {c : Flock.Circuit} {st : Stmt} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
+    {c : Flock.Circuit} {st : Flock.Stmt} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hfmt : formatOk c = true)
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program
       (some own) = .ok st)

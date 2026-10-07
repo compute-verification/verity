@@ -15,6 +15,7 @@ import Proofs.Flock.Soundness.Discharge.ZkPubIn.Bind
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Count
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.ComposedJ
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.RunsJ
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Sound
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -47,5 +48,6 @@ sites (`sitesShCP`, `sitesShCP_bcSite`) and `lay`, `rs` at `keyProgP` moved to i
 (`pubDecodesZ_placeZCP`). `ComposedJ`: the `J`-table session's decoder, simulation and headline at any acceptance
 event (`DecodesOnZKJA`, `RunsOnZCJA`, `zk_headline_exec_tablesA`). `RunsJ`: `RunsOnZCJA` at `AcceptsZKP I own` and the
 canonical `J` tables (`runsZCJH_liveCP`), from the coin server's record and draw at `own` (`RecordsLiveZKJP`,
-`DrawOkZKHJP`).
+`DrawOkZKHJP`). `Sound`: the canonical session with the verifier's public inputs is sound at the public transcript
+`Xpub pubOnes pubZeros XplurZC` (`zk_session_soundCP`), at `zk_session_soundC`'s bound.
 -/
