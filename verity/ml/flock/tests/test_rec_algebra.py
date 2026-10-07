@@ -39,8 +39,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 FLIP = 1 << 17
 
-#: a message element changed (by FLIP), and the residuals that move off zero: 0 is the zerocheck, 1 the lincheck, 2 + k claim
-#: k's ring switch, 10 and 11 Ligerito's final check (K's c0, c1). Ligerito's last message (27) enters no check.
+#: a message element changed (by FLIP), and the residuals that move off zero when T is the inner verifier's own: 0 is the
+#: zerocheck, 1 the lincheck, 2 + k claim k's ring switch, 10 and 11 Ligerito's final check (K's c0, c1), 12 the absorbed T
+#: against the batched sum. Ligerito's last message (27) enters no check.
 MUTATIONS = {
     ("ab", 9): [0],
     ("g1", 3): [0],
@@ -54,6 +55,9 @@ MUTATIONS = {
     ("msg", 26, 1, 1): [10, 11],
     ("msg", 27, 0, 0): [],
 }
+#: where V*'s statement differs, T being the absorbed one: a changed ring switch moves its own residual and T's, not the final
+#: check, which uses the absorbed T as the inner verifier uses its own
+ABSORBED = {("rs", 2, 77): [4, 12]}
 
 
 @dataclass
@@ -161,7 +165,7 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
     h = G.of_hex
     for rep in reps:
         out, info = A.residuals(rep.shape, rep.proof, rep.rounds, rep.comb, rep.extras)
-        assert len(out) == 4 + rep.shape.claims and _nonzero(out) == []
+        assert len(out) == 5 + rep.shape.claims and _nonzero(out) == []
         zc, lc = rep.dump["zerocheck"], rep.dump["lincheck"]
         assert (info["z"], info["rho"], info["r"], info["v_c"]) == (h(zc["z"]), [h(x) for x in zc["rho"]],
                                                                     [h(x) for x in zc["r"]], h(zc["v_c"]))
@@ -171,12 +175,11 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
 
 
 def _ports(rep: Rep, seed: int) -> tuple[dict, A.Layout, list[int], list[int]]:
-    """The structure, its layout, and its v and w ports on the honest rep, the comb split into random public and hidden parts."""
+    """The structure, its layout, and its v and w ports on the honest rep, the running sums starting at a random value."""
     S, lay = A.structure(rep.shape)
     g = random.Random(seed)
-    hid = [g.getrandbits(128) for _ in range(64)]
-    V, _ = A.verifier_rows(rep.shape, rep.rounds, rep.extras, [a ^ b for a, b in zip(rep.comb, hid)])
-    W = A.witness(rep.shape, rep.proof, rep.rounds, hid, rep.extras)
+    V, info = A.verifier_rows(rep.shape, rep.rounds, rep.extras, rep.comb)
+    W = A.witness(rep.shape, rep.proof, rep.rounds, rep.extras, acc0=(g.getrandbits(128), g.getrandbits(128)), info=info)
     return S, lay, V, W
 
 
@@ -187,29 +190,69 @@ def ports(session):
 
 def test_the_structure_is_a_function_of_the_shape(session, ports):
     """Both reps' coins give one structure (`verifier_rows` checks it against `structure`), and its ports are laid out as the
-    module states: the free messages, the consistency sums and the comb's hidden part; then per residual its coefficients and
-    constant, and the comb's public part."""
+    module states: the message elements by round and the running sums; then per residual its coefficients and constant, and
+    the comb."""
     _, reps = session
     S, lay, V0, _ = ports
     V1, _ = A.verifier_rows(reps[1].shape, reps[1].rounds, reps[1].extras, reps[1].comb)
     assert len(V0) == len(V1) == S["nv"] == len(lay.v)
-    assert S["nw"] == len(lay.w) and lay.w[:len(A.free_names(reps[0].shape))] == A.free_names(reps[0].shape)
-    assert lay.w[-64:] == [("comb_hid", l) for l in range(64)] and lay.v[-64:] == [("comb_pub", l) for l in range(64)]
-    assert len(S["res"]) == 4 + reps[0].shape.claims
+    assert S["nw"] == len(lay.w) and lay.w == [x for r in A.rounds(reps[0].shape) for x in r] + A.ACC_NAMES
+    assert lay.v[-64:] == [("comb", l) for l in range(64)] and V0[-64:] == reps[0].comb
+    assert len(S["res"]) == 5 + reps[0].shape.claims
     read = {t[1] for op in S["ops"] for t in op if t[0] == "w"} | {t[1] for r in S["res"] for t in r["add"] if t[0] == "w"}
     assert not {lay.index[("msg", 27, h, c)] for h in range(2) for c in range(2)} & read
 
 
+def test_the_rounds_are_the_transcripts(session):
+    """`rounds` names each rep's absorbed elements as its transcript's rounds carry them: per round that absorbs any, the free
+    elements of the round's message (`rec_live.split_round`, what `c_k` commits) are the witness's values at the round's names,
+    in order, T included where the prover absorbs it."""
+    from verity_flock import rec_live as RL
+
+    record, reps = session
+    for rep in reps:
+        S, lay = A.structure(rep.shape)
+        V, info = A.verifier_rows(rep.shape, rep.rounds, rep.extras, rep.comb)
+        val = dict(zip(lay.w, A.witness(rep.shape, rep.proof, rep.rounds, rep.extras, info=info)))
+        [st] = [s for s in record["streams"] if s["stream"] == rep.dump["stream"]]
+        frees = [RL.split_round(bytes.fromhex(rd["msg"]), k == 0).free for k, rd in enumerate(st["rounds"])]
+        names = A.rounds(rep.shape)
+        assert [[val[k] for k in nm] for nm in names] == [f for f in frees if f]
+
+
+def test_the_running_sums_stand_for_the_consistency_sums(session, ports):
+    """The final check's coefficients on the consistency sums (κ) are functions of the coins alone, not of the claims; the
+    rep's running sums differ by the openings' share of the final check (`consistency`), at any start; and a running sum
+    changed moves the final check's component it carries, alone."""
+    _, reps = session
+    rep = reps[0]
+    S, lay, V, W = ports
+    g = random.Random(2)
+    other = [A.Claim(g.getrandbits(128), tuple(g.getrandbits(128) for _ in e.skip), tuple(g.getrandbits(128) for _ in e.x))
+             for e in rep.extras]
+    _, info = A.verifier_rows(rep.shape, rep.rounds, rep.extras, rep.comb)
+    _, info2 = A.verifier_rows(rep.shape, rep.rounds, other, rep.comb)
+    assert info["kappa"] == info2["kappa"]
+    acc = [W[lay.index[k]] for k in A.ACC_NAMES]
+    assert [acc[0] ^ acc[2], acc[1] ^ acc[3]] == A.consistency(rep.shape, rep.proof, info) != [0, 0]
+    fin = 2 + rep.shape.claims
+    for r in range(2):
+        W2 = list(W)
+        W2[lay.index[("acc1", r)]] ^= FLIP
+        assert _nonzero(G.residuals(S, W2, V)) == [fin + r]
+
+
 @pytest.mark.parametrize("k", [("zp", 5), ("rs", 2, 77), ("msg", 26, 0, 1)], ids=str)
 def test_the_circuit_gives_the_references_residuals(session, ports, k):
+    """With T the absorbed one, as V*'s witness carries it."""
     rep = session[1][0]
     S, lay, V, W = ports
     assert _nonzero(G.residuals(S, W, V)) == []
     data, _, _ = _mutated(rep, k)
-    want, _ = A.residuals(rep.shape, A.decode(rep.shape, data), rep.rounds, rep.comb, rep.extras)
+    want, _ = A.residuals(rep.shape, A.decode(rep.shape, data), rep.rounds, rep.comb, rep.extras, t=W[lay.index[A.T_NAME]])
     W2 = list(W)
     W2[lay.index[k]] ^= FLIP
-    assert G.residuals(S, W2, V) == want and _nonzero(want) == MUTATIONS[k]
+    assert G.residuals(S, W2, V) == want and _nonzero(want) == ABSORBED.get(k, MUTATIONS[k])
 
 
 def _bits(xs) -> np.ndarray:
@@ -233,9 +276,9 @@ def test_the_lincheck_through_the_ir_evaluator(ports):
 
 @pytest.mark.slow
 def test_every_check_through_the_ir_evaluator(session):
-    """`InnerRepCheck` whole (3,949 products, 59M gates) on the IR evaluator, both reps: zero on the honest witness, and on a
-    changed message the residuals the reference gives. It catches a fault in a residual the lincheck test does not build
-    (the zerocheck's product of messages, the transposed ring-switch blocks, Ligerito's K-valued check); about 20 s."""
+    """The algebra whole (2,704 products) on the IR evaluator, both reps: zero on the honest witness, and on a changed message
+    the residuals the reference gives. It catches a fault in a residual the lincheck test does not build (the zerocheck's
+    product of messages, the transposed ring-switch blocks, Ligerito's K-valued check and its running sums); about 20 s."""
     _, reps = session
     for rep in reps:
         S, lay, V, W = _ports(rep, seed=1)
@@ -243,7 +286,7 @@ def test_every_check_through_the_ir_evaluator(session):
         W2[lay.index[("rs", 2, 77)]] ^= FLIP
         out = evaluate_batch(bind(G.GfResiduals, S=S), np.stack([_bits(W), _bits(W2)]), np.stack([_bits(V)] * 2))
         assert [_val(x) for x in out[0]] == [0] * len(S["res"])
-        assert [_val(x) for x in out[1]] == G.residuals(S, W2, V) and _nonzero(G.residuals(S, W2, V)) == [4, 10, 11]
+        assert [_val(x) for x in out[1]] == G.residuals(S, W2, V) and _nonzero(G.residuals(S, W2, V)) == ABSORBED[("rs", 2, 77)]
 
 
 @pytest.mark.slow

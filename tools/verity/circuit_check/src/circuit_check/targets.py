@@ -93,6 +93,7 @@ def load_registries() -> None:
     import verity.experimental.protocols.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
     import verity.experimental.protocols.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
     import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
+    import verity_flock.rec_residuals  # noqa: F401  (V*'s algebra: the inner verifier's checks on one rep)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 

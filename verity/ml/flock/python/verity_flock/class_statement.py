@@ -109,18 +109,25 @@ def _slots(widths: Sequence[int], packed: bool = False) -> tuple[list[tuple[int,
 
 @dataclass
 class ClassDefinition:
-    """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array."""
+    """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array, or
+    with ``out_words`` a tuple of them (one output port each, their words ``w_out`` in all)."""
 
     id: str
     port_words: tuple[int, ...]
     w_out: int
+    out_words: tuple[int, ...] = ()
 
     @property
     def w_in(self) -> int:
         return sum(self.port_words)
 
     def signature(self):
-        return tuple((f"p{i}", Array(w, Value(16))) for i, w in enumerate(self.port_words)), Array(self.w_out, Value(16))
+        params = tuple((f"p{i}", Array(w, Value(16))) for i, w in enumerate(self.port_words))
+        if self.out_words:
+            if sum(self.out_words) != self.w_out:
+                raise ValueError(f"{self.id}: output ports of {self.out_words} words are not {self.w_out}")
+            return params, Tuple(*(Array(w, Value(16)) for w in self.out_words))
+        return params, Array(self.w_out, Value(16))
 
 
 def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
