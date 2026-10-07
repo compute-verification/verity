@@ -6,6 +6,7 @@ declares window w's sync at its first bucket, w·T. By then it has read exactly 
 boundary), each anchored in an earlier window, and it knows every earlier window's declaration. `Prover.declare` is
 that prover: a rule (`Rule`) gets a summary of each recent window (`Past`) computed from those frames and declarations
 only, and the frames it sees are the contiguous canonical prefix ready by w·T, so a frame ready later can't change it.
+A frame ready no later than its anchor's bucket, which only a tick read early makes, is `Refused`.
 
 The rules are one family, `cover-K-M` (`rule`): the tightest value of Σ_sync that would have met each of the last K
 windows' seen frames, with M buckets of δ to spare, at the least estimated hand time. `-fallback` declares the envelope
@@ -43,6 +44,12 @@ class Past:
 
 
 Choose = Callable[[Sequence[Past], SyncSet, ClockSync], ClockSync]
+
+
+class Refused(ValueError):
+    """A declaration refused: a frame read by the window's first bucket is ready no later than its anchor's bucket,
+    which a device whose ticks are on time never reads (an ingress tick read before its due time can release a
+    request whose response is read before the egress bucket it is anchored in)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,13 +127,15 @@ class _Link:
             self.index.append(frame.index)
             self.ready.append(ready)
 
-    def see(self, bucket: int) -> None:
-        """Extend the seen prefix to the frames ready by `bucket`."""
+    def see(self, bucket: int) -> bool:
+        """Extend the seen prefix to the frames ready by `bucket`; whether one of them is ready no later than its
+        anchor's bucket."""
+        early = False
         while self.seen < len(self.ready) and self.ready[self.seen] <= bucket:
-            if self.anchor[self.seen] >= self.ready[self.seen]:
-                raise ValueError("a frame is ready only after its anchor's bucket")
+            early |= self.anchor[self.seen] >= self.ready[self.seen]
             self.positions.setdefault(self.anchor[self.seen] // self.T, []).append(self.seen)
             self.seen += 1
+        return early
 
     def _eligible(self, k: int, s: ClockSync) -> int:
         return self.anchor[k] + s.delta + self.index[k] * s.rho.denominator // s.rho.numerator
@@ -184,10 +193,12 @@ class Prover:
         self.links[link].arrive(position, frame, ready)
 
     def declare(self) -> ClockSync:
-        """The next window's sync, from the frames ready by its first bucket and the earlier declarations."""
+        """The next window's sync, from the frames ready by its first bucket and the earlier declarations. Raises
+        `Refused` if a frame it reads then is ready no later than its anchor's bucket; it has read them all the same,
+        so the next `declare` is the window's."""
         w = len(self.syncs)
-        for link in self.links:
-            link.see(w * self.T)
+        if any([link.see(w * self.T) for link in self.links]):
+            raise Refused("a frame is ready only after its anchor's bucket")
         past = []
         for u in range(max(0, w - self.rule.depth), w):
             key = tuple(len(link.positions.get(u, ())) for link in self.links)
@@ -205,9 +216,9 @@ class Prover:
 
     def history(self) -> list[Past]:
         """At the end of the run, every frame read: the summaries of its last `depth` windows with a frame, with
-        `prior` making up the rest, for the unit's next run."""
-        for link in self.links:
-            link.see(max(link.ready, default=0))
+        `prior` making up the rest, for the unit's next run; `Refused` as `declare` is."""
+        if any([link.see(max(link.ready, default=0)) for link in self.links]):
+            raise Refused("a frame is ready only after its anchor's bucket")
         w = len(self.syncs)
         own = [self._summarize(u, n) for u in range(max(0, w - self.rule.depth), w)
                if (n := sum(len(link.positions.get(u, ())) for link in self.links))]
