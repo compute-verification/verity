@@ -217,8 +217,7 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/", "backends/flock/verifier/lean/", "!README.md",
-                                                       "!PROTOCOL.md"]}
+    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/", "!README.md", "!PROTOCOL.md"]}
     pin = __import__("json").loads((ROOT / "backends" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
@@ -789,6 +788,6 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert "check: changes under backends/flock/, backends/flock/verifier/lean/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    assert "check: changes under backends/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)

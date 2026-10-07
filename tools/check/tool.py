@@ -16,6 +16,6 @@ from research.store.tool import Tool
 
 CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--extra", "torch-cpu", "python", "tools/check/check.py"],
              produces=["check/v1"],
-             merge_requires={"lean-agreement": ["backends/flock/", "backends/flock/verifier/lean/", "!README.md", "!PROTOCOL.md"]},
+             merge_requires={"lean-agreement": ["backends/flock/", "!README.md", "!PROTOCOL.md"]},
              preflight=["tools/check/preflight.py"],
              after_land=["uv", "run", "-q", "python", "tools/check/post_train.py"])

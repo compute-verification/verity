@@ -45,7 +45,7 @@ name = "lean-agreement"
 owner = "proofs"
 group = 3
 needs = ["lean-build"]
-merge_requires = ["backends/flock/", "backends/flock/verifier/lean/", "!README.md", "!PROTOCOL.md"]
+merge_requires = ["backends/flock/", "!README.md", "!PROTOCOL.md"]
 
 # Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
 [[job]]
