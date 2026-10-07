@@ -9,6 +9,7 @@ import Proofs.Flock.Soundness.Discharge.ZkPubIn.Flat
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Sites
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.HmP
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.SiteP
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.RowsP
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -30,5 +31,8 @@ beside `keyProg`'s at the canonical output-row bits, the first of them. `Flat`, 
 twin off the public leaves at canonical rows (`rowsFlatCP`), and `keyProgP`'s sites and places
 (`SitesHP.progPlaces_keyProgP`), with a drawn table's acceptance at canonical rows (`TableHP.acc`). `HmP`: the row nets' slots at the statement, and
 a canonical output row's data bit holds its copy (`msg_copyCP`). `SiteP`: a drawn unit's site, its registered `b ‖ c`
-(`bc_site_ofHP`), its input copies (`copy_siteHP`), and its returned outputs at canonical rows (`out_copyHCP`).
+(`bc_site_ofHP`), its input copies (`copy_siteHP`), its returned outputs at canonical rows (`out_copyHCP`), and a
+canonical row's `b ‖ c` (`bc_site_commitHCP`). `RowsP`: `lay` and `rs` at `keyProgP`'s places in canonical tables
+(`keyLayoutCP`, `keyRowsCP`, `keyRowsCP_computes`), a public gate holding the verifier's own word's bit (`pub_siteCP`,
+from `Canonical.public_pinnedC`).
 -/

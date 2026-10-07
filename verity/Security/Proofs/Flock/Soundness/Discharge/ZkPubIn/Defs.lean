@@ -69,13 +69,11 @@ def LiveAcceptsZKRP (I : Inputs) (reg : Array Registered.Port) (own : ByteArray)
 /-! ## The verifier's own words and the public leaf maps -/
 
 /-- **Word `x` of the verifier's own recomputation**: u16 LE at bytes `2x`, `2x + 1` of the body after `F`'s header
-line (instance-major, the ports in order, as `HmIn.checkOwn` reads it); 0 without a header line. -/
+line (instance-major, the ports in order, as `HmIn.checkOwn` reads it); read from byte 1 without one, as
+`Canonical.ownWord` reads it (`HmIn.checkOwn` refuses a file without a header line). -/
 def ownWord (own : ByteArray) (x : ℕ) : ℕ :=
-  match findByte own 10 with
-  | some nl =>
-    let body := own.extract (nl + 1) own.size
-    (body.get! (2 * x)).toNat + 256 * (body.get! (2 * x + 1)).toNat
-  | none => 0
+  let body := own.extract ((findByte own 10).getD 0 + 1) own.size
+  (body.get! (2 * x)).toNat + 256 * (body.get! (2 * x + 1)).toNat
 
 /-- **The public file's words are the verifier's own**: every word of the population's public words (`checkOwn`'s
 `words`, instance-major, `pi.words` per instance) is `ownWord own` at its index. -/
