@@ -4,4 +4,5 @@ import PousCheck.Randomness
 import PousCheck.Challenge
 import PousCheck.Wire.Codec
 import PousCheck.Wire
+import PousCheck.Certificate
 import PousCheck.Difftest

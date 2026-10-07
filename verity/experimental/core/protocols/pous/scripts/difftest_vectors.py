@@ -620,6 +620,71 @@ def _pins_answers(py, inst: dict) -> dict:
     return out
 
 
+def _storage(w: int, c0: int, bps: int, segments: int, k: int, delta: int, rtt: int) -> dict | None:
+    """The generic protocol's gate and profile for P2 at a store: `MemoryChallenger` covers the audit when it runs it
+    without `research`, and with `research` its certificate and gaps make the `StorageProfile`. None when `P2Params`
+    refuses the store."""
+    from verity.experimental.protocols.pous.protocol import MemoryChallenger, StorageProfile
+    from verity.experimental.protocols.pous.schemes.p2 import P2, P2Params
+    from verity.experimental.protocols.pous.verifier import VerifierKey
+    from verity.ml.randomness import derive
+    try:
+        params = P2Params(w, c0, bps, segments)
+    except ValueError:
+        return None
+    scheme = P2(params)
+    vk, key = VerifierKey(params, bytes(24), bytes(64), ()), derive(b"difftest", "verity/pous/difftest/v1", {})
+
+    def challenger(research: bool) -> MemoryChallenger:
+        return MemoryChallenger(scheme, vk, key, k=k, deadline_ns=delta, rtt_allowance_ns=rtt, root_only=True,
+                                research=research, experimental=True)
+
+    try:
+        challenger(False)
+        covered = True
+    except ValueError:
+        covered = False
+    mc = challenger(True)
+    profile = StorageProfile(scheme.name, params.manifest(), params.blocks, params.m, mc.k, mc.limit_ns, mc.certificate,
+                             mc.gaps, scheme.experimental)
+    return {"covered": covered, "profile": profile.to_json()}
+
+
+def _assess(py, frames: list[bytes], final: bytes) -> dict:
+    """What the session's record establishes: the `FINAL`'s verdict and, on success, the gate and profile at the
+    manifest's store, with `k`, `Δ` and `RTT` the `FINAL`'s."""
+    Wi = py[1]
+    verdict, _, records = Wi.parse_final(final)
+    if not verdict:
+        return {"verdict": False, "accepted": False}
+    m = json.loads(frames[0][14:-Wi.D])
+    o = Wi.D + Wi.S + 4 + 10
+    delta, rtt = int.from_bytes(final[o:o + 8], "big"), int.from_bytes(final[o + 8:o + 16], "big")
+    gate = _storage(m["w"], m["c0"], m["blocks_per_segment"], m["segments"], records, delta, rtt)
+    if gate is None:
+        return {"verdict": True, "accepted": False, "profile": None}
+    return {"verdict": True, "covered": gate["covered"], "accepted": gate["covered"], "profile": gate["profile"]}
+
+
+def _storage_instance(rng: random.Random) -> dict:
+    """A store and an audit's `k`, `Δ` and `RTT` near the certificate's edges: the registered point or one coordinate off
+    it, `k` around 105, `Δ + RTT` around one root call."""
+    w, c0, bps = rng.choice([(16448, 21065, 1 << 16)] * 4 + [(16448, 21069, 1 << 16), (16416, 21065, 1 << 16),
+                             (16448, 21065, 1 << 15), (64, 189, 8), (16448, 1 << 16 | 1, 1 << 16), (16448, 65533, 1 << 16)])
+    segments = rng.choice([8, 8, 8, 1, 7, 9, 1 << 40])
+    k = rng.choice([105, 105, 104, 106, 1, 0, 65535])
+    limit = rng.choice([854_028, 854_029, 854_000, 0, 1, 854_029 * 2, 1_708_057, 10**12, rng.randint(0, 2 * 854_029)])
+    delta = rng.choice([500_000, 0, limit, rng.randint(0, limit)])
+    delta = min(delta, limit)
+    return {"kind": "storage", "w": w, "c0": c0, "blocks_per_segment": bps, "segments": segments, "k": k, "delta": delta,
+            "rtt": limit - delta}
+
+
+def _storage_answers(py, inst: dict) -> dict | None:
+    return _storage(inst["w"], inst["c0"], inst["blocks_per_segment"], inst["segments"], inst["k"], inst["delta"],
+                    inst["rtt"])
+
+
 def _audit_answers(py, inst: dict) -> dict:
     Wi = py[1]
     source = inst["verifier_source"]
@@ -633,7 +698,7 @@ def _audit_answers(py, inst: dict) -> dict:
         return {"error": error.code}
     if "expected_final" in inst and final.hex() != inst["expected_final"]:
         raise SystemExit(f"{inst['name']}: the reference verifier no longer gives the vector's FINAL")
-    return {"final": final.hex()}
+    return {"final": final.hex(), "storage": _assess(py, [bytes.fromhex(f) for f in inst["frames"]], final)}
 
 
 DEPLOYMENT_AUDITS = ("honest", "honest", "late", "flip-sibling", "decode", "rtt-over-cap", "k-104")
@@ -644,10 +709,12 @@ def instances(py) -> list[dict]:
     out += [_randomness(random.Random(f"randomness/{seed}")) for seed in range(200)]
     out += [_small_audit(py, random.Random(f"audit/{seed}")) for seed in range(600)]
     out += [_full_audit(py, random.Random(f"deployment/{i}"), name) for i, name in enumerate(DEPLOYMENT_AUDITS)]
+    out += [_storage_instance(random.Random(f"storage/{seed}")) for seed in range(200)]
     return out + _vector_audits(py) + [_pins(py)]
 
 
-ANSWERS = {"merkle": _merkle_answers, "randomness": _randomness_answers, "audit": _audit_answers, "sha512": _pins_answers}
+ANSWERS = {"merkle": _merkle_answers, "randomness": _randomness_answers, "audit": _audit_answers, "sha512": _pins_answers,
+           "storage": _storage_answers}
 
 
 def answers(py, inst: dict) -> dict:

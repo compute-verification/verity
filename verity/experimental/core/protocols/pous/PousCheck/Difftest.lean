@@ -2,6 +2,7 @@ import Flock.Canon
 import PousCheck.Merkle
 import PousCheck.Challenge
 import PousCheck.Wire
+import PousCheck.Certificate
 
 /-!
 # The difftest: the PoUS check against the Python verifier, on generated instances
@@ -18,6 +19,8 @@ a test, not a proof.
   and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices (`PousCheck.Challenge`).
 * `audit`: `Wire.verifyAudit` on a session (frames, measured latencies, the verifier's secret, beacons and seen pairs): its
   `FINAL` frame, or the fault's code when there is none.
+  An accepted `FINAL` also gives the session's `Certificate.assess`: its verdict, coverage and StorageProfile.
+* `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
 * `sha512`: the SHA-512 of labelled bytes, against the pins the spec's §7 states for them.
 -/
 
@@ -149,8 +152,21 @@ def audit (inst : Json) : V Json := do
     let #[e, a] := (← J.asArr p "pair") | throw "audit: a seen pair is [epoch, audit id]"
     pure (← bytesOf e "epoch", ← bytesOf a "audit id")
   pure <| match Wire.verifyAudit frames elapsed ⟨source, beacons, seen⟩ with
-    | .ok final => Json.mkObj [("final", hex final)]
+    | .ok final => Json.mkObj [("final", hex final), ("storage", match Wire.parseSetup frames with
+      | .ok (setup, _) => Certificate.assess setup.params final
+      | .error _ => Json.mkObj [("verdict", .bool false), ("accepted", .bool false)])]
     | .error e => Json.mkObj [("error", num e.code)]
+
+/-- A `storage` instance's answer: the certificate gate and the StorageProfile of an accepted audit of `k` challenges
+within `Δ + RTT` of a store (`Certificate.gate`, `profileJson`), or `null` when `P2Params` refuses the store. -/
+def storage (inst : Json) : V Json := do
+  let n k := J.nat inst k "storage"
+  let q : Wire.Params := ⟨← n "w", ← n "c0", ← n "blocks_per_segment", ← n "segments", "", 0⟩
+  let (k, limit) := (← n "k", (← n "delta") + (← n "rtt"))
+  pure <| match Certificate.Store.ofParams q with
+    | none => .null
+    | some s => Json.mkObj [("covered", .bool (Certificate.gate s k limit).2.1.isEmpty),
+      ("profile", Certificate.profileJson s k limit)]
 
 /-- A `sha512` instance's answer: the SHA-512 of each item's bytes, by its label (the spec's §7 pins). -/
 def sha512 (inst : Json) : V Json := do
@@ -165,6 +181,7 @@ def evaluate (inst py : Json) : V Json := do
   | "randomness" => randomness inst
   | "audit" => audit inst
   | "sha512" => sha512 inst
+  | "storage" => storage inst
   | k => throw s!"unknown instance kind {k}"
 
 /-- The differences on one line: none, or why its answer is not the Python's. -/
