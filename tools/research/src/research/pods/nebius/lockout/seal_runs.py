@@ -129,36 +129,34 @@ def _sealed_mode(mode: int) -> int:
 
 def seal_dir(parent_fd: int, name: str, uid: int = 0, gid: int = 0) -> int:
     """Seal the dir `name` of the directory `parent_fd`; the number of entries sealed. No symlink is followed (module docstring)."""
-    top = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    os.close(os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd))   # ELOOP for a symlink
     n = 0
-    try:
-        for _root, dirs, files, rootfd in os.fwalk(".", dir_fd=top, topdown=False, follow_symlinks=False):
-            for entry in dirs + files:
-                st = os.stat(entry, dir_fd=rootfd, follow_symlinks=False)
-                if stat.S_ISDIR(st.st_mode):
-                    continue                                  # sealed through its own fd, when fwalk yields it
-                if not stat.S_ISREG(st.st_mode):
-                    os.chown(entry, uid, gid, dir_fd=rootfd, follow_symlinks=False)
+    # fwalk opens `name` itself and descends it only when it is the directory its lstat saw
+    for _root, dirs, files, rootfd in os.fwalk(name, dir_fd=parent_fd, topdown=False, follow_symlinks=False):
+        for entry in dirs + files:
+            st = os.stat(entry, dir_fd=rootfd, follow_symlinks=False)
+            if stat.S_ISDIR(st.st_mode):
+                continue                                  # sealed through its own fd, when fwalk yields it
+            if not stat.S_ISREG(st.st_mode):
+                os.chown(entry, uid, gid, dir_fd=rootfd, follow_symlinks=False)
+                n += 1
+                continue
+            try:
+                fd = os.open(entry, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_NOCTTY, dir_fd=rootfd)
+            except OSError:
+                continue                                  # swapped for a symlink, or gone
+            try:
+                fst = os.fstat(fd)
+                if (fst.st_dev, fst.st_ino) == (st.st_dev, st.st_ino) and stat.S_ISREG(fst.st_mode):
+                    os.fchown(fd, uid, gid)
+                    os.fchmod(fd, _sealed_mode(fst.st_mode))
                     n += 1
-                    continue
-                try:
-                    fd = os.open(entry, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_NOCTTY, dir_fd=rootfd)
-                except OSError:
-                    continue                                  # swapped for a symlink, or gone
-                try:
-                    fst = os.fstat(fd)
-                    if (fst.st_dev, fst.st_ino) == (st.st_dev, st.st_ino) and stat.S_ISREG(fst.st_mode):
-                        os.fchown(fd, uid, gid)
-                        os.fchmod(fd, _sealed_mode(fst.st_mode))
-                        n += 1
-                finally:
-                    os.close(fd)
-            dst = os.fstat(rootfd)
-            os.fchown(rootfd, uid, gid)
-            os.fchmod(rootfd, _sealed_mode(dst.st_mode))
-            n += 1
-    finally:
-        os.close(top)
+            finally:
+                os.close(fd)
+        dst = os.fstat(rootfd)
+        os.fchown(rootfd, uid, gid)
+        os.fchmod(rootfd, _sealed_mode(dst.st_mode))
+        n += 1
     return n
 
 
@@ -255,13 +253,13 @@ def sealed_run(path: str, roots: list[str], uid: int = 0) -> tuple[Path | None, 
     return p, None
 
 
-def delete(path: str, roots: list[str], uid: int = 0, say=print) -> int:
+def delete(path: str, roots: list[str], uid: int = 0, say=print, remove=shutil.rmtree) -> int:
     p, why = sealed_run(path, roots, uid)
     if p is None:
         say(f"vy-seal-runs delete: refused: {why}")
         return REFUSED
     n = sum(len(fs) for _b, _d, fs in os.walk(p))
-    shutil.rmtree(p)
+    remove(p)
     say(f"vy-seal-runs delete: deleted {p} ({n} files; sealed, custody vouched for it), for uid {os.environ.get('SUDO_UID', '?')}")
     return 0
 
