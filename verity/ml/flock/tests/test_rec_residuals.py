@@ -15,7 +15,7 @@ from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 
 HERE = Path(__file__).resolve().parent
-BIN = HERE.parent / "verifier" / "lean" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = HERE.parents[2] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 

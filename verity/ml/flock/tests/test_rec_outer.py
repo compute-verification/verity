@@ -16,7 +16,7 @@ from test_rec_open import _tree
 from verity_flock import rec_outer as O
 from verity_flock import rec_vstar as V
 
-BIN = Path(__file__).resolve().parents[1] / "verifier" / "lean" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
 
 pytestmark = pytest.mark.slow
 
