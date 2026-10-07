@@ -38,13 +38,12 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[1]
+REPO = HERE.parents[2]
 TARGETS = HERE / "src" / "circuit_check" / "targets.py"
 PINS = HERE / "src" / "circuit_check" / "pins"
 LEGACY_PINS = PINS.with_name("pins.json")
 #: the source roots this tree's packages import from, ahead of any installed copy
-PATHS = ("tools/verity/circuit_check/src", ".", "catalog", "kernels", "experimental", "integrations/vllm", "benchmarks/numerical/python",
-         "verity/ml/flock/python")
+PATHS = ("tools/verity/circuit_check/src", ".", "integrations/vllm", "benchmarks/numerical/python", "verity/ml/flock/python")
 #: `targets.py`'s own: what no one module owns (every kernel's and vocabulary kind's self-check bindings)
 SHARED = ("_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots")
 #: split by hand (`POUW`)
