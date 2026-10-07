@@ -82,7 +82,7 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/verity/check/suites.py       # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu verity check     # the check a merge requires; --remote records it as an Attempt on a pod
+uv run --extra torch-cpu verity check     # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
 ## Design rules
@@ -152,8 +152,7 @@ multi-core CPU pod. It covers:
   `check.py --record` sends what it needs).
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit; `verity check
---remote` is `check.py --record --on auto`, or on the `--on POD` given.
+unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
 Landing:
 
