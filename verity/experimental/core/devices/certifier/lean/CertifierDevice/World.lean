@@ -6,7 +6,9 @@ import Std.Sync.Channel
 
 `World` is what the device needs from its host, kept minimal so the shared world can replace it: a monotonic clock and a
 sleep (ns), the boundary link (`Conn`: a blocking read, of no bytes at its end, a write, and its unwritten backlog), a
-server connection per stream (`connect`), and where records go (`publish`).
+server connection per stream (`connect`), where records go (`publish`), and the signer's leaf state (`reserveLeaf`,
+`lms.LeafState.reserve`: the next unused leaf, recorded as used before it is returned, or a refusal when the state is
+missing, behind, held by another signer or used up).
 
 `run` feeds `step`. Each blocking read runs in a task of its own (the link's, and each stream's once it connects), and
 sends what it read, with the clock's reading, to one channel; so does each connection attempt. The driver takes those
@@ -17,7 +19,7 @@ returns. It returns when both grids have run all their ticks, leaving the readin
 
 namespace CertifierDevice
 
-/-- A refusal: a connection the server refused. -/
+/-- A refusal: a connection the server refused, or a leaf the signer's state refused. -/
 structure Refused where
   reason : String
 
@@ -34,6 +36,7 @@ structure World where
   link : Conn
   connect : Nat → IO (Except Refused Conn)
   publish : Record → Params → IO Unit
+  reserveLeaf : IO (Except Refused Nat)
 
 /-- An event from a task, with the connection it opened. -/
 abbrev Message := Event × Option Conn

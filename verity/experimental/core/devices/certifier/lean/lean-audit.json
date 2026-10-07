@@ -2,7 +2,8 @@
  "roots": ["CertifierDevice"],
  "exempt": {
   "CertifierDevice.DifftestMain": "the difftest against active.Proxy, under `runs`: compiled evaluation of CertifierDevice.Difftest.main, audited under CertifierDevice, a test and not a proof",
-  "CertifierDevice.SmokeMain": "a smoke run of run on the host's clock in an in-memory loopback world, run by hand: it reads the wall clock, so it is no test, and nothing proves anything of it"
+  "CertifierDevice.IssuerDifftestMain": "the issuer difftest against certificate.Issuer, under `runs`: compiled evaluation of CertifierDevice.IssuerDifftest.main, audited under CertifierDevice, a test and not a proof",
+  "CertifierDevice.SmokeMain": "a smoke run of run on the host's clock in an in-memory loopback world, with the issuer certifying its records, run by hand: it reads the wall clock, so it is no test, and nothing proves anything of it"
  },
  "runs": {
   "CertifierDevice.DifftestMain": {
@@ -13,6 +14,15 @@
     "difftest/python.jsonl": "6f9e2c91d07eb8305ac684cd88927a9ca314f332ba8be3dd3bbdc67f790042c5"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "CertifierDevice.IssuerDifftestMain": {
+   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the certificate's fields and signature, verify under the key and after each tamper (a changed signature, field, deadline bit or public key, and a changed link-window or key identifier signed again), the records it refuses (no head, a leaf past 2^H) and the reservations the host refuses, listed in refused",
+   "args": ["{issuer/instances.jsonl}", "{issuer/python.jsonl}", "160"],
+   "data": {
+    "issuer/instances.jsonl": "cac50a90c834fc8bbd666424822bf5c7e32314235f7af3f7488a29b9e5a50df6",
+    "issuer/python.jsonl": "08dc6b07c89db3f160b598778f3110392dbc14fe0b5c7a57e364fa6d2f130ad1"
+   },
+   "generate": ["python3", "scripts/issuer_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {
@@ -45,6 +55,11 @@
    "imports": ["CertifierDevice.Device", "Std.Sync.Channel"],
    "except": [],
    "why": "the host the device needs, kept minimal so the shared World can replace it: Lean core's IO and channels over the device, nothing of Security"
+  },
+  "CertifierDevice.Issuer": {
+   "imports": ["CertifierDevice.World", "Lms.Sign"],
+   "except": [],
+   "why": "the issuer is code: the device's World and lms's signing, which reuses network_check's encodings; no Mathlib and nothing of Security"
   }
  },
  "dependencies": {
