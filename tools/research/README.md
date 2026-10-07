@@ -161,7 +161,7 @@ restacks or merges `main` into (`carry`). The branch holds the queue's state (ea
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
-The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
+The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
 workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
 `result.json` lands there and never in the checkout; `--env K=V` is set for the
