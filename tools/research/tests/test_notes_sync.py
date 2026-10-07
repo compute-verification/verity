@@ -110,6 +110,43 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
     assert not (b / ".git" / "rebase-merge").exists()
 
 
+def test_a_detached_head_commits_nothing(machines):
+    """The steward's clone, 6 Oct 16:05Z: once HEAD was detached, every pass committed onto it and none could push (nine syncs
+    unpushed by 17:20Z); a sync on a detached HEAD now leaves the work uncommitted for the branch to take."""
+    _, a, _ = machines
+    _git(a, "checkout", "-q", "--detach")
+    _insert_after(a / DOC, "<!-- a -->", "a while detached")
+    before = _git(a, "rev-parse", "HEAD")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["commit"], rep["pushed"]) == (2, None, False) and "detached" in NS.render_sync(rep)
+    assert _git(a, "rev-parse", "HEAD") == before and "a while detached" in (a / DOC).read_text()
+
+
+def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, monkeypatch):
+    """The same clone, 6 Oct 16:05Z: on NFS the rebase lost `.git/rebase-merge` ("could not lock .../git-rebase-todo"), so its
+    abort did nothing and HEAD stayed detached at origin/main; the sync puts the branch back, with the local commit on it."""
+    origin, a, b = machines
+    _insert_after(a / DOC, "<!-- b -->", "a first")
+    assert NS.sync(a, secrets=[])["pushed"]
+    _insert_after(b / DOC, "<!-- a -->", "b local")
+    real = NS._run
+
+    def run(root, *args, **kw):
+        if args[:1] == ("rebase",) and "--abort" not in args:
+            real(root, "checkout", "-q", "--detach", args[-1])
+            return subprocess.CompletedProcess(["git", *args], 1, "",
+                                               "error: could not lock '.git/rebase-merge/git-rebase-todo': No such file or directory")
+        if args == ("rebase", "--abort"):
+            return subprocess.CompletedProcess(["git", *args], 128, "", "fatal: no rebase in progress?")
+        return real(root, *args, **kw)
+    monkeypatch.setattr(NS, "_run", run)
+    rep = NS.sync(b, secrets=[])
+    assert rep["rc"] == 3 and _git(b, "symbolic-ref", "--short", "HEAD").strip() == "main"
+    assert "b local" in _git(b, "show", f"HEAD:{DOC}") and "b local" in (b / DOC).read_text()
+    monkeypatch.setattr(NS, "_run", real)
+    assert NS.sync(b, secrets=[])["pushed"] and "b local" in _git(origin, "show", f"main:{DOC}")
+
+
 def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pass(machines):
     origin, a, b = machines
     now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.timezone.utc)
