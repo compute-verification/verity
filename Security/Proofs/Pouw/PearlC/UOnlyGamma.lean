@@ -1,5 +1,5 @@
 import Proofs.Pouw.PearlC.DeviceCapGamma
-import Specs.Pouw.Assumptions.PearlC.TTOutUOnly
+import Models.Pouw.Assumptions.PearlC.TTOutUOnly
 
 /-!
 # TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it (the TT_OUT restatements lane's file)
