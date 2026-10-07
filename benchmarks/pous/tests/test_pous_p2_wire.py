@@ -176,3 +176,21 @@ def test_seen_audit_ids_are_required_and_persist_across_audits():
     seen: set = set()
     assert _verify([*setup, *audit], small, seen_audits=seen) == (True, 0, 2)
     assert _verify([*setup, *audit], small, seen_audits=seen) == (False, 2, 0)
+
+
+def test_flag_bit_1_compares_each_payload_with_the_verifier_held_w():
+    """Spec §4: flag bit 1 compares the decoded payload with verifier-held expected bytes: the true W passes, a W differing
+    in a challenged payload is code 5 with the decode flags set, and a verifier holding no W cannot ask for it."""
+    small, setup, audit = _small_session()
+    o = 10 + Wi.D + Wi.S
+    opened = audit[0][:o + 19] + b"\x03" + audit[0][o + 20:]
+    w = bytes.fromhex(small["W"])
+    assert _verify([*setup, opened, *audit[1:]], small, w_bytes=w) == (True, 0, 2)
+    first = small["exchanges"][0]["index"]
+    held = bytearray(w)
+    held[first * 63 // 8 + 1] ^= 0x01
+    final = Wi.verify_audit([*setup, opened, *audit[1:]], small["elapsed_ns"], seen_audits=set(), w_bytes=bytes(held),
+                            verifier_source=bytes.fromhex(small["audit_source"]))
+    assert Wi.parse_final(final) == (False, 5, 1) and final[-1 - 2 * Wi.D] == 0x0F
+    with pytest.raises(ValueError, match="held W"):
+        _verify([*setup, opened, *audit[1:]], small)

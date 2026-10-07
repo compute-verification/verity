@@ -390,13 +390,15 @@ def _parse_response(frame_bytes: bytes, block_bytes: int) -> tuple[bytes, bytes,
 
 def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier_source: bytes | None = None,
                  beacon_inputs: Mapping[int, bytes] | None = None,
-                 seen_audits: MutableSet[tuple[bytes, bytes]], private_root: bytes | None = None) -> bytes:
+                 seen_audits: MutableSet[tuple[bytes, bytes]], private_root: bytes | None = None,
+                 w_bytes: bytes | None = None) -> bytes:
     """Verify a setup and one audit transcript, returning the exact FINAL frame.
 
     `frames` is SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*, SETUP_ROOT, AUDIT_OPEN, then alternating CHALLENGE and RESPONSE.
     A missing final response is a transport failure. `elapsed_ns[j]` is the verifier's measured challenge-to-response time
     for round j. `seen_audits` holds every `(epoch_id, audit_id)` pair this verifier has used, and gains this audit's.
-    `private_root` is the root the verifier built from `W` itself, which a private setup's declared root must be."""
+    `private_root` is the root the verifier built from `W` itself, which a private setup's declared root must be.
+    `w_bytes` is the `W` the verifier holds, which flag bit 1 compares each decoded payload with."""
     if not frames:
         raise WireError(FAIL_TRANSPORT, "empty transcript has no audit identity")
     try:
@@ -417,6 +419,8 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
             raise
         return _final(salvaged, error.code, [open_frame], [])
     cursor += 1
+    if opened.verification_flags & 0x02 and w_bytes is None:
+        raise ValueError("flag bit 1 compares each payload with the held W: pass it (w_bytes)")
     transcript: list[bytes] = [opened.frame]
     records: list[bytes] = []
 
@@ -497,15 +501,20 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
         if opened.verification_flags & 0x01:
             flags |= 0x04
             k_value, tweak, _ = R.keys(setup.salt, setup.params, setup.commitment, segment, local)
-            if R.decode(setup.params, int.from_bytes(block, "big"), k_value, tweak) >> setup.payload_bits:
+            payload = R.decode(setup.params, int.from_bytes(block, "big"), k_value, tweak)
+            if payload >> setup.payload_bits:
                 return fail(FAIL_DECODE, flags)
             flags |= 0x08
-        if opened.verification_flags & 0x02:
-            # comparison with verifier-held payload is setup's, outside this audit-only reference
-            return fail(FAIL_DECODE, flags)
+            if opened.verification_flags & 0x02 and payload != _held_payload(w_bytes, setup.payload_bits, index):
+                return fail(FAIL_DECODE, flags)
         records.append(record(j, index, elapsed, flags, challenge_hash, response_hash))
 
     return stop(FAIL_IDENTITY if cursor != len(frames) else FAIL_SUCCESS)
+
+
+def _held_payload(w: bytes, bits: int, index: int) -> int:
+    start, stop = index * bits, (index + 1) * bits
+    return int.from_bytes(w[start // 8:(stop + 7) // 8], "big") >> (-stop % 8) & ((1 << bits) - 1)
 
 
 def _final(opened: AuditOpen, code: int, transcript: Sequence[bytes], records: Sequence[bytes]) -> bytes:
