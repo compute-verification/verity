@@ -124,8 +124,10 @@ def test_a_workspace_root_that_is_a_package_is_reached_through_a_shim_never_the_
                        env={"PYTHONPATH": ":".join(path)}, capture_output=True, text=True)
     assert r.stdout.strip() == "[True, True, True, True, False]", r.stderr
     assert P.shim_dir(t, ["core"], tmp_path / "shims") == str(shim)                       # the same tree shares one shim
+    assert P.shim_packages(shim, t) == ["core"] and P.shim_packages(shim, t / "src") is None and P.shim_packages(t, t) is None
     (shim / "core").unlink()
     (shim / "core").symlink_to(tmp_path)
+    assert P.shim_packages(shim, t) is None and P.shim_packages(tmp_path / "absent", t) is None
     assert P.shim_dir(t, ["core"], tmp_path / "shims") == str(shim) and (shim / "core").resolve() == t / "core", "a stale link is rebuilt"
     assert sorted(os.listdir(tmp_path / "shims")) == [shim.name]
     assert str(t) not in P.tree_pythonpath(t).split(":"), "a render of a root-package tree does not add the root either"

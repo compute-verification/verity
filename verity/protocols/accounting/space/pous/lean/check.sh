@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# Acceptance check: the package builds and passes Verity's Lean audit (`tools/lean/audit.py --all --fresh`), the open
-# targets elaborate, and the grader passes the positive control and rejects each negative control for the stated
-# reason. Prints ALL CHECKS PASSED.
+# Acceptance check: the grader and the security analysis (`verity/Security`, where PoUS's trusted layer and proofs are)
+# build and pass Verity's Lean audit (`tools/lean/audit.py --fresh`), the open targets elaborate, and the grader passes
+# the positive control and rejects each negative control for the stated reason. Prints ALL CHECKS PASSED.
 set -uo pipefail
 cd "$(dirname "$0")"
+security=$(cd ../../../../../Security && pwd)
 export PATH="$HOME/.elan/bin:$PATH"
 fail() { echo "CHECK FAILED: $1" >&2; exit 1; }
 
-echo "== the package: Verity's Lean audit (its controls, every declaration, pins, kernel replay, leanchecker --fresh)"
-audit_py=${POUS_LEAN_AUDIT:-$PWD/../../../tools/lean/audit.py}
+echo "== the packages: Verity's Lean audit (its controls, every declaration, pins, kernel replay, leanchecker --fresh)"
+audit_py=${POUS_LEAN_AUDIT:-$PWD/../../../../../../tools/lean/audit.py}
 [ -f "$audit_py" ] || fail "no Verity tools/lean/audit.py at $audit_py (set POUS_LEAN_AUDIT to another copy)"
 lake build > /dev/null || fail "lake build"
 alog=$(mktemp)
-python3 "$audit_py" --all --root . --fresh > "$alog" 2>&1 || { tail -40 "$alog" >&2; rm -f "$alog"; fail "audit.py"; }
+python3 "$audit_py" --build --fresh . "$security" > "$alog" 2>&1 || { tail -40 "$alog" >&2; rm -f "$alog"; fail "audit.py"; }
 grep -E '^(audit: controls|AUDIT )' "$alog" | sed 's/^/   /' | cut -c1-160
 rm -f "$alog"
 
 echo "== open targets elaborate"
-lake build PousTargets > /dev/null 2>&1 || fail "PousTargets"
+(cd "$security/Proofs" && lake build Proofs.Pous.Targets) > /dev/null 2>&1 || fail "Proofs.Pous.Targets"
 
 echo "== grader controls"
 tmp=$(mktemp -d)
@@ -33,20 +34,20 @@ expect() { # file target exit substring
 expect submissions/reference.lean Pous.Guarantees.KFloor 0 '"verdict":"PASS"'
 
 cat > "$tmp/sorry.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 theorem solution : Pous.Guarantees.Theorem1ii := sorry
 EOF
 expect "$tmp/sorry.lean" Pous.Guarantees.Theorem1ii 1 'sorryAx'
 
 cat > "$tmp/rogue_axiom.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 axiom cheat : False
 theorem solution : Pous.Guarantees.Theorem1ii := cheat.elim
 EOF
 expect "$tmp/rogue_axiom.lean" Pous.Guarantees.Theorem1ii 1 'unregistered axioms: [cheat]'
 
 cat > "$tmp/wrong_statement.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 theorem solution : Pous.Params.ρ = 18 / 19 := rfl
 EOF
 expect "$tmp/wrong_statement.lean" Pous.Guarantees.KFloor 1 'does not have the pinned type'
@@ -57,14 +58,14 @@ expect submissions/reference.lean Pous.Params.ρ 1 'is not a pinned statement'
 # equality would keep the kernel unfolding; the grader compares syntactically. The timeout turns a regression into a
 # failure instead of a hang.
 cat > "$tmp/near_miss.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 theorem solution : Pous.Guarantees.BandChainMeets64D12 := sorry
 EOF
 POUS_GRADE_TIMEOUT=120 expect "$tmp/near_miss.lean" Pous.Guarantees.BandChainMeets64D5 1 'does not have the pinned type'
 
 # `native_decide` rests on an auxiliary axiom per use (`solution._native.native_decide.ax_…`).
 cat > "$tmp/native.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 theorem solution : Pous.Guarantees.Theorem1ii := by
   have : (2 : ℕ) + 2 = 4 := by native_decide
   exact sorry
@@ -72,15 +73,15 @@ EOF
 expect "$tmp/native.lean" Pous.Guarantees.Theorem1ii 1 'native_decide.ax'
 
 cat > "$tmp/import.lean" <<'EOF'
-import Pous.Guarantees
-import Pous.SecurityProofs
+import Specs.Pous.Guarantees
+import Proofs.Pous
 theorem solution : Pous.Guarantees.Theorem1ii := Pous.SecurityProofs.Theorem1ii
 EOF
 expect "$tmp/import.lean" Pous.Guarantees.Theorem1ii 1 'may import only'
 
 # Adds `solution` without kernel checking; the option name is assembled so the textual filter misses it.
 cat > "$tmp/kernel_bypass.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 open Lean Elab Command in
 run_cmd liftCoreM do
   let opt : Name := .str (.str .anonymous ("deb" ++ "ug")) ("skipKernel" ++ "TC")
@@ -95,7 +96,7 @@ expect "$tmp/kernel_bypass.lean" Pous.Guarantees.Theorem1ii 1 'the kernel reject
 # compile and reach the grader.
 grader_hash=$(sha256sum .lake/build/bin/pous-grader)
 cat > "$tmp/rt_registry_tamper.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 #eval show IO Unit from do
   for p in ["AXIOMS", "ROOT/AXIOMS", "ROOT/Grader/Registry.lean", "ROOT/TRUSTED.sha256"] do
     try
@@ -108,7 +109,7 @@ import Pous.Guarantees
 theorem solution : Pous.Guarantees.Theorem1ii := sorry
 EOF
 cat > "$tmp/rt_grader_swap.lean" <<'EOF'
-import Pous.Guarantees
+import Specs.Pous.Guarantees
 #eval show IO Unit from do
   let g := "ROOT/.lake/build/bin/pous-grader"
   try IO.FS.rename g (g ++ ".orig") catch _ => pure ()
