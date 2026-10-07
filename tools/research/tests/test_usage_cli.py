@@ -1,4 +1,4 @@
-"""`research usage` is `cluster usage` from the same tree's tools/cluster, run as a subprocess (research never imports cluster),
+"""`research usage` is `cluster usage` from the same tree's infra/cluster, run as a subprocess (research never imports cluster),
 with its output and exit code."""
 from __future__ import annotations
 
@@ -27,4 +27,4 @@ def test_research_usage_runs_cluster_usage_from_this_tree(tmp_path, capfd):
 def test_without_tools_cluster_beside_it_research_usage_exits_2(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "CLUSTER_SRC", tmp_path)
     assert cli.main(["usage", "hourly"]) == 2
-    assert "no tools/cluster" in capsys.readouterr().err
+    assert "no infra/cluster" in capsys.readouterr().err
