@@ -23,6 +23,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# verity_ops imports research, and deploy reads research's pods/nebius/deploy.toml.
-inputs = ["tools/research"]
+# verity_ops imports research, deploy reads research's pods/nebius/deploy.toml, and its test the Slack registry for owners.
+inputs = ["tools/research", ".agents/skills/using-slack/registry.json"]
 parallel = true
