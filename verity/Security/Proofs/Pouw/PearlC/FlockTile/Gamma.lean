@@ -1,4 +1,4 @@
-import Proofs.Pouw.PearlC.FlockTile.Audit
+import Proofs.Pouw.PearlC.FlockTile.Statement
 import Proofs.Pouw.PearlC.HiddenTileGame
 
 /-!
@@ -10,6 +10,8 @@ import Proofs.Pouw.PearlC.HiddenTileGame
 * `pearlCHiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`: so `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`'s
   `hzk` is discharged there, and v1 under rev1 per tile at 1/1,000, 8192³ keeps 0.36949% under C-Flock's hidden audit,
   given `TTOutTilePearlCDevRev1`, T3 and the binding.
+* `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`: the guarantee
+  `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` (`FlockTile.Statement`), which is the last.
 
 Both open obligations are about TileRead, whose Definition and C-Flock soundness are not in Lean yet; the session is a
 parameter (`TileReadSession`). A γ under this audit is cited only beside the theorem that the honest prover, at its stated
@@ -62,3 +64,12 @@ theorem pearlCHiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 (F : TileReadSessio
     (tileProofSoundAll_flock _ _ _ F ηzk h0 hT3 hbind)
 
 end Pouw.PearlC.FlockTile
+
+namespace Pouw.SecurityProofs.PearlC
+
+theorem HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 :
+    Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 :=
+  fun CM sem F ηzk h0 hTT hT3 hbind =>
+    Pouw.PearlC.FlockTile.pearlCHiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 CM sem F ηzk h0 hTT hT3 hbind
+
+end Pouw.SecurityProofs.PearlC
