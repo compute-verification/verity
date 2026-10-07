@@ -1217,16 +1217,16 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span. Every range's slots are at least a word, as on the BLAKE3 path, and at most the block
   (`7 ≤ slot_log ≤ k_log`): a slot below 64 bits makes the fold no `αA₀ᵀe + B₀ᵀe` of any matrices, and a packed range of
   no slots would escape the block bound.
-- **Header sizes.** A power of a number META chooses is computed only once the number is bounded. `parse` refuses
-  `k_log > 27` where it reads it (`HmRow.kLogOf`), before the layout check computes `2^{k_log}`, or `2^{slot_log}` once
-  `slot_log ≤ k_log`; and it compares a lookup's `in_bits` with its pinned table's `log2` before `2^{in_bits}`. `setupH`
-  refuses `k_log > 27` too, and a pinned table's words are a power of two, so the verifier accepts and refuses what it did
-  before (`kLogOf_ok`, `lookup_index_test`), refusing such a file before spending memory on it.
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
   when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.
 - **Blocks.** `vus_per_block ≥ 1` (D9, §17.1). Every range's count is `vus_per_block` times its per-VU count, and the
   unit range's power-of-two bound binds only when the unit returns the outputs, so a tail that returns them would otherwise
   pass with no VU in a block.
+- **Header sizes.** A power of a number META chooses is computed only once the number is bounded. `parse` refuses
+  `k_log > 27` where it reads it (`HmRow.kLogOf`), before the layout check computes `2^{k_log}`, or `2^{slot_log}` once
+  `slot_log ≤ k_log`; and it compares a lookup's `in_bits` with its pinned table's `log2` before `2^{in_bits}`. `setupH`
+  refuses `k_log > 27` too, and a pinned table's words are a power of two, so the verifier accepts and refuses what it did
+  before (`kLogOf_ok`, `lookup_index_test`), refusing such a file before spending memory on it.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
