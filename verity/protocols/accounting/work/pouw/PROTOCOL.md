@@ -693,13 +693,15 @@ the certificate names no γ_0. The module's docstring states every step and roun
 rows      k BF16 words per row of either operand
 stats     s, ρ as pearl-c-h100-v1; σ = ρ/4; α = 2688/max(s + 4σ, 2^−32) (mxfp4: floored to a power of two);
           β_row = (σ·α)·f32(16/√2346.125), a_E = ue4m3(β_row)
-lines     32 uniform E2M1 codes: TurboSHAKE128(seed ‖ role ‖ index u32, D = 0x24), 16 bytes; seed labels pearl-c4/v0/seed-*
+seeds     seed_A = H_"seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE);  seed_B = H_"seed-B"(salt ‖ root_B);
+          H_ℓ = SHA-512 of pearl-c4/v1/ℓ ‖ \0 (zero-padded to one 128-byte block) ‖ x, its first 32 bytes (`labelled`)
+lines     32 uniform E2M1 codes: TurboSHAKE128(seed ‖ role ‖ index u32, D = 0x24), 16 bytes
 forming   D_t = NVF4.step(C = α·x_t, E ‖ 0 at a_E, F_t ‖ 0 at 2^−4); per scale block s_b from amax|D|/6 (nvfp4: UE4M3
           nearest even, at least 2^−9; mxfp4: UE8M0 rounded up); code = e2m1(D·(1/s_b))
 chain     C̃ = the scheme's atom chained from +0 over k/64 steps, no promotion
 peel      Ẽ = E·a_E·2^−4 (exact in BF16); P_A = [Ẽ_A ‖ bf16(A′·F_B)], P_B = [bf16(Ẽ_B·G − B̃·F_A) ‖ −Ẽ_B], G = F_Bᵀ·F_A;
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_M16N8K16 steps (sm_120 mma.sync) into C̃'s word
-leaf      pearl-c-h100's; tickets: Pearl's lottery over C̃
+leaf      pearl-c-h100's; tickets: Pearl's lottery over C̃, -h3's SHA-512 H_jackpot(seed_A ‖ fold) at every hashing
 useful    U/(α_A·α_B), glue
 ~~~
 
@@ -707,24 +709,26 @@ useful    U/(α_A·α_B), glue
   test), so rounding binds no word to its order. D₄ doesn't guarantee it (`Fp4Freeze.noLoss_gap`, an in-domain step
   that drops a bit), so no claim rests on exactness: the debit's terms are replayed per run. The design's defense
   against a salt-free precomputation is that every code and every block scale depends on the salt.
-- **B̃ is keyed by this job's salt (D-SK):** seed_B = H(salt ‖ root_B) (`seed_b`), and the verifier forms B̃ itself from
-  it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its checked
-  values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
-  (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
-  stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
+- **B̃ is keyed by this job's salt (D-SK):** seed_B = H_"seed-B"(salt ‖ root_B) (`seed_b`), and the verifier forms B̃
+  itself from it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its
+  checked values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is
+  two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on
+  crafted stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack applies here too.** `noise` keys every row's E_A by the
   unit's seed_A alone, so the prover knows each row's noise before it chooses the row and can fold every row onto one A′
   row, whose C̃ it computes once per weight row, while every row passes every rule
   (`art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`). The fix is Pearl-C's -h3 (above):
   - `PearlC4(hashing="h3")` (`pearl-c-nvfp4-v0-h3`, not registered) draws row i's E_A as line 0 (role E_A) of its own
-    seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, keyed BLAKE3 under
-    blake3("pearl-c4/v0/seed-A") of salt ‖ d_i ‖ root_B ‖ u·2^32 + i, over the row's SHA-512 digest d_i
-    (`pearl_c.row_digest`). The seed is still Pearl-C4's BLAKE3 seed-A derivation, as at h0.
+    seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, H_"seed-A"(salt ‖ d_i ‖ root_B ‖
+    u·2^32 + i u64 LE) over the row's SHA-512 digest d_i (`pearl_c.row_digest`), the same SHA-512 seed-A derivation as
+    the unit's.
   - seed_B and what it keys (E_B, F_A, F_B) are unchanged, and the tickets keep the unit's seed_A over root_A. A's and
-    B's trees are `audit.HM96`, the tile leaf and the tickets are Pearl-C's -h3 (SHA-512); the work law checks the row cap
-    as well as the tile cap.
-  - The `test-16-nvfp4-h3` vector pins a call end to end, its roots 64 bytes. -h0's names, vectors, certificate, circuit
-    (`circuit.pc4`) and kernels are unchanged, and no device path forms -h3 yet.
+    B's trees are `audit.HM96`, the tile leaf is Pearl-C's -h3 (SHA-512); the work law checks the row cap as well as the
+    tile cap.
+  - The `test-16-nvfp4-h3` vector pins a call end to end, its roots 64 bytes. -h0 keeps its names, circuit
+    (`circuit.pc4`) and kernels, and no device path forms -h3 yet.
+  - At every hashing the seeds are SHA-512 (`pearl-c4/v1`) and the tickets -h3's, so Pearl-C4 claims `cr/sha-512` and
+    reaches no BLAKE3. The device's seeds (`pearl_c4.cu`'s `commit_rows`) hash with `pearl_c/sha512.cuh`.
 - **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at
