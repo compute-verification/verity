@@ -17,11 +17,12 @@ import pytest
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 VERIFIER = LEAN.parent
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: RoPE d64 staged by verity_flock.circuit (circuit_sha512 d2dafe7e…) with the live build's --zk sessions: sessions/selftest
-#: (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances), sessions/m26 (one
-#: table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all accepted)
-FIXTURE = "art:8126390c"
-STATEMENT = "verity/flock-circuit@967b8d06+seed-injection"
+#: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 5c33464c…) with the live build's --zk sessions:
+#: sessions/selftest (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances),
+#: sessions/m26 (one table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all
+#: accepted); its identity's refused_coins name the zerocheck outer coin r_j = 1 (run r20261004-033801-14b6)
+FIXTURE = "art:5542740a"
+STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -39,7 +40,7 @@ def zk(tmp_path_factory):
     return root
 
 
-def _run(root: Path, *sessions: Path, public: str = "pub-16.bin", tables: int = 1, zk: bool = True,
+def _run(root: Path, *sessions: Path, public: str | Path = "pub-16.bin", tables: int = 1, zk: bool = True,
          extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
     return subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
                            "--public", str(root / "stage" / public), "--session-tables", str(tables), *(["--zk"] if zk else []),
@@ -56,9 +57,13 @@ def _one(root: Path, name: str, k: int = 0) -> Path:
 
 
 def _selftest(root: Path, keep) -> None:
-    """The selftest cases `keep` admits, in one run: each gets its live verdict, and an inner proof's refusal its reason."""
-    cases = sorted(p for p in (root / "sessions" / "selftest").iterdir() if p.is_dir() and keep(p.name))
-    verdicts = _verify(root, *cases)
+    """The selftest cases `keep` admits, in one run, a case with its own false statement (`pub.bin`) in a run of its own:
+    each gets its live verdict, and an inner proof's refusal its reason."""
+    found = sorted(p for p in (root / "sessions" / "selftest").iterdir() if p.is_dir() and keep(p.name))
+    shared = [d for d in found if not (d / "pub.bin").exists()]
+    own = [d for d in found if (d / "pub.bin").exists()]
+    cases = shared + own
+    verdicts = _verify(root, *shared) + [v for d in own for v in _verify(root, d, public=d / "pub.bin")]
     assert len(verdicts) == len(cases)
     for d, v in zip(cases, verdicts):
         live = json.loads((d / "case.json").read_text())["live"]

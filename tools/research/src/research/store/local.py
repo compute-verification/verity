@@ -34,7 +34,7 @@ from pathlib import Path
 from collections.abc import Sequence
 from typing import Any, Callable
 
-from ..secret_hint import lost
+from ..secret_hint import FRESH_SHELL, lost
 from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
@@ -218,8 +218,21 @@ class LocalStore:
         r = self.remote
         if r is None:
             why = getattr(self, "remote_error", None)
-            raise StoreError(why or lost("R2_ENDPOINT", "R2_BUCKET") or "no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
+            raise StoreError(why or lost("R2_ENDPOINT", "R2_BUCKET") or self.remote_lost()
+                             or "no remote configured (~/.research/store.toml or $RESEARCH_STORE_CONFIG)")
         return r
+
+    def remote_lost(self) -> str:
+        """'' unless nothing here names a remote (no `$RESEARCH_WRITE_THROUGH`, store.toml, `$RESEARCH_STORE_CONFIG`, `R2_ENDPOINT` or
+        `R2_BUCKET`) yet the catalog holds artifacts pulled from or verified on one; then the hint.  A cloud shell can lose
+        $CLOUD_AGENT_INJECTED_SECRET_NAMES along with the secrets (so `lost` says nothing), and its writes would stay local unannounced."""
+        if (self._config_path is not None or os.environ.get(WRITE_THROUGH_ENV, "").strip() or "RESEARCH_STORE_CONFIG" in os.environ
+                or os.environ.get("R2_ENDPOINT") or os.environ.get("R2_BUCKET") or config_path().is_file()):
+            return ""
+        if self.index.db.execute("SELECT 1 FROM replicas WHERE location='remote' UNION ALL SELECT 1 FROM artifacts WHERE remote=1 LIMIT 1").fetchone() is None:
+            return ""
+        return ("R2_ENDPOINT and R2_BUCKET are not in this shell, but this store has used the remote (its catalog holds artifacts from it): "
+                f"the shell lost the VM's secrets; {FRESH_SHELL}")
 
     @property
     def repo(self) -> Path | None:
@@ -322,7 +335,7 @@ class LocalStore:
             return self._read_manifest(p, hex_)
         r = self.remote
         if r is not None:
-            tmp = p.parent / f".tmp-{hex_}-{os.getpid()}"
+            tmp = p.parent / f".tmp-{hex_}-{os.getpid()}-{threading.get_ident()}"
             try:
                 r.get(manifest_key(hex_), tmp)
             except KeyError:
@@ -457,25 +470,28 @@ class LocalStore:
         self.index.set_presence(art_id, local=self._blobs_local(m))
         if to is None:
             final = self.root / "trees" / hex_
-            if final.is_dir() and all((final / f.path).is_file() for f in wanted):
-                return final
-            if paths:                                                   # a partial fetch lands in place; the cache is complete when every file is there
-                self._materialise(srcs, final)
-                return final
-            work = final.parent / f".tmp-{hex_}-{os.getpid()}"
-            shutil.rmtree(work, ignore_errors=True)
-            self._materialise(srcs, work)
-            try:
-                os.rename(work, final)
-            except OSError:
-                shutil.rmtree(final, ignore_errors=True)                # an incomplete partial fetch is superseded by the full one
-                try:
-                    os.rename(work, final)
-                except OSError:
-                    shutil.rmtree(work, ignore_errors=True)
+            if not (final.is_dir() and all((final / f.path).is_file() for f in wanted)):
+                self._land_tree(final, srcs, partial=bool(paths))
+            os.utime(final)   # eviction leaves a tree fetched within `evict.TREE_KEEP_S`: whoever fetched it may still read it
             return final
         self._materialise(srcs, Path(to))
         return Path(to)
+
+    def _land_tree(self, final: Path, srcs: list[tuple[TreeFile, Path]], *, partial: bool) -> None:
+        # A tree already in trees/ (a partial fetch, or another process's fetch that landed first) is completed in place with the
+        # files it lacks, and nothing in it is replaced or removed: another process may be reading it.  Each file lands whole, so
+        # the cache is complete when every file is there.
+        if partial or final.is_dir():
+            self._materialise([(f, b) for f, b in srcs if not (final / f.path).is_file()], final)
+            return
+        work = final.parent / f".tmp-{final.name}-{os.getpid()}"
+        shutil.rmtree(work, ignore_errors=True)
+        self._materialise(srcs, work)
+        try:
+            os.rename(work, final)
+        except OSError:
+            self._materialise([(f, b) for f, b in srcs if not (final / f.path).is_file()], final)
+            shutil.rmtree(work, ignore_errors=True)
 
     @staticmethod
     def _materialise(srcs: list[tuple[TreeFile, Path]], dst: Path) -> None:
@@ -544,7 +560,7 @@ class LocalStore:
             r = self.remote
             if r is None:
                 return None
-            tmp = p.parent / f".tmp-{run_id}-{os.getpid()}"
+            tmp = p.parent / f".tmp-{run_id}-{os.getpid()}-{threading.get_ident()}"
             try:
                 r.get(attempt_key(run_id), tmp)
             except KeyError:

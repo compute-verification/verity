@@ -459,7 +459,7 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 # `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16` (SASS HGMMA.64xNx16.F32.BF16) as `veritor.core.silicon_total.
 # HOPPER_BF16_WGMMA_K16` defines it -- one group of all sixteen products plus the accumulator, 26-bit adder, exponent floor
 # -133 (lane HP's H100 re-measurement, docs/data/tc-hopper-2026-09-07: 307,281,920 output words, 0 mismatches; `scale-d = 0`
-# measured equal to acc = +0).  The registered scalar primitive is `verity.ml.prims.HopperBF16WgmmaDot16`; this twin
+# measured equal to acc = +0).  The registered scalar primitive is `verity_catalog.definitions.prims.HopperBF16WgmmaDot16`; this twin
 # is checked word for word against it in tests/program/test_derived_rows.py.
 #
 # The k-CHAIN of the Hopper GEMM of record (`Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`, gemm_targets.REGISTERED['hopper']) is
@@ -633,18 +633,18 @@ def tc_dot32_e4m3(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.nda
 def scaled_mm_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128,
                             chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
     """`ScaledMmFp8Block_v1{K,N,G}` on ONE token row (`_C.cutlass_scaled_mm` blockwise, CutlassFp8BlockScaledMMKernel): xq (K,) e4m3
-    bytes, sx (K/G,) f32 words, w (N, K) e4m3 bytes, ws (N/G, K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output column n
-    (`ScaledMmFp8BlockCoordinate`): for kb ascending, `temp` = G/32 `tc_dot32_e4m3` steps from +0 over the tile's bytes, `s` =
-    FMUL(sx[kb], ws[n // G][kb]), `acc` = FFMA(temp, s, acc) from +0 (the f32 promotion pinned by the adversarial operands: FFMA, not
-    mul+add; ascending k), then `cvt.rn.bf16.f32`.  Vectorised over <= `chunk` columns at a time (bounds the int64 temporaries)."""
+    bytes, sx (K/G,) f32 words, w (N, K) e4m3 bytes, ws (cdiv(N, G), K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output
+    column n (`ScaledMmFp8BlockCoordinate`): for kb ascending, `temp` = G/32 `tc_dot32_e4m3` steps from +0 over the tile's bytes, `s` =
+    FMUL(sx[kb], ws[n // G][kb]), `acc` = FFMA(temp, s, acc) from +0 (FFMA, not mul+add; ascending k), then `cvt.rn.bf16.f32`.  The
+    last weight block may be partial (`fp8.weight_blocks`).  Vectorised over <= `chunk` columns (bounds the int64 temporaries)."""
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
     K = xq.size
     w = np.asarray(w, dtype=np.uint8).reshape(-1, K)
     N = w.shape[0]
-    if K % G or N % G or G % 32:
-        raise ValueError(f"ScaledMmFp8Block: K={K} N={N} must be multiples of G={G} (G a multiple of 32)")
+    if K % G or G % 32:
+        raise ValueError(f"ScaledMmFp8Block: K={K} must be a multiple of G={G} (G a multiple of 32)")
     sx = np.asarray(sx, dtype=np.uint32).reshape(K // G)
-    ws = np.asarray(ws, dtype=np.uint32).reshape(N // G, K // G)
+    ws = np.asarray(ws, dtype=np.uint32).reshape(-(-N // G), K // G)
     out = np.empty(N, dtype=np.uint16)
     nonfin = np.zeros(N, dtype=bool)
     for n0 in range(0, N, chunk):
@@ -671,7 +671,7 @@ def fp8_group_quant_row(x: np.ndarray, *, G: int = 128) -> tuple[np.ndarray, np.
     bytes, sx (K/G,) f32 words).  Per group: `s = fmaxf-fold(eps=1e-10f, |f32(x_e)|) / 448.0f` (an exact max -- fmaxf drops a NaN
     operand -- then an IEEE div.rn.f32), `xq[e] = cvt.rn.satfinite.e4m3(fminf(fmaxf(f32(x[e]) / s, -448), 448))` (a true division; a NaN
     quotient is dropped by fmaxf -> -448 -> 0xFE, the kernel's word)."""
-    from verity_vllm.program.registry.fp8 import np_f32_to_e4m3_sat          # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
+    from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat     # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
     x = np.asarray(x, dtype=np.uint16).reshape(-1)
     K = x.size
     if K % G:
@@ -750,7 +750,7 @@ def rmsnorm_fused_v2_rows(x: np.ndarray, res: np.ndarray, w: np.ndarray, eps: fl
     ``normed``/``resid`` and the derived f32 words ``var`` (cub BlockReduce output) and ``s``
     (`RsqrtApprox(var / N + eps)`).  Delegates to `rmsnorm_fused_sweep.fused_rows` (the twin that
     reproduced 2,340/2,340 fused-norm rows of the B0 store) with the v2 variance tree."""
-    from verity_vllm.program.registry.rmsnorm_fused_sweep import fused_rows, variance_v2
+    from verity_vllm.program.kernels.rmsnorm_fused_sweep import fused_rows, variance_v2
     R, N = np.asarray(x).shape
     w2 = np.ascontiguousarray(np.broadcast_to(np.asarray(w, dtype=np.uint16), (R, N)))
     out, rp, var, s = fused_rows(np.ascontiguousarray(x, dtype=np.uint16),

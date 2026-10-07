@@ -190,7 +190,7 @@ from research.store.tool import Tool
 TC_PROBE = Tool(
     name="tc_probe", version="1",
     command=["python", "tools/tc_probe/tc_probe.py"],
-    closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**"],   # repo-relative globs -> file manifest at run time
+    closure=["tools/tc_probe/**", "catalog/verity_catalog/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_instances"],                     # path-valued params: identity = content, never pathname
@@ -199,7 +199,7 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `backends/direct/ligero/tool.py`; the example above is
+Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
 illustrative, the files follow the scripts' real argparse) and are found by `research run --tool <dotted.module:NAME>` or
 `--tool <name>` via the registry in `research/store/tools_registry.py` (a dict name -> dotted path; keep it tiny). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
@@ -485,8 +485,8 @@ research data snapshot --name NAME (--members art:... | --select <select flags>)
 research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
-research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels all on the remote, else the failing legs
+research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
@@ -546,10 +546,10 @@ from its record. A failure whose key had expired says so in the marker's `error`
 (no `run_record`).
 
 - The pod guard accepts a valid `.custody` like a valid `.fetched`: every file listed, none changed at or after `verified_from`.
-- `research data custody RUN [--publish]` checks the same predicate from any machine (and rewrites the marker); `--publish` puts a
-  local run dir on the remote first. `research data custody --triage [--verify]` sorts a runs root into `fetched`, `r2`,
-  `attempt-no-record`, `attempt-unpreserved`, `no-custody`, `running`, `never-ran`, `waived`; a waiver or never-ran verdict is a
-  label: `research data label RUN custody waived|never-ran --by WHO`.
+- `research data custody RUN [--publish [--force [--runner-gone]]]` checks the same predicate from any machine (and rewrites the
+  marker); `--publish` puts a local run dir on the remote first. `--triage [--verify] [--older-min N]` sorts runs roots by
+  `custody.triage_row`; waived and never-ran are labels (`research data label RUN custody waived|never-ran|needed --by WHO`).
+  Its `needs_action` (exit 1) is the monitors' invariant, per node.
 - `research pods drain|unpreserved --custody-r2` and `research notes watch --reap --custody-r2` (`pods.drain.pod_custody`) refresh
   the catalog from the remote, require every attempt tied to the pod to be preserved, and read the pod guard's state for its run
   dirs: without a guard state younger than 10 min, custody is unknown and nothing is terminated.

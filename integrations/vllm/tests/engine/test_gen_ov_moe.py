@@ -19,10 +19,10 @@ from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEF
 OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
-from verity.ir.defs import bind
-from verity.ir.evaluate import evaluate_region
-from verity.ir.layout import resolve
-from verity.ir.program import Program
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.evaluate import evaluate_region
+from verity.primitives.circuits.layout import resolve
+from verity.primitives.circuits.program import Program
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
@@ -296,7 +296,7 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     assert g.consumed == tuple(sorted(se.roots[0].ids()))
     computes = [p for p in g.parts if isinstance(p, Compute)]
     specs = [c.spec.id for c in computes]
-    assert specs == [f"MoeRouterTopKOrdered_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}}",
+    assert specs == [f"MoeRouterTopKOrdered_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}",
                      f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
     assert [c.rows for c in computes] == [M, M * TOPK, M * TOPK, M * TOPK, M]
     router, up, silu, down, msum = computes

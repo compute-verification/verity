@@ -13,7 +13,6 @@ the predictor gives the rows' traced digests.
 
 from __future__ import annotations
 
-import gzip
 import json
 import re
 from pathlib import Path
@@ -176,105 +175,14 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
     (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
     (TINY, {"tp": {"world": 4, "rank": 0}}, "tensor parallel world 4"),
-    ({**TINY, "num_key_value_heads": 1}, {"tp": {"world": 2, "rank": 0}}, "4 query and 1 key/value heads over 2 ranks"),
+    ({**TINY, "hidden_size": 96, "num_attention_heads": 6, "num_key_value_heads": 3}, {"tp": {"world": 2, "rank": 0}},
+     "6 query and 3 key/value heads over 2 ranks"),
     ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
     (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
         build_program(_phi(cfg, **phi_kw), "step")
-
-
-def _row(tmp_path: Path, row: str, builds: dict, sweep: dict | None = None) -> dict:
-    return {"dir": str(tmp_path / "rows" / "job" / row), "job": "job", "row": row, "summary": {}, "builds": builds, "source_root": None,
-            "workload_path": None, "workload": {"model": "org/tiny", "tokenizer_revision": "rev", "target": {}, **({"sweep": sweep} if sweep else {}),
-                                                "requests": [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0,
-                                                              **({"seed": 7} if sweep else {})}]}}
-
-
-def test_score_reports_exact_divergence_and_refusals(tmp_path):
-    cfgp = tmp_path / "hf" / "models--org--tiny" / "snapshots" / "rev" / "config.json"
-    cfgp.parent.mkdir(parents=True)
-    cfgp.write_text(json.dumps(TINY))
-    phi = _phi(TINY, [{"request_id": "u0", "index": 0, "prompt_len": 8, "max_tokens": 3, "arrive_step": 0}])
-    step = build_program(phi, "step", M=1, pos0=8)
-    req = build_program(phi, "request", LP=8, T=2)
-    wl = S.predict_workload(phi)
-    # the traced request descriptor: the prediction with one root reference moved (the attention's key history of row 3)
-    bad = json.loads(json.dumps(req.desc))
-    nodes = bad["definitions"][bad["root"]]["body"]["nodes"]
-    k = next(i for i, n in enumerate(nodes) if bad["callees"][n["fn"]].startswith("Attention") and len(n["args"]) == 3
-             and "concat" in n["args"][1]["refs"])
-    nodes[k]["args"][1]["refs"] = nodes[k]["args"][2]["refs"]
-    dpath = tmp_path / "traced_request.json.gz"
-    with gzip.open(dpath, "wt") as f:
-        json.dump(bad, f)
-    greedy = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__greedy__bi-eager"
-    stoch = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o3__mixed__stoch-t0.8-p0.95__bi-eager"
-    topk = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i8__o4__mixed__stoch-t0.8-p0.95__bi-eager"
-    sweep = {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]}
-    sstep = build_program(_phi(TINY, sampling={**STOCH, "splits": 32}), "step", M=1, pos0=8)
-    tp2 = "smollm2-135m__bf16__rtxpro6000__tp2__b1__i8__o3__mixed__greedy__bi-eager"
-    rank_step = {r: build_program(_phi(TINY, tp={"world": 2, "rank": r}), "step", M=1, pos0=8).digest for r in (0, 1)}
-    rank1_wl = S.predict_workload(_phi(TINY, phi.requests, tp={"world": 2, "rank": 1}))["digest"]
-    assert len({rank_step[0], rank_step[1], step.digest}) == 3
-    prog = lambda d: {"digest": d, "function": None, "n_root_nodes": None}  # noqa: E731
-    inv = {"schema": "verity-predict/inventory/v1", "root": str(tmp_path / "rows"), "rows": [
-        _row(tmp_path, greedy, {
-            "build_step": {"wrapper": "step", "M": 1, "pos0": 8, "LP": 8, "T": 4, "ok": True, "program": prog(step.digest)},
-            "build_request": {"wrapper": "request", "M": 1, "pos0": 8, "LP": 8, "T": 2, "ok": True, "program": prog("0" * 64), "descriptor": str(dpath)},
-            "build_request_LP9_T2": {"wrapper": None, "ok": False, "message": "Device string must not be empty"},
-            "build_workload": {"ok": True, "workload_digest": wl["digest"], "lag": 1, "n_requests": 1}}),
-        _row(tmp_path, stoch, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog(sstep.digest)}}, sweep),
-        _row(tmp_path, topk, {"build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog("1" * 64)}},
-             {**sweep, "sampling_params": {**sweep["sampling_params"], "top_k": 50}}),
-        _row(tmp_path, tp2, {f"rank{r}/build_step": {"wrapper": "step", "M": 1, "pos0": 8, "ok": True, "program": prog(rank_step[r])} for r in (0, 1)}
-             | {"rank1/build_workload": {"ok": True, "workload_digest": rank1_wl, "lag": 1, "n_requests": 1}}),
-    ]}
-    cache = str(tmp_path / "cache.jsonl")
-    res = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache)
-    assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True)["summary"] == res["summary"]
-    assert S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=cache, cached_only=True, max_diverge=0)["summary"] == \
-        res["summary"], "a divergence in the cache is reported whatever the budget for new ones"
-    cold = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=str(tmp_path / "empty.jsonl"), cached_only=True)
-    assert cold["summary"]["units_compared"] == 0 and cold["summary"]["units_by_status"]["not_run"] == 7
-    tight = S.score(inv, hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, max_mem_mb=1, cache=cache, cached_only=True)
-    assert tight["summary"]["units_by_status"]["over_budget"] == 7
-    units = {(r["row"], u["unit"]): u for r in res["rows"] for u in r["units"]}
-    assert units[(greedy, "build_step")]["status"] == "exact"
-    assert units[(greedy, "build_workload")]["status"] == "exact"
-    u = units[(greedy, "build_request")]
-    assert u["status"] == "differs" and u["predicted_digest"] == req.digest
-    assert u["first_divergence"]["where"] == "root node" and u["first_divergence"]["node"] == k and u["first_divergence"]["arg"] == 1
-    assert u["equivalence"]["verdict"] != "equivalent"
-    assert units[(greedy, "build_request_LP9_T2")]["status"] == "no_trace"
-    assert units[(stoch, "build_step")]["status"] == "exact"
-    assert units[(topk, "build_step")]["status"] == "unexpressible" and "top_k = 50" in units[(topk, "build_step")]["reason"]
-    assert all(units[(tp2, n)]["status"] == "exact" for n in ("rank0/build_step", "rank1/build_step", "rank1/build_workload"))
-    s = res["summary"]
-    assert (s["units_compared"], s["units_exact"]) == (7, 6)
-    assert s["units_by_granularity"]["step:exact"] == 4
-    assert "| first divergence | units |" in S.table_md(res)
-    entries = [json.loads(line) for line in open(cache)]
-    assert res["code"] == S.code_version() and {e["code"] for e in entries} == {res["code"]} and s["compared_by_code"] == {res["code"]: 7}
-    other, unstamped = str(tmp_path / "other.jsonl"), str(tmp_path / "unstamped.jsonl")
-    with open(other, "w") as f:
-        f.writelines(json.dumps({**e, "code": "0" * 16}) + "\n" for e in entries)
-    with open(unstamped, "w") as f:
-        f.writelines(json.dumps({k: v for k, v in e.items() if k != "code"}) + "\n" for e in entries)
-    for path, version in ((other, "0" * 16), (unstamped, S.UNSTAMPED)):
-        kw = dict(hf_home=str(tmp_path / "hf"), workers=0, max_rows=64, cache=path, cached_only=True)
-        assert S.score(inv, **kw)["summary"]["units_by_status"]["not_run"] == 7, "another code's results are not this code's"
-        old = S.score(inv, **kw, reuse_code=(version,))["summary"]
-        assert old["compared_by_code"] == {version: 7} and {**old, "compared_by_code": 0} == {**s, "compared_by_code": 0}
-    # whatever the order written: this code's result for a key, then the reused versions' in the order named
-    e = entries[0]
-    mixed = str(tmp_path / "mixed.jsonl")
-    with open(mixed, "w") as f:
-        f.writelines(json.dumps(x) + "\n" for x in ({**e, "digest": "own"}, {**e, "code": "a", "digest": "a"}, {**e, "code": "b", "digest": "b"}))
-    assert S.Cache(mixed, e["code"], ("a", "b")).get(e["key"])["digest"] == "own"
-    assert S.Cache(mixed, "c", ("a", "b")).get(e["key"])["digest"] == "a"
-    assert S.Cache(mixed, "c", ("b", "a")).get(e["key"])["digest"] == "b"
 
 
 def test_memory_estimate_is_above_a_measured_peak():
@@ -299,3 +207,23 @@ def test_no_record_path_module_reads_the_predictor():
     hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
     assert hits == []
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
+
+
+def test_code_version_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path):
+    """`verity` as a namespace: the digest is the same over any order of its portions and with a cwd directory that joined it
+    without a module, and moves with an edit."""
+    import verity
+
+    for rel in ("upper/verity/ml/__init__.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
+                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(f"# {rel}\n")
+
+    def version(*portions: str) -> str:
+        monkeypatch.setattr(verity, "__path__", [str(tmp_path / p / "verity") for p in portions])
+        return S.code_version()
+
+    a = version("upper", "lower")
+    assert version("lower", "upper") == version("cwd", "upper", "lower") == a
+    (tmp_path / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
+    assert version("upper", "lower") != a

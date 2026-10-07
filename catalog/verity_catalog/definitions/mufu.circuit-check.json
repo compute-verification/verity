@@ -1,0 +1,28 @@
+{
+ "pieces": {
+  "DivFullRcp_v1": {
+   "and": 3987
+  },
+  "DivFullScaleA_v1": {
+   "and": 1538
+  },
+  "Fa2InvSum_v1": {
+   "and": 290
+  },
+  "MufuEx2Ftz_v1": {
+   "and": 688
+  },
+  "MufuRcpFtz_v1": {
+   "and": 197
+  },
+  "MufuSqrtFtz_v1": {
+   "and": 148
+  },
+  "MufuTanh_v1": {
+   "and": 160
+  },
+  "RsqrtApprox_v1": {
+   "and": 947
+  }
+ }
+}

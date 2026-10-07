@@ -1,7 +1,9 @@
 """Reference harness: `tele run --attempt-dir D --stage S [--timeout T] -- CMD...` (design §8).
 
 Writes job.json (unless present), status.json{running}, starts the sidecar in its own session (setsid) with --root-pid = the workload,
-emits span_start, runs CMD in its own process group with stdout/stderr tee'd to D/stdout.log / D/stderr.log (or inherited with --inherit-io),
+emits span_start, runs CMD in its own process group with RESEARCH_RUN_DIR=D and OUT=D/out (created first; custody uploads all of it) and
+stdout/stderr tee'd to D/stdout.log / D/stderr.log (or inherited with --inherit-io),
+dumps the workload's Python stacks with py-spy when D has not changed for --stall-dump-s (_StallWatch),
 on timeout writes cancel_intent{actor: timeout} then SIGTERM -> grace -> SIGKILL with cancel_results, records rc/signal/pid/pgid in
 status.json, stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
@@ -9,26 +11,34 @@ status.json, stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import CANCEL_ACTORS
+from . import CANCEL_ACTORS, pyspy
 from .cancel import add_args as cancel_args, cancel as cancel_run
 from .classify import classify, write as write_failure
 from .events import Emitter, append, events_path, utc_now_ms
-from .job import build_job, input_ref, set_status, sha256_file, write_json_atomic
+from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
 from .procs import stat_fields
 
 
 def _tele_argv() -> list[str]:
     return [sys.executable, "-m", "research.telemetry"]
+
+
+def _sampler_argv(a: argparse.Namespace, d: Path, root_pid: int) -> list[str]:
+    return _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(root_pid), "--pss-every", str(a.pss_every),
+                           "--pss-max-rss-gb", str(a.pss_max_rss_gb), "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
 
 
 def _tele_env() -> dict[str, str]:
@@ -49,11 +59,12 @@ def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: 
             deliver: bool, job: str | None) -> int:
     ns = argparse.Namespace(actor=actor, reason=reason, signal=sig, target_pid=target_pid, target_pgid=target_pgid, target_pod=None,
                             attempt_dir=str(attempt_dir), fallback=None, expect_starttime=starttime, expect_comm=None, expect_nonempty=False,
-                            deliver=deliver, confirm_exit_s=0.0, project=None, job=job, attempt=None, controller="tele-run")
+                            expect_run_dir=None, deliver=deliver, confirm_exit_s=0.0, project=None, job=job, attempt=None, controller="tele-run")
     return cancel_run(ns)
 
 
 CONTROL_TIMEOUT = Path("control") / "timeout_s"     # attempt-dir relative; written by `tele set-timeout`, re-read by the run loop
+OUT_DIR = "out"                                     # attempt-dir relative; the workload's $OUT, which custody always uploads in full
 #: The clock (seconds) the stage timeout runs on; a test replaces it to decide when the deadline passes.  The recorded times
 #: (started_mono, ended_mono, wall_s) stay on time.monotonic, the clock of every event's t_mono.
 clock = time.monotonic
@@ -98,6 +109,71 @@ class _TimeoutControl:
             return None
 
 
+#: Seconds between the stall watch's looks at the attempt dir (a walk of every file in it).
+STALL_CHECK_S = 30.0
+#: What the recorder itself writes into the attempt dir while the workload runs (fnmatch on the relative path): not progress.
+RECORDER_FILES = ("status.json", "job.json", "launcher.log", "sampler.json", "sampler.log", "events*.jsonl", "resources*.jsonl", "control/*",
+                  "logs/stall-*.txt")
+
+
+def _utc_stamp() -> str:
+    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+
+
+def _progress(d: Path, logs: list[str]) -> tuple[int, int, int]:
+    """(newest mtime_ns, total bytes, files) over the attempt dir, less RECORDER_FILES, and the --log files."""
+    paths = [os.path.join(r, f) for r, _, fs in os.walk(d) for f in fs]
+    paths = [p for p in paths if not any(fnmatch.fnmatchcase(os.path.relpath(p, d), g) for g in RECORDER_FILES)] + list(logs)
+    newest = total = n = 0
+    for p in paths:
+        try:
+            st = os.stat(p)
+        except OSError:
+            continue
+        newest, total, n = max(newest, st.st_mtime_ns), total + st.st_size, n + 1
+    return newest, total, n
+
+
+class _StallWatch:
+    """Once nothing in the attempt dir but the recorder's own files, nor a --log file, has changed for `after_s`: a py-spy dump of the
+    workload's Python processes (research.telemetry.pyspy) to logs/stall-<UTC stamp>.txt and a `stall_dump` mark, then none until
+    something changes.  py-spy not on PATH is one `stall_dump_skipped` mark.  `procs`, `run`, `which` and `stamp` are a test's to replace;
+    the time is `clock`."""
+
+    def __init__(self, d: Path, em: Emitter, stage: str, after_s: float, logs: list[str], procs: Callable[[], list[tuple[int, str]]], *,
+                 run: Callable[..., Any] = subprocess.run, which: Callable[[str], str | None] = shutil.which, stamp: Callable[[], str] = _utc_stamp):
+        self.d, self.em, self.stage, self.after_s, self.logs, self.procs = d, em, stage, after_s, logs, procs
+        self.run, self.which, self.stamp = run, which, stamp
+        self.sig = _progress(d, logs)
+        self.since = self.checked = clock()
+        self.armed, self.said_missing = True, False
+
+    def poll(self) -> None:
+        now = clock()
+        if now - self.checked < STALL_CHECK_S:
+            return
+        self.checked = now
+        sig = _progress(self.d, self.logs)
+        if sig != self.sig:
+            self.sig, self.since, self.armed = sig, now, True
+            return
+        if not self.armed or now - self.since < self.after_s:
+            return
+        self.armed = False
+        idle_s = round(now - self.since, 1)
+        results = pyspy.dump(self.procs(), run=self.run, which=self.which)
+        if results is None:
+            if not self.said_missing:
+                self.em.mark(self.stage, "stall_dump_skipped", idle_s=idle_s, reason=pyspy.MISSING)
+                self.said_missing = True
+            return
+        rel = f"logs/stall-{self.stamp()}.txt"
+        (self.d / rel).parent.mkdir(parents=True, exist_ok=True)
+        (self.d / rel).write_text(f"# no progress in {self.d} for {idle_s:g} s\n" + pyspy.render(results))
+        self.em.mark(self.stage, "stall_dump", idle_s=idle_s, path=rel, pids=[r["pid"] for r in results],
+                     failed=[r["pid"] for r in results if r["rc"] != 0])
+
+
 def set_timeout(attempt_dir: str | Path, timeout_s: float | None, actor: str, reason: str) -> Path:
     """Write the control file atomically (the run loop picks it up within one poll interval) and return its path."""
     p = Path(attempt_dir) / CONTROL_TIMEOUT
@@ -136,7 +212,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                         release_tag=a.release_tag, workload_digest=a.workload_digest, stage=a.stage, inputs=[input_ref(x) for x in a.input],
                         profile={k: os.environ.get(k) for k in a.profile_key if k in os.environ}, command=cmd, declared_outputs=a.declared_output,
                         timeout_s=a.timeout, reservation={"gpu": a.reservation_gpu, "host_memory_bytes": a.reservation_host_memory_bytes},
-                        policy_version=policy_version, policy_sha256=policy_sha, instruments=["cgroup", "process", "pss", "gpu", "storage"] if not a.no_sampler else [],
+                        policy_version=policy_version, policy_sha256=policy_sha, instruments=sampler_instruments(a.pss_every) if not a.no_sampler else [],
                         cadence_s=a.cadence, pss_every_s=a.pss_every)
         write_json_atomic(d / "job.json", job)
     em.queue("started", stage=a.stage, job=a.job, attempt=a.attempt)
@@ -148,10 +224,11 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         out_f = open(d / "stdout.log", "ab")
         err_f = open(d / "stderr.log", "ab")
         stdout, stderr = out_f, err_f
+    (d / OUT_DIR).mkdir(exist_ok=True)
     t_start, armed = time.monotonic(), clock()
     try:
         proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None,
-                                env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve())})
+                                env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve()), "OUT": str((d / OUT_DIR).resolve())})
     except OSError as e:
         set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage)
         em.emit("mark", stage=a.stage, name="spawn_failed", error=str(e))
@@ -163,10 +240,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     # ---- sampler in its own session
     sampler = None
     if not a.no_sampler:
-        sargs = _tele_argv() + ["sample", "--attempt-dir", str(d), "--cadence", str(a.cadence), "--root-pid", str(proc.pid), "--pss-every", str(a.pss_every),
-                                "--linger", str(a.linger)] + sum((["--mount", m] for m in a.mount), [])
         try:
-            sampler = subprocess.Popen(sargs, start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
+            sampler = subprocess.Popen(_sampler_argv(a, d, proc.pid), start_new_session=True, stdout=open(d / "sampler.log", "ab"), stderr=subprocess.STDOUT, env=_tele_env())
         except OSError as e:
             em.emit("mark", stage=a.stage, name="sampler_start_failed", error=str(e))
             sampler = None
@@ -175,6 +250,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     rc: int | None = None
     timeout = a.timeout
     ctl = _TimeoutControl(d)
+    stall = (_StallWatch(d, em, a.stage, a.stall_dump_s, list(a.log), lambda: pyspy.python_tree(proc.pid, starttime))
+             if a.stall_dump_s > 0 else None)
     try:
         while True:
             try:
@@ -190,6 +267,12 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                         elapsed_s=round(clock() - armed, 3), control=str(ctl.path))
                 timeout = new["timeout_s"]
                 set_status(d, "running", timeout_s=timeout, timeout_changed_utc=utc_now_ms())
+            if stall is not None:
+                try:
+                    stall.poll()
+                except Exception as e:      # the watch is never the reason the workload stops
+                    em.mark(a.stage, "stall_watch_failed", error=f"{e.__class__.__name__}: {e}"[:300])
+                    stall = None
             if timeout and clock() - armed >= timeout and not timed_out:
                 timed_out = True
                 _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout}", None, True, a.job)
@@ -241,8 +324,13 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--stage", required=True)
     ap.add_argument("--timeout", type=float, default=None, help="seconds; SIGTERM with a timeout marker, then SIGKILL after --grace")
     ap.add_argument("--grace", type=float, default=10.0)
+    ap.add_argument("--stall-dump-s", type=float, default=900.0,
+                    help="seconds without a change in the attempt dir (its logs included) before a py-spy dump of the workload's Python "
+                         "processes goes to logs/stall-<UTC stamp>.txt, once per stall (default 900); 0 turns it off")
     ap.add_argument("--cadence", type=float, default=1.0)
-    ap.add_argument("--pss-every", type=float, default=5.0)
+    ap.add_argument("--pss-every", type=float, default=5.0, help="seconds between the sampler's PSS rounds (default 5); 0 turns PSS off")
+    ap.add_argument("--pss-max-rss-gb", type=float, default=8.0,
+                    help="the sampler never reads smaps_rollup of a process with more RSS than this, in GB (default 8; tele sample --help)")
     ap.add_argument("--linger", type=float, default=3.0)
     ap.add_argument("--mount", action="append", default=[])
     ap.add_argument("--no-sampler", action="store_true")
@@ -265,8 +353,8 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--input", action="append", default=[], help="name=path input artifact reference")
     ap.add_argument("--profile-key", action="append", default=[], help="environment variable NAMES to record (allowlist); values are read from the environment")
     ap.add_argument("--declared-output", action="append", default=[], metavar="GLOB",
-                    help="run-dir-relative glob of files custody uploads (repeatable; `*` crosses `/`); other files are listed by size and "
-                         "hash, not uploaded, past 256 MiB. See .agents/skills/writing-runs/SKILL.md")
+                    help="run-dir-relative glob of files custody uploads beside all of out/ ($OUT) (repeatable; `*` crosses `/`); other "
+                         "files are listed by size and hash, not uploaded, past 256 MiB. See .agents/skills/writing-runs/SKILL.md")
     ap.add_argument("--reservation-gpu", default=None)
     ap.add_argument("--reservation-host-memory-bytes", type=int, default=None)
     ap.add_argument("--policy", default=None, help="policy toml; its version + sha256 are recorded")

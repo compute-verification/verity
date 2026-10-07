@@ -61,6 +61,7 @@ DOMAINS = ("total", "finite-only")
 BREAKTHROUGH = "breakthrough"
 LANE = "lane"
 QUESTION = "question"
+CITED_BY = "cited-by"
 ROW = "row"
 SWEEP = "sweep"
 ARM = "arm"
@@ -68,6 +69,8 @@ STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
 ABANDONED = "abandoned"
+REPLAY_SET = "replay_set"
+REPLAY_EXPECT = "replay_expect"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
 HASH = "hash"
 SHARING = "sharing"
@@ -88,6 +91,8 @@ SAME_DEVICE = "same_device"
 BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
+CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
+CUSTODY_VALUES = ("waived", "never-ran", "needed")
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -125,9 +130,9 @@ CITES = "cites"
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
 VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS)
 COMMIT_MAP_VALUES = ("accepted", "retracted")
-#: Mirrors `PROOF_CLASSES` in `backends/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
+#: Mirrors `PROOF_CLASSES` in `benchmarks/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
 #: `bench/ledger.py` adds (a bucket measured alone is no proof class).  The store imports neither package (the `research` rule), so
-#: the spelling is copied here; `backends/numerical/tests/bench/test_tables.py` checks the copy against both.
+#: the spelling is copied here; `benchmarks/numerical/tests/bench/test_tables.py` checks the copy against both.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
@@ -138,7 +143,7 @@ TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 #: backends' tests check the copy.  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values `ledger_to_store.candidate` derives from a frozen ledger lane, which recorded labels carry
-#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `backends/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
 #: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
@@ -173,7 +178,8 @@ ANCHOR = "anchor"
 #: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
-#: The owner's word that a pull request is ready at one head (`research queue ready`); the merge queue admits nothing without it.
+#: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
+#: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
 #: An `audit.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
 #: where it printed the head's whole lean-audit.json change as the same statements (`research.queue.reviewed`).
@@ -223,16 +229,19 @@ class Key:
     doc: str
     values: tuple[str, ...] = ()
     status: str = CURRENT
+    pattern: str = ""
 
     def check(self, value: Any) -> str | None:
-        """Why `value` is outside this key's declared set, as one line, or None (free forms are never checked)."""
+        """Why `value` is outside this key's declared set or `pattern`, as one line, or None (other free forms are never checked)."""
         if self.values and scalar_text(value) not in self.values:
             return f"{self.name}={scalar_text(value)!r} is not one of {', '.join(self.values)}"
+        if self.pattern and not re.fullmatch(self.pattern, scalar_text(value)):
+            return f"{self.name}={scalar_text(value)!r} does not match {self.pattern}"
         return None
 
 
-def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (), status: str = CURRENT) -> Key:
-    return Key(name, group, form, doc, TRUE_FALSE if form == BOOL else values, status)
+def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (), status: str = CURRENT, pattern: str = "") -> Key:
+    return Key(name, group, form, doc, TRUE_FALSE if form == BOOL else values, status, pattern)
 
 
 VOCAB: dict[str, Key] = {k.name: k for k in (
@@ -261,6 +270,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(BREAKTHROUGH, GROUP_RESULT, BOOL, "the lane's own flag that the row moves the campaign"),
     _k(LANE, GROUP_RESULT, TEXT, "the lane that produced the result, when the artifact's meta does not carry it (tables read meta.lane first)"),
     _k(QUESTION, GROUP_RESULT, TEXT, "the research question the job answers, as its lane's research owner named it (Daniel, 30 Sep: every job names one)"),
+    _k(CITED_BY, GROUP_RESULT, TEXT, "one place that cites the run or artifact as evidence (note:<id>, <repo>#<n>, a doc path): a lane marks what it must never lose"),
     _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
     _k(SWEEP, GROUP_RESULT, TEXT, "the parameter a series of results varies (batch, subbatch, l, zk, ...); old spelling `axis`"),
     _k(ARM, GROUP_RESULT, TEXT, "this result's point or variant within its sweep or comparison (pipeline4-window4, 1M-vu); old spelling `milestone`"),
@@ -268,6 +278,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
        "approach record, the <campaign>/<slug> that replaces it"),
+    _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
+       "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
+       "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
+    _k(REPLAY_EXPECT, GROUP_RESULT, TEXT, "the change a replay at current main should show instead of the recorded verdict, with --ref "
+       "naming the ruling: `refused: FORM` (the verifier of record now refuses that form) or `blocked: GATE` (fail-closed refuses the "
+       "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
@@ -292,11 +308,17 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        status=IGNORED),
     _k(FINDING, GROUP_VERIFICATION, TEXT, "a red-team or audit finding in prose (DOWNGRADE / EARNED / HOLDS ...), beside the proof_class verdict it explains"),
     _k(SAME_DEVICE, GROUP_VERIFICATION, BOOL, "whether the verifier ran on the prover's machine"),
+    _k(CUSTODY, GROUP_VERIFICATION, ENUM, "on a run id, by whoever looked at its records: whether custody triage needs more of it (waived: "
+       "nothing more, its logs stay where they are, or are gone; never-ran: it never ran its workload, so it holds no evidence, which "
+       "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
+       "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
+       "the latest label wins", CUSTODY_VALUES),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
        GRANT_ROLES),
-    _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it again"),
+    _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
+       "again; a train member needs none (Q14)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of an `audit.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed) needs no statement-reviewer grant"),
     # evidence
@@ -310,7 +332,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_DATASET, GROUP_EVIDENCE, TEXT, "the instance dataset a run or set draws from, e.g. bench-instances/v1"),
     _k(INSTANCES_TIER, GROUP_EVIDENCE, TEXT, "the tier within the dataset, e.g. vu-k1536"),
     _k(MISMATCHES, GROUP_EVIDENCE, INT, "tiles or instances that disagreed with the reference"),
-    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.proofs.target name)"),
+    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity_catalog.targets.target name)"),
     _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture ran on, as its UUID (nvidia-smi --query-gpu=uuid: GPU-...); the trust framework's device identity"),
     _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),

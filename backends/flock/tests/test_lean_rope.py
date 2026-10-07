@@ -1,7 +1,7 @@
-"""The Lean soundness package's RoPE data (`FlockSoundness/Rope/`: the gates, the pinned rows, the checkpoints and the
-chunk checks): the committed gate circuit computes the unit's circuit (on random inputs), and the rest is regenerated
-here from it and the pinned rows, byte for byte, for the netlist `rope_head.PINS` pins. `FlockSoundness.Rope.pinned_eq`
-checks the rest in the kernel."""
+"""The Lean soundness package's RoPE data (`verity/Security/Proofs/Flock/Soundness/Rope/`: the gates, the pinned rows,
+the checkpoints and the chunk checks): the committed gate circuit computes the unit's circuit (on random inputs), and
+the rest is regenerated here from it and the pinned rows, byte for byte, for the netlist `rope_head.PINS` pins.
+`FlockSoundness.Rope.pinned_eq` checks the rest in the kernel."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,7 +12,7 @@ pytest.importorskip("verity_vllm.program.registry.prims")
 from verity_flock import lean_rows  # noqa: E402
 from verity_flock.templates import rope_head  # noqa: E402
 
-ROPE = Path(__file__).resolve().parents[1] / "verifier" / "lean" / "soundness" / "FlockSoundness" / "Rope"
+ROPE = Path(__file__).resolve().parents[3] / "verity" / "Security" / "Proofs" / "Flock" / "Soundness" / "Rope"
 
 
 def test_the_encoders_refuse_what_the_lean_decoders_cannot_read():

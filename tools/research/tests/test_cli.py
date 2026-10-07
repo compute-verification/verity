@@ -253,6 +253,23 @@ def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue
     assert main([*plain, "--gpus", "1", "--cpus", "4", "--", "true"]) == 2
     assert "--gpus, --cpus declare a job to the queue and mean nothing without --queue" in capsys.readouterr().err
     assert main([*plain, "--kind", "lean-audit", "--", "true"]) == 2
+    assert main([*plain, "--gpu-host", "--", "true"]) == 2
+    assert "--gpu-host declare a job to the queue" in capsys.readouterr().err
+
+
+def test_gpu_host_reaches_the_queue_as_its_flag(tmp_path, monkeypatch, capsys):
+    from research import remote
+
+    specs = []
+
+    def place(src, run_id, spec):
+        specs.append(spec)
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "queue_placement", place)
+    base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--project", "p", "--source", str(tmp_path), "--max-min", "1"]
+    assert main([*base, "--gpu-host", "--", "true"]) == 3 and main([*base, "--", "true"]) == 3
+    assert [s["gpu-host"] for s in specs] == [True, False], "True becomes `cluster submit --gpu-host`; False is left out"
 
 
 def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
@@ -262,6 +279,54 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     (pkg / "remote.py").write_text("def tool_identity(): pass\n")
     assert remote.knows_queue(None) and remote.knows_queue(Path(remote.__file__).parent)
     assert not remote.knows_queue(pkg) and not remote.knows_queue(tmp_path / "nope")
+
+
+def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_placement(tmp_path, monkeypatch, capsys):
+    """On a research package before --pss-max-rss-gb, `--pss-every 0` is a PSS round every round (a 100 GB process's smaps_rollup
+    read each second) and the bound fails the run on the machine; `research run --on/--queue` refuses both before anything moves."""
+    from research import remote
+
+    def tree(name, sample_py):
+        pkg = tmp_path / name / "tools" / "research" / "src" / "research"
+        (pkg / "telemetry").mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "telemetry" / "sample.py").write_text(sample_py)
+        return tmp_path / name, pkg
+
+    old, old_pkg = tree("old", "ap.add_argument('--pss-every', type=float, default=5.0)\n")
+    new, _ = tree("new", Path(remote.__file__).with_name("telemetry").joinpath("sample.py").read_text())
+    assert remote.knows_pss_bound(None) and remote.knows_pss_bound(Path(remote.__file__).parent)
+    assert not remote.knows_pss_bound(old_pkg) and not remote.knows_pss_bound(tmp_path / "nope")
+
+    launched, placed = [], []
+
+    def launch(**kw):
+        launched.append(kw["harness_args"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    def place(*a):
+        placed.append(a)
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "launch", launch)
+    monkeypatch.setattr(remote, "queue_placement", place)
+    runs = str(tmp_path / "runs")
+    on = lambda src, *flags: main(["run", "--runs-dir", runs, "--on", "m", "--project", "p", "--source", str(src), "--no-custody-r2", *flags,
+                                   "--", "true"])
+    queue = lambda src, *flags: main(["run", "--runs-dir", runs, "--queue", "--project", "p", "--source", str(src), "--max-min", "1", *flags,
+                                      "--", "true"])
+    for flags, asked in ((["--pss-every", "0"], "--pss-every 0"), (["--pss-every=-1"], "--pss-every -1"),
+                         (["--pss-max-rss-gb", "4"], "--pss-max-rss-gb 4"),
+                         (["--pss-max-rss-gb=4", "--pss-every", "0"], "--pss-every 0 and --pss-max-rss-gb 4")):
+        for go in (on, queue):
+            assert go(old, *flags) == 3
+            err = capsys.readouterr().err
+            assert err.startswith(f"research run: refused: {asked}: the research package in {old} predates them"), err
+            assert "every round, about once a second" in err and "Rebase the --source tree onto main" in err
+    assert launched == [] and placed == [] and not (tmp_path / "runs").exists()
+    assert on(old, "--pss-every", "5") == 0 and on(new, "--pss-every", "0", "--pss-max-rss-gb=4") == 0
+    assert [remote.flag_value(a, "--pss-every") for a in launched] == ["5", "0"] and "--pss-max-rss-gb=4" in launched[1]
+    assert queue(new, "--pss-every", "0") == 3 and len(placed) == 1 and "placement reached" in capsys.readouterr().err
 
 
 def test_an_unknown_command_says_how_old_the_checkout_is(tmp_path, capsys, monkeypatch):

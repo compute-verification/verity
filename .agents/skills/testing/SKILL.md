@@ -46,7 +46,7 @@ reported `nondeterministic`.
 
 ## Where a test goes
 
-- **In the tests/ of the package it tests**, mirroring the package's modules (`packages/verity/tests/ir/` tests `verity.ir`).
+- **In the tests/ of the package it tests**, mirroring the package's modules (`verity/primitives/circuits/tests/` tests `verity.primitives.circuits`).
   Never in another package's suite, and never in the root `tests/`, which is only for invariants of the whole repository.
 - **A new package** joins the workspace (`[tool.uv.workspace] members` in the root pyproject) with the pytest table its
   siblings have. A directory with tests but no importable package is a virtual member (`[tool.uv] package = false`), like
@@ -61,10 +61,15 @@ keeps the cache sound: a pass is only reused while everything the tests read is 
 
 - **The package imports another at run time:** add it to `[project] dependencies` (with a `[tool.uv.sources]` workspace entry).
 - **Only the tests need it,** such as a cross-check against another package, a shared fixture or the census: list the path
-  under `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why. A listed workspace package
-  brings its own dependencies.
+  under `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why. List what the tests read, as
+  narrowly as a directory or a file allows: a listed workspace package is its directory alone, not its dependencies, and
+  every listed path adds the suite to the quick tier of each change under it.
 
-Programs a test starts as a subprocess aren't traced, so list what they read. Locate files from `__file__`
+A Python a test starts is guarded like the test, and the failure names the test and the file the process read: declare the
+file, or give the test a stand-in for it. Other programs (bash, git, a Python run with `-I`, `-E` or `-S`, or with a PYTHONPATH
+that replaces the suite's) aren't traced, and nothing fails when they read outside the inputs, so list what they read; a Python
+they start on the suite's PYTHONPATH is traced again. The guard sees opens, not `exists()` or `stat()`, so list a path a test
+only checks the existence of too. Locate files from `__file__`
 (`Path(__file__).parent / "fixtures"`), never from the working directory. Never lean on another suite's side effects, such as
 a `sys.path` entry another test file added: every suite runs alone.
 
@@ -94,11 +99,14 @@ a `sys.path` entry another test file added: every suite runs alone.
   time: `tests/test_no_wall_clock.py` rejects sleeps, clock readings, timeouts and sleeping workloads in every suite. Wait on
   the event instead (a child's exit, a line of its output, a FIFO the test holds open: `tools/research/tests/waits.py`), and
   inject the clock or timer that the code under test measures time with (`monkeypatch.setattr(mod, "clock", ...)`).
+  Don't write a test whose result can depend on load, a shared machine or what holds it (GPU leases, check slots, pods),
+  ports and sockets, a race between processes, or an outside service. A test that flakes (it passed and failed under one
+  key, which `suites.py` reports as `nondeterministic`) is deleted, not fixed or rerun.
 - **Isolated:** write only under `tmp_path`; change the environment, `sys.path` or a module only through `monkeypatch`. The
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
   code rejects by name, not merely that it raises.
-- **Small fixtures** sit beside the tests (`tests/fixtures/`). Shared ones go under the root `fixtures/`, registered in
+- **Small fixtures** sit beside the tests, in a `fixtures/` directory of the suite's own. Shared ones go under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
   fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
   add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it

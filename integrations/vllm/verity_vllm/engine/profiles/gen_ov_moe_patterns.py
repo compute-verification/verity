@@ -10,6 +10,8 @@ cf. `Embedding_v1`).  Nothing in the fold reads device data to resolve dataflow:
 weight operand is the whole expert table (`Shared`).
 
 Resolution of the scope (`MoEFusedExperts`), in fold order:
+  0. `matmul_kernel_persistent` (gate) -> the profile's own GEMM Compute, when the router's gate GEMM launches inside the scope
+                                          (Qwen3-MoE: `FusedMoE(gate=...)`); it must write the logits the router reads
   1. `_moe_C.topk_softmax`             -> Compute(MoeRouterTopK_v1{E,TOPK,VPT}, rows=M): logits[M,E] -> (weights[M,TOPK] f32, ids[M,TOPK] i32)
   2. `_moe_C.moe_align_block_size`     -> Transparent(noop) claiming the kernel: its outputs (sorted_token_ids, expert_ids,
                                           num_tokens_post_padded) are a SCHEDULE — they decide which pairs a CTA processes
@@ -18,7 +20,7 @@ Resolution of the scope (`MoEFusedExperts`), in fold order:
                                           Absent on the naive path (M <= 2: `naive_block_assignment=True`).
   3. `fused_moe_kernel` (w13)          -> Compute(MoeExpertGemm_v1{E,K=H,N=2I}, rows=M*TOPK):
                                           (Gather(hidden, p//TOPK), PerRow(ids.flat), Shared(w13)) -> PerRow(cache1 as [M*TOPK, 2I])
-  4. `_C.silu_and_mul`                 -> the base `SiluAndMul` Compute (SiluMul_v1{I}, rows=M*TOPK)
+  4. `_C.silu_and_mul`                 -> the base `SiluAndMul` Compute bound as SiluMul_v2{I} (rows=M*TOPK), the constructions' declared activation
   5. `fused_moe_kernel` (w2, weighted) -> Compute(MoeExpertGemmW_v1{E,K=I,N=H}, rows=M*TOPK):
                                           (PerRow(cache2), PerRow(ids.flat), PerRow(weights.flat), Shared(w2)) -> PerRow(cache3 as [M*TOPK, H])
   6. `_moe_C.moe_sum`                  -> Compute(MoeSum_v1{TOPK,H}, rows=M): PerRow(cache3[M,TOPK,H]) -> PerRow(out[M,H])
@@ -36,9 +38,10 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
+from verity_vllm.program.registry import act as _ACT
 from verity_vllm.program.registry import moe as _MOE
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
@@ -112,6 +115,8 @@ K_ALIGN = "moe_align_block_size_small_batch_expert_kernel"
 K_ALIGN_KERNELS = (K_ALIGN, "moe_align_block_size_kernel", "count_and_sort_expert_tokens_kernel")
 K_FUSED = "fused_moe_kernel"
 K_SUM = "moe_sum_vec_kernel"
+#: The batch-invariant GEMM a scope may launch for the router's gate (`Qwen3MoeSparseMoeBlock`: `FusedMoE(gate=...)`).
+K_GATE = "matmul_kernel_persistent"
 
 #: The fused kernel's constexprs that must hold for the bodies to apply (numerical, not schedule).
 FUSED_MOE_NUMERIC_PINS: dict[str, Any] = {"compute_type": "bf16", "use_fp8_w8a8": False, "use_int8_w8a8": False, "use_int8_w8a16": False,
@@ -212,8 +217,11 @@ class MoEFusedExperts:
                                counts={"topk_softmax": len(routers), "align": len(aligns), "fused_moe_kernel": len(launches),
                                        "silu_and_mul": len(silus), "moe_sum": len(sums)}, census=moe_subtree_census(node))
         router, up, down, silu, msum = routers[0], launches[0], launches[1], silus[0], sums[0]
-        keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns}
-        keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns)))
+        gates = self._gate_launches(node)
+        if isinstance(gates, Unsupported):
+            return gates
+        keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns} | {g.id for g in gates}
+        keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns, *gates)))
         # [R19 qwen3, TP] descendants the scope patterns own (the in-scope all-reduce of a rank): resolved here, kept out of the glue walk
         extra: list[Compute] = []
         if self.scope_patterns:
@@ -258,7 +266,10 @@ class MoEFusedExperts:
             return unsupported(node, "no pinned router reduction geometry (VPT) for this expert count", E=E, pinned=self.router_vpt)
         router_c = Compute(bind(router_def, E=E, TOPK=TOPK, VPT=vpt), M, (PerRow(logits),), (PerRow(weights), PerRow(ids)), (router.id,),
                            hint=f"{hint}/router", kernels=(K_ROUTER,), attribution=tuple(ctx.start.rows), pattern=self.name)
-        parts: list[Compute | Transparent] = list(before) + [router_c]
+        gate_c = [self._gate(node, gates[0], router, logits, ctx)] if gates else []
+        if gate_c and isinstance(gate_c[0], Unsupported):
+            return gate_c[0]
+        parts: list[Compute | Transparent] = list(before) + gate_c + [router_c]
 
         # 2. alignment: a schedule, no numerical effect ----------------------------------------------------------
         for al in aligns:
@@ -268,7 +279,7 @@ class MoEFusedExperts:
         # 3. up/gate GEMM over pairs --------------------------------------------------------------------------------
         P = M * TOPK
         ids_flat = _flat(ids, P)
-        try:   # the record target's expert GEMM Definitions (`registry.targets.moe_expert_gemm_spec`): the same selection the builder makes
+        try:   # the record target's expert GEMM Definitions (`frontend.targets.moe_expert_gemm_spec`): the same selection the builder makes
             up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * I, False), (I, H, True)))
         except T.UnregisteredTarget as e:
             return unsupported(node, f"target has no registered fused-MoE binding: {e}")
@@ -286,11 +297,12 @@ class MoEFusedExperts:
         # 4. silu_and_mul on the pair rows ------------------------------------------------------------------------
         silu_r = SiluAndMul().match(silu, ctx)
         if not isinstance(silu_r, Compute):
-            return unsupported(node, "silu_and_mul inside the MoE scope did not resolve as SiluMul_v1",
+            return unsupported(node, "silu_and_mul inside the MoE scope did not resolve as SiluMul",
                                detail=getattr(silu_r, "detail", None), reason=getattr(silu_r, "reason", None))
         if silu_r.rows != P:
             return unsupported(node, "silu_and_mul rows are not the M*TOPK pair rows", rows=silu_r.rows, P=P)
-        parts.append(dataclasses.replace(silu_r, hint=f"{hint}/silu_and_mul", pattern=self.name))
+        # the constructions' declared activation (`TargetProfile.MOE_CONSTRUCTIONS`: SiluMul_v2{I}, the Build's `silu_mul` kind)
+        parts.append(dataclasses.replace(silu_r, spec=bind(_ACT.SiluMul, I=silu_r.spec.bindings["I"]), hint=f"{hint}/silu_and_mul", pattern=self.name))
 
         # 5. down GEMM over pairs, routed weight in the epilogue ---------------------------------------------------
         r = self._fused(node, down, expect_weighted=True, expect_top_k=1, E=E, K=I, N=H, P=P)
@@ -323,6 +335,35 @@ class MoEFusedExperts:
         # 7. [TP] the in-scope collective(s) the scope patterns resolved (log order): the all-reduce of the routed sum, after MoeSum
         parts.extend(sorted(extra, key=lambda c: min(c.consumed)))
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=hint, pattern=self.name)
+
+    def _gate_launches(self, node: TreeNode) -> list[TreeNode] | Unsupported:
+        """[Qwen3-MoE on vLLM d9105ea80] `Qwen3MoeSparseMoeBlock` hands `FusedMoE` its `gate` and passes `router_logits=hidden_states`,
+        so the router's gate GEMM launches inside the scope, ahead of topk_softmax (OLMoE computes the logits before the call)."""
+        gates = find_descendants(node, lambda n: n.is_triton and triton_name(n) == K_GATE)
+        if len(gates) > 1:
+            return unsupported(node, f"MoE scope has more than one {K_GATE} launch (at most the router's gate GEMM)",
+                               launches=[g.id for g in gates], census=moe_subtree_census(node))
+        return gates
+
+    def _gate(self, node: TreeNode, gate: TreeNode, router: TreeNode, logits: ViewDesc, ctx: StepContext) -> Compute | Unsupported:
+        """The in-scope router gate GEMM, resolved by the profile's own patterns exactly as the first-match resolver would resolve it
+        outside a scope (same tiling pins, same Definition), once it is shown to be the launch that writes the router's logits."""
+        if gate.id > router.id:
+            return unsupported(node, f"the in-scope {K_GATE} launch follows topk_softmax: it is not the router's gate GEMM", gate_id=gate.id, router_id=router.id)
+        c = bound_args(gate).get("c_ptr")
+        if not isinstance(c, ViewDesc) or (c.alloc, c.offset, c.shape) != (logits.alloc, logits.offset, logits.shape):
+            return unsupported(node, f"the in-scope {K_GATE} launch does not write the router's gating logits", c=repr(c), logits=repr(logits))
+        for pt in ctx.profile.patterns:
+            if isinstance(pt, MoEFusedExperts):
+                continue
+            r = pt.match(gate, ctx)
+            if r is None:
+                continue
+            if type(r) is not Compute:
+                return unsupported(node, f"{getattr(pt, 'name', type(pt).__name__)} refused the router's gate GEMM inside {op_name(node.op)}",
+                                   child_id=gate.id, child_reason=getattr(r, "reason", None), child_detail=getattr(r, "detail", None))
+            return r
+        return unsupported(node, f"no profile pattern resolves the router's gate GEMM inside {op_name(node.op)}", child_id=gate.id)
 
     def _fused(self, node: TreeNode, launch: TreeNode, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int, P: int):
         """Check one `fused_moe_kernel` launch against the pins and return `(a_view, b_view, c_view)` or an Unsupported."""
@@ -419,10 +460,12 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
                       hint=f"{hint}/moe_ffn_fixed", kernels=(K_ROUTER, K_FUSED, *silu.kernels, K_SUM), attribution=router.attribution,
                       pattern=self.name, roots=(None, None, _root_name(ctx, w13, "w13"), _root_name(ctx, w2, "w2")))
         six = {id(router), id(up), id(silu), id(down), id(msum)}
-        keep = [p for p in parts if id(p) not in six]                 # the scope glue (before) + the alignment noop (+ a TP collective), in order
-        tail = [p for p in keep if isinstance(p, Compute)]            # [TP] the in-scope all-reduce stays AFTER the block's one Compute
+        keep = [p for p in parts if id(p) not in six]                 # the scope glue (before) + the alignment noop (+ gate GEMM, TP collective), in order
+        first = min(router.consumed)
+        head = [p for p in keep if isinstance(p, Compute) and min(p.consumed) < first]   # the in-scope gate GEMM writes the logits `one` reads
+        tail = [p for p in keep if isinstance(p, Compute) and min(p.consumed) > first]   # [TP] the in-scope all-reduce stays AFTER the block's one Compute
         keep = [p for p in keep if not isinstance(p, Compute)]
-        return Group(tuple(keep) + (one, *tail), r.consumed, hint=hint, pattern=self.name)
+        return Group(tuple(keep) + (*head, one, *tail), r.consumed, hint=hint, pattern=self.name)
 
 
 @dataclass

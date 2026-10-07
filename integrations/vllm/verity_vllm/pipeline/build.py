@@ -11,6 +11,9 @@ the instance sequence (comparator input), and the inputs trace.
 
 from __future__ import annotations
 
+import contextlib
+import copy
+import functools
 import gzip
 import hashlib
 import json
@@ -20,15 +23,16 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity.ir.partition_object import program_sha512
+from verity.primitives.circuits.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
+from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
 
 
 def _spec_histogram(program) -> dict[str, int]:
-    from verity.ir.codec import _spec_id
+    from verity.primitives.circuits.codec import _spec_id
     h: dict[str, int] = {}
     for n in program.fn.body.nodes:
         if n.form in ("call", "primitive"):
@@ -42,8 +46,8 @@ def _spec_histogram(program) -> dict[str, int]:
 
 def _instance_rows(program):
     """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
-    from verity.ir.codec import descriptor_id
-    from verity.ir.refs import runs
+    from verity.primitives.circuits.codec import descriptor_id
+    from verity.primitives.circuits.refs import runs
     for k, n in enumerate(program.fn.body.nodes):
         yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
 
@@ -97,7 +101,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
-                         "verity_vllm/program/registry/targets.py",
+                         "verity_vllm/program/frontend/targets.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
@@ -105,7 +109,10 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
-                         "verity_vllm/engine/env.py")
+                         "verity_vllm/engine/env.py",
+                         # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
+                         "verity_vllm/program/frontend/report.py", "verity_vllm/program/frontend/relabel.py",
+                         "verity_vllm/pipeline/tp/emit_ranks.py", "verity_vllm/pipeline/tp/links.py")
 
 
 def construction_version(rules, root: str | None = None) -> dict:
@@ -189,7 +196,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     assumption about the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the
     select's 6th operand, computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then
     anchors S itself.  A workload of several requests keeps the derived input above."""
-    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for, splits_for_v1
+    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for, splits_for_v1
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -306,12 +313,12 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
     which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
     from verity_vllm.program.frontend.rules.vllm_bindings import GEMM_PINS, RMS_PINS, tuned_gemm_table_sha256
-    from verity_vllm.program.registry.gemm_targets import try_gemm_target_for
-    # [R13 ampere] the registered GEMM specialization the construction pinned (verity_vllm.program.registry.gemm_targets, selected by the target's
+    from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
+    # [R13 ampere] the registered GEMM specialization the construction pinned (verity_vllm.program.frontend.gemm_targets, selected by the target's
     # capability + the arch family vLLM applied): its key and k16 step are conditions of reuse; None (with the refusal) when unregistered.
     gt, gt_refusal = try_gemm_target_for(profile.compute_capability, applied.get("tuned_gemm_arch_family"))
-    from verity_vllm.program.registry import targets as TG
-    try:   # [R13 hopper] the target-keyed Definition selection the Program rests on (registry.targets): step, GEMM/attention kinds, FA version
+    from verity_vllm.program.frontend import targets as TG
+    try:   # [R13 hopper] the target-keyed Definition selection the Program rests on (frontend.targets): step, GEMM/attention kinds, FA version
         tb = TG.describe(profile)
         target_bindings = {k: tb[k] for k in ("tensor_core_family", "dot", "gemm_kind", "attention_kind", "flash_attn_version_effective", "tuned_gemm_arch_family")}
     except TG.UnregisteredTarget as e:
@@ -355,7 +362,8 @@ def _cuda_available() -> bool:
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
-        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None) -> dict:
+        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None) -> dict:
+    """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -375,7 +383,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                  # this rank's weight shards as its committed weight inputs, the other rank's collective partials as peer inputs)
                  "tp": {"world": int(tp), "rank": int(rank)},
                  # [R15 hopper HOP-03, M-0225] the LAUNCH CONTEXT (structural input): per request step the varlen launch's max_seqlen_q over every
-                 # co-scheduled sequence (registry.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
+                 # co-scheduled sequence (frontend.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
                  "launch_context": launch}
     try:
         res["code_rev"] = json.load(open("EXPORT.json"))
@@ -411,10 +419,14 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch)
+                   tp=tp, rank=rank, launch=launch, emit=emit)
     except _Refused:
         pass
-    return _finish(out, res, t_start)
+    res = _finish(out, res, t_start)
+    if emit is not None:
+        from verity_vllm.pipeline.tp.emit_ranks import finish
+        finish(emit, out, res, _write_manifest)
+    return res
 
 
 _WRAPPER_NAMES = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
@@ -425,13 +437,12 @@ class _Refused(Exception):
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-               tp: int = 1, rank: int = 0, launch: dict | None = None) -> None:
-    import contextlib
+               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import vllm_meta as vm
-        from verity_vllm.program.frontend.export_compat import apply_target_profile, export_compat, host_facts, read_back_applied
-        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog, intercept_triton_launches
+        from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
+        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
         from verity_vllm.program.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
@@ -526,10 +537,12 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["declared_derived"] = declared_derived_accounting(target, applied)
             # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
-            with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
+            session: list | None = [] if emit is not None else None
+            with _derive_context(vm, cfg, ntok, target, model):
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values))
+                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
+                                    session=session)
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
@@ -540,48 +553,78 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
             json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
         else:
-            from verity.ir.codec import canonical_json, encode_program
-            from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
-            program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
-            desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
-            digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
-            # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
-            corr_digest = correspondence_digest(desc)
-            assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
-            raw = json.dumps(desc, sort_keys=True).encode()
-            with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
-                f.write(raw)
-            corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
-            res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
-                              "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
-                              "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
-                              "correspondence_digest": corr_digest,
-                              "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
-                                                 "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}
-            res["spec_histogram"] = _spec_histogram(program)
-            res["rules_applied"] = rep.provenance["rules_applied"]
-            res["n_applications"] = len(rep.provenance["applications"])
-            res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}
-            if tp > 1:
-                # [lane vllm-tp-n] the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
-                # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
-                # the root is recorded as DATA so no reader spells the wrapper prefix
-                model_root = next((n for n, m in mod.named_modules() if m is model), None)
-                res["tp"]["links"] = _write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
-            res["mutation_effects"] = rep.provenance["mutation_effects"]
-            res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
-            json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
-            _write_instances_file(os.path.join(out, "instances.json.gz"),
-                                  {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
-                                   "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
-                                  _instance_rows(program))
-            # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
-            art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
-                                         applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)
-            res["artifact"] = art.to_json()
-            # beside program_digest, NOT inside the identity: the correspondence is data about the Program, not part of it
-            res["artifact"]["correspondence_digest"] = corr_digest
-            json.dump(res["artifact"], open(os.path.join(out, "artifact.json"), "w"), indent=1, sort_keys=True)
+            # [lane vllm-tp-n] the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
+            # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
+            # the root is recorded as DATA so no reader spells the wrapper prefix
+            model_root = next((n for n, m in mod.named_modules() if m is model), None) if tp > 1 else None
+            write = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
+            pre = copy.deepcopy(res) if emit is not None else None      # rank r's `res` before its writer: the template's, at rank r
+            write(out, res, rep, rank=rank)
+            if emit is not None:
+                from verity_vllm.pipeline.tp import emit_ranks
+                from verity_vllm.program.frontend.export_ops import rank_embedding_shards
+                rep = None                                                 # the template's descriptor and correspondence: freed
+                emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
+                                context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
+                                post=derived if target.ir == "boolean" else None, write=write)
+
+
+def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
+                   model_root: str | None) -> None:
+    """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
+    from verity.primitives.circuits.codec import canonical_json, encode_program
+    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
+    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
+    from verity_vllm.program.frontend.target_profile import ArtifactIdentity
+    program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
+    desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
+    digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
+    # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
+    corr_digest = correspondence_digest(desc)
+    assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
+    raw = json.dumps(desc, sort_keys=True).encode()
+    with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
+        f.write(raw)
+    corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
+    res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
+                      "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
+                      "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
+                      "correspondence_digest": corr_digest,
+                      "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
+                                         "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}
+    res["spec_histogram"] = _spec_histogram(program)
+    res["rules_applied"] = rep.provenance["rules_applied"]
+    res["n_applications"] = len(rep.provenance["applications"])
+    res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}
+    if tp > 1:
+        res["tp"]["links"] = write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
+    res["mutation_effects"] = rep.provenance["mutation_effects"]
+    res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
+    json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
+    _write_instances_file(os.path.join(out, "instances.json.gz"),
+                          {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
+                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
+                          _instance_rows(program))
+    # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
+    art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
+                                 applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)
+    res["artifact"] = art.to_json()
+    # beside program_digest, NOT inside the identity: the correspondence is data about the Program, not part of it
+    res["artifact"]["correspondence_digest"] = corr_digest
+    json.dump(res["artifact"], open(os.path.join(out, "artifact.json"), "w"), indent=1, sort_keys=True)
+
+
+@contextlib.contextmanager
+def _derive_context(vm, cfg, ntok: int, target, model, *, apply_target: bool = False):
+    """The contexts the derive runs in; `apply_target`: with the declared target applied again (a relabel, after the construction's)."""
+    import torch
+    from verity_vllm.program.frontend.export_compat import apply_target_profile, export_compat
+    from verity_vllm.program.frontend.triton_capture import intercept_triton_launches
+    with contextlib.ExitStack() as st:
+        if apply_target:
+            st.enter_context(apply_target_profile(target))
+        with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
+            yield
 
 
 def _count(xs) -> dict:
@@ -608,88 +651,6 @@ def _sharded_param_summary(model) -> dict:
             by_cls.setdefault(key, {}).setdefault(f"{pn}{tuple(p.shape)}", 0)
             by_cls[key][f"{pn}{tuple(p.shape)}"] += 1
     return {"n_params": n_params, "n_elements": n_elems, "by_class": by_cls}
-
-
-def module_in_model_vocabulary(module_path: str | None, model_root: str | None) -> str | None:
-    """[lane vllm-tp-n] A derive module path (`<model_root>.<path> (<Class>)`, the traced wrapper's `named_modules()` spelling) in the
-    recorder's vocabulary (`model.named_modules()`): the class suffix dropped and the RECORDED model root removed.  `model_root` is data
-    the derive wrote (by object identity), never a spelled prefix; without it (a v1 file) the path is returned as spelled, class dropped,
-    and consumers compare by `same_module_path` (dotted-suffix identity)."""
-    if not isinstance(module_path, str):
-        return None
-    mp = module_path.split(" (", 1)[0].strip()
-    if model_root:
-        if mp == model_root:
-            return ""
-        head = model_root + "."
-        if mp.startswith(head):
-            return mp[len(head):]
-    return mp
-
-
-def same_module_path(a: str | None, b: str | None) -> bool:
-    """[lane vllm-tp-n] Two dotted module paths name the same module when equal, or when one is the other's dotted suffix (the same
-    `named_modules()` path read from a wrapper's root vs the model's root).  Structural: no vocabulary prefix is spelled."""
-    if a is None or b is None:
-        return False
-    a, b = a.split(" (", 1)[0].strip(), b.split(" (", 1)[0].strip()
-    return a == b or a.endswith("." + b) or b.endswith("." + a)
-
-
-def _write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_root: str | None = None) -> dict:
-    """[R13 tp] `tp_links.json`: how this rank's Program is bound to the other rank's.  Peer input k (the (k+1)-th user Input after the
-    prompt) is NOT a fresh trusted input: it is bound to collective k of rank 1-r — the value that rank's Program computes as its own
-    partial (`part_rank{1-r}` of ITS k-th `all_reduce2`/`all_gather2` call), a committed value of that rank.  The Match of rank r binds
-    peer input k from rank (1-r)'s committed log and checks its received collective output against `AllReduce2(part_r, part_{1-r})`."""
-    params = [(n, str(t)) for n, t in program.fn.body.params]
-    user = [n for n, _ in params if n != "weights"]
-    probe = res["tp"]["collectives"]["record"]
-    peer_ranks = [r for r in range(tp) if r != rank]                       # [lane vllm-tp-n] world-1 peers per collective, in rank order
-    n_peer = len(probe) * len(peer_ranks)
-    peer_names = user[len(user) - n_peer:]
-    apps = [a for a in rep.provenance["applications"] if a.get("collective")]      # the collective rules tag their applications (kind), in call order
-    if len(apps) != len(probe):
-        raise RuntimeError(f"tp_links: {len(apps)} collective rule applications vs {len(probe)} probed collectives")
-    links = []
-    for k, (p, a) in enumerate(zip(probe, apps)):
-        peers = [{"rank": pr, "input": peer_names[k * len(peer_ranks) + j], "operand": f"part_rank{pr}", "collective_k": k} for j, pr in enumerate(peer_ranks)]
-        ln = {"k": k, "kind": p["kind"], "shape": p["shape"], "dtype": p["dtype"], "peer_collective_k": k, "own_operand": f"part_rank{rank}",
-              "peers": peers, "node": a["node"], "module_path": a.get("module_path"), "emitted": a.get("emitted"),
-              "module": module_in_model_vocabulary(a.get("module_path"), model_root)}      # recorder vocabulary (`model.named_modules()`)
-        if tp == 2:   # the v1 fields, kept verbatim for the two-rank readers (one peer)
-            ln.update({"peer_input": peers[0]["input"], "peer_rank": peers[0]["rank"], "peer_operand": peers[0]["operand"]})
-        links.append(ln)
-    doc = {"schema": "cb-a/tp_links/v2", "world": tp, "rank": rank, "peer_ranks": peer_ranks, "program_digest": res["program"]["digest"], "user_inputs": user,
-           "model_root": model_root,
-           "module_vocabulary": "link.module_path: the traced wrapper's named_modules() path + ' (Class)'; link.module: the same module in the "
-                                "recorder's model.named_modules() vocabulary = module_path minus model_root (recorded by object identity)",
-           "prompt_inputs": user[:len(user) - n_peer], "peer_inputs": peer_names,
-           "peer_input_layout": "peer input k*(world-1)+j of rank r := the j-th other rank's (rank order) partial of collective k",
-           "binding": "each peer input of collective k of rank r := part_rank(p) of collective k of rank p (that rank's committed partial); the received "
-                      "collective output of rank r is AllReduce/AllGather(part_rank0, .., part_rank{world-1}) in rank order — never a fresh trusted input"
-                      + (" (world 2: AllReduce2/AllGather2, the recorded identities)" if tp == 2 else ""),
-           "weight_shards": "the `weights` record of this Program holds THIS rank's shards (shapes in result.tp.sharded_params); the rank's "
-                            "weight root commits to the shard, the run root binds every rank's weight root (rank-tagged)",
-           "links": links}
-    json.dump(doc, open(os.path.join(out, "tp_links.json"), "w"), indent=1)
-    return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": len(user) - n_peer, "file": "tp_links.json"}
-
-
-def read_tp_links(path: str) -> dict:
-    """[lane vllm-tp-n] Load a `tp_links.json` of schema v1 (world 2, one `peer_input`/`peer_rank` per link) or v2 (`peers` per link), returning
-    the v2 shape: every link carries `peers = [{rank, input, operand, collective_k}]` and the doc `peer_ranks`.  A v1 file is upgraded in
-    memory (world 2: the single peer is rank 1-r); nothing is rewritten on disk."""
-    doc = json.load(open(path))
-    world, rank = int(doc.get("world") or 2), int(doc.get("rank") or 0)
-    doc.setdefault("peer_ranks", [r for r in range(world) if r != rank])
-    root = doc.get("model_root")
-    for ln in doc.get("links") or []:
-        if "module" not in ln:    # v1 / early v2: no recorded model root -> the path as spelled (class dropped); readers use same_module_path
-            ln["module"] = module_in_model_vocabulary(ln.get("module_path"), root)
-        if "peers" not in ln:
-            ln["peers"] = [{"rank": int(ln.get("peer_rank", 1 - rank)), "input": ln.get("peer_input"), "operand": ln.get("peer_operand", f"part_rank{1 - rank}"),
-                            "collective_k": int(ln.get("peer_collective_k", ln.get("k", 0)))}]
-    return doc
 
 
 def _finish(out: str, res: dict, t_start: float) -> dict:
@@ -738,8 +699,10 @@ def _write_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.ir descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
+         "files": ["descriptor.json.gz (verity.primitives.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
+    if res.get("relabeled_from"):
+        m["relabeled_from"] = res["relabeled_from"]
     json.dump(m, open(os.path.join(out, "construction_manifest.json"), "w"), indent=1, default=str)
 
 
@@ -766,6 +729,9 @@ class Options:
     tp: int = option("--tp", type=int, default=1,
                      help="[R13 tp] tensor-parallel world size (structural input); the Program describes ONE rank")
     rank: int = option("--rank", type=int, default=0, help="[R13 tp] which rank's Program to construct (0..tp-1)")
+    emit_ranks: str | None = option("--emit-ranks", default=None,
+                                    help="other ranks (comma list) whose files are written from this rank's derivation (pipeline.tp.emit_ranks)")
+    emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
     launch_max_seqlen_q: str | None = option("--launch-max-seqlen-q", default=None,
                                              help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
                                              "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt "
@@ -779,10 +745,12 @@ def main(a: Options) -> int:
     _gc_tune()
     try:
         from verity_vllm.program.frontend.target_profile import parse_target_arg
-        from verity_vllm.program.registry.targets import parse_launch_context
+        from verity_vllm.program.frontend.targets import parse_launch_context
+        from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
+        emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
-                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q))
+                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit)
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)

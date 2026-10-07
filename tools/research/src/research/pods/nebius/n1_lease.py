@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """vy-nebius-1's process-level GPU leases: node 2's `gpu-lease` (the same lock files and rules) on GPUs that Kubernetes lends it.
 
-    n1_lease.py loop [--every 5]     as research on node 1 (tmux `n1-lease`)
+    n1_lease.py loop [--every 5]     as research on node 1 (unit vy-n1-lease@POOL, one per pool)
     n1_lease.py tick | status
 
 A job leases a GPU for its GPU phase only: its pod requests no `nvidia.com/gpu`, runs with `hostPID`, runtime class nvidia and
@@ -23,6 +23,13 @@ Each tick, with the brain absent (local rules):
     holder, and the lease on it is then outside the pool and stopped. A holder's GPU is unfenced once its pod runs and names its UUID;
   - shrink: fence a pool GPU that has been free for `$VY_POOL_IDLE_S` with nobody waiting for it, then delete its holder;
     delete pending holders nobody waits for.
+With `$VY_POOL_POLICY` set (a command printing this pool's keys of the cluster policy in force, `cluster/policy/v1` JSON:
+`python3 -m cluster policy show --key vy-nebius-1.lease-pool.provers --json` from tools/cluster), the pool's `max`, `borrow` and
+`borrow-until` come from it instead, read again every `POLICY_EVERY_S`, so an override (`cluster policy override`) takes effect
+without a restart (a read that takes longer than `POLICY_TIMEOUT_S` fails, and everything it started is killed). A key it lacks keeps the environment's value; while it fails or answers a `max` or `borrow` that isn't a
+whole number of the node's GPUs, the three it last answered stay (the environment's, before it ever has). Each change is logged
+(`policy`), and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read with where they came from,
+`from=policy`, `last-policy` or `environment` (`cluster policy diff` reads them there).
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
 cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
@@ -51,6 +58,7 @@ import json
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -66,6 +74,9 @@ IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "120"))
 GRACE_S = int(os.environ.get("VY_LEASE_EXPIRY_GRACE_S", "120"))
 BORROW = int(os.environ.get("VY_POOL_BORROW", "0"))
 BORROW_UNTIL = os.environ.get("VY_POOL_BORROW_UNTIL", "")
+POLICY = os.environ.get("VY_POOL_POLICY", "")
+POLICY_EVERY_S = 60
+POLICY_TIMEOUT_S = 5
 KILL_AFTER_S = 30
 BRAIN = os.environ.get("VY_LEASE_BRAIN", "")
 BRAIN_MISSES = 2
@@ -86,6 +97,38 @@ def epoch(s: str | None) -> float | None:
         return datetime.strptime(s or "", "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
     except ValueError:
         return None
+
+
+def gpu_count(field: str, v, cap: int) -> int:
+    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `cap`, as an int or a string of digits; ValueError for
+    anything else (-1, 1.5, Infinity, "8x")."""
+    if isinstance(v, str) and v.isascii() and v.isdigit():
+        v = int(v)
+    if type(v) is not int or not 0 <= v <= cap:
+        raise ValueError(f"{field} {v!r} isn't a whole number of GPUs from 0 to {cap}")
+    return v
+
+
+def communicate(p: subprocess.Popen, timeout: float) -> tuple[str, str]:
+    return p.communicate(timeout=timeout)
+
+
+def policy_output(cmd: str) -> str:
+    """`cmd`'s stdout, run by a shell in a session of its own whose whole process group is killed after `POLICY_TIMEOUT_S`, so
+    nothing it started (an ssh, a python3 under `cd ... &&`) outlives it; CalledProcessError on a nonzero exit."""
+    with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          start_new_session=True) as p:
+        try:
+            out, err = communicate(p, POLICY_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            raise
+    if p.returncode:
+        raise subprocess.CalledProcessError(p.returncode, cmd, out, err)
+    return out
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -253,6 +296,49 @@ class Controller:
         self.brain_misses = BRAIN_MISSES
         self.agent_fd: int | None = None
         self.events: list[dict] = []
+        self.limits: dict = {"max": POOL_MAX, "borrow": BORROW, "borrow-until": BORROW_UNTIL}
+        self.policy_at: float | None = None
+        self.policy_error: str | None = None
+        self.policy_last: dict | None = None           # the limits $VY_POOL_POLICY last answered
+
+    def pool_limits(self, t: float, dry: bool = False) -> dict:
+        """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers with whole numbers of the node's GPUs
+        and a UTC borrow-until, else those it last answered, else the environment's. Nothing the command prints raises out of
+        here."""
+        if not POLICY or (self.policy_at is not None and t - self.policy_at < POLICY_EVERY_S):
+            return self.limits
+        self.policy_at = t
+        env = {"max": POOL_MAX, "borrow": BORROW, "borrow-until": BORROW_UNTIL}
+        got, err = dict(env), None
+        try:
+            doc = json.loads(policy_output(POLICY))
+            if doc.get("schema") != "cluster/policy/v1":
+                raise ValueError(f"schema {doc.get('schema')!r}, not cluster/policy/v1")
+            seen: dict = {}
+            for k in doc["keys"]:
+                f = k["key"].rsplit(".", 1)[-1]
+                if f in env and f in seen:
+                    raise ValueError(f"two keys give {f}: name one pool")
+                if f in env:
+                    seen[f] = k["value"]
+            for f, v in seen.items():
+                if f == "borrow-until" and epoch(str(v)) is None:
+                    raise ValueError(f"borrow-until {v!r} isn't %Y-%m-%dT%H:%M:%SZ")
+                got[f] = str(v) if f == "borrow-until" else gpu_count(f, v, len(self.table))
+        except Exception as e:  # noqa: BLE001  (a bad policy must never stop the loop)
+            got, err = self.policy_last or env, f"{type(e).__name__}: {e}"[:200]
+        else:
+            self.policy_last = got
+        source = "policy" if not err else "last-policy" if self.policy_last else "environment"
+        if not dry:
+            if got != self.limits or err != self.policy_error:
+                self.log(t, "policy", limits=got, **({"error": err, "fallback": source} if err else {}))
+            try:
+                write(DIR / "n1-lease.limits", " ".join(f"{k}={v}" for k, v in got.items()) + f" from={source}\n")
+            except OSError as e:
+                self.log(t, "limits-write-failed", error=str(e)[:200])
+        self.limits, self.policy_error = got, err
+        return got
 
     def log(self, t: float, ev: str, **kw) -> None:
         rec = {"t": iso(t), "ev": ev, **kw}
@@ -291,9 +377,10 @@ class Controller:
 
     def tick(self, t: float, obs: dict | None = None, dry: bool = False) -> dict:
         self.events = []
-        obs = obs or self.observe()
         if not self.table:
             self.table = gpu_table()
+        lim = self.pool_limits(t, dry)
+        obs = obs or self.observe()
         n = len(self.table)
         pods_by_uid = {p["metadata"].get("uid"): p for p in obs["pods"]}
         pods_by_job: dict[str, list[dict]] = {}
@@ -395,8 +482,9 @@ class Controller:
             target = len(pool) - len(free) + wanted
         self.stopping = {p: s for p, s in self.stopping.items() if Path(f"/proc/{p}").exists()}
         cap = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
-        borrow = BORROW if want and all(w.get("preempt") == "1" for w in want) and t < (epoch(BORROW_UNTIL) or float("inf")) else 0
-        limit = min(POOL_MAX, cap + borrow) if cap is not None else len(pool) + len(pending)
+        borrow = lim["borrow"] if want and all(w.get("preempt") == "1" for w in want) and \
+            t < (epoch(lim["borrow-until"]) or float("inf")) else 0
+        limit = min(lim["max"], cap + borrow) if cap is not None else len(pool) + len(pending)
         target = max(0, min(limit, int(target)))
         if blocked:
             target = len(pool) + len(pending)
@@ -432,7 +520,8 @@ class Controller:
         return state
 
     def ask_brain(self, t: float, gpus: list[dict], want: list[dict], pending: list[str]) -> dict | None:
-        req = {"t": iso(t), "node": SERVER, "gpus": gpus, "waiting": want, "pending_holders": pending, "pool_max": POOL_MAX}
+        req = {"t": iso(t), "node": SERVER, "gpus": gpus, "waiting": want, "pending_holders": pending,
+               "pool_max": self.limits["max"]}
         try:
             out = subprocess.run(BRAIN, shell=True, input=json.dumps(req), capture_output=True, text=True, timeout=20,
                                  check=True).stdout
@@ -458,13 +547,24 @@ class Controller:
         return ans
 
 
+#: what `setup` runs as root on one file of DIR: DIR is 0777, so any local user can plant a symlink or a hard link there, or swap a
+#: file for one after it was listed; only the regular file it opens without following a link, with no other name, is made 0666
+FIX_MODE = """import os, stat, sys
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+st = os.fstat(fd)
+if stat.S_ISREG(st.st_mode) and st.st_nlink == 1:
+    os.fchmod(fd, 0o666)
+"""
+
+
 def setup() -> None:
     if not DIR.is_dir() or (DIR.stat().st_mode & 0o7777) != 0o777:
         subprocess.run(["sudo", "-n", "install", "-d", "-m", "0777", str(DIR)], check=True)
         subprocess.run(["sudo", "-n", "chmod", "0777", str(DIR)], check=True)
     for f in DIR.iterdir():
-        if f.is_file() and (f.stat().st_mode & 0o666) != 0o666:
-            subprocess.run(["sudo", "-n", "chmod", "0666", str(f)], check=False)
+        st = f.lstat()
+        if stat.S_ISREG(st.st_mode) and (st.st_mode & 0o666) != 0o666:
+            subprocess.run(["sudo", "-n", "python3", "-c", FIX_MODE, str(f)], check=False)
 
 
 def main(argv: list[str]) -> int:

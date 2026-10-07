@@ -561,6 +561,31 @@ def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
         lean_key(one, ["b"], repo)
 
 
+def test_a_lean_regen_is_keyed_on_its_provers_and_everything_they_require(tmp_path):
+    """A package whose guarantees are proved in a nested package (`proved_in`) is audited from that package's build, and so
+    from every package it requires by path, at any depth."""
+    from research.jobs.cli import lean_inputs, lean_key
+
+    repo = _lean_repo(tmp_path)
+    files = {"s/lean-audit.json": json.dumps({"proved_in": ["Proofs"]}), "s/lakefile.toml": "", "s/S.lean": "s",
+             "s/Proofs/lakefile.toml": "", "s/Proofs/P.lean": "p",
+             "s/Proofs/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."}, {"type": "path", "dir": "../../a"}]})}
+    for f, text in files.items():
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_text(text)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "s")
+    one = _git(repo, "rev-parse", "HEAD")
+    assert {"s/S.lean", "s/Proofs/P.lean", "a/A.lean", "b/B.lean"} <= set(lean_inputs(one, ["s"], repo))
+    assert not {"a/nested/N.lean", "c/C.lean"} & set(lean_inputs(one, ["s"], repo))
+    base, keys = lean_key(one, ["s"], repo), set()
+    for path in ("s/Proofs/P.lean", "a/A.lean", "b/B.lean"):
+        (repo / path).write_text("x")
+        _git(repo, "commit", "-qam", path)
+        keys.add(lean_key(_git(repo, "rev-parse", "HEAD"), ["s"], repo))
+    assert len(keys | {base}) == 4
+
+
 def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monkeypatch, capsys):
     repo = _lean_repo(tmp_path)
     one = _git(repo, "rev-parse", "HEAD")
@@ -618,6 +643,31 @@ def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags,
     repo = _flock_repo(tmp_path, rustflags, pattern)
     commit, base = _change(repo, path)
     assert needs_avx512(commit, base, repo) is want
+
+
+def test_a_flock_file_whose_name_git_quotes_still_asks_for_avx512(tmp_path):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.rs"`), which the agreement's
+    rule never matched, so a change to such a file asked for no AVX-512 machine."""
+    from research.jobs.cli import needs_avx512
+
+    repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / "backends" / "flock" / "é.rs").write_text("fn f() {}")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "é")
+    assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
+
+
+def test_a_check_asks_for_avx512_for_a_file_renamed_out_of_the_agreements_paths(tmp_path):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the agreement the file's old
+    path runs."""
+    from research.jobs.cli import needs_avx512
+
+    repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "mv", "backends/flock/src.rs", "src.rs")
+    _git(repo, "commit", "-qm", "move")
+    assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
 
 
 def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_path, monkeypatch, capsys):

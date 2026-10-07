@@ -1,30 +1,30 @@
 """The checks, over one Definition, one subcircuit (a template bound), or one served row's request Program.
 
-    correspondence   the reference (`verity.evaluation.evaluate`, the IR evaluator; a vLLM Definition's is its registered
+    correspondence   the reference (`verity.primitives.circuits.evaluation.evaluate`, the IR evaluator; a vLLM Definition's is its registered
                      evaluator) on the edge and random vectors of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
-                     kernel (`verity.evaluation.self_check`), a template's evaluated target where it is another Definition, and
+                     kernel (`verity.primitives.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof units otherwise); a Boolean Definition with a word counterpart
-                     (`verity.ml.boolean.trace.word_of`) also equals that word Definition through its word view.  A
+                     (`verity.primitives.circuits.boolean.trace.word_of`) also equals that word Definition through its word view.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
     redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
-    dead gates       gates no output depends on (`verity.ir.liveness.dead_gates`, transitive), by primitive @ activation
+    dead gates       gates no output depends on (`verity.primitives.circuits.liveness.dead_gates`, transitive), by primitive @ activation
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a row): every gate
                      certified by exactly one unit, cross-unit reads only through committed values, no value computed in two
-                     units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes);
+                     units, the width rule (`verity.primitives.circuits.partition.validate_unit_cut`'s codes and the word's width classes);
                      recorded: the whole Definition's cut under `Q_word` v2 (its codes, and the values computed in two units
                      it reports, `recomputed_across`).  A Boolean Call is judged by v2: its `recomputed_across` is recorded,
                      in its entry and the summary, and every other code fails as under v1.  `Q_call` v1 {X = 32} is recorded
                      beside it (`q_call`: units, committed bits, values computed in two units; or why it refuses, a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
                      warning, ``partition/unchecked``)
-    lowering pins    a lowering's AND/XOR/NOT counts against `pins.json` (a piece's, a Boolean Definition's whole lowering's,
-                     a template unit's; a Boolean Definition's lowering has at most its own And gates), a template unit's
-                     circuit digest against its C-Flock
+    lowering pins    a lowering's AND/XOR/NOT counts against its pin (a piece's, a Boolean Definition's whole lowering's,
+                     a template unit's, in the sidecar of the module that defines it or `pins.json`, `sidecars`; a Boolean
+                     Definition's lowering has at most its own And gates), a template unit's circuit digest against its C-Flock
                      module's `PINS`, and the Boolean export's gate lists checked against the unit circuit
                      (`verity_flock.boolean_export`)
 
@@ -34,7 +34,6 @@ is a warning.
 """
 from __future__ import annotations
 
-import json
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,16 +41,19 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from verity.evaluation import ScalarReference, evaluate, kernels, self_check
-from verity.evaluation.reference import resolve, signature_of, standalone_call
-from verity.ir.boolean import is_boolean
-from verity.ir.defs import PrimitiveDefinition
+from verity.primitives.circuits.evaluation import ScalarReference, evaluate, kernels, self_check
+from verity.primitives.circuits.evaluation.reference import resolve, signature_of, standalone_call
+from verity.primitives.circuits import boolean as BL
+from verity.primitives.circuits.boolean import is_boolean
+from verity.primitives.circuits.defs import PrimitiveDefinition
 
+from . import sidecars as SC
 from .vectors import edge_count, flat, instance_args, vectors
 
 SCHEMA = "verity-circuit-check/v1"
 PINS = Path(__file__).with_name("pins.json")
 _EXAMPLES = 3
+_LIMB = (1 << 64) - 1
 
 
 @dataclass(frozen=True)
@@ -96,8 +98,21 @@ class Findings:
         self.warnings += other.warnings
 
 
+_SHA512 = ("one SHA-512 compression under the AND budget, traced from `sha512.compress_gadget`: the trace turns the gadget's "
+           "23,455 commits (`sha512.commit`, And(x, ONE)) into x's wire, and `ir_lower` cannot commit an Xor, so every form "
+           "is carried whole and grows round over round (mean 3,132 bits, 8.2 GB a third of the way in); each of these four "
+           "was OOM-killed at 64 GiB (MemoryMax) after 14 minutes on vy-nebius-1 (run r20261006-074613-c4b9)")
+#: Boolean Definition families whose whole C-Flock lowering does not fit in memory, and why
+UNLOWERED: dict[str, str] = {f: _SHA512 for f in ("Sha512Compress_v1", "LmsChainStep_v1", "LmsLeaf_v1", "LmsNode_v1")}
+
+
+def _family(t: Any) -> str:
+    return getattr(t, "base_id", None) or t.id
+
+
 def load_pins() -> dict:
-    return json.loads(PINS.read_text()) if PINS.exists() else {"pieces": {}, "units": {}}
+    """Every pin: `PINS`' and each sidecar's (`sidecars.load_pins`)."""
+    return SC.load_pins(PINS)
 
 
 def _short(x: Any, n: int = 240) -> str:
@@ -204,7 +219,7 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
 
 def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings) -> dict | None:
     """A template evaluated through another Definition (``Subcircuit.target``) against its own Definition's reference."""
-    from verity.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation import evaluate_batch
 
     if target is definition or getattr(target, "id", None) == getattr(definition, "id", None):
         return None
@@ -223,14 +238,36 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
     return {"target": target.id, "compared": len(rows), "mismatches": len(bad)}
 
 
+def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
+    """`evaluate_words` where an element is wider than its 64 bits (PoUW's 576-bit sums of squares): Python ints, each element
+    through its bits (`verity.primitives.circuits.evaluation.bits.evaluate_bits`)."""
+    from verity.primitives.circuits.evaluation.batch import type_shape
+    from verity.primitives.circuits.evaluation.bits import evaluate_bits
+
+    ins = []
+    for a, p in zip(arrays, params):
+        widths = BL.elements(p)
+        rows = np.asarray(a, dtype=object).reshape(n, len(widths))
+        ins.append(np.array([[(int(v) >> j) & 1 for v, w in zip(row, widths) for j in range(w)] for row in rows],
+                            dtype=np.uint8).reshape(n, *type_shape(p)))
+    bits = np.asarray(evaluate_bits(t, *ins)).reshape(n, -1)
+    out = np.zeros((n, len(BL.elements(ret))), dtype=object)
+    at = 0
+    for e, w in enumerate(BL.elements(ret)):
+        for i in range(n):
+            out[i, e] = sum(int(b) << j for j, b in enumerate(bits[i, at:at + w]))
+        at += w
+    return out
+
+
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """A Boolean Definition against the word Definition it computes (`verity.ml.boolean.trace.word_of`), through the word view
-    (`verity.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
+    """A Boolean Definition against the word Definition it computes (`verity.primitives.circuits.boolean.trace.word_of`), through the word view
+    (`verity.primitives.circuits.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
-    from verity.evaluation import evaluate_batch
-    from verity.evaluation.bits import evaluate_words
-    from verity.ml.boolean.trace import word_of
+    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.primitives.circuits.evaluation.bits import evaluate_words
+    from verity.primitives.circuits.boolean.trace import word_of
 
     try:
         word = word_of(t)
@@ -239,8 +276,13 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
     pw, _ = signature_of(word)
     arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
     n = arrays[0].shape[0]
-    want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
-    got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
+    pb, rb = signature_of(t)
+    if max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
+        want = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
+        got = _wide_words(t, pb, rb, arrays, n)
+    else:
+        want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
+        got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
     bad = np.flatnonzero((got != want).any(axis=1)).tolist()
     if bad:
         F.fail("correspondence", "word-view-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word-view:{word.id}",
@@ -348,7 +390,7 @@ def _pieces_used(t: Any, pins: dict) -> tuple[Counter, Counter, int]:
 
 def _piece_status(pid: str, opts: Options, pins: dict, memo: dict) -> None:
     """Record in ``memo["pieces"]`` how many vectors the piece of the primitive ``pid`` gets wrong."""
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
 
     prim = REGISTRY.defs[pid]
     params, _ = signature_of(prim)
@@ -397,6 +439,8 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
             return {"lowered": False, "reason": f"C-Flock has no piece for {t.id}"}
     elif t.gates > opts.lower_max_gates and not is_boolean(t):
         return {"lowered": False, "reason": f"{t.gates} IR gates: lowered as a template's units, not whole (budget {opts.lower_max_gates})"}
+    elif is_boolean(t) and (why := UNLOWERED.get(_family(t))):
+        return {"lowered": False, "reason": why}
     else:
         used, missing, est = _pieces_used(t, pins)
         if missing:
@@ -424,8 +468,11 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     rec: dict[str, Any] = {"lowered": True, "via": "c-flock:ir_lower", "ands": counts["ands"], "compared": T}
     if T:
         got_s, fail = C.evaluate({f"in{j}": IL.slice_words(fin[:, j], w) for j, w in enumerate(widths)}, T)
-        got = np.stack([IL.unslice_words(got_s[f"out{k}"], T) for k in range(len(outs))], axis=1)
-        want = np.asarray([ref[i] for i in rows], dtype=np.uint64)
+        # a lane holds 64 bits, so an output leaf wider than that is compared limb by limb, low limb first
+        cols = [(k, lo) for k, o in enumerate(outs) for lo in range(0, max(len(o), 1), 64)]
+        got = np.stack([IL.unslice_words(got_s[f"out{k}"][lo:lo + 64], T) for k, lo in cols], axis=1)
+        want = np.asarray([[ref[i][k] if len(outs[k]) <= 64 else ref[i][k] >> lo & _LIMB for k, lo in cols] for i in rows],
+                          dtype=np.uint64)
         bad = np.flatnonzero((got != want).any(axis=1)).tolist()
         rec["mismatches"] = len(bad)
         if isinstance(t, PrimitiveDefinition):
@@ -443,7 +490,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if isinstance(t, PrimitiveDefinition):
         rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"]}, pins, F, t.id)
     elif is_boolean(t):
-        from verity.evaluation.bits import compile as compile_bits
+        from verity.primitives.circuits.evaluation.bits import compile as compile_bits
 
         own = rec["definition_ands"] = compile_bits(t).counts["and"]
         if counts["ands"] > own:
@@ -474,7 +521,7 @@ def redundant_gates(fn: Any, opts: Options, F: Findings, rule: dict, graph: tupl
 
 
 def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
-    from verity.ir.liveness import dead_gates as dead
+    from verity.primitives.circuits.liveness import dead_gates as dead
 
     prog, _call = standalone_call(fn)
     rep = dead(prog, limit=opts.dead_ids, transitive=True)
@@ -556,7 +603,7 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
     """`Q_call{X = cut.CALL_X}` v1 on one Call of ``fn``: its units, committed gates and bits, and the values two units compute
     (reported, as `Q_word` v2 does); or why the query refuses it (``inapplicable``: a gate wider than X, a warning).  A code of
     the cut's own check fails by name (``partition/q-call-<code>``); none is expected, since the cut derives what it checks."""
-    from verity.ir import cut
+    from verity.primitives.circuits import cut
 
     X = cut.CALL_X
     if fn.gates > opts.partition_max_gates:
@@ -621,7 +668,7 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
         entry["redundant_gates"] = {"checked": False}
         entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
     elif kind == "composite":
-        from verity.ir import boolean as BL
+        from verity.primitives.circuits import boolean as BL
 
         part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call, q_word=2 if BL.is_boolean(t) else 1)
         graph = part.pop("_graph", None)
@@ -669,7 +716,7 @@ def _export_counts(build: Callable[[], Any], name: str) -> dict:
 
 
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
-    """A subcircuit's C-Flock proof units: the unit circuit's digest against its module's pin, its counts against `pins.json`
+    """A subcircuit's C-Flock proof units: the unit circuit's digest against its module's pin, its counts against their pin
     and the Boolean export, its redundant ANDs, and the laid-out units against the reference on the edge and random vectors."""
     from verity_flock import ir_lower as IL
     from verity_numerical.bench import lowerings

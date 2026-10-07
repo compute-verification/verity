@@ -150,6 +150,8 @@ def test_a_request_inside_a_slot_takes_no_second_one(slots, monkeypatch):
 def test_a_pool_the_file_doesn_t_list_takes_from_any_or_is_refused_by_name(slots, monkeypatch, capsys):
     LS.SLOTS.write_text("any 1\n")
     assert LS.resolve(LS.parse(LS.SLOTS.read_text()), "audit") == ("any", 1)
+    with pytest.raises(LS.Refused, match="lists no pool 'build', the only one this request takes; the steward adds `build N`"):
+        LS.hold("build", or_any=False)
     LS.SLOTS.write_text("check 2\n")
     with pytest.raises(LS.Refused, match="lists neither pool 'audit' nor 'any'; the steward adds `audit N`"):
         LS.hold("audit")
@@ -198,6 +200,33 @@ def test_status_lists_each_pool_s_slots_and_waiters(slots, monkeypatch, capsys):
     os.close(held)
 
 
+def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch, capsys):
+    """`--status --json`, which `check.py --slots` reads from each machine; null pools where no cap is set (node 2)."""
+    held = _hold(slots / "lean-check-1.lock", {"pid": os.getpid(), "run": "r-train", "by": "lander", "took": "2026-10-03T16:40Z"})
+    line = slots / "lean-line-audit"
+    line.mkdir()
+    waiter = line / f"{int((NOW.timestamp() - 120) * 1e9):020d}-77"
+    waiter.write_text(json.dumps({"pid": 77, "run": "r-audit", "by": "proofs"}))
+    wfd = _hold(waiter)
+    past = _hold(slots / "lean-audit-2.lock")                                  # the steward lowered N while it ran
+    assert LS.main(["--status", "--json"], now=lambda: NOW) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["file"] == str(LS.SLOTS) and list(doc["pools"]) == ["audit", "check"]
+    audit, check = doc["pools"]["audit"], doc["pools"]["check"]
+    assert [(s["index"], s["past_n"], s["holder"] is None) for s in audit["slots"]] == [(0, False, True), (1, False, True), (2, True, False)]
+    assert audit["waiters"] == [{"since": "2026-10-03T16:58Z", "minutes": 2, "priority": False, "pid": 77, "run": "r-audit", "by": "proofs"}]
+    assert check["n"] == 2 and check["slots"][0] == {"index": 0, "past_n": False, "holder": None} and check["waiters"] == []
+    h = check["slots"][1]["holder"]
+    assert h["pid"] == os.getpid() and (h["run"], h["by"], h["took"]) == ("r-train", "lander", "2026-10-03T16:40Z")
+    for fd in (held, wfd, past):
+        os.close(fd)
+    monkeypatch.setattr(LS, "SLOTS", slots / "absent")
+    assert LS.main(["--status", "--json"], now=lambda: NOW) == 0
+    assert json.loads(capsys.readouterr().out) == {"file": str(slots / "absent"), "now": "2026-10-03T17:00Z", "pools": None}
+    with pytest.raises(SystemExit, match="usage: lean_slot.py --status"):
+        LS.main(["--status", "--all"])
+
+
 def test_the_command_holds_the_slot_while_it_runs_and_sigterm_frees_it(slots):
     """The real exec, ended as `research cancel` ends it: the kernel drops the flock with the process."""
     child = ("import os, sys\nprint(os.environ['LEAN_SLOT'], flush=True)\nsys.stdin.read()\n")
@@ -237,7 +266,7 @@ def test_check_s_lean_audit_takes_a_slot_only_when_it_will_audit_a_package(tmp_p
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path))
     (tmp_path / "lean-audit").mkdir()
     (tmp_path / "lean-audit" / "kp.json").write_text("{}")
-    cmd = [sys.executable, "tools/check/lean_audit.py", "--out", "o"]
+    cmd = [sys.executable, "tools/lean/lean_audit.py", "--out", "o"]
     assert check.lean_slot(cmd)[:len(check.LEAN_SLOT_WRAP)] == check.LEAN_SLOT_WRAP           # q misses
     assert check.LEAN_SLOT_WRAP[1].endswith("tools/check/lean_slot.py") and check.LEAN_SLOT_WRAP[2:4] == ["--pool", "check"]
     (tmp_path / "lean-audit" / "kq.json").write_text("{}")

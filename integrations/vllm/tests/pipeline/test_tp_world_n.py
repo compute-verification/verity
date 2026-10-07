@@ -5,17 +5,16 @@ the consumers use instead of spelled prefixes, the N-ary collective bus (one pee
 from __future__ import annotations
 
 import json
-import re
 
 import numpy as np
 import pytest
 
-from verity.ir.defs import bind
-from verity.ir.evaluate import evaluate_region
-from verity.ir.layout import resolve
-from verity.ir.program import Program
-from verity_vllm.program.registry import b1_tp2 as TP2
-from verity_vllm.program.registry import prims as P
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.evaluate import evaluate_region
+from verity.primitives.circuits.layout import resolve
+from verity.primitives.circuits.program import Program
+from verity_vllm.program.registry import b1_tp2 as TP2, prims as P
+from verity_vllm.program.frontend import collective_kinds
 
 
 # --- helpers --------------------------------------------------------------------------------------------------------------
@@ -103,11 +102,11 @@ def test_allgather_world_n_is_the_rank_order_concatenation(W, N):
 
 def test_registry_derived_family_selectors():
     """Consumers (the v2 query, sampled_replay, tp/worker, tp/commit) ask the registry, never a spelled prefix."""
-    assert TP2.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == TP2.collective_kind("AllReduce_v2{WORLD=3,N=8}")
-    assert TP2.collective_kind("AllGather2_v1") == "all_gather" == TP2.collective_kind("AllGather_v1{WORLD=4,N=8}")
-    assert TP2.collective_kind("Gemm_v1{K=1,N=2}") is None and TP2.collective_kind("") is None
-    assert TP2.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
-    assert TP2.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
+    assert collective_kinds.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == collective_kinds.collective_kind("AllReduce_v2{WORLD=3,N=8}")
+    assert collective_kinds.collective_kind("AllGather2_v1") == "all_gather" == collective_kinds.collective_kind("AllGather_v1{WORLD=4,N=8}")
+    assert collective_kinds.collective_kind("Gemm_v1{K=1,N=2}") is None and collective_kinds.collective_kind("") is None
+    assert collective_kinds.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
+    assert collective_kinds.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
     from verity_vllm.check.match import xrank_collectives as XC
     from verity_vllm.query import required as v1_bridge
     assert v1_bridge.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"
@@ -247,14 +246,66 @@ def test_cross_rank_check_world_3_passes_and_names_a_missing_rank():
     assert not cnt["pass"] and any("rank" in f for f in cnt["fails"])
 
 
-# --- the rank Commit refuses a world above two ----------------------------------------------------------------------------------
+# --- worlds 2, 4 and 8 ---------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("world_args", [["--tp", "3"], ["--world", "4"]])
-def test_rank_commit_refuses_world_above_two_before_building_an_engine(world_args, monkeypatch, tmp_path, capsys):
-    from verity_vllm.engine import engine_profile as prof
+@pytest.mark.parametrize("world_args,W", [(["--tp", "2"], 2), (["--tp", "4"], 4), (["--world", "8"], 8), (["--tp", "8", "--world", "8"], 8)])
+def test_rank_commit_takes_worlds_2_4_and_8(world_args, W, tmp_path):
     from verity_vllm.pipeline import cli
-    monkeypatch.setattr(prof, "apply_env", lambda: {})
-    with pytest.raises(SystemExit) as refused:
-        cli.main(["tp-commit", "--workload", str(tmp_path / "wl.json"), "--out", str(tmp_path / "out"), *world_args])
-    assert refused.value.code == 2 and re.search(r"argument --(tp|world): invalid choice: '?[34]'?", capsys.readouterr().err)
-    assert not (tmp_path / "out").exists()
+    args = cli.parse("tp-commit", ["--workload", str(tmp_path / "wl.json"), "--out", str(tmp_path / "out"), *world_args])
+    assert (args.tp if args.world is None else args.world) == W
+
+
+@pytest.mark.parametrize("W", [2, 4, 8])
+def test_config_run_row_takes_worlds_2_4_and_8(W, monkeypatch):
+    from verity_vllm.pipeline import cli, row as ROW, row_tp
+    seen = {}
+
+    class Rec:
+        def __init__(self, **kw):
+            seen.update(kw)
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(row_tp, "TpRow", Rec)
+    o = cli.parse("row", ["run", f"qwen3-14b__bf16__rtxpro6000__tp{W}__b1__i256__o32__mixed__greedy__bi-eager", "QWEN3_14B", "Qwen/Qwen3-14B",
+                          "a" * 40, "--config-run", "1", "--replay-k", "460", "--world", str(W)])
+    assert ROW.run_row(o, "build,commit") == 0 and seen["world"] == W and seen["commit"].config_run == "1"
+
+
+@pytest.mark.parametrize("W", [2, 4, 8])
+@pytest.mark.parametrize("kind", ["all_reduce", "all_gather"])
+def test_collective_record_names_own_and_peer_operands_at_worlds_2_4_and_8(W, kind):
+    """World 2's binary ops keep their record's keys; a world-N op takes its `parts` as one list in rank order, and its record names
+    the rank's own operand and every peer's input."""
+    from types import SimpleNamespace
+    import torch
+    from verity_vllm.program.frontend import emit as E
+    for rank in range(W):
+        g = torch.fx.Graph()
+        parts = [g.placeholder(f"p{r}") for r in range(W)]
+        peer_in = {parts[p]: f"in.{kind}.k0.r{p}" for p in range(W) if p != rank}
+        ctx = SimpleNamespace(is_input_storage=lambda a: peer_in.get(a))
+        rec = E._collective_record(ctx, SimpleNamespace(args=tuple(parts) if W == 2 else (parts,)), kind, 3)
+        assert rec["kind"] == kind and rec["occurrence"] == 3 and rec["own_operand"] == rank and rec["operand_ranks"] == list(range(W))
+        if W == 2:
+            assert list(rec) == ["kind", "occurrence", "operand_ranks", "own_operand", "peer_operand", "peer_input"]
+            assert rec["peer_operand"] == 1 - rank and rec["peer_input"] == f"in.{kind}.k0.r{1 - rank}"
+        else:
+            assert rec["peer_operand"] is None and rec["peer_operands"] == [p for p in range(W) if p != rank]
+            assert rec["peer_inputs"] == [f"in.{kind}.k0.r{p}" for p in range(W) if p != rank]
+
+
+@pytest.mark.parametrize("W", [2, 4, 8])
+def test_own_partial_run_is_the_ranks_slice_at_worlds_2_4_and_8(W):
+    """A world-N all_gather's input runs are in rank order: rank r's own partial is the run holding leaf r*N, not only the first
+    (rank 0) or the last (rank W-1) run."""
+    from verity_vllm.check.match import rank_match as RMx
+    N = 7
+    runs = [("in", f"r{r}", 0, N) for r in range(W)]
+    for rank in range(W):
+        assert RMx._own_run(runs, {"rank": rank, "world": W, "N": N}) == runs[rank]
+    merged = [("in", "r0..1", 0, 2 * N)] + [("in", f"r{r}", 0, N) for r in range(2, W)]
+    assert RMx._own_run(merged, {"rank": 0, "world": W, "N": N}) == merged[0]
+    if W > 2:
+        assert RMx._own_run(merged, {"rank": 1, "world": W, "N": N}) == merged[0]

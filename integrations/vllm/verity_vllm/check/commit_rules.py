@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from verity.proofs.codes import VerificationCode as VC
+from verity_vllm.check.codes import VerificationCode as VC
 
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult, code_of
 
@@ -580,7 +580,8 @@ def rule_identity_layout(commit: dict, ctx: dict) -> CheckResult:
     if not idc.get("ok"):
         viols = [v for v in (idc.get("violations") or []) if isinstance(v, dict)]
         diffs: list[dict[str, Any]] = []
-        for key in ("fa2_layers_bad", "missing_modules", "unknown_modules", "moe_layers_bad", "tp_sites_bad", "multiplicity_vs_step0", "call_boundaries_bad"):
+        for key in ("fa2_layers_bad", "missing_modules", "unknown_modules", "moe_layers_bad", "tp_sites_bad", "multiplicity_vs_step0", "call_boundaries_bad",
+                    "routes_bad"):
             hits = [v for v in viols if v.get(key)]
             if hits:
                 diffs.append({"name": key, "steps": [v.get("step") for v in hits][:16], "steps_n": len(hits), "first": {"step": hits[0].get("step"), key: hits[0][key]}})

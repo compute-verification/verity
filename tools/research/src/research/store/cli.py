@@ -3,23 +3,26 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending] [--no-labels] [--jobs N] [--verify head|readback]
+  research data push [ART|RUN ...] [--pending] [--skip-record-less] [--no-labels] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
                                                    a run pushes its attempt + outputs + the assertions about them (attempt, derivation, outputs);
-                                                   --pending pushes everything local the remote lacks, assertions included
+                                                   --pending pushes everything local the remote lacks, assertions included;
+                                                   --skip-record-less pushes no attempt that names no run record
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
                                                    --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
-  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--json]
+  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--src-dir D [--src-origin URL]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
-                                                   --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached
+                                                   --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
+                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
-  research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
+  research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
-                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py)
+                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py);
+                                                   N targets (default 8) checked at once, each printed as it finishes
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
@@ -182,7 +185,7 @@ def cmd_put(argv: list[str]) -> int:
         except Exception as e:  # noqa: BLE001
             why = str(e)
     else:
-        gone = lost("R2_ENDPOINT", "R2_BUCKET")
+        gone = lost("R2_ENDPOINT", "R2_BUCKET") or st.remote_lost()
         why = gone or "write-through off"
     if ns.json:
         _dump({"id": art, "preserve": rep, **({"pending": why} if why or (rep and not rep["preserved"]) else {})})
@@ -314,6 +317,11 @@ def cmd_evict(argv: list[str]) -> int:
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--src-dir", default=None, metavar="DIR",
+                    help="also delete the `research run` source trees under DIR (<root>/src) recoverable on the node that nothing uses, "
+                         "whatever the target (evict.py `evict_src`; needs root or CAP_SYS_PTRACE to read /proc)")
+    ap.add_argument("--src-origin", default=None, metavar="URL",
+                    help="--src-dir: the repository whose refs make a tree recoverable (default <root>/git/verity.git, the node's own)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
@@ -326,6 +334,8 @@ def cmd_evict(argv: list[str]) -> int:
 
         rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
                                     quiet_s=ns.quiet_min * 60, log=say)
+    if ns.src_dir:
+        rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, log=say)
     if ns.json:
         _dump(rep)
     last = rep.get("runs") or rep["store"]
@@ -350,7 +360,8 @@ def cmd_verify(argv: list[str]) -> int:
 def cmd_preserved(argv: list[str]) -> int:
     """The durability gate (F7, `preserved.py`), three legs: the attempt manifest, every artifact it names (outputs + telemetry),
     and every local assertion about the attempt / its derivation / those artifacts must be verifiably on the remote.  Exit 0 iff so
-    for every target; else 1, the list of what is not, and which legs fail.  Exit 2 on a usage error (no targets)."""
+    for every target; else 1, the list of what is not, and which legs fail.  Exit 2 on a usage error (no targets).  Targets are checked
+    `--jobs` at a time and each one's lines are printed as it finishes (completion order); `--json` waits and keeps the given order."""
     from . import preserved as P
 
     ap = _ap("preserved")
@@ -358,16 +369,21 @@ def cmd_preserved(argv: list[str]) -> int:
     ap.add_argument("--mode", choices=list(P.MODES), default="head",
                     help="head: size + MD5 ETag per blob (read-back when unavailable), manifest read back (default); "
                          "readback: every object read back; recorded: trust the local catalog's verified remote replica (offline)")
+    ap.add_argument("--jobs", type=int, default=8, metavar="N", help="targets checked at once (default 8)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if not ns.targets:
         print("research data preserved: give at least one run id or art: id", file=sys.stderr)
         return 2
-    rep = P.check(LocalStore(ns.store), ns.targets, mode=ns.mode)
+
+    def say(t: dict) -> None:
+        print("\n".join(P.format_target(t)), flush=True)
+
+    rep = P.check(LocalStore(ns.store), ns.targets, mode=ns.mode, jobs=ns.jobs, on_target=None if ns.json else say)
     if ns.json:
         _dump(rep)
     else:
-        for line in P.format_report(rep):
+        for line in P.format_summary(rep):
             print(line)
     return 0 if rep["preserved"] else 1
 
@@ -508,7 +524,7 @@ def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
 
     pending = "pending: `research data push --pending` uploads it"
     if not st.write_through:
-        if hint := lost("R2_ENDPOINT", "R2_BUCKET"):
+        if hint := lost("R2_ENDPOINT", "R2_BUCKET") or st.remote_lost():
             return f"NOT preserved ({hint}); {pending}", True
         return f"local only (write-through off); {pending}", False
     if st.remote is None:
@@ -788,6 +804,8 @@ def cmd_push(argv: list[str]) -> int:
     ap.add_argument("--verify", choices=["head", "readback"], default="head",
                     help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
     ap.add_argument("--no-labels", action="store_true", help="do not push assertions (a run's: about it, its derivation and its outputs; --pending: all local ones)")
+    ap.add_argument("--skip-record-less", action="store_true",
+                    help="push no attempt that names no run record (--pending: one the remote lacks keeps its logs only here)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if ns.jobs < 1:
@@ -805,6 +823,7 @@ def cmd_push(argv: list[str]) -> int:
         arts += queue["artifacts"]
         runs += queue["attempts"]
     reports: list[dict] = []
+    record_less: list[str] = []
     label_targets: dict[str, list[str]] = {}                       # report id -> the label targets its durability covers
     from . import labels_sync as LS  # noqa: PLC0415
 
@@ -814,6 +833,9 @@ def cmd_push(argv: list[str]) -> int:
         doc = st.get_attempt(rid)
         if doc is None:
             raise StoreError(f"attempt {rid} is not in the store")
+        if ns.skip_record_less and not (doc.get("outputs") or {}).get("run_record"):
+            record_less.append(rid)
+            continue
         arts += _attempt_artifacts(doc)
         label_targets[rid] = LS.attempt_targets(doc)
         try:                                                       # one bad upload must not abandon the batch: record, continue
@@ -821,6 +843,9 @@ def cmd_push(argv: list[str]) -> int:
             reports.append({"id": rid, "kind": "attempt", "preserved": r.head(attempt_key(rid)) is not None})
         except Exception as e:  # noqa: BLE001
             reports.append({"id": rid, "kind": "attempt", "preserved": False, "errors": [f"{type(e).__name__}: {e}"]})
+    if record_less:
+        print(f"research data push: {len(record_less)} attempt(s) without a run record not pushed (--skip-record-less): "
+              + " ".join(record_less[:5]) + (" …" if len(record_less) > 5 else ""), file=sys.stderr)
     for a in arts:                                                 # an artifact's own assertions count against it as well (explicit or via a run)
         label_targets.setdefault(a, [a])
     def heartbeat(p: dict) -> None:                                # long artifacts (10^5 objects): a running count on stderr, no --json noise

@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import argparse
 import json
 import multiprocessing as mp
 import os
@@ -332,6 +333,24 @@ def test_cancel_markers_classify_by_actor_and_need_delivery_or_matching_signal(t
     evs = [{"kind": "cancel_intent", "actor": "manual", "reason": "r", "signal": 15, "target": {"pid": 100}, "t_mono": 105.0, "t_utc": "T"}]
     doc = classify(_attempt(d, rc=143, sig=15, samples=[], evs=evs))
     assert doc["class"] == "CANCELLED_MANUAL" and doc["certainty"] == "inferred"
+
+
+def test_a_cancel_of_a_large_group_keeps_its_pgid_and_classifies(tmp_path, monkeypatch):
+    from research.telemetry import cancel
+    members = [{"pid": 1000 + i, "comm": "python3", "starttime_ticks": 45_000_000 + i} for i in range(120)]
+    monkeypatch.setattr(cancel, "pgid_members", lambda pgid: members)
+    monkeypatch.setattr(cancel, "run_dir_of", lambda pid: str(tmp_path.resolve()))
+    d = _attempt(tmp_path, rc=143, sig=None, samples=[], pid=100)
+    a = argparse.Namespace(actor="manual", attempt_dir=str(d), fallback=None, target_pid=None, target_pgid=100, target_pod=None,
+                           expect_starttime=None, expect_comm=None, expect_run_dir=str(d), expect_nonempty=False, reason="r", signal=15,
+                           project=None, job=None, attempt=None, controller=None, deliver=False)
+    assert cancel.cancel(a) == 0
+    intent = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()][-1]
+    assert "truncated_fields" not in intent
+    assert intent["target"]["pgid"] == 100 and intent["target"]["members_total"] == 120 and intent["verified"] is True
+    intent["t_mono"] = 105.0
+    (d / "events.jsonl").write_text(json.dumps(intent) + "\n" + json.dumps(dict(intent, kind="cancel_result", delivered=True, t_mono=105.1)) + "\n")
+    assert classify(d)["class"] == "CANCELLED_MANUAL"
 
 
 def test_logs_cuda_enospc_and_checker_record(tmp_path):
@@ -742,6 +761,33 @@ def test_rule_7b_needs_both_the_counter_and_the_killed_line(tmp_path, monkeypatc
     assert classify(d)["class"] == "CGROUP_OOM_ATTRIBUTED"
 
 
+def _queue_attempt(tmp_path, run_id, *, sig, oom, unit=None):
+    """A `research run --queue` attempt: its cgroup is the scope `cluster-<run id>.scope` capped at 8 GiB (job.json), which the
+    sampler calls the pod's because the runner and the sampler share it with the workload."""
+    d = tmp_path / run_id
+    d.mkdir()
+    path = f"/user.slice/user-1001.slice/user@1001.service/app.slice/{unit or f'cluster-{run_id}.scope'}"
+    cg = [{**_cg(t, k), "cgroup": {**_cg(t, k)["cgroup"], "path": path}} for t, k in ((100, 0), (104, oom))]
+    _attempt(d, rc=128 + sig, sig=sig, samples=cg, end=105.0)
+    (d / "job.json").write_text(json.dumps({"ownership": {"job": run_id}, "environment": {"cgroup": {"path": path, "memory_max_bytes": 8 << 30}}}))
+    return d
+
+
+def test_a_queue_scope_systemd_stopped_after_an_oom_kill_is_an_oom_that_names_the_cap(tmp_path):
+    doc = classify(_queue_attempt(tmp_path, "r20261005-064854-bd63", sig=15, oom=1))
+    assert doc["class"] == "CGROUP_OOM_ATTRIBUTED" and doc["certainty"] == "established", doc["why"]
+    assert "MemoryMax=8G" in doc["why"] and "--mem-gb" in doc["why"] and "systemd" in doc["why"]
+    assert any(e["kind"] == "cgroup.queue_scope" and e["memory_max"] == "MemoryMax=8G" for e in doc["evidence"])
+    killed = classify(_queue_attempt(tmp_path, "r2", sig=9, oom=1))
+    assert killed["class"] == "CGROUP_OOM_ATTRIBUTED" and killed["certainty"] == "established" and "MemoryMax=8G" in killed["why"]
+
+
+def test_a_sigterm_with_no_kill_or_outside_the_runs_own_scope_stays_unknown_signal(tmp_path):
+    assert classify(_queue_attempt(tmp_path, "r1", sig=15, oom=0))["class"] == "UNKNOWN_SIGNAL"
+    other = classify(_queue_attempt(tmp_path, "r3", sig=15, oom=1, unit="cluster-r9.scope"))
+    assert other["class"] == "UNKNOWN_SIGNAL" and "MemoryMax" not in other["why"]
+
+
 def test_killed_re_matches_shell_kernel_and_subprocess_reports_not_prose():
     from research.telemetry.classify import KILLED_RE
 
@@ -786,3 +832,205 @@ def test_v1_kill_counter_that_did_not_move_vetoes_the_failcnt_fallback(tmp_path,
     doc = classify(d)
     assert doc["class"] == "UNKNOWN_EXIT" and doc["incidents"] == []
     assert "log.killed" in [e["kind"] for e in doc["evidence"]]
+
+
+# ---- the sampler's PSS rounds (network accounting's friction note, 3 Oct: a 100 GB process's smaps_rollup read slowed its engine) ------------
+
+GB = 10 ** 9
+
+
+def _proc(pid, rss):
+    return {"pid": pid, "starttime_ticks": 7, "comm": "w", "rss_bytes": rss, "rss_anon_bytes": rss - rss // 4, "rss_file_bytes": rss // 4,
+            "rss_shmem_bytes": 0}
+
+
+class _Clock:
+    """The sampler's clock: the test sets it, and a fake read that takes time moves it."""
+
+    def __init__(self, t):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+def _sampler(tmp_path, monkeypatch, table, read, *flags):
+    """A Sampler over the process table `table` (re-read every round, so a test may change it), whose smaps_rollup reads are `read`."""
+    from research.telemetry import sample
+
+    monkeypatch.delenv("TELEMETRY_STREAM_SUFFIX", raising=False)
+    monkeypatch.setattr(sample, "snapshot_tree", lambda root_pid, pgid, max_pids: (list(table), False, len(table), []))
+    monkeypatch.setattr(sample, "pss", read)
+    monkeypatch.setattr(sample, "gpu_sample", lambda timeout: {"available": False, "reason": "no GPU in this test"})
+    ap = argparse.ArgumentParser()
+    sample.add_args(ap)
+    return sample.Sampler(ap.parse_args(["--attempt-dir", str(tmp_path), *flags]))
+
+
+def _records(d, kind):
+    return [r for r in map(json.loads, (d / "resources.jsonl").read_text().splitlines()) if r["kind"] == kind]
+
+
+def test_pss_every_0_turns_pss_off(tmp_path, monkeypatch):
+    """`--pss-every 0` used to mean a PSS round every round; it is off: no read, no pss record, and pss is not an instrument."""
+    from research import cli as rcli
+
+    opened = []
+    s = _sampler(tmp_path, monkeypatch, [_proc(10, GB)], lambda pid: opened.append(pid) or {"pid": pid, "pss_bytes": GB}, "--pss-every", "0")
+    for _ in range(3):
+        s.round()
+    s.round(final=True)
+    assert opened == [] and _records(tmp_path, "pss") == [] and len(_records(tmp_path, "process")) == 4
+    for every, has in (("0", False), ("5", True)):
+        a = rcli._harness_parser("research run").parse_args(["--attempt-dir", str(tmp_path), "--stage", "s", "--pss-every", every])
+        instruments = rcli.build_job_from(a, ["true"])["telemetry"]["instruments"]
+        assert ("pss" in instruments) is has and "process" in instruments, (every, instruments)
+
+
+def test_a_process_over_pss_max_rss_gb_is_never_read_in_any_round(tmp_path, monkeypatch):
+    """smaps_rollup of a 91-120 GB vLLM engine took 1.6-2.7 s under its mmap lock, and the engine's steps behind it had a 2-4.5x longer
+    p99. A process over --pss-max-rss-gb (default 8) is recorded from its status RSS instead, in the cadence, topology-change and
+    final rounds alike, and counted `skipped`, not `denied` (which stays what the reader refused)."""
+    from research.telemetry import sample
+
+    clk = _Clock(1000.0)
+    monkeypatch.setattr(sample, "clock", clk)
+    opened = []
+
+    def read(pid):
+        opened.append(pid)
+        return {"pid": pid, "pss_bytes": None, "reason": "permission denied"} if pid == 13 else {"pid": pid, "pss_bytes": GB // 2}
+
+    table = [_proc(10, 97_300_000_000), _proc(12, GB), _proc(13, GB)]
+    s = _sampler(tmp_path, monkeypatch, table, read, "--pss-every", "60")
+    s.round()                                     # the first round
+    clk.t = 1006.0
+    table.append(_proc(14, GB))
+    s.round()                                     # a child appeared: a topology-change round, 54 s before the cadence's
+    clk.t = 1007.0
+    s.round()                                     # nothing due
+    clk.t = 1008.0
+    s.round(final=True)
+    recs = _records(tmp_path, "pss")
+    assert len(recs) == 3 and 10 not in opened and opened.count(12) == 3 and opened.count(14) == 2
+    for r in recs:
+        assert r["processes"][0] == {
+            "pid": 10, "pss_bytes": None, "skipped": True, "rss_bytes": 97_300_000_000, "rss_anon_bytes": 72_975_000_000,
+            "rss_file_bytes": 24_325_000_000, "rss_shmem_bytes": 0,
+            "reason": "skipped: rss 97.30 GB over --pss-max-rss-gb 8 (smaps_rollup holds the process's mmap lock for seconds)"}
+        assert r["skipped"] == 1 and r["denied"] == 1 and r["pss_sum_bytes"] == GB // 2 * (len(r["processes"]) - 2)
+    assert [len(r["processes"]) for r in recs] == [3, 4, 4]
+
+
+def test_a_process_whose_status_has_no_rss_is_judged_and_recorded_by_its_stat_rss(tmp_path, monkeypatch):
+    """/proc/<pid>/status without VmRSS (a process exiting between its stat and status reads): the threshold reads the RSS of
+    /proc/<pid>/stat, and the skipped record carries that figure, not only the status fields it lacks."""
+    opened = []
+    row = {"pid": 10, "starttime_ticks": 7, "comm": "w", "rss_bytes_stat": 8_040_000_000, "status_reason": "gone"}
+    s = _sampler(tmp_path, monkeypatch, [row, _proc(12, GB)], lambda pid: opened.append(pid) or {"pid": pid, "pss_bytes": GB // 2})
+    s.round()
+    [rec] = _records(tmp_path, "pss")
+    assert opened == [12] and rec["skipped"] == 1 and rec["denied"] == 0
+    p = rec["processes"][0]
+    assert p["skipped"] is True and p["rss_bytes"] is None and p["rss_bytes_stat"] == 8_040_000_000
+    assert p["reason"].startswith("skipped: rss 8.04 GB over --pss-max-rss-gb 8 ")
+    assert "rss_bytes_stat" not in rec["processes"][1]
+
+
+def test_research_run_passes_the_pss_flags_through_tele_run_to_the_sampler(tmp_path):
+    from research import cli as rcli
+    from research.telemetry import run as trun, sample
+
+    ap = argparse.ArgumentParser()
+    sample.add_args(ap)
+    for flags, want in (([], (5.0, 8.0)), (["--pss-every", "0", "--pss-max-rss-gb", "2.5"], (0.0, 2.5))):
+        a = rcli._harness_parser("research run").parse_args(["--attempt-dir", str(tmp_path), "--stage", "s", *flags])
+        argv = trun._sampler_argv(a, tmp_path, 4242)
+        assert argv[:4] == [*trun._tele_argv(), "sample"]
+        got = ap.parse_args(argv[4:])
+        assert (got.pss_every, got.pss_max_rss_gb, got.root_pid) == (*want, 4242)
+
+
+def test_a_slow_read_holds_that_process_off_for_200_times_its_length(tmp_path, monkeypatch):
+    """Under --pss-max-rss-gb a read can still take long. A process is read again no sooner than 200x its last read took, so the reads
+    hold its mmap lock at most 0.5% of its time (a p99 shows a perturbation over 1%), while the other processes keep the cadence."""
+    from research.telemetry import sample
+
+    clk = _Clock(1000.0)
+    monkeypatch.setattr(sample, "clock", clk)
+    opened = []
+
+    def read(pid):
+        opened.append((pid, clk.t))
+        clk.t += 0.5 if pid == 11 else 0.001
+        return {"pid": pid, "pss_bytes": GB // 2}
+
+    s = _sampler(tmp_path, monkeypatch, [_proc(11, 2 * GB), _proc(12, GB)], read, "--pss-every", "5")
+    for i in range(22):
+        clk.t = 1000.0 + 5 * i
+        s.round()
+    recs = _records(tmp_path, "pss")
+    assert len(recs) == 22 and [t for p, t in opened if p == 11] == [1000.0, 1100.0] and sum(p == 12 for p, _ in opened) == 22
+    assert [r["skipped"] for r in recs] == [0] + [1] * 19 + [0, 1] and all(r["denied"] == 0 for r in recs)
+    assert recs[0]["processes"][0]["read_s"] == 0.5
+    held = recs[1]["processes"][0]
+    assert held["skipped"] is True and held["pss_bytes"] is None and held["rss_bytes"] == 2 * GB and held["rss_file_bytes"] == GB // 2
+    assert held["reason"] == ("skipped: its last smaps_rollup read took 0.500 s, so the next waits 200x that (95.0 s more): reads hold "
+                              "its mmap lock at most 1/200 of its time")
+
+
+def test_a_failed_process_snapshot_keeps_the_holds(tmp_path, monkeypatch):
+    """A round whose process snapshot failed knows no process. Pruning the holds to it released every held process, so the next
+    round read them again at once; holds are pruned only to a snapshot that succeeded, which still drops the processes that exited."""
+    from research.telemetry import sample
+
+    clk = _Clock(1000.0)
+    monkeypatch.setattr(sample, "clock", clk)
+    opened = []
+
+    def read(pid):
+        opened.append(pid)
+        clk.t += 0.5 if pid == 11 else 0.001
+        return {"pid": pid, "pss_bytes": GB // 2}
+
+    def no_proc(root_pid, pgid, max_pids):
+        raise OSError("no /proc")
+
+    table = [_proc(11, 2 * GB), _proc(12, GB)]
+    s = _sampler(tmp_path, monkeypatch, table, read, "--pss-every", "5")
+    snapshot = sample.snapshot_tree
+    s.round()
+    monkeypatch.setattr(sample, "snapshot_tree", no_proc)
+    clk.t = 1005.0
+    s.round()
+    monkeypatch.setattr(sample, "snapshot_tree", snapshot)
+    table.pop()
+    clk.t = 1010.0
+    s.round()
+    assert s.errors["process"] == 1 and opened == [11, 12] and set(s.pss_hold) == {(11, 7)}
+    held = _records(tmp_path, "pss")[-1]["processes"]
+    assert [p["pid"] for p in held] == [11] and held[0]["skipped"] is True and "(90.0 s more)" in held[0]["reason"]
+
+
+# ---- source identity: a namespace package spans every portion ----------------------------------------------------------------------------------
+
+def _portion(tree: Path, root: str, name: str, module: str) -> str:
+    (tree / root / name / module).mkdir(parents=True)
+    (tree / root / name / module / "__init__.py").write_text("")
+    (tree / "EXPORT.json").write_text(json.dumps({"commit": tree.name * 8}))
+    return str(tree / root)
+
+
+def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
+    """Recording only the first portion passed a namespace whose second portion came from another checkout."""
+    from research.telemetry import source_identity as sid
+
+    ours, other = tmp_path / "ours", tmp_path / "other"
+    src, lib, foreign = _portion(ours, "src", "nsprobe", "ir"), _portion(ours, "lib", "nsprobe", "ml"), _portion(other, "src", "nsprobe", "ml")
+    both = sid.resolve_module("nsprobe", path=[src, lib])
+    assert both["repo_root"] == str(ours.resolve()) and [p["repo_root"] for p in both["portions"]] == [str(ours.resolve())] * 2
+    assert sid.check({"nsprobe": both}, str(ours)) == []
+    mixed = sid.resolve_module("nsprobe", path=[src, foreign])
+    assert mixed["resolved_path"] == str((ours / "src" / "nsprobe").resolve()) and mixed["repo_root"] is None
+    [m] = sid.check({"nsprobe": mixed}, str(ours))
+    assert "namespace portion(s) outside the requested tree" in m["why"] and str((other / "src" / "nsprobe").resolve()) in m["why"]

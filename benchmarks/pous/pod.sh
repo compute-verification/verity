@@ -15,16 +15,26 @@
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
+# A timed run there goes inside the node's quiet slice, `gpu-lease 1 --on N --max-min M -- vy-pous-quiet CMD`, with VCPU and
+# RCPU among its cores: outside it, neighbours' load makes honest answers late (r20261005-231145-6d0f accepted 18 of 20).
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
+# GATE_ROLE=<role> runs the run as that party of the proof service (memory-challenger for the auditor's timed audit on a node):
+# before anything is built or timed, bench/placement.py's gate checks where it runs and records placement-gate.json, and a
+# refusal exits 4. GATE_CORES are the role's dedicated CPUs (vy-pous-quiet's 124-127 on node 2), GATE_PEERS its peers' probe
+# records, space-separated ROLE[:NAME]=FILE (a relative FILE is one of the run's inputs, --send), and GATE_ABSENT the peer
+# roles not deployed yet:
+#   gpu-lease 1 --on 7 --max-min M --timed -- vy-pous-quiet bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
+#     GATE_CORES=124-127 GATE_PEERS=worker:vy-nebius-2=/etc/vy/placement/vy-nebius-2.json GATE_ABSENT='firewall challenger'
+#
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
 #
 # HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000
-# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<census/hardware.json id>.
+# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<catalog/census/hardware.json id>.
 #
 # Every nvidia-smi query names the run's own GPU (--id): the lease's (GPU_LEASE_UUID), else CUDA_VISIBLE_DEVICES' first, else
 # the node's only GPU, never GPU 0 by default; a GPU run on a node with more GPUs and neither is refused. The clocks-*.txt
@@ -32,7 +42,7 @@
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
-# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity_pous. reference runs
+# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.protocols.accounting.space.pous. reference runs
 # bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv. band-gpu needs no implementation tree: a Python 3.12
 # venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -67,7 +77,7 @@ case "$GPU" in                                            # the census id is the
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
   *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
-  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
+  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<catalog/census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}
@@ -124,7 +134,14 @@ smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv,nohead
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
 export PATH=$HOME/.local/bin:$PATH
-export PYTHONPATH=$REPO/packages/verity/src:$REPO/protocols/pous:$REPO/tools/research/src
+export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src
+if [ -n "${GATE_ROLE:-}" ]; then
+  gate=(--role "$GATE_ROLE" --out "$O/placement-gate.json" ${GATE_CORES:+--cores "$GATE_CORES"})
+  for p in ${GATE_PEERS:-}; do f=${p#*=}; [ "${f#/}" = "$f" ] && f=$I/$f; gate+=(--peer "${p%%=*}=$f"); done
+  for r in ${GATE_ABSENT:-}; do gate+=(--absent "$r"); done
+  python3 benchmarks/numerical/python/verity_numerical/bench/placement.py gate "${gate[@]}" > /dev/null \
+    || { echo "the placement gate refused this run as $GATE_ROLE (placement-gate.json)"; exit 4; }
+fi
 if [ "$IMPL" = vllm-gpu ]; then
   [ -f "$I/impl.tar" ] || { echo "vllm-gpu needs --send impl.tar"; exit 2; }
   SHA=$(sha256sum "$I/impl.tar" | cut -c1-16)
@@ -177,7 +194,9 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
-  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL                  # keyed by the nvcc too: a .so another toolkit built is never adopted
+  # keyed by the nvcc and the sources too: a .so another toolkit or another tree built is never adopted
+  P2SRC=$(cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/p2dec.cu | sha256sum | cut -c1-12)
+  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2SRC
   make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own

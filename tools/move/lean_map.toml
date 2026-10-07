@@ -1,0 +1,79 @@
+# The Lean layout move: what `tools/move/lean.py` moves, renames and regenerates (Daniel's ruling, 5 Oct 2026 8:53 AM PDT).
+#
+# Lean is code (programs and the interfaces they use, untrusted, with their component) and security analysis
+# (`verity/Security/`): `Definitions` (trusted vocabulary) and `Specs` (named assumptions and guarantee statements) in the
+# package `security`, and `Proofs` in the nested package `security_proofs` (`srcDir = ".."`, ArkLib allowed). A module's new
+# name is the longest [modules] prefix of its old one with that prefix replaced; its file is the new name's path under
+# `verity/Security/` (for `Definitions`, `Specs` and `Proofs`) or under its code package. Declarations keep their names.
+
+[security]
+dir = "verity/Security"
+proofs = "verity/Security/Proofs"
+
+# Each Lake package before the move: its directory, and the package its lock merges into (`security`, whose guarantees
+# `security_proofs` proves) or `code` (the package stays, with its lock regenerated).
+[packages]
+core = { dir = "verity/lean", into = "security" }
+nci = { dir = "verity/protocols/compliance/nci/lean", into = "security" }
+pouw = { dir = "verity/protocols/accounting/work/pouw/lean", into = "security" }
+pous = { dir = "verity/protocols/accounting/space/pous/lean", into = "security", code = ["Grader", "submissions"] }
+warden = { dir = "verity/protocols/accounting/communication/warden/lean", into = "security" }
+verifier = { dir = "backends/flock/verifier/lean", into = "security", code = ["Flock", "Main", "FlockRows"] }
+level3 = { dir = "backends/flock/verifier/lean/level3", into = "security" }
+soundness = { dir = "backends/flock/verifier/lean/soundness", into = "security" }
+
+# Old module prefix -> new; the longest prefix wins. "" drops the module: a package umbrella, replaced by the generated ones.
+[modules]
+"Verity" = ""
+"Verity.Protocol" = "Definitions.Core"
+"Verity.Assumptions" = "Specs.Core.Assumptions"
+"Verity.Guarantees" = "Specs.Core.Guarantees"
+"Verity.SecurityProofs" = "Proofs.Core"
+"Nci" = ""
+"Nci.Protocol" = "Definitions.Nci"
+"Nci.Assumptions" = "Specs.Nci.Assumptions"
+"Nci.Guarantees" = "Specs.Nci.Guarantees"
+"Nci.SecurityProofs" = "Proofs.Nci"
+"Pouw" = ""
+"Pouw.Protocol" = "Definitions.Pouw"
+"Pouw.Assumptions" = "Specs.Pouw.Assumptions"
+"Pouw.Guarantees" = "Specs.Pouw.Guarantees"
+"Pouw.SecurityProofs" = "Proofs.Pouw"
+"PouwBulk" = "Proofs.Pouw.Bulk"
+"Pous" = ""
+"Pous.Protocol" = "Definitions.Pous"
+"Pous.Assumptions" = "Specs.Pous.Assumptions"
+"Pous.Guarantees" = "Specs.Pous.Guarantees"
+"Pous.SecurityProofs" = "Proofs.Pous"
+"PousTargets" = "Proofs.Pous.Targets"
+"pous:CheckAxioms" = "Proofs.Pous.CheckAxioms"
+"NetTiming" = ""
+"NetTiming.Protocol" = "Definitions.Warden"
+"NetTiming.Assumptions" = "Specs.Warden.Assumptions"
+"NetTiming.Guarantees" = "Specs.Warden.Guarantees"
+"NetTiming.SecurityProofs" = "Proofs.Warden"
+"NetTiming.Difftest" = "Proofs.Warden.Difftest"
+"NetTimingDifftest" = "Proofs.Warden.DifftestMain"
+"warden:CheckAxioms" = "Proofs.Warden.CheckAxioms"
+"Main" = "FlockVerify"
+"FlockProofs" = "Proofs.Flock.Verifier"
+"FlockLevel3" = "Proofs.Flock.Level3"
+"FlockSoundness" = "Proofs.Flock.Soundness"
+
+# Files other than modules: old path (a file, or a directory ending in "/") -> new. A file beside the modules of a moved
+# directory moves with them (`Pouw/Protocol/Fp8Atom/H1TCoverage.json`); a package's own files are regenerated or listed here.
+[files]
+"backends/flock/verifier/lean/soundness/ASSUMPTIONS.md" = "verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md"
+"backends/flock/verifier/lean/soundness/DESIGN.md" = "verity/Security/Proofs/Flock/Soundness/DESIGN.md"
+"backends/flock/verifier/lean/soundness/README.md" = "verity/Security/Proofs/Flock/Soundness/README.md"
+"backends/flock/verifier/lean/soundness/assumptions/" = "verity/Security/Proofs/Flock/Soundness/assumption-notes/"
+"verity/protocols/accounting/communication/warden/lean/README.md" = "verity/Security/Proofs/Warden/README.md"
+
+# References to a package directory that no longer exists: rewritten to the package that holds its guarantees now.
+[dirs]
+"verity/lean" = "verity/Security"
+"verity/protocols/compliance/nci/lean" = "verity/Security"
+"verity/protocols/accounting/work/pouw/lean" = "verity/Security"
+"verity/protocols/accounting/communication/warden/lean" = "verity/Security"
+"backends/flock/verifier/lean/level3" = "verity/Security/Proofs"
+"backends/flock/verifier/lean/soundness" = "verity/Security/Proofs"

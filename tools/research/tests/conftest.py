@@ -30,12 +30,15 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # with its tmp dir. The tests of that refusal unset this.
     monkeypatch.setenv("RESEARCH_LOCAL_ONLY", "a test's run: its store is a tmp dir")
     monkeypatch.setenv("RESEARCH_MACHINES_D", "none")      # the pod registry (pods/registry.py) is each test's explicit choice
+    monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "")        # nor does a merge's push reach node 1's bare repository
     # ... nor the public export: an empty URL is no public source (unset, as the clear above leaves it, would mean fetchset.PUBLIC_URL)
     monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
     # ... nor the machine's hard deadline: lease.sh defaults to /etc/research/deadline, which a Nebius host has
     monkeypatch.setenv("LEASE_DEADLINE_FILE", str(tmp_path_factory.mktemp("lease") / "absent-deadline"))
     # ... nor its GPU split: gpu-lease and the runner read /etc/vy/direct-gpus, which says `none` on a cut-over Nebius host
     monkeypatch.setenv("GPU_LEASE_ALLOWED_FILE", str(tmp_path_factory.mktemp("gpu-lease") / "absent-direct-gpus"))
+    # ... nor its bookings: gpu-lease refuses a lease that overlaps a window in /workspace/pouw/fill/windows on vy-nebius-2
+    monkeypatch.setenv("GPU_LEASE_WINDOWS", str(tmp_path_factory.mktemp("gpu-lease") / "absent-windows"))
     monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
@@ -43,7 +46,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # /workspace/jobs/dispatch, node 1's loop's) into os.environ outside monkeypatch, so every later test in the worker would see
     # node 1's CPU slices
     monkeypatch.setenv("VY_DISPATCH_ROOT", str(tmp_path_factory.mktemp("dispatch") / "absent"))
-    # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research slack asks this socket for an OIDC token for its broker
+    # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research msg asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
 
 

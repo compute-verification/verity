@@ -48,77 +48,159 @@
       "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
-      "usergroup": "S0C5APDSYF9"
+      "usergroup": "S0C5APDSYF9",
+      "owns": [
+        "infra/",
+        "tools/cluster/",
+        "tools/agent-guard/",
+        "tools/research/",
+        "benchmarks/judge.py"
+      ]
     },
     {
       "handle": "proofs",
       "holder": "the proofs coordinator (bc-8416bc72-c4cc-5551-93a8-b14a6e5f95d4); the research coordinator (bc-8ece7cde) keeps running the merge trains",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
-      "usergroup": "S0C5Q6KJZTQ"
+      "usergroup": "S0C5Q6KJZTQ",
+      "owns": [
+        "verity/",
+        "backends/",
+        "verity/protocols/verification/sampled_proofs/",
+        "benchmarks/one_stage/",
+        "benchmarks/commitments/",
+        "archive/sp1/benchmarks/dot_product/",
+        "archive/sp1/benchmarks/ir_call/",
+        "benchmarks/latency_compare.py",
+        "benchmarks/private_circuit/"
+      ]
     },
     {
       "handle": "circuits",
       "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
-      "usergroup": "S0C5U3LHMFT"
+      "usergroup": "S0C5U3LHMFT",
+      "owns": [
+        "integrations/",
+        "tools/circuit_check/",
+        "tools/native_peak/",
+        "tools/tc_probe/",
+        "tools/tc_probe_fp4/",
+        "catalog/verity_catalog/definitions/"
+      ]
     },
     {
       "handle": "compute-accounting",
       "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
-      "remit": "Proof of useful work: protocols/pouw, its schemes and their runs.",
+      "remit": "Proof of useful work: verity/protocols/accounting/work/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5U3Q04JD"
+      "usergroup": "S0C5U3Q04JD",
+      "owns": [
+        "verity/protocols/accounting/work/pouw/",
+        "verity/Security/Definitions/Pouw/",
+        "verity/Security/Specs/Pouw/",
+        "verity/Security/Proofs/Pouw/",
+        "verity/Security/Definitions/Nci.lean",
+        "verity/Security/Specs/Nci/",
+        "verity/Security/Proofs/Nci/",
+        "benchmarks/pouw/",
+        ".agents/skills/kernel-engineering/"
+      ]
     },
     {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
-      "remit": "Proof of useful space: protocols/pous, its Lean package and its runs.",
+      "remit": "Proof of useful space: verity/protocols/accounting/space/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5VRGBZFE"
+      "usergroup": "S0C5VRGBZFE",
+      "owns": [
+        "verity/protocols/accounting/space/pous/",
+        "verity/Security/Definitions/Pous/",
+        "verity/Security/Specs/Pous/",
+        "verity/Security/Proofs/Pous/",
+        "benchmarks/pous/"
+      ]
     },
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
-      "remit": "Network accounting: the network warden (protocols/network_warden) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/protocols/accounting/communication/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C6LGGSY6L"
+      "usergroup": "S0C6LGGSY6L",
+      "owns": [
+        "verity/protocols/accounting/communication/certifier/",
+        "verity/Security/Definitions/NetworkCertifier/",
+        "verity/Security/Specs/NetworkCertifier/",
+        "verity/Security/Proofs/NetworkCertifier/",
+        "benchmarks/network_traces/"
+      ]
     },
     {
       "handle": "console",
       "holder": "the console coordinator (bc-ddee017b-705a-5429-a92e-fed2ba6ea491)",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
-      "usergroup": "S0C5LSDENA1"
+      "usergroup": "S0C5LSDENA1",
+      "owns": [
+        "catalog/census/"
+      ]
     },
     {
       "handle": "ci",
-      "holder": "the CI lead (bc-7ff3de9e-dd31-5d7f-9e53-265bfba177d0)",
+      "holder": "the CI lead (bc-81ff5c35-39a9-5232-a6b5-8e933b944292)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
-      "usergroup": null
+      "usergroup": null,
+      "owns": [
+        "tools/check/",
+        "tools/research/src/research/queue.py",
+        "tools/research/src/research/quick_tier.py",
+        "tools/research/src/research/merge.py"
+      ]
     },
     {
       "handle": "lean",
       "holder": "the lean agent (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
-      "remit": "Lean: reviews every audit-flagged change to a pinned Lean guarantee.",
+      "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
-      "usergroup": null
+      "usergroup": null,
+      "owns": [
+        "tools/lean/",
+        ".agents/skills/lean-proofs/",
+        "verity/Security/"
+      ]
     },
     {
       "handle": "comms",
       "holder": "comms (bc-3e100045-0b60-5d20-951e-7207a989b252)",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
-      "usergroup": null
+      "usergroup": null,
+      "owns": [
+        ".agents/skills/using-slack/",
+        "tools/research/src/research/slack.py",
+        "tools/research/tests/test_slack.py",
+        "tools/research/tests/slack_routing_vectors.json"
+      ]
     },
     {
       "handle": "top",
       "holder": "top-level, Daniel's coordinator (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
-      "usergroup": null
+      "usergroup": null,
+      "owns": [
+        "AGENTS.md",
+        "README.md",
+        ".agents/skills/",
+        "tests/",
+        "fixtures/",
+        "pyproject.toml",
+        "uv.lock",
+        ".gitattributes",
+        ".gitignore"
+      ]
     },
     {
       "handle": "old-accounting",

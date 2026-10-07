@@ -1,4 +1,4 @@
-//! The verifier's per-session coin commitment (lane flock-zk, M2; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
+//! The verifier's per-session coin commitment (lane flock-zk, C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
 //! (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md).
 //!
 //! At `Hello`, before the prover's first message, the verifier draws every coin of the session and commits to all of them
@@ -29,7 +29,7 @@ pub const KEY_BYTES: usize = 256;
 pub const NONCE_BYTES: usize = 32;
 /// The session's own stream: round 0 is the link points drawn at `Commit`.
 pub const SESSION: &str = "session";
-// hm96-sha512/v1's prefixes (verity/commitments/hm96/PROTOCOL.md §2), zero-padded to 128 bytes
+// hm96-sha512/v1's prefixes (verity/primitives/commitments/hm96/PROTOCOL.md §2), zero-padded to 128 bytes
 const SALT_TAG: &[u8] = b"verity/hm96-sha512/salt/v1\0";
 const LEAF_TAG: &[u8] = b"verity/hm96-sha512/leaf/v1\0";
 
@@ -62,7 +62,7 @@ impl Spec {
     }
 }
 
-// The scheme's digests are SHA-512's: the SHA-512 build's 64-byte nodes and hm96 leaves. A build without it (M0's older GPU
+// The scheme's digests are SHA-512's: the SHA-512 build's 64-byte nodes and hm96 leaves. A build without it (the circuit prover's older GPU
 // binaries) keeps the types and refuses the scheme.
 #[cfg(feature = "sha512")]
 fn digest(b: &[u8]) -> Hash {

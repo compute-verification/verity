@@ -1,5 +1,5 @@
 """Every table a primitive reads by index is declared (`PrimitiveDefinition.tables`): the guard
-(`verity.ml.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
+(`verity.primitives.circuits.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
 
 A primitive reads a table when its evaluator reaches an indexable constant (one it closes over, or a global or module
 attribute of the code it calls) or a memoized loader that returns anything but a word, or when C-Flock's lowering of it reads
@@ -21,10 +21,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from circuit_check import sidecars as SC
 from circuit_check import targets as TG
-from verity.ir.defs import REGISTRY, PrimitiveDefinition
-from verity.ir.types import Array
-from verity.ml.prims import F32
+from verity.primitives.circuits.defs import REGISTRY, PrimitiveDefinition
+from verity.primitives.circuits.types import Array
+from verity_catalog.definitions.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
@@ -181,7 +182,7 @@ def _primitives() -> list[PrimitiveDefinition]:
     root = Path(R.__path__[0])
     loaded = sorted(importlib.import_module(m.name).__name__ for m in pkgutil.walk_packages(R.__path__, f"{R.__name__}."))
     on_disk = {".".join((R.__name__, *f.relative_to(root).with_suffix("").parts)).removesuffix(".__init__")
-               for f in root.rglob("*.py")}
+               for f in root.rglob("*.py") if SC.SUFFIX not in f.name}
     assert loaded == sorted(on_disk - {R.__name__}), "a module of the vLLM registry was skipped"
     for p in [d for d in REGISTRY.defs.values() if isinstance(d, PrimitiveDefinition) and TG._authored(d)]:
         if not p.id.startswith("Lifted[") and not hasattr(p, "ordinary_of"):

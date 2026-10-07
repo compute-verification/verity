@@ -2,7 +2,8 @@
 the suite runs over, every registered Definition and template at small bindings.
 
     definition  ``F32Add_v1``, ``RMSNormTriton_v1{N=64,EPS=1e-05}``, ``GemmCoordinate_v2{K=64,DOT=AmpereBF16TcDot16_v2}``: a
-                registered Definition bound to the statics its id writes (a function-valued static by its id)
+                registered Definition bound to the statics its id writes (a function-valued static by its id, a record by the
+                digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); ``attention-head`` is checked at the ends of its key-count range
     row         a Build's request Program: its directory or its ``instances.json.gz``
@@ -10,7 +11,9 @@ the suite runs over, every registered Definition and template at small bindings.
 The catalog (`catalog`) is roots at small statics: every primitive, every static-free composite, core's GEMM Definitions and
 silicon references, every vLLM kernel's self-check specialisations, each template, and tiny whole-model configurations; the
 suite checks every specialisation reachable from them (`suite`), and fails by name for a registered Definition family no root
-reaches: a new Definition needs a binding here.
+reaches: a new Definition needs a binding.  A binding lives beside the Definitions it binds, in their module's sidecar
+(`sidecars`), in this module's forms: a root function named in `ROOT_FUNCTIONS`, a `_model_roots` entry, a ``TEMPLATE_PARAMS``
+entry.  This module keeps what no one Definition module owns.
 """
 from __future__ import annotations
 
@@ -18,10 +21,14 @@ import ast
 import importlib
 import pkgutil
 import re
+import sys
 import zlib
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import numpy as np
+
+from . import cache as CC
 
 _LOADED = False
 #: the ids registered once every registry module is imported: the authored Definitions (a lazy family's members, such as
@@ -29,35 +36,61 @@ _LOADED = False
 REGISTERED: list[str] = []
 
 
+#: the repository's root: a Definition is this tree's when the module defining it is a file under it
+REPO = Path(__file__).resolve().parents[4]
+
+
 def _authored(d: Any) -> bool:
-    """A Definition the core, the vLLM registry or PoUW's circuit defines (not one a test module registered in the same
-    session)."""
+    """A Definition this tree's code defines, decided by the file of the module that defines it: under the repository and
+    outside every `tests/` directory and conftest, not one a test module registered in the same session. A Definition whose
+    module has no file here to judge by raises, naming it, rather than drop out of `REGISTERED` unchecked."""
     fn = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm", "verity_pouw")
+    name = getattr(fn, "__module__", None)
+    file = getattr(sys.modules.get(name or ""), "__file__", None)
+    if not file:
+        raise LookupError(f"{getattr(d, 'id', d)!r}: its defining module {name!r} has no file, so circuit-check can't tell "
+                          f"whether this tree authored it")
+    path = Path(file).resolve()
+    if not path.is_relative_to(REPO):
+        return False
+    rel = path.relative_to(REPO)
+    return "tests" not in rel.parts[:-1] and rel.name != "conftest.py"
 
 
 def load_registries() -> None:
-    """Register every Definition and kernel: core's `verity.ml`, and each module of the vLLM registry and kernel registry."""
+    """Register every Definition and kernel: core's `verity_catalog.definitions`, and each module of the vLLM registry and kernel registry."""
     global _LOADED
     if _LOADED:
         return
-    from verity.ir.defs import REGISTRY
+    from verity.primitives.circuits.defs import REGISTRY
 
-    import verity.ml.boolean.attention  # noqa: F401
-    import verity.ml.boolean.cast  # noqa: F401
-    import verity.ml.boolean.elementwise  # noqa: F401
-    import verity.ml.boolean.gemm  # noqa: F401
-    import verity.ml.boolean.mufu  # noqa: F401
-    import verity.ml.boolean.scalar  # noqa: F401
-    import verity.ml.gemm  # noqa: F401
-    import verity.ml.kernels  # noqa: F401
-    import verity.ml.prims  # noqa: F401
+    import verity_catalog.definitions.boolean.attention  # noqa: F401
+    import verity_catalog.definitions.boolean.cast  # noqa: F401
+    import verity_catalog.definitions.boolean.elementwise  # noqa: F401
+    import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity.primitives.commitments.gates.lms  # noqa: F401
+    import verity.primitives.commitments.gates.merkle  # noqa: F401
+    import verity.primitives.commitments.gates.rowleaf  # noqa: F401
+    import verity_catalog.definitions.boolean.mufu  # noqa: F401
+    import verity_catalog.definitions.boolean.scalar  # noqa: F401
+    import verity_experimental.private_circuits.universal  # noqa: F401
+    import verity_catalog.definitions.gemm  # noqa: F401
+    import verity_kernels.tc  # noqa: F401
+    import verity_catalog.definitions.prims  # noqa: F401
     import verity_vllm.program.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
-    import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity.protocols.accounting.work.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits: the rows' six, the hiding tiles' four Keccak words, the cap's five window words)
+    import verity.protocols.accounting.work.pouw.circuit.cap  # noqa: F401  (PoUW's prototype of Pearl-C's per-tile cap)
+    import verity.protocols.accounting.work.pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity.protocols.accounting.work.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
+    import verity.protocols.accounting.work.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
+    import verity.protocols.accounting.work.pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
+    import verity.protocols.accounting.space.pous.circuit  # noqa: F401  (P2's modular squaring on bits)
+    import verity.protocols.accounting.space.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
+    import verity.protocols.accounting.space.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -86,9 +119,29 @@ def _split(body: str) -> dict[str, str]:
 
 def _value(s: str) -> Any:
     try:
-        return ast.literal_eval(s)
+        v = ast.literal_eval(s)
     except (ValueError, SyntaxError):
         return s
+    return (v,) if s.startswith("(") and not isinstance(v, tuple) else v    # an id prints a tuple of one as `(7)`
+
+
+#: a record (dict-valued) static as a Definition id prints it, a prefix of its digest (`verity.primitives.circuits.defs`): the record itself is
+#: not in the id, so it is looked up among the records the suite's Definitions are bound to
+_RECORD = re.compile(r"\{[0-9a-f]{12}\}")
+_RECORDS: dict[str, Any] = {}
+
+
+def _record(text: str) -> Any:
+    """The record that a suite Definition's id prints as ``text``."""
+    if not _RECORDS:
+        for fn in suite().values():
+            m = re.fullmatch(r"[^{]+\{(.*)\}", fn.id)
+            for k, v in (_split(m[1]).items() if m else ()):
+                if _RECORD.fullmatch(v) and k in getattr(fn, "bindings", {}):
+                    _RECORDS.setdefault(v, fn.bindings[k])
+    if text not in _RECORDS:
+        raise KeyError(f"record static {text}: no Definition the suite checks is bound to a record of that digest")
+    return _RECORDS[text]
 
 
 def definition(spec: str) -> Any:
@@ -101,7 +154,7 @@ def definition(spec: str) -> Any:
     if m is None:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
-    statics = {k: _value(v) for k, v in _split(body).items()} if body else {}
+    statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
     try:
         fn = W.specialization(fam, statics)
     except KeyError:
@@ -157,145 +210,79 @@ TINY_NOBIAS = {**TINY, "BIAS": False, "KVH": 2, "QKV": 96}
 #: FP8's per-token quantization reads whole 256-thread blocks: every reduction length is at least 256
 TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V": 16, "QKV": 512, "GU": 512}
 
-#: the parameters each template is checked at: the workload ones where C-Flock pins its unit circuit, else small (a template's
-#: example is its served size)
-TEMPLATE_PARAMS = {
-    "gemm-coordinate": [{"K": 64, "semantics": "sm80.mma.m16n8k16.bf16"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k16.bf16"},
-                        {"K": 64, "semantics": "sm89.mma.m16n8k32.e4m3"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k32.e4m3"},
-                        {"K": 128, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}],
-    "attention-head": [{"D": 64, "BN": 128, "T": "1:17"}],
-    "rope-head": [{"D": 64}],
-    "rmsnorm-fused-cuda": [{"N": 2048, "EPS": 1e-05}],
-    "rmsnorm-triton": [{"N": 128, "EPS": 1e-06}],
-    "silu-mul": [{"I": 8192}],
-    "gumbel-top-p-token-select": [{"V": 64}],
-    "token-select-greedy": [{"V": 64}],
-    "embedding-row": [{"V": 64, "H": 16}],
-    "moe-expert-coordinate": [{"E": 4, "K": 64}],
-    "moe-expert-coordinate-weighted": [{"E": 4, "K": 64}],
-    "scaled-mm-fp8-block-coordinate": [{"K": 256, "G": 128}],
-}
+
+#: the binding units (`cache`'s units of a binding file: a root function, a `_model_roots` entry, a `TEMPLATE_PARAMS` entry;
+#: this module's by name, a sidecar's as ``<file>#<name>``) whose roots reach each suite target, by Definition id (`suite`) or
+#: template label (`templates`)
+BINDINGS: dict[str, set[str]] = {}
+#: the root functions a binding file may define, in catalog order (each file's in turn, this module first); ``_X_roots`` holds
+#: ``_X_bindings`` beside it as one binding when the file defines both
+ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_merkle_roots",
+                  "_lms_roots", "_pous_roots", "_kernel_roots", "_vocabulary_roots", "_pouw_roots")
 
 
-def templates() -> list[tuple[str, Any, list[dict]]]:
-    """(label, subcircuit, instance statics) for every template in the catalogue: `TEMPLATE_PARAMS`, else its example."""
-    from verity_numerical.bench import templates as TM
+def binding_files() -> list[tuple[str, dict[str, Any]]]:
+    """(unit prefix, namespace) of each binding file: this module (its units by name) and each sidecar, by its module's name
+    (``<module>.circuit-check#``, `cache.SUFFIX`), so a unit's name moves with its module.
+    A sidecar binding function this module does not run is an error."""
+    from . import sidecars as SC
 
     load_registries()
-    out = []
-    for tid, t in sorted(TM.TEMPLATES.items()):
-        for params in TEMPLATE_PARAMS.get(tid, [dict(t.example)]):
-            sub = t.bind(**params)
-            out.append((sub.id, sub, instance_statics(sub, params)))
+    out: list[tuple[str, dict[str, Any]]] = [("", globals())]
+    for mod, m in SC.binding_modules():
+        ns = vars(m)
+        known = {*ROOT_FUNCTIONS, *(n.replace("_roots", "_bindings") for n in ROOT_FUNCTIONS), "_model_roots"}
+        if stray := sorted(n for n in ns if CC._is_binding(n) and n not in known):
+            raise ValueError(f"{m.__file__}: {', '.join(stray)} is no binding circuit-check runs (`targets.ROOT_FUNCTIONS`)")
+        out.append((f"{m.__name__}#", ns))
     return out
 
 
-def _pouw_roots() -> list[Any]:
-    """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
-    it (`verity_pouw.circuit.ncp2`), for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check
-    their template partitions and the Z separator. Beside them, the model Program's rows at a PoUW site, without and with the
-    bias (`verity_vllm.program.registry.pouw_rows`)."""
-    from verity.ir.defs import bind
-    from verity_pouw.circuit import ncp2
-    from verity_vllm.program.registry import pouw_rows
+def _root_bindings(name: str) -> list[tuple[tuple[str, ...], Callable[[], list[Any]]]]:
+    """(units, root function) of every binding file that defines root function ``name``."""
+    pair = name.replace("_roots", "_bindings")
+    return [(tuple(prefix + n for n in (name, pair) if n in ns), ns[name]) for prefix, ns in binding_files() if name in ns]
 
-    shape = ncp2.Shape(16, 64, 16)
+
+def template_params() -> dict[str, tuple[str, list[dict]]]:
+    """{template id: (unit, its parameters)} over every binding file's ``TEMPLATE_PARAMS``; a template in two is an error."""
+    out: dict[str, tuple[str, list[dict]]] = {}
+    for prefix, ns in binding_files():
+        for tid, params in ns.get("TEMPLATE_PARAMS", {}).items():
+            if tid in out:
+                raise ValueError(f"template {tid} has parameters in two binding files ({out[tid][0]}, {prefix}TEMPLATE_PARAMS)")
+            out[tid] = (f"{prefix}TEMPLATE_PARAMS:{tid}", params)
+    return out
+
+
+def _template_unit(tid: str) -> str:
+    return template_params().get(tid, (f"TEMPLATE_PARAMS:{tid}",))[0]
+
+
+def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: list | None = None) -> list[Any]:
+    """``make()``'s roots, recorded while it runs, with every Definition it makes (`cache.producing`)."""
+    with CC.producing(units):
+        got = make()
+    if by_unit is not None:
+        by_unit.append((units, got))
+    return got
+
+
+def templates() -> list[tuple[str, Any, list[dict]]]:
+    """(label, subcircuit, instance statics) for every template in the catalogue: its ``TEMPLATE_PARAMS`` (`template_params`),
+    else its example."""
+    from verity_numerical.bench import templates as TM
+
+    load_registries()
+    params_of = template_params()
     out = []
-    for kind in ("shift24", "word"):
-        out += [t for t in ncp2.templates(64, kind).values() if t not in out]
-        out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
-    return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
-                  bind(pouw_rows.NcpLinearCoordinate, K=64)]
-
-
-def _core_roots() -> list[Any]:
-    from verity.ir.defs import bind
-    from verity.ml import gemm as G
-    from verity.ml import kernels as K
-    from verity.ml import prims as P
-
-    A, H = P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16
-    return [bind(G.DotBf16, K=64, DOT=A), bind(G.DotBf16, K=48, DOT=H), bind(G.GemmCoordinate, K=64, DOT=A),
-            bind(G.GemmCoordinate, K=64, DOT=H), bind(G.Gemm, K=32, N=3, DOT=A), P.BlackwellE4m3QmmaDot32,
-            P.BlackwellE5m2QmmaDot32, P.BlackwellNvf4OmmaDot64, P.BlackwellMxf4OmmaDot64, bind(G.GemmCoordinateE4m3, K=64, **G.GEMM_SM120_E4M3),
-            bind(G.GemmCoordinateNvf4, K=128, **G.GEMM_SM120_NVF4), bind(G.GemmCoordinateMxf4, K=128, **G.GEMM_SM120_MXF4), P.F32ToE2m1Sat, P.E4m3ToF32, K.HOPPER_E4M3_STEP, K.HOPPER_E4M3_DOT.bind(K=128),
-            K.ADA_E4M3_STEP, K.ADA_E4M3_DOT.bind(K=128), K.SM120_NVF4_STEP, K.SM120_NVF4_DOT.bind(K=256), K.SM120_MXF4_STEP,
-            K.SM120_MXF4_DOT.bind(K=256)]
-
-
-def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3
-    coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128; `silu_and_mul`'s rows at I = 8
-    (`verity_vllm.program.registry.boolean_silu`: `SiluMul_v3` and `SiluMul_v4`, and v4's word view, the served
-    `SiluMul_v2` of `registry.act`), the final-logit softcap's tanh row at N = 8 (`boolean_activation`),
-    `registry.dense`'s rows on bits at 8 elements with Gemma-2's constants (`boolean_dense`: `gelu_tanh_and_mul` at I = 8, the
-    RMSNorm chain's and the logit softcap's element-wise rows at N = 8), and OLMoE's routed sum at TOPK = 8 over 8 columns
-    and its router at 8 experts, 2 slots, 4 values per thread (`boolean_moe`); the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the element-wise
-    operations (`verity.ml.boolean.elementwise`), the MUFU operations (`verity.ml.boolean.mufu`), the comparator, selects, max /
-    min and E4M3 cast (`verity.ml.boolean.scalar`), the argmax step, `SiluMulBf16_v3` and the rows' static-free elements are
-    static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which
-    reaches its head and halves; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its
-    tree, which reach every stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served
-    norms on bits (`boolean_norms`) at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the switch's
-    binding, `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word Definitions of its
-    constant steps; the rest of Gemma-2's norm chain on bits (`boolean_dense_norm`, over `boolean_dense`'s rows): the mean at
-    N = 16 and at N = 1030 (two chunks, one element per thread), the narrowing at N = 16, and the rsqrt with its MUFU at the word
-    id and at mufu's `RsqrtApprox_v2`. The Gumbel select (`gumbel_boolean.GumbelSelectF32_v2`) at two lanes (its family's smallest, and the noisy row's:
-    about 600,000 gates each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and
-    their pieces are static-free; the f32 argmax tree's stages at two and three levels reach its other shapes. FA2 with logit
-    soft-capping on bits (`boolean_softcap`) at one head of 17 keys, two blocks (a full one and a partial one) with Check_inf in
-    both, its ``TANH`` and ``EX2`` at mufu's Boolean versions, which reaches its head and blocks."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean import attention as BAT
-    from verity.ml.boolean import gemm as BG
-    from verity.ml.boolean import mufu as BM
-    from verity_vllm.program.registry import act
-    from verity_vllm.program.registry import boolean_activation as BA
-    from verity_vllm.program.registry import boolean_dense as BDN
-    from verity_vllm.program.registry import boolean_dense_norm as DN
-    from verity_vllm.program.registry import boolean_moe as BMOE
-    from verity_vllm.program.registry import boolean_norms as BN
-    from verity_vllm.program.registry import boolean_rope
-    from verity_vllm.program.registry import boolean_silu as BSL
-    from verity_vllm.program.registry import boolean_softcap as BSC
-    from verity_vllm.program.registry import gumbel_boolean as GB
-    from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry import sampling_boolean as SB
-
-    rows = [bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
-                                   BDN.MulVecF32, BDN.Bf16MulScalarTensor)]
-    rows += [bind(BDN.AddScalarF32, N=8, C=1e-6), bind(BDN.AddScalarBf16, N=8, C=1.0), bind(BDN.Bf16DivScalar, N=8, C=30.0),
-             bind(BDN.Bf16MulScalar, N=8, C=30.0), bind(BMOE.MoeSum, TOPK=8, H=8),
-             bind(BMOE.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4)]
-    return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
-            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
-            bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
-            bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
-            bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
-            bind(BSL.SiluMul, I=8), bind(BSL.SiluMulExpf, I=8), bind(act.SiluMul, I=8),
-            bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
-            bind(SB.TokenSelect, V=4161),
-            bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, **BN.CUDA_WORD), bind(BN.RMSNormTriton, N=16, EPS=1e-5, **BN.TRITON_WORD),
-            bind(BN.RMSNormLanesCuda, N=40, BLOCK=32), bind(BN.RMSNormVarEpsCudaWord, N=16, EPS=1e-5),
-            bind(BN.RMSNormVarEpsTritonWord, N=16, EPS=1e-5),
-            bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)),
-            bind(BN.RMSNormTriton, N=16, EPS=1e-5, SQRT=bind(BM.MufuSqrtFtz), SCALEA=bind(BM.DivFullScaleA), RCP=bind(BM.DivFullRcp)),
-            bind(DN.MeanTriton, N=16), bind(DN.MeanTriton, N=1030), bind(DN.NarrowF32ToBf16, N=16),
-            bind(DN.RsqrtF32, N=1, RSQRT=P.RsqrtApprox), bind(DN.RsqrtF32, N=1, RSQRT=bind(BM.RsqrtApprox)),
-            bind(BA.Bf16Tanh, N=8), bind(BDN.GeluTanhMul, I=8),
-            bind(BSC.AttentionSoftcap, T=17, NH=1, KVH=1, D=16, BN=16, CAP=50.0, DOT=BG.HopperBF16WgmmaDot16, INV=BAT.Fa2InvSum,
-                 MASKED_FROM=0, TANH=BM.MufuTanh, EX2=BM.MufuEx2Ftz),
-            bind(GB.GumbelSelectF32, V=2), bind(GB.GumbelSelectF32, V=65),
-            *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)] + rows
-
-
-def _boolean_gather_roots() -> list[Any]:
-    """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
-    that is a tree of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity.ml.boolean.cast`) is static-free."""
-    from verity.ir.defs import bind
-    from verity_vllm.program.registry import boolean_gather as BGA
-
-    return [bind(BGA.Embedding, V=64, H=16), bind(BGA.gather_bf16(1100))]
+    for tid, t in sorted(TM.TEMPLATES.items()):
+        unit = (_template_unit(tid),)
+        for params in params_of.get(tid, ("", [dict(t.example)]))[1]:
+            sub, sts = _produce(unit, lambda t=t, params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
+            BINDINGS.setdefault(sub.id, set()).update(unit)
+            out.append((sub.id, sub, sts))
+    return out
 
 
 def _kernel_roots() -> list[Any]:
@@ -305,84 +292,6 @@ def _kernel_roots() -> list[Any]:
     for r in KR.registered():
         out += list(r.check_targets(np.random.default_rng(zlib.crc32(f"{r.key}/{r.kernel}".encode()))))
     return out
-
-
-def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
-    from verity.ir.defs import bind
-    from verity.ml.boolean import gemm as BG
-    from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64
-    from verity_vllm.program.registry import b1, b1_tp2, fa2_check_inf, fp8, hopper, lifted, moe_pad, nvfp4, ref_prims, sampling, serve3, spec
-    from verity_vllm.program.registry import value_inputs as VI
-    from verity_vllm.program.registry import boolean_attention, boolean_fp8, tables
-
-    long = {**TINY, "MAX_POS": 16}
-    tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
-    lifted_profile = {"GEMM": b1.GEMM_AMPERE, "ATTENTION": b1.ATTENTION_FA2, "NORM": b1.norm_bundle(TINY)}
-    return [
-        ("Serve_v1", lambda: bind(b1.Serve, C=TINY, LP=3, STEPS=2)),
-        ("Serve_v2", lambda: b1.serve_v2(TINY, 3, 2)),
-        ("Serve_v3", lambda: serve3.serve_v3({**TINY, "EOS_ID": 7}, 3, 2)),
-        ("Serve_v4", lambda: bind(b1.ServeV4, C=TINY, LP=3, STEPS=2, BN=16)),
-        ("ServeHopper_v1", lambda: bind(hopper.ServeHopper, C=TINY, LP=3, STEPS=2)),
-        ("ServeFp8_v1", lambda: bind(fp8.ServeFp8, C=TINY_FP8, LP=2, STEPS=1)),
-        ("ServeTP2_v1", lambda: b1_tp2.serve_tp2(3, 2, tp2)),
-        ("Prefill_v1", lambda: bind(lifted.Prefill, C=TINY, LP=3, **lifted_profile)),
-        ("StepBody_v1", lambda: bind(lifted.StepBody, C=TINY, T=4, **lifted_profile)),
-        ("AttentionN_v1", lambda: bind(spec.AttentionN, T=5, NH=2, KVH=1, D=16, BN=16)),
-        # about 7 minutes a target: the smallest Boolean chain whose second block rescales (T = BN + 1)
-        ("Attention_v6", lambda: bind(boolean_attention.AttentionV6, T=17, NH=1, KVH=1, D=16, BN=16)),
-        ("Attention_v7", lambda: bind(boolean_attention.AttentionV7, T=5, NH=1, KVH=1, D=16, BN=16, **boolean_attention.ATTENTION_FA3)),
-        # the served FA2 binding at the smallest chain whose unguarded block rescales (T = BN + 1, block 0 below MASKED_FROM)
-        ("Attention_v8", lambda: bind(boolean_attention.AttentionV8, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
-                                      DOT=boolean_attention.ATTENTION_FA3["DOT"], INV=boolean_attention.ATTENTION_FA2["INV"])),
-        ("Attention_v9", lambda: bind(boolean_attention.AttentionV9, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
-                                      **boolean_attention.ATTENTION_FA3)),
-        ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
-        # the Definitions whose program values are inputs (eps, the attention scale); the chain's second block rescales (T = BN + 1)
-        ("RMSNormTriton_v3", lambda: bind(VI.RMSNormTritonV3, N=64)),
-        ("RMSNormFusedCuda_v4", lambda: bind(VI.RMSNormFusedCudaV4, N=64)),
-        ("Attention_v10", lambda: bind(VI.AttentionV10, T=17, NH=1, KVH=1, D=16, BN=16)),
-        ("Attention_v11", lambda: bind(fa2_check_inf.AttentionV11, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
-                                       DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
-        ("Attention_v12", lambda: bind(VI.AttentionV12, T=17, NH=1, KVH=1, D=16, BN=16, DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
-        ("Attention_v13", lambda: bind(VI.AttentionV13, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1, DOT=hopper.HopperBF16WgmmaDot16,
-                                       INV=hopper.Fa3InvSum)),
-        ("AttentionSoftcap_v4", lambda: bind(VI.AttentionSoftcapV4, T=17, NH=1, KVH=1, D=16, BN=16)),
-        ("AttentionSoftcap_v5", lambda: bind(VI.AttentionSoftcapV5, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
-                                             DOT=hopper.HopperBF16WgmmaDot16, INV=b1.P.Fa2InvSum)),
-        # the Definitions that read a registered table (`gelu_tanh_bf16`, `tanh_rn`) through `TableRead16x1_v1`, `TableRead27x2_v1`
-        ("GeluTanhMul_v3", lambda: bind(tables.GeluTanhMulV3, I=16)),
-        ("TanhF32Rn_v2", lambda: bind(tables.TanhF32RnV2)),
-        ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
-        ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
-        ("AllGather_v1", lambda: b1_tp2.all_gather(4, 8)),
-        ("QuantLinearFp8_v1", lambda: bind(fp8.QuantLinearFp8, K=256, N=2, BIAS=True)),
-        ("ScaledMmFp8NoSwap_v1", lambda: bind(fp8.ScaledMmFp8NoSwap, K=64, N=2, BIAS=True, DOT=BlackwellE4m3QmmaDot32)),
-        ("QuantLinearNvfp4_v1", lambda: bind(nvfp4.QuantLinearNvfp4, K=64, N=2, DOT=BlackwellNvf4OmmaDot64)),
-        ("ScaledMmFp8BlockSharedScale_v1", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=256, G=128)),
-        ("QuantLinearFp8_v2", lambda: bind(boolean_fp8.QuantLinearFp8V2, K=256, N=2, BIAS=True)),
-        ("ScaledMmFp8_v2", lambda: bind(boolean_fp8.ScaledMmFp8V2, K=32, N=2, BIAS=False)),
-        ("Fp8GroupQuant_v2", lambda: bind(boolean_fp8.Fp8GroupQuantV2, K=64, G=32)),
-        ("ScaledMmFp8Block_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockV2, K=32, N=32, G=32)),
-        ("ScaledMmFp8BlockSharedScale_v2", lambda: bind(boolean_fp8.ScaledMmFp8BlockSharedScaleV2, K=64, N=32, G=32)),
-        ("ScaledMmFp8NoSwap_v2", lambda: bind(boolean_fp8.ScaledMmFp8NoSwapV2, K=64, N=2, BIAS=True,
-                                              DOT=BG.BlackwellE4m3QmmaDot32)),
-        ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
-        ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
-        ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
-        ("VerifyBranch_v1", lambda: bind(spec.VerifyBranch, C=long, LP=3, K=2)),
-        ("LMoeBlock_v1", lambda: moe_pad.block(4, 2, 2, 16, 16)),
-        ("LMoeBlockL_v1", lambda: bind(moe_pad.LMoeBlockL, E=4, TOPK=2, VPT=2, H=16, I=16)),
-        ("LMoeFfn_v1", lambda: bind(moe_pad.LMoeFfn, E=4, TOPK=2, VPT=2, H=16, I=16)),
-        ("GumbelTokenSelect_v1", lambda: bind(sampling.GumbelTokenSelect, V=16)),
-        ("GumbelTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTokenSelectSharedGreedy, V=16)),
-        ("GumbelTopPTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)),
-        ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
-        ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
-        ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
-        ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
-    ]
 
 
 def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
@@ -422,14 +331,16 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
     Definition, or the error)."""
+    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
              "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
-             "SCALE": "shared-per-block", "S": 4,
-             "CONSTRUCTION": "shared-greedy"}
+             "SCALE": "shared-per-block", "S": 4, "FP8_DOT": BlackwellE4m3QmmaDot32,
+             "CONSTRUCTION": "shared-greedy", "TARGET": TargetProfile.default()}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
     kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]
@@ -488,8 +399,8 @@ def call_families() -> set[str]:
 def boolean_call_families(word_calls: set[str]) -> set[str]:
     """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
-    from verity.evaluation import ScalarReference
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits import boolean as BL
     from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
 
     out: set[str] = set()
@@ -503,9 +414,10 @@ def boolean_call_families(word_calls: set[str]) -> set[str]:
     return out
 
 
-def catalog() -> list[Any]:
-    """The roots: every primitive, every static-free composite, and the bindings above."""
-    from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+def catalog(by_unit: list | None = None) -> list[Any]:
+    """The roots: every primitive, every static-free composite, and the bindings above; with ``by_unit``, each binding's
+    (units, roots) appended to it."""
+    from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     load_registries()
     roots: list[Any] = []
@@ -515,24 +427,29 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
-    for label, make in _model_roots():
-        try:
-            fn = make()
-            _ = fn.body
-            roots.append(fn)
-        except Exception as e:  # noqa: BLE001  (named, and the suite fails on it)
-            ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
+    for name in ROOT_FUNCTIONS:
+        for units, make in _root_bindings(name):
+            roots += _produce(units, make, by_unit)
+    for prefix, ns in binding_files():
+        for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+            def built(make=make):
+                fn = make()
+                _ = fn.body
+                return [fn]
+            try:
+                roots += _produce((f"{prefix}_model_roots:{label}",), built, by_unit)
+            except Exception as e:  # noqa: BLE001  (named, and the suite fails on it)
+                ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
     for _label, sub, sts in templates():
-        for st in sts:
-            roots += [sub.definition(**st), sub.target(**st)]
+        roots += _produce((_template_unit(sub.template.id),),
+                          lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], by_unit)
     return roots
 
 
 def reachable(roots: Iterable[Any]) -> dict[str, Any]:
     """Every Definition (primitive, complete specialisation) or reference reachable from ``roots``, by id."""
-    from verity.evaluation import ScalarReference
-    from verity.ir.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.primitives.circuits.evaluation import ScalarReference
+    from verity.primitives.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 
     out: dict[str, Any] = {}
     stack = list(roots)
@@ -561,7 +478,7 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
     """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
     smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
     the Program on bits calls)."""
-    from verity.ir import boolean as BL
+    from verity.primitives.circuits import boolean as BL
 
     by: dict[str, list[Any]] = {}
     for fn in found.values():
@@ -580,12 +497,19 @@ def select(found: dict[str, Any], max_gates: int = MAX_GATES) -> dict[str, Any]:
 
 def suite() -> dict[str, Any]:
     """Every Definition the suite checks, by id: `select`'s, and PoUW's roots whatever their size (each P's whole call and
-    window share a family and a gate count, so `select` alone keeps one of them)."""
-    out = select(reachable(catalog()))
-    out.update({fn.id: fn for fn in _pouw_roots()})
+    window share a family and a gate count, so `select` alone keeps one of them).  Records each one's `BINDINGS`."""
+    by_unit: list = []
+    out = select(reachable(catalog(by_unit)))
+    for units, make in _root_bindings("_pouw_roots"):
+        out.update({fn.id: fn for fn in _produce(units, make, by_unit)})
+    for units, roots in by_unit:
+        for fid in reachable(roots):
+            if fid in out:
+                BINDINGS.setdefault(fid, set()).update(units)
     return dict(sorted(out.items()))
 
 
-__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TABLE_PROBES", "TEMPLATE_PARAMS", "TINY", "boolean_call_families", "call_families",
-           "catalog", "definition", "family", "instance_statics", "kind_of", "load_registries", "reachable", "select", "subcircuit",
-           "suite", "table_probe", "templates"]
+__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
+           "binding_files", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics",
+           "kind_of", "load_registries", "reachable", "select", "subcircuit", "suite", "table_probe", "template_params",
+           "templates"]

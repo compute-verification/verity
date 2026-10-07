@@ -1,4 +1,4 @@
-"""`research slack` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
+"""`research msg` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ class FakeSlack:
         self.calls: list[tuple[str, dict]] = []
         self._ts = itertools.count(1)
         self.page = 200
+        self.replies_keep_root = False
 
     def add(self, channel: str, **msg) -> dict:
         msg.setdefault("ts", f"1700000000.{next(self._ts):06d}")
@@ -67,7 +68,8 @@ class FakeSlack:
             else:
                 msgs = [m for m in msgs if not m.get("thread_ts") or m["thread_ts"] == m["ts"]][::-1]     # newest first, like Slack
             if "oldest" in p:
-                msgs = [m for m in msgs if float(m["ts"]) >= float(p["oldest"])]
+                keep = p["ts"] if method == "conversations.replies" and self.replies_keep_root else None   # as Slack does
+                msgs = [m for m in msgs if float(m["ts"]) >= float(p["oldest"]) or m["ts"] == keep]
             if "latest" in p:
                 msgs = [m for m in msgs if float(m["ts"]) <= float(p["latest"])]
             start = int(p.get("cursor") or 0)
@@ -206,6 +208,26 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
 
+def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
+    rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
+                     "catalog/verity_catalog/definitions/tc.py", "verity/primitives/circuits/cut.py", "AGENTS.md", "nowhere/x")
+    assert rc == 0 and [line.split() for line in out.splitlines()] == [
+        ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
+        ["@circuits", "catalog/verity_catalog/definitions/tc.py"], ["@proofs", "verity/primitives/circuits/cut.py"],
+        ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
+    monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
+    rc, out, _ = run(capsys, "owners")
+    assert [line.split()[0] for line in out.splitlines()] == ["@infra", "@top"]
+
+
+def test_registry_refuses_a_path_two_handles_own(registry, capsys):
+    reg = json.loads(registry.read_text())
+    reg["handles"][1]["owns"] = [reg["handles"][0]["owns"][0]]
+    registry.write_text(json.dumps(reg))
+    rc, _, err = run(capsys, "owners", "AGENTS.md")
+    assert rc == 2 and "no other handle owns" in err
+
+
 def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     reg = json.loads(registry.read_text())
     reg["channels"]["agent-coordination"]["id"] = None
@@ -225,6 +247,20 @@ def test_ask_tags_one_owner_with_its_user_group_and_carries_no_footer(fake, regi
     assert TOKEN not in out + err
     assert run(capsys, "ask", "--as", "compute-accounting", "--to", "@compute-accounting", "--text", "x")[0] == 2
     assert run(capsys, "ask", "--as", "pous-worker-3", "--to", "@infra", "--text", "x")[0] == 2      # workers aren't on Slack
+
+
+def test_a_post_that_went_out_stands_when_its_permalink_fails(capsys):
+    """A caller that retries on a raise (the monitors' relay) would otherwise post it twice."""
+    class Api:
+        dry_run = False
+
+        def call(self, method, **kw):
+            if method == "chat.getPermalink":
+                raise slack.SlackError("chat.getPermalink: HTTP 429 (rate limited; retry after 1 s)")
+            return {"ok": True, "ts": "1700000000.000100"}
+
+    assert slack._post(Api(), ALERTS, "infra", "hello") == "1700000000.000100"
+    assert capsys.readouterr().out == "1700000000.000100 -\n"
 
 
 def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_file(fake, registry, capsys, tmp_path):
@@ -318,6 +354,19 @@ def broker(fake, monkeypatch):
     return b
 
 
+def test_a_not_ok_answer_s_error_and_needed_scopes_are_echoed_only_as_codes():
+    answers = iter([{"ok": False, "error": "missing_scope", "needed": "chat:write,users:read.email"},
+                    {"ok": False, "error": "<html>refused dummy-verity-bot</html>", "needed": "see https://example.invalid/x\n"},
+                    {"ok": False, "error": "invalid_auth\n"}, {"ok": False, "error": 7}])
+    api = slack.Slack(TOKEN, transport=lambda url, data, headers: next(answers))
+    said = []
+    for _ in range(4):
+        with pytest.raises(slack.SlackError) as e:
+            api.call("auth.test")
+        said.append(str(e.value))
+    assert said == ["auth.test: missing_scope (needed scope chat:write,users:read.email)"] + ["auth.test: not ok"] * 3
+
+
 def test_the_transport_is_direct_with_a_token_and_the_broker_without_or_when_forced(monkeypatch):
     assert slack.via(TOKEN) == "direct" and slack.via(None) == "broker" and slack.via("") == "broker"
     monkeypatch.setenv("RESEARCH_SLACK_VIA", "broker")
@@ -404,8 +453,9 @@ def test_a_slack_error_through_the_broker_is_slacks_own(broker, registry, capsys
 def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
     with pytest.raises(slack.SlackError, match="not in BROKER_METHODS"):
         slack.Slack(None).call("chat.delete", channel=COORD, ts="1.0")
-    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", "1.0", "--text", "x" * slack.BROKER_MAX_BODY)
-    assert rc == 2 and "more than the broker takes" in err and not broker.requests
+    with pytest.raises(slack.SlackError, match="more than the broker takes"):
+        slack.Slack(None).call("chat.postMessage", channel=COORD, text="x" * slack.BROKER_MAX_BODY)
+    assert not broker.requests
 
 
 def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
@@ -595,6 +645,21 @@ def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys)
     assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second", "third"]
     rc, out, _ = run(capsys, "read", "--thread", a["ts"], "--json")
     assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
+
+
+def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsys):
+    """`--since` with `--thread` was refused, so a lane following a thread re-read all of it each time."""
+    fake.page = 2
+    root = fake.add(COORD, text="question", user="U1")
+    seen = fake.add(COORD, text="first answer", user="U2", thread_ts=root["ts"])
+    fake.add(COORD, text="elsewhere", user="U2")
+    fake.add(COORD, text="second answer", user="U3", thread_ts=root["ts"])
+    fake.add(COORD, text="third answer", username="console", bot_id=BOT, thread_ts=root["ts"])
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", seen["ts"])
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second answer", "third answer"]
+    fake.replies_keep_root = True
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", seen["ts"], "--json")
+    assert rc == 0 and [m["text"] for m in json.loads(out)] == ["second answer", "third answer"]
 
 
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
@@ -869,9 +934,15 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
-def test_resolve_records_a_thread_answer_and_says_clearly_when_the_route_is_missing(route, registry, capsys):
+def test_status_404_says_no_card_has_that_id(route, registry, capsys):
+    route.answer = (404, {"error": "not_found"})
+    rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
+
+
+def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "Daniel in the thread: needs changes")
-    assert rc == 2 and "HTTP 404: the resolve route isn't deployed yet" in err and "record it as a ruling" in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "record Daniel's thread reply as a ruling" in err
     route.resolve = True
     rc, out, _ = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "needs changes")
     assert rc == 0 and out == "decided no thread -\n"
@@ -1009,6 +1080,48 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
+def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "infra")
+    lines = [f"*@infra:* row {i} " + "x" * 90 for i in range(80)] + ["see <!date^1791361800^{time}|1:30 AM PDT (08:30Z)> -> " + "y " * 900]
+    assert run(capsys, "send", "--as", "circuits", "--to", "@infra", "--text", "\n".join(lines))[0] == 0
+    root = fake.messages[COORD][1]
+    rest = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]
+    assert len(rest) >= 2 and not [m for m in fake.messages[COORD] if not m.get("thread_ts") and m["ts"] not in (box, root["ts"])]
+    assert all(len(m["text"].encode()) <= slack.POST_MAX + 20 for m in [root, *rest])
+    assert all(m["text"].startswith(f"({i}/{len(rest) + 1}) ") and slack.tags_of(m["text"]) == [slack.QUIET]
+               for i, m in enumerate(rest, 2))
+    body = "\n".join(slack.FOOTER_RE.sub("", re.sub(r"^\(\d+/\d+\) ", "", m["text"])) for m in [root, *rest])
+    assert body.split() == f"<!subteam^SINFRA|@infra> {chr(10).join(lines)}".split()
+    assert "<!date^1791361800^{time}|1:30 AM PDT (08:30Z)>" in body
+    assert len(bells(fake, box)) == 1
+
+
+def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--dry-run", "--text", "<!subteam^SINFRA|@infra> steward: is exit 1 harmless?")
+    assert rc == 2 and "never wakes its author" in err
+    assert run(capsys, "send", "--as", "infra", "--dry-run", "--text", "@infra @ci is exit 1 harmless?")[0] == 0
+
+
+def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "@lean @ci daily wasters")
+    assert rc == 2 and "pass them as --to" in err
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "Daily wasters. @lean, yours")[0] == 0
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--to", "@lean", "@ci", "--dry-run", "--text", "daily")[0] == 0
+    assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
+
+
+def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
+    circuits, lean = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "lean")
+    root = fake.add(COORD, text="@circuits @lean the move starts at 7", username="top", bot_id=BOT)
+    assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--text", "shard 3/5 passed")[0] == 0
+    assert bells(fake, circuits) == [] and bells(fake, lean) == []                    # a progress note is for the digest
+    note = next(m for m in reversed(fake.messages[COORD]) if m.get("username") == "top" and m is not root)
+    assert slack.tags_of(note["text"]) == ["fyi", slack.QUIET]
+    assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--to", "@lean",
+               "--text", "your shard passed")[0] == 0
+    assert bells(fake, circuits) == [] and len(bells(fake, lean)) == 1
+
+
 def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
@@ -1103,8 +1216,8 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
     assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
     slack.mark_read("vllm-epoch-run", [second])
     assert slack.seen_path("vllm-epoch-run").read_text().strip() == third["ts"]
-    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--since", first["ts"])
-    assert rc == 2 and "neither --since nor --as" in err
+    rc, _, err = run(capsys, "read", "--thread", first["ts"], "--as", "vllm-epoch-run")
+    assert rc == 2 and "--thread reads one thread; it doesn't take --as" in err
     rc, _, err = run(capsys, "read")
     assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
 
@@ -1113,6 +1226,7 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-circuits", box, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
     run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "one")
+    fake.add(COORD, text="circuits 06:00Z: 3 open", username="circuits", bot_id=BOT, thread_ts=box)   # its own note, no doorbell
     old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
     fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
