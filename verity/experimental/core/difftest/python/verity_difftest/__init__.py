@@ -1,16 +1,22 @@
 """The differential test of a Lean port against today's Python (`README.md` in this distribution's directory).
 
-A `Port` names a function served by a Lean executable (`Difftest.serve`, `lean/Difftest.lean`), the Python reference it must
-agree with, and a Hypothesis strategy of inputs, invalid ones included. `run` keeps one server process open, feeds both sides
-every input the strategy draws, and fails with a `Mismatch` on the first difference, shrunk by Hypothesis to a minimal input:
+A port is a Lean executable that answers one canonical JSON line per request, the Python reference it must agree with, and a
+Hypothesis strategy of inputs, invalid ones included. There are two kinds, sharing the server, the run and the shrinking:
 
-* both give an output, and the outputs differ as canonical JSON (`canonical`: compact, keys sorted, integers only);
-* one rejects and the other doesn't (reject parity: the reasons need not match);
-* the reference raises something that is not one of the port's declared rejects, or the server faults or dies.
+* `Port`: one function behind `Difftest.serve` (`lean/Difftest.lean`), requests `{"fn", "input"}`. Lean and Python must
+  give the same output as canonical JSON (`canonical`: compact, keys sorted, integers only), or both reject (reject parity:
+  the reasons need not match).
+* `ProtocolPort`: a core protocol's executable in `serve` mode (`Core.Protocol.main`, the interface of
+  `verity/experimental/core/protocols/interface`), one case `{"commitment", "evidence", "params"}` per line and one outcome
+  per case. Lean and Python must agree on `verdict`, `commitment`, `public`, `profile` and `protocol` exactly; `reason` is
+  not compared. `verity_difftest.protocol` is the interface's case framing in Python, for references to build on.
 
-A run is deterministic: Hypothesis draws from `seed` (`derandomize`, no example database, no deadline), so `run(port,
-examples=N, seed=S)` finds the same minimal input again, and `replay(port, value)` compares one input. Nothing here reads a
-clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean never answers hangs its test.
+`run` keeps one server process open, feeds both sides every input the strategy draws, and fails with a `Mismatch` on the
+first difference, shrunk by Hypothesis to a minimal input; a reference that raises something it doesn't declare, and a
+server that faults or dies, are differences too. A run is deterministic: Hypothesis draws from `seed` (`derandomize`, no
+example database, no deadline), so `run(port, examples=N, seed=S)` finds the same minimal input again, and `replay(port,
+value)` compares one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
+never answers hangs its test.
 
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
 (`pytestmark = pytest.mark.skipif(shutil.which("lake") is None, ...)`), which puts its suite among those `check` runs after
@@ -26,7 +32,7 @@ import json
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,13 +40,18 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import seed as use_seed
 from hypothesis.strategies import SearchStrategy
 
+#: One side's answer to one input: `(kind, text)`. A `Port`'s kinds are `output` (the canonical text), `reject` (the
+#: reason) and `error`; a `ProtocolPort`'s are the verdicts (the outcome's canonical text) and `error`.
+Outcome = tuple[str, str]
+
 
 class Reject(Exception):
     """The reference refuses its input (the message is the reason). A port may declare other exception types as rejects."""
 
 
 class ProtocolError(Exception):
-    """The server broke the protocol (`lean/Difftest.lean`): an `error` response, a line that isn't canonical JSON, or no line."""
+    """The server broke the protocol: a fault it reports (`{"error"}`), a line that isn't one canonical JSON object of the
+    expected form, or no line at all."""
 
 
 class BuildError(Exception):
@@ -48,21 +59,21 @@ class BuildError(Exception):
 
 
 class Mismatch(AssertionError):
-    """Lean and Python differ on `input` (the minimal one Hypothesis found): `lean` and `python` are each side's outcome,
-    `("output", canonical text)`, `("reject", reason)` or `("error", message)`."""
+    """Lean and Python differ on `input` (the minimal one Hypothesis found): `lean` and `python` are each side's
+    `Outcome`."""
 
-    def __init__(self, fn: str, value: Any, lean: tuple[str, str], python: tuple[str, str]):
-        self.fn, self.input, self.lean, self.python = fn, value, lean, python
+    def __init__(self, label: str, value: Any, lean: Outcome, python: Outcome):
+        self.label, self.input, self.lean, self.python = label, value, lean, python
         self.report = ""
-        super().__init__(f"{fn}: Lean {_show(lean)}, Python {_show(python)} on {canonical(value)}")
+        super().__init__(f"{label}: Lean {_show(lean)}, Python {_show(python)} on {canonical(value)}")
 
     def __str__(self) -> str:
         return self.report or super().__str__()
 
 
 class Vacuous(AssertionError):
-    """A run passed without exercising both outcomes: no input gave an output, or (unless the port waives it) none was
-    rejected. A strategy that only reaches one side of the port's domain checks nothing on the other."""
+    """A run passed without exercising both sides: no input was accepted, or (unless the port waives it) none was refused.
+    A strategy that only reaches one side of the port's domain checks nothing on the other."""
 
 
 def canonical(value: Any) -> str:
@@ -103,26 +114,8 @@ def build(package: Path, exe: str) -> Path:
     return package / ".lake" / "build" / "bin" / exe
 
 
-@dataclass(frozen=True)
-class Port:
-    """One ported function. `exe` is the server executable's path, or with `package` the name of a `lean_exe` of that Lake
-    package, which `run` builds. `reference(value)` returns the expected output (canonical JSON's domain) or raises one of
-    `rejects`. `inputs` draws inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected."""
-
-    exe: str | Path
-    fn: str
-    reference: Callable[[Any], Any]
-    inputs: SearchStrategy
-    package: Path | None = None
-    rejects: tuple[type[BaseException], ...] = (Reject,)
-    need_rejects: bool = True
-
-    def argv(self) -> list[str]:
-        return [str(build(Path(self.package), str(self.exe)) if self.package is not None else Path(self.exe))]
-
-
 class Server:
-    """One server process, started at the first call and again after it dies; requests are answered in order."""
+    """One server process, started at the first request and again after it dies; requests are answered in order."""
 
     def __init__(self, argv: Sequence[str]):
         self.argv = list(argv)
@@ -135,35 +128,44 @@ class Server:
                                       text=True, encoding="utf-8")
         return self._proc
 
-    def call(self, fn: str, value: Any) -> tuple[str, str]:
-        """`("output", canonical text)` or `("reject", reason)`; raises `ProtocolError` for anything else."""
-        request = canonical({"fn": fn, "input": value})
+    def exchange(self, request: Any) -> dict:
+        """Send `request` as one canonical JSON line and read one line back, which must be one canonical JSON object."""
+        line = canonical(request)
         proc = self._proc or self._start()
         try:
-            proc.stdin.write(request + "\n")
+            proc.stdin.write(line + "\n")
             proc.stdin.flush()
             reply = proc.stdout.readline()
         except BrokenPipeError:
             reply = ""
         if not reply.endswith("\n"):
-            raise ProtocolError(f"{self.argv[0]} ended on {request}: {self._dead()}")
+            raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._dead()}")
         reply = reply[:-1]
         try:
             msg = json.loads(reply)
-            ok = isinstance(msg, dict) and len(msg) == 1 and canonical(msg) == reply
+            ok = isinstance(msg, dict) and canonical(msg) == reply
         except (ValueError, TypeError):
             ok = False
         if not ok:
             proc.kill()
             self._dead()
-            raise ProtocolError(f"{self.argv[0]} answered {request} with a line that is not one canonical JSON object "
+            raise ProtocolError(f"{self.argv[0]} answered {line} with a line that is not one canonical JSON object "
                                 f"(stdout is the protocol's: write anything else to stderr): {reply[:500]}")
-        (kind, body), = msg.items()
-        if kind == "output":
-            return "output", canonical(body)
-        if kind == "reject" and isinstance(body, str):
-            return "reject", body
-        raise ProtocolError(f"{self.argv[0]} on {request}: {body if kind == 'error' else reply}")
+        return msg
+
+    def call(self, fn: str, value: Any) -> Outcome:
+        """`Difftest.serve`'s answer to `{"fn": fn, "input": value}`: `("output", canonical text)` or `("reject", reason)`;
+        anything else raises `ProtocolError`."""
+        msg = self.exchange({"fn": fn, "input": value})
+        if len(msg) == 1:
+            (kind, body), = msg.items()
+            if kind == "output":
+                return "output", canonical(body)
+            if kind == "reject" and isinstance(body, str):
+                return "reject", body
+            if kind == "error":
+                raise ProtocolError(f"{self.argv[0]} on {fn}: {body}")
+        raise ProtocolError(f"{self.argv[0]} on {fn}: not an output, a reject or an error: {canonical(msg)[:500]}")
 
     def _dead(self) -> str:
         proc, self._proc = self._proc, None
@@ -186,38 +188,135 @@ class Server:
         self.close()
 
 
-def _show(outcome: tuple[str, str]) -> str:
+def _exe(exe: str | Path, package: Path | None) -> str:
+    return str(build(Path(package), str(exe)) if package is not None else Path(exe))
+
+
+def _undeclared(e: Exception, declared: tuple[type[BaseException], ...]) -> Outcome:
+    return "error", f"the reference raised {type(e).__name__}: {e}, not one of {[r.__name__ for r in declared]}"
+
+
+@dataclass(frozen=True)
+class Port:
+    """One ported function. `exe` is the server executable's path, or with `package` the name of a `lean_exe` of that Lake
+    package, which `run` builds. `reference(value)` returns the expected output (canonical JSON's domain) or raises one of
+    `rejects`. `inputs` draws inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected."""
+
+    exe: str | Path
+    fn: str
+    reference: Callable[[Any], Any]
+    inputs: SearchStrategy
+    package: Path | None = None
+    rejects: tuple[type[BaseException], ...] = (Reject,)
+    need_rejects: bool = True
+    accepted = "output"
+
+    @property
+    def label(self) -> str:
+        return self.fn
+
+    def argv(self) -> list[str]:
+        return [_exe(self.exe, self.package)]
+
+    def lean(self, server: Server, value: Any) -> Outcome:
+        return server.call(self.fn, value)
+
+    def python(self, value: Any) -> Outcome:
+        try:
+            out = self.reference(copy.deepcopy(value))
+        except self.rejects as e:
+            return "reject", str(e)
+        except Exception as e:
+            return _undeclared(e, self.rejects)
+        try:
+            return "output", canonical(out)
+        except TypeError as e:
+            return "error", f"the reference's output is {e}"
+
+    def key(self, outcome: Outcome) -> Any:
+        """What must be equal: the output, or only the fact of a rejection."""
+        return outcome[:1] if outcome[0] == "reject" else outcome
+
+
+#: The fields of a protocol's outcome line (`Core.Answer.toJson`), and its verdicts.
+OUTCOME_FIELDS = frozenset({"commitment", "profile", "protocol", "public", "reason", "verdict"})
+VERDICTS = frozenset({"accept", "reject", "undecided"})
+
+
+def _outcome(msg: Any, who: str) -> Outcome:
+    """`(verdict, canonical text)` of an outcome object, or `ValueError` saying what about it is not one."""
+    if not isinstance(msg, dict) or set(msg) != OUTCOME_FIELDS:
+        got = sorted(msg) if isinstance(msg, dict) else type(msg).__name__
+        raise ValueError(f"{who} outcome has the fields {got}, not {sorted(OUTCOME_FIELDS)}")
+    if msg["verdict"] not in VERDICTS:
+        raise ValueError(f"{who} outcome's verdict {msg['verdict']!r} is not one of {sorted(VERDICTS)}")
+    return msg["verdict"], canonical(msg)
+
+
+@dataclass(frozen=True)
+class ProtocolPort:
+    """A core protocol's port: its executable (`exe`, or a `lean_exe` of the Lake package `package`) run as `EXE serve`.
+    `reference(case)` returns the outcome dict, all six fields (`verity_difftest.protocol.answer` builds one as
+    `Core.Protocol.case` does). `inputs` draws cases, `{"commitment": hex, "evidence": hex, "params": JSON}` and malformed
+    ones (bad hex, params, evidence, missing fields); `need_rejects=False` waives the check that some aren't accepted."""
+
+    exe: str | Path
+    reference: Callable[[Any], dict]
+    inputs: SearchStrategy
+    package: Path | None = None
+    need_rejects: bool = True
+    serve: tuple[str, ...] = ("serve",)
+    accepted = "accept"
+
+    @property
+    def label(self) -> str:
+        return f"{Path(str(self.exe)).name} serve"
+
+    def argv(self) -> list[str]:
+        return [_exe(self.exe, self.package), *self.serve]
+
+    def lean(self, server: Server, case: Any) -> Outcome:
+        try:
+            return _outcome(server.exchange(case), "Lean's")
+        except ValueError as e:
+            raise ProtocolError(f"{server.argv[0]}: {e}") from None
+
+    def python(self, case: Any) -> Outcome:
+        try:
+            out = self.reference(copy.deepcopy(case))
+        except Exception as e:
+            return _undeclared(e, ())
+        try:
+            return _outcome(out, "the reference's")
+        except (ValueError, TypeError) as e:
+            return "error", str(e)
+
+    def key(self, outcome: Outcome) -> Any:
+        """Everything but the reason."""
+        if outcome[0] == "error":
+            return outcome
+        return {k: v for k, v in json.loads(outcome[1]).items() if k != "reason"}
+
+
+def _show(outcome: Outcome) -> str:
     kind, body = outcome
-    return f"{kind} {body}" if kind == "output" else f"{kind} {body!r}"
+    return f"{kind} {body}" if kind in ("output", *VERDICTS) else f"{kind} {body!r}"
 
 
-def _python(port: Port, value: Any) -> tuple[str, str]:
-    try:
-        out = port.reference(copy.deepcopy(value))
-    except port.rejects as e:
-        return "reject", str(e)
-    except Exception as e:
-        return "error", f"the reference raised {type(e).__name__}: {e}, not one of {[r.__name__ for r in port.rejects]}"
-    try:
-        return "output", canonical(out)
-    except TypeError as e:
-        return "error", f"the reference's output is {e}"
-
-
-def _compare(port: Port, server: Server, value: Any, seen: dict[str, int]) -> tuple[str, str]:
+def _compare(port: Port | ProtocolPort, server: Server, value: Any, seen: dict[str, int]) -> Outcome:
     canonical(value)
-    python = _python(port, value)
+    python = port.python(value)
     try:
-        lean = server.call(port.fn, value)
+        lean = port.lean(server, value)
     except ProtocolError as e:
         lean = ("error", str(e))
     seen[python[0]] = seen.get(python[0], 0) + 1
-    if "error" in (lean[0], python[0]) or lean != python and (lean[0], python[0]) != ("reject", "reject"):
-        raise Mismatch(port.fn, value, lean, python)
+    if "error" in (lean[0], python[0]) or port.key(lean) != port.key(python):
+        raise Mismatch(port.label, value, lean, python)
     return lean
 
 
-def replay(port: Port, value: Any, server: Server | None = None) -> tuple[str, str]:
+def replay(port: Port | ProtocolPort, value: Any, server: Server | None = None) -> Outcome:
     """Compare one input, as `run` does: Lean's outcome when the two agree, else `Mismatch`."""
     with Server(port.argv()) if server is None else contextlib.nullcontext(server) as s:
         return _compare(port, s, value, {})
@@ -226,18 +325,26 @@ def replay(port: Port, value: Any, server: Server | None = None) -> tuple[str, s
 @dataclass(frozen=True)
 class Stats:
     examples: int
-    outputs: int
-    rejects: int
+    counts: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def outputs(self) -> int:
+        return self.counts.get("output", 0)
+
+    @property
+    def rejects(self) -> int:
+        return self.counts.get("reject", 0)
 
 
-def run(port: Port, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
+def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
     """Draw `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
-    `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`."""
+    `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
+    count Python's outcomes by kind."""
     seen: dict[str, int] = {}
 
     @use_seed(seed)
-    @settings(derandomize=True, database=None, deadline=None, max_examples=examples,
-              report_multiple_bugs=False, suppress_health_check=[HealthCheck.too_slow])
+    @settings(derandomize=True, database=None, deadline=None, max_examples=examples, report_multiple_bugs=False,
+              suppress_health_check=[HealthCheck.too_slow])
     @given(port.inputs)
     def differential(value: Any) -> None:
         _compare(port, s, value, seen)
@@ -247,7 +354,7 @@ def run(port: Port, examples: int = 100, seed: int = 0, server: Server | None = 
             differential()
         except Mismatch as e:
             e.report = "\n".join([
-                f"difftest of {port.fn!r} ({s.argv[0]}): Lean and Python differ; the minimal input Hypothesis found:",
+                f"difftest of {port.label!r} ({s.argv[0]}): Lean and Python differ; the minimal input Hypothesis found:",
                 f"  input:  {canonical(e.input)}",
                 f"  lean:   {_show(e.lean)}",
                 f"  python: {_show(e.python)}",
@@ -255,22 +362,23 @@ def run(port: Port, examples: int = 100, seed: int = 0, server: Server | None = 
                 f"verity_difftest.run(port, examples={examples}, seed={seed})"])
             raise
     total = sum(seen.values())
-    if not seen.get("output"):
-        raise Vacuous(f"difftest of {port.fn!r}: none of {total} inputs gave an output; the strategy reaches only rejects")
-    if port.need_rejects and not seen.get("reject"):
-        raise Vacuous(f"difftest of {port.fn!r}: none of {total} inputs was rejected; draw invalid inputs too, or set "
+    if not seen.get(port.accepted):
+        raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs gave {port.accepted!r}; the strategy reaches "
+                      f"only refusals")
+    if port.need_rejects and total == seen[port.accepted]:
+        raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs was rejected; draw invalid inputs too, or set "
                       f"need_rejects=False for a total function")
-    return Stats(total, seen.get("output", 0), seen.get("reject", 0))
+    return Stats(total, dict(seen))
 
 
-def server_fixture(port_or_argv: Port | Sequence[str], scope: str = "module"):
+def server_fixture(port_or_argv: Port | ProtocolPort | Sequence[str], scope: str = "module"):
     """A pytest fixture holding one `Server` open across the tests of its scope: `server = server_fixture(PORT)` at a test
     module's top level, then `run(PORT, server=server)` in each test."""
     import pytest
 
     @pytest.fixture(scope=scope)
     def server() -> Iterator[Server]:
-        with Server(port_or_argv.argv() if isinstance(port_or_argv, Port) else port_or_argv) as s:
+        with Server(port_or_argv.argv() if isinstance(port_or_argv, (Port, ProtocolPort)) else port_or_argv) as s:
             yield s
 
     return server
