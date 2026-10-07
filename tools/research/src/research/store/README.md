@@ -109,7 +109,7 @@ Published by `research run` at completion or failure (both — a failed attempt 
   "conditions": {"hw.family": "h100", "hw.sku": "NVIDIA H100 80GB HBM3", "driver": "...", "cuda": "...", "...": "..."},
   "key_conditions": ["hw.family"],
   "source": {"commit": "<sha>", "tree": "<sha>", "dirty": false, "dirty_digest": null, "lockfiles": {"uv.lock": "<sha256>"}},
-  "closure": {"tools/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
+  "closure": {"benchmarks/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
   "execution": {"start_utc": "...", "end_utc": "...", "wall_s": 12.3, "exclusive": false, "load_start": 1.2, "load_end": 1.1,
                 "host": "vy-g5", "project": "verity", "campaign": "r21-silicon", "run_dir": "/workspace/research/runs/r...",
                 "stage": "bench", "remote": {"machine": "vy-g5", "pod_id": "...", "root": "...", "source_sha": "..."} },
@@ -189,19 +189,19 @@ from research.store.tool import Tool
 
 TC_PROBE = Tool(
     name="tc_probe", version="1",
-    command=["python", "tools/tc_probe/tc_probe.py"],
-    closure=["tools/tc_probe/**", "catalog/verity_catalog/silicon/**"],   # repo-relative globs -> file manifest at run time
+    command=["python", "benchmarks/tc_probe/tc_probe.py"],
+    closure=["benchmarks/tc_probe/**", "verity/ml/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
-    param_artifacts=["replay_golden", "replay_instances"],                     # path-valued params: identity = content, never pathname
-    caches=["nvcc"],                                                            # names for d.scratch(name)
+    param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname
+    caches=["nvcc"],                                        # names for d.scratch(name)
     produces=["tc-evidence/v1", "run-files/v1"],
 )
 ~~~
 
-Declarations live next to the tool they describe (`tools/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
-illustrative, the files follow the scripts' real argparse) and are found by `research run --tool <dotted.module:NAME>` or
-`--tool <name>` via the registry in `research/store/tools_registry.py` (a dict name -> dotted path; keep it tiny). A declaration
+Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
+illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
+`--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
 back to executing `<source root>/<module path>.py` by file when the module is not on sys.path).
 
@@ -341,7 +341,7 @@ by one of two checks, and the replica record (`replicas.verified`) says which:
 ~~~text
 etag-md5          `push --verify head` (default): HEAD after upload; Content-Length == bytes and the single-part ETag == hex MD5 of
                   the local bytes (S3 and R2 make a single-PUT object's ETag its MD5; a `-` in the ETag marks multipart, which is not
-                  an MD5, and such an object falls back to read-back).  One extra round trip per object.
+                  an MD5, and such an object falls back to read-back). One extra round trip per object.
 sha256-readback   `push --verify readback`, `verify`, `put --preserve`'s manifest: download and sha256 against the manifest.  Costs
                   the object's bytes again.  Manifests are always read back (they are small); blobs on request.
 ~~~
@@ -572,7 +572,7 @@ telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
-trust-dossier/v1         the computed trust level of one numerical target (`python tools/tc_probe/trust.py --publish`): meta =
+trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
                          instruction, level, anchor

@@ -18,7 +18,7 @@ be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-
 the verdict passed and no step listed twice.  A sharded check (`check.py --shard K/N`, one Attempt per shard, its result a
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
-commit's own `tools/check/`, every part once, every job of its `ci.toml`, no step failed) and the combine's steps theirs; a
+commit's own `tools/verity/check/`, every part once, every job of its `ci.toml`, no step failed) and the combine's steps theirs; a
 shard alone passes nothing.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
@@ -92,12 +92,12 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 
 
 #: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
-#: `lean-fast/v1` is the Lean fast path's (`tools/lean/lean_changed.py --records`), an audit without the kernel replay,
+#: `lean-fast/v1` is the Lean fast path's (`tools/verity/lean/lean_changed.py --records`), an audit without the kernel replay,
 #: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
 #: `--priority` and `--by NAME` when given, then `--`
-SLOT_WRAP = ("python3", "tools/check/slot.py")
+SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`
 CHECK_FLAGS = ("--no-cache", "--keep-going")
@@ -106,7 +106,7 @@ CHECK_FLAGS = ("--no-cache", "--keep-going")
 def invocation(argv, command) -> tuple[str, object]:
     """What an attempt's ``argv`` ran of the target's declared ``command``: ("check", None), ``command`` itself, in a check slot
     (`SLOT_WRAP`) or not, followed by nothing but check.py's own flags (`CHECK_FLAGS`); ("shard", (K, N)), the same with
-    `--shard K/N` once (`tools/check/check.py`'s sharding); ("combine", [run ids]), ``command`` with `--combine RUN...` and
+    `--shard K/N` once (`tools/verity/check/check.py`'s sharding); ("combine", [run ids]), ``command`` with `--combine RUN...` and
     nothing else; or ("refused", why) for anything else."""
     if not command:
         return "refused", "the target's declaration of the tool names no command to hold it to"
@@ -150,21 +150,25 @@ def unlike(argv, command) -> str | None:
     return arg if mode == "refused" else None
 
 
-#: a sharded check's shard result (`tools/check/check.py --shard`): never a kind the tool produces, read only by `shard_set`
+#: a sharded check's shard result (`tools/verity/check/check.py --shard`): never a kind the tool produces, read only by `shard_set`
 SHARD_KIND = "check-shard/v1"
 
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
-    """The job names ``commit``'s own `tools/check/ci.toml` declares, or why they can't be read."""
+    """The job names ``commit``'s own `tools/verity/check/ci.toml` declares, or why they can't be read."""
     import tomllib
 
-    r = _git(repo, "show", f"{commit}:tools/check/ci.toml", check=False)
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/verity/check/ci.toml",
+                                  lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
+    r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
         jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", [])] if r.returncode == 0 else None
     except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
         jobs = None
     if not jobs or not all(isinstance(j, str) for j in jobs):
-        return f"{commit[:12]}'s tools/check/ci.toml can't be read for the jobs a check runs"
+        return f"{commit[:12]}'s tools/verity/check/ci.toml can't be read for the jobs a check runs"
     return jobs
 
 
@@ -195,15 +199,15 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     """(the steps of the one check the shard attempts ``ids`` make, None) when together they are a passing check of the clean
     ``commit``, else (None, why).  Each must be a passing ``tool`` attempt of ``commit`` whose command is the declared
     ``command`` with `--shard K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that shard, ``commit`` and
-    its config (``commit``'s tree of `tools/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
+    its config (``commit``'s tree of `tools/verity/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
     together, one N with K = 1..N once each, one list of every part, which their parts make exactly once and which covers every
     job ``commit``'s `ci.toml` declares, and the same steps outside their parts (the preflight), passed in each.  The steps: those
     once, then each part as its shard's step ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
-    config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/check", check=False).stdout.strip()
+    config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/verity/check", check=False).stdout.strip()
     if not config:
-        return None, f"{commit[:12]} has no tools/check/ to hold the shards' config to"
+        return None, f"{commit[:12]} has no tools/verity/check/ to hold the shards' config to"
     jobs = declared_jobs(repo, commit)
     if isinstance(jobs, str):
         return None, jobs
@@ -233,7 +237,7 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
             return None, f"{rid}: its result is shard {sh.get('k')}/{sh.get('n')}, its command {arg[0]}/{arg[1]}"
         if sh.get("commit") != commit or sh.get("config") != config:
             return None, (f"{rid}: its result checked commit {sh.get('commit')} with config {sh.get('config')}, not {commit[:12]}'s "
-                          f"tools/check/ ({config[:12]})")
+                          f"tools/verity/check/ ({config[:12]})")
         if not all(isinstance(sh.get(f), list) and all(isinstance(p, str) for p in sh[f]) for f in ("parts", "all")):
             return None, f"{rid}: its result doesn't list its parts and every part"
         if bad := [s["step"] for s in steps if s.get("status") not in ("passed", "skipped")]:
@@ -409,7 +413,7 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
         seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}{f' refused: {why[r[0]]}' if why.get(r[0]) else ''}"
                          for r in rows) or "none"
         raise Refused(f"no passing `{tool}` attempt for {commit} in the evidence store (attempts of it: {seen}); "
-                      f"record one: `uv run python tools/check/check.py --record` on that commit")
+                      f"record one: `uv run python tools/verity/check/check.py --record` on that commit")
     need = required_steps(repo, "HEAD", commit, tool)
     if not need:
         return commit, ids[0]
@@ -421,7 +425,7 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
         why.append(f"{rid}: {', '.join(f'{s} {step_status(store, rid, s)}' for s in missing)}")
     raise Refused(f"{commit[:12]} changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must have run "
                   f"{', '.join(need)}; no attempt did ({'; '.join(why)}). Record it with what those steps need (for `check`: "
-                  f"`uv run python tools/check/check.py --record --on MACHINE` sends the agreement inputs)")
+                  f"`uv run python tools/verity/check/check.py --record --on MACHINE` sends the agreement inputs)")
 
 
 ZERO = "0" * 40
@@ -586,7 +590,8 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
 def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
     """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
     changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
-    one with a `/` against its path), so `["backends/flock/", "!README.md"]` leaves out every README.md there."""
+    one with a `/` against its path), so `["verity/ml/flock/", "verity/core/service/flock/", "!README.md"]` leaves out every
+    README.md under either."""
     import fnmatch
 
     prefixes = [r for r in rule if not r.startswith("!")]
@@ -800,7 +805,7 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                            f"name it as N@SHA")
                 continue
             lacking = set(need) - grants(pr, sha) if need else set()
-            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto)):
+            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto, rules)):
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: from {by.get(g) or 'its rule, which names no `by`'}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
@@ -895,7 +900,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
         for n, sha, onto in pins:
             need = rules.needs(repo, onto, sha) if rules else set()
             lacking = need - grants(n, sha)
-            if missing := lacking - grants.carried(n, sha, lacking, onto):
+            if missing := lacking - grants.carried(n, sha, lacking, onto, rules):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
         raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e
@@ -903,7 +908,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
 
 
 #: what `prepare` runs on a train before pushing it: check's preflight (`uv.lock`, the repository's lints)
-PREFLIGHT = ["tools/check/check.py", "--preflight"]
+PREFLIGHT = ["tools/verity/check/check.py", "--preflight"]
 
 
 def preflight_argv() -> list[str]:
@@ -1025,7 +1030,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         need = required_steps(repo, "HEAD", chain[-1], tool)
         if need and on and not sends:
             raise Refused(f"the train changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must run "
-                          f"{', '.join(need)}: pass what it needs with --send (for `check`: `uv run python tools/check/check.py "
+                          f"{', '.join(need)}: pass what it needs with --send (for `check`: `uv run python tools/verity/check/check.py "
                           f"--agreement-files` prints the flags)")
 
         def passes(k: int) -> bool:
@@ -1300,11 +1305,11 @@ def main(argv: list[str]) -> int:
                     "unless the target's declared command, with check.py's own flags at most, since the gate takes no other")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="--train --on: ship this file with every run (research run --send)")
     ap.add_argument("--prepare", default=None, metavar="BRANCH", help="--train: record and land nothing; build the train, run --lint "
-                    "on it and push it to --remote as BRANCH (never forced), for `tools/check/train.sh BRANCH MACHINE`")
+                    "on it and push it to --remote as BRANCH (never forced), for `tools/verity/check/train.sh BRANCH MACHINE`")
     ap.add_argument("--onto", default=None, metavar="BASE", help="--prepare: the branch on --remote (or commit) the train starts "
                     "from (default --into; a train ahead's prep branch stacks this one on it)")
     ap.add_argument("--lint", default=None, metavar="CMD", help="--prepare: what must pass on the train before it's pushed "
-                    "(default `python tools/check/check.py --preflight`: under this interpreter when it has pytest, else `uv run --locked`)")
+                    "(default `python tools/verity/check/check.py --preflight`: under this interpreter when it has pytest, else `uv run --locked`)")
     ap.add_argument("--allow-removal", action="append", default=[], metavar="PATH", help="--train: a path where the train may "
                     "lose lines none of its refs removes in a commit of its own (`reverted`; by default the train is refused)")
     ap.add_argument("--into", default="main", help="the branch checked out here that receives the merge (default main)")
@@ -1392,7 +1397,7 @@ def main(argv: list[str]) -> int:
         except Refused as e:
             return refuse(PROG, str(e))
         print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
-              f"check it with `tools/check/train.sh {tip[:12]} MACHINE`, land it with `research merge {a.prepare}`")
+              f"check it with `tools/verity/check/train.sh {tip[:12]} MACHINE`, land it with `research merge {a.prepare}`")
         return 0
     if a.train:
         from .store import tools_registry

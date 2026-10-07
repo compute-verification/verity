@@ -8,8 +8,8 @@ import numpy as np
 
 import torch
 
-from verity.primitives.circuits.refs import Coll, PartLog, array_of
-from verity.primitives.circuits.types import Array
+from verity.ml.circuits.refs import Coll, PartLog, array_of
+from verity.ml.circuits.types import Array
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 

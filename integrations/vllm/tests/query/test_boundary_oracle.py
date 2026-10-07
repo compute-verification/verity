@@ -1,4 +1,4 @@
-"""Differential tests of `verity.primitives.circuits.boundary` on the registry's Programs against the explicit oracle `GateSelection.out` / `GateSelection.in_`.
+"""Differential tests of `verity.ml.circuits.boundary` on the registry's Programs against the explicit oracle `GateSelection.out` / `GateSelection.in_`.
 
 Every exact answer must equal the oracle on the expanded circuit; every bound must be >= the exact `w_out`; every
 `Unsupported` must be on a case named here (in the natural fixtures there are none; the named ones are produced by
@@ -12,17 +12,17 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits import boundary as B
-from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.primitives.circuits.liveness import Liveness
-from verity.primitives.circuits.layout import FunctionCall, Scope, GateSelection
-from verity.primitives.circuits.parts import Limits, Part, Unsupported, n_members
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.refs import Coll, array_of, strided_view, tuple_of
+from verity.ml.circuits import boundary as B
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.liveness import Liveness
+from verity.ml.circuits.layout import FunctionCall, Scope, GateSelection
+from verity.ml.circuits.parts import Limits, Part, Unsupported, n_members
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import Coll, array_of, strided_view, tuple_of
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, F32
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array, Tuple
 
 # --------------------------------------------------------------------------------------------------------------
 # oracle

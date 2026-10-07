@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 def _boolean_roots() -> list[Any]:
     """`silu_and_mul`'s served row, `SiluMul_v2`, at I = 8: the word view of `boolean_silu`'s `SiluMul_v4`."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import act
 
     return [
@@ -18,7 +18,7 @@ def _boolean_roots() -> list[Any]:
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import act
 
     return [
