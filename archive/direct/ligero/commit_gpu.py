@@ -1,6 +1,6 @@
 """The prover's Merkle commitment on the GPU, specialised to this protocol (lane enc-hopper): leaf ``c`` = Blake3 of
 column ``c`` of the codeword matrix ``U`` (``m`` little-endian uint32 words), node = Blake3(left || right) -- the same
-bytes as ``merkle.verify_path`` / the ``blake3`` package / ``kernels/hash_gpu`` (which stays the reference
+bytes as ``merkle.verify_path`` / the ``blake3`` package / ``verity/ml/kernels/hash_gpu`` (which stays the reference
 the tests compare against), in three launches instead of ~20 and without the local-memory round trips of the shared
 kernel:
 

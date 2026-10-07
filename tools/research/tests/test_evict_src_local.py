@@ -96,7 +96,7 @@ def test_LOW_a_sibling_tree_named_relatively_from_another_tree_or_from_src_keeps
     """_LOOSE needs the literal `src/` before the sha.  `diff -r . ../<sha>` from another tree, or `python3 <sha>/x.py` from <src>,
     names it without one."""
     fake_proc(node.proc, 800, cwd=f"{node.src}/{node.c}", cmdline=f"diff -r . ../{node.a}")
-    fake_proc(node.proc, 801, cwd=str(node.src), cmdline=f"python3 {node.b}/tools/check/check.py")
+    fake_proc(node.proc, 801, cwd=str(node.src), cmdline=f"python3 {node.b}/tools/verity/check/check.py")
     rep = run(node, origin=None)
     assert node.a not in deleted(rep) and node.b not in deleted(rep), deleted(rep)
 

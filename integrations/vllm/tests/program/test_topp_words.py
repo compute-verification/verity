@@ -9,11 +9,11 @@ import json
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.codec import decode_program, encode_program
-from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.circuits.types import Array
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.codec import decode_program, encode_program
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.types import Array
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import topp_split as TS
 from verity_vllm.program.registry import topp_keep_builder as TKB

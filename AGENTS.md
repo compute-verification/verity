@@ -11,25 +11,25 @@ be older than `main` (a cloud VM boots from a snapshot), so when they differ, `g
 Top-level directories (a grouping, not an import name, except `verity/`):
 
 - `verity/`: the core library, the distribution `verity` (the root `pyproject.toml`).
-  - `verity.primitives`: circuits and their evaluator (`circuits`, format in `circuits/PROTOCOL.md`), commitments
+  - `verity.ml`: circuits and their evaluator (`circuits`, format in `circuits/PROTOCOL.md`), commitments
     (`commitments`), shared hash code (`crypto`), and the one challenge derivation (`randomness`).
-  - `verity.protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs
+  - `verity.experimental.protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs
     (`verification.sampled_proofs`), PoUW (`accounting.work.pouw`), PoUS (`accounting.space.pous`) and the network
     certifier (`accounting.communication.certifier`). NCI is Lean only.
-  - `verity.claims`: the ids of security claims.
-  - `verity/Security/`: the Lean every protocol states its guarantees in.
+  - `verity.experimental.claims`: the ids of security claims.
+  - `Security/`: the Lean every protocol states its guarantees in.
 
-  The module list is `verity/README.md`. Import from the owning module (`from verity.primitives.circuits import
+  The module list is `verity/README.md`. Import from the owning module (`from verity.ml.circuits import
   Program`); `verity` re-exports nothing. Each directory's tests sit beside it as their own suite.
-- `catalog/` (`verity_catalog`): what the trusted base reads by digest.
+- `verity/ml/circuits/` (`verity.ml.circuits`): what the trusted base reads by digest.
   - `silicon`: the exact hardware semantics.
   - `definitions`: the primitive circuits' Definitions.
   - `targets`.
-  - `catalog/census/`: data only. Core never reads it; it takes such numbers as parameters.
-- `kernels/` (`verity_kernels`): fast code, each kernel checked against its Definition.
-- `experimental/` (`verity_experimental`): what is under development or kept for study (private circuits, multiproofs,
+  - `benchmarks/census/`: data only. Core never reads it; it takes such numbers as parameters.
+- `verity/ml/kernels/` (`verity.ml.kernels`): fast code, each kernel checked against its Definition.
+- `verity/experimental/` (`verity.experimental`): what is under development or kept for study (private circuits, multiproofs,
   sampled proofs' plans and consumers). `verity` never imports it.
-- `backends/flock/` (`verity_flock`): C-Flock, the proof system.
+- `verity/ml/flock/` (`verity_flock`): C-Flock, the proof system.
   - Its patches on upstream Flock, the CUDA prover, and the zero-knowledge prover (`live/`, `flock-circuit --zk`).
   - `verifier/`: the verifier of record, written in Lean, with upstream's Rust verifier as a cross-check.
 - `integrations/vllm/` (`verity_vllm`): the vLLM integration. It builds each served workload's circuit, commits its
@@ -55,7 +55,7 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 `tools/research/src/research/pods/nebius/deploy.toml`. Delete data you don't own on a node only with
 `research retention gc` or `research retention rm --approved-by @OWNER`, never a bare `rm`.
 
-Dependencies point inward, and `verity/tests/test_boundaries.py` enforces them:
+Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
 - Everything outside `verity/` may import the core. The core imports no other distribution, except that PoUW reads the
   catalog.
@@ -66,8 +66,8 @@ Dependencies point inward, and `verity/tests/test_boundaries.py` enforces them:
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run tools/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu python tools/check/check.py  # the check a merge requires; --record publishes it as an Attempt
+uv run tools/verity/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
+uv run --extra torch-cpu python tools/verity/check/check.py  # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
 ## Design rules
@@ -124,15 +124,15 @@ which the suite enforces.
 
 ## Checking and merging
 
-There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check, run on a multi-core CPU pod. It covers:
+There is no GitHub Actions CI. `check` (`tools/verity/check/check.py`) is the one check, run on a multi-core CPU pod. It covers:
 
 - every test suite;
 - `circuit-check --all`;
 - C-Flock's Rust build and tests;
 - the Lean verifier's build and its partition check;
 - the Lean check;
-- `merge_requires` (`tools/check/tool.py`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
-  against upstream's Rust verifier, for `backends/flock/` (`check.py --record` sends what it needs).
+- `merge_requires` (`tools/verity/check/tool.py`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
+  against upstream's Rust verifier, for `verity/ml/flock/` (`check.py --record` sends what it needs).
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
@@ -150,7 +150,7 @@ Landing:
 - A grant carries to a head whose own patch is byte-identical.
 - A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
   the tip; a push to the PR would refuse every tip that pins its old head.
-- A pure move that `tools/check/move_check.py BASE HEAD` certifies goes first, alone in its train.
+- A pure move that `tools/verity/check/move_check.py BASE HEAD` certifies goes first, alone in its train.
 
 ## Lean
 
@@ -159,21 +159,21 @@ Landing:
   it gains no new form ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a
   new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
-  - Code stays with its component and never requires `verity/Security/`: C-Flock's executable verifier
-    (`backends/flock/verifier/lean/`, no dependencies), the PoUS grader (`verity/protocols/accounting/space/pous/lean/`) and
-    the certifier program (`verity/protocols/accounting/communication/certifier/lean/`, `NetworkCertifier`, with its
+  - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
+    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/experimental/protocols/pous/lean/`) and
+    the certifier program (`verity/experimental/protocols/certifier/lean/`, `NetworkCertifier`, with its
     difftest).
-  - The analysis is `verity/Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Specs/` (its named
+  - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Specs/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
   - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
-  - The spec imports only itself and Mathlib (`layers` in `verity/Security/lean-audit.json`). A theorem that must stay
+  - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's analysis is all
     in `Proofs.Flock` until its spec is extracted.
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The Lean check.** Every Lake package has a lock, `lean-audit.json` until lean renames it `lean-lock.json`, and `check` runs the Lean check on every declaration
-  (`tools/lean/audit.py`):
+  (`tools/verity/lean/check.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
   - an assumption is a named `Prop`, taken as a hypothesis;
