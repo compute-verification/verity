@@ -1,6 +1,6 @@
 import Definitions.Pouw.NCP.Pinned
 import Proofs.Pouw.Exact
-import Specs.Pouw.Guarantees.NCP
+import Models.Pouw.Guarantees.NCP
 
 /-!
 # Noise that cancels inside one checked product: proofs
