@@ -103,9 +103,9 @@ def outerFn (input : Json) : V Json := do
     | j => match runOf j "send" with
       | .ok (.fault m) => pure (Except.error m)
       | _ => throw "send: not a boolean or {\"panic\": msg}"
-  let (o, evs) := outerSession r.events (← Flock.J.str input "session" ctx) (← Flock.J.str input "part" ctx) (← Flock.J.nat input "now_ms" ctx)
+  let (o, r) ← outerSession r (← Flock.J.str input "session" ctx) (← Flock.J.str input "part" ctx) (← Flock.J.nat input "now_ms" ctx)
     (← runOf (← Flock.J.get input "prove" ctx) "prove") (← runOf (← Flock.J.get input "ready" ctx) "ready") send
-  pure (Json.mkObj [("outcome", Json.str o.kind.name), ("record", Json.str (r.extend evs).text),
+  pure (Json.mkObj [("outcome", Json.str o.kind.name), ("record", Json.str r.text),
     ("sent_at", optNat o.sentAt), ("why", match o.why with | some w => Json.str w | none => Json.null)])
 
 end Core.Firewall

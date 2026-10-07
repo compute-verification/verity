@@ -182,6 +182,14 @@ def Record.read (text : String) : V Record := do
 /-- The record after `evs`, which extend its events: its text with their lines appended. -/
 def Record.extend (r : Record) (evs : Events) : Record := { text := r.text ++ linesFrom evs r.events.size, events := evs }
 
+/-- One op as the firewall runs it on its file: read the record whole, act on its events, append the events the op adds.
+Rust and Python read the file again at every op, under its lock, so a record one op left unreadable (its line appended to
+a last line without a newline) is the next op's error. -/
+def Record.op {α : Type} (r : Record) (f : Events → α × Events) : V (α × Record) := do
+  let r ← Record.read r.text
+  let (a, evs) := f r.events
+  pure (a, r.extend evs)
+
 /-! ## The rules over the events -/
 
 /-- The recursive session's `open`. -/
