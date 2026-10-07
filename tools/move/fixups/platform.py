@@ -103,6 +103,13 @@ EDITS = [
      'CODE_DIRS = [*CORE_DIRS, "catalog", "kernels", "experimental"]\n',
      "#: The code the integration imports besides its own: `verity`, with the catalog, the kernels and experimental in it.\n"
      "CODE_DIRS = [*CORE_DIRS]\n"),
+    ("integrations/vllm/tests/pipeline/test_experiment_index.py",
+     '    """The dirty check covers each directory that ships core (`research_tools.CORE_DIRS`), not one hand-written path, and the\n'
+     "    catalog's, the kernels' and experimental's beside it (`research_tools.CODE_DIRS`).\"\"\"\n"
+     "    assert set(research_tools.CORE_DIRS) < set(research_tools.CODE_DIRS)\n",
+     '    """The dirty check covers each directory that ships core (`research_tools.CORE_DIRS`), not one hand-written path, and\n'
+     '    every other directory the integration imports (`research_tools.CODE_DIRS`)."""\n'
+     "    assert set(research_tools.CORE_DIRS) <= set(research_tools.CODE_DIRS)\n"),
     ("integrations/vllm/verity_vllm/ops/pod_bootstrap.sh",
      'DISTS="catalog kernels experimental"   # the distributions under their groupings: verity.ml.circuits, verity.ml.kernels, '
      'verity.experimental\nfor G in $DISTS; do [ -d "$CORE/$G" ] || { echo "BOOTSTRAP_FAIL_TREE: no $G beside $ROOT" >&2; exit 3; }; '
