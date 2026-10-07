@@ -1,12 +1,14 @@
+import Definitions.Pous.P2.Cost
 import PousCheck.SetupProtocol
 
 /-!
-# The PoUS setup check's properties
+# The PoUS setup check's properties, stated against the Lean code
 
-What `verity/pous/p2/v4/setup` (`PousCheck.SetupProtocol.protocol`) accepts and publishes, stated against its `check`
-and `Accepts` (`CoreProtocol/Protocol.lean`), with no assumption: the check is a function of its three inputs, and
-these say which function. The inputs the check sees are every commitment and every `C*` of any shape, at parameters
-that `P2.Params.validate` accepts (the protocol's `params` refuses any other before the check runs).
+What `verity/pous/p2/v4/setup` (`PousCheck.SetupProtocol.protocol`, package `pous_check`) accepts and publishes, stated
+against its `check` and `Accepts` (`CoreProtocol/Protocol.lean`), and what its block decoder computes, stated against
+the trusted model's (`Definitions/Pous/P2/Cost.lean`). No statement takes an assumption: the check is a function of its
+three inputs, and these say which function. The check sees every commitment and every `C*` of any shape, at parameters
+`P2.Params.validate` accepts (the protocol's `params` refuses any other before the check runs).
 
 * `AcceptsIff`: the check accepts iff every block of `C*` decodes canonically (`Decodes`) and the decoded payload's
   commitment (`Commit.commit`) is the server's;
@@ -14,16 +16,18 @@ that `P2.Params.validate` accepts (the protocol's `params` refuses any other bef
   (`leaves`), beside the server's commitment, the salt and the block count;
 * `Deployed`: the registered point `P2.Params.deployed` is valid, with `p = 2^16448 − 21065`, 2,056-byte blocks of
   2,054 payload bytes, and `B = 2^19` blocks;
-* `AcceptsIffDeployed`, `PublishesRootDeployed`: the first two at that point.
+* `AcceptsIffDeployed`, `PublishesRootDeployed`: the first two at that point;
+* `DecodeIsModel`: the code's `P2.decodeValue p K t c` is the trusted model's block decoder `Pous.decBlock` (P2 in the
+  ring model `ringRO`) run at the identity labeling with block keys `(K, t)`, on every canonical `c < p`, read mod
+  `2^b`; `DecodeIsModelDeployed` at the registered point. With `Decodes` (which reads `decodeValue`), it ties what the
+  check accepts to `p2ring`'s `dec`, which the model's audit statements read.
 
 `Decodes` and `leaves` are declarative: they name each block by its segment and index rather than by the check's loop,
-and read only the code's primitives (the keys, `P2.decodeValue`, `Merkle.packageLeaf`), whose own properties are stated
-with them. Statements only: nothing here is proved or pinned yet.
+and read only the code's primitives (the keys, `P2.decodeValue`, `Merkle.packageLeaf`). Only `Deployed` is proved
+(`Properties.Proofs.Pous`); nothing is pinned yet.
 -/
 
-namespace Pous.Properties
-
-open PousCheck
+namespace PousCheck.Properties
 
 /-- Block `j` of segment `s` decodes canonically to the payload `m`: the keys of `(s, j)` under `salt` exist, the block
 is `blockBytes` bytes, its value `c` is below `p`, `D(c)` fits in the payload's bits, and `m` is `D(c)` as `payloadBytes`
@@ -75,4 +79,24 @@ def AcceptsIffDeployed : Prop := AcceptsIffAt P2.Params.deployed
 
 def PublishesRootDeployed : Prop := PublishesRootAt P2.Params.deployed
 
-end Pous.Properties
+/-- The identity labeling `φ = id` of `Z/p` (the model's `nonemptyΩ` witness), at which `p2ring` is
+`decode_segment` for given keys. -/
+def idLabeling (p : ℕ) [NeZero p] : Pous.OddLabeling p :=
+  ⟨(ZMod.finEquiv p).symm.toEquiv, fun x => map_neg (ZMod.finEquiv p).symm x⟩
+
+/-- At `(B, w, p, b)`: for every block `j` whose keys are the mask `K < 2^w` and the offset `t < p`, and every canonical
+`c < p`, the model's `decBlock` run at the identity labeling reads `P2.decodeValue p K t c mod 2^b`. -/
+def DecodeIsModelAt (B w p b : ℕ) [NeZero p] : Prop :=
+  ∀ (keys : Fin B → Pous.Bits w × Fin p) (j : Fin B) (K c : ℕ),
+    K < 2 ^ w → c < p → (keys j).1 = Pous.bitsOfNat w K →
+      Pous.bitsVal ((Pous.decBlock B w p b j (Pous.bitsOfNat w c)).run
+          ((Pous.ringRO B w p).answer (idLabeling p, keys)))
+        = P2.decodeValue p K (keys j).2 c % 2 ^ b
+
+def DecodeIsModel : Prop := ∀ (B w p b : ℕ) [NeZero p], p ≤ 2 ^ w → DecodeIsModelAt B w p b
+
+/-- `DecodeIsModel` at the registered point: `2^19` blocks of `16,448` bits, `p = 2^16448 − 21065`, `8 · 2,054` payload
+bits. -/
+def DecodeIsModelDeployed : Prop := DecodeIsModelAt (2 ^ 19) 16448 (2 ^ 16448 - 21065) (8 * 2054)
+
+end PousCheck.Properties

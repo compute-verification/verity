@@ -1,6 +1,8 @@
-# The properties of the protocols' programs (untrusted statements, no proofs): each stated against a program's
-# `Core.Protocol` check, which it requires by path. Its modules sit beside the trusted text's (`srcDir = ".."`) under a
-# root of their own, `Properties`. The proofs are to go in `security_proofs`, which will require this package.
+# The security analysis's properties of the Lean code: what each component's executable Lean does, stated against its
+# functions (`Pouw`: PoUW's window; `Nci`: the NCI check; `Pous`: the PoUS setup check). It may require `security`
+# (Definitions, Models) and the code it states properties of, never `security_proofs`. Its modules sit beside the trusted
+# text's (`srcDir = ".."`) under a root of their own, `Properties`: `Properties.<Protocol>` states,
+# `Properties.Proofs.<Protocol>` proves.
 name = "security_properties"
 srcDir = ".."
 defaultTargets = ["Properties"]
@@ -10,9 +12,21 @@ autoImplicit = false
 relaxedAutoImplicit = false
 
 [[require]]
+name = "security"
+path = ".."
+
+[[require]]
+name = "pouw_window"
+path = "../../verity/experimental/core/protocols/pouw/window"
+
+[[require]]
+name = "nci_check"
+path = "../../verity/experimental/core/protocols/network/nci/lean"
+
+[[require]]
 name = "pous_check"
 path = "../../verity/experimental/core/protocols/pous"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Pous"]
+roots = ["Properties.Pouw", "Properties.Proofs.Pouw", "Properties.Nci", "Properties.Proofs.Nci", "Properties.Pous", "Properties.Proofs.Pous"]
