@@ -222,17 +222,27 @@ def workload(item: Item) -> dict:
 def reconcile(items: list[Item], shadow: list[dict]) -> tuple[list[dict], list[str]]:
     """The Workloads to create, in arrival order (Kueue's FIFO is by creation time), and the names to delete (Workloads whose
     item is gone). While any new item is one the node runs, only those are created, and new waiters wait a tick, so Kueue
-    has admitted what already runs before it orders the waiters behind it."""
-    have = {w["metadata"]["name"] for w in shadow}
+    has admitted what already runs before it orders the waiters behind it. A waiter whose request is newer than its Workload's
+    (a holder that let go and asked again) is a new request: its Workload is deleted, and made again next tick."""
+    have = {w["metadata"]["name"]: w for w in shadow}
     want = {workload_name(i.key): i for i in items}
+    stale = {n for n, i in want.items() if n in have and _stale(have[n], i)}
     new = sorted((i for n, i in want.items() if n not in have), key=lambda i: (i.since, i.key))
     if any(i.running for i in new):
         new = [i for i in new if i.running]
-    return [workload(i) for i in new], sorted(have - set(want))
+    return [workload(i) for i in new], sorted((set(have) - set(want)) | stale)
+
+
+def _stale(w: dict, item: Item) -> bool:
+    """Whether `w` is no longer `item`'s request: being deleted, or a waiter's request newer than the one `w` was made for."""
+    meta = w["metadata"]
+    return bool(meta.get("deletionTimestamp")) or (
+        not item.running and bool(item.since) and (meta.get("annotations") or {}).get("vy.dev/shadow-since") != item.since)
 
 
 def compare(t: str, items: list[Item], shadow: list[dict], before: frozenset[str] = frozenset()) -> dict:
     """One record: each item the node and Kueue disagree on. An item whose Workload is new this tick isn't compared, and a
+    stale Workload isn't compared either, and a
     disagreement is a divergence only when the last tick had it too (`before`, its record's `disagree`): a slot handed over
     between two ticks reads as one for a tick, until the shadow deletes the old holder's Workload."""
     by_name = {w["metadata"]["name"]: w for w in shadow}
@@ -241,7 +251,7 @@ def compare(t: str, items: list[Item], shadow: list[dict], before: frozenset[str
     compared = 0
     for i in sorted(items, key=lambda i: i.key):
         w = by_name.get(workload_name(i.key))
-        if w is None or not i.active:
+        if w is None or not i.active or _stale(w, i):
             continue
         compared += 1
         admitted = _true(w, "QuotaReserved")

@@ -108,8 +108,8 @@ def test_reconcile_creates_what_runs_before_waiters_and_deletes_the_gone() -> No
     assert [w["metadata"]["annotations"]["vy.dev/shadow-key"] for w in create] == ["w"] and delete == []
 
 
-def shadow(key: str, admitted: bool) -> dict:
-    return {"metadata": {"name": K.workload_name(key)}, "status": {"conditions": [
+def shadow(key: str, admitted: bool, since: str = "2026-10-07T08:00Z") -> dict:
+    return {"metadata": {"name": K.workload_name(key), "annotations": {"vy.dev/shadow-since": since}}, "status": {"conditions": [
         {"type": "QuotaReserved", "status": "True" if admitted else "False", "message": "insufficient quota"}]}}
 
 
@@ -123,6 +123,20 @@ def test_compare_names_both_ways_the_node_and_kueue_differ() -> None:
     assert rec["schema"] == "cluster/kueue-shadow/v1" and rec["items"] == 5 and rec["compared"] == 4
     assert [(d["key"], d["kind"]) for d in rec["divergences"]] == [("kueue-ran", "kueue-ran"), ("node-ran", "node-ran")]
     assert rec["divergences"][1]["kueue"] == "insufficient quota"
+
+
+def test_a_holder_that_asks_again_is_a_new_request() -> None:
+    """A run that let its slot go and queued again keeps its key; its admitted Workload is the old request's, so the shadow
+    deletes it rather than counting the old admission against whoever the node gave the slot to."""
+    again = item("lean/build/r1", False, "2026-10-07T10:33Z")
+    old = shadow("lean/build/r1", True, "2026-10-07T10:04Z")
+    rec = K.compare("2026-10-07T10:34:00Z", [again], [old], frozenset({"lean/build/r1"}))
+    assert rec["compared"] == 0 and rec["divergent"] == 0
+    create, delete = K.reconcile([again], [old])
+    assert create == [] and delete == [K.workload_name("lean/build/r1")]
+    gone = old | {"metadata": old["metadata"] | {"deletionTimestamp": "2026-10-07T10:34:01Z"}}
+    assert K.compare("2026-10-07T10:35:00Z", [again], [gone])["compared"] == 0
+    assert K.reconcile([again], [shadow("lean/build/r1", False, "2026-10-07T10:33Z")]) == ([], [])
 
 
 def test_last_disagree_reads_the_records_last_tick(tmp_path) -> None:
