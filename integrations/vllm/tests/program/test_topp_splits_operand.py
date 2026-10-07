@@ -24,7 +24,7 @@ import pytest
 
 from verity.primitives.circuits.defs import bind
 from verity.ml.circuits.ops import sampling as SM
-from verity_vllm.properties.difftests import sampling_topp_difftest as D
+from verity_vllm.program.kernels import sampling_topp_difftest as D
 from verity.ml.circuits.ops import topp_split as TS
 from verity.ml.circuits.ops import topp_geometry
 

@@ -30,7 +30,7 @@
     "GumbelStreamKey_v2": "verity.ml.circuits.ops.gumbel_boolean",
     "GumbelTokenSelectSharedGreedy_v1": "verity.ml.circuits.ops.sampling",
     "GumbelTokenSelect_v1": "verity.ml.circuits.ops.sampling",
-    "GumbelTopPTokenSelectDifftest_v1": "verity_vllm.properties.difftests.sampling_topp_difftest",
+    "GumbelTopPTokenSelectDifftest_v1": "verity_vllm.program.kernels.sampling_topp_difftest",
     "GumbelTopPTokenSelectSharedGreedy_v1": "verity.ml.circuits.ops.sampling",
     "GumbelTopPTokenSelect_v1": "verity.ml.circuits.ops.sampling",
     "GumbelTopPTokenSelect_v2": "verity.ml.circuits.ops.topp_words",

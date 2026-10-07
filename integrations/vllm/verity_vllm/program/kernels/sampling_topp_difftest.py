@@ -6,8 +6,8 @@ pos, temp)` — temperature + top-p (split pipeline) + seeded Gumbel select — 
     apply_top_k_top_p(logits32, k=None, p=top_p)                                            # `_apply_topp_split` (batch 1 -> S = splits_for(1, num_sm))
     gumbel_sample(logits32, idx, temperature, seeds, pos, apply_temperature=False, ...)      # `_gumbel_sample_kernel` + argmax
 
-    # pod, torch venv:  VERITY_REAL_LOGITS=<rows.npy> verity-vllm properties-admission produce --adapter verity_vllm.properties.difftests.sampling_topp_difftest --n 40 --seed 13 --out DIR
-    # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.properties.difftests.sampling_topp_difftest --dir DIR --out RUN/sampling_topp.json
+    # pod, torch venv:  VERITY_REAL_LOGITS=<rows.npy> verity-vllm properties-admission produce --adapter verity_vllm.program.kernels.sampling_topp_difftest --n 40 --seed 13 --out DIR
+    # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.program.kernels.sampling_topp_difftest --dir DIR --out RUN/sampling_topp.json
 
 The production side ALSO emits the masked fp32 row (output 1) so the intermediate `TopPMask_v1{V,S}` value is checked lane by lane,
 not only the sampled token.  S is a static of the specialization = the split count the production launch used (recorded per case).

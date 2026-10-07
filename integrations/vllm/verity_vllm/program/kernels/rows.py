@@ -225,7 +225,7 @@ def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]
     arrive as the committed / Const encodings; every operand is checked against the signature's leaf count before the walk (a slice
     that is not exactly one f32 word is a fault of the Program's wiring, named here, never a silent truncation)."""
     from verity.primitives.circuits.evaluation import evaluate
-    from verity_vllm.properties.difftests import sampling_topp_difftest as DT
+    from verity_vllm.program.kernels import sampling_topp_difftest as DT
     V = int(statics["V"])
     if len(operands) != len(_GUMBEL_TOPP_OPERANDS):
         raise ValueError(f"GumbelTopPTokenSelect_v1 takes {len(_GUMBEL_TOPP_OPERANDS)} operands, the row wires {len(operands)}")

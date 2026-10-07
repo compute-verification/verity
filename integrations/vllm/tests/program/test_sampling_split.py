@@ -22,7 +22,7 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-REG = VLLM / "verity_vllm" / "program" / "registry"
+REG = REPO / "verity" / "ml" / "circuits" / "ops"
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 TASKS = REPO / "tools" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
 PKG = "verity.ml.circuits.ops"
@@ -34,6 +34,8 @@ TWIN_MODULES = ("sampling_rows", "sampling_topp_difftest", "topp_split", "sampli
 VOCAB_MODULES = ("sampling_vocab",)
 #: the modules of the unsplit tree too, so the writer and the test find the same Definitions on either
 FAMILY_MODULES = DEFINITION_MODULES + TWIN_MODULES + VOCAB_MODULES
+#: the twin whose differential adapter imports vLLM and torch stays in the integration, beside its kernel twins
+ELSEWHERE = {"sampling_topp_difftest": "verity_vllm.program.kernels"}
 OTHER_DEFINITION_MODULES = {
     "ref_prims": "F32GtStrict_v1 and F32Sub_v1, the v1 fp32 compare and subtract the selects and the top-p gates call",
     "b1": "ArgmaxStep_v1 and TokenSelect_v1, the word Definitions sampling_boolean's Boolean ones compute (word=)",
@@ -64,19 +66,23 @@ def defining_module(fn) -> str | None:
     return getattr(getattr(f, "func", f), "__module__", None)
 
 
+def _module(m: str) -> str:
+    return f"{ELSEWHERE.get(m, PKG)}.{m}"
+
+
 def family_definitions() -> dict[str, object]:
     """Every Definition a family module constructs and binds to a global, by id (a family maker's, such as `BitAtx{W}_v1`, is
     registered on first use, so whether the registry holds one depends on what ran before)."""
-    import importlib
+    import importlib.util
 
     from verity.primitives.circuits.defs import FunctionDefinition
     from verity.ml.circuits.ops.catalog import load
 
     load()
-    mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}
+    mods = {_module(m) for m in FAMILY_MODULES}
     out = {}
     for m in sorted(mods):
-        if (REG / f"{m.rsplit('.', 1)[1]}.py").exists():
+        if importlib.util.find_spec(m) is not None:
             for v in vars(importlib.import_module(m)).values():
                 if isinstance(v, FunctionDefinition) and defining_module(v) in mods:
                     out.setdefault(v.id, v)
@@ -228,7 +234,7 @@ def test_the_exceptions_are_current():
 
 def test_twins_and_vocabulary_are_not_definition_modules(defs):
     """The twin and vocabulary modules construct no Definition the registry serves (the difftest's own is unregistered)."""
-    served = {k for k, d in defs.items() if defining_module(d) in {f"{PKG}.{m}" for m in TWIN_MODULES + VOCAB_MODULES} and d.register}
+    served = {k for k, d in defs.items() if defining_module(d) in {_module(m) for m in TWIN_MODULES + VOCAB_MODULES} and d.register}
     assert not served, sorted(served)
 
 

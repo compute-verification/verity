@@ -361,7 +361,7 @@ def _cases(V: int, n: int, seed: int):
 @pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
     from verity_vllm.properties.admission import evaluate_spec
-    from verity_vllm.properties.difftests import sampling_topp_difftest as D
+    from verity_vllm.program.kernels import sampling_topp_difftest as D
     V = 1024
     for bf, temp, p, S, seed, pos in _cases(V, 30, 11):
         words = [bf.astype(np.uint64), np.array([f32b(p)], dtype=np.uint64), np.array([seed], dtype=np.uint64),
@@ -379,7 +379,7 @@ def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agre
     the kernel-consumed masked row, seed / pos / temperature / top_p as the kernel read them.  The vectorised row reproduces the
     served token AND every lane of the masked row; the lane walk is run on one of them (10 s) as the reference beside it."""
     from verity_vllm.properties.admission import evaluate_spec
-    from verity_vllm.properties.difftests import sampling_topp_difftest as D
+    from verity_vllm.program.kernels import sampling_topp_difftest as D
     z = np.load(os.path.join(FIX, "fstoch01_rows.npz"))
     meta = json.load(open(os.path.join(FIX, "fstoch01_rows.npz.json")))
     first = True

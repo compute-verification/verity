@@ -31,7 +31,7 @@ new = { verity = "verity", verity_experimental = "experimental/verity_experiment
 # ... except what imports an outside system (torch, vllm, triton): difftests against vLLM's kernels and a capture CLI
 "integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py" = "integrations/vllm/verity_vllm/properties/difftests/layer_norm_difftest.py"
 "integrations/vllm/verity_vllm/program/registry/moe_difftest.py" = "integrations/vllm/verity_vllm/properties/difftests/moe_difftest.py"
-"integrations/vllm/verity_vllm/program/registry/sampling_topp_difftest.py" = "integrations/vllm/verity_vllm/properties/difftests/sampling_topp_difftest.py"
+"integrations/vllm/verity_vllm/program/registry/sampling_topp_difftest.py" = "integrations/vllm/verity_vllm/program/kernels/sampling_topp_difftest.py"
 "integrations/vllm/verity_vllm/program/registry/mla_capture.py" = "integrations/vllm/verity_vllm/properties/difftests/mla_capture.py"
 "integrations/vllm/verity_vllm/program/registry/quarantine/act/silu_mul_difftest.py" = "integrations/vllm/verity_vllm/properties/difftests/silu_mul_difftest.py"
 "integrations/vllm/verity_vllm/program/registry/quarantine/collective/allreduce_difftest.py" = "integrations/vllm/verity_vllm/properties/difftests/allreduce_difftest.py"
@@ -93,7 +93,7 @@ new = { verity = "verity", verity_experimental = "experimental/verity_experiment
 "verity_vllm.program.registry.moe_difftest" = "verity_vllm.properties.difftests.moe_difftest"
 "verity_vllm.program.registry.quarantine.act.silu_mul_difftest" = "verity_vllm.properties.difftests.silu_mul_difftest"
 "verity_vllm.program.registry.quarantine.collective.allreduce_difftest" = "verity_vllm.properties.difftests.allreduce_difftest"
-"verity_vllm.program.registry.sampling_topp_difftest" = "verity_vllm.properties.difftests.sampling_topp_difftest"
+"verity_vllm.program.registry.sampling_topp_difftest" = "verity_vllm.program.kernels.sampling_topp_difftest"
 
 [aliases]
 

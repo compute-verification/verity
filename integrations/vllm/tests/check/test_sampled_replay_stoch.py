@@ -104,7 +104,7 @@ def _select_rows(pi):
 def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registry_difftest_walk():
     assert "GumbelTopPTokenSelect_v1" in RK.EVALUATORS and "GumbelTopPTokenSelect_v1" not in RC.NOT_YET
     from verity_vllm.properties.admission import evaluate_spec
-    from verity_vllm.properties.difftests import sampling_topp_difftest as DT
+    from verity_vllm.program.kernels import sampling_topp_difftest as DT
     rng = np.random.default_rng(11)
     lg = _logits(rng, 0)
     for S in (1, 2, 4, 8):
