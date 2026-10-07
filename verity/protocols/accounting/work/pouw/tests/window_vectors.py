@@ -5,8 +5,9 @@ public inputs file C-Flock's verifier writes), and needs a reason in the PR.
 
 The toy window: P = 4 entries over a toy window domain, the identity ``verity/pouw/window-vectors/v1`` of {"window":
 "toy"}; call 0 keeps A rows 0, 1, 3 of four (row 2 refused) and both of its B rows, call 1 one A row and two B rows, so 8
-real tiles, level 7, N = 9, and the filler's one zero row on each side covers tile 8.  Rows are FP8 rows of k = 32 whose
-codes and salts are SHAKE-256 of a tag; the draw is K′ = 3 tiles in sessions of cap 2, so session 1 pads with N − 1."""
+real tiles, level 7, N = 9, and the filler's one zero row on each side covers tile 8.  Both calls name one toy pass's -h3
+tile root, and F_σ its toy tile domain.  Rows are FP8 rows of k = 32 whose codes and salts are SHAKE-256 of a tag; the
+draw is K′ = 3 tiles in sessions of cap 2, so session 1 pads with N − 1."""
 
 from __future__ import annotations
 
@@ -41,6 +42,11 @@ def _row(label: str) -> list[int]:
     return L.words_fp8_p(list(raw[:K]), list(raw[K:K + 64]))
 
 
+def pass_h3() -> tuple[bytes, bytes]:
+    """The toy pass's -h3 tile root and its tile tree's domain id."""
+    return _bytes("pass/root_h3", 64), identity_digest_sha512(TAG, {"pass": "toy", "tiles": "h3"})
+
+
 def window_domain() -> CommitmentDomain:
     return CommitmentDomain(identity_digest_sha512(TAG, {"window": "toy"}), Wd.OWNER, RangeIndexedDomain(0, P), hash="sha512")
 
@@ -57,6 +63,7 @@ def window() -> dict:
     """The toy window's entries, sides and root, as `vectors` pins them."""
     dom = window_domain()
     sdom = {s: Wd.side_domain(dom.domain_id, s) for s in "ab"}
+    root_h3, _ = pass_h3()
     entries, sides, at = [], [], 0
     zero = [0] * L.ROW_WORDS["fp8-p"](K)
     for c, call in enumerate(CALLS + (None,)):
@@ -66,7 +73,7 @@ def window() -> dict:
         size = len(rows["a"]) * len(rows["b"]) if call else Wd.bucket(at).n - at
         record = Wd.record_digest({"call": c, "keep": keep}) if call else bytes(64)
         entries.append(Wd.Entry("call" if call else "filler", at, at + size, side["a"]["rows"], side["b"]["rows"],
-                                side["a"]["root"], side["b"]["root"], record))
+                                side["a"]["root"], side["b"]["root"], root_h3 if call else bytes(64), record))
         sides.append(side)
         at += size
     entries += [Wd.Entry("none")] * (P - len(entries))
@@ -75,7 +82,7 @@ def window() -> dict:
     leaves = [Wd.entry_leaf(dom, e, bc) for e, bc in enumerate(bcs)]
     root = tree_levels(dom, leaves)[-1][0]
     return {"domain": dom, "side_domains": sdom, "entries": entries, "sides": sides, "salts": salts, "bcs": bcs,
-            "leaves": leaves, "root": root, "work": Wd.bucket(entries[len(CALLS)].lo)}
+            "leaves": leaves, "root": root, "work": Wd.bucket(entries[len(CALLS)].lo), "root_h3": root_h3}
 
 
 def registration(w: dict) -> dict:
@@ -87,13 +94,15 @@ def registration(w: dict) -> dict:
 def vectors() -> dict:
     w = window()
     reg = registration(w)
+    _, domain_h3 = pass_h3()
     a = w["sides"][0]["a"]
     sdom = w["side_domains"]["a"]
     return {
         "about": f"python {Path(__file__).name} rewrites this file; its docstring says what is pinned",
         "layout": {"entry_bytes": Wd.ENTRY_BYTES, "entry_words": Wd.ENTRY_WORDS, "depths": Wd.DEPTHS, "t_bits": Wd.T_BITS,
                    "kinds": Wd.KIND_CODE, "schema": Wd.ENTRY_SCHEMA},
-        "window": {"domain": w["domain"].domain_id.hex(), "work": w["work"].to_json(1), "root": w["root"].hex()},
+        "window": {"domain": w["domain"].domain_id.hex(), "work": w["work"].to_json(1), "root": w["root"].hex(),
+                   "root_h3": w["root_h3"].hex(), "domain_h3": domain_h3.hex()},
         "entries": [{"entry": x.to_json(), "row": x.row().hex(), "digest": Wd.entry_digest(x).hex(), "salt": s.hex(),
                      "bc": bc.hex(), "leaf": leaf.hex()}
                     for x, s, bc, leaf in zip(w["entries"], w["salts"], w["bcs"], w["leaves"])],
@@ -102,7 +111,7 @@ def vectors() -> dict:
                  "leaves": [x.hex() for x in a["leaves"]], "pad_leaf": sdom.pad(a["rows"]).hex(),
                  "root": a["root"].hex(), "path_of_1": [x.hex() for x in Wd.side_path(sdom, a["levels"], 1)]},
         "public_inputs": {"registration": reg, "drawn": list(DRAWN), "cap": CAP,
-                          "sessions": [Wd.public_inputs(reg, DRAWN, s, CAP).hex()
+                          "sessions": [Wd.public_inputs(reg, DRAWN, s, CAP, domain_h3).hex()
                                        for s in range(Wd.sessions(len(DRAWN), CAP))]},
     }
 

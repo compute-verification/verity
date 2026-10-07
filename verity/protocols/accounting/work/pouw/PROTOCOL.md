@@ -141,10 +141,11 @@ window this way.
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
 `hm96-sha512/row/v2` row at index e: the leaf is hm96-sha512's tree leaf of `commit_string(key, x, salt_e)`, where x is
-the entry row's `sha512/row/v2` digest over its 1,920 bits, salt_e is 192 fresh bytes and key is the pinned default
+the entry row's `sha512/row/v2` digest over its 2,432 bits, salt_e is 192 fresh bytes and key is the pinned default
 (`Entry`, `entry_bc`, `entry_leaf`).
 
-**An entry row** is 240 bytes (120 u16 words). Each integer is a u64, little-endian:
+**An entry row** is 304 bytes (152 u16 words, 19 128-bit words). Each integer is a u64, little-endian, and each digest
+starts on a 128-bit word:
 
 ~~~text
 bytes     0..8    kind      0 none, 1 call, 2 filler
@@ -155,7 +156,8 @@ bytes     0..8    kind      0 none, 1 call, 2 filler
          40..48   zero      so the digests start on a 128-bit word
          48..112  root_a    A's side root (64 bytes)
         112..176  root_b    B's side root
-        176..240  record    a call's record: SHA-512 of its RFC 8785 canonical JSON; zero for the filler and for none
+        176..240  root_h3   a call's pass's -h3 tile-tree root; zero for the filler and for none
+        240..304  record    a call's record: SHA-512 of its RFC 8785 canonical JSON; zero for the filler and for none
 ~~~
 
 An empty entry is the zero row. A call's record is the committer's own description of the call, including `keep`: for
@@ -180,25 +182,60 @@ side_domain(w, s) = frame-v3-sha512 domain, binding identity_digest_sha512("veri
 Here w is the window root's domain id, which is one-stage's served domain of the window's program, partition and
 context. So the side domains, like the window's, are a function of the context and ℓ alone.
 
-**The window statement** (L4, `window_problem`) holds on the P entry rows when all of the following hold:
+**The -h3 tile tree** is the pass's own tile commitment, the one its manifest publishes (`commitment`: root and count),
+not a tree the window's committer builds. Under `pearl-c-sm120-v1-h3` with SHA-512 throughout (not on main yet: main's
+Pearl-C hashings are h0 to h2) it is one tree per pass, over every call's tiles:
 
-- each row is an entry row: 240 bytes, a known kind, and a zero word at 40..48;
+~~~text
+domain    hm96-sha512 (frame-v3-sha512, hm96-sha512 leaves over 64-byte digests), binding
+          tagged_sha512("verity/pouw/transcript/v2", salt, weights_root), owner −1, positions [0, count)
+          (`audit.transcript_domain`): one per pass (its epoch's salt and weights' root), not per window or call
+depth     D_H3 = ⌈log2 count⌉, count the pass's tile count, which the domain id binds
+leaf p    the pass's tile p, in workload order then each call's 64 x 64 tiles row-major (`audit.tile_refs`); its value
+          x ‖ y, x the tile's -h3 leaf (`pearl_c.leaf(·, "h3")`: `sha512/row-seg/v1` over the tile's messages, per tile row
+          and 32-column chunk le32 C̃ ‖ le32 U, 256 bytes each) and y its 192-byte salt (the prover's ChaCha20 stream,
+          nonce 2^63, blocks 3p to 3p + 2); the frame leaf is frame-v3's at rank and position p, under
+          `hm96-sha512/row-seg/v1`, of hm96-sha512's tree leaf of commit_string(key, x, y)
+~~~
+
+So a window holds calls of one pass, each call's entry names that pass's root, and the window statement holds every
+call's root_h3 to the root the pass published.
+
+**The verdict asserts the served result.** A drawn tile's unit (TileRead, not yet a Program) reads three committed
+rows: its A row and its B row through its entry's side roots, and its pass's -h3 leaf through root_h3. It compares, in
+gates, the leaf's x with the -h3 leaf its own tile's words give, so the tile it proves is the tile the pass served. The
+read is not at position t. Window tile t is one word, (I, J) = (keep_a[i], keep_b[j]) of its call for
+(i, j) = `tile_in(entry, t)`, and the pass's leaf holding it is
+
+~~~text
+p    the call's first tile in the pass + (I div 64)·⌈n/64⌉ + (J div 64)
+at   (I mod 64) | (J mod 64) << 6 | (rows/16 − 1) << 12, rows the tile's height (64, or the call's short last tile row)
+~~~
+
+So up to 4,096 window tiles read one leaf, and the leaf a unit computes is its word's 64 x 64 tile's (the output of
+`Pc8TileLeafH3`, not on main yet, from the word and the tile's other messages as advice), not `Pc8TileHidden`'s 1 x 1
+digest. I, J, the call's first tile and its shape are in its record only, so the entry row does not yet give a unit p
+and at from what it reads.
+
+**The window statement** (L4, `window_problem`) holds on the P entry rows and the pass's published tile root when all of
+the following hold:
+
+- each row is an entry row: 304 bytes, a known kind, and a zero word at 40..48;
 - each entry satisfies the layout (`layout_problem`): its range is 40-bit, an empty entry is the zero row, a call's or
-  the filler's sides hold 1..2^D rows, and the filler's record is zero;
+  the filler's sides hold 1..2^D rows, and the filler's root_h3 and record are zero;
 - the kinds are the calls (at least one), then one filler, then empty entries;
 - the calls' and the filler's ranges are nonempty and contiguous from 0;
 - a call's range is exactly its n_a·n_b tiles, and the filler's is at most its n_a·n_b;
+- every call's root_h3 is the pass's tile root;
 - the ranges end at N, and the registered level is `bucket` of the calls' tiles N_real.
-
-The verdict is unchanged: every drawn tile is proved and opened, or not. No served digest is compared.
 
 **The tile instances' public inputs.** The K′ drawn tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each
 (`sessions`). Session σ's instance s takes the tile t = drawn[σ·cap + s] while σ·cap + s < K′, and otherwise t = N − 1,
 the window's last tile, which is always a filler tile (`instance_ts`). The verifier writes its own `--public-inputs` file
 F_σ (C-Flock's `verity/flock-public-inputs/v1`, read by Lean's `HmIn.checkOwn`) from the one-stage registration (its
-population N, its law subset:K′, and its window root and domain at port `entries`), its own draw, σ and the cap alone
-(`public_inputs`). F_σ is a key-sorted JSON header line `{"format", "instances": cap, "ports"}`, then each instance's
-words, u16 little-endian, instance-major, in port order:
+population N, its law subset:K′, and its window root and domain at port `entries`), its own draw, σ, the cap and the
+pass's tile domain (`public_inputs`). F_σ is a key-sorted JSON header line `{"format", "instances": cap, "ports"}`, then
+each instance's words, u16 little-endian, instance-major, in port order:
 
 ~~~text
 port       words   seed           derivation                               value
@@ -207,15 +244,30 @@ root       32      registration   verity/pouw/window/root/v1               the w
 domain     32      registration   verity/pouw/window/domain/v1             its domain id w
 domain_a   32      registration   verity/pouw/window/side-domain-a/v1      side_domain(w, "a")'s id
 domain_b   32      registration   verity/pouw/window/side-domain-b/v1      side_domain(w, "b")'s id
+domain_h3  32      pass           verity/pouw/window/domain-h3/v1          the pass's tile domain id (its D_H3)
 ~~~
 
-Each port is a whole number of 128-bit words, so no row leaf shares a word with a public input. The window statement is
-proved as its own direct statement per window, separate from the tiles' sessions.
+Each port is a whole number of 128-bit words, so no row leaf shares a word with a public input; an instance is 336
+bytes. The window statement is proved as its own direct statement per window, separate from the tiles' sessions.
+
+**Sizing.** Served windows register levels 87 to 143 (N from 9,216 to 1,179,648). A C-Flock session is at most
+m = k_log + max(3, ⌈log2 blocks⌉) ≤ 35, so a session of a unit of 2^k_log bits per instance holds at most 2^(35 − k_log)
+instances (`session_cap`). The drawn tile's unit in the served runs, `Pc8TileLeafH3{K=4096, sm120}`, is 3,492,322 ANDs
+at k_log 24; TileRead's three reads add to it.
+
+~~~text
+ε, δ               K′ over levels 87..143                  cap at k_log 24   S     cap at k_log 25   S
+0.1%, 2^-40        N up to level 100, at most 31,178        2,048             16    1,024             31
+1%, 2^-128         N at level 87, at most 9,937             2,048             5     1,024             10
+~~~
+
+The largest K′ is at level 143: 27,713 tiles unpadded, times g_(ℓ+1)/g_ℓ = 9/8 at levels whose point is 8·2^e.
 
 **Vectors:** `tests/vectors/window.json` (`tests/window_vectors.py`) pins a toy window of P = 4 entries over a toy window
-domain. Call 0 keeps A rows 0, 1 and 3 of four, so its refused row 2 is no leaf. The vectors hold each entry's JSON, its
-row, digest, salt, b ‖ c and leaf; one side tree's leaves, its pad leaf, its root and a path; the window root; and F_σ for
-the draw (1, 4, 6) in sessions of 2, where the second session pads with N − 1 = 8.
+domain. Call 0 keeps A rows 0, 1 and 3 of four, so its refused row 2 is no leaf. Both calls name one toy pass's tile
+root. The vectors hold each entry's JSON, its row, digest, salt, b ‖ c and leaf; one side tree's leaves, its pad leaf, its
+root and a path; the window root; and F_σ, with a toy pass tile domain, for the draw (1, 4, 6) in sessions of 2, where
+the second session pads with N − 1 = 8.
 
 ## `ncp-v1`: noise-cancelling polarization under TTNCP_U(0.5%), route U at β = 128
 

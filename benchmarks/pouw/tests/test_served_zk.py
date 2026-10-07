@@ -50,7 +50,8 @@ def _manifest(run: str, coins: Coins | None) -> dict:
     `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before epoch coins carries."""
     roots = {2: hashlib.sha512(run.encode()).digest()}
     work = Workload((Matmul(5, Shape(16, K, N), 2),))
-    man = {"run": run, "matmuls": [{"index": 5, "m": 16, "k": K, "n": N, "weight": 2}], "weights": {"2": {"root": roots[2].hex()}}}
+    man = {"run": run, "matmuls": [{"index": 5, "m": 16, "k": K, "n": N, "weight": 2}], "weights": {"2": {"root": roots[2].hex()}},
+           "commitment": {"root": hashlib.sha512(f"{run}/tiles".encode()).hexdigest(), "count": 1}}
     if coins is None:
         beacon = bytes(32)
         return {**man, "schema": PD.MANIFEST_SCHEMA_RECORDED, "beacon": beacon.hex(),
@@ -102,7 +103,7 @@ def _window(words, run="r-request", coins=None, recorded=False):
     params = _params(run, _raw(man))
     PASSES[params["context"]] = (coins, _raw(man), man)
     root_w, _ = SC.commit_weights(params, _weights())
-    public, advice, priv = SC.commit_window(params, _calls(words), root_w)
+    public, advice, priv = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man))
     return params, public, advice, priv
 
 
@@ -151,11 +152,13 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
     assert [e.kind for e in entries] == ["call", "call", "filler", "none"]
     call, filler = entries[0], entries[2]
     assert (call.n_a, call.n_b, call.lo, call.hi) == (M, N, 0, M * N) and (filler.lo, filler.hi) == (24, 26)
-    assert (filler.n_a, filler.n_b) == (1, 2) and filler.record == bytes(64) and entries[3] == Wd.Entry("none")
+    assert (filler.n_a, filler.n_b) == (1, 2) and filler.record == filler.root_h3 == bytes(64) and entries[3] == Wd.Entry("none")
+    root_h3 = SC.root_h3_of(PASSES[params["context"]][2])
+    assert entries[0].root_h3 == entries[1].root_h3 == root_h3 and advice["root_h3"] == root_h3.hex()
     assert advice["records"][0]["keep"] == {"a": list(range(M)), "b": list(range(N))} and advice["records"][2:] == [None, None]
     assert call.record == Wd.record_digest(advice["records"][0]) and len(priv[0]["a"]["bcs"]) == M
     assert not priv[2]["a"]["words"].any() and not priv[2]["b"]["words"].any()
-    assert Wd.window_problem([e.row() for e in entries], work, params["entries"]) is None
+    assert Wd.window_problem([e.row() for e in entries], work, params["entries"], root_h3) is None
     _, _, part = SC.population(K, work.n)
     (wroot,) = [r for r in public["roots"] if r["port"] == SC.PORT]
     assert wroot["domain"] == R.served_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
@@ -169,8 +172,12 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
             assert root == (entries[e].root_a if side == "a" else entries[e].root_b)
     assert priv[0]["b"]["bcs"][2] == L.commit("fp8-p", SC.SIDES["b"], words["b"][2], priv[0]["b"]["salts"][2])
     salts = {e: {s: priv[e][s]["salts"] for s in "ab"} for e in range(3)}
-    again, advice2, _ = SC.commit_window(params, _calls(words), public["items"]["root_W"], {**salts, "entries": priv["entries"]})
+    again, advice2, _ = SC.commit_window(params, _calls(words), public["items"]["root_W"], root_h3,
+                                         {**salts, "entries": priv["entries"]})
     assert again == public and advice2["entries"] == advice["entries"]
+    for bad in ({}, {"commitment": {"root": "ab" * 32}}):
+        with pytest.raises(SystemExit, match="not a SHA-512"):
+            SC.root_h3_of(bad)
 
 
 def test_register_makes_exactly_the_public_items_public(served):

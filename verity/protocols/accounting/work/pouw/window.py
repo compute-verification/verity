@@ -31,15 +31,17 @@ tiles, so a draw of K′ without replacement misses it with probability at most 
 an `Entry` row committed in one window root registered before the draw.  A call's sides are dense: each side tree holds only
 the rows its tiles keep (a row the scheme refused is no tile's), in order, so its tiles are the products of A's rows and
 B's, row-major, and index u of its range is (u div n_b, u mod n_b); the rows' places in the call stay in its record, which
-the entry binds by SHA-512.  The filler entry holds zero rows on both sides and the range [N_real, N).  `tile_at` maps a
-drawn index to its entry and rows, and `window_problem` is the window statement (L4) in Python over the entry rows: the
-rows are entry rows, the ranges tile [0, N) in order, each call's range is its tiles, the filler covers the rest, and the
-registered level is `bucket` of the real tiles.  It is not proved yet: no Program states it.
+the entry binds by SHA-512.  A call's entry also holds the root of its pass's -h3 tile tree, where each drawn tile's served
+leaf is read.  The filler entry holds zero rows on both sides and the range [N_real, N).  `tile_at` maps a drawn index to
+its entry and rows, and `window_problem` is the window statement (L4) in Python over the entry rows: the rows are entry
+rows, the ranges tile [0, N) in order, each call's range is its tiles, the filler covers the rest, every call's -h3 root is
+the pass's, and the registered level is `bucket` of the real tiles.  It is not proved yet: no Program states it.
 
 **The layout for gates** (`note:proofs/20261006T1940Z-draft-units-to-inner-layout`, §2) is specified in PoUW's PROTOCOL.md,
-"The served audit window": the entry row (`Entry`, 240 bytes), the dense side trees of 2^D leaves (`DEPTHS`) padded with
+"The served audit window": the entry row (`Entry`, 304 bytes), the dense side trees of 2^D leaves (`DEPTHS`) padded with
 frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`, `side_path`), and the tile instances'
-public inputs (`PUBLIC_PORTS`, `sessions`, `instance_ts`, `public_inputs`); `tests/vectors/window.json` pins them.
+public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`, `public_inputs`); `tests/vectors/window.json`
+pins them.
 """
 from __future__ import annotations
 
@@ -190,7 +192,7 @@ DEPTHS = {"a": 13, "b": 17}
 #: the window root's port, and the schema its entry rows are committed under
 PORT = "entries"
 ENTRY_SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
-ENTRY_BYTES = 240
+ENTRY_BYTES = 304
 ENTRY_WORDS = ENTRY_BYTES // 2
 ENTRY_BITS = 8 * ENTRY_BYTES
 KIND_CODE = {"none": 0, "call": 1, "filler": 2}
@@ -202,9 +204,9 @@ _HM = hm96.SHA512
 
 @dataclass(frozen=True)
 class Entry:
-    """One entry of the window root, as its committed bit row holds it (the module docstring's layout): its kind, its tile
-    range [lo, hi), each side's row count and root, and a call's record's SHA-512.  `row` and `from_row` encode any values
-    that fit the row's fields; `layout_problem` holds them to the layout."""
+    """One entry of the window root, as its committed bit row holds it (PROTOCOL.md's layout): its kind, its tile range
+    [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, and a call's record's SHA-512.  `row` and
+    `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
 
     kind: str
     lo: int = 0
@@ -213,21 +215,22 @@ class Entry:
     n_b: int = 0
     root_a: bytes = _ZERO
     root_b: bytes = _ZERO
+    root_h3: bytes = _ZERO
     record: bytes = _ZERO
 
     def row(self) -> bytes:
         if self.kind not in KIND_CODE:
             raise ValueError(f"an entry's kind is one of {KINDS}, not {self.kind!r}")
-        if any(len(d) != _DIGEST for d in (self.root_a, self.root_b, self.record)):
+        if any(len(d) != _DIGEST for d in (self.root_a, self.root_b, self.root_h3, self.record)):
             raise ValueError("an entry's roots and record are 64-byte digests")
         try:
             head = _HEAD.pack(KIND_CODE[self.kind], self.lo, self.hi, self.n_a, self.n_b, 0)
         except struct.error as e:
             raise ValueError(f"an entry's integers are u64s: {e}") from None
-        return head + self.root_a + self.root_b + self.record
+        return head + self.root_a + self.root_b + self.root_h3 + self.record
 
     def words(self) -> list[int]:
-        """The row as its 120 u16 words, little-endian."""
+        """The row as its 152 u16 words, little-endian."""
         return list(struct.unpack(f"<{ENTRY_WORDS}H", self.row()))
 
     @classmethod
@@ -242,7 +245,7 @@ class Entry:
             raise ValueError(f"kind {code} is none of {KINDS} ({sorted(KIND_CODE.values())})")
         if pad:
             raise ValueError("its bytes 40..48 are not zero")
-        return cls(kind, lo, hi, n_a, n_b, row[48:112], row[112:176], row[176:240])
+        return cls(kind, lo, hi, n_a, n_b, row[48:112], row[112:176], row[176:240], row[240:304])
 
     @classmethod
     def from_words(cls, words: Sequence[int]) -> "Entry":
@@ -252,12 +255,12 @@ class Entry:
 
     def to_json(self) -> dict[str, Any]:
         return {"kind": self.kind, "lo": self.lo, "hi": self.hi, "n_a": self.n_a, "n_b": self.n_b, "root_a": self.root_a.hex(),
-                "root_b": self.root_b.hex(), "record": self.record.hex()}
+                "root_b": self.root_b.hex(), "root_h3": self.root_h3.hex(), "record": self.record.hex()}
 
     @classmethod
     def from_json(cls, x: Mapping[str, Any]) -> "Entry":
         return cls(x["kind"], x["lo"], x["hi"], x["n_a"], x["n_b"], bytes.fromhex(x["root_a"]), bytes.fromhex(x["root_b"]),
-                   bytes.fromhex(x["record"]))
+                   bytes.fromhex(x["root_h3"]), bytes.fromhex(x["record"]))
 
 
 def record_digest(record: Mapping[str, Any]) -> bytes:
@@ -267,7 +270,7 @@ def record_digest(record: Mapping[str, Any]) -> bytes:
 
 def layout_problem(entry: Entry) -> str | None:
     """Why an entry's values are not the layout's, or None: its range in [0, 2^40); an empty entry the zero row; a call's or
-    the filler's sides 1..2^D rows; the filler's record zero."""
+    the filler's sides 1..2^D rows; the filler's -h3 root and record zero."""
     if not (entry.lo < 1 << T_BITS and entry.hi < 1 << T_BITS):
         return f"its range [{entry.lo}, {entry.hi}) is not of {T_BITS}-bit indices"
     if entry.kind == "none":
@@ -275,6 +278,8 @@ def layout_problem(entry: Entry) -> str | None:
     for side, n in (("a", entry.n_a), ("b", entry.n_b)):
         if not 1 <= n <= 1 << DEPTHS[side]:
             return f"side {side} holds {n} rows, not 1 to 2^{DEPTHS[side]}"
+    if entry.kind == "filler" and entry.root_h3 != _ZERO:
+        return "the filler's -h3 root is not zero"
     if entry.kind == "filler" and entry.record != _ZERO:
         return "the filler's record is not zero"
     return None
@@ -376,11 +381,14 @@ def tile_at(entries: Sequence[Entry], t: int) -> tuple[int, int, int]:
     raise ValueError(f"index {t} is in no entry's range")
 
 
-def window_problem(rows: Sequence[bytes], work: Work, bound: int, bits: int = GRID_BITS) -> str | None:
+def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes, bits: int = GRID_BITS) -> str | None:
     """The window statement (L4) on the committed entry rows, or None: `bound` rows, each an entry row of the layout
     (`Entry.from_row`, `layout_problem`); the calls, then one filler, then empty entries; the ranges tile [0, work.n) in
-    order; a call's range is its tiles; the filler's holds the rest, within its rows; and the level is `bucket` of the
-    calls' tiles.  Credited tiles are only the calls'."""
+    order; a call's range is its tiles; the filler's holds the rest, within its rows; every call's -h3 root is `root_h3`,
+    the pass's published tile commitment; and the level is `bucket` of the calls' tiles.  Credited tiles are only the
+    calls'."""
+    if len(root_h3) != _DIGEST:
+        raise ValueError("the pass's -h3 tile root is 64 bytes")
     if len(rows) != bound:
         return f"{len(rows)} entries, not the bound {bound}"
     entries = []
@@ -404,6 +412,8 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, bits: int = GR
         size = entry.hi - entry.lo
         if entry.kind == "call" and size != tiles(entry):
             return f"entry {e}: its range is {size} tiles, not its {tiles(entry)} tiles"
+        if entry.kind == "call" and entry.root_h3 != root_h3:
+            return f"entry {e}: its -h3 root is not the pass's tile commitment"
         if entry.kind == "filler" and size > tiles(entry):
             return f"entry {e}: the filler's range is {size} tiles, beyond its {tiles(entry)}"
         at = entry.hi
@@ -421,18 +431,31 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, bits: int = GR
 PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
 #: a tile instance's public input ports, in order, as its circuit's META ``public_inputs`` must name them: each port's u16
 #: words (whole 128-bit words, so no row leaf shares one), the public datum it is recomputed from and its rule.  t is a
-#: u128 below 2^40; the root and the domain ids are 64 bytes, each u16 word two of them, little-endian.
+#: u128 below 2^40; the root and the domain ids are 64 bytes, each u16 word two of them, little-endian.  domain_h3 is the
+#: domain of the pass's -h3 tile tree, which binds its tile count and so its depth.
 PUBLIC_PORTS = (
     {"port": "t", "words": 8, "seed": "drawn", "derivation": "verity/pouw/window/t/v1"},
     {"port": "root", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/root/v1"},
     {"port": "domain", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/domain/v1"},
     {"port": "domain_a", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/side-domain-a/v1"},
     {"port": "domain_b", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/side-domain-b/v1"},
+    {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": "verity/pouw/window/domain-h3/v1"},
 )
+#: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its PROTOCOL.md §16.5, `shape_in_range`)
+M_MAX = 35
+
+
+def session_cap(k_log: int, per_block: int = 1) -> int:
+    """The most instances one session holds when each block of 2^`k_log` bits holds `per_block` of them (C-Flock's
+    m <= `M_MAX`)."""
+    if not (_positive(k_log) and k_log <= M_MAX - 3 and _positive(per_block)):
+        raise ValueError(f"a block of 2^{k_log!r} bits does not fit a session of m <= {M_MAX}")
+    return per_block << (M_MAX - k_log)
 
 
 def sessions(k: int, cap: int) -> int:
-    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles."""
+    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles.  Served windows draw
+    K′ <= 31,178 (ε = 0.1%, δ = 2^-40 over levels 87 to 143) and K′ <= 9,937 (ε = 1%, δ = 2^-128)."""
     if not (_positive(k) and _positive(cap)):
         raise ValueError(f"K′ and the cap are positive, not {k!r} and {cap!r}")
     return -(-k // cap)
@@ -466,19 +489,23 @@ def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: in
     return [drawn[sigma * cap + s] if sigma * cap + s < k else n - 1 for s in range(cap)]
 
 
-def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> bytes:
+def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int, domain_h3: bytes) -> bytes:
     """F_σ: the verifier's own ``--public-inputs`` file for session σ's `cap` tile instances, from the registration (the
     one-stage record: its population N, its law subset:K′ and its window root and domain at port `PORT`), its own draw,
-    σ and the cap alone.  A header line ``{format, instances, ports}`` (`PUBLIC_PORTS`), then each instance's words
-    (`instance_ts`'s t, the root, the window domain, side A's and side B's domains), u16 LE, instance-major."""
+    σ, the cap and `domain_h3`, the domain id of the pass's -h3 tile tree (the verifier's own, from the pass's epoch and
+    tile count).  A header line ``{format, instances, ports}`` (`PUBLIC_PORTS`), then each instance's words
+    (`instance_ts`'s t, the root, the window domain, side A's and side B's domains, domain_h3), u16 LE, instance-major."""
     root, dom = _registered_root(registration)
-    common = root + dom + side_domain(dom, "a").domain_id + side_domain(dom, "b").domain_id
+    if len(domain_h3) != _DIGEST:
+        raise ValueError("the pass's -h3 domain id is 64 bytes")
+    common = root + dom + side_domain(dom, "a").domain_id + side_domain(dom, "b").domain_id + bytes(domain_h3)
     body = b"".join(t.to_bytes(16, "little") + common for t in instance_ts(registration, drawn, sigma, cap))
     head = {"format": PUBLIC_INPUTS_FORMAT, "instances": cap, "ports": [dict(p) for p in PUBLIC_PORTS]}
     return json.dumps(head, sort_keys=True).encode() + b"\n" + body
 
 
-__all__ = ["DEPTHS", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
-           "REGISTERED", "T_BITS", "Work", "bucket", "entry_bc", "entry_digest", "entry_leaf", "floor_point", "instance_ts",
-           "k_prime", "layout_problem", "level", "levels", "on_grid", "pad_node", "point", "public_inputs", "record_digest",
-           "sampling", "sessions", "side_domain", "side_levels", "side_path", "tile_at", "tile_in", "tiles", "window_problem"]
+__all__ = ["DEPTHS", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT",
+           "PUBLIC_PORTS", "REGISTERED", "T_BITS", "Work", "bucket", "entry_bc", "entry_digest", "entry_leaf", "floor_point",
+           "instance_ts", "k_prime", "layout_problem", "level", "levels", "on_grid", "pad_node", "point", "public_inputs",
+           "record_digest", "sampling", "session_cap", "sessions", "side_domain", "side_levels", "side_path", "tile_at",
+           "tile_in", "tiles", "window_problem"]
