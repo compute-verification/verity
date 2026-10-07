@@ -8,6 +8,7 @@ import http.client
 import http.server
 import socket
 import threading
+import urllib.error
 
 import pytest
 
@@ -109,6 +110,19 @@ def test_a_head_that_never_answers_is_exhausted_after_its_one_retry_and_named(se
     with pytest.raises(TimeoutError, match=f"HEAD k2: no response within the {remote_s3.HEAD_DEADLINE_S:.0f}s deadline on all 2 tries"):
         server.head("k2")
     assert [x["key"] for x in server.exhausted] == ["k2"] and len(server.deadline_hits) == 2 and len(_fired()) == 2
+
+
+def test_a_head_the_service_keeps_failing_ends_in_its_http_error_after_its_one_retry(server, monkeypatch):
+    # the 5xx retry counted RETRIES for every method, so a HEAD's last try retried past HEAD_RETRIES: AssertionError("unreachable")
+    def do_HEAD(self):
+        _Stall.calls.append("HEAD")
+        self.send_response(503)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+    monkeypatch.setattr(_Stall, "do_HEAD", do_HEAD)
+    with pytest.raises(urllib.error.HTTPError) as e:
+        server.head("k")
+    assert e.value.code == 503 and _Stall.calls == ["HEAD"] * (remote_s3.HEAD_RETRIES + 1)
 
 
 def test_a_retry_after_a_dropped_connection_never_draws_another_idle_one(server, monkeypatch):

@@ -2,6 +2,7 @@
 differ from the definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
@@ -200,13 +201,18 @@ def test_unit_draw_check(tmp_path):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
 
 
+def _ir_tests() -> Path:
+    """Core's `tests/ir`, beside the `verity.ir` the import system finds (whichever member ships it): the vectors the Lean verifier
+    agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""
+    return Path(importlib.util.find_spec("verity.ir").origin).resolve().parents[3] / "tests" / "ir"
+
+
 def _template_vectors():
     try:
-        import verity
+        import verity  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "template_instance_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "template_instance_vectors.json"
 
 
 
@@ -584,12 +590,10 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
 
 def _qword_vector_file():
     try:
-        import verity
         from verity.ir.codec import decode_program  # noqa: F401
     except ImportError:
         return None
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "qword_vectors.json"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
@@ -613,9 +617,7 @@ def _qword_vectors():
         from verity.ir.cut import cut_word  # noqa: F401
     except ImportError:
         return None
-    import verity
-    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
-    return v if v.exists() else None
+    return _ir_tests() / "partition_vectors.json"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
@@ -628,12 +630,19 @@ def test_qword_evaluator_agrees_with_the_reference(tmp_path):
 
 def _format_vectors():
     try:
-        import verity
+        import verity  # noqa: F401
     except ImportError:
         return None
-    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
-    need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
-    return ir if all(p.exists() for p in need) else None
+    return _ir_tests()
+
+
+def test_the_reference_vectors_exist():
+    """The agreement tests below skip without Lean or without core, never for a vectors file that is not where they look."""
+    ir = _format_vectors()
+    files = [_template_vectors(), _qword_vector_file(), _qword_vectors(),
+             *(ir / n for n in ("format_vectors.json", "partition_vectors.json", "test_format_spec.py", "qcall_vectors.json"))]
+    missing = [str(f) for f in files if not f.exists()]
+    assert not missing, missing
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
@@ -649,8 +658,7 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None
-                    or not (_format_vectors() / "qcall_vectors.json").exists(), reason="no Lean toolchain or no Q_call vectors")
+@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -907,9 +915,10 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset
     return text
 
 
-def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4) -> tuple[str, dict, dict]:
+def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True) -> tuple[str, dict, dict]:
     """A statement whose one unit writes output ports ``a0, a1, …`` of ``out_words`` words, committed as one
-    `hm96-sha512/row-seg/v1` row ``a0`` of exactly their words (META ``out_row_ports``), staged in ``d`` like `_bit_row_toy`:
+    `hm96-sha512/row-seg/v1` row ``a0`` of exactly their words (META ``out_row_ports``; ``seg`` false: one exact-length
+    `hm96-sha512/row/v2` row, META ``out_row_ports`` only for a run of several), staged in ``d`` like `_bit_row_toy`:
     one 1024-bit input row ``p0`` (seed 1), output word ``o`` the XOR of input word ``o mod 64`` and input word ``o + 1 mod
     64`` rotated by ``o mod 16``, with AND(bit 0, bit 1) of the first added at word 0's bit 0. The salts are SHAKE-256 of
     ``row-seg-pair`` and the row. Returns the circuit text, the row's words per instance and its salts."""
@@ -946,7 +955,7 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4) -> tuple[str, dic
                           program_digests=lambda statics: {"unit-class/seg-writer": hashlib.sha256(content).hexdigest()})
     iset = SimpleNamespace(subcircuit=sub, name="unit-class-seg-writer", content_digest=hashlib.sha256(content).hexdigest())
     names = tuple(f"a{i}" for i in range(len(out_words)))
-    text = FC.compose(low, sub, port_bits=[1024], seg_out_rows=(names,))
+    text = FC.compose(low, sub, port_bits=[1024], **({"seg_out_rows": (names,)} if seg else {"v2_out_rows": (names,)}))
     rows = {"p0": np.random.default_rng(1).integers(0, 1 << 16, (n, 64), dtype=np.uint64).astype(np.uint16)}
     got, _cut, ok = low.evaluate(rows["p0"].astype(np.uint64))
     assert int(ok) == (1 << n) - 1
@@ -1129,8 +1138,8 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
     `sha512_row_seg_word_digest`), commitment ``b || c`` and hm96 tree leaf, so their frame leaves agree under one domain; each
     side's statement digest is the one `flock-circuit statement` gives it, seeded and under `FC_COINS=os`. A writer's META
     that the statement can't link is refused with the Rust verifier's message: runs that don't cover the output ports once or
-    don't match the row's length, no runs (one row per port), a row named after another port, and its length or schema
-    changed. The composer refuses a run that isn't consecutive output ports."""
+    don't match the row's length, no runs (one row per port), a row named after another port, a later port of its run named
+    after an input row, and its length or schema changed. The composer refuses a run that isn't consecutive output ports."""
     from verity.commitments import hm96
     from verity.commitments.rowleaf import sha512_row_seg_word_digest
     from verity_flock import circuit as FC
@@ -1169,6 +1178,7 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
         "an empty run": (lambda m: m.__setitem__("out_row_ports", [0, 3]), runs_bad),
         "no runs": (lambda m: m.pop("out_row_ports"), rows_bad),
         "named after another port": (lambda m: m["ports"][1].__setitem__(0, "a1"), rows_bad),
+        "a later port of the run named after an input row": (lambda m: m["out_ports"][1].__setitem__(0, "p0"), rows_bad),
         "its length": (lambda m: m["row_schemas"][1].__setitem__(1, 19440),
                        "port a0: a row of 19440 bits is 1215 u16 leaves and 23 compressions, not META's 1216 and 23"),
         "read as v2": (lambda m: m["row_schemas"][1].__setitem__(0, "hm96-sha512/row/v2"),
@@ -1183,6 +1193,90 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
         FC._out_ports([["a0", 4], ["a1", 4], ["a2", 4]], True, (("a0", "a2"),))
     with pytest.raises(ValueError, match="a run of consecutive output ports"):
         FC._out_ports([["a0", 4], ["a1", 4], ["a2", 4]], True, (("a0", "a1"), ("a1", "a2")))
+
+
+ROW_V2_PAIRS = {
+    "row-v2-pair/ok": ([1], {
+        "x": "8d20f8025fed0d15f703681378bdd4112b8b530b4b4ec7020d81703e4a2a47d622a536a2b1463c99ee152e7ebfbe1b8e995a447402d877fdfdbf984e9683e6bd",
+        "tree_leaf": "f9992b597e19dea48018e5e1051fd3728f0b41ea0db47e0abfaf9e74fc49b4e403fb9f19fd95e3a9debc1fb717d678bfee33bcebca228bc26929004979f47335",
+        ("writer", "seed"): "26a6f43a4aaea361a874c67f3bb97396b6a0505dcde45f96e18e66b38aca7011402199c6e87edec812f8c34b4c67dbebed8e843d7ba82bb7489adbc3e255ab8a",
+        ("writer", "os"): "44f3e8b3b4802d12e815207a37758171264c17b9a1a3bb2d16858af96c162e075ef25e847406f937421d91d08f6b20ff930c2de3363dcd204a204be0747b4a11",
+        ("reader", "seed"): "fb472687b5da4c66355a65b6385106eefa09bac440bc6becdc59cca32ec28c3d3e0f5f6c18ce597049fa64f6bcbb86a8bc9c8fdfe3d679901cbb5a37a9b48ba1",
+        ("reader", "os"): "5ed878518c8fd815a12bd600f543af50041d0968864b4775144de24c0121303f8ce593adb1cce14006139212cb18fd56fcebdb85b0737c23d8ffcc49da0b23bf"}),
+    "row-v2-pair/tile": ([16], {
+        "x": "dcf6bf88ec1c4b03b2dccbfc2aa35c24197f25dc9f30918ad3f48c63acce67eb3dc1eef2da7b82f8ab25a50d7ef4e8364b488e6d6967c2e49fa5dc78615934ad",
+        "tree_leaf": "5bb689f861dd1a92700580a52755d7f7e3743604dbf7e05b9e497e15547c60552cbeec381b4106062661ebc032afd854e1c2f2b8b3c605209d7b7f618d2b9ecd",
+        ("writer", "seed"): "68cfafb91f8b05a6b33f4d1b87bb356bf268702c5b55c06a32aaca1f6d51a984ad7e1dc02782d938b7ed42d0f600c0151fec1d7e64f07a533415f8393d12d142",
+        ("writer", "os"): "9a016e162e4b597d33be389716f07268a2e2b33c4072214fe1b3d6ceef9fa515baeafd9ad4f78a669fdc446960941ef046b13ff308017106f1fae703ec91aade",
+        ("reader", "seed"): "d5e1ae7609215348a1e05d11795a86331fcd3cda4d514bd3ca5e8bdd46496e2702f634fe677a660d34301be640de39e5d0e322a106cb72875e946bbc83d7d300",
+        ("reader", "os"): "0518a93ebfc6902eb2cf4ee34ff6bb339418f1ad9269de3e8b3bad6bc287b37746bfdc1e299e99ca2872621f51c37af024107cfb56d7c5292d66b77a774e2fc5"}),
+    "row-v2-pair/nvfp4-p-w-k1024": ([256, 32, 64], {
+        "x": "a7c153b39c1a75d0d084a36f2bfd904c426e5e9d5cd10aecef9bff874db9161388fce6403418f852609acdd0025017f9ee8080d03b9b754c9488eef5201d3230",
+        "tree_leaf": "e428c85590300f43a826da068c2d855bd61ae044de61a0871a7a944ba55b2ba27fb30ba143369554326e3e328522c02acb6945febc615177f1f24718bd3ba61e",
+        ("writer", "seed"): "a37b92f067ba7365298f4687d4cfb51120a43823c812511b4f7162adc8e97901979ee7a8b5fc642702044ec336f430d70a3d9b5389edd3ffb3e41453275a466f",
+        ("writer", "os"): "f9e3c7db2b0dc9426491903f8bd1ed67caf93618bb33f8da5c4847a5335d9a8b38dd166ced2bb9ccf32b98ac03ae521110516b57045409722f84c95c6eb15388",
+        ("reader", "seed"): "2ba04994502465744b4fb13e7ea6f9077972af6ec01887a12e5335b4c1be85a1a7d09e71a7518d2372d9121acf6bab25f7069b0681a6c135f8dd8b72bb78367d",
+        ("reader", "os"): "0c52a99db90a9383c404a73f506dfb41f3185e6ad5dc352d557ed715db75ced7c9f95b037d88006f36409a9eaf976f924491d009ed906496de03e79604a52ac4"}),
+    "row-v2-pair/fp8-p-w-k1024": ([512, 64], {
+        "x": "bc97c0abcf9b6bc376b822f075765c31f605a85b219d95a486b60f7d605168eac1df645ac8c4d5d534007611b2b8d6ff50281d6c6e3cbc8fc227e1f9cfe6891f",
+        "tree_leaf": "9cce701f152b279895a52bc92133245075ca902d0b65707540641e026d2bc9b07abf74b53e4436fe1bc247c393f03ad7055e4138c5eb30991119e409ebe9baf8",
+        ("writer", "seed"): "404f6b1054e0bde7e9124fb7a06970c95410c2e4bb13c9b1c7849f88cd1e64b4d64fa3b396e386c1134fc4f98d09533e9cd9928b5e6916e277a0a9c8f7de75aa",
+        ("writer", "os"): "b5af933e90eb7123941c1db13d30aa99a29a93eae06a013691d0ec63b0ff42b8306c62ef5d45c61cdfc46b1ba68d6412260a84790faa4a276cb288ac12af8b6b",
+        ("reader", "seed"): "b673d347e10673dd26ccfb44d4df8b5b1fcd2ecb1c1e7d03247b2c4c1b118f0c1d872e3f93192cace56d6bbf80a00f406454bb32e0e9bbd57b6caa97df4eeaef",
+        ("reader", "os"): "8ceab99220805cd73fce947d36c76d20adebc6d483e25a387bf055878a2c37200684884e773546cfebdd74517e2530edfcd3bdde8d183feeab783fdc89ff1c1b"}),
+}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_commits(tmp_path):
+    """An output row of exactly its words (`hm96-sha512/row/v2`, not padded to whole blocks), written as one output port
+    (PoUW's 1-word ok, its 16-word tile digest) or as a run of them (META `out_row_ports`: the nvfp4-p and fp8-p W rows), and
+    read by another unit as one input port has, on both sides, the same row digest (core's `sha512_row_v2_digest`),
+    commitment ``b || c`` and hm96 tree leaf; each side's statement digest is the one `flock-circuit statement` gives it,
+    seeded and under `FC_COINS=os`. A run written as a v1 row, or at a length other than its words, is refused."""
+    import numpy as np
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import sha512_row_v2_digest
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    inst = hm96.SHA512
+
+    def statement(d, text, *extra):
+        (d / "c.txt").write_text(text)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+                               "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
+
+    def digest(row, words):
+        return sha512_row_v2_digest(np.ascontiguousarray(row, dtype="<u2").tobytes(), 16 * words)
+
+    for vid, (out_words, want) in ROW_V2_PAIRS.items():
+        dw, dr = tmp_path / vid / "writer", tmp_path / vid / "reader"
+        text, got, salts = _seg_writer_toy(out_words, dw, seg=False)
+        rtext = _bit_row_toy([16 * sum(out_words)], dr, rows={"p0": got}, salts={"p0": salts})
+        bw, br = _public_bcs(dw / "pub.bin", 2), _public_bcs(dr / "pub.bin", 2)
+        for i in range(len(got)):
+            assert bw[i][1] == br[i][0] == inst.commit_string(inst.default_key, digest(got[i], sum(out_words)), salts[i]), (vid, i)
+        assert digest(got[0], sum(out_words)).hex() == want["x"], vid
+        assert inst.tree_leaf(inst.default_key, bw[0][1]).hex() == want["tree_leaf"] == inst.tree_leaf(inst.default_key, br[0][0]).hex()
+        for side, d, t in (("writer", dw, text), ("reader", dr, rtext)):
+            for coins in ("seed", "os"):
+                p = statement(d, t, "--coins", coins)
+                assert p.returncode == 0, p.stdout + p.stderr
+                assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[side, coins], (vid, side, coins)
+
+    d = tmp_path / "row-v2-pair/nvfp4-p-w-k1024" / "writer"
+    head, meta_line, rest = (d / "circuit.txt").read_text().split("\n", 2)
+    cases = {
+        "a run as a v1 row": lambda m: m["row_schemas"][1].__setitem__(0, "hm96-sha512/row/v1"),
+        "a run padded to whole blocks": lambda m: m["row_schemas"][1].__setitem__(1, 6144),
+        "a run one word short": lambda m: m["row_schemas"][1].__setitem__(1, 5616),
+    }
+    for name, change in cases.items():
+        meta = json.loads(meta_line[5:])
+        change(meta)
+        p = statement(d, f"{head}\nMETA {json.dumps(meta)}\n{rest}")
+        assert p.returncode != 0, name
 
 
 TOY_EXTRACTOR = r"""import FlockProofs

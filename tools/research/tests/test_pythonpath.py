@@ -24,7 +24,7 @@ REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "packages/verity/src", 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
     d = P.import_roots_dir(REPO)
-    assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["source"] == "pyproject.toml [tool.uv.workspace]"
+    assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["shim"] == [] and d["source"] == "pyproject.toml [tool.uv.workspace]"
     names = ["research", "cluster", "verity", "verity_vllm", "verity_sp1", "verity_numerical", "verity_sampled_proofs", "verity_pous", "verity_network_warden", "verity_pouw", "verity_flock", "circuit_check"]
     probe = "import importlib.util as u, sys; [print(n, u.find_spec(n).origin) for n in sys.argv[1:]]"
     # -S: no site-packages, so an editable install elsewhere cannot answer; find_spec locates without importing (no torch)
@@ -72,6 +72,66 @@ def test_layouts_globs_exclude_and_missing(tmp_path):
     assert P.pythonpath("/w/src/s", d, extra="/mine:/w/src/s/flat") == \
         "/w/src/s/libs/a/src:/w/src/s/libs/b/src:/w/src/s/flat:/w/src/s/st_dir/lib:/w/src/s/st_find/code:/mine"
     assert P.import_roots_dir(tmp_path)["roots"] == [] and P.import_roots_dir(tmp_path)["source"].startswith("none")
+
+
+def test_a_package_split_across_members_is_found_in_each_and_one_found_nowhere_raises(tmp_path):
+    t = tmp_path / "tree"
+    _write(t, "pyproject.toml", '[tool.uv.workspace]\nmembers = ["upper", "lower", "other"]\n')
+    for member, module in (("upper", "ml"), ("lower", "ir")):
+        _write(t, f"{member}/pyproject.toml", '[tool.hatch.build.targets.wheel]\npackages = ["src/core"]\n')
+        _write(t, f"{member}/src/core/{module}/__init__.py", "")
+    _write(t, "other/pyproject.toml", "[project]\nname='other'\n")
+    _write(t, "other/src/other/__init__.py", "")
+    _write(t, "uv.lock", "")
+    _write(t, "upper/uv.lock", "")
+    assert P.package_dirs(t, "core") == ["upper/src/core", "lower/src/core"]
+    assert P.package_dirs(t, "other") == ["other/src/other"]
+    with pytest.raises(LookupError, match="'gone'"):
+        P.package_dirs(t, "gone")
+    with pytest.raises(LookupError):
+        P.package_dirs(tmp_path, "core")
+    assert P.workspace_root(t / "lower" / "src" / "core" / "ir" / "__init__.py") == t.resolve()
+    assert P.package_paths(t, "core", "**", "ir/**", "ml/__init__.py") == ["upper/src/core/**", "lower/src/core/**", "lower/src/core/ir/**",
+                                                                          "upper/src/core/ml/__init__.py"]
+    with pytest.raises(LookupError, match="'tc/\\*\\*'"):
+        P.package_paths(t, "core", "ir/**", "tc/**")
+    assert P.workspace_root(t / "upper") == t.resolve(), "a member's own pyproject.toml declares no workspace, lock or not"
+    with pytest.raises(LookupError):
+        P.workspace_root(tmp_path)
+
+
+def test_a_workspace_root_that_is_a_package_is_reached_through_a_shim_never_the_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(P, "SHIM_BASE", tmp_path / "shims")
+    t = tmp_path / "tree"
+    _write(t, "pyproject.toml", '[build-system]\nrequires = ["hatchling"]\n[tool.hatch.build.targets.wheel]\npackages = ["core", "src/extra"]\n'
+                                '[tool.uv.workspace]\nmembers = ["tools/one"]\n')
+    _write(t, "core/__init__.py", "")
+    _write(t, "core/ir/__init__.py", "")
+    _write(t, "src/extra/__init__.py", "")
+    _write(t, "kernels/__init__.py", "")                         # a grouping directory with a PyPI name: must not import from the tree
+    _write(t, "tools/one/pyproject.toml", '[tool.hatch.build.targets.wheel]\npackages = ["one"]\n')
+    _write(t, "tools/one/one/__init__.py", "")
+    d = P.import_roots_dir(t)
+    assert (d["shim"], d["roots"], d["missing"]) == (["core"], ["src", "tools/one"], [])
+    assert P.package_dirs(t, "core") == ["core"] and P.package_dirs(t, "one") == ["tools/one/one"]
+    path = P.pythonpath(str(t), d, extra="/mine", shim_base=tmp_path / "shims").split(":")
+    shim = Path(path[0])
+    assert path[1:] == [str(t / "src"), str(t / "tools/one"), "/mine"] and str(t) not in path
+    assert shim.parent == tmp_path / "shims" and os.listdir(shim) == ["core"] and (shim / "core").resolve() == t / "core"
+    probe = "import importlib.util as u, sys; print([bool(u.find_spec(n)) for n in sys.argv[1:]])"
+    r = subprocess.run([PY, "-S", "-c", probe, "core", "core.ir", "extra", "one", "kernels"], cwd=tmp_path,
+                       env={"PYTHONPATH": ":".join(path)}, capture_output=True, text=True)
+    assert r.stdout.strip() == "[True, True, True, True, False]", r.stderr
+    assert P.shim_dir(t, ["core"], tmp_path / "shims") == str(shim)                       # the same tree shares one shim
+    (shim / "core").unlink()
+    (shim / "core").symlink_to(tmp_path)
+    assert P.shim_dir(t, ["core"], tmp_path / "shims") == str(shim) and (shim / "core").resolve() == t / "core", "a stale link is rebuilt"
+    assert sorted(os.listdir(tmp_path / "shims")) == [shim.name]
+    assert str(t) not in P.tree_pythonpath(t).split(":"), "a render of a root-package tree does not add the root either"
+    _write(t, "pyproject.toml", '[build-system]\nrequires = ["hatchling"]\n[tool.uv]\npackage = false\n[tool.uv.workspace]\nmembers = ["tools/one"]\n')
+    assert P.import_roots_dir(t)["shim"] == [] and P.tree_pythonpath(t).split(":")[-1] == str(t)     # a virtual root: as before
+    _write(t, "pyproject.toml", '[build-system]\nrequires = ["setuptools"]\n[tool.uv.workspace]\nmembers = ["tools/one"]\n')
+    assert P.import_roots_dir(t)["missing"][0].startswith(". (the workspace root is a package")
 
 
 def test_launch_request_sets_the_trees_pythonpath_appends_the_users_and_records_it(tmp_path):

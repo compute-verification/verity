@@ -176,7 +176,8 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
     (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
     (TINY, {"tp": {"world": 4, "rank": 0}}, "tensor parallel world 4"),
-    ({**TINY, "num_key_value_heads": 1}, {"tp": {"world": 2, "rank": 0}}, "4 query and 1 key/value heads over 2 ranks"),
+    ({**TINY, "hidden_size": 96, "num_attention_heads": 6, "num_key_value_heads": 3}, {"tp": {"world": 2, "rank": 0}},
+     "6 query and 3 key/value heads over 2 ranks"),
     ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
     (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
 ])
@@ -299,3 +300,23 @@ def test_no_record_path_module_reads_the_predictor():
     hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
     assert hits == []
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
+
+
+def test_code_version_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path):
+    """`verity` as a namespace: the digest is the same over any order of its portions and with a cwd directory that joined it
+    without a module, and moves with an edit."""
+    import verity
+
+    for rel in ("upper/verity/ml/__init__.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
+                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(f"# {rel}\n")
+
+    def version(*portions: str) -> str:
+        monkeypatch.setattr(verity, "__path__", [str(tmp_path / p / "verity") for p in portions])
+        return S.code_version()
+
+    a = version("upper", "lower")
+    assert version("lower", "upper") == version("cwd", "upper", "lower") == a
+    (tmp_path / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")
+    assert version("upper", "lower") != a

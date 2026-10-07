@@ -95,8 +95,38 @@ into a question for Daniel.
 
 ## Rulings so far
 
-Newest first. Each is Daniel's.
+Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
+  piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
+  critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
+  work still names its question.
+- 2026-10-04 (2:21 PM PDT): during the migration, ci resolves a conflict that is only a rename (a moved file that another
+  PR edited) in the train tip's merge commit, instead of sending the PR back for a restack, and names each resolution in
+  the handoff. A conflict that needs judgment still goes to the PR's owner, and `check` still runs on the merged tree.
+- 2026-10-04 (8:42 AM PDT): the proof system proves batches of arbitrary Boolean circuits, so soundness is **one
+  theorem over everything the compiled Lean verifier accepts**, with no hypothesis on the circuit file or the statement's
+  form (no `scopeOk`, no `pub.tables = none`). The verifier fails closed: it refuses every form the proof doesn't cover,
+  and rejecting an unproved form is a completeness limit, never a soundness gap. A circuit's inputs and outputs use one
+  canonical format, proved once in general (any row length, any input groups, any output placement), and frontends
+  normalize to it. Adding a workload never needs a verifier or proof change. The verifier gains no new form ahead of its
+  proof, and progress is never measured by which workloads' files fall inside a proof's scope. Pushback is welcome:
+  send it to Daniel through @proofs.
+- 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
+  detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
+  the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
+  cheap tier only (its T0 checks, about four minutes), and under `VERITY_STORE_REQUIRED=1` a fixture or input that doesn't
+  resolve fails rather than skips.
+- 2026-10-03 (the coordinator's): data you don't own on a node is deleted only with `research retention gc` or `research
+  retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
+  `rm`, and never on another lane's word about who owns it.
+- 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`EDGES` in
+  `tests/test_protocol_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+  edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
+  system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
+  registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
+  for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
+  guarantees.
 - 2026-10-02 (10:27 PM PDT): a statement review or red-team grant on a PR carries across a restack or a merge of `main`
   when the restacked head's `lean-audit.json` change against its base is byte-identical to the one that was granted.
   Any other change to `lean-audit.json` needs a new grant.
@@ -134,8 +164,6 @@ Newest first. Each is Daniel's.
 - 2026-10-01 (9:50 AM PDT): lane notes are records (reports, checkpoints, findings, drafts, friction), never a channel.
   A handoff, an order or an ask goes on Slack (`research msg`), or to your own Cursor workers as a follow-up; a note
   written as a message reaches nobody.
-- 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
-  message, counts as the named statement reviewer's sign-off for `research merge`.
 - 2026-10-01 (9:12 AM PDT): agents message each other directly, without a coordinator relaying, and adding a handle
   needs no Slack admin. Comms owns the routing (`@<name>` at the start of a post wakes that lead's agent).
 
@@ -144,9 +172,13 @@ Newest first. Each is Daniel's.
   the Lean catches up), and the PR whose Lean covers it deletes the file.
 - 2026-10-01: whoever lands a train runs `research merge --sweep` after each push, which closes the landed PRs, retargets
   their children and deletes landed branches. `research merge --push` pushes the merge and then sweeps, so a lander passes it.
+- 2026-09-30 (2:52 PM PDT; at all hours since the coordinator's 06:33Z Oct 4): GPU work runs only as items its lane owner
+  said yes to, each naming its research question (`--question`, or a `question` label on its run). There is no filler:
+  idle GPUs beat padded ones, a steward reports idle GPUs instead of offering them as backfill, and approved backfill runs
+  on preemptible leases.
 - 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
-  lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a
+  lane's proofs when no guarantee's record changes; a changed record in another lane's package goes through that lane. What a
   headline theorem may rest on, what "proved" means, retiring a theorem a table cites, spend past a budget line and any
   new human gate go to Daniel.
 - 2026-09-30: a lane fixes a bug it hits in `tools/research` in a small PR of its own, and the research coordinator only

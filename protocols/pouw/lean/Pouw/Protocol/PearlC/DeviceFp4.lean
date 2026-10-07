@@ -128,10 +128,10 @@ def nvf4Scale (amax : ℚ) : Fin 256 := max (e4m3 (wordVal (f32Word (amax * sixt
 def nvf4Recip (s : Fin 256) : ℚ := wordVal (f32Word (1 / codeVal s))
 
 /-- One block's codes and scale byte from its noise-atom words `ds`: `s_b` from the block's largest magnitude, and
-`code_t = e2m1(fp32.mul(D_t, r_b))`. -/
+`code_t = e2m1(fp32.mul(D_t, r_b))`. The product of `−0` and `r_b > 0` is `−0`, so a `−0` word's code is `0x8`. -/
 def nvf4Block (ds : List ℕ) : List Nib × Fin 256 :=
   let s := nvf4Scale ((ds.map fun w => |wordVal w|).foldl max 0)
-  (ds.map fun w => e2m1Word (f32Word (wordVal w * nvf4Recip s)), s)
+  (ds.map fun w => e2m1Word (if w = 0x80000000 then w else f32Word (wordVal w * nvf4Recip s)), s)
 
 /-- **One row's noisy NVFP4 forming** (`pearl_c4.form` on one row): element `t`'s noise atom
 `nvf4NoiseElem α (x t) β e (F t)`, that is `D_t = NVF4.step(f32(α·x_t), E ‖ 0³² at e4m3(β), F_t ‖ 0³² at 2⁻⁴)`, then
@@ -733,14 +733,16 @@ def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
         drawB (U.layout.shape u) (H (seedB s (U.weight (U.layout.wid u))))
 
-/-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word finite, every row passing
-`RowAdmit4`. -/
+/-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low
+16 bits zero) and finite, every row passing `RowAdmit4`. -/
 def Fp4Sem.OperandOK (sem : Fp4Sem Q R S) (p q : ℕ) (W : Codes) : Prop :=
-  (∀ i < p, ∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ i : Fin p, RowAdmit4 sem.beta q (wordsVal p q W i)
+  (∀ i < p, ∀ l < q, (wordQ (W i l)).isSome ∧ W i l % 2 ^ 16 = 0) ∧
+    ∀ i : Fin p, RowAdmit4 sem.beta q (wordsVal p q W i)
 
 /-- Row `i` of a committed operand passes Pearl-C4's rules: `Fp4Sem.OperandOK` on one row. -/
 def Fp4Sem.RowOK (sem : Fp4Sem Q R S) (p q : ℕ) (W : Codes) (i : ℕ) : Prop :=
-  (∀ l < q, (wordQ (W i l)).isSome) ∧ ∀ h : i < p, RowAdmit4 sem.beta q (wordsVal p q W ⟨i, h⟩)
+  (∀ l < q, (wordQ (W i l)).isSome ∧ W i l % 2 ^ 16 = 0) ∧
+    ∀ h : i < p, RowAdmit4 sem.beta q (wordsVal p q W ⟨i, h⟩)
 
 open Classical in
 /-- A tile's credited rows: those whose activation row passes Pearl-C4's rules. -/
@@ -848,7 +850,7 @@ noncomputable def pearlCProtocolFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : �
   ticket := fun H s U u act => atNat (d.ticket (sem.unitForm d H s U u act).1 (sem.unitForm d H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUseful d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w => sem.OperandOK sh.n sh.k w
+  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act => ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s U u act : ℚ) : ℝ)
   capOK := fun H s U u act => sem.unitDebit d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
   Wref := fun L u => (wrefFp4 d (L.shape u) : ℝ)

@@ -7,6 +7,7 @@
   "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",
   "verity_vllm.check.poc_required_interface": "imported by tests/commit/synthetic.py",
   "verity_vllm.program.kernels.fa3_model": "independent CPU FA3 model cross-checked by test_composition.py / test_derived_rows.py (LIVE derived_rows)",
+  "verity_vllm.program.kernels.fp8_moe_rows": "the fused-MoE expert GEMM's twin, checked against its Definitions by test_fp8_moe.py (LIVE registry.fp8_moe) and run by the H200 capture tests/properties/glm53_block_fp8_capture_gpu.py; live once a replay row binds MoeExpertFp8BlockGemm(W)_v1",
   "verity_vllm.collectives.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
   "verity_vllm.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
   "verity_vllm.linear.api": "see verity_vllm.linear",
@@ -18,6 +19,7 @@
   "verity_vllm.program.registry.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
   "verity_vllm.program.registry.quarantine.act.silu_mul_bf16": "see quarantine.act",
   "verity_vllm.program.registry.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
+  "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py",
   "verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, loaded by --adapter name"
  }
 }

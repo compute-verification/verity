@@ -6,6 +6,7 @@
  "assumptions": ["Control.Assumptions"],
  "escapes": {"Control.loop": "partial def: the controls' listed escape",
              "Control.loop'": "partial def, calling `loop` as `loop` calls it"},
- "layers": {"Control.Defs": {"imports": [], "why": "the definitions import nothing of the package"}},
- "pins": {"Control.main_thm": {}}
+ "layers": {"Control.Assumptions": {"imports": [], "why": "the named assumption imports nothing of the package"},
+            "Control.Defs": {"imports": [], "why": "the definitions import nothing of the package"}},
+ "guarantees": {"Control.main_thm": {"owner": "@lean"}}
 }
