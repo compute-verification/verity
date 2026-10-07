@@ -4,7 +4,7 @@ import PousCheck.Setup
 # The setup difftest: `PousCheck` against the Python reference, on generated instances and the spec's vectors
 
 `scripts/setup_difftest.py` writes instances and the answers of `verity.experimental.protocols.pous` (`schemes/p2.py`,
-`setup.py`, `protocol.py`) on each; `PousCheck/DifftestMain.lean` reads both and fails unless `answer`, which computes
+`setup.py`, `protocol.py`) on each; `PousCheck/SetupDifftestMain.lean` reads both and fails unless `answer`, which computes
 the same from this package's definitions, gives every one of them. The kinds:
 
 * `maps`: `P2.d`, `P2.sigma` and `P2.decodeValue` on canonical values (Python's `_Field.sq`, `sigma`);
@@ -24,7 +24,7 @@ index, c and m under the spec's prefix (`Keys.specPrefix`), and the σ rejection
 The audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
-namespace PousCheck.Difftest
+namespace PousCheck.SetupDifftest
 
 open Lean PousCheck
 
@@ -154,7 +154,7 @@ def vectorProblems (raw : ByteArray) : V (List String × Nat × Nat) := do
 
 def main (args : List String) : IO UInt32 := do
   let [insts, py, vectors, n] := args
-    | IO.eprintln "usage: PousCheck/DifftestMain.lean INSTANCES PYTHON VECTORS N"; return 2
+    | IO.eprintln "usage: PousCheck/SetupDifftestMain.lean INSTANCES PYTHON VECTORS N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines insts
@@ -173,4 +173,4 @@ def main (args : List String) : IO UInt32 := do
     IO.println s!"vectors.json: {nv} vectors and {ns} σ rejection cases checked, {problems.length} problems"
     return if found.isEmpty && problems.isEmpty then 0 else 1
 
-end PousCheck.Difftest
+end PousCheck.SetupDifftest

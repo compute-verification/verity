@@ -1,10 +1,10 @@
 {
  "roots": ["PousCheck"],
  "exempt": {
-  "PousCheck.DifftestMain": "the setup difftest against the Python reference, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof"
+  "PousCheck.SetupDifftestMain": "the setup difftest against the Python reference, under `runs`: compiled evaluation of PousCheck.SetupDifftest.main, audited under PousCheck, a test and not a proof"
  },
  "runs": {
-  "PousCheck.DifftestMain": {
+  "PousCheck.SetupDifftestMain": {
    "why": "generated instances on which PousCheck's P2 v4 maps (d, σ, D), keys (expand_prefix, sha512_keys), commitment (setup.commit, tagged_sha512, the manifest) and public-encoder setup check (decode_segment, verifier_key mode PUBLIC, refusals by kind) give what the Python reference gives, and the spec's §7 vectors.json against its SHA-512 pins, keys, codewords and σ rejection cases",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "{difftest/p2-vectors.json}", "3741"],
    "data": {

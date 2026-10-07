@@ -1,4 +1,4 @@
-"""The setup difftest's data: generated instances and the Python reference's answers on each, for `PousCheck.Difftest`.
+"""The setup difftest's data: generated instances and the Python reference's answers on each, for `PousCheck.SetupDifftest`.
 
     python scripts/setup_difftest.py <verity checkout> --out DIR
 

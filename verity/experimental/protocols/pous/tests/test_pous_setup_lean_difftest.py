@@ -22,7 +22,7 @@ SCRIPT = LEAN / "scripts" / "setup_difftest.py"
 _spec = importlib.util.spec_from_file_location("setup_difftest", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["PousCheck.DifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["PousCheck.SetupDifftestMain"]
 
 
 @pytest.mark.slow
