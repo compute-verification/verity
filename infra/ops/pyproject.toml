@@ -1,0 +1,28 @@
+[project]
+name = "verity-ops"
+version = "0.1.0"
+description = "Operations on the shared machines: deploys to the Nebius nodes and keepers."
+requires-python = ">=3.11"
+dependencies = ["research"]
+
+[project.scripts]
+ops = "verity_ops.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_ops"]
+
+[tool.uv.sources]
+research = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# verity_ops imports research, and deploy reads research's pods/nebius/deploy.toml.
+inputs = ["tools/research"]
+parallel = true
