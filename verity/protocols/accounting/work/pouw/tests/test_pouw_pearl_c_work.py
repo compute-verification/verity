@@ -1,6 +1,7 @@
 """Pearl-C's work law (`pearl_c_work`; statement review item 5, red team F1, F2, F5–F8): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
-excluded rows fail, the debit under the cap), draws keyed by the epoch's draw coin after the commitment, and the audit."""
+excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's draw coin
+after the commitment, and the audit."""
 
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ import epoch_coins as E
 import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
 from verity.protocols.accounting.work.pouw.audit import Epoch, Prover, Workload
-from verity.protocols.accounting.work.pouw.protocol import DomainError, Matmul, Shape, Tile
+from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul, Shape, Tile
 from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
 from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
 from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
@@ -176,14 +177,14 @@ def test_padding_stuffing_is_rejected():
     assert "A row 0 is not zero past the kept width" in W.check_opened(S, unit, tile, rows_a, rows_b, ops_for(rows_a, rows_b, k))
 
 
-def lifecycle(rows_a=None, real=20, scheme=S):
+def lifecycle(rows_a=None, real=20, scheme=S, salt_key=None):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails liveness; B passes."""
     if rows_a is None:
         rows_a = CV.rows_f32("work-life", "A", real, K) + [C.f32_row([0] * K)] * (32 - real)
         rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(scheme, {9: rows_b})
+    prover = Prover(scheme, {9: rows_b}, salt_key=salt_key)
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
@@ -271,12 +272,20 @@ def test_v_ex_is_a_no_op_on_pearl_c():
     assert W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
-def test_audit_under_hashing_h1():
-    """The work law's audit is the same under hashing format -h1: its openings verify against frame-b3 roots."""
-    h1 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1")
-    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h1)
-    records = W.declare(h1, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    assert W.audit(h1, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
+def test_audit_under_hashing_h3():
+    """The work law's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots, once
+    the honest prover has given up (`volunteer`) the A row over its row cap.  Each row's seed reads the hiding roots, so
+    which rows pass the row cap changes with the salts; under this salt key row 7 is over it, and a drawn tile holding
+    it fails until it is given up."""
+    h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
+    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3, salt_key=bytes(32))
+    declared = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    out = W.audit(h3, epoch, prover, tr, SPLITS, declared, E.challenger(), 4).audit
+    assert not out.accepted and any(v.reason.startswith("A row 7's replayed debit") for v in out.verdicts)
+    va, vb = W.volunteer(h3, epoch, tr, declared, {3: rows_a}, {9: rows_b})
+    assert (va, vb) == ({3: [7]}, {})
+    records = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, voluntary_a=va)
+    assert W.audit(h3, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
     assert not W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
@@ -329,6 +338,41 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
         assert out.audit.accepted == accepted
         if not accepted:
             assert "exceeds the cap" in out.audit.verdicts[0].reason
+
+
+def test_h3_caps_each_credited_row_as_well_as_the_tile():
+    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with the aligned spikes
+    among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the tile's.
+    h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and the audit then
+    accepts on the other 31 rows."""
+    k, m, n = 1024, 32, 4
+    h3, h0 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h0"))
+    assert W.row_cap(h3) and not W.row_cap(h0) and not W.row_cap(S)
+    rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
+    rows_b = spiked_rows(k, n, 900, 300.0)
+    work = Workload((Matmul(0, Shape(m, k, n), 1),))
+    splits = {1: W.Split(k)}
+    prover = Prover(h3, {1: rows_b}, salt_key=bytes(32))
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
+    tr = prover.prove(epoch, {0: rows_a})
+    records = W.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits)
+    assert records == [W.UnitRecord(work.matmuls[0], m, k)]
+    tile = h3.tiles(work.matmuls[0].shape)[0]
+    ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], epoch.weight_roots[1])
+    for s in (h3, h0):
+        ops = s.encode(ctx, s.noise(ctx), rows_a, rows_b, tile)
+        debit, cap = W._debit_cap(s, records[0], tile, ops, list(range(m)), list(range(n)))
+        row = W._debit_cap(s, records[0], tile, ops, [0], list(range(n)))
+        assert debit < cap * 3 / 4 and row[0] > 10 * row[1] and row[1] == cap / m
+    assert W.check_opened(h0, records[0], tile, rows_a, rows_b, ops) is None
+    out = W.audit(h3, epoch, prover, tr, splits, records, E.challenger(), 1)
+    assert not out.audit.accepted
+    assert out.audit.verdicts[0].reason.startswith("A row 0's replayed debit") and "the row cap" in out.audit.verdicts[0].reason
+    va, vb = W.volunteer(h3, epoch, tr, records, {0: rows_a}, {1: rows_b})
+    assert (va, vb) == ({0: [0]}, {})
+    given = W.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
+    again = W.audit(h3, epoch, prover, tr, splits, given, E.challenger(), 1)
+    assert again.audit.accepted and again.credit == (1 - h3.cap) * W.cell_credit(h3, given[0]) * (m - 1) * n
 
 
 def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():
