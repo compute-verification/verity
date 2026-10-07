@@ -6,6 +6,7 @@ import importlib.util
 import itertools
 import json
 import os
+import re
 import tomllib
 from pathlib import Path
 
@@ -30,7 +31,10 @@ def test_every_lake_package_is_audited():
 
 
 def test_one_toolchain():
+    """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
+    image = ROOT / "tools/research/src/research/pods/nebius/image/Dockerfile"
+    pins[str(image.relative_to(ROOT))] = re.search(r"^ARG LEAN_TOOLCHAIN=(\S+)", image.read_text(), re.MULTILINE).group(1)
     assert len(set(pins.values())) == 1, pins
 
 
