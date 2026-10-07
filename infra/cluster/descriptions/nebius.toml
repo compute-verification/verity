@@ -95,12 +95,12 @@ until = "2026-10-07T12:00:00Z"
 [policy.vy-nebius-1]
 owner = "infra"
 direct-gpus = "none"            # /etc/vy/direct-gpus: gpu-lease's direct runs get no GPU (the 30 Sep cutover)
-direct-cpus = "0-159"           # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones (96-127 since 6 Oct)
+direct-cpus = "0-95,128-159"    # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones (96-127 are the --queue GPU jobs', 6 Oct)
 user-cpuset = { delegate = "cpu cpuset memory pids" }   # user@.service.d/vy-cpuset.conf, so a user scope's AllowedCPUs holds (#855)
 # /workspace/research/locks/lean-slots (lean_slot.py): the cap of 4, split by infra and proofs (16:25Z)
 lean-slots = { check = 2, audit = 2 }
 # /workspace/research/locks/slots (slot.py): the merge-check slots, the `checks` pool
-check-slots = { c = "8-31", a = "32-63", b = "64-95", d = "128-159" }
+check-slots = { c = "8-31", a = "32-63 only=trains", b = "64-95", d = "128-159" }
 
 # tmux n1-lease: the provers' lease pool (n1_lease.py's environment). Up to 8 holders, 4 of them on borrowed quota while every
 # waiter is --preemptible, until 2 h before the 12:30Z quiet hold (coordinator 15:00Z; 6 left borrowing dead, 18:26Z).

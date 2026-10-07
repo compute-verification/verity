@@ -54,7 +54,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
                  no axiom, and only this catches it (the `kernel` control); or the axioms found by walking the replayed
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
-                 kill
+                 kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
+                 module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
+                 unchecked, and its constants are still walked for axioms
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
@@ -130,7 +132,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 #: where the Lean files are run from: `main` points it at a copy taken before the first build
 TOOL = HERE
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[2]
 POLICY = "lean-audit.json"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
 #: compiler trust: `native_decide` declares an axiom `<decl>._native.native_decide.ax_<i>` (older toolchains used these two)
@@ -1344,6 +1346,35 @@ def olean_digest(lib: Path, files: list[Path]) -> str:
     return h.hexdigest()
 
 
+REPLAY_SCHEMA = "lean-replay/v1"
+
+
+def replay_keys(facts: dict, toolchain: str) -> dict[str, str]:
+    """{module: key} for each audited module: what its kernel replay's verdict is a function of. The key hashes the
+    toolchain, `Replay.lean`, and the `.olean` files (every part) of the module and of each module it imports, transitively,
+    each under its module's name (``facts``' `graph`), never a path: a module whose bytes and imports' bytes are unchanged
+    keeps its key wherever the package is built."""
+    graph = facts["graph"]
+    files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
+             for m, g in graph.items()}
+    with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
+        digests = dict(zip(files, ex.map(lambda ps: ",".join(sha256(p) for p in ps), files.values())))
+    head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
+    keys = {}
+    for m in facts["modules"]:
+        seen, stack = {m}, [m]
+        while stack:
+            for i in graph[stack.pop()]["imports"]:
+                if i not in seen:
+                    seen.add(i)
+                    stack.append(i)
+        h = hashlib.sha256(f"{head}{m}\0".encode())
+        for n in sorted(seen):
+            h.update(f"{n}\0{digests[n]}\n".encode())
+        keys[m] = h.hexdigest()
+    return keys
+
+
 def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str, str]:
     """A digest of the `.olean` files (every part) of the modules the package imports (``oleans``, which `Facts.lean`
     reports), per package ``pkg`` fetches (`.lake/packages/*`: Mathlib's downloaded cache, ArkLib's local build...) and for
@@ -1456,7 +1487,8 @@ def template(pkg: Path) -> dict:
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
-          ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None) -> dict:
+          ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
+          replay_cache: Path | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
@@ -1466,7 +1498,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  ``name`` writes each anonymous
     instance's name into its source (`name_instances`) instead of failing on it.  ``lifts`` writes those lifts (`lift`)
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
-    that no guarantee reads (`unread_spec`)."""
+    that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
+    its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
+    when the replay passes."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, list the theorems your documents cite "
@@ -1563,8 +1597,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         s = time.monotonic()
         found = work / "replay.json"
         found.unlink(missing_ok=True)
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *facts["modules"]], pkg,
-                       work / "replay.log")
+        keys = replay_keys(facts, rep["toolchain"]) if replay_cache else {}
+        reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
+        checked = [m for m in facts["modules"] if m not in reused]
+        rep["replay"] = {"checked": len(checked), "reused": len(reused)}
+        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
+                        *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
         if killed(rc):
             fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
         elif rc or not found.exists():
@@ -1573,6 +1611,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
             fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
                          f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
+        elif keys:
+            replay_cache.mkdir(parents=True, exist_ok=True)
+            for m in checked:
+                tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
+                tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
+                os.replace(tmp, replay_cache / f"{keys[m]}.json")
         rep["seconds"]["replay"] = round(time.monotonic() - s, 1)
     if fresh:
         s = time.monotonic()
@@ -1750,6 +1794,9 @@ def main(argv: list[str]) -> int:
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
+                    "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
+                    "checked here")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
@@ -1832,7 +1879,7 @@ def main(argv: list[str]) -> int:
             rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
                         runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
                         ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
-                        name=a.name_instances and mine, lifts=lifts if mine else None)
+                        name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
