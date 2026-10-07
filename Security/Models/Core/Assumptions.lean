@@ -43,6 +43,12 @@ root is SHA-512's (the one-hash rule), so two partitions with one root would be 
 def AdviceBinding {R : Type} (C : Circuit) (advice : (n : ℕ) → Partition C n → R) : Prop :=
   Function.Injective fun x : (n : ℕ) × Partition C n => advice x.1 x.2
 
+/-- **`cr/sha-512`, for one run**: no two of the strings `xs` a run hashes have one SHA-512 digest. Stated, as
+`LmsEufCma` is, for one run and its own strings, which a theorem names: over every string SHA-512 has collisions, over the
+few a run hashes the chance of one is the standard collision-resistance bound, which is not formalized here. -/
+def Sha512CollisionFreeOn {D : Type} (hash : ByteArray → D) (xs : ByteArray → Prop) : Prop :=
+  ∀ x y, xs x → xs y → hash x = hash y → x = y
+
 /-- **`trusted-nebius-host`**: the auditor-trusted `device` (a network certifier, the memory challenger) runs its stated
 `code` on the Nebius host it is deployed to. `run device x` is everything the device does on input `x`: what it emits,
 and how it uses its clock and its keys. The host changes none of it. Nothing attests this, since no attestation hardware
