@@ -114,7 +114,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
   - `tools/verity/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
   - [`tools/verity/lean/`](tools/verity/lean/README.md): the Lean check every Lean package passes
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
-- `infra/`: our machines; [`infra/cluster/`](infra/cluster/README.md) is `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger
+- `infra/`: our machines; [`infra/cluster/`](infra/cluster/README.md) is `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger, and `control/` holds the control pod's boot script and loops
 - `fixtures/` and `tests/`: repository-wide fixtures, and the repository's own suite of whole-tree invariants; replicated inputs are registered in `fixtures/artifacts.json`
 
 ## Getting started
@@ -149,7 +149,7 @@ query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each w
 
 ## Development
 
-Dependencies point inward: integrations, the proof system and benchmarks depend on `verity`, `verity` imports no other distribution, `verity.experimental` may import `verity.ml` but never the reverse, `verity/core/` never imports `verity/experimental/`, nothing outside `infra/` imports `infra/`, and `verity`'s modules depend on each other in one direction:
+Dependencies point inward: integrations, the proof system and benchmarks depend on `verity`, `verity` imports no other distribution, `verity.experimental` may import `verity.ml` but never the reverse (apart from C-Flock's tests), `verity/core/` never imports `verity/experimental/`, nothing outside `infra/` imports `infra/`, and `verity`'s modules depend on each other in one direction:
 
 ~~~text
 ml.circuits  <-  ml.commitments  ->  ml.crypto
