@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.Dimension.Pipe
+import Models.Pouw.Assumptions.Dimension.Pipe
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.MinRankProofs
 

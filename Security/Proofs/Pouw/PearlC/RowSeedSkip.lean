@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.PearlC.RowSeedAssumptions
+import Models.Pouw.Assumptions.PearlC.RowSeedAssumptions
 import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree

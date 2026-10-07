@@ -1,6 +1,6 @@
 import Mathlib.Data.Fintype.BigOperators
 import Proofs.Pouw.Dimension.H100WProofs
-import Specs.Pouw.Assumptions.Fp8Atom.H1TGamma
+import Models.Pouw.Assumptions.Fp8Atom.H1TGamma
 
 /-!
 # Proofs of H-1T's γ corollary

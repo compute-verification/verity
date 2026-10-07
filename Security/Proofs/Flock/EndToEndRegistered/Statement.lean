@@ -11,7 +11,7 @@ as a second conjunct, and `EndToEndRegisteredDrawn` is the same statement with i
 `Flock.SecurityProofs.EndToEndRegisteredDrawn : Flock.Guarantees.EndToEndRegisteredDrawn`.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Specs.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndRegistered` does.
 -/
 
