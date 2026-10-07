@@ -8,9 +8,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 GIT = shutil.which("git")
-spec = importlib.util.spec_from_file_location("check_move_check", ROOT / "tools" / "check" / "move_check.py")
+spec = importlib.util.spec_from_file_location("check_move_check", ROOT / "tools" / "verity" / "check" / "move_check.py")
 MC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(MC)
 

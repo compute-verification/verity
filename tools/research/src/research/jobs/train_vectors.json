@@ -1,6 +1,6 @@
 {
   "schema": "verity/job-service-train-vectors/v1",
-  "about": "Stage 1.5 of the Job queue (trains the service builds, checks and lands) as request/response cases. research.jobs.trains runs them (tools/research/tests/test_jobs_vectors.py); the site's TypeScript runs the same file. Everything in vectors.json's `about` holds here too, and each case also starts from `setup.github` in a fake GitHub and an empty fake store. The fake GitHub: `commits` by id, each with `parents` and `files` (the paths it sets against its first parent; null deletes one); a commit's tree is its first-parent chain's files applied in order. `merge(ref, head)` (the Merges API): 204 when head is already an ancestor of the ref's tip; 409 when a path changed on both sides since their merge base has different contents; else 201 and a new commit named `{tip}+{head}` with parents [tip, head], and the ref moves to it. `update_ref(ref, sha)` with force false: 422 unless the old tip is an ancestor of sha; on success every open PR based on that ref whose head is now an ancestor becomes `merged`. The fake store holds `attempts` by run id and `manifests` by art id (a result's: its `kind` and `meta`). The gate reads main's tools/check/tool.py by parsing it, never by running it or by the first match of a pattern: its one module-level `CHECK = Tool(...)`, a call with keyword arguments only, whose `produces` (a list of strings; missing: no kind passes) and `merge_requires` (an object of lists of strings; missing: no step is required) are each read as a literal; anything else lands nothing. Further step forms: `store` adds attempts and manifests (replacing one of the same id, which the real store never does, to keep the cases short); `github_push` puts someone else's commit on a ref (moving it without the fast-forward rule); `github_label` adds a label to a PR; `reconcile: true` runs the reconcile cron, whose `expect.moved` lists the train ids it moved; `expect_github` compares refs (null: the ref must be absent), PRs (a subset of each), the comments posted, in order, and `trees`: files at a commit (a subset). Lean records: when a merge step's two sides both changed a `lean-audit.json` whose contents differ, the service merges the three records (merge base, train, PR) with tools/lean/merge.py's `merge()` and writes the result with audit.py's `text()`. The result goes onto the train as a commit named `{tip}.rec` and onto the PR's head as `{head}.rec`. When `merge()` refuses, only `{head}.rec` is written, with the train's record, and the package (the record's directory) is regenerated: a `lean-regen` job on the tip, whose run's `records/{package}/lean-audit.json` (from its run record: `outputs.run_record`, then that manifest's `payload.files`, then `objects`) becomes the commit `{tip}.regen` before the merge check. `store` also takes `objects`.",
+  "about": "Stage 1.5 of the Job queue (trains the service builds, checks and lands) as request/response cases. research.jobs.trains runs them (tools/research/tests/test_jobs_vectors.py); the site's TypeScript runs the same file. Everything in vectors.json's `about` holds here too, and each case also starts from `setup.github` in a fake GitHub and an empty fake store. The fake GitHub: `commits` by id, each with `parents` and `files` (the paths it sets against its first parent; null deletes one); a commit's tree is its first-parent chain's files applied in order. `merge(ref, head)` (the Merges API): 204 when head is already an ancestor of the ref's tip; 409 when a path changed on both sides since their merge base has different contents; else 201 and a new commit named `{tip}+{head}` with parents [tip, head], and the ref moves to it. `update_ref(ref, sha)` with force false: 422 unless the old tip is an ancestor of sha; on success every open PR based on that ref whose head is now an ancestor becomes `merged`. The fake store holds `attempts` by run id and `manifests` by art id (a result's: its `kind` and `meta`). The gate reads main's tools/verity/check/tool.py by parsing it, never by running it or by the first match of a pattern: its one module-level `CHECK = Tool(...)`, a call with keyword arguments only, whose `produces` (a list of strings; missing: no kind passes) and `merge_requires` (an object of lists of strings; missing: no step is required) are each read as a literal; anything else lands nothing. Further step forms: `store` adds attempts and manifests (replacing one of the same id, which the real store never does, to keep the cases short); `github_push` puts someone else's commit on a ref (moving it without the fast-forward rule); `github_label` adds a label to a PR; `reconcile: true` runs the reconcile cron, whose `expect.moved` lists the train ids it moved; `expect_github` compares refs (null: the ref must be absent), PRs (a subset of each), the comments posted, in order, and `trees`: files at a commit (a subset). Lean records: when a merge step's two sides both changed a `lean-audit.json` whose contents differ, the service merges the three records (merge base, train, PR) with tools/lean/merge.py's `merge()` and writes the result with audit.py's `text()`. The result goes onto the train as a commit named `{tip}.rec` and onto the PR's head as `{head}.rec`. When `merge()` refuses, only `{head}.rec` is written, with the train's record, and the package (the record's directory) is regenerated: a `lean-regen` job on the tip, whose run's `records/{package}/lean-audit.json` (from its run record: `outputs.run_record`, then that manifest's `payload.files`, then `objects`) becomes the commit `{tip}.regen` before the merge check. `store` also takes `objects`.",
   "epoch": "2026-09-29T00:00:00Z",
   "setup": {
     "tokens": [
@@ -14,14 +14,14 @@
     ],
     "github": {
       "commits": {
-        "m0": {"parents": [], "files": {"README.md": "verity", "tools/check/tool.py": "CHECK = Tool(name=\"check\", version=\"1\",\n             produces=[\"check/v1\"],\n             merge_requires={\"lean-agreement\": [\"backends/flock/\", \"!README.md\", \"!PROTOCOL.md\"]})\n", "lean/lean-audit.json": "{\n \"guarantees\": {}\n}\n"}},
+        "m0": {"parents": [], "files": {"README.md": "verity", "tools/verity/check/tool.py": "CHECK = Tool(name=\"check\", version=\"1\",\n             produces=[\"check/v1\"],\n             merge_requires={\"lean-agreement\": [\"verity/ml/flock/\", \"!README.md\", \"!PROTOCOL.md\"]})\n", "lean/lean-audit.json": "{\n \"guarantees\": {}\n}\n"}},
         "a1": {"parents": ["m0"], "files": {"a.txt": "a"}},
         "b1": {"parents": ["m0"], "files": {"b.txt": "b"}},
         "c1": {"parents": ["a1"], "files": {"c.txt": "c"}},
         "d1": {"parents": ["a1"], "files": {"d.txt": "d"}},
         "x1": {"parents": ["m0"], "files": {"a.txt": "x"}},
-        "f1": {"parents": ["m0"], "files": {"backends/flock/src.rs": "fn main() {}"}},
-        "r1": {"parents": ["m0"], "files": {"backends/flock/README.md": "flock"}},
+        "f1": {"parents": ["m0"], "files": {"verity/ml/flock/src.rs": "fn main() {}"}},
+        "r1": {"parents": ["m0"], "files": {"verity/ml/flock/README.md": "flock"}},
         "h1": {"parents": ["m0"], "files": {"h.txt": "h"}},
         "k1": {"parents": ["m0"], "files": {"k.txt": "k"}},
         "p1": {"parents": ["m0"], "files": {"lean/lean-audit.json": "{\n \"guarantees\": {\n  \"t1\": \"1\"\n }\n}\n", "lean/T1.lean": "t1"}},
@@ -139,14 +139,14 @@
       ]
     },
     {
-      "name": "the gate admits only a result of a kind main's tools/check/tool.py produces, and never the Lean fast path's lean-fast/v1",
+      "name": "the gate admits only a result of a kind main's tools/verity/check/tool.py produces, and never the Lean fast path's lean-fast/v1",
       "steps": [
         {"at": 0, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": null}}}}},
         {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 1, "tip": "m0+b1", "job": 1}}},
         {"at": 0, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
         {"at": 0, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r2"}, "expect": {"status": 200}},
         {"at": 1, "reconcile": true, "expect": {"moved": [1]}},
-        {"at": 2, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2 published no result, and tools/check/tool.py on main produces check/v1"}}},
+        {"at": 2, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2 published no result, and tools/verity/check/tool.py on main produces check/v1"}}},
         {"at": 3, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:fast"}}}, "manifests": {"art:fast": {"kind": "lean-fast/v1", "meta": {"steps": []}}}}},
         {"at": 3, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 2}}},
         {"at": 4, "reconcile": true, "expect": {"moved": [2]}},
@@ -154,7 +154,7 @@
         {"at": 6, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:bench"}}}, "manifests": {"art:bench": {"kind": "bench-result/v1", "meta": {"steps": []}}}}},
         {"at": 6, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 3}}},
         {"at": 7, "reconcile": true, "expect": {"moved": [3]}},
-        {"at": 8, "req": ["GET", "/api/trains/3"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2's result is a bench-result/v1, and tools/check/tool.py on main produces check/v1"}}},
+        {"at": 8, "req": ["GET", "/api/trains/3"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r2's result is a bench-result/v1, and tools/verity/check/tool.py on main produces check/v1"}}},
         {"at": 9, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m0+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:gone"}}}}},
         {"at": 9, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 4}}},
         {"at": 10, "reconcile": true, "expect": {"moved": [4]}},
@@ -217,7 +217,7 @@
       ]
     },
     {
-      "name": "a change under backends/flock/ with lean-agreement passed lands",
+      "name": "a change under verity/ml/flock/ with lean-agreement passed lands",
       "steps": [
         {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"tip": "m0+f1"}}},
         {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
@@ -229,9 +229,9 @@
       ]
     },
     {
-      "name": "the gate reads merge_requires from main's own tools/check/tool.py, where preflight follows it: a backends/flock/ change lands only with lean-agreement passed",
+      "name": "the gate reads merge_requires from main's own tools/verity/check/tool.py, where preflight follows it: a verity/ml/flock/ change lands only with lean-agreement passed",
       "steps": [
-        {"at": 0, "github_push": {"ref": "main", "sha": "m2", "parents": ["m0"], "files": {"tools/check/tool.py": "\"\"\"Store declaration for the repository's check (research.store README \u00a76.1; `tools/check/check.py`).\n\n    research run --tool check --project verity --cwd source -- uv run --locked --extra torch-cpu python tools/check/check.py\n\nNo key params and no closure: the attempt's source (a clean commit) is the whole input, and `research merge` reads the attempt by\nthat commit.  A merge that changes backends/flock/, other than a README.md or PROTOCOL.md (which nothing the agreement runs\nreads), needs an attempt whose `lean-agreement` step passed (`merge_requires`; the step runs when the run has the pinned\nupstream build, which `check.py --record` sends then).  `research run --on` refuses a machine that fails `preflight.py` (the pod\nsetup, the Lean dependencies, a store read, AVX-512 when needed, free disk) before the run is claimed.  Nothing here imports\nanything but `research.store.tool`.\n\"\"\"\nfrom __future__ import annotations\n\nfrom research.store.tool import Tool\n\nCHECK = Tool(name=\"check\", version=\"1\", command=[\"uv\", \"run\", \"--locked\", \"--extra\", \"torch-cpu\", \"python\", \"tools/check/check.py\"],\n             produces=[\"check/v1\"],\n             merge_requires={\"lean-agreement\": [\"backends/flock/\", \"!README.md\", \"!PROTOCOL.md\"]},\n             preflight=[\"tools/check/preflight.py\"])\n"}}},
+        {"at": 0, "github_push": {"ref": "main", "sha": "m2", "parents": ["m0"], "files": {"tools/verity/check/tool.py": "\"\"\"Store declaration for the repository's check (research.store README \u00a76.1; `tools/verity/check/check.py`).\n\n    research run --tool check --project verity --cwd source -- uv run --locked --extra torch-cpu python tools/verity/check/check.py\n\nNo key params and no closure: the attempt's source (a clean commit) is the whole input, and `research merge` reads the attempt by\nthat commit.  A merge that changes verity/ml/flock/, other than a README.md or PROTOCOL.md (which nothing the agreement runs\nreads), needs an attempt whose `lean-agreement` step passed (`merge_requires`; the step runs when the run has the pinned\nupstream build, which `check.py --record` sends then).  `research run --on` refuses a machine that fails `preflight.py` (the pod\nsetup, the Lean dependencies, a store read, AVX-512 when needed, free disk) before the run is claimed.  Nothing here imports\nanything but `research.store.tool`.\n\"\"\"\nfrom __future__ import annotations\n\nfrom research.store.tool import Tool\n\nCHECK = Tool(name=\"check\", version=\"1\", command=[\"uv\", \"run\", \"--locked\", \"--extra\", \"torch-cpu\", \"python\", \"tools/verity/check/check.py\"],\n             produces=[\"check/v1\"],\n             merge_requires={\"lean-agreement\": [\"verity/ml/flock/\", \"!README.md\", \"!PROTOCOL.md\"]},\n             preflight=[\"tools/verity/check/preflight.py\"])\n"}}},
         {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"id": 1, "tip": "m2+f1", "job": 1}}},
         {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
         {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r6"}, "expect": {"status": 200}},
@@ -251,7 +251,7 @@
     {
       "name": "the gate reads CHECK's own produces and merge_requires, never those of a Tool declared above it",
       "steps": [
-        {"at": 0, "github_push": {"ref": "main", "sha": "m3", "parents": ["m0"], "files": {"tools/check/tool.py": "\"\"\"Two declarations: the train gate reads CHECK's.\"\"\"\nfrom research.store.tool import Tool\n\nBENCH = Tool(name=\"bench\", version=\"1\", produces=[\"bench-result/v1\"], merge_requires={})\nCHECK = Tool(name=\"check\", version=\"1\", produces=[\"check/v1\"],\n             merge_requires={\"lean-agreement\": [\"backends/flock/\", \"!README.md\", \"!PROTOCOL.md\"]},\n             preflight=[\"tools/check/preflight.py\"])\n"}}},
+        {"at": 0, "github_push": {"ref": "main", "sha": "m3", "parents": ["m0"], "files": {"tools/verity/check/tool.py": "\"\"\"Two declarations: the train gate reads CHECK's.\"\"\"\nfrom research.store.tool import Tool\n\nBENCH = Tool(name=\"bench\", version=\"1\", produces=[\"bench-result/v1\"], merge_requires={})\nCHECK = Tool(name=\"check\", version=\"1\", produces=[\"check/v1\"],\n             merge_requires={\"lean-agreement\": [\"verity/ml/flock/\", \"!README.md\", \"!PROTOCOL.md\"]},\n             preflight=[\"tools/verity/check/preflight.py\"])\n"}}},
         {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"id": 1, "tip": "m3+f1", "job": 1}}},
         {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
         {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r6"}, "expect": {"status": 200}},
@@ -263,7 +263,7 @@
                            "manifests": {"art:bench6": {"kind": "bench-result/v1", "meta": {"steps": [{"step": "suites", "status": "passed"}, {"step": "lean-agreement", "status": "passed"}]}}}}},
         {"at": 6, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"id": 2}}},
         {"at": 7, "reconcile": true, "expect": {"moved": [2]}},
-        {"at": 8, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r6's result is a bench-result/v1, and tools/check/tool.py on main produces check/v1"}}},
+        {"at": 8, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "run r6's result is a bench-result/v1, and tools/verity/check/tool.py on main produces check/v1"}}},
         {"at": 9, "store": {"attempts": {"r6": {"id": "r6", "tool": {"name": "check"}, "source": {"commit": "m3+f1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res6b"}}},
                            "manifests": {"art:res6b": {"kind": "check/v1", "meta": {"steps": [{"step": "suites", "status": "passed"}, {"step": "lean-agreement", "status": "passed"}]}}}}},
         {"at": 9, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [6]}, "expect": {"status": 201, "body": {"id": 3}}},
@@ -275,22 +275,22 @@
     {
       "name": "a produces or merge_requires on main that isn't a literal of its type lands nothing, whatever the change",
       "steps": [
-        {"at": 0, "github_push": {"ref": "main", "sha": "m4", "parents": ["m0"], "files": {"tools/check/tool.py": "from research.store.tool import Tool\n\nKINDS = [\"check/v1\"]\nCHECK = Tool(name=\"check\", version=\"1\", produces=KINDS)\n"}}},
+        {"at": 0, "github_push": {"ref": "main", "sha": "m4", "parents": ["m0"], "files": {"tools/verity/check/tool.py": "from research.store.tool import Tool\n\nKINDS = [\"check/v1\"]\nCHECK = Tool(name=\"check\", version=\"1\", produces=KINDS)\n"}}},
         {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 1, "tip": "m4+b1", "job": 1}}},
         {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
         {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed", "run_id": "r2"}, "expect": {"status": 200}},
         {"at": 3, "store": {"attempts": {"r2": {"id": "r2", "tool": {"name": "check"}, "source": {"commit": "m4+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res2"}}},
                            "manifests": {"art:res2": {"kind": "check/v1", "meta": {"steps": []}}}}},
         {"at": 4, "reconcile": true, "expect": {"moved": [1]}},
-        {"at": 5, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "tools/check/tool.py on main has a produces this gate can't read"}}},
-        {"at": 6, "github_push": {"ref": "main", "sha": "m5", "parents": ["m4"], "files": {"tools/check/tool.py": "from research.store.tool import Tool\n\nRULES = {\"lean-agreement\": [\"backends/flock/\"]}\nCHECK = Tool(name=\"check\", version=\"1\", produces=[\"check/v1\"], merge_requires=dict(RULES))\n"}}},
+        {"at": 5, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "tools/verity/check/tool.py on main has a produces this gate can't read"}}},
+        {"at": 6, "github_push": {"ref": "main", "sha": "m5", "parents": ["m4"], "files": {"tools/verity/check/tool.py": "from research.store.tool import Tool\n\nRULES = {\"lean-agreement\": [\"verity/ml/flock/\"]}\nCHECK = Tool(name=\"check\", version=\"1\", produces=[\"check/v1\"], merge_requires=dict(RULES))\n"}}},
         {"at": 6, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201, "body": {"id": 2, "tip": "m5+b1", "job": 2}}},
         {"at": 7, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L2": "lease_token"}},
         {"at": 8, "req": ["POST", "/api/jobs/2/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "passed", "run_id": "r3"}, "expect": {"status": 200}},
         {"at": 9, "store": {"attempts": {"r3": {"id": "r3", "tool": {"name": "check"}, "source": {"commit": "m5+b1", "dirty": false}, "status": {"state": "done", "rc": 0}, "outputs": {"result": "art:res3"}}},
                            "manifests": {"art:res3": {"kind": "check/v1", "meta": {"steps": []}}}}},
         {"at": 10, "reconcile": true, "expect": {"moved": [2]}},
-        {"at": 11, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "tools/check/tool.py on main has a merge_requires this gate can't read"}}},
+        {"at": 11, "req": ["GET", "/api/trains/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "stuck", "why": "tools/verity/check/tool.py on main has a merge_requires this gate can't read"}}},
         {"at": 11, "expect_github": {"refs": {"main": "m5"}}}
       ]
     },
