@@ -1,8 +1,10 @@
-"""The harness's wire format and server handling, without Lean: `canonical`, and a stand-in server in Python that answers in
-canonical JSON, breaks the protocol, or exits."""
+"""The harness's wire format, server handling and build lock, without Lean: `canonical`, a stand-in server in Python that
+answers in canonical JSON, breaks the protocol, or exits, and `build` with a stand-in `lake`."""
 
 from __future__ import annotations
 
+import fcntl
+import subprocess
 import sys
 
 import pytest
@@ -58,3 +60,23 @@ def test_a_broken_protocol_is_an_error_and_the_server_comes_back(server, value, 
 def test_a_float_input_is_refused_before_it_is_sent(server):
     with pytest.raises(TypeError, match="float"):
         server.call("f", 0.5)
+
+
+def test_lake_builds_only_under_the_build_lock(monkeypatch, tmp_path):
+    """Two ports' builds at once (two suites of one `check`) compiled the C of `lean/`, their shared path require, in one
+    directory together, and clang crashed on a `Difftest.c` the other build was rewriting: `lake` runs only while `build`
+    holds `BUILD_LOCK`, so another process's build waits for it."""
+    seen = []
+
+    def lake(argv, **kw):
+        with open(D.BUILD_LOCK) as other:
+            try:
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                seen.append("free")
+            except BlockingIOError:
+                seen.append("held")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(D.subprocess, "run", lake)
+    assert D.build(tmp_path, "port") == tmp_path / ".lake" / "build" / "bin" / "port"
+    assert seen == ["held"]
