@@ -40,7 +40,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from . import remote
+from research import remote
 
 MAX_AHEAD_H = 48
 NODE_KEEPER = "/usr/local/bin/vy-keeper"
@@ -93,7 +93,7 @@ def _until(text: str, now: float) -> str | None:
 
 
 def cmd_set(argv: list[str]) -> int:
-    from . import cli
+    from research import cli
 
     if "--" not in argv:
         print("research keeper set: the chunk's command goes after `--`, with {seed} where its seed goes", file=sys.stderr)
@@ -130,7 +130,7 @@ def cmd_set(argv: list[str]) -> int:
     env = cli._parse_env(ns.env)
     if env is None:
         return 2
-    from .telemetry.job import SECRET_KEY
+    from research.telemetry.job import SECRET_KEY
 
     for bad, why in (([k for k in env if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k)], "not a variable name"),
                      ([k for k in env if re.fullmatch(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|RESEARCH_KEEPER_\w*", k)],
@@ -157,7 +157,7 @@ def cmd_set(argv: list[str]) -> int:
         return 2
     pkg = remote.source_tool_package(src)
     if ns.tool and pkg is None and ":" not in ns.tool:
-        from .store import tools_registry
+        from research.store import tools_registry
 
         if ns.tool not in tools_registry.REGISTRY:
             print(f"research keeper set: this research package does not know tool {ns.tool!r}; pass --source with tools/research",
