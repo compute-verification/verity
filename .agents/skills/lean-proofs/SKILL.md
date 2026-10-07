@@ -19,7 +19,8 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 ## Where the work goes
 
 - **Code or analysis** (`AGENTS.md` "Lean"). Code the verifier runs, and anything the V[B] generator or a reference
-  prover runs: `verity/core/service/flock/` (no dependencies); the PoUS grader stays with PoUS. Everything else is
+  prover runs: `verity/core/service/flock/` (no dependencies); the PoUS grader and the certifier program stay with their
+  protocols, each in its `lean/`. Everything else is
   security analysis, under `Security/`: a definition or statement in `Definitions/<Area>/` or
   `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
   `security_proofs` in `Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
@@ -40,11 +41,12 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 ## Build, iterate, check
 
 ~~~text
-bash tools/verity/lean/setup.sh PKG                  once per machine: elan, the toolchain, Mathlib's cache
-cd PKG && lake build                          once per checkout; incremental from then on
-lake env lean Pkg/Area/File.lean              each edit: elaborate one file against the built imports
-lake build Pkg.Area.File                      after editing a file others import, so they see the change
-python tools/verity/lean/check.py PKG                once, before pushing (the kernel replay of Security/Proofs is the slow part)
+bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Mathlib's cache
+cd PKG && lake build                   once per checkout; incremental from then on
+lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
+lake build Pkg.Area.File               after editing a file others import, so they see the change
+python tools/verity/lean/audit.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part);
+                                       `verity check lean PKG` runs the same
 ~~~
 
 Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
@@ -76,7 +78,7 @@ the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages
 
 While proving, check one file at a time, and leave the whole package and the Lean check for the end:
 
-- **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. Core's slowest file takes about 10 s
+- **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. The `Core` area's slowest file takes about 10 s
   this way. A file that imports what you changed sees the change only after `lake build` of the changed module.
 - **Ask Lean in a scratch file** outside the repository, run from the package directory with `lake env lean
   /tmp/scratch/Probe.lean`. It takes well under a second against built imports:
@@ -177,7 +179,7 @@ These are Daniel's rulings, newest first.
   `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
   and the protocols `ALLOWED` in `tests/test_boundaries.py` lists (PoUW → sampled proofs, the ruling of
   2026-10-03 in `.agents/skills/friction/SKILL.md`). Its Lean half is superseded by the Lean layout move (2026-10-06):
-  there are no protocol packages, only areas of `Security` and its Proofs.
+  there are no protocol packages, only areas of `Security/` and its Proofs.
 - 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
