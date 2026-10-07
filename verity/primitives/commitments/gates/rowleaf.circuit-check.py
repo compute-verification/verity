@@ -7,7 +7,8 @@ from typing import Any
 
 def _merkle_roots() -> list[Any]:
     """The sha512/row-seg/v1 digest (`verity.primitives.commitments.gates.rowleaf`) of a 13-bit row: one short segment with its
-    zero fill and the outer hash, two SHA-512 compressions (a longer row repeats the segment part and lengthens the outer hash)."""
+    zero fill and the outer hash, two SHA-512 compressions (a longer row repeats the segment part and lengthens the outer
+    hash)."""
     from verity.primitives.commitments.gates.rowleaf import digest
 
     return [digest(13)]

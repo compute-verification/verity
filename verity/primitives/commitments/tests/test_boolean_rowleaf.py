@@ -1,8 +1,8 @@
-"""`verity.primitives.commitments.gates.rowleaf`: the sha512/row-seg/v1 digest in gates reproduces ``frame_v3/vectors_sha512.json``'s
-``row_seg_leaves`` (the whole at the short lengths, its segment part on every vector segment and its outer part on every vector's
-segment digests) and `rowleaf.sha512_row_seg_digest` on random 262,144-bit rows, a 64 x 64 Pearl-C tile's ``-h3`` digest; a
-flipped data bit, two segments swapped and a wrong length each change it; it refuses malformed bindings and rows; and its parts
-cost the gates pinned here."""
+"""`verity.primitives.commitments.gates.rowleaf`: the sha512/row-seg/v1 digest in gates reproduces
+``frame_v3/vectors_sha512.json``'s ``row_seg_leaves`` (the whole at the short lengths, its segment part on every vector
+segment and its outer part on every vector's segment digests) and `rowleaf.sha512_row_seg_digest` on random 262,144-bit
+rows, a 64 x 64 Pearl-C tile's ``-h3`` digest; a flipped data bit, two segments swapped and a wrong length each change it;
+it refuses malformed bindings and rows; and its parts cost the gates pinned here."""
 from __future__ import annotations
 
 import random
@@ -151,8 +151,8 @@ def test_the_parts_reproduce_every_vector_segment_and_outer_hash() -> None:
 
 @pytest.mark.slow
 def test_a_wrong_length_or_a_flipped_bit_changes_a_short_digest() -> None:
-    """About two and a half minutes, the length controls: the same bits zero-extended by one bit, by a byte, and past a segment (8192 to 8193 bits) each give
-    another digest, the reference's at that length; and one flipped bit does too."""
+    """About two and a half minutes, the length controls: the same bits zero-extended by one bit, by a byte, and past a
+    segment (8192 to 8193 bits) each give another digest, the reference's at that length; and one flipped bit does too."""
     rng = random.Random("row-seg-gates/length")
     row = _random_row(rng, 13)
     flipped = bytes([row[0] ^ 1, row[1]])
