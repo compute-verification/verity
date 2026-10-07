@@ -38,6 +38,7 @@ pub mod firewall;
 pub mod firewall_transcript;
 pub mod glue;
 pub mod pure_block;
+pub mod release;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;
