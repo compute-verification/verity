@@ -10,6 +10,8 @@ theory lane has stated and nobody has proved.
 **Per row x** of either operand (k BF16 words, the model's activation and weight dtype):
 
 ~~~text
+seeds     seed_A = H_"seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE);  seed_B = H_"seed-B"(salt ‖ root_B);
+          H_ℓ(x) = SHA-512(pearl-c4/v1/ℓ ‖ \0, zero-padded to one 128-byte block ‖ x), its first 32 bytes (`labelled`)
 stats     s = max|x|, ρ = pearl_c's every-8th RMS in its pinned order;  σ = ρ·δ (δ = 1/4);  t = s + 4σ
           nvfp4: α = 2688 / max(t, 2^-32)       mxfp4: α = that, floored to a power of two (its mantissa bits cleared)
           β_row = (σ·α)·f32(16/√2346.125);  a_E = ue4m3(β_row)                     (FP32 nearest even, in that order)
@@ -98,6 +100,7 @@ rounds to zero keeps its sign (code 0x8); no checked word depends on it.
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import math
 import struct
@@ -107,7 +110,6 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.primitives.crypto.blake3 import blake3, keyed
 from verity.primitives.crypto.turboshake import turboshake128
 from verity.errors import InvalidArtifact
 from verity_catalog.silicon import fp32
@@ -125,7 +127,10 @@ PEEL_K = 2 * R
 TILE = C.TILE
 D_LINE = 0x24                      # TurboSHAKE128 domain byte of the noise lines
 ROLE_EA, ROLE_FA, ROLE_EB, ROLE_FB = 0, 1, 2, 3
-LABELS = {r: f"pearl-c4/v0/{r}".encode() for r in ("seed-A", "seed-B")}
+LABELS = {r: f"pearl-c4/v1/{r}".encode() for r in ("seed-A", "seed-B")}
+#: the seeds' H_ℓ(x) = SHA-512(ℓ ‖ \0 zero-padded to one 128-byte block ‖ x), its first 32 bytes: `pearl_c.s512`'s
+#: construction under Pearl-C4's labels
+LABEL_BLOCKS = {r: (label + b"\0").ljust(128, b"\0") for r, label in LABELS.items()}
 
 DELTA = 0x3E800000                 # δ = 1/4
 FOUR = 0x40800000
@@ -285,9 +290,14 @@ def line(seed: bytes, role: int, index: int) -> list[int]:
     return [b >> s & 0xF for b in raw for s in (0, 4)]
 
 
+def labelled(role: str, message: bytes) -> bytes:
+    """H_role(message) (`LABEL_BLOCKS`): the first 32 bytes of SHA-512 over the label's block and the message."""
+    return hashlib.sha512(LABEL_BLOCKS[role] + message).digest()[:32]
+
+
 def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
-    """A unit's seed_A: keyed BLAKE3 under blake3("pearl-c4/v0/seed-A") of salt ‖ root_A ‖ root_B ‖ index u64 LE."""
-    return keyed(blake3(LABELS["seed-A"]), salt + root_a + root_b + index.to_bytes(8, "little"))
+    """A unit's seed_A: H_"pearl-c4/v1/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE) (`labelled`)."""
+    return labelled("seed-A", salt + root_a + root_b + index.to_bytes(8, "little"))
 
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int) -> bytes:
@@ -303,8 +313,9 @@ def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int) -> by
 def seed_b(salt: bytes, root_b: bytes) -> bytes:
     """B̃'s noise seed, keyed by this job's salt and B's root.  So B̃ exists only once the salt does, and no program
     can precompute with it: the salt-free base split is two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater
-    paying both corrections), which is what ties it on the stride rows (TT_OUT-FP4's rule D-SK)."""
-    return keyed(blake3(LABELS["seed-B"]), salt + root_b)
+    paying both corrections), which is what ties it on the stride rows (TT_OUT-FP4's rule D-SK).
+    H_"pearl-c4/v1/seed-B"(salt ‖ root_B) (`labelled`)."""
+    return labelled("seed-B", salt + root_b)
 
 
 @lru_cache(maxsize=4)
@@ -1138,11 +1149,11 @@ class PearlC4:
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", *(("cr/sha-512",) if hashing != "h0" else ()),
-                    "cr/sha-256", "device-reproducibility", "live-verifier"),
+            claims=("tt-out/fp4-sm120", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility",
+                    "live-verifier"),
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
-                "this job's salt, seed-B = keyed(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
+                "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
                 "F2 (theory §6.2–6.3; the assessor's FP4 conditions, ratings.md 15:18Z), as the theory lane states it, proposed and "
                 "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
                 "the cap for less than their credit less the debit (research store "
@@ -1324,5 +1335,5 @@ class PearlC4:
 
 
 __all__ = ["FORMATS", "HASHINGS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1",
-           "form", "hw_scales", "line", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
+           "form", "hw_scales", "labelled", "line", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
            "unit_seed_a", "word_replay"]
