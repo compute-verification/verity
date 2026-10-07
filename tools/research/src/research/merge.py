@@ -101,6 +101,19 @@ SLOT_WRAP = ("python3", "tools/check/slot.py")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`
 CHECK_FLAGS = ("--no-cache", "--keep-going")
+#: the layout move's head (pr:1450) and the paths it gave check's scripts: main declares their old paths until the move lands,
+#: and a check of the moved tree can only run them at the new ones, so for that commit alone an argv naming the new paths is
+#: read as naming the old. Remove once main declares tools/verity/check/.
+MOVED_CHECK = {"8543eeccaccbca68dab78552e6eda2814b2afe2e": {"tools/verity/check/slot.py": "tools/check/slot.py",
+                                                            "tools/verity/check/check.py": "tools/check/check.py"}}
+
+
+def as_declared(argv, commit: str | None):
+    """``argv`` with the paths `MOVED_CHECK` gives ``commit`` mapped back to the ones main declares; ``argv`` itself otherwise."""
+    paths = MOVED_CHECK.get(commit or "")
+    if not paths or not isinstance(argv, list):
+        return argv
+    return [paths.get(x, x) if isinstance(x, str) else x for x in argv]
 
 
 def invocation(argv, command) -> tuple[str, object]:
@@ -308,8 +321,9 @@ def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, 
     if isinstance(got, str):
         return got
     doc, art, result = got
-    mode, ids = invocation(doc.get("argv"), command)
-    if mode != "combine" and (why := unlike(doc.get("argv"), command)):
+    argv = as_declared(doc.get("argv"), commit)
+    mode, ids = invocation(argv, command)
+    if mode != "combine" and (why := unlike(argv, command)):
         return why
     kind = result.kind if result else None
     if kind in REFUSED_KINDS:

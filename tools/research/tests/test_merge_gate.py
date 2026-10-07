@@ -828,6 +828,37 @@ def test_merge_admits_only_a_run_of_the_declared_command_whose_own_result_passed
     assert merge_main(["feat", "--dry-run"]) == 0
 
 
+def test_the_layout_moves_check_at_the_moved_paths_is_the_declared_command_for_the_moves_head_alone(tmp_path, monkeypatch, capsys):
+    """Main declares `tools/check/check.py` until the layout move lands, and a check of the moved tree can only run
+    `tools/verity/check/check.py`, so no check of the move could pass (the move's check dc20, 7 Oct). `MOVED_CHECK` reads the moved
+    paths as the declared ones for the move's head and nothing else."""
+    import research.merge as M
+
+    main, feat, tip = _repos(tmp_path)
+    (feat / "tools" / "verity" / "check").mkdir(parents=True)
+    (feat / "tools" / "verity" / "check" / "check.py").write_text(CHECK_PY)
+    _git(feat, "add", "-A")
+    _git(feat, "commit", "-q", "-m", "the move")
+    tip = _git(feat, "rev-parse", "HEAD")
+    moved = (sys.executable, "tools/verity/check/check.py")
+    monkeypatch.delenv("FAKE_CHECK", raising=False)
+    assert _record(tmp_path, feat, monkeypatch, *moved) == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 3
+    assert f"isn't the target's declared `{shlex.join(CHECKED)}`" in capsys.readouterr().err
+    monkeypatch.setattr(M, "MOVED_CHECK", {"f" * 40: {"tools/verity/check/check.py": "tools/check/check.py"}})
+    assert merge_main(["feat", "--dry-run"]) == 3, "another commit's entry admits nothing"
+    capsys.readouterr()
+    monkeypatch.setattr(M, "MOVED_CHECK", {tip: {"tools/verity/check/check.py": "tools/check/check.py"}})
+    assert merge_main(["feat", "--dry-run"]) == 0
+    monkeypatch.undo()
+    head, declared = next(iter(M.MOVED_CHECK)), ("uv", "run", "--locked", "--extra", "torch-cpu", "python", "tools/check/check.py")
+    ran = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "x", "--", "uv", "run", "--locked", "--extra", "torch-cpu",
+           "python", "tools/verity/check/check.py", "--keep-going", "--verdicts-in", "v.tgz"]
+    assert M.unlike(M.as_declared(ran, head), declared) is None
+    assert "isn't the target's declared" in M.unlike(M.as_declared(ran, "f" * 40), declared)
+
+
 def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_pys_own_flags_at_most():
     """What `check.py --record [--on]`, `train.sh`, the jobs dispatch and `research merge --train` record: the declared command,
     behind `slot.py` when it was sent to a machine, followed by check.py's own flags.  Anything else is another command."""
