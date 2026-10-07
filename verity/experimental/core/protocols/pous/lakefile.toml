@@ -1,0 +1,16 @@
+# The PoUS check as a program: what the verifier checks at setup and in the timed audit, in executable Lean, reading the
+# formats the Python reference writes. It imports Lean core and Flock's executable primitives only. Its properties are
+# stated in `Security/Properties/Pous.lean`; it moves into `verity/core/protocols/pous` once they are proved.
+name = "pous_check"
+defaultTargets = ["PousCheck"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../../core/service/flock"
+
+[[lean_lib]]
+name = "PousCheck"

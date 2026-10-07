@@ -1,0 +1,13 @@
+{
+ "roots": ["PousCheck"],
+ "layers": {
+  "PousCheck": {
+   "imports": ["PousCheck", "Flock"],
+   "except": [],
+   "why": "the program is code: Lean core and Flock's executable primitives only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
+ "dependencies": {
+  "toolchain": "c294f2a04d5984ba7be879bb0074fc8a4db0da2b7bc5dc8673e7fe8d09dd640a"
+ }
+}
