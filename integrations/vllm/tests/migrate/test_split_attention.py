@@ -1,6 +1,6 @@
 """`tools/migrate/split_attention.py` on a synthetic tree: the move, every import form it rewrites, its idempotence (a rerun is the
 rebase) and what it refuses.  The real tree's invariants (ids, digests, circuit-check's tasks) are
-`tools/circuit_check/tests/test_attention_split.py`'s."""
+`tools/verity/circuit_check/tests/test_attention_split.py`'s."""
 from __future__ import annotations
 
 import ast
@@ -17,7 +17,7 @@ _spec.loader.exec_module(S)
 FA2 = '''"""FA2 per-iteration Check_inf: `AttentionHead_v5` takes `MASKED_FROM` (`fa2_masked_from`)."""
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import composite
+from verity.ml.circuits.defs import composite
 
 #: FA2's splitkv tile height
 KBLOCK_M = 64
@@ -121,7 +121,7 @@ def test_the_move_and_every_import_form(tmp_path, files):
     fa2 = _read(repo, f"{reg}/fa2_check_inf.py")
     assert "def fa2_masked_from" not in fa2 and "KBLOCK_M" not in fa2.replace("attention_vocab", "")
     assert '__all__ = ["AttnBlockV5"]' in fa2 and "(`attention_vocab.fa2_masked_from`)" in fa2
-    assert "from verity.primitives.circuits.defs import composite\n\n\ndef AttnBlockV5" in fa2         # two blank lines where the rules were
+    assert "from verity.ml.circuits.defs import composite\n\n\ndef AttnBlockV5" in fa2         # two blank lines where the rules were
 
     assert _read(repo, "integrations/vllm/verity_vllm/a.py").startswith(
         "from verity_vllm.program.registry.fa2_check_inf import AttnBlockV5\n"

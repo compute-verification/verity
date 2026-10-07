@@ -196,7 +196,7 @@ Runs: `python -m archive.direct.ligero.run bench-vu [--zk] --batch 16384 --total
   distinct rows) -- **3372 rows per unit**, 338 linear + 3246 quadratic constraints (the census's 358 mul / 137 lin /
   306 lookups, with the lookups paid as bits and selectors).
 * BabyBear, rate-1/4 Reed-Solomon (`[16384, 4096]`) by a batched radix-2 int64 NTT in torch, Blake3 Merkle over
-  the codeword columns on the GPU (`kernels/hash_gpu`; host Blake3 fallback), Ligero's three tests (interleaved proximity; linear constraints with the
+  the codeword columns on the GPU (`verity/ml/kernels/hash_gpu`; host Blake3 fallback), Ligero's three tests (interleaved proximity; linear constraints with the
   verifier encoding the public right-hand side itself, so nothing is sent; quadratic constraints as a batched
   Hadamard identity with a quotient by `Z_H`), `t = 189` opened columns, 6 BabyBear coordinates per challenge:
   soundness `2^-128.1` by `security.accounting.ligero_error`. `rounds.sequential_depth = 2`.
@@ -237,7 +237,7 @@ python -m archive.direct.ligero.encoder_bench                                   
 
 ## Measurements (synchronised device clock, warm, median of 5; `results/*.json` per `bench.contract`)
 
-Final state (torch hint generator, GPU Blake3 Merkle from `kernels/hash_gpu`, `torch.compile`d NTT butterfly
+Final state (torch hint generator, GPU Blake3 Merkle from `verity/ml/kernels/hash_gpu`, `torch.compile`d NTT butterfly
 and constraint kernels, CUDA-graph replay of the witness program):
 
 | | unit proof, B = 4096 units | VU proof, 42 VUs (l = 4096) | VU proof, 85 VUs (l = 8192) |

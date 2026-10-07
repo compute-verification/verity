@@ -7,7 +7,7 @@ import struct
 from collections.abc import Sequence
 from pathlib import Path
 
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
 
 from verity_numerical.checker import REAL, Params, Reject, check_step, gen_step
 from verity_numerical.checker.ctx import Table
