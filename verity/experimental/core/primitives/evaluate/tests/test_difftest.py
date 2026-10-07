@@ -34,6 +34,8 @@ import functools
 import gzip
 import itertools
 import json
+import multiprocessing
+import os
 import random
 import re
 import shutil
@@ -1457,6 +1459,61 @@ def test_the_logs_on_drawn_words(server):
     words = [rng.getrandbits(32) for _ in range(1 << 18)]
     for fn in (TW.NvLogf, TW.NvLogfV2):
         assert _agree_on(server, fn, [[(w,) for w in words[i:i + (1 << 16)]] for i in range(0, 1 << 18, 1 << 16)]) == 1 << 18
+
+
+FULL_LOGF = "VERITY_EVALUATE_FULL_LOGF"
+#: the full domain's requests: 2^16 consecutive words each
+_LOGF_BLOCK = 1 << 16
+_logf_server: DT.Server | None = None
+
+
+def _logf_start(exe: str) -> None:
+    global _logf_server
+    _logf_server = DT.Server([exe])
+
+
+@functools.cache
+def _logf_desc(fid: str) -> dict:
+    return json.loads(_batch_text(fid, _LOGF_BLOCK))
+
+
+def _logf_block(b: int) -> tuple[dict[str, int], list[tuple]]:
+    """Block `b` of the 32-bit words under both logs: per log, how many words the Lean evaluator answers with the Python
+    primitive's own word; and the first few it doesn't."""
+    words = list(range(b * _LOGF_BLOCK, (b + 1) * _LOGF_BLOCK))
+    counts, bad = {}, []
+    for fn in (TW.NvLogf, TW.NvLogfV2):
+        kind, out = _logf_server.call("evaluate", request(_logf_desc(fn.id), [words]))
+        got = json.loads(out) if kind == "output" else [out] * _LOGF_BLOCK
+        counts[fn.id] = 0
+        for w, g in zip(words, got):
+            want = fn.evaluate(w)
+            if g == want:
+                counts[fn.id] += 1
+            elif len(bad) < 4:
+                bad.append((fn.id, hex(w), g, want))
+    return counts, bad
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(os.environ.get(FULL_LOGF) != "1",
+                    reason=f"set {FULL_LOGF}=1: NvLogf_v1 and _v2 on all 2^32 words, about 85 core-hours (Lean 1.4 s and "
+                           "Python 0.9 s per 2^16 words and log), half an hour on a 192-vCPU machine")
+def test_the_logs_on_every_word():
+    """`NvLogf_v1` and `_v2` on every 32-bit word, in requests of 2^16 over a process per CPU, each with its own server; each
+    answer the Python primitive's own word. The sweeps and draws reach a few hundred thousand words of a reduction whose
+    polynomial, binade change and NaN handling act on each word separately: only every word shows they agree everywhere."""
+    exe = str(DT.build(PKG, "verity-evaluate"))
+    jobs = len(os.sched_getaffinity(0))
+    counts, bad = {"NvLogf_v1": 0, "NvLogf_v2": 0}, []
+    with multiprocessing.get_context("fork").Pool(jobs, _logf_start, (exe,)) as pool:
+        for c, b in pool.imap_unordered(_logf_block, range((1 << 32) // _LOGF_BLOCK), chunksize=4):
+            for k, v in c.items():
+                counts[k] += v
+            bad += b[:max(0, 16 - len(bad))]
+    print(f"NvLogf on every word over {jobs} processes: {counts}; first disagreements: {bad}")
+    assert not bad, bad
+    assert counts == {"NvLogf_v1": 1 << 32, "NvLogf_v2": 1 << 32}, counts
 
 
 STORE_IO = Path(__file__).resolve().parents[6] / "integrations/vllm/tests/regression/store_io.py"
