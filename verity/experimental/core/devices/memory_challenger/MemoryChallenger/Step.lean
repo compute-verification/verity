@@ -12,8 +12,9 @@ does next. The Python's `run(respond)` is a call per round; here the answer arri
 * `received now bytes` appends to the open round's answer. The round's receipt time is the reading `now` of the event
   whose bytes complete the `block_bytes`-byte block, which the driver takes after the bytes arrive and before `step`
   hashes them (`receive`). Bytes with no round open, and any past the block, are no answer and are dropped.
-* A round is late when its elapsed time passes `limit_ns`; the first late round ends the session (`LATE`), and `k`
-  on-time rounds end it `COMPLETE`. No round is retried and no index redrawn.
+* A round is late when its elapsed time is outside `[0, limit_ns]`, as `verdict` judges it: past the limit, or a
+  receipt before its send (a clock that ran backwards). The first late round ends the session (`LATE`), and `k` on-time
+  rounds end it `COMPLETE`. No round is retried and no index redrawn.
 * Two endings the Python has no counterpart for, since its `respond` always returns: a `tick` past the open round's
   deadline (`send_ns + limit_ns`), and the end of the link, end the session `LATE` with the open round unrecorded.
 * An ended session asks for a leaf (`reserve`) once; `reserved q` signs the session at `q` (`close`, its signature
@@ -121,7 +122,7 @@ def step (cfg : Config) (s : State) : Event → State × List Action
       if answer.size < cfg.blockBytes then ({ s with buffer := answer }, []) else
       let r : Round := ⟨o.j, o.index, o.sendNs, now, blockDigest (answer.extract 0 cfg.blockBytes)⟩
       let s := { s with rounds := s.rounds.push r, current := none, buffer := .empty }
-      if r.elapsedNs > cfg.limitNs then finish s LATE
+      if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ cfg.limitNs) then finish s LATE
       else if s.rounds.size == cfg.coins.k then finish s COMPLETE
       else (s, [])
     | _, _ => (s, [])
