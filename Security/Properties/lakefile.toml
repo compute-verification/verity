@@ -1,0 +1,18 @@
+# The properties of the protocols' programs (untrusted statements, no proofs): each stated against a program's
+# `Core.Protocol` check, which it requires by path. Its modules sit beside the trusted text's (`srcDir = ".."`) under a
+# root of their own, `Properties`. The proofs are to go in `security_proofs`, which will require this package.
+name = "security_properties"
+srcDir = ".."
+defaultTargets = ["Properties"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "pous_check"
+path = "../../verity/experimental/core/protocols/pous"
+
+[[lean_lib]]
+name = "Properties"
+roots = ["Properties.Pous"]
