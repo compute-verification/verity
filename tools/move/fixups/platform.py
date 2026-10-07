@@ -167,6 +167,28 @@ EDITS = [
      '(tmp_path / "verity" / "ml" / "flock" / "verify.rs")'),
     ("tools/verity/check/tests/test_check.py", '(tmp_path / "backends" / "flock" / "é.py")',
      '(tmp_path / "verity" / "ml" / "flock" / "é.py")'),
+    # the Lean check's entry point is `check.py` (the row moves it); these load it by its bare name
+    ("tools/verity/lean/check.py", 'prog="audit.py"', 'prog="check.py"'),
+    ("tools/verity/lean/merge.py", '"lean_audit_for_merge", HERE / "audit.py")', '"lean_audit_for_merge", HERE / "check.py")'),
+    ("tools/verity/lean/upstream.py", '"lean_audit", HERE / "audit.py")', '"lean_audit", HERE / "check.py")'),
+    ("tools/verity/lean/tests/test_audit.py", '"lean_audit", HERE.parent / "audit.py")', '"lean_audit", HERE.parent / "check.py")'),
+    ("tools/verity/lean/tests/test_audit.py", "{str(HERE.parent / 'audit.py')!r}", "{str(HERE.parent / 'check.py')!r}"),
+    ("tools/verity/lean/tests/test_cache.py", '"lean_audit_env", HERE.parent / "audit.py")',
+     '"lean_audit_env", HERE.parent / "check.py")'),
+    ("tools/verity/lean/tests/test_merge.py", 'for f in ("merge.py", "audit.py"):', 'for f in ("merge.py", "check.py"):'),
+    ("tools/move/lean.py", "    import audit as A\n    sec = {", "    import check as A\n    sec = {"),
+    ("tools/move/tests/test_lean.py", "    import audit as A\n    toy = {", "    import check as A\n    toy = {"),
+    ("tools/research/tests/test_jobs_dispatch.py", '"audit.py --build --update verity/ml/flock/verifier/soundness"',
+     '"check.py --build --update verity/ml/flock/verifier/soundness"'),
+    # from the PoUS package's directory, which the move put one level deeper; the move doesn't see a $PWD-relative path
+    ("verity/experimental/protocols/pous/lean/check.sh", "$PWD/../../../../../../tools/lean/audit.py",
+     "$PWD/../../../../../tools/verity/lean/check.py"),
+    ("verity/experimental/protocols/pous/lean/check.sh", 'fail "audit.py"; }', 'fail "check.py"; }'),
+    # the commands run from the repository's root, which the plain-relative pass read as relative to the document
+    ("Security/Proofs/Flock/Soundness/README.md", "`python tools/verity/lean/check.py ../Security/Proofs`",
+     "`python tools/verity/lean/check.py Security/Proofs`"),
+    ("Security/Proofs/Flock/Soundness/ASSUMPTIONS.md", "`python tools/verity/lean/upstream.py ../Security/Proofs`",
+     "`python tools/verity/lean/upstream.py Security/Proofs`"),
 ]
 
 #: (path, first line, the line it stops before): the text from one to the other goes.
