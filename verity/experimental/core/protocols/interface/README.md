@@ -55,5 +55,14 @@ profile type and JSON.
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
 actual parameters, every input covered and assumptions as named `Prop`s. They gate promotion into `verity/core/`, not
-the port. `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`;
-`core-protocol-example` runs it.
+the port. All protocols share one Lake package for them, `security_properties` (#1494), with the statements in
+`Properties.<Protocol>` and the proofs in `Properties.Proofs.<Protocol>` (top, 1791398523.782759):
+- It requires `security` (Definitions and Models) and, by path, the code it states properties of. It never requires
+  `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
+- A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in
+  `security_proofs` as `Proofs.<Protocol>`, which may require `security_properties`. Sampled proofs' `audit_profile`
+  (`Proofs/Flock/Soundness/Audit/OneStage.lean`) is one such result.
+- Each protocol adds its root and its `[[require]]` to that one lakefile.
+
+`CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`; `core-protocol-example`
+runs it.
