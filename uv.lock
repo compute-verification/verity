@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
