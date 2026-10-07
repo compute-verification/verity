@@ -101,7 +101,7 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
-- 2026-10-06 (about 7:40 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
+- 2026-10-06 (8:00 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
   `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
   question.
 - 2026-10-06 (9:49 AM PDT): the repository becomes the minimal, DRY implementation of the system as now decided. Every
