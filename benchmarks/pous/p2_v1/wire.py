@@ -239,7 +239,9 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
         raise WireError(FAIL_TRANSPORT, "missing SETUP_SALT")
     _, body = parse_envelope(frames[cursor], SETUP_SALT)
     cursor += 1
-    if len(body) != D + S or body[:D] != commitment:
+    if len(body) != D + S:
+        raise WireError(FAIL_MALFORMED, "SETUP_SALT length mismatch")
+    if body[:D] != commitment:
         raise WireError(FAIL_IDENTITY, "SETUP_SALT commitment mismatch")
     salt = body[D:]
 

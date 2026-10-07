@@ -93,3 +93,34 @@ def test_the_generator_rewrites_the_files_it_pins():
     negative = V.negative_vectors(audit["small_end_to_end"])
     for doc, path in ((maps, R.VECTORS), (audit, R.AUDIT_VECTORS), (negative, R.NEGATIVE_VECTORS)):
         assert V._dump(doc) == path.read_bytes(), path.name
+
+
+def _small_session():
+    small = _load(R.AUDIT_VECTORS)["small_end_to_end"]
+    setup = [bytes.fromhex(m["bytes"]) for m in small["setup_messages"]]
+    audit = [bytes.fromhex(small["audit_open"])]
+    for x in small["exchanges"]:
+        audit += [bytes.fromhex(x["challenge"]), bytes.fromhex(x["response"])]
+    return small, setup, audit
+
+
+def _verify(frames, small, **kw):
+    kw.setdefault("seen_audits", set())
+    return Wi.parse_final(Wi.verify_audit(frames, small["elapsed_ns"], verifier_source=bytes.fromhex(small["audit_source"]),
+                                          **kw))
+
+
+def _setup_with_block(small, setup, i, block):
+    """`setup` with block `i` replaced and SETUP_ROOT's root rebuilt over the new leaves, so the root still authenticates."""
+    salt, bps = bytes.fromhex(small["setup_salt"]), V.SMALL.blocks_per_segment
+    blocks = [bytes.fromhex(b) for b in small["blocks"]]
+    blocks[i] = block
+    root = R.root([R.leaf(salt, j // bps, j % bps, b) for j, b in enumerate(blocks)])
+    return Wi.setup_messages(small["manifest"].encode(), bytes.fromhex(small["w_commitment"]), salt, blocks, root)
+
+
+def test_a_setup_salt_of_the_wrong_length_is_malformed():
+    """A body outside its type's length is code 1 (spec §4's table), before any binding is compared."""
+    small, setup, audit = _small_session()
+    for body in (setup[1][10:] + b"\x00", setup[1][10:-1]):
+        assert _verify([setup[0], Wi.envelope(Wi.SETUP_SALT, body), *setup[2:], *audit], small) == (False, 1, 0)
