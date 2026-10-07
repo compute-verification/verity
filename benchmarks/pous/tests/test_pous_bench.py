@@ -30,13 +30,13 @@ def test_weight_sets_are_the_frozen_benchmarks():
     for ws in sets.values():
         assert ws["bytes"] == sum(o * k * 2 for _, o, k in ws["tensors"])
         assert all(len(s) == 64 for s in ws["checkpoint"]["safetensors_sha256"].values())
-    hardware = {h["id"] for h in json.loads((ROOT / "catalog" / "census" / "hardware.json").read_text())}
+    hardware = {h["id"] for h in json.loads((ROOT / "benchmarks" / "census" / "hardware.json").read_text())}
     assert set(doc["hardware"]) <= hardware
 
 
 def test_harness_registry_and_certificate_gate():
-    pytest.importorskip("verity.protocols.accounting.space.pous")
-    from verity.protocols.accounting.space.pous import schemes
+    pytest.importorskip("verity.experimental.protocols.pous")
+    from verity.experimental.protocols.pous import schemes
 
     bench = _bench()
     assert set(bench.IMPLS) == {"reference", "vllm-gpu", "band-gpu", "p2-v1-gpu", "p2-v3-gpu", "p2-v3-mc-gpu", "p2-gpu"}

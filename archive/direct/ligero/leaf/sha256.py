@@ -1,6 +1,6 @@
 """``leaf = sha256``: the operand rows hashed **in-circuit with SHA-256's compression function** under the core frame-v3 row
 leaf ``sha256/row/v1`` (lane b-ligero-sha256): what the verifier ends up checking is the ordinary
-``SHA-256(sha256_row_prefix(role, word_bits, n_words) || row_bytes)`` (``verity.primitives.commitments.rowleaf.sha256_row_digest``) of
+``SHA-256(sha256_row_prefix(role, word_bits, n_words) || row_bytes)`` (``verity.ml.commitments.rowleaf.sha256_row_digest``) of
 every committed row as the leaf value under the SHA-256 indexed trees -- anyone with ``hashlib`` recomputes it.
 
 **Framing.**  The core schema's first block is the 64-byte public prefix (tag, role, word width, row length), so every row's
@@ -41,7 +41,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from verity.primitives.commitments.rowleaf import SCHEMA_SHA256_ROW, sha256_row_digest, sha256_row_prefix
+from verity.ml.commitments.rowleaf import SCHEMA_SHA256_ROW, sha256_row_digest, sha256_row_prefix
 
 from ..compile import Expr, LigeroCtx, P, Quadratic
 from .blake3 import _bits_raw, _const, _prod, row_bytes
@@ -486,7 +486,7 @@ class Sha256Leaf:
         return leaf_bytes_many(digests)
 
     def reference_digest(self, rows: np.ndarray, *, word_bits: int, role: int) -> list[bytes]:
-        """``verity.primitives.commitments.rowleaf.sha256_row_digest`` per row -- the core reference :meth:`leaf_bytes` of
+        """``verity.ml.commitments.rowleaf.sha256_row_digest`` per row -- the core reference :meth:`leaf_bytes` of
         :meth:`native` must equal."""
         return [sha256_row_digest([int(x) for x in r], word_bits, role) for r in np.asarray(rows, dtype=np.int64)]
 

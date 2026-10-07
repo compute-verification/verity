@@ -108,7 +108,7 @@ class _FP4Relation:
     instances_dataset, instances_tier, frozen_tier = "synthetic", "fp4-nvf4 synthetic (fp4/chain.instances_fp4)", None
 
     def __init__(self):
-        from verity_catalog.targets.target import NVFP4_SM120
+        from verity.ml.circuits.targets.target import NVFP4_SM120
 
         from archive.direct.ligero.fp4 import chain as fc
         from archive.direct.ligero.fp4 import relation as fr
