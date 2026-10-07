@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 `Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden`.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkHidden.View`, and `Specs.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.ZkHidden.View`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.ZeroKnowledgeHidden` does.
 -/
 
