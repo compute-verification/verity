@@ -8,7 +8,7 @@ session of `J` tables: one `Commit` with every table's root, one link exchange w
 tables share `m_pts`), the `2J` rep streams `(table j, rep r)` in any order the prover picks, each round's coins drawn
 after its bytes, and every proof file after the last coin of every stream (the barrier).
 
-* `liveSession dg J mPts N`: that live session, on the coin server with retained round bytes. `liveSession` at `J = 1`
+* `liveSession dg J mPts N`: that live session, on the challenger with retained round bytes. `liveSession` at `J = 1`
   is `Refine.liveTable` up to the submissions' table index.
 * `modelSession out G`: the model's session of `J` tables, `Commit`'s caps, the link points, then `batch` over the
   tables, each its two reps concurrently (`G j pts r`) and its openings. `sessionBL` is one (`Session.lean`).
@@ -60,7 +60,7 @@ theorem addRoundJ_ne {J : ℕ} (rs : Fin J → Fin 2 → List Round) {j j' : Fin
     (h : ¬ (j' = j ∧ r' = r)) : addRoundJ rs j r rd j' r' = rs j' r' :=
   upd_ne _ _ h
 
-/-- **The coin server's rounds over `2J` streams** (PROTOCOL.md §7.1): the prover submits a round on any table's either
+/-- **The challenger's rounds over `2J` streams** (PROTOCOL.md §7.1): the prover submits a round on any table's either
 rep, or stops, at most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed and appends
 the round to that stream. -/
 def liveRoundsJ (dg : ByteArray → ByteArray) (J : ℕ) :

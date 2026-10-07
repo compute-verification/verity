@@ -1,7 +1,7 @@
-"""The Lean soundness package's RoPE data (`FlockSoundness/Rope/`: the gates, the pinned rows, the checkpoints and the
-chunk checks): the committed gate circuit computes the unit's circuit (on random inputs), and the rest is regenerated
-here from it and the pinned rows, byte for byte, for the netlist `rope_head.PINS` pins. `FlockSoundness.Rope.pinned_eq`
-checks the rest in the kernel."""
+"""The Lean soundness package's RoPE data (`verity/Security/Proofs/Flock/Soundness/Rope/`: the gates, the pinned rows,
+the checkpoints and the chunk checks): the committed gate circuit computes the unit's circuit (on random inputs), and
+the rest is regenerated here from it and the pinned rows, byte for byte, for the netlist `rope_head.PINS` pins.
+`FlockSoundness.Rope.pinned_eq` checks the rest in the kernel."""
 from __future__ import annotations
 
 from pathlib import Path

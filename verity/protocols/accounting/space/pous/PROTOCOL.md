@@ -206,6 +206,24 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the verifier's RTT is measured.
 
+## Public outputs
+
+Under the proof service (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, "PoUS"), an
+audit makes public its verdict and nothing about a single round:
+
+- the verdict;
+- the salted roots of `W` and of the encoding `C`;
+- the salt;
+- the setup draw and its profile;
+- the openings of the memory challenger's coin tree, once the session has closed.
+
+Everything else is witness. The per-round on-time bits stay in the memory challenger's signed record, so a server can't
+steer what the auditor sees round by round. The memory challenger reveals each index from its coin tree, receives the
+whole 2,056-byte answer, hashes those bytes itself, and signs the index, the send and receipt times and the hash. The
+hash is the memory challenger's, not a commitment the server made, so the audit needs no possession claim. The
+reference here runs the rounds in the clear: `audit.AuditResult` keeps every answer and its latency, which is the
+memory challenger's record, never a public output.
+
 ## The generic protocol (`protocol`, `schemes`)
 
 The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
@@ -485,7 +503,7 @@ column storage, whole lower labels as separators, meet in the middle through `Pâ
 `tests/` covers:
 
 - round trips on every backend and shape;
-- known-answer vectors for `F`, `Î `, `P_T`, `H` and whole segments (`fixtures/vectors.json`; the 64 KB segment with
+- known-answer vectors for `F`, `Î `, `P_T`, `H` and whole segments (`tests/fixtures/vectors.json`; the 64 KB segment with
   `VERITY_POUS_SLOW=1`);
 - `H` recomputed from the spec's text;
 - the RFC 6962 tree and the timed and simulated audits;
@@ -503,7 +521,7 @@ column storage, whole lower labels as separators, meet in the middle through `Pâ
   one word for word in the Lean file) and restates it on the verifier's clock. Fuzzed and scripted traces (answers at
   and one nanosecond past each deadline, wrong, pipelined, stale and dropped answers) must agree with it action for
   action, and Lean `ContMachine`s run against the verifier must get `contRecords`' verdicts and `contAccepts`;
-- the Lean vectors (`fixtures/lean_vectors.json`).
+- the Lean vectors (`tests/fixtures/lean_vectors.json`).
 
 The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean's `c1'`, `topLabel'`, `transpose`,
 `decodeLower`, `tagOf`, the decoder, `bandGraph` and `colRound` on small cases. It proves by `rfl` that its generic
@@ -719,5 +737,7 @@ the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
+- The memory challenger: its committed coin tree and its signed per-round record ("Public outputs"). Today
+  `audit.TimedVerifier` runs the rounds and holds their record in the clear.
 - In `lean/`: N10â€² (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
   `p3-meets` (P3 with a random-oracle `H`) come in later PRs.

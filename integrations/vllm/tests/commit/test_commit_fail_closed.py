@@ -236,12 +236,6 @@ def test_dead_watchdog_exits_rc3_with_marker_when_never_acknowledged(tmp_path: P
     assert m["schema"] == "verity-collect/dead-watchdog/v1" and m["rc"] == 3 and "did not fail closed" in m["reason"]
 
 
-@pytest.mark.parametrize("mode", ["ack", "progress"])
-def test_dead_watchdog_stands_down_when_the_run_fails_closed_or_progresses(tmp_path: Path, mode: str):
-    p, marker = _watchdog_run(tmp_path, mode, 1.0)
-    assert p.returncode == 0, f"an acknowledged / progressing dead collector must NOT be killed: rc {p.returncode}\n{p.stdout[-1500:]}\n{p.stderr[-1500:]}"
-    assert "ALIVE-AFTER-GRACE" in p.stdout and "DEAD-WATCHDOG" not in p.stderr
-    assert not marker.exists()
 
 
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")

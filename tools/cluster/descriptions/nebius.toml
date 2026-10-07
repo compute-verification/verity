@@ -95,7 +95,7 @@ until = "2026-10-07T12:00:00Z"
 [policy.vy-nebius-1]
 owner = "infra"
 direct-gpus = "none"            # /etc/vy/direct-gpus: gpu-lease's direct runs get no GPU (the 30 Sep cutover)
-direct-cpus = "0-95,128-159"    # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones
+direct-cpus = "0-159"           # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones (96-127 since 6 Oct)
 user-cpuset = { delegate = "cpu cpuset memory pids" }   # user@.service.d/vy-cpuset.conf, so a user scope's AllowedCPUs holds (#855)
 # /workspace/research/locks/lean-slots (lean_slot.py): the cap of 4, split by infra and proofs (16:25Z)
 lean-slots = { check = 2, audit = 2 }
