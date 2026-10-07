@@ -405,7 +405,7 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
 
 __all__ = ["CAP_CHUNKS", "CAP_ROW_WORDS", "DIGEST", "INST", "KEY", "OK", "P_WORDS", "PearlTileDigestDef", "ROW_SCHEMA",
            "ROW_WORDS", "SCHEMAS", "chunk_digests", "commit", "digest_bytes", "leaf_digest", "messages_type", "ok_of",
-           "row_digest", "statement_rows", "tile_digest", "tile_messages", "tree_leaf", "words_bf16", "words_cap_chunks", "words_cap_flags",
-           "words_cap_rows", "words_cap_sums", "words_cap_word", "words_fp32", "words_fp8_codes", "words_fp8_p",
-           "words_nvfp4_codes", "words_nvfp4_p", "words_ok", "words_pc4_carry", "words_pc4_head", "words_pc8_carry",
-           "words_pc8_head", "words_sd", "words_tile"]
+           "row_digest", "statement_rows", "tile_digest", "tile_messages", "tree_leaf", "words_bf16", "words_cap_chunks",
+           "words_cap_flags", "words_cap_rows", "words_cap_sums", "words_cap_word", "words_fp32", "words_fp8_codes",
+           "words_fp8_p", "words_nvfp4_codes", "words_nvfp4_p", "words_ok", "words_pc4_carry", "words_pc4_head",
+           "words_pc8_carry", "words_pc8_head", "words_sd", "words_tile"]

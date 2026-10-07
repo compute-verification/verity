@@ -15,12 +15,13 @@ r × TN (`Shape.tile_rows`, `tile_templates`).  The partition is `Q_template_ins
 every value is computed in exactly one unit.  Forming v0 (#311's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, the row its ``sha512/row-seg/v1`` leaf
-hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet), and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
-B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the
-per-tile cap to the hiding call, cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row
-unit along k into a head, a form per segment of row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's
-block at every served k.  A shape takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a
-short last tile row there); off, nothing here changes.
+hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet), and the rows are
+C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j; `leaves`) and each
+row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the per-tile cap to the hiding call,
+cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row unit along k into a head, a form
+per segment of row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's block at every served k.  A shape
+takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a short last tile row there); off,
+nothing here changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
