@@ -114,9 +114,9 @@ def lit(v: int) -> str:
 
 
 def render(vectors: dict[str, list[tuple[int, ...]]]) -> tuple[str, str]:
-    data = ["import Pouw.Protocol.PearlC.RowPrims", "", HEADER.format(seed=SEED), "",
+    data = ["import Definitions.Pouw.PearlC.RowPrims", "", HEADER.format(seed=SEED), "",
             "namespace Pouw.PearlC.RowPrimVectors", ""]
-    checks = ["import Pouw.Protocol.PearlC.RowPrimVectors", "", HEADER.format(seed=SEED), "",
+    checks = ["import Definitions.Pouw.PearlC.RowPrimVectors", "", HEADER.format(seed=SEED), "",
               "namespace Pouw.PearlC.RowPrimChecks", "", "open Pouw.PearlC.RowCircuit", ""]
     for stem, fn, arity, per, doc in FAMILIES:
         vs = vectors[stem]

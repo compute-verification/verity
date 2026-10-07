@@ -157,7 +157,7 @@
       "owns": [
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "verity/lean/"
+        "verity/Security/"
       ]
     },
     {
