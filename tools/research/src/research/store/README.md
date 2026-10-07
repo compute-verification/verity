@@ -193,15 +193,15 @@ TC_PROBE = Tool(
     closure=["benchmarks/tc_probe/**", "verity/ml/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
-    param_artifacts=["replay_golden", "replay_instances"],                     # path-valued params: identity = content, never pathname
-    caches=["nvcc"],                                                            # names for d.scratch(name)
+    param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname
+    caches=["nvcc"],                                        # names for d.scratch(name)
     produces=["tc-evidence/v1", "run-files/v1"],
 )
 ~~~
 
 Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
-illustrative, the files follow the scripts' real argparse) and are found by `research run --tool <dotted.module:NAME>` or
-`--tool <name>` via the registry in `research/store/tools_registry.py` (a dict name -> dotted path; keep it tiny). A declaration
+illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
+`--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
 back to executing `<source root>/<module path>.py` by file when the module is not on sys.path).
 
@@ -341,7 +341,7 @@ by one of two checks, and the replica record (`replicas.verified`) says which:
 ~~~text
 etag-md5          `push --verify head` (default): HEAD after upload; Content-Length == bytes and the single-part ETag == hex MD5 of
                   the local bytes (S3 and R2 make a single-PUT object's ETag its MD5; a `-` in the ETag marks multipart, which is not
-                  an MD5, and such an object falls back to read-back).  One extra round trip per object.
+                  an MD5, and such an object falls back to read-back). One extra round trip per object.
 sha256-readback   `push --verify readback`, `verify`, `put --preserve`'s manifest: download and sha256 against the manifest.  Costs
                   the object's bytes again.  Manifests are always read back (they are small); blobs on request.
 ~~~

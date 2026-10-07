@@ -33,7 +33,8 @@ def _sha(b: bytes) -> str:
 def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned: bool = True) -> Path:
     t = tmp_path / "tree"
     for d in ("check", "lean"):
-        (t / "tools" / d).mkdir(parents=True)
+        (t / "tools" / "verity" / d).mkdir(parents=True)
+    (t / "verity" / "ml" / "flock" / "verifier").mkdir(parents=True)
     (t / "tools" / "verity" / "check" / "pod_setup.sh").write_text("set -e\nUV_VERSION=${UV_VERSION:-0.12.20}\n")
     for pkg, deps in (("verity/core/service/flock", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
         d = t / pkg
