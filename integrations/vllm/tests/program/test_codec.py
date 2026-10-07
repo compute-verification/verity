@@ -7,9 +7,9 @@ import json
 
 import pytest
 
-from verity.primitives.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
-from verity.primitives.circuits.codec import IdentityConflict
-from verity.primitives.circuits.defs import CompositeDefinition
+from verity.ml.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
+from verity.ml.circuits.codec import IdentityConflict
+from verity.ml.circuits.defs import CompositeDefinition
 from verity_vllm.program.registry import b1
 
 from tests.program.test_running_example import Add16, Dot, Id16, Mul16, Relu16, make_program
@@ -49,7 +49,7 @@ def TwoLinears(B, S, x, W):
 
 @composite("Stack2", 1, ["M"], lambda S: ((("a", Array(S.M, V16)), ("b", Array(S.M, V16))), Array(2, Array(S.M, V16))))
 def Stack2(B, S, a, b):
-    from verity.primitives.circuits.refs import array_of
+    from verity.ml.circuits.refs import array_of
     return array_of([a, b])
 
 
@@ -146,21 +146,21 @@ def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
     definition is an `IdentityConflict`, never first-wins."""
     da, db = _dot_like(_dot_body_a), _dot_like(_dot_body_b)
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
-                              lambda B, S, x, w: __import__("verity.primitives.circuits.refs", fromlist=["array_of"]).array_of(
+                              lambda B, S, x, w: __import__("verity.ml.circuits.refs", fromlist=["array_of"]).array_of(
                                   [B.call(da, x, w), B.call(db, x, w)]), register=False)
     P = Program(bind(top))
     with pytest.raises(IdentityConflict, match="DotConflict_v1"):
         encode_program(P)
     # ... whichever order the two are met in
     top2 = CompositeDefinition("TopConflict2", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
-                               lambda B, S, x, w: __import__("verity.primitives.circuits.refs", fromlist=["array_of"]).array_of(
+                               lambda B, S, x, w: __import__("verity.ml.circuits.refs", fromlist=["array_of"]).array_of(
                                    [B.call(db, x, w), B.call(da, x, w)]), register=False)
     with pytest.raises(IdentityConflict):
         encode_program(Program(bind(top2)))
     # the same body under two distinct definition objects is one definition, not a conflict
     da2 = _dot_like(_dot_body_a)
     top3 = CompositeDefinition("TopSame", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
-                               lambda B, S, x, w: __import__("verity.primitives.circuits.refs", fromlist=["array_of"]).array_of(
+                               lambda B, S, x, w: __import__("verity.ml.circuits.refs", fromlist=["array_of"]).array_of(
                                    [B.call(da, x, w), B.call(da2, x, w)]), register=False)
     desc = encode_program(Program(bind(top3)))
     assert desc["definitions"]["DotConflict_v1"]["form"] == "composite"
@@ -171,8 +171,8 @@ def test_duplicate_definition_objects_are_identity_checked_once_per_object(monke
     from separately decoded request components: every node of the second component refers to a duplicate object) is identity-
     checked once per distinct duplicate object, not once per calling node -- the OLMoE B2 GP-01 compose re-encoded 95 definitions
     146,523 times (> 45 min; 8 s deduplicated); the descriptor and digest are unchanged, and a conflicting duplicate is still refused."""
-    from verity.primitives.circuits import codec as C
-    from verity.primitives.circuits.refs import array_of
+    from verity.ml.circuits import codec as C
+    from verity.ml.circuits.refs import array_of
     N = 40
     def wrapped(dot):                                                          # a root that CALLS the dot (the program fn itself is inlined)
         return CompositeDefinition("WrapDot", 1, (), lambda S: ((("x", A2), ("w", A2)), V16), lambda B, S, x, w: B.call(dot, x, w), register=False)
@@ -250,7 +250,7 @@ def test_unbound_composite_as_a_static_value_is_not_encodable():
 # -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
-    from verity.primitives.circuits.refs import Affine, Concat, Strided, concat, is_broadcast
+    from verity.ml.circuits.refs import Affine, Concat, Strided, concat, is_broadcast
     z = Affine("n", 3, 0, 1)  # one produced value
     r = concat([z] * 64)
     assert isinstance(r, Strided) and (r.outer_stride, r.inner_stride, r.inner, r.count) == (0, 0, 1, 64)
@@ -274,7 +274,7 @@ def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_s
 def test_attention_head_zero_padding_references_one_zero_gate():
     """The FA2 `Clear_OOB_MN` pad of `AttentionHead{T}` is D * (BN - nvis) references to the body's single
     `Const16[0]` gate (and l0/o0 to its single `Const32[0]`): one value each, broadcast, not n produced zeros."""
-    from verity.primitives.circuits.refs import Strided
+    from verity.ml.circuits.refs import Strided
     sp = bind(b1.AttentionHead, T=5, D=64)
     body = sp.body
     consts = [(k, n.fn.id) for k, n in enumerate(body.nodes) if getattr(n.fn, "family", None) == "Const"]
@@ -299,8 +299,8 @@ def test_attention_head_zero_padding_references_one_zero_gate():
 
 def test_v1_alias_writes_a_repeated_reference_sequence_as_a_pass_through_to_the_earlier_argument():
     from types import SimpleNamespace
-    from verity.primitives.circuits.codec import SCHEMA_V0, SCHEMA_V1, _BodyEncoder, _Tables, _decode_refs
-    from verity.primitives.circuits.refs import Affine, Concat
+    from verity.ml.circuits.codec import SCHEMA_V0, SCHEMA_V1, _BodyEncoder, _Tables, _decode_refs
+    from verity.ml.circuits.refs import Affine, Concat
     a0, a1, a2, a3 = (Affine("n", i, 0, 4) for i in range(4))
     A = Concat([a0, a1])
     Bn = Concat([A, a2, a3])  # nested, as the builder produces it for the growing KV cache
@@ -325,7 +325,7 @@ def test_v1_alias_writes_a_repeated_reference_sequence_as_a_pass_through_to_the_
 @pytest.mark.slow
 def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_program():
     from verity_vllm.program import profile_descriptor as PD
-    from verity.primitives.circuits.codec import SCHEMA_V0, SCHEMA_V1, encode_program as enc
+    from verity.ml.circuits.codec import SCHEMA_V0, SCHEMA_V1, encode_program as enc
     from verity_vllm.program.descriptor_equivalence import canonical_runs
     LP, STEPS = 4, 2
     desc = PD.build("B0", LP, STEPS)
@@ -386,6 +386,6 @@ def _v0_programs():
 
 @pytest.mark.parametrize("label", sorted(V0_DIGESTS))
 def test_v0_digests_of_programs_without_nested_statics_did_not_move(label):
-    from verity.primitives.circuits.codec import SCHEMA_V0
+    from verity.ml.circuits.codec import SCHEMA_V0
     P = _v0_programs()[label]
     assert program_digest(encode_program(P, schema=SCHEMA_V0)) == V0_DIGESTS[label]

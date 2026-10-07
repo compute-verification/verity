@@ -9,7 +9,7 @@ the shapes still to derive.  [R17-1] `LAG` (the declared scheduler's post-EOS ro
 REQUIRED static of the workload Program (`Workload_v1{requests, shared, lag}`): the digest differs per value and GM-01 G6 consumes it.
 
 Writes: `workload_program.json` (artifact: digest, components, address map, chronology), `descriptor.json.gz` (the workload
-Program's descriptor, decodable with verity.primitives.circuits.codec), `address_map.json`, `chronology.json`.
+Program's descriptor, decodable with verity.ml.circuits.codec), `address_map.json`, `chronology.json`.
 
 Layout 1.1 (`verity_vllm.pipeline.layout`): beside the absolute `inputs.manifest` / `inputs.derived` paths of the build machine, the
 artifact carries a `layout` block with the same paths relative to the artifact root (`--artifact-root`, default the parent of
@@ -27,8 +27,8 @@ import sys
 import time
 from dataclasses import dataclass
 
-from verity.primitives.circuits.codec import canonical_json, descriptor_size
-from verity.primitives.circuits.defs import REGISTRY
+from verity.ml.circuits.codec import canonical_json, descriptor_size
+from verity.ml.circuits.defs import REGISTRY
 from verity_vllm.config import option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W

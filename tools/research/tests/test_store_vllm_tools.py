@@ -45,7 +45,7 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
         assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity")),
-                             "catalog/**", "kernels/**", "experimental/**"]
+                             "verity/ml/circuits/**", "verity/ml/kernels/**", "verity/experimental/**"]
         for k in t.produces:
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
@@ -106,7 +106,7 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
 
 def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monkeypatch):
     # Only for this test: left on sys.path, the repo root makes a later test's `--tool check` import the repo's own
-    # tools/check/tool.py instead of its fixture's, outside the suite's inputs.
+    # tools/verity/check/tool.py instead of its fixture's, outside the suite's inputs.
     monkeypatch.syspath_prepend(str(REPO))
     from integrations.vllm.verity_vllm.pipeline import research_tools as RT
 
