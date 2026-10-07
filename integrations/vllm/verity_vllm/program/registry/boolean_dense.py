@@ -3,8 +3,8 @@
     GeluTanhMulBf16_v2   (g, u: Array<16, Value<1>>) -> Array<16, Value<1>>                      word view: GeluTanhMulBf16_v1
     GeluTanhMul_v2{I}    (gu: Array<2I, Array<16, Value<1>>>) -> Array<I, Array<16, Value<1>>>   word view: GeluTanhMul_v1{I}
 
-`GeluTanhMulBf16_v2` is traced from `gelu_tanh_mul` (`verity.primitives.circuits.boolean.trace.definition`), so its And gates are that builder's
-live ANDs: ``a = gelu_tanh_bf16(g)``, then ``bf16_rn(f32(a) * (f32(u) + 0.0f))`` through `verity_catalog.silicon.fp` with F2FP's NaN
+`GeluTanhMulBf16_v2` is traced from `gelu_tanh_mul` (`verity.ml.circuits.boolean.trace.definition`), so its And gates are that builder's
+live ANDs: ``a = gelu_tanh_bf16(g)``, then ``bf16_rn(f32(a) * (f32(u) + 0.0f))`` through `verity.ml.circuits.silicon.fp` with F2FP's NaN
 0x7FFF. ``a = (T)gelu_tanh_kernel((float)g)`` is a function of the 16-bit g alone (`dense.gelu_tanh_bf16_bits`), and its word
 Definition reads no MUFU (``tanhf`` is `TanhF32Rn_v1`, RN32 of the real tanh), so neither does this. Off a band of exponent
 fields e it is exact arithmetic on g's fields; on the band it reads a constant table of the word function's own values
@@ -34,7 +34,7 @@ F32 = Array<32, Value<1>>; each word view is its _v1 at the same statics, `Bf16M
     Bf16DivScalar_v2{N,C}, Bf16MulScalar_v2{N,C}  (x: Array<N, BF16>) -> Array<N, BF16>       Bf16MulF32_v1(x_j, K)
     Bf16MulScalarTensor_v2{N}                     (x: Array<N, BF16>, s: Array<1, BF16>) -> Array<N, BF16>
 
-Each is a batch of one element Definition per member, traced from `verity_catalog.silicon.fp`'s builders with the IR's NaN words,
+Each is a batch of one element Definition per member, traced from `verity.ml.circuits.silicon.fp`'s builders with the IR's NaN words,
 and computes no value twice (`Q_word`'s no-recompute rule): ``x * x`` decodes x once (`SquareF32Element_v1`, not
 ``F32Mul_v3(x, x)``); a constant static is folded into the gates (`elementwise.specialized`; `Bf16DivScalar`'s K is ATen's
 RN32(1 / C), `dense.reciprocal_bits`, `Bf16MulScalar`'s f32(C)); a scalar every member shares has its own gates once per row
@@ -44,14 +44,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.types import Array
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.silicon import fp
-from verity_catalog.definitions.boolean.elementwise import bf16_band
-from verity.primitives.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, or_reduce, sub
-from verity.primitives.circuits.boolean.trace import definition
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.types import Array
+from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.ops.boolean.elementwise import bf16_band
+from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, or_reduce, sub
+from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import dense as D
 from verity_vllm.program.registry import prims as P

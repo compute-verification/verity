@@ -6,7 +6,7 @@ import json
 import random
 
 from verity_vllm.program import compact as K
-from verity.primitives.circuits.refs import refs_from_json, runs
+from verity.ml.circuits.refs import refs_from_json, runs
 
 
 def _rand_refs(rng, depth=0):
@@ -51,7 +51,7 @@ def test_from_refs_inlined_affine_stretches_hand_over_and_resume_exactly_like_th
     merging into ONE open run (the record's push), an open run closing into out[-1] as run 2 (fixing the delta) / run k+1 of a
     progression / a new singleton, a Strided or Explicit in the middle taking the open run with it, an empty Affine skipped, a stretch
     that is the whole Concat, a stretch that ends the Concat with its last run left open for finish()."""
-    from verity.primitives.circuits.refs import Affine, Concat, Explicit, Strided
+    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
     A, S, E = Affine, Strided, Explicit
     cases = [
         Concat([A("n", 5, 0, 3), A("n", 5, 3, 4), A("n", 6, 0, 3)]),                                  # merge, then a new idx
@@ -451,7 +451,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
     from verity_vllm.program.compact import file_items_from_refs_json
     from tests.check import test_global_match as T
     from verity_vllm.observe.fold.fold import fold
-    from verity.primitives.circuits.refs import runs
+    from verity.ml.circuits.refs import runs
     evs = T.batched_log([T.R0, T.R1_LATE, T.R2_LATE], wl_sha=None)
     res = fold(evs, T.profile(), strict=True)
     assert res.report.unsupported == 0 and not res.errors and res.instances and res.accesses
