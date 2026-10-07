@@ -2,8 +2,7 @@ import Flock.Bytes
 
 /-!
 Byte-level encodings P2 shares with core: fixed-width unsigned big-endian integers (`int.to_bytes(n, "big")` and
-`int.from_bytes(b, "big")`, at a block's 2,056 bytes in tens of microseconds), and `verity.ml.randomness.frame` (`p2/PROTOCOL.md` §4: `tag ‖ u64be(len(body)) ‖ body`, tag
-`b`, `s` or `i`). Nothing here is P2's.
+`int.from_bytes(b, "big")`, at a block's 2,056 bytes in tens of microseconds). Nothing here is P2's.
 -/
 
 namespace PousCheck.Prim
@@ -41,20 +40,6 @@ decreasing_by all_goals omega
 #guard beOfNat 0x0102030405060708090a0b 11 == ⟨#[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]⟩
 #guard beOfNat (2 ^ 200 + 0xabcd) 10 == ⟨#[0, 0, 0, 0, 0, 0, 0, 0, 0xab, 0xcd]⟩
 #guard (List.range 40).all fun w => natOfBE (beOfNat (3 ^ 200 + w) w) == (3 ^ 200 + w) % 2 ^ (8 * w)
-
-/-- The least bytes, at least one, of `n` big-endian: `frame`'s body of an integer. -/
-def minimalBE (n : Nat) : ByteArray := beOfNat n (max 1 ((Nat.log2 n + 1 + 7) / 8))
-
-/-- A part of `verity.ml.randomness.frame`: bytes, a string (its UTF-8) or a nonnegative integer. -/
-inductive Part where
-  | bytes (b : ByteArray)
-  | str (s : String)
-  | nat (n : Nat)
-
-def frame : Part → ByteArray
-  | .bytes b => (ByteArray.mk #[0x62] ++ Flock.be64 b.size.toUInt64) ++ b
-  | .str s => let b := s.toUTF8; (ByteArray.mk #[0x73] ++ Flock.be64 b.size.toUInt64) ++ b
-  | .nat n => let b := minimalBE n; (ByteArray.mk #[0x69] ++ Flock.be64 b.size.toUInt64) ++ b
 
 def zeros (n : Nat) : ByteArray := ⟨Array.replicate n 0⟩
 

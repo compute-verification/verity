@@ -1,4 +1,5 @@
 import Identity.Sha512
+import Randomness
 import PousCheck.P2
 
 /-!
@@ -26,6 +27,7 @@ them is an error here, an `OverflowError` in Python (probability `(c0/2^w)^⌊2^
 namespace PousCheck.Keys
 
 open PousCheck.Prim Identity
+open FlockSoundness.Randomness (frame)
 
 def KEYS_TAG : ByteArray := "verity/pous/p2/keys/v4\x00".toUTF8
 def PROTOCOL_ID : String := "p2/v4"
