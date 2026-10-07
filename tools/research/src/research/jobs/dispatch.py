@@ -25,7 +25,7 @@ runs where `research run --on` with custody works today, the research coordinato
                   merge-check  `check.py --record --on POD --base BASE [--verdicts-in PACK]` (the pack fetched from the store)
                   audit-main   `check.py --record --on POD --base EMPTY_TREE --no-cache`: a cold check of `main`'s tip with every
                                path counted as changed, so `merge_requires` sends the Lean agreement's inputs too
-                  lean-regen   `research run --on POD --source . --cwd source` of `audit.py --build --update PACKAGE...`, each
+                  lean-regen   `research run --on POD --source . --cwd source` of `check.py --build --update PACKAGE...`, each
                                regenerated lean-audit.json copied to the run dir's records/ (custody publishes it)
                 and the worktree is removed once the source is shipped.  The job's token is not in the child's environment.
     run         every POLL_S, `research fetch` of the run's records.  merge-check, audit-main: passed on rc 0 with check's result.json
