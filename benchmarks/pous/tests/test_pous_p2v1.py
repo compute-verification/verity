@@ -139,6 +139,16 @@ def test_the_root_exponent_splits_as_the_kernel_takes_it():
     assert gpu.exponent_split(R.DEPLOYMENT) == (13, 16433, 2926)
 
 
+def test_params_refuse_a_modulus_below_the_payload():
+    """Every payload is below p (spec §2, `m < 2^b < p`): a c0 past 2^w (a negative modulus, which is 3 mod 4 in Python's
+    arithmetic), or one leaving p at or below the largest payload, is refused rather than rejecting every block."""
+    R, _, _ = _p2()
+    for c0 in ((1 << 32) + 5, (1 << 32) - 3, (1 << 32) - (1 << 24) + 1):
+        with pytest.raises(ValueError, match="payload"):
+            R.Params(32, c0, 3)
+    assert R.Params(32, 5, 3).p == (1 << 32) - 5
+
+
 def test_the_tree_and_the_audit_derivation_are_the_specs():
     R, _, _ = _p2()
     leaves = [bytes([i]) * 32 for i in range(3)]
