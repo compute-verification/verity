@@ -20,6 +20,12 @@ verity = { workspace = true }
 verity-vllm = { workspace = true }
 verity-flock = { workspace = true }
 verity-numerical = { workspace = true }
+
+[tool.verity.tests]
+# Every test writes only under its tmp_path and caches only under its own --cache, so they run in any order and process: the
+# three slow end-to-end tests run side by side, and each test's pass is kept on its own.
+parallel = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
