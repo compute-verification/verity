@@ -325,7 +325,7 @@ def test_the_commands_each_kind_runs(tmp_path):
     assert "--preflight" not in D.command({"kind": "lean-regen", "payload": {"packages": ["p"]}}, "t1", "py", None, preflight=False)
     assert D.command({"kind": "audit-main", "payload": {"commit": C1}}, "t1", "py", None) == [
         "py", "tools/verity/check/check.py", "--record", "--on", "t1", "--base", D.EMPTY_TREE, "--no-cache"]
-    assert "audit.py --build --update verity/ml/flock/verifier/soundness" in regen[-1]
+    assert "check.py --build --update verity/ml/flock/verifier/soundness" in regen[-1]
     assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
 
 
@@ -652,7 +652,7 @@ def test_a_flock_file_whose_name_git_quotes_still_asks_for_avx512(tmp_path):
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "backends" / "flock" / "é.rs").write_text("fn f() {}")
+    (repo / "verity" / "ml" / "flock" / "é.rs").write_text("fn f() {}")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "é")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
