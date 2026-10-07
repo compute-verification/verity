@@ -6,7 +6,7 @@
 #   bash tests/lean/generate.sh [PACKAGE_DIR]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-pkg=$(cd "${1:-$here/../../../../verity/Security/Proofs}" && pwd)
+pkg=$(cd "${1:-$here/../../../../../Security/Proofs}" && pwd)
 out=$(mktemp)
 (cd "$pkg" && lake build Proofs.Flock.Soundness.Audit.Influence Proofs.Flock.Soundness.Audit.StratifiedMiss >&2 && lake env lean --run "$here/ExfiltrationVectors.lean") > "$out"
 python3 - "$out" "$here" "$pkg" <<'PY'
