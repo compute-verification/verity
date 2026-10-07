@@ -265,7 +265,11 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 timeout = new["timeout_s"]
                 set_status(d, "running", timeout_s=timeout, timeout_changed_utc=utc_now_ms())
             if stall is not None:
-                stall.poll()
+                try:
+                    stall.poll()
+                except Exception as e:      # the watch is never the reason the workload stops
+                    em.mark(a.stage, "stall_watch_failed", error=f"{e.__class__.__name__}: {e}"[:300])
+                    stall = None
             if timeout and clock() - armed >= timeout and not timed_out:
                 timed_out = True
                 _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout}", None, True, a.job)

@@ -162,6 +162,29 @@ def test_tele_run_dumps_its_own_workload(tmp_path, monkeypatch):
     assert (d / m["path"]).read_text().endswith(STACK)
 
 
+def test_a_failing_watch_does_not_stop_the_workload(tmp_path, monkeypatch):
+    d, gate = tmp_path / "r1", Gate(tmp_path / "gate")
+    t = [0.0]
+
+    def clock():
+        t[0] += 300
+        return t[0]
+
+    def dump(procs, **kw):
+        gate.release()
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(trun, "clock", clock)
+    monkeypatch.setattr(trun.pyspy, "dump", dump)
+    try:
+        assert trun.main(["--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify", "--",
+                          sys.executable, "-c", Gate.WAIT, str(gate.path)]) == 0
+    finally:
+        gate.close()
+    (m,) = [e for e in _events(d) if e.get("name") == "stall_watch_failed"]
+    assert "No space left" in m["error"]
+
+
 def test_custody_keeps_the_dumps_and_compare_does_not_read_them(tmp_path):
     (tmp_path / "logs").mkdir()
     (tmp_path / "logs" / "stall-20261007T030000Z.txt").write_text(STACK)
