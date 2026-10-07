@@ -868,6 +868,8 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     a Verity job that finds no slot requeues the newest lent job, and nothing more is lent while it waits."""
     monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
     monkeypatch.setenv("FILL_VERITY_CPU_SLOTS", "2")
+    monkeypatch.setenv("FILL_VERITY_UNTIL", "9999-01-01T00:00:00+00:00")
+    monkeypatch.setenv("FILL_VERITY_STOP", "9999-01-01T01:00:00+00:00")
     spec = importlib.util.spec_from_file_location("fill_runner_lend", FILL_RUNNER)
     fr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fr)
@@ -2611,6 +2613,37 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b")])
     (pool / "blocked").unlink()
     assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
+
+
+def test_gpu_stray_reads_only_the_gpu_variables_of_a_process(monkeypatch):
+    """Daniel's ruling (7 Oct): the probe reads another process's GPU variables and nothing else of its environment, which may
+    hold its secrets. Under sudo only the matching lines leave `grep`; read directly, the rest is dropped at once."""
+    spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    env = {"PATH": os.environ["PATH"], "CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all", "JOB_TOKEN": "dummy"}
+    p = subprocess.Popen(["cat"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        p.stdin.write(b"up\n")
+        p.stdin.flush()
+        assert p.stdout.readline() == b"up\n"          # cat echoes once it has exec'd with `env`
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        ran = []
+
+        def denied(self):
+            raise PermissionError(str(self))
+
+        def sudo(cmd, **kw):
+            ran.append(cmd)
+            return real_run(cmd[2:], **kw)              # the same grep, without sudo
+
+        real_run = subprocess.run
+        monkeypatch.setattr(m.Path, "read_bytes", denied)
+        monkeypatch.setattr(m.subprocess, "run", sudo)
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        assert ran == [["sudo", "-n", "grep", "-zaE", "^(NVIDIA_VISIBLE_DEVICES|CUDA_VISIBLE_DEVICES)=", f"/proc/{p.pid}/environ"]]
+    finally:
+        p.communicate()
 
 
 def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_read(monkeypatch, tmp_path):

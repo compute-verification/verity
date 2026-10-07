@@ -34,7 +34,7 @@
   }
  ],
  "encoding": "lowercase hex; vllm-v1 with SHA-512 for every hash the scheme computes (tags, framing and field order unchanged); scheme-computed digests are 64 bytes, the integration's identity digests 32",
- "generator": "python -m verity.primitives.commitments.vllm_v1.vectors_sha512",
+ "generator": "python -m verity.ml.commitments.vllm_v1.vectors_sha512",
  "hash": [
   {
    "digest": "5ad2c55f922b70dd8687cf3ad7053b025573fd7cad724f64ff324b853fcf72749d47e9cb116428202a7e7cfac9d409dc0d8e1ff2bd40cad384550167ecac86c7",

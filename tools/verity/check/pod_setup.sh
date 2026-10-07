@@ -16,7 +16,7 @@
 # nothing for a pod without the marker.
 set -euo pipefail
 UV_VERSION=${UV_VERSION:-0.12.20}
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 TOOLCHAIN=$(cat "$ROOT/verity/core/service/flock/lean-toolchain")
 export PATH="$HOME/.elan/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
 MARKER=${POD_SETUP_MARKER:-$HOME/.research/pod-setup.json}
