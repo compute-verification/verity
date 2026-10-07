@@ -245,6 +245,7 @@
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
+ "four_names": ["Nci", "NetTiming"],
  "guarantees": {
   "Flock.HmNets.col_and": {
    "owner": "@proofs",
@@ -85832,6 +85833,5 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
   "toolchain": "d95e8a4c480ea108924167135008bc1409c650e2ac659cc2acb8bd8db870d011"
- },
- "four_names": ["Nci", "NetTiming"]
+ }
 }
