@@ -1,10 +1,12 @@
 import CertifierDevice.Issuer
 
-/-! A smoke run of `CertifierDevice.run` on the host's clock, in an in-memory loopback world: a peer that has written two
-requests on the link, and a server that answers each request with one event once it is written. Two windows of five 20 ms
-buckets; it fails unless all four records are published complete, the egress grids carry both events, and the link got
-every bucket's bytes. Then it certifies the four records with a toy key of four leaves, reserved from the world's leaf
-counter, and fails unless each certificate verifies and a fifth reservation is refused and listed. Run by hand (`lake exe certifier-device-smoke`); it reads the wall clock, so no test runs it. -/
+/-! A smoke run of `CertifierDevice.run` in a `Core.World` on the operating system's clock and timer, with an in-memory
+loopback link and server: a peer that has written two requests on the link, and a server that answers each request
+(`GET /s`) with one event, at position s − 1, once it is written. Two windows of five 20 ms buckets; it fails unless all
+four records are published complete, the egress grids carry both events, and the link got every bucket's bytes. Then it
+certifies the four records with a toy key of four leaves, reserved from the world's leaf counter, and fails unless each
+certificate verifies and a fifth reservation is refused and listed. Run by hand (`lake exe certifier-device-smoke`); it
+reads the wall clock, so no test runs it. -/
 
 open CertifierDevice NetworkCertifier
 
@@ -17,12 +19,13 @@ def syncSet : SyncSet := ⟨[2], [1], by decide, by decide, by decide, by decide
 
 def sync : ClockSync := ⟨2, 1, by decide⟩
 
-/-- Stream `s`'s server: once its request is written, one event at position `s − 1`, then its end. -/
-def server (s : Nat) : IO Conn := do
+/-- A server connection: once a request `GET /s` is written, one event at position `s − 1`, then its end. -/
+def server : IO Core.Conn := do
   let reads ← Std.Channel.new (α := ByteArray)
   let reads := reads.sync
-  return { read := reads.recv, backlog := pure 0,
-           write := fun _ => do
+  return { read := reads.recv, backlog := pure 0, close := pure (),
+           write := fun request => do
+             let s := (((String.fromUTF8? request).getD "").drop 5).toString.toNat!
              reads.send s!"id: {s - 1}\ndata: hello {s}\n\n".toUTF8
              reads.send ByteArray.empty }
 
@@ -38,15 +41,14 @@ def main : IO UInt32 := do
   let now ← IO.monoNanosNow
   let config : Config := { egress := egressParams, ingress := ingressParams, syncSet, syncs := #[sync, sync],
                            windows := 2, origin := now + 20 * ms, slack := 15 * ms }
-  let world : World := {
-    clock := IO.monoNanosNow,
-    sleep := fun ns => IO.sleep ((ns + ms - 1) / ms).toUInt32,
-    link := { read := link.recv, write := fun b => wrote.modify (· ++ b), backlog := pure 0 },
-    connect := fun s => .ok <$> server s,
-    publish := fun r _ => records.modify (·.push r),
-    reserveLeaf := do
+  let world : Core.World Out := {
+    coins := Core.World.coinsOS, clock := Core.World.clockOS, sleepUntil := Core.World.sleepUntilOS,
+    link := { read := link.recv, write := fun b => wrote.modify (· ++ b), backlog := pure 0, close := pure () },
+    connect := .ok <$> server,
+    publish := fun (r, _) => records.modify (·.push r),
+    reserve := do
       let q ← next.get
-      if q ≥ 4 then return .error ⟨"all 2^2 leaves are used"⟩
+      if q ≥ 4 then return .error "all 2^2 leaves are used"
       next.set (q + 1)
       return .ok q }
   run world config

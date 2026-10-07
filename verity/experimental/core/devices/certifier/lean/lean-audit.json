@@ -51,15 +51,15 @@
    "except": [],
    "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
   },
-  "CertifierDevice.World": {
-   "imports": ["CertifierDevice.Device", "Std.Sync.Channel"],
+  "CertifierDevice.Driver": {
+   "imports": ["CertifierDevice.Device", "Std.Sync.Channel", "World"],
    "except": [],
-   "why": "the host the device needs, kept minimal so the shared World can replace it: Lean core's IO and channels over the device, nothing of Security"
+   "why": "the driver: the device over core_world's World, with Lean core's IO and channels, nothing of Security"
   },
   "CertifierDevice.Issuer": {
-   "imports": ["CertifierDevice.World", "Lms.Sign"],
+   "imports": ["CertifierDevice.Driver", "Lms.Sign"],
    "except": [],
-   "why": "the issuer is code: the device's World and lms's signing, which reuses network_check's encodings; no Mathlib and nothing of Security"
+   "why": "the issuer is code: the driver's World and lms's signing, which reuses network_check's encodings; no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

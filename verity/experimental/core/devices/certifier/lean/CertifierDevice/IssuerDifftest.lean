@@ -104,8 +104,8 @@ def evaluate (j : Json) : Except String (Json × List String) := do
     let digest ← match c.getObjValD "parameters" with
       | .null => parameters params ss
       | b => bytesOf b
-    let leaf : Except Refused Nat ← match c.getObjValD "leaf" with
-      | .null => pure (.error ⟨"the leaf state refused the reservation"⟩)
+    let leaf : Except String Nat ← match c.getObjValD "leaf" with
+      | .null => pure (.error "the leaf state refused the reservation")
       | q => .ok <$> q.getNat?
     let tamper ← match c.getObjValD "tamper" with
       | .null => pure none
@@ -127,7 +127,7 @@ def evaluate (j : Json) : Except String (Json × List String) := do
       let verified := cr.verify p pub
       let t ← match tamper with
         | none => pure Json.null
-        | some t => toJson <$> tampered cr k (← leaf.mapError (·.reason)) pub t
+        | some t => toJson <$> tampered cr k (← leaf) pub t
       certify := Json.mkObj [("certified", ← certifiedJson cr verified t)]
       outcomes := s!"certified, {if verified then "verified" else "NOT verified"}" :: outcomes
       if let some (kind, _) := tamper then

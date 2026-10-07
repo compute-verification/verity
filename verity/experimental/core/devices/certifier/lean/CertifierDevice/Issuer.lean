@@ -1,4 +1,4 @@
-import CertifierDevice.World
+import CertifierDevice.Driver
 import Lms.Sign
 
 /-!
@@ -10,9 +10,9 @@ under the grid's `parameters_digest`) and digest, the message that binds it to t
 the signature `Lms`'s.
 
 Which leaf signs is the signer's state (`lms.LeafState.reserve`), which stays with the host: `Issuer.certify` is pure
-given the reservation's result, and `certifyWith` takes it from the world's `reserveLeaf`. As in `Issuer.certify`, the
-head and its digest come first, so a record with no encoding is refused before a leaf is spent, and a reservation the
-host refuses leaves the link-window without a certificate (fail-closed) and is listed in `refused`.
+given the reservation's result, and `certifyWith` takes it from `Core.World.reserve`. As in `Issuer.certify`, the head
+and its digest come first, so a record with no encoding is refused before a leaf is spent, and a reservation the host
+refuses leaves the link-window without a certificate (fail-closed) and is listed in `refused`.
 -/
 
 namespace CertifierDevice
@@ -59,7 +59,7 @@ def prepare (i : Issuer) (record : Record) (direction : Direction) (params : Par
   pure (head, digest, message)
 
 /-- The prepared record signed at the reserved leaf, or listed in `refused` when the host refused the reservation. -/
-def finish (i : Issuer) (leaf : Except Refused Nat) (record : Record) (direction : Direction)
+def finish (i : Issuer) (leaf : Except String Nat) (record : Record) (direction : Direction)
     (prepared : RecordHead × ByteArray × ByteArray) : Except String (Issuer × Option CertifiedRecord) := do
   let (head, digest, message) := prepared
   match leaf with
@@ -70,17 +70,17 @@ def finish (i : Issuer) (leaf : Except Refused Nat) (record : Record) (direction
 
 /-- **`Issuer.certify`**, its signer's reservation given: refused (an error) where the record has no head, as Python
 raises `ValueError`. -/
-def certify (i : Issuer) (leaf : Except Refused Nat) (record : Record) (direction : Direction) (params : Params)
+def certify (i : Issuer) (leaf : Except String Nat) (record : Record) (direction : Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool := true) : Except String (Issuer × Option CertifiedRecord) := do
   i.finish leaf record direction (← i.prepare record direction params parameters deadline)
 
 end Issuer
 
 /-- `Issuer.certify` against the world's leaf state: the head first, then the reservation, then the signature. -/
-def certifyWith (w : World) (i : Issuer) (record : Record) (direction : Direction) (params : Params)
+def certifyWith (w : Core.World Out) (i : Issuer) (record : Record) (direction : Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool := true) : IO (Issuer × Option CertifiedRecord) := do
   let prepared ← IO.ofExcept (i.prepare record direction params parameters deadline)
-  IO.ofExcept (i.finish (← w.reserveLeaf) record direction prepared)
+  IO.ofExcept (i.finish (← w.reserve) record direction prepared)
 
 /-- `CertifiedRecord.verify` under an `LmsKey`: the certificate is signed by `publicKey`, names the head's link-window and
 signs the head's digest. -/

@@ -1,48 +1,36 @@
 import CertifierDevice.Device
+import World
 import Std.Sync.Channel
 
 /-!
-# A local world, and the driver that runs the device in it
+# The driver that runs the device in the world
 
-`World` is what the device needs from its host, kept minimal so the shared world can replace it: a monotonic clock and a
-sleep (ns), the boundary link (`Conn`: a blocking read, of no bytes at its end, a write, and its unwritten backlog), a
-server connection per stream (`connect`), where records go (`publish`), and the signer's leaf state (`reserveLeaf`,
-`lms.LeafState.reserve`: the next unused leaf, recorded as used before it is returned, or a refusal when the state is
-missing, behind, held by another signer or used up).
+The device's host is `core_world`'s `Core.World`, whose outputs are the closed windows (`Out`: a record and its grid's
+parameters): its clock and `sleepUntil`, the boundary link, a server connection per stream (`connect`, called once for
+each), `publish`, and the signer's leaf state (`reserve`, which `certifyWith` takes a leaf from).
 
 `run` feeds `step`. Each blocking read runs in a task of its own (the link's, and each stream's once it connects), and
 sends what it read, with the clock's reading, to one channel; so does each connection attempt. The driver takes those
 in order, and when a grid's tick is due (`origin + t·τ`) it ticks it with the clock's reading then and, on egress, the
 link's backlog. It performs each action as the device returns it: a write with `drain` is delivered once the write
-returns. It returns when both grids have run all their ticks, leaving the reading tasks blocked where they are.
+returns. It closes a stream's connection when it takes the read that ends it, as `active.py` closes its writer then, and
+when both grids have run all their ticks it closes the connections still open and the link, as `Proxy.run` does, and
+returns.
 -/
 
 namespace CertifierDevice
 
-/-- A refusal: a connection the server refused, or a leaf the signer's state refused. -/
-structure Refused where
-  reason : String
+open Core (Conn)
 
-/-- A byte connection: a read blocks until bytes come and gives none at the end; `backlog` is what is still unwritten. -/
-structure Conn where
-  read : IO ByteArray
-  write : ByteArray → IO Unit
-  backlog : IO Nat
-
-/-- What the device needs from its host. -/
-structure World where
-  clock : IO Nat
-  sleep : Nat → IO Unit
-  link : Conn
-  connect : Nat → IO (Except Refused Conn)
-  publish : Record → Params → IO Unit
-  reserveLeaf : IO (Except Refused Nat)
+/-- What the device publishes: a closed window's record, with its grid's parameters. -/
+abbrev Out := Record × Params
 
 /-- An event from a task, with the connection it opened. -/
 abbrev Message := Event × Option Conn
 
 /-- Read `conn` until its end, sending each read as `wrap now bytes`. -/
-def pumpReads (w : World) (conn : Conn) (ch : Std.Channel.Sync Message) (wrap : Nat → ByteArray → Event) : IO Unit := do
+def pumpReads (w : Core.World Out) (conn : Conn) (ch : Std.Channel.Sync Message) (wrap : Nat → ByteArray → Event) :
+    IO Unit := do
   repeat
     let bytes ← conn.read
     ch.send (wrap (← w.clock) bytes, none)
@@ -52,7 +40,7 @@ def pumpReads (w : World) (conn : Conn) (ch : Std.Channel.Sync Message) (wrap : 
 def pollNs : Nat := 200000
 
 /-- **The driver.** -/
-def run (w : World) (c : Config) : IO Unit := do
+def run (w : Core.World Out) (c : Config) : IO Unit := do
   match c.check with
   | .error e => throw (IO.userError e)
   | .ok () => pure ()
@@ -80,13 +68,19 @@ def run (w : World) (c : Config) : IO Unit := do
           | some de, some di =>
             if de ≤ di && de ≤ now then pure (some (.tick .egress now (← w.link.backlog)))
             else if di ≤ now then pure (some (.tick .ingress now 0))
-            else w.sleep (min (min de di - now) pollNs) *> pure none
+            else w.sleepUntil (min (min de di) (now + pollNs)) *> pure none
           | some de, none =>
-            if de ≤ now then pure (some (.tick .egress now (← w.link.backlog))) else w.sleep (min (de - now) pollNs) *> pure none
+            if de ≤ now then pure (some (.tick .egress now (← w.link.backlog)))
+            else w.sleepUntil (min de (now + pollNs)) *> pure none
           | none, some di =>
-            if di ≤ now then pure (some (.tick .ingress now 0)) else w.sleep (min (di - now) pollNs) *> pure none
+            if di ≤ now then pure (some (.tick .ingress now 0)) else w.sleepUntil (min di (now + pollNs)) *> pure none
           | none, none => pure none
     let some ev := ev? | continue
+    if let .upstream s _ bytes := ev then
+      if bytes.isEmpty then
+        if let some conn := conns.get? s then
+          conn.close
+          conns := conns.erase s
     let (st', acts) := step st ev
     st := st'
     for a in acts do
@@ -94,7 +88,7 @@ def run (w : World) (c : Config) : IO Unit := do
       | .writeLink bytes => w.link.write bytes
       | .connect s =>
         let _ ← IO.asTask (prio := .dedicated) do
-          match ← w.connect s with
+          match ← w.connect with
           | .error _ => ch.send (.refused s (← w.clock), none)
           | .ok conn =>
             ch.send (.connected s (← w.clock), some conn)
@@ -103,6 +97,8 @@ def run (w : World) (c : Config) : IO Unit := do
         if let some conn := conns.get? s then
           conn.write bytes
           if drain then queue := queue.push (.delivered s (← w.clock))
-      | .publish record params => w.publish record params
+      | .publish record params => w.publish (record, params)
+  for (_, conn) in conns do conn.close
+  w.link.close
 
 end CertifierDevice
