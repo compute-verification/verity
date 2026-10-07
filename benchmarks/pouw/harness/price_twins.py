@@ -46,9 +46,9 @@ FADD_PRICES = (Fraction(8), Fraction(1047, 125))
 #: the POUS Project store's pin files, relative to its root: the Lean store's audit first (what is pinned), then what is
 #: staged with a red-team GO (price-twins-lean/README.md)
 LEAN_STORE = "lean/submissions/pouw/lean-audit.json"
-#: the repository's PoUW Lean audit, where pins land now; read after the store's files, so a pin they hold keeps its row
-REPO_AUDIT = HERE.parents[2] / "verity" / "protocols" / "accounting" / "work" / "pouw" / "lean" / "lean-audit.json"
-REPO_SOURCE = "verity/protocols/accounting/work/pouw/lean/lean-audit.json"
+#: the repository's security analysis audit, where PoUW's pins land now; read after the store's files, so a pin they hold keeps its row
+REPO_AUDIT = HERE.parents[2] / "verity" / "Security" / "lean-audit.json"
+REPO_SOURCE = "verity/Security/lean-audit.json"
 STAGED = ("internal/pouw/price-twins-lean/proposed-pins.json", "internal/pouw/price-twins-lean/v2-hot/v2-hot-pins.json",
           "internal/pouw/price-twins-lean/v1-hot/v1-hot-pins.json", "internal/pouw/price-twins-lean/fp4-delta/fp4-delta-pins.json")
 CASTS = {"8": "cast-8", "8p72": "cast-8.72", "16": "cast-16", "32": "cast-32", "32p06": "cast-32.06"}
@@ -91,7 +91,8 @@ def _q(num: str, den: str | None) -> Fraction:
 
 def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
     """The body of each `Pouw.Guarantees` definition that the audit's `reads` record, from its module's source under `lean`,
-    with whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix."""
+    with whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix, or
+    `def _root_.G : Prop :=` in any namespace (how `tools/lean/audit.py --lift` writes it)."""
     out = {}
     for module, group in audit.get("reads", {}).items():
         names = [d for d in group.get("definitions", {}) if d.startswith("Pouw.Guarantees.")]
@@ -101,8 +102,9 @@ def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
         text = path.read_text()
         for d in names:
             ns, short = d.rsplit(".", 1)
-            m = re.search(rf"^namespace {re.escape(ns)}\n(?:.*\n)*?def {re.escape(short)} : Prop :=\n((?:[ \t]+\S.*\n)+)", text,
-                          re.M)
+            m = (re.search(rf"^namespace {re.escape(ns)}\n(?:.*\n)*?def {re.escape(short)} : Prop :=\n((?:[ \t]+\S.*\n)+)",
+                           text, re.M)
+                 or re.search(rf"^def _root_\.{re.escape(d)} : Prop :=\n((?:[ \t]+\S.*\n)+)", text, re.M))
             if m:
                 out[d] = " ".join(m[1].split())
     return out

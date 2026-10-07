@@ -95,8 +95,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     `--fresh`)
     circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
                     existence probe and loaded library its own check read or resolved (the Definitions it reached, their builds
-                    and modules' import closures, its `targets.py` bindings and its pins) is unchanged, with the checker's own
-                    version; one after a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
+                    and modules' import closures, its bindings and its pins, in `targets.py` or a Definition module's sidecar) is
+                    unchanged, with the checker's own version; one after a read the tracer cannot see (a program it starts) is
+                    not stored (`circuit_check.cache`)
     lean-audit      per package (`lean_audit.py`): a pass is reused while the content of the package, its path dependencies,
                     `tools/lean/` and its toolchain and manifest is unchanged, wherever the package is (a move is no miss, and
                     its kept build follows it); a miss is audited on a scratch tree holding only those, so a read outside them
@@ -340,10 +341,13 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     elif not check["slots"]:
         raise ValueError(f"{check['file']} lists no slots")
     else:
-        free = [s for s in check["slots"] if s["holder"] is None and not s["blocked"]]
+        mine = [s for s in check["slots"] if priority or not s.get("trains")]
+        if not mine:
+            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains)")
+        free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
-                                          for s in check["slots"]) + f"; {waiting}"
+                                          for s in mine) + f"; {waiting}"
     if lean["pools"] is None:
         return room, ahead, f"{why}; no Lean audit cap"
     pool = next((p for p in ("check", "any") if p in lean["pools"]), None)
@@ -560,11 +564,17 @@ def memory_gb() -> int:
     return 0
 
 
+#: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
+#: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
+#: (tip 38's shard 2/3, 6 Oct)
+AGREEMENT_MEMORY_SHARE = 2
+
+
 def session_jobs() -> int:
     """`ci.py --session-jobs`: its own default counts the host's CPUs and memory inside a container, so check passes what this
-    process may use, at ci.py's `GB_PER_PROCESS` per verifier process."""
+    process may use (its `AGREEMENT_MEMORY_SHARE`), at ci.py's `GB_PER_PROCESS` per verifier process."""
     m = re.search(r"^GB_PER_PROCESS = (\d+)", (FLOCK_VERIFIER / "ci.py").read_text(), re.M)
-    return max(1, min(cores(), memory_gb() // int(m.group(1) if m else 8)))
+    return max(1, min(cores(), memory_gb() // AGREEMENT_MEMORY_SHARE // int(m.group(1) if m else 8)))
 
 
 #: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
@@ -1014,10 +1024,10 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 
 def agreement_closure(files: list[str]) -> list[str]:
-    """The tracked files the agreement job can read: backends/flock/verifier/, less the Lake packages nested in its Lean package
-    (`level3/`, `soundness/`: proofs with a lakefile of their own), which `flock-verify` is not built from as long as the Lean
-    package requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which
-    only `tools/lean/audit.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
+    """The tracked files the agreement job can read: backends/flock/verifier/, less any Lake package nested in its Lean package
+    (C-Flock's proofs are under `verity/Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
+    requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
+    `tools/lean/audit.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
     pre, lean = "backends/flock/verifier/", "backends/flock/verifier/lean/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
@@ -1354,7 +1364,8 @@ def main(argv: list[str]) -> int:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
               flush=True)
     for c in flaky:
-        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key", flush=True)
+        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key: "
+              "delete each (a flaky test is deleted, not rerun or fixed)", flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}

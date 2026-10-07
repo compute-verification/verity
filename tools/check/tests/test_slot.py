@@ -8,7 +8,7 @@ import os
 import stat
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -223,6 +223,50 @@ def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     with pytest.raises(Exec) as e:
         SLOT.main(["--", "true"], now=lambda: NOW)
     assert e.value.args[0] == ["true"]
+
+
+def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):
+    """Quick tiers sat 3 h in node 1's line and their run's timeout reported them failed (#1344, 6 Oct): --wait-max ends the
+    wait first, with an exit that says nothing ran."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    held = _hold(tmp_path / "check-a.lock")
+    t = [NOW]
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran without a slot"))
+    rc = SLOT.main(["--wait-max", "60", "--", "true"], now=lambda: t[0],
+                   sleep=lambda s: t.__setitem__(0, t[0] + timedelta(seconds=s)))
+    assert rc == SLOT.NOT_STARTED == 75 and t[0] - NOW == timedelta(seconds=3 * SLOT.POLL_S)
+    assert "slot: not started: no check slot within --wait-max 60 s (every check slot is taken (a: busy)); exit 75" in capsys.readouterr().err
+    assert list((tmp_path / SLOT.LINE).iterdir()) == []                         # its ticket is gone: nobody waits behind it
+    os.close(held)
+
+
+def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp_path, monkeypatch, capsys):
+    """The run's --timeout counted the wait; once the slot is taken, the run has --run-max from then (its harness re-reads
+    control/timeout_s, from the run's start on this machine's monotonic clock)."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "status.json").write_text(json.dumps({"state": "running", "started_mono": 1000.0}))
+    assert SLOT.limit_run(10800, "d", str(run), mono=lambda: 1000.0 + 5400) == \
+        "slot: the run's timeout is now 16200 s from its start: 10800 s from taking slot d"
+    doc = json.loads((run / SLOT.RUN_TIMEOUT).read_text())
+    assert doc == {"timeout_s": 16200.0, "actor": "timeout", "reason": "slot.py --run-max: 10800 s from taking check slot d"}
+    assert "not applied: not in a `research run`" in SLOT.limit_run(60, "d", None)
+    (run / "status.json").write_text("{}")
+    assert "has no started_mono; the run keeps its timeout" in SLOT.limit_run(60, "d", str(run))
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0}))
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(argv)))
+    with pytest.raises(Exec):
+        SLOT.main(["--by", "infra", "--wait-max", "21600", "--run-max", "10800", "--", "true"], now=lambda: NOW)
+    assert "slot: the run's timeout is now" in capsys.readouterr().err
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] >= 10800
+    for bad in (["--wait-max", "0"], ["--run-max", "soon"], ["--wait-max"]):
+        with pytest.raises(SystemExit):
+            SLOT.main([*bad, "--", "true"])
 
 
 def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
@@ -450,6 +494,37 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
     assert SLOT.ahead(train2) == 1                                           # behind the older train only
     for fd in (lane, tfd, lfd, t2):
         os.close(fd)
+
+
+def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch, capsys):
+    """Node 2, 6 Oct 02:31Z: the lander's train check waited 36 min with priority while quick tiers held both slots; priority
+    orders the line but never frees a slot a lane check is running in."""
+    (tmp_path / "slots").write_text("d 0 only=trains\ne 1\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    assert [s["trains"] for s in SLOT.parse((tmp_path / "slots").read_text())] == [True, False]
+    held = [_hold(tmp_path / "check-e.lock")]
+    ran = {}
+
+    def free(_s):
+        if held:
+            os.close(held.pop())
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)              # a lane check waits for e, though d is free
+    assert ran["slot"] == "e" and "d: for train checks; e: busy" in capsys.readouterr().err
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=free)
+    assert ran["slot"] == "d"
+    assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
+    (tmp_path / "slots").write_text("d 0 only=trains\n")
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks"):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):

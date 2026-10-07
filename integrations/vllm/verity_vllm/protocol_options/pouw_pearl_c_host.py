@@ -145,8 +145,8 @@ def _write(path: Path, data: bytes, digest: bool = True) -> dict:
 
 
 def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
-    """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the beacon, the salt, the
-    records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and tree
+    """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the epoch's coin commitment
+    and its salt coin's opening, the salt, the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and tree
     levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
     levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 32 bytes a node."""
     path = d / "manifest.json"

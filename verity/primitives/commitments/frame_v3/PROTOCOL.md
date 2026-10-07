@@ -112,10 +112,13 @@ SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
   `verity/tagged-sha512/v1\0`.
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
-**What stays: the one SHA-256 input.** `binding` is the caller's 32-byte SHA-256 identity digest of what the commitment may not
-outlive: a header, a replay phase or a weights tag. It is an identity from the protocol and the IR, not something the frame computes.
-It moves to SHA-512 with the other identity digests at the re-baseline, which Daniel's rule of 2026-09-26 extends E4 to. That makes
-it a fixed-width change to this section, with new vectors.
+**The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
+weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under `frame-v3-sha512` it is 64
+bytes, an `identity_digest_sha512` (Daniel's one-hash ruling: one hash, SHA-512), or 32 bytes, a SHA-256 identity digest as recorded
+statements carry it; every other frame takes 32 bytes only. The domain message frames every part with its u64be length, so a 64-byte
+binding and a 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
+`vectors_sha512.json` gives row trees over 64-byte bindings, each with its identity's tag and document, the positions' SHA-512
+identity and the domain message; the other groups are unchanged.
 
 **Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows and the bit rows below, and no other row kind. `FrameV3` refuses SHA-256
 and BLAKE3 rows under it, and SHA-512 rows under a SHA-256 frame.
@@ -192,11 +195,17 @@ digest      = SHA-512( Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1) )
 - **Hiding.** `hm96-sha512/row-seg/v1` is the hiding leaf over this digest, under unchanged `hm96-sha512/v1`.
 - **Written by several ports (C-Flock).** A row one unit writes as several output ports and another reads as one input port
   (PoUW's A′ ‖ P_A) is one row on both sides. The writer's META `out_row_ports` lists each output row's run of consecutive
-  output ports (absent: one row per port, zero-padded to whole blocks); a run's row is a row-seg row of exactly their words
-  in port order (ℓ = 16 · their words), named after its first port, and its message bits are copies of those output words.
-  Its digest, `b ‖ c` and tree leaf are then the reader's for the same words and salt. Both verifiers refuse runs that do not
-  cover the output ports once in order, a run whose row is not row-seg of exactly their words, and a padded row of more
-  than one port. The pair vectors are `ROW_SEG_PAIRS` in `backends/flock/tests/test_lean_verifier.py`.
+  output ports (absent: one row per port); a run's row is a row-seg or `sha512/row/v2` row of exactly their words in port
+  order (ℓ = 16 · their words, its `row_schemas` entry), named after its first port, and its message bits are copies of those
+  output words. A lone port's row is either that, or under v2 the port's words zero-padded to whole blocks (ℓ = 16 · its
+  padded words). Its digest, `b ‖ c` and tree leaf are then the reader's for the same words and salt. Both verifiers refuse
+  runs that do not cover the output ports once in order, a row of any other length, a padded row of more than one port and
+  a v1 row that is not padded.
+- **When META names `out_row_ports`.** Exactly when some output row is row-seg or some run covers more than one port; a
+  statement whose output rows are all lone v2 ports omits it. Its presence is part of the circuit text, so of the statement's
+  identity, and a writer that computes it otherwise (PoUW's `leaves.statement_rows` follows this rule) gets another statement
+  digest. `OUT_ROW_PORTS_RULE` in `backends/flock/tests/test_lean_verifier.py` pins the rule with each case's circuit
+  SHA-512. The pair vectors are `ROW_SEG_PAIRS` and `ROW_V2_PAIRS` there.
 - **Reference and conformance.** `rowleaf.sha512_row_seg_segments`, `_prefix`, `_segment_prefix` and `_digest`, the last refusing a
   nonzero fill. `row_seg_leaves` in `vectors_sha512.json`: random rows at ℓ = 0, 1, 13, 8191, 8192, 8193, 24,581 and 65,536 and word rows (BF16 k = 4096 and 5, FP32 k = 4096), with every
   segment's prefix and digest, and the 65,536-bit row's hiding leaf. `test_rowleaf_seg.py` checks them and the cost above.
@@ -208,8 +217,8 @@ tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_
 ~~~
 
 The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. Over a bit row's digest it is
-`hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). The SHA-256 frame's counterpart is `hm96-sha256/row/v1`, over
-`hm96.SHA256.tree_leaf(key, b ‖ c)`. `rowleaf.row_leaf` accepts each at its width.
+`hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). `rowleaf.row_leaf` accepts each at its width. The SHA-256 frame has no hiding
+row schema: every commitment is hm96 rows in `frame-v3-sha512` trees (Daniel's one-hash ruling).
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.
@@ -249,7 +258,7 @@ and `test_rowleaf_bits.py` check them.
 A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
 `verity.primitives.commitments.merkle`, where the module docstring states the layout. Its first user is Pearl-C's hashing format `-h1`
 (`verity/protocols/accounting/work/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
-B-Ligero do not mirror it, and `FrameV3` does not offer it.
+B-Ligero do not mirror it, `FrameV3` does not offer it, and `multiproof` refuses it.
 
 ~~~text
 domain id  = BLAKE3( the frame-v3 domain message )                     (not keyed)

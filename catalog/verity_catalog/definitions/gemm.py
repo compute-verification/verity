@@ -5,7 +5,7 @@
     Gemm_v2{K, N, DOT}          x[K] @ W[N,K]^T -> [N], no epilogue
 
 `DOT` is a static naming the step: `GEMM_AMPERE` binds `AmpereBF16TcDot16_v2`, `GEMM_HOPPER` binds
-`HopperBF16WgmmaDot16_v1`.  A verification unit for the FLOP proof is one `GemmCoordinate_v2{K, DOT}` call: K/16
+`HopperBF16WgmmaDot16_v1`.  A proof unit for the FLOP proof is one `GemmCoordinate_v2{K, DOT}` call: K/16
 transitions of `DOT` followed by one `F2fpBf16`.
 
 The same coordinate over the sm_120 low-precision steps, each K/k `DOT` steps in ascending k from a zero accumulator and

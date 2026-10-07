@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Refine.Final
 
 `finalProgZ` (`RunsLig.lean`) is `Refine.finalProg`'s text returning the lane phase's record. A run of it that
 succeeds establishes `finalProg_ok`'s facts (`finalProgZ_facts`), so the model's final check holds on its state
-(`final_refinesZ`, as M0's `final_refines`).
+(`final_refinesZ`, as the non-ZK session's `final_refines`).
 -/
 
 namespace FlockSoundness.Discharge.ZkExec

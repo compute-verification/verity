@@ -3,9 +3,9 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 /-!
 # Ligerito under `--zk`, as frames
 
-`zkLigerito_frames`: a `Zk.ligerito` run that succeeds on retained rounds emits `ligFramesZ`. Its steps are M0's
-(`Exec.ligerito_frames`) with three changes: `LABEL_OPEN` follows the cap; the last lane round's coin is followed by
-level 0's hiding frames (`l0Fr`, through `laneFr`); and level 0's queries open rows `EXTRA_LANES` wider
+`zkLigerito_frames`: a `Zk.ligerito` run that succeeds on retained rounds emits `ligFramesZ`. Its steps are the non-ZK
+session's (`Exec.ligerito_frames`) with three changes: `LABEL_OPEN` follows the cap; the last lane round's coin is
+followed by level 0's hiding frames (`l0Fr`, through `laneFr`); and level 0's queries open rows `EXTRA_LANES` wider
 (`queryLevel0_emit`), followed by a pure loop over the extra lanes that emits nothing. The final check is
 `Refine.finalProg`'s text returning the lane phase's record (`finalProgZ`), and it emits nothing (`finalProgZ_ok`).
 -/

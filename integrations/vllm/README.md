@@ -56,7 +56,9 @@ primitive families through `verity.primitives.circuits.codec.register_lazy_famil
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
 and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
-proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).  `registry/fa3_check_inf.py` is FA3's
+proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core
+binds were promoted into `registry/`).
+`registry/fa3_check_inf.py` is FA3's
 per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default).
 
 **`query/`** implements the *verification query*: `word.py` (`Q_word_v1{X=16,W=32}`, the query of record: every Call's circuit cut
@@ -233,8 +235,10 @@ the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit adm
 bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
 `traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
-PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `beacon` (hex, at least 32 bytes),
-`retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so
+PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
+`verity.protocols.accounting.work.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
+after the weights' root and refuses without one; a pipeline that is its run's own auditor supplies one,
+`pouw.challenged`), `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.
@@ -246,9 +250,6 @@ placeholders are listed in its `info()`.
 - There is no opener for a drawn tile.
 - The transcript's `leaves` grow without bound for the life of the install: 32 B per 16×16 tile, about 0.84 MB per
   token at 70B.
-
-The check, and the options with their costs, are in the research store at
-`/cursor/stores/bc-b729c175-2ef6-418e-98fe-10896709028b/internal/pouw-mvp/deployment-audit-315-check.md`.
 
 ## Running
 

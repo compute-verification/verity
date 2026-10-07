@@ -338,8 +338,8 @@ def SpongeExPostFacto : Prop :=
 the untweaked ideal permutation `Π` of `m + 512` bits under `H`, with `m = n·wc`. -/
 abbrev P3SOmega (n wc : ℕ) : Type := (Tweak n → Equiv.Perm (Lab n wc)) × Equiv.Perm (Bits (n * wc + 512))
 
-noncomputable instance (n wc : ℕ) : Fintype (P3SOmega n wc) := Fintype.ofFinite _
-instance (n wc : ℕ) : Nonempty (P3SOmega n wc) := ⟨⟨fun _ => 1, 1⟩⟩
+noncomputable instance instFintypeP3SOmega (n wc : ℕ) : Fintype (P3SOmega n wc) := Fintype.ofFinite _
+instance instNonemptyP3SOmega (n wc : ℕ) : Nonempty (P3SOmega n wc) := ⟨⟨fun _ => 1, 1⟩⟩
 
 /-- **The P3 model over the sponge.** Queries are `Π`, `Π⁻¹`, `P_T` and `P_T⁻¹`; answers are states or labels. -/
 noncomputable def p3SpongeModel (n wc : ℕ) : IdealModel where
@@ -1677,8 +1677,8 @@ abbrev KQ' (n wc : ℕ) : Type := Bits 256 × Fin 2 × Fin n × (Fin n → Optio
 /-- The salted primitive: `H : KQ' → Lab` and an ideal permutation `P` of labels. -/
 abbrev Omega' (n wc : ℕ) : Type := (KQ' n wc → Lab n wc) × Equiv.Perm (Lab n wc)
 
-noncomputable instance (n wc : ℕ) : Fintype (Omega' n wc) := Fintype.ofFinite _
-instance (n wc : ℕ) : Nonempty (Omega' n wc) := ⟨⟨fun _ _ _ => false, 1⟩⟩
+noncomputable instance instFintypeOmega' (n wc : ℕ) : Fintype (Omega' n wc) := Fintype.ofFinite _
+instance instNonemptyOmega' (n wc : ℕ) : Nonempty (Omega' n wc) := ⟨⟨fun _ _ _ => false, 1⟩⟩
 
 /-- The salted P3 model: `H | P | P⁻¹`, with the `(salt, segment)` tag inside `H`'s domain. -/
 noncomputable def p3Model' (n wc : ℕ) : IdealModel where
@@ -2362,8 +2362,8 @@ abbrev Tweak (n : ℕ) : Type := Bits 256 × Fin 2 × Fin n
 /-- The tweaked primitive: `H : KQ' → Lab` and a **family** of ideal permutations `P_t` indexed by the tweak. -/
 abbrev OmegaT (n wc : ℕ) : Type := (KQ' n wc → Lab n wc) × (Tweak n → Equiv.Perm (Lab n wc))
 
-noncomputable instance (n wc : ℕ) : Fintype (OmegaT n wc) := Fintype.ofFinite _
-instance (n wc : ℕ) : Nonempty (OmegaT n wc) := ⟨⟨fun _ _ _ => false, fun _ => 1⟩⟩
+noncomputable instance instFintypeOmegaT (n wc : ℕ) : Fintype (OmegaT n wc) := Fintype.ofFinite _
+instance instNonemptyOmegaT (n wc : ℕ) : Nonempty (OmegaT n wc) := ⟨⟨fun _ _ _ => false, fun _ => 1⟩⟩
 
 /-- The tweaked P3 model: `H | P_t | P_t⁻¹`, with the permutation tweaked by `(tag, layer, node)`. -/
 noncomputable def p3ModelT (n wc : ℕ) : IdealModel where
@@ -2581,7 +2581,7 @@ theorem length_le_of_isChain {α : Type} {R : α → α → Prop} (f : α → �
 /-- `a` is one of the `k` nodes before `b`. -/
 def Band (k : ℕ) (a b : Fin n) : Prop := a.val < b.val ∧ b.val ≤ a.val + k
 
-instance (k : ℕ) (a b : Fin n) : Decidable (Band k a b) := by unfold Band; infer_instance
+instance instDecidableBand (k : ℕ) (a b : Fin n) : Decidable (Band k a b) := by unfold Band; infer_instance
 
 /-- The nodes of `S` with no node of `S` among their `k` predecessors. -/
 def starts (k : ℕ) (S : Finset (Fin n)) : Finset (Fin n) := S.filter fun v => ∀ u ∈ S, ¬ Band k u v
@@ -4579,7 +4579,7 @@ theorem p3_meets_64_band16 (h10 : N10primeAt fun D => (D + 1) / 2) (h1 : Pous.Gu
     Meets (p3SchemeR 2384 (bandGraph 220 16)) .sequential 20 (2 ^ 20) 117 ((2⁻¹ : ℝ≥0∞) ^ 128) :=
   p3_meets_64_of _ h10 h1 12 (by norm_num) band_twoWay_220_16
 
-instance : NeZero (971 : ℕ) := ⟨by norm_num⟩
+instance instNeZeroNatOfNat_pous : NeZero (971 : ℕ) := ⟨by norm_num⟩
 
 /-- 14 GB: `|C| = 971·220·524480 = 112039417600` bits (14.005 GB), `S = ⌊(18/19)·|C|⌋`. -/
 theorem stateBound_14GB_64 : (p3SchemeNR 2384 Gr 971).stateBound Params.ρ = 106142606147 := by
@@ -10129,7 +10129,7 @@ theorem card_bits_eq_mul (K : Finset (Fin n × Fin wc)) (β : K → Bool) :
 def RedLab (x : Lab n wc) (K : Finset (Fin n × Fin wc)) : Type :=
   ({p // p ∉ K} → Bool) × Equiv.Perm {y // y ≠ x}
 
-instance (x : Lab n wc) (K : Finset (Fin n × Fin wc)) : Fintype (RedLab x K) :=
+instance instFintypeRedLab (x : Lab n wc) (K : Finset (Fin n × Fin wc)) : Fintype (RedLab x K) :=
   inferInstanceAs (Fintype (({p // p ∉ K} → Bool) × Equiv.Perm {y // y ≠ x}))
 
 /-- **Encoder, one tweak.** `P ↦ (bits K (P x), rest)`, with `rest : RedLab x K` what the hint stores. -/
@@ -10198,7 +10198,7 @@ variable {T : Type} [Fintype T] [DecidableEq T]
 /-- The family hint: per tweak, the bits of `P_t (x t)` off `K t` and the reduced permutation. -/
 def FamilyRed (x : T → Lab n wc) (K : T → Finset (Fin n × Fin wc)) : Type := (t : T) → RedLab (x t) (K t)
 
-instance (x : T → Lab n wc) (K : T → Finset (Fin n × Fin wc)) : Fintype (FamilyRed x K) :=
+instance instFintypeFamilyRed (x : T → Lab n wc) (K : T → Finset (Fin n × Fin wc)) : Fintype (FamilyRed x K) :=
   inferInstanceAs (Fintype ((t : T) → RedLab (x t) (K t)))
 
 /-- **Encoder, family.** `F ↦ ((bits (K t) (F t (x t)))ₜ, rest)`. -/
@@ -19240,7 +19240,7 @@ inductive GA
   | p1 | k1 | b1 | k2 | b2 | p2 | vY | vY2
   deriving DecidableEq
 
-instance : Fintype GA :=
+instance instFintypeGA : Fintype GA :=
   ⟨{.p1, .k1, .b1, .k2, .b2, .p2, .vY, .vY2}, fun x => by cases x <;> simp⟩
 
 /-- The relations of a pair group. -/
@@ -19248,7 +19248,7 @@ inductive GR
   | rc1 | rx2 | rc2 | rx1 | rh0 | rh1 | rIw | rIu | ab1 | ab2 | ap2 | aY | aY2
   deriving DecidableEq
 
-instance : Fintype GR :=
+instance instFintypeGR : Fintype GR :=
   ⟨{.rc1, .rx2, .rc2, .rx1, .rh0, .rh1, .rIw, .rIu, .ab1, .ab2, .ap2, .aY, .aY2}, fun x => by cases x <;> simp⟩
 
 /-- A relation's priority among relations at the same index (`< 13`). -/
@@ -26339,7 +26339,7 @@ variable {Sig : Type} (whole : Sig → ℕ)
 /-- The joint tables of a class profile `p`: one table per segment, segment `t`'s with `p t` whole credits. -/
 def SigP (p : Fin N → ℕ) : Type := {σ : Fin N → Sig // ∀ t, whole (σ t) = p t}
 
-noncomputable instance [Fintype Sig] (p : Fin N → ℕ) : Fintype (SigP whole p) := by
+noncomputable instance instFintypeSigP [Fintype Sig] (p : Fin N → ℕ) : Fintype (SigP whole p) := by
   classical
   unfold SigP
   infer_instance
@@ -42886,7 +42886,7 @@ inductive V6Part where
   | h
 deriving DecidableEq
 
-instance : Fintype V6Part where
+instance instFintypeV6Part : Fintype V6Part where
   elems := {.r, .h}
   complete := by intro x; cases x <;> simp
 
@@ -51972,7 +51972,7 @@ theorem seg_timedINC (N B ℓ D Q β : ℕ) [NeZero (N * B)] (hN : 0 < N) (hD : 
   refine le_trans (le_of_eq (by rw [Finset.card_univ, Fintype.card_fin]))
     (Finset.card_le_card (s := Finset.univ) fun c _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, hH c⟩)
 
-instance : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
+instance instNeZeroHMulOfNatHPow_pous : NeZero (448 * 2 ^ 9) := ⟨by norm_num⟩
 
 /-- `|Hist|·π ≤ 2^-128` at `N = 448`, `B = 2^9`, `ℓ = 524288`, `D = 5`, `Q = 2^20`, `k = 106`, `β = 119067414778`.
 `N*B = 229376 ≤ 2^18`, `(N*B(Q+1)+N*B)^2 ≤ 2^76`, and the exponent `(524288−76)·227136 − (18·106 + 18 + β) = 128`. -/
@@ -53520,12 +53520,12 @@ theorem pubMeets_exact {M : IdealModel} (sch : Scheme M) [Subsingleton sch.Coins
 
 /-! ### Instances -/
 
-instance (B ℓ : ℕ) [NeZero B] : Subsingleton (Pous.Dense.denseScheme B ℓ).Coins := inferInstanceAs (Subsingleton Unit)
+instance instSubsingletonCoinsDenseScheme (B ℓ : ℕ) [NeZero B] : Subsingleton (Pous.Dense.denseScheme B ℓ).Coins := inferInstanceAs (Subsingleton Unit)
 
-instance (N B ℓ : ℕ) [NeZero (N * B)] : Subsingleton (Pous.DenseReCert.segScheme N B ℓ).Coins :=
+instance instSubsingletonCoinsSegScheme (N B ℓ : ℕ) [NeZero (N * B)] : Subsingleton (Pous.DenseReCert.segScheme N B ℓ).Coins :=
   inferInstanceAs (Subsingleton Unit)
 
-instance (B ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (Pous.Sponge.chainDense B ℓ c dom).Coins :=
+instance instSubsingletonCoinsChainDense (B ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (Pous.Sponge.chainDense B ℓ c dom).Coins :=
   inferInstanceAs (Subsingleton Unit)
 
 /-- The trusted `Pous.Dense.denseScheme` is the dense file's `PousDenseChain.denseScheme`, verbatim. -/
@@ -53780,7 +53780,7 @@ namespace Pous.BandChain
 open Pous Pous.Sponge
 open scoped ENNReal
 
-instance (B d ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (chainBand B d ℓ c dom).Coins :=
+instance instSubsingletonCoinsChainBand (B d ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (chainBand B d ℓ c dom).Coins :=
   inferInstanceAs (Subsingleton Unit)
 
 /-- The band codec at the 64 KiB point (`2^9` blocks, in-degree `d`, capacity 512), for every salt, with a public
@@ -53843,7 +53843,7 @@ theorem pubMeets_exact_iff {M : IdealModel} (sch : Scheme M) [Subsingleton sch.C
 
 /-! ### The band codec at 14 GB -/
 
-instance (N B d ℓ c : ℕ) [NeZero (N * B)] (dom : ℕ → Bits c) :
+instance instSubsingletonCoinsChainBandSeg (N B d ℓ c : ℕ) [NeZero (N * B)] (dom : ℕ → Bits c) :
     Subsingleton (Pous.BandMulti.chainBandSeg N B d ℓ c dom).Coins :=
   inferInstanceAs (Subsingleton Unit)
 

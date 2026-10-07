@@ -6,7 +6,7 @@ same step stream and run root as the module's other values.  Attached whenever t
 The sites are the manifest's `scale_products` identities.  A forward pre-hook marks the site module that runs; inside it, during a
 committed step, the wrapper of `torch.ops._C.cutlass_scaled_mm` reads the launch's `a_scales` (the [M, K/G] group scales
 `per_token_group_fp8_quant` wrote, x_s) and `b_scales` (the transposed view of the module's [N/G, K/G] `weight_scale_inv`, w_s), computes
-`F32Mul_v1(x_s[m][kb], w_s[nb][kb])` on the host through the IR (`registry.fp8.scale_products`), acquires the words on the launch's
+`F32Mul_v1(x_s[m][kb], w_s[nb][kb])` on the host through the IR (`kernels.fp8_twins.scale_products`), acquires the words on the launch's
 device, then runs the installed kernel unchanged.  No kernel changes.  A launch whose scale shapes are not the manifest's block geometry
 is a collector error.
 """
@@ -18,16 +18,16 @@ from typing import Any, Mapping
 import numpy as np
 
 from verity_vllm.engine import hooks
-from verity_vllm.program.registry import fp8
+from verity_vllm.program.kernels import fp8_twins
 from verity_vllm.query import scale_products as SP
 
 
 def products(torch: Any, a_scales: Any, b_scales: Any) -> Any:
-    """f32 [M, N/G * K/G] on `a_scales`' device: `fp8.scale_products` of the launch's [M, K/G] activation scales and the [N/G, K/G]
+    """f32 [M, N/G * K/G] on `a_scales`' device: `fp8_twins.scale_products` of the launch's [M, K/G] activation scales and the [N/G, K/G]
     block scales `b_scales` is the transposed view of, carried as 32-bit words end to end."""
     xs = a_scales.contiguous().view(torch.int32).cpu().numpy().view(np.uint32)
     ws = b_scales.t().contiguous().view(torch.int32).cpu().numpy().view(np.uint32)
-    out = fp8.scale_products(xs, ws).reshape(xs.shape[0], -1)
+    out = fp8_twins.scale_products(xs, ws).reshape(xs.shape[0], -1)
     return torch.from_numpy(out.view(np.int32)).to(a_scales.device).view(torch.float32)
 
 
@@ -125,7 +125,7 @@ class ScaleProductsSource:
         return [{"class": SP.FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
                  "tensors": self.stats["tensors"], "rows": self.stats["rows"], "errors": self.stats["errors"],
                  "evidence": (f"scale-products source: `<linear module>/{SP.MEMBER}` of {len(self.sites)} sites, F32Mul_v1 of the launch's "
-                              "activation scales and the module's weight_scale_inv through the IR (registry.fp8.scale_products; no kernel change)")}]
+                              "activation scales and the module's weight_scale_inv through the IR (kernels.fp8_twins.scale_products; no kernel change)")}]
 
 
 def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
