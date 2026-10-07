@@ -5,6 +5,8 @@ import Proofs.Flock.Soundness.Discharge.ZkPubIn.Setup
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Composed
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Runs
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.WireP
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Flat
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Sites
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -22,5 +24,7 @@ and ZkExec's session pieces at any acceptance event. `Runs`: HiddenExec's sessio
 
 These read the event, not the statement's rows. The rows, sites and binding at `keyProgP` are proved at canonical rows
 (`Discharge.Canonical`), and the session and its registered reads come after them. `WireP`: `keyProgP`'s wiring
-beside `keyProg`'s at the canonical output-row bits, the first of them.
+beside `keyProg`'s at the canonical output-row bits, the first of them. `Flat`, `Sites`: the statement and its flat
+twin off the public leaves at canonical rows (`rowsFlatCP`), and `keyProgP`'s sites and places
+(`SitesHP.progPlaces_keyProgP`), with a drawn table's acceptance at canonical rows (`TableHP.acc`).
 -/
