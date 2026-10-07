@@ -47,7 +47,7 @@ in, so package-local skills need no path configuration.
 For example, `research` (how an agent anywhere in Verity runs, inspects, and
 preserves substantial computational work) is repo-level. `proof-benchmark`
 (what counts as a valid, comparable proof experiment) belongs under
-`backends/`, because only backend work needs it.
+`verity/ml/flock/`, because only proof-system work needs it.
 
 ## File Structure
 
