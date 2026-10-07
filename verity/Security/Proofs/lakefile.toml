@@ -21,6 +21,10 @@ path = ".."
 name = "flock_verifier"
 path = "../../../backends/flock/verifier/lean"
 
+[[require]]
+name = "certifier_program"
+path = "../../protocols/accounting/communication/certifier/lean"
+
 [[lean_lib]]
 name = "Proofs"
-roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Warden", "Proofs.Flock"]
+roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock"]

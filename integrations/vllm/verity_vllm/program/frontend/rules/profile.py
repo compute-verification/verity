@@ -17,7 +17,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInf
 from verity_vllm.program.frontend.rules.common import attention_scale, dtype_is, from_rows, kv_logs, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.registry.targets import UnregisteredTarget
+from verity_vllm.program.frontend.targets import UnregisteredTarget
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16

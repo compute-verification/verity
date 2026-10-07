@@ -1,5 +1,5 @@
-"""Differential tests: `verity.protocols.accounting.space.pous`'s timed verifiers against the Lean model of the continuous audit
-(`lean/Pous/Protocol/Model/Continuous.lean`), restated as the oracle in `pous_continuous_model.py`.
+"""Differential tests: `verity.protocols.accounting.space.pous`'s memory challengers against the Lean model of the continuous audit
+(`verity/Security/Definitions/Pous/Model/Continuous.lean`), restated as the oracle in `pous_continuous_model.py`.
 
 Each action of a trace goes to the verifier and to `ClockOracle` at one reading of an injected clock, and after every
 action the two must agree exactly: whether the action was refused and why, the challenge revealed, every closed round's
@@ -10,8 +10,8 @@ challenge, actions after the last round) and a few scripted ones. `test_lean_mac
 from Lean `ContMachine` scripts and checks its verdicts against `cont_records`, the transcription of Lean's
 `contRecords`, and its acceptance against `contAccepts`.
 
-The verifiers: `TimedVerifier` without a hard deadline (the single audit's), and, once
-`cursor/pous-continuous-enforce-3cf5` has landed, `TimedVerifier` with one and `ContinuousVerifier`.
+The verifiers: `MemoryChallenger` without a hard deadline (the single audit's), and, once
+`cursor/pous-continuous-enforce-3cf5` has landed, `MemoryChallenger` with one and `ContinuousMemoryChallenger`.
 """
 
 from __future__ import annotations
@@ -29,19 +29,19 @@ import pous_continuous_model as model
 from pous_continuous_model import (ALL_SENT, CLOSED, HIT, LATE, NO_HARD_DEADLINE, NONE_OPEN, NOT_REVEALED, REJECT,
                                    UNANSWERED, WITHIN, WRONG, ClockOracle, Record, Refused)
 from verity.protocols.accounting.space.pous import band
-from verity.protocols.accounting.space.pous.audit import AuditResult, TimedVerifier, challenge_key, run_timed
+from verity.protocols.accounting.space.pous.audit import AuditResult, MemoryChallenger, challenge_key, run_timed
 from verity.protocols.accounting.space.pous.codec import encode_segments
 from verity.protocols.accounting.space.pous.verifier import VerifierKey
 
 try:
-    from verity.protocols.accounting.space.pous.continuous import ContinuousVerifier, Reply, run_continuous
+    from verity.protocols.accounting.space.pous.continuous import ContinuousMemoryChallenger, Reply, run_continuous
 except ImportError:
-    ContinuousVerifier = Reply = run_continuous = None
+    ContinuousMemoryChallenger = Reply = run_continuous = None
 
-LEAN = Path(__file__).resolve().parents[1] / "lean"
-MODEL = "Pous/Protocol/Model/Continuous.lean"
-ENFORCE = "the hard deadline and ContinuousVerifier land with cursor/pous-continuous-enforce-3cf5"
-HARD = "late_deadline_ns" in inspect.signature(TimedVerifier).parameters
+ROOT = Path(__file__).resolve().parents[6]
+MODEL = "verity/Security/Definitions/Pous/Model/Continuous.lean"
+ENFORCE = "the hard deadline and ContinuousMemoryChallenger land with cursor/pous-continuous-enforce-3cf5"
+HARD = "late_deadline_ns" in inspect.signature(MemoryChallenger).parameters
 
 PARAMS = band.BandParams(16, 64, 12, 2)
 SALT = bytes(range(24))
@@ -57,7 +57,7 @@ can be late without being rejected), and `D = 0` with the largest `D_late`, 12."
 KINDS = [
     pytest.param("timed", id="timed"),
     pytest.param("timed-hard", id="timed-hard", marks=pytest.mark.skipif(not HARD, reason=ENFORCE)),
-    pytest.param("continuous", id="continuous", marks=pytest.mark.skipif(ContinuousVerifier is None, reason=ENFORCE)),
+    pytest.param("continuous", id="continuous", marks=pytest.mark.skipif(ContinuousMemoryChallenger is None, reason=ENFORCE)),
 ]
 
 MESSAGES = {
@@ -105,12 +105,12 @@ class Subject:
     def __init__(self, kind, vk, key, n, deadline, late, rtt, clock, max_misses):
         self.kind, self.named, self.hard = kind, kind == "continuous", kind != "timed"
         if self.named:
-            self.v = ContinuousVerifier(vk, key, n, late_deadline_ns=late, max_misses=max_misses, deadline_ns=deadline,
+            self.v = ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=late, max_misses=max_misses, deadline_ns=deadline,
                                         rtt_allowance_ns=rtt, clock=clock)
             self.timed = self.v.timed
         else:
             kw = {"late_deadline_ns": late} if self.hard else {}
-            self.v = self.timed = TimedVerifier(vk, key, n, deadline, rtt, clock, **kw)
+            self.v = self.timed = MemoryChallenger(vk, key, n, deadline, rtt, clock, **kw)
         self.max_misses = max_misses if self.named else 0
         self.can_expire = hasattr(self.timed, "expire")
 
@@ -208,14 +208,13 @@ def _words(text: str) -> str:
 def test_the_oracle_transcribes_the_lean_model():
     """Each Lean definition the oracle transcribes is, word for word, the one in the Lean file its docstring names. A
     failure means the model changed: re-derive the oracle from it before trusting these tests."""
-    if not (LEAN / MODEL).exists():
-        pytest.skip(f"{MODEL} lands with cursor/pous-lean-continuous-3cf5")
+    assert (ROOT / MODEL).exists(), f"{MODEL} is gone: re-point the oracle's docstrings at the model's new home"
     found = {}
     for obj in _transcriptions():
         head, lean = inspect.getdoc(obj).split("\n", 1)
         path = re.search(r"\(`([^`]+\.lean)`\)", head).group(1)
         found[re.match(r"Lean `([^`]+)`", head).group(1)] = path
-        assert _words(lean) in _words((LEAN / path).read_text()), f"{obj.__name__}: {path} no longer says this"
+        assert _words(lean) in _words((ROOT / path).read_text()), f"{obj.__name__}: {path} no longer says this"
     assert set(found) == {"Prog.run", "Prog.depth", "Prog.work", "ContMachine.round", "contVerdict", "ContState",
                           "ContState.start", "contSend", "contMem", "contProg", "contNext", "contAfter", "ContRecord",
                           "contRecord", "contRecords", "contAccepts"}

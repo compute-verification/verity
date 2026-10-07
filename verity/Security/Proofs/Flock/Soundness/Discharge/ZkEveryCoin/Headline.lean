@@ -199,7 +199,7 @@ at any `w0`) are within `2·|LeafPos|·2^-193`, both ways, T1's on every leaf. A
 (`CoinedSetup.Admits`), so no coin vector is left unsimulated.
 
 As `Composed.zk_session_view`, this is for coins fixed independently of the prover; a verifier that chooses them is
-covered by the coin server's commitment at `Hello`, before the prover's first message (`coin_tree.rs`), whose binding is
+covered by the challenger's commitment at `Hello`, before the prover's first message (`coin_tree.rs`), whose binding is
 `keyed-cr`, which no statement here models yet.
 
 For an untyped statement (`ht`) whose Δ and regions avoid the mask slot (`avoidsMask`, a named hypothesis until the

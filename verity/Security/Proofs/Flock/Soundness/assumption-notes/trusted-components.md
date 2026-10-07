@@ -28,15 +28,16 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   domain points `ω_q` are distinct only for `2^d ≤ 2^64` (`ω_q` is the low word of `q`). The novel basis is a basis
   only for `L ≤ 40` columns (the range the executable's normalisers are checked on). `Level.Fits` carries those bounds,
   and every `fast100` level fits.
-- **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is `../../../../../../backends/flock/verifier/lean/soundness/lean-audit.json`'s
+- **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is `../../../../lean-audit.json`'s
   `pins` and `reads`, and `../ASSUMPTIONS.md` for the named assumptions.
   - `pins`: each pinned theorem's signature as Lean prints it, with its named assumptions.
   - `reads`: per module, the definitions those statements depend on (followed through the `meaning` modules,
     `FlockSoundness` and `FlockLevel3`), and which pins read them. Some are in proof files (`LinkSound.lean`,
     `CompiledSound.lean`, `CompiledLock.lean`).
-  - The audit fails when a signature or a definition it reads changes, until `audit.py --update` rewrites the record,
-    and a rewritten record needs a named statement reviewer. A theorem cited but not pinned (`../ASSUMPTIONS.md` names
-    them) is read in its source.
+  - The audit fails when a signature or a definition it reads changes, until `audit.py --update` rewrites the record.
+    When a rewritten record lands on `main`, Daniel gets a DM showing it, and that is the check: a statement reviewer
+    is optional, and nothing waits on one. A theorem cited but not pinned (`../ASSUMPTIONS.md` names them) is read in
+    its source.
 - **Pinned dependencies.** ArkLib `b2e456fc`; through its manifest, VCVio `d7089e46`, CompPoly `df591bb8`
   (`v4.34.0-patch2`) and Mathlib `5ed29652` (`v4.34.0`). Lean 4.34.0. The definitions used from them (Reed–Solomon
   codes, `mcaError`, Johnson bounds) are part of what the statement means. `reads` does not follow them, so a bump's

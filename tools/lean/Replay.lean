@@ -122,8 +122,17 @@ unsafe def main (args : List String) : IO UInt32 := do
       if !mods.contains i.module && !imports.any (·.module == i.module) then
         imports := imports.push i
   let env ← importModules imports {}
-  if let some n := constants.keys.find? (env.contains ·) then
-    throw <| IO.userError s!"{n} is declared by a replayed module and by one it imports from outside the set"
+  -- An equation lemma (`f.eq_1`) is realized in each module that first asks for it, so an import from outside the set
+  -- can hold the same theorem: that one, already checked as imported, stands for it.
+  for (n, c) in constants do
+    match env.find? n, c with
+    | none, _ => pure ()
+    | some (.thmInfo a), .thmInfo b =>
+      unless a.type == b.type && a.levelParams == b.levelParams do
+        throw <| IO.userError s!"{n} is declared by {moduleOf[n]!} and by an import from outside the set with different statements"
+      constants := constants.erase n
+    | some _, _ =>
+      throw <| IO.userError s!"{n} is declared by a replayed module and by one it imports from outside the set"
   -- The kernel checks no unsafe or partial constant (compiled code, which may recurse through others), and refuses a
   -- checked one that mentions them, so they go in first, unchecked, and are not ordered.
   let compiled (c : ConstantInfo) := c.isUnsafe || c.isPartial
