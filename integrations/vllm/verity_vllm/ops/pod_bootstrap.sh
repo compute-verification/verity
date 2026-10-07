@@ -34,11 +34,10 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../.." 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no Verity tree above $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
 RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no tools/research/src beside $ROOT" >&2; exit 3; }
-DISTS="catalog kernels experimental"   # the distributions under their groupings: verity.ml.circuits, verity.ml.kernels, verity.experimental
-for G in $DISTS; do [ -d "$CORE/$G" ] || { echo "BOOTSTRAP_FAIL_TREE: no $G beside $ROOT" >&2; exit 3; }; done
+[ -d "$CORE/verity/experimental" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/experimental beside $ROOT" >&2; exit 3; }
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
-export PYTHONPATH=$ROOT:$CORE:$RESEARCH:$CORE/catalog:$CORE/kernels:$CORE/experimental${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
 export VERITY_TREE=$ROOT
 CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0
 while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
@@ -65,12 +64,6 @@ if [ ! -x "$PY" ]; then
   uv venv "$VENV" --python 3.12 >/dev/null || fail VENV "uv venv --python 3.12 failed"
 fi
 $PY -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' || fail PYTHON "$PY is not Python 3.12: $($PY -V 2>&1)"
-# scripts that set their own PYTHONPATH (gates, rows) still import the catalog, the kernels and experimental (the challenge's
-# sampled-proofs law is experimental's): a .pth for each in the venv's site-packages
-SITE=$VENV/lib/python3.12/site-packages; [ -d "$SITE" ] || fail PTH "no $SITE (the venv is Python 3.12)"
-for G in $DISTS; do
-  echo "$CORE/$G" > "$SITE/verity-$G.pth" || fail PTH "cannot write $SITE/verity-$G.pth"
-done
 
 # ---- 2. vLLM d9105ea80 (cu129 wheel, sha pinned) + torch cu129 + the Python deps ---------------------------------------------------
 W="vllm-0.28.1rc1.dev472+gd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl"
@@ -196,18 +189,11 @@ check("verity_from_tree", lambda: under("verity.ml.circuits", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
 check("sampled_proofs_from_tree", lambda: under("verity.experimental.protocols.sampled_proofs.plan", experimental))   # the program tests import it
-def experimental_without_pythonpath():
-    # drop only verity/experimental/ from PYTHONPATH: its .pth must supply it; verity (its dependency) stays on the path
-    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and os.path.realpath(p) != os.path.realpath(experimental)]
-    env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, **({"PYTHONPATH": os.pathsep.join(keep)} if keep else {})}
-    r = subprocess.run([sys.executable, "-c", "import verity.experimental.protocols.sampled_proofs.plan as m; print(m.__file__)"], capture_output=True, text=True, env=env, timeout=60)
-    if r.returncode != 0 or not os.path.realpath(r.stdout.strip()).startswith(os.path.realpath(experimental) + os.sep):
-        raise RuntimeError(f"without experimental on PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")
-    return r.stdout.strip()
-check("sampled_proofs_via_pth", experimental_without_pythonpath)   # the venv's verity-experimental.pth, for scripts whose PYTHONPATH omits it
 def distributions_from_tree():
-    return {d: under(f"verity_{d}", os.path.join(core, d)) for d in ("verity/ml/circuits", "verity/ml/kernels", "verity/experimental")}
-check("distributions_from_tree", distributions_from_tree)   # each through its .pth: a row's stages set their own PYTHONPATH
+    # the catalog, the kernels and experimental, distributions of their own before the platform layout, now in verity
+    mods = {"catalog": "verity.ml.circuits.ops", "kernels": "verity.ml.kernels", "experimental": "verity.experimental"}
+    return {d: under(m, os.path.join(core, *m.split("."))) for d, m in mods.items()}
+check("distributions_from_tree", distributions_from_tree)
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
 if gpu:
