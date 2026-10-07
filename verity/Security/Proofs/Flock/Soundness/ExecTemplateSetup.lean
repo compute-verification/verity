@@ -901,9 +901,9 @@ theorem unitShape_of_class (k : Typed.Class) : UnitShape k.done (k.done.getD k.u
   unitShape_of k.hd (unit_const_row k.hd) (order_cols k.hd) (fun _ hp _ hc => part_reads k.hd hp hc)
     (fun _ hp _ hc _ hr => callee_prod k.hd hp hc hr)
 
-/-- **1e's facts at every VU of an accepted template statement** (T3): for the class `k` its circuit carries, the block
-rows at `Typed.col c tb g c` are the unit's block row there, in the model of the accepted statement. The parts may be
-derived layouts or generated reads. -/
+/-- **1e's facts at every template instance of an accepted template statement** (T3): for the class `k` its circuit
+carries, the block rows at `Typed.col c tb g c` are the unit's block row there, in the model of the accepted statement.
+The parts may be derived layouts or generated reads. -/
 theorem setupH_blockFacts (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t))
@@ -1061,8 +1061,8 @@ theorem copy_sum (y s j : ℕ) :
   · subst hj; simp
   · simp [hj, Ne.symm hj]
 
-/-- **An input of VU `g` copies its message bit**: the block rows at its position read exactly `copySrc g w`, in `A` and
-in `B` (#277's input copies, over the unit's self input rows). -/
+/-- **An input of template instance `g` copies its message bit**: the block rows at its position read exactly
+`copySrc g w`, in `A` and in `B` (#277's input copies, over the unit's self input rows). -/
 theorem input_rows (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     (U : UnitShape done 𝒖) {g w : ℕ} (hg : g < st.c.g) (hw : w < 𝒖.inCols.size) (j : ℕ) :
     rangesEntry st (slotEntryA st) (Typed.col st.c tb g 𝒖.inCols[w]) j +
@@ -1160,9 +1160,9 @@ theorem input_rows (hd : deriveChecked types ls info words unit = .ok done) (T :
             rw [hy, hb0']; rfl]
         exact copy_sum _ _ _
 
-/-- **An input of VU `g` is a copy row of its message bit**, in the model of the accepted statement (when the message
-bit's position is in the block). A satisfying witness then carries the message bit there (`CopyRow.block_eq`): a table
-class's `copy`. -/
+/-- **An input of template instance `g` is a copy row of its message bit**, in the model of the accepted statement (when
+the message bit's position is in the block). A satisfying witness then carries the message bit there
+(`CopyRow.block_eq`): a table class's `copy`. -/
 theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T : TemplateLayout st tb words done 𝒖)
     (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g w : ℕ} (hg : g < st.c.g)
     (hw : w < 𝒖.inCols.size) (hs : Typed.copySrc st.c g w < 2 ^ st.c.kLog) :
@@ -1179,9 +1179,9 @@ theorem input_copy (hd : deriveChecked types ls info words unit = .ok done) (T :
 
 end TemplateLayout
 
-/-- **An accepted template statement's inputs read message bits inside the block**: input `w` of VU `g` copies
-`Typed.copySrc st.c g w`, a message bit of one of the file's rows (`msgCol_lt`). The file has a row, since the instance's
-inputs are its rows' words (`checkTyped`) and the unit has input `w`. -/
+/-- **An accepted template statement's inputs read message bits inside the block**: input `w` of template instance `g`
+copies `Typed.copySrc st.c g w`, a message bit of one of the file's rows (`msgCol_lt`). The file has a row, since the
+instance's inputs are its rows' words (`checkTyped`) and the unit has input `w`. -/
 theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
@@ -1219,8 +1219,8 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
     exact msgCol_lt P' C' hg (portAt_lt st.c hne _) _ _ (Nat.mod_lt _ (by norm_num))
   · cases hrn
 
-/-- **The inputs of an accepted template statement copy their message bits** (a table class's `copy`): input `w` of VU
-`g` is a copy row of `Typed.copySrc st.c g w` in the model of the accepted statement. -/
+/-- **The inputs of an accepted template statement copy their message bits** (a table class's `copy`): input `w` of
+template instance `g` is a copy row of `Typed.copySrc st.c g w` in the model of the accepted statement. -/
 theorem setupH_inputCopy {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}

@@ -152,7 +152,7 @@ noncomputable def readsZ (ω : L.Ω) (c : vb.Pos) : Finset vb.Val :=
 abbrev ΩcZ (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsDrawZ A P planZ tab vb c ω}
 
 open Classical in
-noncomputable instance (L : Law n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
+noncomputable instance instFintypeΩcZ (L : Law n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
 
 /-- **The trial for commit string `c`**: a draw that reads `c`, uniform among such draws. -/
 noncomputable abbrev trialZ (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] : Game (ΩcZ A P planZ tab vb L c) :=

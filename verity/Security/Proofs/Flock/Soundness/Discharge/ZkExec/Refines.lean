@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 # R11 at `--zk`, one table, and the `--zk` headline at flock-verify's acceptance
 
 * `execRefinesZK_one : ExecRefinesZKOne …`: the live `--zk` audit simulated in the compiled `--zk` audit, by the live
-  coin server's simulation (`live_le`, `Refine/LiveSim.lean`) at each draw, with `bad = ⊥`, given `DecodesZK`.
+  challenger's simulation (`live_le`, `Refine/LiveSim.lean`) at each draw, with `bad = ⊥`, given `DecodesZK`.
 * `zk_headline_exec_one : ZkHeadlineExecOne …`: from it, any bound on the compiled audit's acceptance with an event of
   the simulated prover bounds flock-verify `--zk`'s acceptance with that event (`exec_le_of_refines`).
 -/

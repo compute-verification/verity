@@ -279,11 +279,11 @@ end Pouw.Guarantees.PearlC
 
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
-    lean = tmp_path / "lean"
-    (lean / "Pouw" / "Guarantees").mkdir(parents=True)
-    (lean / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    lean = tmp_path / "Security"
+    (lean / "Specs" / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / "Specs" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "reads": {"Specs.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
     return audit, lean
 
 
@@ -337,7 +337,7 @@ def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
 
 
 @pytest.mark.parametrize("statement, path, reading, published, at", [
-    # the panel's published figures (docs/pouw/panel.md, 30 Sep 16:00Z), each from its pin, the larger of the two prices;
+    # the panel's published figures (30 Sep 16:00Z), each from its pin, the larger of the two prices;
     # v1's at its cap then, 1/400
     ("pearl-c-sm120/v1", "cast-32.06", "forming-credited", "0.77888%", "8"),
     ("pearl-c-sm120/v1", "cast-16", "forming-credited", "0.60019%", "1047/125"),

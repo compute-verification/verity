@@ -2,6 +2,9 @@
 
     uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
+    ... PART...                                             only those parts (`tests`, `circuits`, `lean`: each job's `part` in
+                                                            ci.toml) and what their jobs need, after the preflight; outside a
+                                                            recorded run, since no gate takes part of a check
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -95,8 +98,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     `--fresh`)
     circuit-check   `circuit-check --cache`, per target: a target's result is reused when every file, directory listing,
                     existence probe and loaded library its own check read or resolved (the Definitions it reached, their builds
-                    and modules' import closures, its `targets.py` bindings and its pins) is unchanged, with the checker's own
-                    version; one after a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
+                    and modules' import closures, its bindings and its pins, in `targets.py` or a Definition module's sidecar) is
+                    unchanged, with the checker's own version; one after a read the tracer cannot see (a program it starts) is
+                    not stored (`circuit_check.cache`)
     lean-audit      per package (`lean_audit.py`): a pass is reused while the content of the package, its path dependencies,
                     `tools/lean/` and its toolchain and manifest is unchanged, wherever the package is (a move is no miss, and
                     its kept build follows it); a miss is audited on a scratch tree holding only those, so a read outside them
@@ -340,10 +344,13 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     elif not check["slots"]:
         raise ValueError(f"{check['file']} lists no slots")
     else:
-        free = [s for s in check["slots"] if s["holder"] is None and not s["blocked"]]
+        mine = [s for s in check["slots"] if priority or not s.get("trains")]
+        if not mine:
+            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains)")
+        free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
-                                          for s in check["slots"]) + f"; {waiting}"
+                                          for s in mine) + f"; {waiting}"
     if lean["pools"] is None:
         return room, ahead, f"{why}; no Lean audit cap"
     pool = next((p for p in ("check", "any") if p in lean["pools"]), None)
@@ -560,11 +567,17 @@ def memory_gb() -> int:
     return 0
 
 
+#: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
+#: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
+#: (tip 38's shard 2/3, 6 Oct)
+AGREEMENT_MEMORY_SHARE = 2
+
+
 def session_jobs() -> int:
     """`ci.py --session-jobs`: its own default counts the host's CPUs and memory inside a container, so check passes what this
-    process may use, at ci.py's `GB_PER_PROCESS` per verifier process."""
+    process may use (its `AGREEMENT_MEMORY_SHARE`), at ci.py's `GB_PER_PROCESS` per verifier process."""
     m = re.search(r"^GB_PER_PROCESS = (\d+)", (FLOCK_VERIFIER / "ci.py").read_text(), re.M)
-    return max(1, min(cores(), memory_gb() // int(m.group(1) if m else 8)))
+    return max(1, min(cores(), memory_gb() // AGREEMENT_MEMORY_SHARE // int(m.group(1) if m else 8)))
 
 
 #: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
@@ -870,12 +883,21 @@ def shard(spec: str) -> dict:
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
-    files = tracked_files(ROOT)
-    if files is None:
-        raise DECLARATION.DeclarationError("--shard: this tree's files can't be listed, so its Lake packages aren't known")
-    parts_of = {"lean-audit": _lean_audit().packages(files)}
+    parts_of = _parts_of()
     return {"k": k, "n": n, "parts": DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1],
             "all": DECLARATION.all_parts(JOBS, parts_of)}
+
+
+def _parts_of() -> dict[str, list[str]]:
+    files = tracked_files(ROOT)
+    if files is None:
+        raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
+    return {"lean-audit": _lean_audit().packages(files)}
+
+
+def shard_parts() -> list[str]:
+    """Every part an unsharded check covers on this tree (`declaration.all_parts`)."""
+    return DECLARATION.all_parts(JOBS, _parts_of())
 
 
 def _rev(rev: str) -> str | None:
@@ -1333,6 +1355,20 @@ def main(argv: list[str]) -> int:
             return 2
         rest = rest[:i] + rest[i + 2:]
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
+    picked = [a for a in rest if a in DECLARATION.PARTS]
+    rest = [a for a in rest if a not in DECLARATION.PARTS]
+    if picked:
+        if sharded or os.environ.get("RESEARCH_RUN_ID"):
+            print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
+                  file=sys.stderr)
+            return 2
+        try:
+            chosen = DECLARATION.select(JOBS, picked)
+            sharded = {"parts": [p for p in shard_parts() if p.partition(":")[0] in chosen]}
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        print(f"check: parts {', '.join(picked)}: {', '.join(j.name for j in JOBS if j.name in chosen)}", flush=True)
     n = None
     if rest[:1] == ["--cores"] and len(rest) == 2 and rest[1].isdigit():
         n, rest = int(rest[1]), []
@@ -1354,7 +1390,8 @@ def main(argv: list[str]) -> int:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
               flush=True)
     for c in flaky:
-        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key", flush=True)
+        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key: "
+              "delete each (a flaky test is deleted, not rerun or fixed)", flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}

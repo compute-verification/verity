@@ -18,7 +18,7 @@ open Flock FlockLevel3 Game Transcript
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- `Game` is a lawful monad: its `bind` is associative and `ret` is its unit. -/
-instance : LawfulMonad Game := LawfulMonad.mk'
+instance instLawfulMonadGame : LawfulMonad Game := LawfulMonad.mk'
   (id_map := fun x => Game.bind_ret_right x)
   (pure_bind := fun _ _ => rfl)
   (bind_assoc := fun x f g => Game.bind_assoc x f g)
