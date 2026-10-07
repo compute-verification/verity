@@ -97,11 +97,17 @@ def _separate(rel: Path) -> bool:
 
 
 def _sources(root: Path = SRC) -> list[Path]:
-    """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree."""
+    """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake package
+    (a Lean package's scripts, such as its difftest's generator, are run by path) or its build directory (core's Lean
+    builds in ``verity/core/service/flock/.lake``), or a ``SEPARATE`` tree."""
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
-                  and not _separate(p.relative_to(SRC)))
+                  and not _separate(p.relative_to(SRC)) and not _in_lake_package(p))
+
+
+def _in_lake_package(path: Path) -> bool:
+    return any((d / "lakefile.toml").exists() or (d / "lakefile.lean").exists()
+               for d in path.parents if d.is_relative_to(SRC))
 
 
 def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)) -> list[tuple[str, int, bool]]:

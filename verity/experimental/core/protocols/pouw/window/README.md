@@ -1,7 +1,7 @@
 # `pouw_window`: PoUW's audit window as executable Lean
 
-The port of `verity/experimental/protocols/pouw/window.py`, Lean core only, until its properties are proven and it moves to
-`verity/core/protocols/pouw/window/`. The Python keeps running until then.
+The port of `verity/experimental/protocols/pouw/window.py`, Lean core only. Once its properties are proven it moves, as a
+pure move, to the same path under `verity/core/`; the Python keeps running until then.
 
 | module | `window.py` |
 | --- | --- |
@@ -12,7 +12,8 @@ The port of `verity/experimental/protocols/pouw/window.py`, Lean core only, unti
 | `PouwWindow.Json` | the entries read in `window.py`'s dict shape; the items written as Python writes them |
 | `PouwWindow.Difftest` | the difftest's evaluator and runner |
 
-The properties are stated in `Security/Properties/Pouw.lean`.
+Its properties are stated in `Security/Properties/Pouw.lean` (the package `security_properties`), and the proved ones
+are in `Security/Properties/Proofs/Pouw.lean`.
 
 ~~~text
 lake build                                                        the library and pouw-window-difftest
