@@ -50,17 +50,20 @@ def misfit (what : String) (want got : List String) : String :=
     | some i => s!"{what}: {i} is missing"
     | none => s!"{what}: name each component once, in the order of their ids ({", ".intercalate want})"
 
+/-- Each component's answer on its case, under the parameters the composition names for it. -/
+def answersOf (cs : List Protocol) (ps : List Named) (ev : List Case) : Answers :=
+  (cs.zip (ps.zip ev)).map fun (P, n, k) => (P.id, P.answer n.params.toUTF8 k.commitment k.evidence)
+
 /-- Each component's answer on its case, or why the cases don't fit the composition: the parameters and the evidence must
 name exactly the components `cs`, in their order, and each case must carry the parameters the composition names for it. -/
 def run (cs : List Protocol) (ps : List Named) (ev : List Case) : V Answers :=
   let want := cs.map (·.id)
-  if ps.map (·.id) != want then .error (misfit "params" want (ps.map (·.id)))
-  else if ev.map (·.id) != want then .error (misfit "evidence" want (ev.map (·.id)))
+  if ps.map (·.id) ≠ want then .error (misfit "params" want (ps.map (·.id)))
+  else if ev.map (·.id) ≠ want then .error (misfit "evidence" want (ev.map (·.id)))
   else
-    let parts := cs.zip (ps.zip ev)
-    match parts.find? (fun (_, n, k) => k.params != n.params) with
+    match (cs.zip (ps.zip ev)).find? (fun (_, n, k) => k.params ≠ n.params) with
     | some (P, _, _) => .error s!"evidence: {P.id}'s case carries params other than the composition's"
-    | none => .ok (parts.map fun (P, n, k) => (P.id, P.answer n.params.toUTF8 k.commitment k.evidence))
+    | none => .ok (answersOf cs ps ev)
 
 /-- The commitment the composition's prover sends: SHA-512 over the composition's id, a zero byte, and the canonical JSON
 `{"components":[{"commitment":HEX,"id":ID},...]}` of its components' digests in order. -/
@@ -82,19 +85,16 @@ abbrev Keyed := List (String × Json)
 
 /-- The verdict over the components' answers, reject first: any rejection rejects, then a commitment that doesn't bind
 their digests, then any undecided component leaves it undecided; otherwise every component accepted. -/
-def decide (id : String) (c : ByteArray) (answers : Answers) : Outcome Keyed Keyed :=
-  let rejected := answers.filter (·.2.verdict == .reject)
-  if !rejected.isEmpty then .reject (reasons rejected)
-  else if binding id answers != some c then .reject "the commitment does not bind the components' digests"
-  else
-    let undecided := answers.filter (·.2.verdict == .undecided)
-    if !undecided.isEmpty then .undecided (reasons undecided)
-    else .accept (answers.map fun (i, a) => (i, a.published.getD .null)) (answers.map fun (i, a) => (i, a.profile.getD .null))
+def judge (id : String) (c : ByteArray) (answers : Answers) : Outcome Keyed Keyed :=
+  if answers.any (·.2.verdict = .reject) then .reject (reasons (answers.filter (·.2.verdict = .reject)))
+  else if binding id answers ≠ some c then .reject "the commitment does not bind the components' digests"
+  else if answers.any (·.2.verdict = .undecided) then .undecided (reasons (answers.filter (·.2.verdict = .undecided)))
+  else .accept (answers.map fun (i, a) => (i, a.published.getD .null)) (answers.map fun (i, a) => (i, a.profile.getD .null))
 
 def check (id : String) (cs : List Protocol) (ps : List Named) (c : ByteArray) (ev : List Case) : Outcome Keyed Keyed :=
   match run cs ps ev with
   | .error r => .reject r
-  | .ok answers => decide id c answers
+  | .ok answers => judge id c answers
 
 private def keysOf : Json → List String
   | .obj kvs => kvs.keys
