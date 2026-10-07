@@ -3,7 +3,7 @@
 # `verify --zk`, a row unit's anchors held to the verifier's own `TileAnchors.public_inputs` file. Run from the source tree's
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
-#   1. builds flock-circuit twice from Flock b684b12 and backends/flock's patches (the proving build: sha512, glue; the
+#   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
 #      (HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded controls, and the Lean
@@ -57,11 +57,11 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   local D=$1 F=$W/flock
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
-  for p in link gpu-link; do git apply "$SRC/backends/flock/flock-$p-b684b12.patch" || return 1; done
-  cp -r "$SRC/backends/flock/live" crates/flock-live
+  for p in link gpu-link; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
+  cp -r "$SRC/verity/ml/flock/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime; do git apply "$SRC/backends/flock/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-prove" || return 1
@@ -72,7 +72,7 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/backends/flock/verifier/lean" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
+  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
     && (cd "$D.tmp" && lake build) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 build_python() {    # build_python DEST: a venv
@@ -95,8 +95,8 @@ setup() {
   { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
-  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key backends/flock/live backends/flock/*.patch)" build_circuit > "$W/flock.dir" &
-  [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key backends/flock/verifier/lean)" build_lean > "$W/lean.dir" &
+  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_circuit > "$W/flock.dir" &
+  [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key verity/core/service/flock)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
   [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }
@@ -108,7 +108,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity.protocols.accounting.work.pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.experimental.protocols.pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }
@@ -144,7 +144,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
     rc=$?
     log "  selftest $c exit $rc: $(grep -E '^NEG' "$O/selftest-$c.out" | cut -c1-200)"
   done
-  "$PY" "$SRC/backends/flock/verifier/selftest_records.py" "$D/rec" "$D/st" > /dev/null
+  "$PY" "$SRC/verity/ml/flock/verifier/selftest_records.py" "$D/rec" "$D/st" > /dev/null
 }
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
@@ -205,8 +205,8 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
-    benchmarks/pouw/hidden_zk/hash_scratch.py backends/flock/python verity catalog/verity_catalog kernels/verity_kernels \
-    experimental/verity_experimental)
+    benchmarks/pouw/hidden_zk/hash_scratch.py verity/ml/flock/python verity verity/ml/circuits verity/ml/kernels \
+    verity/experimental)
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"
   (

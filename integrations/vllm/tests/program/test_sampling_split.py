@@ -6,7 +6,7 @@
   constructed it.  The pins were written on the unsplit tree (`split_sampling.py snapshot`); a change to a Definition of the
   family rewrites them (`python tests/program/test_sampling_split.py --write`, from `integrations/vllm`).
 * The family's Definition modules import only the stdlib, numpy, `verity`, one another, and the two other families' modules
-  they take Definitions from (`OTHER_DEFINITION_MODULES`), less the one listed exception: so they can move to `catalog/`, which
+  they take Definitions from (`OTHER_DEFINITION_MODULES`), less the one listed exception: so they can move to `verity/ml/circuits/`, which
   imports only `verity`, with the Definitions they call.
 """
 from __future__ import annotations
@@ -24,10 +24,10 @@ VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
 REG = VLLM / "verity_vllm" / "program" / "registry"
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
-TASKS = REPO / "tools" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
+TASKS = REPO / "tools" / "verity" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
 PKG = "verity_vllm.program.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity_catalog"
+CATALOG = "verity.ml.circuits"
 
 DEFINITION_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry")
 TWIN_MODULES = ("sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins")
@@ -57,7 +57,7 @@ SLOW_TRACE = ("GumbelLaneTail_v1",)
 
 def defining_module(fn) -> str | None:
     """The module whose code a Definition runs: a primitive's evaluator's, a composite's body's, a traced Boolean one's build's."""
-    from verity.primitives.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 
     d = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     f = d.evaluate if isinstance(d, PrimitiveDefinition) else getattr(d, "build", d.body) if isinstance(d, CompositeDefinition) else None
@@ -69,7 +69,7 @@ def family_definitions() -> dict[str, object]:
     registered on first use, so whether the registry holds one depends on what ran before)."""
     import importlib
 
-    from verity.primitives.circuits.defs import FunctionDefinition
+    from verity.ml.circuits.defs import FunctionDefinition
     from verity_vllm.program.registry.catalog import load
 
     load()

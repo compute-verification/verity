@@ -200,7 +200,7 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
 
 def ir_guard(m: int) -> int:
     """The IR model's `GuardNegInfZero_v1(m)` by the reference evaluator."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
+    from verity.ml.circuits.evaluation.reference import evaluate
     from verity_vllm.program.registry import prims
 
     return int(evaluate(prims.GuardNegInfZero, int(m))[0])
@@ -250,7 +250,7 @@ def scale_log2_bits(c: dict[str, Any], D: int) -> int:
 def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
     """The IR model's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
     unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
+    from verity.ml.circuits.evaluation.reference import evaluate
     from verity_vllm.program.registry import prims
 
     return int(evaluate(prims.F32MulFtz, ir_guard(m) if check else int(m), int(scale_log2))[0])
