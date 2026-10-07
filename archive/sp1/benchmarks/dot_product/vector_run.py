@@ -79,7 +79,7 @@ for candidate, module in (
 
 from verity_sp1.proofs.binding import bound_public_values  # noqa: E402
 from verity_sp1.proofs.conformance import interpret  # noqa: E402
-from verity_catalog.targets.target import FIRST  # noqa: E402
+from verity.ml.circuits.targets.target import FIRST  # noqa: E402
 from verity_numerical.bench import contract  # noqa: E402
 
 RESULT_SCHEMA = contract.RESULT_SCHEMA
@@ -717,7 +717,7 @@ def run_sp1_bare(a) -> int:
         "artifacts": [os.path.relpath(proofs_dir / "statement.bin", out)] + [v["proof"] for v in verdicts],
     }
     problems = contract.validate(result)
-    from verity_catalog.targets.target import TARGETS
+    from verity.ml.circuits.targets.target import TARGETS
     sp1 = next(c for c in tables.CANDIDATES if c.id == "SP1")
     tgt = TARGETS.get(target_name)
     reasons = tables.reject_reasons(result, [], None, tgt, sp1) if tgt else [f"unknown target {target_name!r}"]

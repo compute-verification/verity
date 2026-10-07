@@ -5,7 +5,7 @@
   research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
-                                                 # the one queue (tools/cluster) places the job and runs it under its node's executor
+                                                 # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
@@ -62,7 +62,7 @@
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
                                                  # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
-                                                 # idle: `cluster usage` (tools/cluster usage.py) over the console's record on vy-nebius-1
+                                                 # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -189,7 +189,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--job-user", default=None, metavar="USER",
                     help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
-    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (tools/cluster) places and runs the job; "
+    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
@@ -200,7 +200,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                    help="its longest run in minutes, which the GPU lease enforces (default --timeout, else its kind's max_wall_min); "
                         "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
     q.add_argument("--kind", dest="queue_kind", default="adhoc", metavar="K",
-                   help="what the job is: a kind in tools/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
+                   help="what the job is: a kind in infra/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
     q.add_argument("--question", default=None, metavar="Q", help="the research question it answers, recorded (default: its kind's)")
     q.add_argument("--disk-gb", type=float, default=None, metavar="N",
                    help="the disk it will write: held on the machine while N more GB would fill the disk past 80%% (released at "
@@ -850,7 +850,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
     are an `--on` run's."""
     if not ns.source or not ns.project:
-        print("research run --queue: --source GITDIR (the tree with tools/cluster, whose kinds/ it resolves) and --project are "
+        print("research run --queue: --source GITDIR (the tree with infra/cluster, whose kinds/ it resolves) and --project are "
               "required", file=sys.stderr)
         return 2
     timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
@@ -1324,17 +1324,17 @@ def cmd_inspect(argv: list[str]) -> int:
     return 0
 
 
-CLUSTER_SRC = Path(__file__).resolve().parents[3] / "cluster" / "src"
+CLUSTER_SRC = Path(__file__).resolve().parents[4] / "infra" / "cluster" / "src"
 
 
 def cmd_usage(argv: list[str]) -> int:
-    """`research usage ...` is `cluster usage ...`, run from this tree's tools/cluster (research never imports cluster), with
+    """`research usage ...` is `cluster usage ...`, run from this tree's infra/cluster (research never imports cluster), with
     its output and exit code: 0, 1 on a finding (the record unread, stale or short of hours), 2 on bad arguments or with no
-    tools/cluster here."""
+    infra/cluster here."""
     import subprocess
 
     if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():
-        print(f"research usage: no tools/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
+        print(f"research usage: no infra/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
         return 2
     env = dict(os.environ)
     env["PYTHONPATH"] = str(CLUSTER_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")

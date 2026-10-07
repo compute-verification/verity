@@ -24,7 +24,7 @@ from test_repository import REGISTRY, ROOT, _tracked
 RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
-    ("catalog/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
+    ("verity/ml/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
 }
 
@@ -114,7 +114,7 @@ def test_the_scan_reads_each_form_and_catches_a_dead_path():
     """The rules above, on a toy tree."""
     files = frozenset({"README.md", "tools/x/README.md", "tools/x/tests/test_a.py", "verity/primitives/b.py",
                        "archive/old/README.md", "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py"})
-    dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/primitives", "archive", "archive/old", "fixtures",
+    dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/ml", "archive", "archive/old", "fixtures",
                       "tests"})
     tree = (files, dirs, frozenset({"tools/x/tests/fixtures/big"}))
     docs = {
