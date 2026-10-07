@@ -37,15 +37,6 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
-  "Flock.CircuitType.check_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.CircuitType.check_ok {callee : String → Option Flock.CircuitType} {t : Flock.CircuitType}",
-    "  (h : Eq (Flock.CircuitType.check callee t) (Except.ok Unit.unit)) : Flock.CircuitType.WellFormed callee t"
-   ],
-   "assumptions": [],
-   "type_hash": "8b51a2bc209063b9a70f8ff3a37cb03145aa863e76568467c9d23b3c58b9ff2d"
-  },
   "Flock.Firewall.Contract.commitLeaf_eq": {
    "owner": "@firewall-contract",
    "signature": [
@@ -154,68 +145,6 @@
    ],
    "assumptions": [],
    "type_hash": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
-  },
-  "Flock.HmNets.check_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.HmNets.check_ok {c : Flock.Circuit} (h : Eq (Flock.HmNets.check c) (Except.ok Unit.unit)) :",
-    "  And",
-    "    (Exists fun g =>",
-    "      And (Eq Flock.HmNets.sha512x3Net.get (Except.ok g)) (Eq (c.nets.getD c.shaNet instInhabitedProd.default).snd g))",
-    "    (Exists fun g =>",
-    "      And (Eq Flock.HmNets.hm96Net.get (Except.ok g)) (Eq (c.nets.getD c.hmNet instInhabitedProd.default).snd g))"
-   ],
-   "assumptions": [],
-   "type_hash": "03d5e27d14955f30047137fbfdb5c307097c72857f4eb221dc6536d9625fd7c2"
-  },
-  "Flock.HmNets.hm96Net_get": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.HmNets.hm96Net_get : Eq Flock.HmNets.hm96Net.get (Flock.HmNets.netOf \"hm96\" (Flock.HmNets.hmLaid Unit.unit))"
-   ],
-   "assumptions": [],
-   "type_hash": "0cac01b8696ba5f8014eb99582ad41bc1b2973ff17e2d454cb7a5ace1f262b8d"
-  },
-  "Flock.HmNets.sha512x3Net_get": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.HmNets.sha512x3Net_get :",
-    "  Eq Flock.HmNets.sha512x3Net.get (Flock.HmNets.netOf \"sha512x3\" (Flock.HmNets.shaLaid Unit.unit))"
-   ],
-   "assumptions": [],
-   "type_hash": "0c628df07c540b65ae6cdc08f30aadd0c5f747ac43282f01665915dd149ee1c4"
-  },
-  "Flock.Layout.check_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.Layout.check_ok {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout} {unit : Nat}",
-    "  {info : String → Option Flock.TableInfo} {sizes : Array Nat}",
-    "  (h : Eq (Flock.Layout.check types ls unit info) (Except.ok sizes)) : Flock.Layout.WellFormed types ls unit info"
-   ],
-   "assumptions": [],
-   "type_hash": "7bf153a0141e760b9af939f67f66f0fc1cb0d35adc767800cff8afa74f08a4e5"
-  },
-  "Flock.checkInRange_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.checkInRange_ok (kLog nRegions mPts : Nat) :",
-    "  Iff (Eq (Flock.checkInRange kLog nRegions mPts) (Except.ok Unit.unit))",
-    "    (And (instLENat.le kLog 27) (And (instLENat.le nRegions 1024) (instLENat.le mPts 64)))"
-   ],
-   "assumptions": [],
-   "type_hash": "7f9f16bbfe2b5a1faaa5eac26c8bedd237ea33f613a35a11f9aa76b84b8b94b0"
-  },
-  "Flock.mkRegion_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.mkRegion_ok {kl : Nat} {name : String} {free : Array Nat} {fixed : Nat} {bytes : Nat → ByteArray}",
-    "  {r : Flock.Region} (h : Eq (Flock.mkRegion kl name free fixed bytes) (Except.ok r)) :",
-    "  And (Eq r.free free)",
-    "    (And free.toList.Nodup",
-    "      (And (instLENat.le free.size Flock.PT_LOCAL) (∀ (b : Nat), Array.instMembership.mem free b → instLTNat.lt b kl)))"
-   ],
-   "assumptions": [],
-   "type_hash": "994e7782a72c6f8d37d11529a043d12da2b3aa7384bfb8686c64fcf36809e9e5"
   }
  },
  "reads": {
