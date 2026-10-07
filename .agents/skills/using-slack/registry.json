@@ -99,10 +99,10 @@
       "owns": [
         "verity/experimental/protocols/pouw/",
         "Security/Definitions/Pouw/",
-        "Security/Specs/Pouw/",
+        "Security/Models/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
-        "Security/Specs/Nci/",
+        "Security/Models/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
         ".agents/skills/kernel-engineering/"
@@ -117,7 +117,7 @@
       "owns": [
         "verity/experimental/protocols/pous/",
         "Security/Definitions/Pous/",
-        "Security/Specs/Pous/",
+        "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/pous/"
       ]
@@ -131,7 +131,7 @@
       "owns": [
         "verity/experimental/protocols/certifier/",
         "Security/Definitions/NetworkCertifier/",
-        "Security/Specs/NetworkCertifier/",
+        "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
       ]
