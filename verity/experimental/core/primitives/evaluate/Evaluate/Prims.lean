@@ -5,6 +5,7 @@ import Evaluate.TC.Dots
 import Evaluate.Words
 import Evaluate.Libdevice
 import Evaluate.Mufu
+import Evaluate.Decimal
 
 /-!
 # The primitives the evaluator implements
@@ -234,6 +235,13 @@ def mufu : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
    ("MufuSqrtFtz_v1", #[("x", f32)], f32, unary mufuSqrtFtz), ("DivFullRcp_v1", #[("b", f32)], f32, unary divFullRcp),
    ("RsqrtApprox_v1", #[("x", f32)], f32, unary rsqrtApprox), ("MufuTanh_v1", #[("x", f32)], f32, unary mufuTanh)]
 
+/-- The correctly rounded transcendentals of the reference kinds by id (the vLLM integration's `ref_prims`), with the
+signatures the registry holds for them. -/
+def decimals : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
+  open Decimal in
+  [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn),
+   ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -242,7 +250,7 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   | none, none, some (w, b) => some (.gate fun _ => b, #[], .value w)
   | none, none, none =>
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
-    else ((scalars ++ floats ++ dots ++ words ++ sampler ++ mufu).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
+    else ((scalars ++ floats ++ dots ++ words ++ sampler ++ mufu ++ decimals).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2

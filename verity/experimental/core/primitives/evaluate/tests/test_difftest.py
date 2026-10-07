@@ -99,7 +99,9 @@ WORDS = tuple(getattr(W, n) for n in W.__all__ if n.startswith("Pouw")) + (PR.Nc
 SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL.GumbelNoiseLaneV2, TW.TopPNumkeep)
 #: E4's MUFU primitives (`Evaluate.Mufu`)
 MUFU = (MU.MufuEx2Ftz, MU.MufuRcpFtz, MU.Fa2InvSum, HOP.Fa3InvSum, MU.MufuSqrtFtz, MU.DivFullRcp, MU.RsqrtApprox, MU.MufuTanh)
-_E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU)
+#: E4's correctly rounded transcendentals of the reference kinds (`Evaluate.Decimal`)
+DECIMALS = (RP.F32ExpRn, RP.F32ErfRn, RP.F32TanhRn)
+_E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU + DECIMALS)
 
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
@@ -414,14 +416,14 @@ def test_refusals(server):
 
 def test_refusals_name_what_is_refused(server):
     """A primitive the Lean does not implement, and a registered input, are refused by name, never evaluated."""
-    ex2 = CompositeDefinition("DtEx2", 1, (), lambda S: ((("x", SC.F32),), SC.F32), lambda B, S, x: B.call(RP.F32ExpRn, x),
+    ex2 = CompositeDefinition("DtRope", 1, (), lambda S: ((("x", VP.BF16),), VP.BF16), lambda B, S, x: B.call(VP.RopeOut, x, x, x, x),
                               register=False)
     _, main, leaves = _random_program(1)
     s = DT.Server(PORT.argv())
     with s:
         got = [s.call("evaluate", request(desc_of(Program(bind(ex2))), [[1]])),
                s.call("evaluate", request(desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves]))]
-    assert got[0][0] == "reject" and "F32ExpRn_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
+    assert got[0][0] == "reject" and "RopeOut_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
     assert got[1][0] == "reject" and "RegisteredInput1_v1" in got[1][1], got[1]
     assert "not implemented" in python_answer(desc_of(Program(bind(ex2))), [[1]])["reject"]
 
@@ -1570,3 +1572,49 @@ def test_mufu_primitives_drawn(server):
 def test_mufu_words_out_of_range_are_refused(server):
     cases = _refused_leaves(MUFU)
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 8)
+
+
+# ---- E4: the correctly rounded transcendentals of the reference kinds: exp, erf and tanh at 100 digits -------------------
+
+_f32w = lambda v: struct.unpack("<I", struct.pack("<f", v))[0]
+#: the words where the rules change (exp's early exits at 89 and -105, its last finite word 0x42B17217 and its last nonzero
+#: one, erf's 4.2 and tanh's 9.2) and the words about one, two, 2^-12 and 2^-24, with their neighbours, both signs; the
+#: sixteenths below 12; and 8192 seeded words of magnitude below 16
+_DEC_EDGES = (89.0, 105.0, 88.72283935546875, 103.97207708, 104.0, 4.2, 9.2, 1.0, 2.0, 2.0 ** -12, 2.0 ** -24, 0.5, 3.0, 8.0)
+DEC_SWEEP = tuple(sorted({*F32_SWEEP, *(s | (_f32w(v) + d) for v in _DEC_EDGES for d in range(-3, 4) for s in (0, 1 << 31)),
+                          *(_f32w(k / 16) | s for k in range(1, 16 * 12) for s in (0, 1 << 31)),
+                          *(_rng.getrandbits(1) << 31 | _rng.randrange(0x41800000) for _rng in [random.Random("decimals")]
+                            for _ in range(8192))}))
+
+
+def test_decimal_primitives_on_their_grids(server):
+    """Each of exp, erf and tanh on every word of `DEC_SWEEP`, each answer also the Python primitive's own evaluator's."""
+    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in DEC_SWEEP[i:i + 2048]] for i in range(0, len(DEC_SWEEP), 2048)])
+              for fn in DECIMALS}
+    assert counts == {fn.id: len(DEC_SWEEP) for fn in DECIMALS}, counts
+
+
+@st.composite
+def decimal_requests(draw) -> dict:
+    """A decimal primitive on eight words, each drawn from `DEC_SWEEP`, the words of magnitude below 16, or the whole
+    range; one request in ten has a word out of its range, which both sides refuse."""
+    fn = draw(st.sampled_from(DECIMALS))
+    small = st.builds(lambda s, m: s | m, st.sampled_from([0, 1 << 31]), st.integers(0, 0x41800000))
+    x = [[draw(st.one_of(st.sampled_from(DEC_SWEEP), small, st.integers(0, (1 << 32) - 1))) for _ in range(8)]]
+    if draw(st.integers(0, 9)) == 0:
+        x[0][draw(st.integers(0, 7))] = draw(st.sampled_from([1 << 32, (1 << 32) + 1, -1]))
+    return request(json.loads(_batch_text(fn.id, 8)), x)
+
+
+DECIMAL_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=decimal_requests(), package=PKG)
+
+
+@pytest.mark.slow
+def test_decimal_primitives_drawn(server):
+    stats = DT.run(DECIMAL_PORT, examples=1000, seed=0, server=server)
+    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+
+
+def test_decimal_words_out_of_range_are_refused(server):
+    cases = _refused_leaves(DECIMALS)
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 3)
