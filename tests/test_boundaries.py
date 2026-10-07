@@ -82,9 +82,10 @@ NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/cir
 ML_IMPORTS_EXPERIMENTAL = {
     "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against experimental's Python verifiers",
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
-                                             "over sampled proofs' registered partitions (`one_stage.partition`, "
-                                             "`one_stage.registered`), which stay experimental until the one-stage audit is "
-                                             "in core",
+                                             "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
+                                             "use only verity.ml; the follow-up to T2 moves them into ml "
+                                             "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
+                                             "experimental imports them from there, and this entry goes",
 }
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
