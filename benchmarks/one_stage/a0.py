@@ -24,13 +24,13 @@ import sys
 import time
 from pathlib import Path
 
-from verity.primitives.commitments.identity import identity_digest, identity_digest_sha512
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.merkle import CommitmentDomain
-from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
-from verity.primitives.circuits.program import Program
+from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
+from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
-from verity.protocols.verification.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
+from verity.experimental.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"

@@ -22,11 +22,11 @@ from types import SimpleNamespace
 import pytest
 
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
-CHECK = Path(__file__).resolve().parents[3] / "tools/check"
+CHECK = Path(__file__).resolve().parents[3] / "tools/verity/check"
 
 
 def _load(name: str, path: Path):
-    """``path`` as module ``name``, compiled from its source: tools/check's __pycache__ is no input of this suite."""
+    """``path`` as module ``name``, compiled from its source: tools/verity/check's __pycache__ is no input of this suite."""
     old = sys.pycache_prefix, sys.dont_write_bytecode
     sys.pycache_prefix, sys.dont_write_bytecode = os.devnull, True
     try:
