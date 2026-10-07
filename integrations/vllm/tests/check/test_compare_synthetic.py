@@ -10,9 +10,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluate import evaluate_region
-from verity.primitives.circuits.layout import FunctionCall, Region
-from verity.primitives.circuits.refs import runs
+from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.layout import FunctionCall, Region
+from verity.ml.circuits.refs import runs
 
 from verity_vllm.check import fold_compare as cmp
 from verity_vllm.observe.events import ViewDesc

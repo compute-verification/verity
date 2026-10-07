@@ -212,7 +212,7 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     err = capsys.readouterr().err
     assert "the queue places run" in err and "warning: stub warning" in err
     argv = json.loads((src / "tools" / "cluster" / "src" / "cluster" / "__main__.py.argv").read_text())
-    assert argv[:2] == ["submit", str(src / "tools" / "cluster" / "descriptions" / "nebius.toml")]
+    assert argv[:2] == ["submit", str(src / "infra" / "cluster" / "descriptions" / "nebius.toml")]
     for k, v in (("--project", "verity"), ("--submitter", "lane-x"), ("--class", "bench"), ("--gpus", "1"), ("--mem-gb", "64"),
                  ("--max-s", "600"), ("--preempt", "requeue")):
         assert argv[argv.index(k) + 1] == v, k
@@ -247,7 +247,7 @@ def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue
     assert main([*base, "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 2
     assert "--source GITDIR" in capsys.readouterr().err
     assert main([*base, "--source", str(tmp_path), "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 3
-    assert "no tools/cluster" in capsys.readouterr().err
+    assert "no infra/cluster" in capsys.readouterr().err
     assert not (tmp_path / "runs").exists() or not list((tmp_path / "runs").iterdir())
     plain = ["run", "--runs-dir", str(tmp_path / "runs")]
     assert main([*plain, "--gpus", "1", "--cpus", "4", "--", "true"]) == 2
