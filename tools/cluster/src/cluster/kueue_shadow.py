@@ -25,7 +25,7 @@ Lean pool, as many as the pool's N.
 - a check slot's holder or waiter: one `vy.dev/check-slot`, a train check's at priority 1;
 - a Lean slot's holder or waiter: one `vy.dev/lean-<pool>`.
 
-**The comparison** (`compare`): an item the node runs that Kueue holds pending is `node-ran` (the node let it past Kueue's
+**The comparison** (`compare`), on two ticks in a row: an item the node runs that Kueue holds pending is `node-ran` (the node let it past Kueue's
 quota, or Kueue would have preempted it); an item the node keeps waiting that Kueue admitted is `kueue-ran` (a rule outside
 Kueue held it back: a pool's `max` or expired `borrow-until`, a slot reserved for trains). Each tick appends one record to
 `--out` (`cluster/kueue-shadow/v1`): the time, the item and divergence counts, and each divergence's key and reason.
@@ -231,10 +231,13 @@ def reconcile(items: list[Item], shadow: list[dict]) -> tuple[list[dict], list[s
     return [workload(i) for i in new], sorted(have - set(want))
 
 
-def compare(t: str, items: list[Item], shadow: list[dict]) -> dict:
-    """One record: each item the node and Kueue disagree on. An item whose Workload is new this tick isn't compared."""
+def compare(t: str, items: list[Item], shadow: list[dict], before: frozenset[str] = frozenset()) -> dict:
+    """One record: each item the node and Kueue disagree on. An item whose Workload is new this tick isn't compared, and a
+    disagreement is a divergence only when the last tick had it too (`before`, its record's `disagree`): a slot handed over
+    between two ticks reads as one for a tick, until the shadow deletes the old holder's Workload."""
     by_name = {w["metadata"]["name"]: w for w in shadow}
     div = []
+    disagree = []
     compared = 0
     for i in sorted(items, key=lambda i: i.key):
         w = by_name.get(workload_name(i.key))
@@ -242,13 +245,34 @@ def compare(t: str, items: list[Item], shadow: list[dict]) -> dict:
             continue
         compared += 1
         admitted = _true(w, "QuotaReserved")
-        if i.running and not admitted:
+        if i.running == admitted:
+            continue
+        disagree.append(i.key)
+        if i.key not in before:
+            continue
+        if i.running:
             div.append({"key": i.key, "queue": i.queue, "kind": "node-ran", "kueue": _reason(w)})
-        elif not i.running and admitted:
+        else:
             div.append({"key": i.key, "queue": i.queue, "kind": "kueue-ran", "since": i.since})
     return {"schema": SCHEMA, "t": t, "items": len(items), "compared": compared,
             "running": sum(i.running for i in items), "waiting": sum(not i.running for i in items),
-            "divergent": len(div), "divergences": div}
+            "divergent": len(div), "divergences": div, "disagree": disagree}
+
+
+def last_disagree(out: Path) -> frozenset[str]:
+    """The keys the record's last tick disagreed on (none without a record, or after a failed tick)."""
+    try:
+        with out.open("rb") as f:
+            f.seek(max(0, f.seek(0, os.SEEK_END) - (1 << 20)))
+            lines = f.read().decode(errors="replace").splitlines()
+    except FileNotFoundError:
+        return frozenset()
+    for line in reversed(lines):
+        try:
+            return frozenset(json.loads(line).get("disagree") or ())
+        except ValueError:
+            continue
+    return frozenset()
 
 
 def _reason(w: dict) -> str:
@@ -302,7 +326,7 @@ def tick(out: Path, run: Callable[[list[str]], str] = kubectl,
     items = demand(obs["workloads"], obs["local_queues"], obs["leases"], obs["priorities"], obs["slots"], obs["lean"])
     apply(queues(obs["cqs"], obs["slots"], obs["lean"]))
     shadow = shadow_workloads(run)
-    rec = compare(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), items, shadow)
+    rec = compare(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), items, shadow, last_disagree(out))
     create, gone = reconcile(items, shadow)
     for w in create:
         apply([w])

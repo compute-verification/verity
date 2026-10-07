@@ -116,11 +116,22 @@ def shadow(key: str, admitted: bool) -> dict:
 def test_compare_names_both_ways_the_node_and_kueue_differ() -> None:
     items = [item("agree-run", True), item("agree-wait", False), item("node-ran", True), item("kueue-ran", False),
              item("new", False)]
-    rec = K.compare("2026-10-07T08:30:00Z", items, [shadow("agree-run", True), shadow("agree-wait", False),
-                                                    shadow("node-ran", False), shadow("kueue-ran", True)])
+    ws = [shadow("agree-run", True), shadow("agree-wait", False), shadow("node-ran", False), shadow("kueue-ran", True)]
+    first = K.compare("2026-10-07T08:30:00Z", items, ws)
+    assert first["divergent"] == 0 and first["disagree"] == ["kueue-ran", "node-ran"]
+    rec = K.compare("2026-10-07T08:31:00Z", items, ws, frozenset(first["disagree"]))
     assert rec["schema"] == "cluster/kueue-shadow/v1" and rec["items"] == 5 and rec["compared"] == 4
     assert [(d["key"], d["kind"]) for d in rec["divergences"]] == [("kueue-ran", "kueue-ran"), ("node-ran", "node-ran")]
     assert rec["divergences"][1]["kueue"] == "insufficient quota"
+
+
+def test_last_disagree_reads_the_records_last_tick(tmp_path) -> None:
+    out = tmp_path / "rec.jsonl"
+    assert K.last_disagree(out) == frozenset()
+    out.write_text(json.dumps({"disagree": ["a"]}) + "\n" + json.dumps({"error": "x"}) + "\n")
+    assert K.last_disagree(out) == frozenset()
+    out.write_text(json.dumps({"disagree": ["a"]}) + "\n" + json.dumps({"disagree": ["b"]}) + "\n")
+    assert K.last_disagree(out) == {"b"}
 
 
 def test_tick_writes_only_shadow_objects(tmp_path, monkeypatch) -> None:
