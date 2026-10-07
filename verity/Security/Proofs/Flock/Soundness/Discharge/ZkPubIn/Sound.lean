@@ -30,6 +30,7 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
+set_option maxHeartbeats 1000000 in
 /-- **One canonical hidden-output `--zk --public-inputs F` sampled session of `J` tables is sound**
 (`Canonical.zk_session_soundC` at `AcceptsZKP I own`, `keyProgP` and the public transcript
 `Xpub pubOnes pubZeros XplurZC`): any number of input rows and groups, rows of any length, output rows of runs of output
@@ -81,16 +82,18 @@ theorem zk_session_soundCP
           ((rsZCP dj y₀ ht hc hfmt hpi hpub hU).bindingZ (rsZCP_computes dj y₀ ht hc hfmt hpi hpub hU))
           k Rw M ρ t' (reg σ) (cont σ) := by
   intro σ hCR
-  refine zk_headline_exec_tablesA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
-    (opnAtZHJP (planZHJP dj y₀) I own dj) dg (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => [])
-    (fun _ _ rs j => capOfRoot rs[j.val]!) N
-    (decodesOnZKJA_of_runsOnZCJA execArith hs512 _ _ wr _ _ _ _ _
-      (runsZCJH_liveCP I own ht hc hfmt dj y₀ wr _ hTags hRec hDraw)) τ _ _ ?_
-  refine (zk_flock_countC_pub execArith hs512 _ (planZHJP dj y₀) (tabZHJP dj y₀) _ (pubOnes c hU n pi own)
-    (pubZeros c hU n pi own) (pubDecodesZ_placeZCP dj y₀ ht hc hfmt hpi hpub hU)
+  have hdec := decodesOnZKJA_of_runsOnZCJA execArith hs512 _ (AcceptsZKP I own) wr _ _ _ _ _
+    (runsZCJH_liveCP I own ht hc hfmt dj y₀ wr _ hTags hRec hDraw)
+  have hc' := (zk_flock_countC_pub execArith hs512 ((keyProgP c hU n pi).partition (Layout.outsOf c hU n))
+    (planZHJP dj y₀) (tabZHJP dj y₀)
+    ((rsZCP dj y₀ ht hc hfmt hpi hpub hU).bindingZ (rsZCP_computes dj y₀ ht hc hfmt hpi hpub hU))
+    (pubOnes c hU n pi own) (pubZeros c hU n pi own) (pubDecodesZ_placeZCP dj y₀ ht hc hfmt hpi hpub hU)
     (loweringSoundZK_of_place execArith _ (planZHJP dj y₀) (tabZHJP dj y₀) (placeZCP dj y₀ ht hc hfmt hpi hU))
-    hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJP dj y₀) hk) ht' K₀ σ).trans ?_
-  exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
-    (ksAvgZC_le_strict execArith hs512 (planZHJP dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
+    hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJP dj y₀) hk) ht' K₀ σ).trans
+    (add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
+      (ksAvgZC_le_strict execArith hs512 (planZHJP dj y₀) k (reg σ) (cont σ) hCR)) le_rfl)
+  exact zk_headline_exec_tablesA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
+    (opnAtZHJP (planZHJP dj y₀) I own dj) dg (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => [])
+    (fun _ _ rs j => capOfRoot rs[j.val]!) N hdec τ _ _ hc'
 
 end FlockSoundness.Discharge.ZkPubIn
