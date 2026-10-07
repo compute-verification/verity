@@ -1,6 +1,6 @@
 """The difftest's data: instances, and the Python verifier's answers on each, for `PousCheck/DifftestMain.lean`.
 
-    python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
+    python scripts/difftest_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/difftest/instances.jsonl`, one instance per line, and `DIR/difftest/python.jsonl`, the same line's answers
 from the checkout's Python, each line canonical JSON (sorted keys, no whitespace). `PousCheck.Difftest` recomputes every
@@ -21,9 +21,6 @@ import random
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-
-COUNT = 400
-
 
 def _python(repo: Path):
     sys.path.insert(0, str(repo / "benchmarks" / "pous"))
@@ -106,20 +103,71 @@ def check_input(name: str, i: int, a: int, b: int, leaves: list[bytes], p: list[
     return i, leaves[i], p
 
 
-def instance(seed: int) -> dict:
-    rng = random.Random(seed)
-    return _merkle(rng)
+def _part(rng: random.Random) -> list:
+    tag = rng.choice("bsi")
+    if tag == "b":
+        return ["b", rng.randbytes(rng.choice([0, 1, 7, 32, 64, rng.randint(0, 100)])).hex()]
+    if tag == "s":
+        return ["s", "".join(rng.choice("abz-/0é€\U0001f600\0") for _ in range(rng.randint(0, 12)))]
+    return ["i", rng.choice([0, 1, 255, 256, 1 << 64, rng.randrange(1 << rng.randint(1, 300))])]
+
+
+def _value(part: list):
+    return bytes.fromhex(part[1]) if part[0] == "b" else part[1]
+
+
+def _randomness(rng: random.Random) -> dict:
+    word = "abcdefghijklmnopqrstuvwxyz0123456789-"
+    domain = "verity/{}/{}/v{}".format("".join(rng.choice(word) for _ in range(rng.randint(1, 10))),
+                                      "".join(rng.choice(word) for _ in range(rng.randint(1, 16))), rng.randint(0, 99))
+    keys = list({"".join(rng.choice("abcAZ_é€\U0001f600") for _ in range(rng.randint(0, 6))) for _ in range(rng.randint(0, 6))})
+    index = lambda: [_part(rng) for _ in range(rng.randint(0, 4))]  # noqa: E731
+    sizes = [1, 2, 3, 7, 1 << 19, (1 << 64) - 1, 1 << 64, rng.randint(1, 1 << 20), rng.randrange(1, 1 << rng.randint(1, 300))]
+    rounds = rng.randint(0, 6)
+    return {"kind": "randomness", "source": rng.randbytes(rng.choice([1, 32, rng.randint(1, 80)])).hex(), "domain": domain,
+            "context": [[k, _part(rng)] for k in keys],
+            "streams": [[index(), rng.choice([0, 1, 32, 63, 64, 65, 128, rng.randint(0, 300)])] for _ in range(3)],
+            "uniforms": [[rng.choice(sizes), index()] for _ in range(4)],
+            "p2": {"source": rng.randbytes(32).hex(), "epoch": rng.randbytes(64).hex(), "root": rng.randbytes(64).hex(),
+                   "salt": rng.randbytes(32).hex(), "counter": rng.choice([0, 1, rng.randrange(1 << 64)]),
+                   "blocks": rng.choice([1, 2, 7, 1 << 19, rng.randint(1, 1 << 24)]), "rounds": rounds,
+                   "beacons": [rng.randbytes(32).hex() for _ in range(rng.randint(0, 3))]}}
+
+
+def _randomness_answers(py, inst: dict) -> dict:
+    reference = py[0]
+    from verity.ml.randomness import derive
+    key = derive(bytes.fromhex(inst["source"]), inst["domain"], {k: _value(v) for k, v in inst["context"]})
+    p2 = inst["p2"]
+    src, epoch, root, salt = (bytes.fromhex(p2[k]) for k in ("source", "epoch", "root", "salt"))
+    aid, akey = reference.audit_key(src, epoch, root, salt, p2["counter"])
+    blocks = p2["blocks"]
+    return {"key": key.value.hex(),
+            "streams": [key.stream(tuple(_value(p) for p in i), n).hex() for i, n in inst["streams"]],
+            "uniforms": [key.uniform(n, tuple(_value(p) for p in i)) for n, i in inst["uniforms"]],
+            "audit_id": aid.hex(), "audit_key": akey.value.hex(),
+            "indices": [akey.uniform(blocks, j) for j in range(p2["rounds"])],
+            "nonces": [akey.stream(("nonce", j), 32).hex() for j in range(p2["rounds"])],
+            "round_indices": [reference.round_key(bytes.fromhex(b), aid, epoch, root, j).uniform(blocks, j)
+                              for j, b in enumerate(p2["beacons"])]}
+
+
+KINDS = {"merkle": (_merkle, _merkle_answers, 400), "randomness": (_randomness, _randomness_answers, 200)}
+
+
+def instances() -> list[dict]:
+    return [KINDS[kind][0](random.Random(f"{kind}/{seed}")) for kind in KINDS for seed in range(KINDS[kind][2])]
 
 
 def answers(py, inst: dict) -> dict:
-    return _merkle_answers(py, inst)
+    return KINDS[inst["kind"]][1](py, inst)
 
 
-def write(repo: Path, out: Path, count: int = COUNT) -> dict[str, Path]:
+def write(repo: Path, out: Path) -> dict[str, Path]:
     py = _python(repo)
     d = out / "difftest"
     d.mkdir(parents=True, exist_ok=True)
-    insts = [instance(seed) for seed in range(count)]
+    insts = instances()
     paths = {"difftest/instances.jsonl": d / "instances.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
     paths["difftest/instances.jsonl"].write_text("".join(canonical(i) + "\n" for i in insts))
     paths["difftest/python.jsonl"].write_text("".join(canonical(answers(py, i)) + "\n" for i in insts))
@@ -130,14 +178,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("verity", type=Path, help="the checkout whose Python verifier is the reference")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--count", type=int, default=COUNT)
     a = ap.parse_args()
     py = _python(a.verity)
     for module in py:
         here = Path(module.__file__).resolve()
         if not here.is_relative_to(a.verity.resolve()):
             raise SystemExit(f"{module.__name__} comes from {here}, not from the checkout {a.verity}")
-    write(a.verity, a.out, a.count)
+    write(a.verity, a.out)
 
 
 if __name__ == "__main__":
