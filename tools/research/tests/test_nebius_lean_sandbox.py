@@ -725,7 +725,7 @@ def test_the_setup_script_runs_only_as_root(tmp_path):
 
 _N = "tools/research/src/research/pods/nebius"
 LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": f"{_N}/lean_build_setup.sh", "/usr/local/bin/vy-lean-sandbox": f"{_N}/lean_sandbox.py",
-              "/usr/local/lib/vy-lean-cache/run-daily": "tools/lean/run_daily.py",
+              "/usr/local/bin/vy-lean-file": f"{_N}/lean_file.py", "/usr/local/lib/vy-lean-cache/run-daily": "tools/lean/run_daily.py",
               "/usr/local/lib/vy-lean-cache/cache.py": "tools/lean/cache.py",
               "/etc/systemd/system/vy-lean-cache-daily.service": f"{_N}/vy-lean-cache-daily.service",
               "/etc/systemd/system/vy-lean-cache-daily.timer": f"{_N}/vy-lean-cache-daily.timer"}
@@ -738,5 +738,5 @@ def test_deploy_puts_the_sandbox_its_setup_and_the_daily_units_on_node_1_only_an
         assert n1[path].src == src and n1[path].run == [], path
         assert any(fnmatch.fnmatch(path, m) for m in nodes["vy-nebius-1"].managed), path
     assert not set(LEAN_CACHE) & {e.path for e in nodes["vy-nebius-2"].entries}
-    for src in (NEBIUS / "lean_build_setup.sh", NEBIUS / "lean_sandbox.py", CHECK.parent / "lean/run_daily.py"):
+    for src in (NEBIUS / "lean_build_setup.sh", NEBIUS / "lean_sandbox.py", NEBIUS / "lean_file.py", CHECK.parent / "lean/run_daily.py"):
         assert os.access(src, os.X_OK), src                                         # installed with the repository's mode

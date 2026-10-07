@@ -54,6 +54,8 @@
   research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
+  research lean-file FILE [--rev REV] [--on vy-nebius-1]   # whether FILE elaborates with this working tree's changes (`git diff REV`,
+                                                 # default HEAD's merge-base with origin/main) on node 1's warm Lean build: vy-lean-file in a run
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
@@ -1149,6 +1151,78 @@ def cmd_env(argv: list[str]) -> int:
     return 0
 
 
+#: `research lean-file`'s workload: node 1's vy-lean-file (pods/nebius/lean_file.py) on what `--send` shipped
+LEAN_FILE_CMD = ('exec sudo -n /usr/local/bin/vy-lean-file "$1" "$2" --out "$RESEARCH_RUN_DIR/out" '
+                 '${3:+--patch "$RESEARCH_RUN_DIR/inputs/$3"}')
+LEAN_FILE_PATCH = "lean-file.patch"
+
+
+def _git(root: Path, *args: str, env: dict | None = None) -> str:
+    import subprocess
+
+    r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, env=env)
+    if r.returncode != 0:
+        raise LookupError(f"`git {' '.join(args)}` failed: {r.stderr.strip()[-300:]}")
+    return r.stdout
+
+
+def lean_file_patch(root: Path, rev: str) -> bytes:
+    """The working tree's difference from ``rev``, untracked files included, built in a copy of the index so the checkout's own
+    is untouched."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    index = Path(_git(root, "rev-parse", "--path-format=absolute", "--git-path", "index").strip())
+    with tempfile.TemporaryDirectory(prefix="lean-file-") as tmp:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        if index.is_file():
+            shutil.copyfile(index, env["GIT_INDEX_FILE"])
+        _git(root, "add", "-A", env=env)
+        r = subprocess.run(["git", "-C", str(root), "diff", "--cached", "--binary", "--full-index", rev], capture_output=True,
+                           env=env)
+    if r.returncode != 0:
+        raise LookupError(f"`git diff --cached {rev}` failed: {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return r.stdout
+
+
+def cmd_lean_file(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="research lean-file", description="whether one Lean file elaborates, with this working tree's "
+                                 "changes, on node 1's warm build (vy-lean-file in a `research run --on`); no SSH")
+    ap.add_argument("file", help="a .lean file of this checkout")
+    ap.add_argument("--rev", default=None, help="the commit on node 1's main to check out; the working tree's difference from it is "
+                                                 "the patch (default: HEAD's merge-base with origin/main)")
+    ap.add_argument("--on", default="vy-nebius-1", metavar="MACHINE")
+    ap.add_argument("--project", default="verity")
+    ns = ap.parse_args(argv)
+    import tempfile
+
+    try:
+        root = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
+        file = os.path.relpath(Path(ns.file).resolve(), root.resolve())
+        if file.startswith("..") or not file.endswith(".lean") or not (root / file).is_file():
+            print(f"research lean-file: {ns.file}: not a .lean file of {root}", file=sys.stderr)
+            return 2
+        sha = _git(root, "rev-parse", "--verify", f"{ns.rev}^{{commit}}" if ns.rev else
+                   _git(root, "merge-base", "HEAD", "origin/main").strip()).strip()
+        patch = lean_file_patch(root, sha)
+    except LookupError as e:
+        print(f"research lean-file: {e}", file=sys.stderr)
+        return 2
+    print(f"research lean-file: {file} at {sha[:12]}" + (f" with a {len(patch)}-byte patch" if patch else ""), file=sys.stderr)
+    with tempfile.TemporaryDirectory(prefix="lean-file-") as tmp:
+        sends = []
+        if patch:
+            (Path(tmp) / LEAN_FILE_PATCH).write_bytes(patch)
+            sends = ["--send", str(Path(tmp) / LEAN_FILE_PATCH)]
+        rc = cmd_run(["--on", ns.on, "--project", ns.project, *sends, "--declared-output", "out/*", "--",
+                      "bash", "-c", LEAN_FILE_CMD, "vy-lean-file", sha, file, LEAN_FILE_PATCH if patch else ""])
+    if rc == 0:
+        print("research lean-file: its output is the run's out/elaboration.txt (Lean's messages), out/lean-file.json (each "
+              "step's exit and seconds) and out/lean.log, after `research fetch RUN --all`", file=sys.stderr)
+    return rc
+
+
 def cmd_launch_request(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research launch-request")
     ap.add_argument("--expect-tool", default=None, metavar="IDENTITY", help="the launcher's remote.tool_identity of the package it shipped")
@@ -1371,6 +1445,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
+    if cmd == "lean-file":
+        return cmd_lean_file(rest)
     if cmd == "doctor":
         from .doctor import main as doctor_main
 

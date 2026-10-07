@@ -476,6 +476,12 @@ src = "tools/research/src/research/pods/nebius/lean_sandbox.py"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
+[[file]]  # `research lean-file`'s workload: one file elaborated in a sandboxed tree of its own
+path = "/usr/local/bin/vy-lean-file"
+src = "tools/research/src/research/pods/nebius/lean_file.py"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
 [[file]]
 path = "/usr/local/lib/vy-lean-cache/run-daily"
 src = "tools/lean/run_daily.py"
