@@ -61,11 +61,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.primitives.circuits.defs import bind, composite, primitive
-from verity.primitives.circuits.refs import Coll, concat, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
-from verity_catalog.definitions.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+from verity.ml.circuits.defs import bind, composite, primitive
+from verity.ml.circuits.refs import Coll, concat, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
+from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.fp8 import E4M3
 from verity_vllm.program.registry.prims import BF16, F32, I32, bits_of

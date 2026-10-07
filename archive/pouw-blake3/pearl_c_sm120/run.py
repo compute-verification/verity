@@ -284,7 +284,7 @@ RS_MAX_SEGS = 128
 #: -h3s's hm96 salt nonces (`audit.HM96_WEIGHTS`, `audit.HM96_TRANSCRIPT`; an activation tree's is its unit index) and the widest
 #: level s512_tree_small (64 threads) takes
 HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
-#: `verity.protocols.accounting.work.pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
+#: `verity.experimental.protocols.pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
 ROW_SCHEMA, TILE_SCHEMA = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 B3S_SEG, B3S_MAX_SEGS = 256, 512
 #: A's row-leaf forms: `w`, the format's own kernel (-h1 hash_rows_w, -h2 hash_rows_b3s), then forming's stats_a; `s`, -h2's

@@ -105,8 +105,8 @@ def dispatch_class(M: int) -> str:
 def _step(dot: str):
     """The vectorised k32 e4m3 step: acc (n,) f32 words, a/b (n, 32) e4m3 bytes -> (n,) f32 words."""
     if dot == "blackwell":
-        from verity_kernels import tc as K
-        from verity_catalog.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+        from verity.ml.kernels import tc as K
+        from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 
         return lambda acc, a, b: np.asarray(K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32)
     if dot == "hopper":
@@ -178,7 +178,7 @@ def reference_word(xq, sx, wrow, wsrow, *, G: int, KB: int, form: str, g: int | 
     """`block_row`'s word at one output coordinate (`dot` Blackwell's) as the plain-integer chain of the registered primitives
     `BlackwellE4m3QmmaDot32_v1`, `F32Mul_v1`, `F32Fma_v1`, `F32Add_v1` and `F2fpBf16_v1`; wrow the coordinate's weight row, wsrow its
     weight-scale row."""
-    from verity_catalog.definitions import fp32, prims
+    from verity.ml.circuits.ops import fp32, prims
 
     xq, wrow = [int(v) for v in np.asarray(xq).reshape(-1)], [int(v) for v in np.asarray(wrow).reshape(-1)]
     sx, wsrow = [int(v) for v in np.asarray(sx).reshape(-1)], [int(v) for v in np.asarray(wsrow).reshape(-1)]
@@ -214,8 +214,8 @@ def _row_operands(a: dict[str, np.ndarray], job: dict[str, Any], i: int):
 def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one GEMM launch against `block_row` at the job's statics; on its reference rows the plain-integer chain on
     three coordinates and every alternative on all of them; on a dense launch the activation quant it received, too."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import fp8 as F
 
@@ -258,8 +258,8 @@ def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_quant(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one quant call: (q, scale) against `Fp8GroupQuant_v1{K,G}`'s twin, the reference on the job's rows."""
-    from verity.primitives.circuits.evaluation import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import fp8 as F
 
