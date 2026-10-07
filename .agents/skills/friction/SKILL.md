@@ -38,7 +38,8 @@ Say what you fixed in the PR description. It needs no note.
 ## 2. Ask, when you can't tell
 
 A change is near the line when it changes what other agents must do or what a gate accepts, touches another lane's
-in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
+in-flight files, spends money past its `budgets.toml` line, deletes others' work, or changes agreed semantics or acceptance
+criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
 - one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
@@ -100,6 +101,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-06 (about 7:40 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
+  `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
+  question.
 - 2026-10-06 (9:49 AM PDT): the repository becomes the minimal, DRY implementation of the system as now decided. Every
   owner removes the smells it finds in its own files without asking: code serving a retired question, two sources of
   truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired process,
