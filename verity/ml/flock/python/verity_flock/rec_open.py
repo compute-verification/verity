@@ -3,8 +3,8 @@ names and adds its share of the level's consistency sums to a running sum, as a 
 it, and their plain-integer reference.
 
     U16 = Array<16, Value<1>>
-    RecOpen_v3{LANES, H}(row: Array<8 LANES, U16>, aux: Array<A(H), U16>, acc: Array<64, U16>, coef: Array<16 LANES, U16>,
-                         dirs: Array<8, U16>) -> (out: Array<64, U16>, acc_out: Array<64, U16>)
+    RecOpen_v4{LANES, H}(row: Array<8 LANES, U16>, aux: Array<A(H), U16>, acc: Array<64, U16>, coef: Array<16 LANES, U16>,
+                         dirs: Array<64, U16>) -> (out: Array<64, U16>, acc_out: Array<64, U16>)
 
 Every port is u16 words (a Boolean element of 16 bits, `verity.ml.circuits.boolean`'s word view): a word's bits LSB first, a byte
 string's bytes two to a word, little-endian, so leaf ``t`` of a port is bit ``t & 7`` of its byte string's byte ``t >> 3``. An
@@ -15,13 +15,16 @@ element of F = GF(2^128) is 8 words, its 16 bytes ``lo`` LE then ``hi`` LE, so i
 * ``aux``: the opening's H siblings bottom up (64 bytes each, 32 words from word ``32 h``), then zero words up to
   ``A(H) = 64 ⌈H / 2⌉``, a whole number of 64-word M0 rows.
 * ``acc``: the running sums before this opening, two elements of F (words 0 .. 15), and 48 words carried as they are.
-* ``coef``: the verifier's coefficients, ``c0[l]`` for each lane then ``c1[l]`` (8 words each): a public input.
-* ``dirs``: the position's low H bits (word 0, bit ``h`` the side at level ``h``, its other bits zero) and 7 zero words: a
-  public input, whole 128-bit words of the unit's leaves as public inputs are (`verity_flock.circuit.public_blocks`).
+* ``coef``: the verifier's coefficients, ``c0[l]`` for each lane then ``c1[l]`` (8 words each).
+* ``dirs``: the position's low H bits (word 0, bit ``h`` the side at level ``h``, its other bits zero) and 63 zero words, one
+  M0 row (the unit reads word 0's low H bits).
 * ``out``: the node H levels up (32 words) and 32 zero words: one M0 row, the top node's own registered row
   (`expected`, `verity_flock.rec_live.top_rows`). The statement reads it from the prover's registration of the top the firewall
   committed under salts (`verity_flock.rec_outer`), so one registered output row checks the climb against the top
-  (PROTOCOL.md §16.13 "Registered reads") and the public ``dirs`` the side at every level.
+  (PROTOCOL.md §16.13 "Registered reads") and ``dirs`` the side at every level.
+
+The statement reads ``coef`` and ``dirs`` from values the verifier registers itself (`verity_flock.rec_outer`), so it has no
+public input.
 * ``acc_out``: ``acc`` with ``Σ_l c_r[l] · row[l]`` added to its element r (`cons_structure`, a ``GfResiduals_v1`` of two
   residuals), its other words as they were.
 
@@ -72,7 +75,7 @@ BLOCK = Array(16, WORD)
 NODE_WORDS = 32
 OUT_WORDS = 64
 ACC_WORDS = 64
-DIRS_WORDS = 8
+DIRS_WORDS = 64
 ROW_BLOCK = 64
 F_WORDS = 8
 
@@ -283,7 +286,7 @@ def _body(B, S, row, aux, acc, coef, dirs):
 
 
 RecOpen = CompositeDefinition(
-    "RecOpen", 3, ("LANES", "H"), _signature, _body, conformance="exact-model-tested",
+    "RecOpen", 4, ("LANES", "H"), _signature, _body, conformance="exact-model-tested",
     doc="One inner Ligerito opening: the plain SHA-512 leaf of the row climbs the H siblings by the low bits dirs holds, and "
         "the node it reaches is the first result, as a registered row; the second is acc with the row's consistency terms "
         "Σ_l coef_r[l] · row[l] added to its two F elements")
