@@ -117,7 +117,7 @@ def test_malformed_bindings_and_rows_are_refused() -> None:
 
 @pytest.mark.slow
 def test_the_digest_reproduces_the_short_vectors() -> None:
-    """A few minutes, most of it tracing a full segment: the only check that the whole's wiring (each segment's slice of the
+    """About four minutes, most of it tracing a full segment: the only check that the whole's wiring (each segment's slice of the
     row, its midstate from j, s and m, the digests' order into the outer hash) gives the vectors' digests, over one short
     segment, a full one with a one-bit last segment (8193) and three full ones with a five-bit last (24581)."""
     for case in CASES:
@@ -128,7 +128,7 @@ def test_the_digest_reproduces_the_short_vectors() -> None:
 
 @pytest.mark.slow
 def test_the_parts_reproduce_every_vector_segment_and_outer_hash() -> None:
-    """A few minutes, most of it tracing the segment part at M = 8191 and 8192: every segment digest of the vectors (37 full
+    """About eight minutes, most of it tracing the segment part at M = 8191 and 8192: every segment digest of the vectors (37 full
     segments and the short ones of 1, 5, 13, 80 and 8191 bits) from its midstate, and every vector's outer hash from its
     segment digests, at every length the vectors take, among them PoUW's 8 KiB A row and Pearl-C's 16 KiB FP32 row."""
     by_m: dict[int, tuple[list, list, list]] = {}
@@ -151,7 +151,7 @@ def test_the_parts_reproduce_every_vector_segment_and_outer_hash() -> None:
 
 @pytest.mark.slow
 def test_a_wrong_length_or_a_flipped_bit_changes_a_short_digest() -> None:
-    """The length controls: the same bits zero-extended by one bit, by a byte, and past a segment (8192 to 8193 bits) each give
+    """About two and a half minutes, the length controls: the same bits zero-extended by one bit, by a byte, and past a segment (8192 to 8193 bits) each give
     another digest, the reference's at that length; and one flipped bit does too."""
     rng = random.Random("row-seg-gates/length")
     row = _random_row(rng, 13)
@@ -167,7 +167,7 @@ def test_a_wrong_length_or_a_flipped_bit_changes_a_short_digest() -> None:
 
 @pytest.mark.slow
 def test_the_deployed_tile_digest_and_its_controls() -> None:
-    """A few minutes and about 8 GB, most of it tracing the 17-compression outer hash: the whole at a 64 x 64 Pearl-C tile's
+    """About six minutes and 10 GB, most of it tracing the 17-compression outer hash: the whole at a 64 x 64 Pearl-C tile's
     262,144 bits (32 segments, the only binding that reaches that hash) against the reference on two random rows, then with a
     data bit flipped in the first and in the last segment and with segments 0 and 1, then 30 and 31, swapped: each changes
     the digest. The outer hash and the whole cost the pinned gates, and the whole's compiled counts are its parts'."""
