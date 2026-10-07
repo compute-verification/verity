@@ -6,11 +6,11 @@ requires-python = ">=3.12"
 dependencies = [
     "research",
     "verity",
-    "verity-sampled-proofs",
-    "verity-pous",
-    "verity-pouw",
     "numpy>=1.26",
     "blake3>=1.0",
+    "verity-catalog",
+    "verity-experimental",
+    "verity-kernels",
 ]
 
 [project.scripts]
@@ -32,10 +32,6 @@ packages = [
 [tool.uv.sources]
 research = { workspace = true }
 verity = { workspace = true }
-verity-sampled-proofs = { workspace = true }
-verity-pous = { workspace = true }
-verity-pouw = { workspace = true }
-
 [tool.pytest.ini_options]
 # Run from this directory: fixtures are read relative to it.  CUDA / vLLM / pod-tree tests skip or fail by name off-pod.
 testpaths = ["tests"]
@@ -46,9 +42,12 @@ markers = [
     "regression: R19 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
+    "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/check/post_train.py)",
 ]
 
 [tool.verity.tests]
-# Test-only: tests/pipeline checks the fixtures this package registers.
-inputs = ["fixtures/artifacts.json", ".gitignore"]
+# Test-only: tests/pipeline checks the fixtures this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3
+# k32 step's pinned vectors through the block-scaled GEMMs.
+inputs = ["fixtures/artifacts.json", ".gitignore", "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json",
+          "catalog/verity_catalog/silicon/captures/vectors/fp8-hopper-wgmma-k32.json"]
 parallel = true

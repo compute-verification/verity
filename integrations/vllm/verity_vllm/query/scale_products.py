@@ -1,11 +1,12 @@
 """The blockwise FP8 GEMM's scale products as a required value: the committed interior words `Q_word_v1{16,32}` derives for
 `ScaledMmFp8BlockSharedScale_v1{K,N,G}` (`TargetProfile.fp8_scale_construction = "shared-per-block"`, the default).  Each weight block's
-K/G products `F32Mul_v1(x_s[kb], w_s[nb][kb])` are read by the block's G coordinates, so the partition commits them: N/G * K/G f32
-words per Call, weight block nb major, k block kb minor (`slots` reads them off the partition and refuses any other set).
+K/G products `F32Mul_v1(x_s[kb], w_s[nb][kb])` are read by the block's G coordinates (a partial last block's by its N % G), so the
+partition commits them: cdiv(N, G) * K/G f32 words per Call, weight block nb major, k block kb minor (`slots` reads them off the
+partition and refuses any other set).
 
 They are interior to the Call: `kernel_rows` adds one `scale_products` identity per (step, linear module), ranging over the module's
 shared-scale Calls at that step, and the scale-products source (`acquire.sources.scale_products_source`) acquires
-`<linear module>/scale_products`, f32 [rows, N/G * K/G], computed from the launch's activation scales and the module's
+`<linear module>/scale_products`, f32 [rows, cdiv(N, G) * K/G], computed from the launch's activation scales and the module's
 `weight_scale_inv` by `registry.fp8.scale_products`.  No kernel changes.  The policy applies to every manifest: a Program without a
 shared-scale Call gets no identity and an unchanged header.  The Match record holds no value for it.
 """
@@ -26,8 +27,8 @@ SHARED = frozenset(d.id for d in fp8.SHARED_SCALE.values())
 
 
 def blocks(st: Mapping[str, Any]) -> tuple[int, int]:
-    """(N/G, K/G) of a shared-scale Call's statics."""
-    return int(st["N"]) // int(st["G"]), int(st["K"]) // int(st["G"])
+    """(cdiv(N, G), K/G) of a shared-scale Call's statics: a partial last weight block (N % G rows) has its K/G products too."""
+    return fp8.weight_blocks(int(st["N"]), int(st["G"])), int(st["K"]) // int(st["G"])
 
 
 def words(st: Mapping[str, Any]) -> int:
@@ -46,7 +47,7 @@ POLICY_TEXT = ("scale products: per token row of " + ", ".join(sorted(SHARED)) +
 def slots(K: int, N: int, G: int) -> tuple[int, ...]:
     """The shared-scale Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i
     of a row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
-    from verity.ir.defs import bind
+    from verity.primitives.circuits.defs import bind
     from verity_vllm.query import word as W
 
     g = W.Graph(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
@@ -57,7 +58,7 @@ def slots(K: int, N: int, G: int) -> tuple[int, ...]:
     crossing = set(g.src[owner[g.src] != owner[g.dst]].tolist())
     committed = sorted(x for x in crossing if kinds[owner[x]] == "committed")
     got = [g.prim_names[int(g.prim[x])] for x in committed]
-    want = [P.F32Mul.id] * ((N // G) * (K // G))
+    want = [P.F32Mul.id] * words({"K": K, "N": N, "G": G})
     if got != want:
         raise ValueError(f"scale products: K={K} N={N} G={G} commits {len(got)} interior values ({sorted(set(got))}), the source acquires "
                          f"{len(want)} {P.F32Mul.id}")
@@ -65,8 +66,9 @@ def slots(K: int, N: int, G: int) -> tuple[int, ...]:
 
 
 def kernel_rows(pop: Any, add: Callable[..., None], impl: Callable[[str], str], aliases: Mapping[str, tuple[str, int]]) -> dict[str, Any] | None:
-    """Add one `scale_products` identity per (step, linear module): its range is the module's shared-scale Calls at that step, N/G * K/G
-    f32 each.  `add` is `request_manifest`'s row writer.  None when the Program has no shared-scale Call (the header is then unchanged)."""
+    """Add one `scale_products` identity per (step, linear module): its range is the module's shared-scale Calls at that step,
+    cdiv(N, G) * K/G f32 each.  `add` is `request_manifest`'s row writer.  None when the Program has no shared-scale Call (the header
+    is then unchanged)."""
     groups: dict[tuple[int, str], dict[str, Any]] = {}
     for c in pop.P.calls:
         if c.family not in SHARED:

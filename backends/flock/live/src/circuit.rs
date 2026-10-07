@@ -74,9 +74,9 @@ pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
 pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
 pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
-/// a bit row's leaf (`sha512/row/v2`; `verity.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)
+/// a bit row's leaf (`sha512/row/v2`; `verity.primitives.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)
 pub const ROW_SCHEMA_V2: &str = "hm96-sha512/row/v2";
-/// a segmented bit row's leaf (`sha512/row-seg/v1`; `verity.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_SEG`)
+/// a segmented bit row's leaf (`sha512/row-seg/v1`; `verity.primitives.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_SEG`)
 pub const ROW_SCHEMA_SEG: &str = "hm96-sha512/row-seg/v1";
 /// a statement's identity `row_leaf_in_circuit` when a port is a segmented row
 pub const ROW_LEAF_SEG_IDENTITY: &str = "hm96-sha512/row/v2 over sha512/row/v2, hm96-sha512/row-seg/v1 over sha512/row-seg/v1, per port";
@@ -162,8 +162,10 @@ const SHA512_ROW_SEG_SEGMENT_TAG: &[u8] = b"verity/sha512-row-seg/v1/segment\0";
 pub const ROW_SEG_BITS: usize = 8192;
 /// a statement's `outputs` identity with runs of output ports (META `out_row_ports`), the Lean verifier's `Tags.outRowsIdentity`
 pub const OUT_ROWS_SEG_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row-seg/v1 row of their words, hashed in the circuit; the public file has no output word";
+/// the same with a run committed as a `hm96-sha512/row/v2` row, the Lean verifier's `Tags.outRowsV2Identity`
+pub const OUT_ROWS_V2_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row/v2 or hm96-sha512/row-seg/v1 row of their words (its row_schemas entry), hashed in the circuit; the public file has no output word";
 /// what `Composite::check` refuses of the output rows, word for word the Lean verifier's (`HmOut.checkRows`)
-pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports: a sha512/row-seg/v1 row of exactly their words, named after the first), each name once";
+pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports), a bit row of exactly their words (sha512/row/v2 or sha512/row-seg/v1) named after the first, each name once";
 const ROLE_X: u8 = 1;
 /// a port's compressions, at most: each reads 1024 message columns of a block of at most 2^IN_RANGE_K_LOG
 const MAX_COMPS: usize = 1 << (IN_RANGE_K_LOG - 10);
@@ -533,7 +535,7 @@ pub fn compress(cv: &mut [u64; 8], block: &[u8]) {
     }
 }
 
-/// `sha512/row/v1`'s first block for an x row of `words` u16 words (`verity.commitments.rowleaf.sha512_row_prefix`).
+/// `sha512/row/v1`'s first block for an x row of `words` u16 words (`verity.primitives.commitments.rowleaf.sha512_row_prefix`).
 pub fn row_prefix(words: usize) -> Vec<u8> {
     let mut v = SHA512_ROW_TAG.to_vec();
     v.extend([ROLE_X, 16]);
@@ -543,7 +545,7 @@ pub fn row_prefix(words: usize) -> Vec<u8> {
 }
 
 /// `sha512/row/v2`'s first block `P(bits)`: `"verity/sha512-row/v2\0" || u64be bits`, zero padded
-/// (`verity.commitments.rowleaf.sha512_row_v2_prefix`).
+/// (`verity.primitives.commitments.rowleaf.sha512_row_v2_prefix`).
 pub fn row_prefix_v2(bits: u64) -> Vec<u8> {
     let mut v = SHA512_ROW_V2_TAG.to_vec();
     v.extend(bits.to_be_bytes());
@@ -552,7 +554,7 @@ pub fn row_prefix_v2(bits: u64) -> Vec<u8> {
 }
 
 /// `sha512/row-seg/v1`'s outer first block `Q(bits)`: `"verity/sha512-row-seg/v1\0" || u64be bits || u64be s || u32be 1024`,
-/// zero padded (`verity.commitments.rowleaf.sha512_row_seg_prefix`).
+/// zero padded (`verity.primitives.commitments.rowleaf.sha512_row_seg_prefix`).
 pub fn row_prefix_seg(bits: u64) -> Vec<u8> {
     let mut v = SHA512_ROW_SEG_TAG.to_vec();
     v.extend(bits.to_be_bytes());
@@ -563,7 +565,7 @@ pub fn row_prefix_seg(bits: u64) -> Vec<u8> {
 }
 
 /// Segment `j` of `s`'s first block `S(j, s, m)`, `m` its bits: `"verity/sha512-row-seg/v1/segment\0" || u64be j || u64be s ||
-/// u64be m`, zero padded (`verity.commitments.rowleaf.sha512_row_seg_segment_prefix`).
+/// u64be m`, zero padded (`verity.primitives.commitments.rowleaf.sha512_row_seg_segment_prefix`).
 pub fn segment_prefix(j: usize, s: usize, m: usize) -> Vec<u8> {
     let mut v = SHA512_ROW_SEG_SEGMENT_TAG.to_vec();
     for x in [j, s, m] {
@@ -601,7 +603,7 @@ pub fn row_consts(p: &Port) -> RowConsts {
     }
 }
 
-/// `sha512/row-seg/v1`'s digest of a row of `bits` bits, its bytes `row` (`verity.commitments.rowleaf.sha512_row_seg_digest`).
+/// `sha512/row-seg/v1`'s digest of a row of `bits` bits, its bytes `row` (`verity.primitives.commitments.rowleaf.sha512_row_seg_digest`).
 pub fn row_seg_digest(bits: usize, row: &[u8]) -> [u8; 64] {
     let (segs, _) = seg_shape(bits);
     let mut h = Sha512::new();
@@ -963,15 +965,14 @@ impl Composite {
             return Err("the rows' slots per VU are not the ports' compressions (three per slot) and one hm96 slot per port".into());
         }
         let out_names: Vec<&str> = self.meta["out_ports"].as_array().map(|a| a.iter().map(|p| p[0].as_str().unwrap_or("")).collect()).unwrap_or_default();
-        let mut names: Vec<&str> = self.ports.iter().map(|p| p.name.as_str()).collect();
+        let mut names: Vec<&str> = self.ports.iter().take(self.n_in).map(|p| p.name.as_str()).chain(out_names.iter().copied()).collect();
         names.sort_unstable();
         if self.n_in > self.ports.len() || self.ports.len() - self.n_in != self.out_row_ports.len() || names.windows(2).any(|w| w[0] == w[1])
             || self.out_rows().iter().enumerate().any(|(j, p)| {
                 let (first, k, _, w) = self.out_group(j);
-                out_names.get(first) != Some(&p.name.as_str()) || match p.segs {
-                    Some(_) => p.bits != 16 * w,
-                    None => k != 1 || p.words != w.div_ceil(64) * 64 || p.bits != 16 * p.words,
-                }
+                let padded = k == 1 && p.words == w.div_ceil(64) * 64 && p.bits == 16 * p.words;
+                out_names.get(first) != Some(&p.name.as_str())
+                    || !if p.segs.is_some() { p.bits == 16 * w } else if p.v2 { p.bits == 16 * w || padded } else { padded }
             })
         {
             return Err(OUT_ROWS_REFUSED.into());
@@ -1895,6 +1896,66 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+pub const LINKS_FORMAT: &str = "verity/flock-links/v1";
+
+/// Linking (PROTOCOL.md §16.13) on the registered population's public file: the verifier's own links file (`--links`,
+/// `verity/flock-links/v1`, derived from its program and query: `verity_flock.class_statement.links_file`) is for this
+/// circuit, its partition and META `links`' ports, and every `(reader, port, writer)` it lists has the reader's link row's
+/// `b || c` equal to the writer's output row's. A circuit with META `links` needs the file; one without takes none. The links
+/// checked. This binds a public topology; it does not hide the topology (the links file is the verifier's view of the circuit).
+pub fn check_links(c: &Composite, inst: &Instances, file: Option<&Value>) -> Result<usize, String> {
+    let ports: Vec<String> = match c.meta.get("links") {
+        None => {
+            return match file {
+                Some(_) => Err("--links: the circuit declares no links (META links)".into()),
+                None => Ok(0),
+            };
+        }
+        Some(ls) => ls.as_array().ok_or("META links is not a list")?.iter()
+            .map(|x| x["port"].as_str().map(String::from).ok_or("META links: a link names no port".to_string())).collect::<Result<_, _>>()?,
+    };
+    let Some(f) = file else {
+        return Err("the circuit declares links (META links): pass the verifier's own links file (--links F)".into());
+    };
+    if f["format"] != LINKS_FORMAT {
+        return Err(format!("--links: not a {LINKS_FORMAT} file"));
+    }
+    if f["circuit_sha512"].as_str() != Some(crate::hex(&c.sha512).as_str()) {
+        return Err("--links: derived for another circuit".into());
+    }
+    if f["partition"] != c.meta["partition"]["digest"] {
+        return Err("--links: derived for another partition than the circuit's".into());
+    }
+    if f["ports"] != json!(ports) {
+        return Err("--links: its ports are not the circuit's link rows (META links)".into());
+    }
+    let np = c.ports.len();
+    if c.ports.len() != c.n_in + 1 {
+        return Err("META links: a statement with links has one output row".into());
+    }
+    if inst.population.is_some() {
+        return Err("links are checked on the registered population's file, before a draw".into());
+    }
+    let (n, out) = (inst.n, np - 1);
+    let links = f["links"].as_array().ok_or("--links: links is not a list")?;
+    for x in links {
+        let bad = || format!("--links: {x} is not [reader, port, writer] over the file's {n} instances and the circuit's link rows");
+        let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(bad)?;
+        let (Some(r), Some(name), Some(w)) = (a[0].as_u64(), a[1].as_str(), a[2].as_u64()) else { return Err(bad()) };
+        let (r, w) = (r as usize, w as usize);
+        let Some(p) = c.ports[..c.n_in].iter().position(|q| q.name == name).filter(|_| ports.iter().any(|q| q == name)) else {
+            return Err(bad());
+        };
+        if r >= n || w >= n {
+            return Err(bad());
+        }
+        if inst.bc(r, p, np) != inst.bc(w, out, np) {
+            return Err(format!("cut wire from instance {w}'s output row to instance {r}'s row {name}: the reader's row is not the writer's committed output row (their b || c differ)"));
+        }
+    }
+    Ok(links.len())
 }
 
 /// The frame-v3-sha512 roots of the file's public part, one row tree per row (input rows, then output rows): over the
@@ -3499,19 +3560,19 @@ mod tests {
 
     #[test]
     fn hm96_sha512_default_key_is_core_s() {
-        // hashlib.sha512(verity.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
+        // hashlib.sha512(verity.primitives.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
         assert_eq!(super::leaf_scheme()["key_sha512"],
                    "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
     }
 
-    /// flock_merkle::hm96 (verity's Flock patch) against core's verity.commitments.hm96 vectors_sha512.json: the key, both
+    /// flock_merkle::hm96 (verity's Flock patch) against core's verity.primitives.commitments.hm96 vectors_sha512.json: the key, both
     /// prefixes, the default-key masks and the leaves over given inner digests.
     #[cfg(feature = "sha512")]
     #[test]
     fn hm96_leaves_match_core_vectors() {
         use flock_merkle::hm96;
         let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../..");
-        let Ok(text) = std::fs::read_to_string(repo.join("packages/verity/src/verity/commitments/hm96/vectors_sha512.json")) else {
+        let Ok(text) = std::fs::read_to_string(repo.join("verity/primitives/commitments/hm96/vectors_sha512.json")) else {
             return;
         };
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -3577,7 +3638,7 @@ mod tests {
     fn segmented_row_constants_complete_its_digest() {
         let mut s = 0x9e37_79b9_7f4a_7c15u64;
         assert_eq!(crate::hex(&row_seg_digest(0, &[])), crate::hex(&Sha512::digest(row_prefix_seg(0))));
-        // core's (`verity.commitments.rowleaf.sha512_row_seg_digest`) of the row of bytes i mod 251 (the last masked to its bits)
+        // core's (`verity.primitives.commitments.rowleaf.sha512_row_seg_digest`) of the row of bytes i mod 251 (the last masked to its bits)
         for (bits, want) in [(8193usize, "1009029f51a63cb64c57e4ac641244ecdb437314b19141530f556dc92bf013d2df4479bebd45d7c13c0938ea5e9a8199cf8241638860509ad92986cc0033799e"),
                              (65536, "4269023781ae746c3e03aaac5fc2330ea43cabddc04ea554e6f570ab271605f9d3bec541863e4190e5f87a3cef4a65906c95041588dfcf92c7928bd93193ac43")] {
             let mut row: Vec<u8> = (0..bits.div_ceil(8)).map(|i| (i % 251) as u8).collect();

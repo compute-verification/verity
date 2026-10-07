@@ -7,7 +7,7 @@ from pathlib import Path
 from verity_vllm.pipeline import research_tools, source_identity
 from verity_vllm.pipeline.tp import commit as tp_commit
 
-CORE = Path("packages") / "verity" / "src" / "verity"
+CORE = Path("verity")
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -16,6 +16,9 @@ def _repo(tmp_path: Path) -> Path:
     (repo / "pyproject.toml").write_text("[project]\nname = 'verity'\n")
     (repo / CORE / "__init__.py").write_text("")
     (repo / CORE / "ir" / "codec.py").write_text("def _spec_id(fn): return fn\n")
+    for d in research_tools.CODE_DIRS:
+        (repo / d).mkdir(parents=True, exist_ok=True)
+        (repo / d / "__init__.py").touch()
     (repo / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "tp").mkdir(parents=True)
     (repo / "integrations" / "vllm" / "verity_vllm" / "__init__.py").write_text("")
     (repo / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "tp" / "commit.py").write_text("TAG = 1\n")

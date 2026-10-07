@@ -55,13 +55,13 @@ control is rejected only by a line that starts with ``REJECT`` and names its sha
 The record may also name the kernel it runs and what the attempt is (v0.5), which `verify.py` writes into the attempt's
 evidence-store record (`ledger.py`, kind ``kernel-attempt/v1``):
 
-- ``variant``: the kernel as `verity_pouw.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
+- ``variant``: the kernel as `verity.protocols.accounting.work.pouw.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
   schemes, the digest of the sources it was built from, the binary's digest, and ``prices``: the priced path it runs,
   such as ``cast-8.72`` or ``lut256``, `price_twins`' names).
 - ``lineage``: ``parent`` (the art: id of the attempt it changes, or that attempt's variant id), ``approach``
   (``<campaign>/<slug>``), ``mechanism`` (namespaced tags such as ``pipeline:tma-ws``), ``hypothesis`` (one line), ``panel``
   (``{"line", "version", "attempt"?, "change"?}``), ``scheme``, ``schedule``, and ``phase_groups`` (each chain phase,
-  before, gemm and after, as `verity_pouw.serving.GROUPS`).
+  before, gemm and after, as `verity.protocols.accounting.work.pouw.serving.GROUPS`).
 
 γ is never declared here: the ledger looks it up from the Lean-pinned price twins of the panel version's statement on the
 variant's priced path, at both FP32 prices. A lineage with ``gamma`` gets no record.
@@ -76,14 +76,14 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
 VERSION = "v0.6"
-#: a call's step groups, in the order its main lane runs them; must equal verity_pouw.serving.GROUPS
+#: a call's step groups, in the order its main lane runs them; must equal verity.protocols.accounting.work.pouw.serving.GROUPS
 GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
-#: the groups nothing later in the call reads, so they may leave the main lane; must equal verity_pouw.serving.MOVABLE
+#: the groups nothing later in the call reads, so they may leave the main lane; must equal verity.protocols.accounting.work.pouw.serving.MOVABLE
 MOVABLE = frozenset({"tile_hash", "screen"})
 #: the chain's parts (`chain.py`), each the groups it runs, in order
 PARTS = {"before": ("a_tree", "forming"), "gemm": ("gemm", "cleanup"), "after": ("tile_hash", "screen")}
 #: the groups the chain's side stream takes: the served deferred schedule's side lane, so must equal
-#: verity_pouw.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
+#: verity.protocols.accounting.work.pouw.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
 DEFERRED = frozenset({"tile_hash"})
 VERIFIER_FIELDS = {
     "run": ("python", "run_dir", "run_id", "commit", "arm"),
@@ -133,8 +133,9 @@ class OperandSet:
 @dataclass(frozen=True)
 class Work:
     """Per call: tensor-core MACs by precision key (the baselines' keys, e.g. ``{"fp8-e4m3": m*k*n}``), W_ref and the
-    credited work as exact strings in `unit` (Lean's `wrefOf` and `creditOf`), and the bytes absorbed by each hash. Per
-    (weight, epoch): the weight side's hashed bytes. `gamma` is the arm's statement (Derived, from its certificate)."""
+    credited work as exact strings in `unit` (the scheme's `wref` and `credit_of`), and the bytes absorbed by each hash.
+    Per (weight, epoch): the weight side's hashed bytes. `gamma` is the arm's statement (Derived, from its
+    certificate)."""
 
     tensor_macs: dict[str, int]
     w_ref: str

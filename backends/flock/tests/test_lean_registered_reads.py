@@ -1,4 +1,4 @@
-"""Registered reads (PROTOCOL.md §16.10, `protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
+"""Registered reads (PROTOCOL.md §16.10, `verity/protocols/verification/sampled_proofs/README.md` "Registered values"): a statement whose port reads
 rows of a registered value (RoPE's `cs`, rows of the program's `cs_table`, committed once at registration) opens every
 table row against the verifier's own registered root, at the position the verifier's own program reads, with the units
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
@@ -6,7 +6,7 @@ circuit (§16.13, the default `verity/flock-circuit`) composed for the `Register
 v0 partition; the reads come from `reads` on that program (`statement`: setup, no proof; `verify`: setup of each table,
 with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
 set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
-module is slow; it catches what the Python reference (`protocols/sampled_proofs/tests/test_registered.py`) can't: the
+module is slow; it catches what the Python reference (`verity/protocols/verification/sampled_proofs/tests/test_registered.py`) can't: the
 executable verifier's own refusals, on both statements' setup paths."""
 from __future__ import annotations
 
@@ -20,14 +20,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.commitments import hm96
-from verity.ir.codec import canonical_json, encode_program
-from verity.ir.defs import CompositeDefinition, bind
-from verity.ir.program import Program
-from verity.ir.refs import coll_concat
-from verity.ir.types import Array
+from verity.primitives.commitments import hm96
+from verity.primitives.circuits.codec import canonical_json, encode_program
+from verity.primitives.circuits.defs import CompositeDefinition, bind
+from verity.primitives.circuits.program import Program
+from verity.primitives.circuits.refs import coll_concat
+from verity.primitives.circuits.types import Array
 from verity_flock import circuit as FC
-from verity_sampled_proofs.one_stage import partition as P, registered as G
+from verity.protocols.verification.sampled_proofs.one_stage import partition as P, registered as G
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 VERIFIER = LEAN.parent
@@ -39,6 +39,11 @@ VALUE = "cs_table"
 #: the program's: the row of `cs_table` each of its 8 RoPEHead Calls reads
 POSITIONS = (11, 5, 3, 1, 0, 9, 8, 4)
 TABLE_ROWS = 12
+#: a registered value whose rows are the units' outputs (PoUW's checked words): the row each unit's `out` must be, which
+#: the verifier's own reads file states (its program has no parameter that names it)
+OUT_VALUE = "rope_out"
+OUT_POSITIONS = (2, 7, 0, 9, 4, 4, 1, 6)
+OUT_ROWS = 10
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -84,22 +89,36 @@ def staged(tmp_path_factory):
     reg = G.Registered.commit(P.program_sha512(program), VALUE, rng.integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
     own = G.reads_file(program, query, {VALUE: 64}, {VALUE: reg.root.hex()})
     (d / "own.json").write_text(json.dumps(own))
-    return SimpleNamespace(dir=d, text=text, reg=reg, own=own, program=program, x=rng.integers(0, 1 << 16, (8, 64)),
+    x = rng.integers(0, 1 << 16, (8, 64))
+    out = G.Registered.commit(P.program_sha512(program), OUT_VALUE,
+                              np.random.default_rng(20261003).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
+    own_out = {**own, "ports": {**own["ports"], "out": {**out.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}
+    (d / "own-out.json").write_text(json.dumps(own_out))
+    return SimpleNamespace(dir=d, text=text, reg=reg, own=own, out=out, own_out=own_out, program=program, x=x,
                            bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
 
 
-def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None) -> Path:
+def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, outs=None, out_salts=None) -> Path:
     positions, refs = G.table(POSITIONS)
     rows, reg_salts, e = s.reg.statement(positions)
     sub = json.loads(s.text.split("\n", 2)[1][5:]).get("subcircuit", "rope-head/d64/neox-bf16")
     inputs = SimpleNamespace(name="rope-registered", subcircuit=SimpleNamespace(id=sub))
-    reg = {"cs": entry or e, **(extra or {})} if registered else None
+    reg = {"cs": entry or e, **(extra or {})} if registered else extra
     out = s.dir / f"{name}.bin"
     fresh = [hm96.SHA512.fresh_salt() for _ in range(8)]
-    FC.write(s.text, inputs, 0, 8, None, out, None, list(range(8)), share_rows=True, outs={"out": np.zeros((8, 64), np.uint16)},
+    FC.write(s.text, inputs, 0, 8, None, out, None, list(range(8)), share_rows=True,
+             outs={"out": np.zeros((8, 64), np.uint16) if outs is None else np.asarray(outs, np.uint16)},
              tables={"x": s.x, "cs": np.asarray(rows)}, refs={"x": list(range(8)), "cs": refs},
-             salts={"x": fresh, "cs": salts or reg_salts, "out": [hm96.SHA512.fresh_salt() for _ in range(8)]}, registered=reg)
+             salts={"x": fresh, "cs": salts or reg_salts, "out": out_salts or [hm96.SHA512.fresh_salt() for _ in range(8)]},
+             registered=reg)
     return out
+
+
+def _stage_out(s, name: str, positions=OUT_POSITIONS, outs=None, entry=None) -> Path:
+    """The honest statement with its output row registered too: each instance's output the registered `rope_out` row at its
+    unit's position, committed under that row's registered salt, the header naming each row's position and path."""
+    rows, salts, e = s.out.statement(positions)
+    return _stage(s, name, extra={"out": entry or e}, outs=rows if outs is None else outs, out_salts=salts)
 
 
 def _statement(s, public: Path, own: Path | None, bound: list[str] | None = None) -> tuple[int, str]:
@@ -177,7 +196,7 @@ def test_the_ports_are_exactly_the_verifiers(staged):
     code, out = _statement(staged, public, _own(staged, "own-x", lambda ps: ps.__setitem__("x", {**ps["cs"], "value": "x"})))
     assert code == 1 and "commits port x's rows of x afresh" in out
     code, out = _statement(staged, public, _own(staged, "own-y", lambda ps: ps.__setitem__("y", ps["cs"])))
-    assert code == 1 and "y is not an input port" in out
+    assert code == 1 and "y is not a row of the circuit (an input port, or an output port's row)" in out
     x_entry = {"value": "x", "positions": list(range(8)), "paths": [""] * 8}
     code, out = _statement(staged, _stage(staged, "extra-x", extra={"x": x_entry}), staged.dir / "own.json")
     assert code == 1 and "names port x registered, and the verifier's registered reads do not" in out
@@ -210,10 +229,49 @@ def test_the_ports_rows_are_the_registered_rows(staged):
             assert code == 1 and f"port cs's rows are 64 u16 words, not {VALUE}'s registered {want}" in out, (name, out)
 
 
-def test_an_output_row_is_never_a_registered_value(staged):
-    """An output row is its instance's own (§16.13): reads that name one are refused, before any row is opened."""
-    code, out = _statement(staged, _stage(staged, "honest-4"), _own(staged, "own-out", lambda ps: ps.__setitem__("out", ps["cs"])))
-    assert code == 1 and "out is an output row, its instance's own" in out, out
+def test_a_registered_output_row_is_accepted_and_reports_its_root(staged):
+    """An output row (§16.13) is a registered port too: each instance's output row, committed under the registered row's
+    salt, opens the registered root at the position the verifier's reads file names for its unit."""
+    code, out = _statement(staged, _stage_out(staged, "out-honest"), staged.dir / "own-out.json")
+    assert code == 0, out
+    line = json.loads(out.splitlines()[0])
+    assert line["registered"] == {"cs": {"value": VALUE, "root": staged.reg.root.hex()},
+                                  "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
+
+
+def test_a_registered_output_row_must_be_the_registered_row(staged):
+    """An instance whose output is not the registered row (its salt the registered one), or whose row is committed under a
+    fresh salt, does not open the registered root; nor does a row with another row's path, or at another position."""
+    rows, _, e = staged.out.statement(OUT_POSITIONS)
+    wrong = np.asarray(rows, np.uint16)
+    wrong[3, 5] ^= 1
+    code, out = _statement(staged, _stage_out(staged, "out-wrong", outs=wrong), staged.dir / "own-out.json")
+    assert code == 1 and f"port out: table row 3 does not open {OUT_VALUE}'s registered root at position {OUT_POSITIONS[3]}" in out, out
+    fresh = _stage(staged, "out-fresh", extra={"out": e}, outs=rows)
+    code, out = _statement(staged, fresh, staged.dir / "own-out.json")
+    assert code == 1 and f"port out: table row 0 does not open {OUT_VALUE}'s registered root at position {OUT_POSITIONS[0]}" in out, out
+    swapped = {**e, "paths": [e["paths"][1], e["paths"][0], *e["paths"][2:]]}
+    moved = {**e, "positions": [OUT_POSITIONS[0] + 1, *OUT_POSITIONS[1:]]}
+    for name, entry in (("out-swapped", swapped), ("out-moved", moved)):
+        code, out = _statement(staged, _stage_out(staged, name, entry=entry), staged.dir / "own-out.json")
+        assert code == 1 and "port out: table row 0 does not open" in out, (name, out)
+
+
+def test_a_registered_output_row_is_at_its_units_position(staged):
+    """A row that opens the registered root at its own position is refused when the verifier's reads put the unit at
+    another: unit 2's output is the registered row 3, and the verifier reads row 0 for it."""
+    at = (*OUT_POSITIONS[:2], 3, *OUT_POSITIONS[3:])
+    code, out = _statement(staged, _stage_out(staged, "out-elsewhere", positions=at), staged.dir / "own-out.json")
+    assert code == 1 and f"port out: unit 2 reads position 3, and the verifier's program reads {OUT_POSITIONS[2]}" in out, out
+
+
+def test_a_registered_output_row_is_on_both_sides(staged):
+    """The statement and the verifier name the same registered ports: an output row the statement names registered and the
+    verifier's file does not is refused, and so is one the verifier reads as registered and the statement commits afresh."""
+    code, out = _statement(staged, _stage_out(staged, "out-one-side"), staged.dir / "own.json")
+    assert code == 1 and "names port out registered, and the verifier's registered reads do not" in out, out
+    code, out = _statement(staged, _stage(staged, "out-afresh"), staged.dir / "own-out.json")
+    assert code == 1 and f"commits port out's rows of {OUT_VALUE} afresh" in out, out
 
 
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):

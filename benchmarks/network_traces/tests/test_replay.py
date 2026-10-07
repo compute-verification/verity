@@ -1,0 +1,122 @@
+"""The end-to-end replay on a tiny synthetic trace calibrated by the library: an honest run is accepted on every
+link-window, raw and committed, with one sync per window shared by a configuration's egress links, and a session made
+late past every sync is a `mismatch` in its own window and in the window its frames spill into."""
+
+from __future__ import annotations
+
+import copy
+import importlib.util
+import json
+from pathlib import Path
+
+from verity.protocols.accounting.communication.warden import calibration
+
+HERE = Path(__file__).resolve().parents[1]
+T = 60  # buckets per window
+
+
+def _replay():
+    spec = importlib.util.spec_from_file_location("network_traces_replay", HERE / "replay.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+rep = _replay()
+
+
+def trace() -> dict:
+    """Three windows of T buckets. Each window has three sessions of four frames, one frame per bucket, whose first
+    frame is ready 1 to 3 buckets after its anchor; each request is one ingress frame, 30 ms after its anchor."""
+    frames, arrival_ms = [], []
+    for w in range(3):
+        for j, (offset, latency) in enumerate(((0, 1), (10, 3), (20, 2))):
+            anchor = w * T + offset
+            frames += [{"session": f"s{w}.{j}", "index": i, "anchor": anchor, "ready": anchor + latency + i}
+                       for i in range(4)]
+            arrival_ms.append(anchor * 100 + 30.0)
+    return {"bucket_ms": 100, "window_buckets": T, "frame_bytes": 4096, "queue_capacity": 1 << 16,
+            "configurations": [{"name": "synthetic", "labels": {"run": "r0", "windows": [0, 3]},
+                                "egress": [{"link": "responses", "frames": canonical(frames)}],
+                                "ingress": [{"link": "requests", "arrival_ms": arrival_ms}]}]}
+
+
+def canonical(frames: list[dict]) -> list[dict]:
+    """The recorder's canonical order: by ready bucket, then anchor."""
+    return sorted(frames, key=lambda f: (f["ready"], f["anchor"], f["session"], f["index"]))
+
+
+def run(tmp_path: Path, doc: dict, report: dict) -> tuple[dict, list[dict]]:
+    (tmp_path / "trace.json").write_text(json.dumps(doc))
+    (tmp_path / "cal.json").write_text(json.dumps(report))
+    out = tmp_path / "out"
+    assert rep.main([str(tmp_path / "trace.json"), "--calibration", str(tmp_path / "cal.json"), "--out", str(out)]) == 0
+    rows = [json.loads(line) for line in (out / "verdicts.jsonl").read_text().splitlines()]
+    return json.loads((out / "summary.json").read_text()), rows
+
+
+def test_an_honest_run_is_accepted_raw_and_committed(tmp_path: Path) -> None:
+    doc = trace()
+    report = calibration.calibrate(doc)
+    assert report["clock_sync"]["honest_miss_rate"] == 0
+    summary, rows = run(tmp_path, doc, report)
+    assert [(r["direction"], r["window"], r["raw"], r["committed"]) for r in rows] == \
+        [("egress", w, None, None) for w in range(3)] + [("ingress", w, None, None) for w in range(3)]
+    e, i = summary["egress"], summary["ingress"]
+    assert e["accepted"] == {"raw": 3, "committed": 3} and i["accepted"] == {"raw": 3, "committed": 3}
+    assert summary["committed_agrees"] and not summary["violations"] and summary["runs_accepted"]["raw"] == 1
+    assert e["frames"] == 36 and e["unreleased_frames"] == 0 and e["calibrator_misses"] == 0
+    # each window's δ is its slowest first frame, 3 buckets: the other sessions wait 1 or 2 buckets for it
+    assert {r["sync"][0] for r in rows if r["direction"] == "egress"} == {3}
+    assert e["latency_ms"]["shaping"]["max"] == 200 and e["latency_ms"]["queueing"]["max"] == 0
+    assert e["latency_ms"]["first_frame"]["max"] == 300
+    r = report["egress"][0]["allocation"]
+    assert e["padding_share"] == 1 - 36 / (3 * T * r)
+    assert i["frames"] == 9 and i["delivery_delay_ms"]["max"] == 70.0
+
+
+def test_the_egress_links_of_a_configuration_share_one_sync_per_window(tmp_path: Path) -> None:
+    """One clock per spatial unit: a second link whose first frames are 5 buckets late raises every window's δ from 3
+    to 5 on both links, and both are accepted, raw and committed."""
+    doc = trace()
+    cfg = doc["configurations"][0]
+    slow = [f | {"ready": f["anchor"] + 5 + f["index"]} for f in cfg["egress"][0]["frames"]]
+    cfg["egress"].append({"link": "responses-b", "frames": canonical(slow)})
+    report = calibration.calibrate(doc)
+    summary, rows = run(tmp_path, doc, report)
+    egress = [r for r in rows if r["direction"] == "egress"]
+    assert sorted((r["link"], r["window"]) for r in egress) == [(link, w) for link in ("responses", "responses-b")
+                                                                for w in range(3)]
+    assert all(r["raw"] is None and r["committed"] is None for r in rows)
+    assert {(r["window"], r["sync"][0], r["sync"][1]) for r in egress} == {(w, 5, egress[w]["sync"][1]) for w in range(3)}
+    e = summary["egress"]
+    assert e["accepted"] == {"raw": 6, "committed": 6} and e["calibrator_misses"] == 0
+    assert summary["committed_agrees"] and summary["runs_accepted"] == {"raw": 1, "committed": 1}
+
+
+def test_a_session_late_past_every_sync_is_a_mismatch(tmp_path: Path) -> None:
+    """Window 1's second session (anchor 70) is 45 buckets late, ready at 118-121, past δ's largest value (15). No sync
+    meets window 1, so the honest prover declares the most lenient one, δ = 15, and the session is logically due
+    behind the window's third session, at bucket 98. The shaper hands its frames when ready, the last two in window 2.
+    Both windows are mismatches, raw and committed: window 1 is the miss, from its bucket 38 (98), and window 2
+    carries it from its first bucket."""
+    honest = trace()
+    report = calibration.calibrate(honest)
+    assert max(report["clock_sync"]["deltas"]) == 15
+    doc = copy.deepcopy(honest)
+    link = doc["configurations"][0]["egress"][0]
+    for f in link["frames"]:
+        if f["session"] == "s1.1":
+            f["ready"] += 45
+    link["frames"] = canonical(link["frames"])
+    summary, rows = run(tmp_path, doc, report)
+    egress = [r for r in rows if r["direction"] == "egress"]
+    assert [(r["raw"], r["committed"], r.get("cause")) for r in egress] == \
+        [(None, None, None), ("mismatch", "mismatch", "miss"), ("mismatch", "mismatch", "carried")]
+    assert egress[1]["detail"] == {"own_late_frames": 4, "carried_late_frames": 0, "first_bucket": 38}
+    assert egress[2]["detail"] == {"own_late_frames": 0, "carried_late_frames": 2, "first_bucket": 0}
+    assert all(r["raw"] is None and r["committed"] is None for r in rows if r["direction"] == "ingress")
+    e = summary["egress"]
+    assert e["accepted"] == {"raw": 1, "committed": 1} and e["violations_by_cause"] == {"miss": 1, "carried": 1}
+    assert e["calibrator_misses"] == 1 and e["rejected_without_own_late_frame"] == 1
+    assert summary["committed_agrees"] and summary["runs_accepted"] == {"raw": 0, "committed": 0}

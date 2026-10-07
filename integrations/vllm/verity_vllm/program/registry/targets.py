@@ -28,8 +28,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ir.defs import bind
-from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+from verity.primitives.circuits.defs import bind
+from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import value_inputs as VI
@@ -74,8 +74,8 @@ TARGETS: dict[str, dict[str, Any]] = {
                            "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; under VLLM_BATCH_INVARIANT=1 "
                                           "vLLM's linear layers run the Triton matmul_kernel_persistent, then `output + bias` in bf16, at every M; "
                                           "other bf16 matmuls stay on cuBLASLt with split-K disabled, the same chain without a bias)",
-                           "pipeline": "verity.ml.tc.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
-                                       "verity.ml.tc.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
+                           "pipeline": "verity_catalog.silicon.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
+                                       "verity_catalog.silicon.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
                            "flash_attn_versions": (2,),
                            "fa2_construction": "check-inf-per-iteration",
                            # the fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`)
@@ -344,6 +344,26 @@ def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
     raise UnregisteredTarget(f"per-tensor FP8 linear on {gt.key} ({profile.capability_str}): no registered binding")
 
 
+def fp8_block_dot(profile):
+    """The e4m3 k32 step the blockwise FP8 linear (`CutlassFp8BlockScaledMMKernel`) binds on the declared target, as the version 3
+    Definitions' `DOT`; None on a target whose step is Hopper's (`ScaledMmFp8Block_v1` and its shared-scale form are that step's chain,
+    and the recorded Programs bind them).  Refused by name where the GEMM target records no blockwise step (`GemmTarget.fp8_block_dot`):
+    `_C.cutlass_scaled_mm` reaches another blockwise kernel there under the same op and kernel class."""
+    gt = gemm_target(profile)
+    dot = FP8_DOTS.get(gt.fp8_block_dot) if gt.fp8_block_dot else None
+    if dot is None:
+        raise UnregisteredTarget(f"blockwise FP8 linear on {gt.key} ({profile.capability_str}): this target's _C.cutlass_scaled_mm "
+                                 f"blockwise kernel has no registered Definition")
+    return None if dot is HopperE4m3QgmmaDot32 else dot
+
+
+def scaled_mm_fp8_block_spec(profile, K: int, N: int, G: int, scale: str | None = None):
+    """The registered Definition of the blockwise FP8 linear on one token row on the declared target, under the scale construction
+    `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` / `ScaledMmFp8Block_v1`
+    on hopper, the version 3 forms `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
+    return fp8.block_gemm(K, N, G, scale or profile.effective_fp8_scale_construction(), fp8_block_dot(profile))
+
+
 def _fp4_dot(profile):
     gt = gemm_target(profile)
     dot = FP4_DOTS.get(gt.fp4_dot) if gt.fp4_dot else None
@@ -370,6 +390,20 @@ def nvfp4_gemm_spec(profile, K: int, N: int):
     return bind(nvfp4.ScaledMmNvfp4, K=int(K), N=int(N), DOT=dot)
 
 
+def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: bool = False):
+    """The registered Definition of `_C.fused_add_rms_norm` on one row on the declared target: under `batch_invariant` the generic
+    kernel (`RMSNormFusedCuda_v2{N,EPS}`; with `eps_input` its twin `RMSNormFusedCuda_v4{N}` that reads eps as an input); refused by
+    name otherwise, where vLLM launches the width-8 kernel, whose block size off batch invariance has no registered Definition."""
+    if not profile.batch_invariant:
+        raise UnregisteredTarget("fused_add_rms_norm without batch invariance launches the width-8 fused_add_rms_norm_kernel<bf16, 8> "
+                                 "(layernorm_kernels.cu, `!batch_invariant_launch`), whose block size off batch invariance is not "
+                                 "pinned: RMSNormFusedCuda_v1 models that kernel at the batch-invariant block size, and v2 is the "
+                                 "generic kernel launched only under batch invariance")
+    if eps_input:
+        return bind(VI.RMSNormFusedCudaV4, N=N)
+    return bind(b1.RMSNormFusedCuda, N=N, EPS=EPS)
+
+
 _SCALE_INPUT = {"Attention_v3": VI.AttentionV10, "Attention_v2": VI.AttentionV12, "Attention_v4": VI.AttentionV13,
                 "Attention_v5": F2.AttentionV11, "AttentionSoftcap_v1": VI.AttentionSoftcapV4, "AttentionSoftcap_v2": VI.AttentionSoftcapV5}
 
@@ -385,16 +419,9 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
     if scale_input:
         spec = attention_spec(profile, T, NH, KVH, D, seqlen_q, row, own_rows, cap)
         return bind(_SCALE_INPUT[spec.base_id], **{k: v for k, v in spec.bindings.items() if k != "CAP"})
-    g = attention_geometry(profile, D, seqlen_q, NH, KVH)
     if cap is not None:
-        from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
-        if uses_accepted_kinds(profile):
-            return bind(DN.AttentionSoftcap, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap))
-        if not fa2_check_inf(profile) or row is None or own_rows is None:
-            raise UnregisteredTarget("a softcapped row off the accepted target is registered only under FA2's per-iteration Check_inf, "
-                                     "with the row's index among its sequence's query rows and their number")
-        return bind(F2S.AttentionSoftcapV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap), DOT=g["DOT"],
-                    INV=g["INV"], MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
+        return softcapped(attention_spec(profile, T, NH, KVH, D, seqlen_q, row, own_rows), cap)
+    g = attention_geometry(profile, D, seqlen_q, NH, KVH)
     if uses_accepted_kinds(profile):
         return bind(b1.AttentionV3, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
     if fa3_check_inf(profile):
@@ -409,6 +436,18 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
         return bind(F2.AttentionV5, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"],
                     MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
     return bind(b1.AttentionV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"])
+
+
+def softcapped(spec, cap: float):
+    """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
+    for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
+    chain has a registered softcapped form (UnregisteredTarget)."""
+    from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
+    body = {"Attention_v3": DN.AttentionSoftcap, "Attention_v5": F2S.AttentionSoftcapV2}.get(spec.base_id)
+    if body is None:
+        raise UnregisteredTarget(f"{spec.base_id} has no registered softcapped chain: a softcapped row is registered on the accepted target "
+                                 f"and under FA2's per-iteration Check_inf")
+    return bind(body, **spec.bindings, CAP=float(cap))
 
 
 def describe(profile) -> dict[str, Any]:
@@ -433,5 +472,5 @@ def describe(profile) -> dict[str, Any]:
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "scaled_mm_fp8_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "attention_spec", "describe",
+           "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]

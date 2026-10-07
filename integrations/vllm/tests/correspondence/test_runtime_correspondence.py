@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from verity.ir.codec import encode_program, program_digest
-from verity.ir.program import Program
+from verity.primitives.circuits.codec import encode_program, program_digest
+from verity.primitives.circuits.program import Program
 from verity_vllm.correspondence.runtime import (
     JSON_SCHEMA, NAMESPACE, SCHEMA, ArgSpan, RuntimeCorrespondence, correspondence_digest, load_correspondence, validate_document,
 )
@@ -176,7 +176,7 @@ def test_rank_argument_is_validated():
 
 
 def test_world_above_two_is_refused():
-    """Collective records exist for the two-rank ops only: a rank of a larger world is refused, never emitted with `collective: null`."""
+    """A two-rank op (`verity_tp::all_gather2` / `all_reduce2`) on a rank of a larger world is refused, never emitted with one peer."""
     tp.ensure_ops()
     with pytest.raises(NotImplementedError, match="world 3 refused"):
         derive_report(tp.Model(), (tp._meta(3, tp.H), tp._meta(3, tp.Q), tp._meta(3, tp.Q), tp._meta(3, tp.H)), **tp.PROF,
