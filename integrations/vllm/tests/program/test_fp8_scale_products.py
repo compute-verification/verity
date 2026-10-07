@@ -10,8 +10,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import fp8
 from verity_vllm.program.kernels import fp8_twins
 from verity_vllm.program.registry import prims as P

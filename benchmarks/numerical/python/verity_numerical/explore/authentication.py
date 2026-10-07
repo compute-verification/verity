@@ -1,7 +1,7 @@
 """What authenticating the boundary values against Verity's leaf-Merkle roots costs A-GKR and B-Ligero.
 
 A relation-only proof (``authentication = excluded``, both PROTOCOL.md files) is not a Verity proof: the batch's
-``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity_catalog.targets.target``: "boundary words are
+``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity.ml.circuits.targets.target``: "boundary words are
 authenticated as packed words against the object's Merkle roots").  This module reads the real K=1536 obligation
 (``fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json``) for the leaf structure -- nothing about
 leaf sizes, tree depths or hash framing is hard-coded -- and costs four ways of paying for that binding.
@@ -9,7 +9,7 @@ leaf sizes, tree depths or hash framing is hard-coded -- and costs four ways of 
 What is authenticated per input (read from the fixture by :func:`read_openings`)
 ====================================================================================
 
-Three whole-tensor leaves under the ``verity-vllm/leaf/v1`` scheme (``verity.primitives.commitments.leaves``), opened as packed
+Three whole-tensor leaves under the ``verity-vllm/leaf/v1`` scheme (``verity.ml.commitments.leaves``), opened as packed
 leaves (``verity_sp1.proofs.packed``): the checker hashes the *whole* leaf and reads words at statement-fixed
 indices; range openings do not exist yet (``leaves.py`` docstring).
 
@@ -40,7 +40,7 @@ resistance the protocols assume (section 7 of both), recorded on the options tha
 
 *Reading C (values in the clear).*  ``verity_sp1.proofs.transparent`` and ``packed.check_packed_openings`` are
 reference checkers that see the openings in the clear and are declared "not zero-knowledge; it is the reference".
-Nothing in ``verity.primitives.commitments`` forbids handing the opened leaves to a verifier; a backend that does so is a
+Nothing in ``verity.ml.commitments`` forbids handing the opened leaves to a verifier; a backend that does so is a
 ``NON_ZK_PROOF`` at best under ``archive/AGENTS.md``'s labels.  Option (b) is costed under this reading and marked
 incompatible with reading P.
 
@@ -54,7 +54,7 @@ Options (per input and per batch; see :func:`cost_option`)
 (c) Recommitment: in-circuit SHA-256 of the *leaf* only, its digest disclosed; the verifier folds the Merkle path
     natively.  Saves the path compressions; discloses leaf digests (hiding assumption).
 (d) Protocol change: Verity re-commits at the runtime with Poseidon2 over Goldilocks (t=12, R_F=8, R_P=22,
-    ``p3-goldilocks``); leaf and path hashed in circuit.  This changes ``verity.primitives.commitments`` -- the README's
+    ``p3-goldilocks``); leaf and path hashed in circuit.  This changes ``verity.ml.commitments`` -- the README's
     "Commitments" section owns the leaf scheme -- and every recorded root; a protocol decision, not a backend
     optimisation.
 
@@ -91,7 +91,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.primitives.commitments.leaves import (
+from verity.ml.commitments.leaves import (
     DIGEST_BYTES,
     LEAF_TAG,
     LIFT_TAG,
@@ -145,7 +145,7 @@ CITATIONS: dict[str, str] = {
     "poseidon2_goldilocks": "p3-goldilocks poseidon2.rs: Goldilocks Poseidon2 alpha=7, R_F=8, R_P=22 (widths 8, 12, 16); Plonky3 Poseidon2Air Goldilocks "
                             "WIDTH=12, SBOX_DEGREE=7, HALF_FULL_ROUNDS=4, PARTIAL_ROUNDS=22. https://docs.rs/p3-goldilocks/latest/src/p3_goldilocks/poseidon2.rs.html",
     "poseidon2_r1cs": "faulhornlabs/hash-circuits: Poseidon2 (t=3, BN254) two-to-one compression ~240 nonlinear R1CS constraints (order-of-magnitude cross-check).",
-    "leaf_scheme": "verity/primitives/commitments/leaves.py: H(tag,*parts)=sha256(u32be(len tag)||tag||(u64be(len part)||part)*); "
+    "leaf_scheme": "verity/ml/commitments/leaves.py: H(tag,*parts)=sha256(u32be(len tag)||tag||(u64be(len part)||part)*); "
                    "leaf=(id,dtype,shape,value); node/lift; DIGEST_BYTES=32; path_shape/tree_depth.",
     "packed": "archive/sp1/python/verity_sp1/proofs/packed.py: 'the guest authenticates the whole packed leaf against the committed root, then reads the "
               "word at the statement-fixed index'; 'a leaf is hashed once however many positions read words of it'; canonical_id/dtype/shape are the prover's to supply.",
@@ -155,8 +155,8 @@ CITATIONS: dict[str, str] = {
                         "of H is assumed for soundness, hiding beyond CRH is an extra assumption; archive/direct/PROTOCOL.md sections 1, 7, 8 likewise.",
     "privacy_reference": "archive/sp1/python/verity_sp1/proofs/transparent.py:10: the reference checker is 'not zero-knowledge; it is the reference every other "
                          "backend must agree with' -- it sees openings in the clear.",
-    "readme_commitments": "README.md 'Commitments': verity.primitives.commitments owns application-level layouts, roots, openings; proof-system-internal commitments "
-                          "are the backend's.  Changing the leaf hash is a verity.primitives.commitments (protocol) change.",
+    "readme_commitments": "README.md 'Commitments': verity.ml.commitments owns application-level layouts, roots, openings; proof-system-internal commitments "
+                          "are the backend's.  Changing the leaf hash is a verity.ml.commitments (protocol) change.",
     "relation_census": "archive/gkr/PROTOCOL.md 9.4 / archive/direct/PROTOCOL.md 9.4: committed elements at K=1536, B=4096: A 181.4M, B 779.6M "
                        "(accounting.census_estimate_a/b); per-unit census security.census.census_vu(1536).",
 }
@@ -525,7 +525,7 @@ def cost_option(option: str, openings: Openings, sharing: Sharing, B: int = 4096
         notes.append("leaf digests disclosed to the verifier (hiding of the row under SHA-256 preimage resistance: an assumption "
                      "beyond CRH, PROTOCOL.md section 7 of both candidates); the verifier folds the Merkle paths natively")
     if option == "d":
-        notes.append("changes verity.primitives.commitments (verity-vllm/leaf/v1 -> a Poseidon2 leaf scheme) and every recorded root, conformance "
+        notes.append("changes verity.ml.commitments (verity-vllm/leaf/v1 -> a Poseidon2 leaf scheme) and every recorded root, conformance "
                      "vector and the SP1 guest: a protocol decision (README 'Commitments'), not a backend optimisation")
     frac_mul = mul * B / rel.mul_gates_batch
     frac_ca = ca * B / rel.committed_a_batch
@@ -590,7 +590,7 @@ def build_report(B: int = 4096) -> dict[str, Any]:
             },
             "reading_C_values_in_clear": {
                 "statement": "the reference checkers (transparent.py, packed.check_packed_openings) see openings in the clear and say they are not ZK; "
-                             "nothing in verity.primitives.commitments forbids a verifier that sees values, but such a backend is NON_ZK_PROOF at best.",
+                             "nothing in verity.ml.commitments forbids a verifier that sees values, but such a backend is NON_ZK_PROOF at best.",
                 "code": [CITATIONS["privacy_reference"]],
             },
             "costed_first": "reading P",

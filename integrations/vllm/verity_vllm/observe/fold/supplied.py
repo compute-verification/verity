@@ -5,8 +5,8 @@ the fold finishes."""
 
 from __future__ import annotations
 
-from verity.primitives.circuits.refs import Affine
-from verity.primitives.circuits.types import Record, Type, Value
+from verity.ml.circuits.refs import Affine
+from verity.ml.circuits.types import Record, Type, Value
 
 from verity_vllm.observe.fold.resolver import Supplied
 
@@ -97,7 +97,7 @@ def program_registered_values(program_dirs) -> bool:
 
 def input_nodes(program) -> dict[str, list[int]]:
     """Each root parameter's Input nodes (root body node indices, ascending), by parameter name, from the lowered root itself."""
-    from verity.primitives.circuits.refs import runs
+    from verity.ml.circuits.refs import runs
     root = program.root
     out: dict[str, list[int]] = {}
     for (name, _t), coll in zip(root.program_fn.signature()[0], root.input_colls):

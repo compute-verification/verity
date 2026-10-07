@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import torch
 
-from verity.primitives.circuits.refs import Coll, concat
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import dtype_is, shape
