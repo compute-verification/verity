@@ -79,7 +79,7 @@
   }
  ],
  "encoding": "lowercase hex; row_bytes are the row's words little-endian; a digest is H(prefix || row_bytes), keyed for BLAKE3",
- "generator": "python -m verity.primitives.commitments.frame_v3.vectors",
+ "generator": "python -m verity.ml.commitments.frame_v3.vectors",
  "row_leaves": [
   {
    "digest": "86f5890e1d0b9fda17998a25419130dff2da33e80f16f17883b3fb90c5465808",
