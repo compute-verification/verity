@@ -3,7 +3,7 @@ name: lean-proofs
 description: >
   How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
   scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
-  tools/verity/lean/audit.py, stating assumptions as named Props, freezing and listing the guarantees a ledger or PR cites in
+  tools/verity/lean/check.py, stating assumptions as named Props, freezing and listing the guarantees a ledger or PR cites in
   lean-audit.json, moving them without a DM to Daniel (--moved), watching ArkLib and other dependencies for proofs
   of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
@@ -45,7 +45,7 @@ bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Ma
 cd PKG && lake build                   once per checkout; incremental from then on
 lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
 lake build Pkg.Area.File               after editing a file others import, so they see the change
-python tools/verity/lean/audit.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part)
+python tools/verity/lean/check.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part)
 ~~~
 
 Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
@@ -54,7 +54,7 @@ proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a s
 `--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
-your own, use the fast path on a shared machine. Don't run `audit.py --build --update` from a fresh tree there: that took
+your own, use the fast path on a shared machine. Don't run `check.py --build --update` from a fresh tree there: that took
 about 22 minutes unpinned on the check cores.
 
 ~~~text
@@ -70,7 +70,7 @@ the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which 
 refuse.
 
 To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python
-tools/verity/lean/audit.py --build --update PKG` with no wrapper around it. It exits 0 when the Lean check passes, whether or not the
+tools/verity/lean/check.py --build --update PKG` with no wrapper around it. It exits 0 when the Lean check passes, whether or not the
 record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
 in the run's own clone of the shipped tree, removed when the run ends; with `--cwd source` every run of the commit builds in
 the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live Lean check.
@@ -123,7 +123,7 @@ simp with that.
   guarantee easier: don't strengthen an input relation, weaken an output relation, shrink the challenge space, add an
   unmotivated hypothesis, or move a verifier check into an assumption. That list is also what Daniel looks for when a change reaches him.
 - **List what you cite.** When a ledger row, a table or a PR description cites a guarantee as proved, add its theorem
-  (`SecurityProofs.G` under the four names) to `guarantees` and run `python tools/verity/lean/audit.py --update PKG`. Commit the
+  (`SecurityProofs.G` under the four names) to `guarantees` and run `python tools/verity/lean/check.py --update PKG`. Commit the
   record with the proof.
 - **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
   (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
@@ -144,7 +144,7 @@ simp with that.
   when you want a second reading of the printout, but don't hold the merge for it.
 - **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
   the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
-  `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
+  `check.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
   record says, renamed or lifted, and the definitions the same under their old names, each get one line; the rest prints
   in full. Moving a definition to another module needs no map.
 - **A lift needs no map.** `theorem X (xs) : e` becoming `theorem X (xs) : G as`, with `def G (ys) : Prop := e` in a
@@ -154,12 +154,12 @@ simp with that.
 
 ## Before the PR
 
-- `python tools/verity/lean/audit.py PKG` passes for every package you touched, and `pytest verity/ml/flock/tests
+- `python tools/verity/lean/check.py PKG` passes for every package you touched, and `pytest verity/ml/flock/tests
   tools/verity/lean/tests tools/verity/check/tests/test_lean_*.py tests/test_lean_packages.py` passes.
 - The PR says which guarantees changed, if any, and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
   both sides' rows. Run `python tools/verity/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
-  rebuild, and only a conflict it refuses needs `audit.py --update` on the merged tree.
+  rebuild, and only a conflict it refuses needs `check.py --update` on the merged tree.
 
 ## Rulings so far
 
