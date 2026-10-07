@@ -551,8 +551,8 @@ the timed audit and the simulator with the dense codec as default.
 
 - **Trusted, reviewed once:** `Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
   `Security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
-  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Specs/Pous/Assumptions.lean` and
-  `Security/Specs/Pous/Guarantees.lean`.
+  `Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Security/Models/Pous/Assumptions.lean` and
+  `Security/Models/Pous/Guarantees.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
 - **Proofs:** `Security/Proofs/Pous/`, checked by Verity's `tools/verity/lean/check.py` against `lean-audit.json`.
@@ -667,7 +667,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
   isolation: both outside Lean;
 - decode cost, which isn't modeled.
 
-## Guarantees (`Security/Specs/Pous/Guarantees.lean`)
+## Guarantees (`Security/Models/Pous/Guarantees.lean`)
 
 | Statements | What | Status |
 |---|---|---|
@@ -701,7 +701,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
 `Pous.ColumnGame`, is being drafted.
 
-## Named assumptions (`Security/Specs/Pous/Assumptions.lean`)
+## Named assumptions (`Security/Models/Pous/Assumptions.lean`)
 
 Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
