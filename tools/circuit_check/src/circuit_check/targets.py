@@ -68,6 +68,8 @@ def load_registries() -> None:
     import verity_catalog.definitions.boolean.cast  # noqa: F401
     import verity_catalog.definitions.boolean.elementwise  # noqa: F401
     import verity_catalog.definitions.boolean.gemm  # noqa: F401
+    import verity.primitives.commitments.gates.frame_v3  # noqa: F401
+    import verity.primitives.commitments.gates.hm96  # noqa: F401
     import verity.primitives.commitments.gates.lms  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
     import verity_catalog.definitions.boolean.mufu  # noqa: F401
