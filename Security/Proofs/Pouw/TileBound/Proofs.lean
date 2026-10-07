@@ -589,7 +589,7 @@ theorem Pouw.SecurityProofs.TileBound.CrossOnOfEval : Pouw.Guarantees.TileBound.
 
 theorem Pouw.SecurityProofs.TileBound.CrossXCount : Pouw.Guarantees.TileBound.CrossXCount := @Pouw.TileBound.crossX_count
 
-theorem Pouw.SecurityProofs.TileBound.CrossYCount : Pouw.Guarantees.TileBound.CrossYCount := @Pouw.TileBound.crossY_count
+theorem Pouw.SecurityProofs.TileBound.CrossYCount.{u_1, u_2, u_4} : Pouw.Guarantees.TileBound.CrossYCount.{u_1, u_2, u_4} := @Pouw.TileBound.crossY_count
 
 theorem Pouw.SecurityProofs.TileBound.FmtClosedIff : Pouw.Guarantees.TileBound.FmtClosedIff := @Pouw.TileBound.fmt_closed_iff
 
@@ -609,6 +609,6 @@ theorem Pouw.SecurityProofs.TileBound.Tf32ClosedUpto : Pouw.Guarantees.TileBound
 
 theorem Pouw.SecurityProofs.TileBound.Tf32OpenAt : Pouw.Guarantees.TileBound.Tf32OpenAt := @Pouw.TileBound.tf32_open_at
 
-theorem Pouw.SecurityProofs.TileBound.TileCostGe : Pouw.Guarantees.TileBound.TileCostGe := @Pouw.TileBound.tile_cost_ge
+theorem Pouw.SecurityProofs.TileBound.TileCostGe.{u_1, u_3} : Pouw.Guarantees.TileBound.TileCostGe.{u_1, u_3} := @Pouw.TileBound.tile_cost_ge
 
-theorem Pouw.SecurityProofs.TileBound.TileCount : Pouw.Guarantees.TileBound.TileCount := @Pouw.TileBound.tile_count
+theorem Pouw.SecurityProofs.TileBound.TileCount.{u_1, u_3} : Pouw.Guarantees.TileBound.TileCount.{u_1, u_3} := @Pouw.TileBound.tile_count

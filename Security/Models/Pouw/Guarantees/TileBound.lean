@@ -130,8 +130,8 @@ namespace Pouw.TileBound
 open Finset Pouw.Fp8Atom Pouw.PearlC.Fp4
 
 /-- **The Y-side count.** -/
-def _root_.Pouw.Guarantees.TileBound.CrossYCount : Prop :=
-  ∀ {K : Type*} [Field K] {m k n : ℕ} {τ : Type*} [Fintype τ] {γ : Type*} [Fintype γ] (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.CrossOn liveX liveY) (B : YBlocks k n γ),
+def _root_.Pouw.Guarantees.TileBound.CrossYCount.{u_1, u_2, u_4} : Prop :=
+  ∀ {K : Type u_1} [Field K] {m k n : ℕ} {τ : Type u_2} [Fintype τ] {γ : Type u_4} [Fintype γ] (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.CrossOn liveX liveY) (B : YBlocks k n γ),
     nLive liveX liveY ≤ ∑ t, (B.touches (P.b t) + B.touches (P.b' t))
 
 end Pouw.TileBound
@@ -278,8 +278,8 @@ namespace Pouw.TileBound
 open Finset Pouw.Fp8Atom Pouw.PearlC.Fp4
 
 /-- **The tile cost bound.** Such a tile program costs at least FP4's per-slot price for every live product. -/
-def _root_.Pouw.Guarantees.TileBound.TileCostGe : Prop :=
-  ∀ {K : Type*} [Field K] {m k n : ℕ} {β : Type*} [Fintype β] {G : ℕ} (P : TileProg K m k n G) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.toBilin.toQuad.CrossOn liveX liveY) (BX : XBlocks m k β) (hr : P.Representable BX),
+def _root_.Pouw.Guarantees.TileBound.TileCostGe.{u_1, u_3} : Prop :=
+  ∀ {K : Type u_1} [Field K] {m k n : ℕ} {β : Type u_3} [Fintype β] {G : ℕ} (P : TileProg K m k n G) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.toBilin.toQuad.CrossOn liveX liveY) (BX : XBlocks m k β) (hr : P.Representable BX),
     price .fp4 * nLive liveX liveY ≤ P.cost
 
 end Pouw.TileBound
@@ -289,8 +289,8 @@ open Finset Pouw.Fp8Atom Pouw.PearlC.Fp4
 
 /-- **The tile count.** A tile program correct on the live entries, whose `P`-inputs each read at most one X-block,
 fires at least `nLive / 8192` gates. -/
-def _root_.Pouw.Guarantees.TileBound.TileCount : Prop :=
-  ∀ {K : Type*} [Field K] {m k n : ℕ} {β : Type*} [Fintype β] {G : ℕ} (P : TileProg K m k n G) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.toBilin.toQuad.CrossOn liveX liveY) (BX : XBlocks m k β) (hr : P.Representable BX),
+def _root_.Pouw.Guarantees.TileBound.TileCount.{u_1, u_3} : Prop :=
+  ∀ {K : Type u_1} [Field K] {m k n : ℕ} {β : Type u_3} [Fintype β] {G : ℕ} (P : TileProg K m k n G) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop} (h : P.toBilin.toQuad.CrossOn liveX liveY) (BX : XBlocks m k β) (hr : P.Representable BX),
     nLive liveX liveY ≤ G * gateSlots
 
 end Pouw.TileBound

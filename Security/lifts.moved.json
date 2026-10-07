@@ -4,8 +4,6 @@
  "Pouw.AlignedExact.region_count_given_le": "Pouw.SecurityProofs.AlignedExact.RegionCountGivenLe",
  "Pouw.Dimension.H100.h32LoopFree": "Pouw.SecurityProofs.Dimension.H100.H32LoopFree",
  "Pouw.Dimension.H100.h32Measured": "Pouw.SecurityProofs.Dimension.H100.H32Measured",
- "Pouw.Fp8Atom.H1T.Proofs.h1tDistinctLive": "Pouw.SecurityProofs.Fp8Atom.H1T.H1tDistinctLive",
- "Pouw.Fp8Atom.H1T.Proofs.h1tRunningOfDistinct": "Pouw.SecurityProofs.Fp8Atom.H1T.H1tRunningOfDistinct",
  "Pouw.PearlC.chainCap_flagged_le": "Pouw.SecurityProofs.PearlC.ChainCapFlaggedLe",
  "Pouw.PearlC.fragSkip_saving_le": "Pouw.SecurityProofs.PearlC.FragSkipSavingLe",
  "Pouw.PearlC.gammaFp4ChainOnly_sm120Issue_lut256_8192": "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192",

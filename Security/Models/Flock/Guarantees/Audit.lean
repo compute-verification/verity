@@ -1,4 +1,4 @@
-import Mathlib
+import Mathlib.Analysis.MeanInequalities
 
 /-!
 # C-Flock's one-stage audit: its guarantees (trusted)
