@@ -20,4 +20,4 @@ path = "../../verity/experimental/core/protocols/network/nci/lean"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Nci"]
+roots = ["Properties.Nci", "Properties.Proofs.Nci"]
