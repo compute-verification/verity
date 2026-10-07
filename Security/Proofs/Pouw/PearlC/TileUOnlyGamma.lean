@@ -1,5 +1,5 @@
 import Proofs.Pouw.PearlC.UOnlyGamma
-import Specs.Pouw.Assumptions.PearlC.TTOutTileUOnly
+import Models.Pouw.Assumptions.PearlC.TTOutTileUOnly
 
 /-!
 # TT_OUT over U alone per audit tile: it asserts more than the (C̃, U) tile row, and γ from it (the cheap-binding lane's file)
