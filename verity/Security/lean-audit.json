@@ -59,7 +59,8 @@
   "Proofs.Flock.EndToEndDrawn",
   "Proofs.Flock.EndToEndHidden",
   "Proofs.Flock.EndToEndRegistered",
-  "Proofs.Flock.ZeroKnowledgeHidden"
+  "Proofs.Flock.ZeroKnowledgeHidden",
+  "Proofs.Pouw.PearlC.FlockTile"
  ],
  "layers": {
   "Definitions.Core": {
@@ -243,7 +244,8 @@
   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
  },
  "four_names": ["Nci", "NetTiming"],
  "guarantees": {
@@ -30678,6 +30680,9 @@
    "signature": ["Pouw.SecurityProofs.PearlC.GammaUImpliesGamma : Pouw.Guarantees.PearlC.GammaUImpliesGamma"],
    "assumptions": [],
    "type_hash": "b7356d1bd4292d7a51333e242bd416d08f63e3c239c0309ed324f9ad112998a3"
+  },
+  "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": {
    "owner": "@compute-accounting",
