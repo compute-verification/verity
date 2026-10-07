@@ -122,6 +122,9 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
            # recorded runs and the rulings say what was, in the paths of their day
            "benchmarks/numerical/tests/bench/data/**", ".agents/skills/friction/SKILL.md",
+           # the applied one-shot splits and their synthetic trees model the registry inside the integration
+           "integrations/vllm/tools/migrate/**", "integrations/vllm/tests/migrate/**",
+           "integrations/vllm/tests/program/test_split_prims_serve.py", "integrations/vllm/tests/tools/test_split_dense.py",
            "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
            "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py",                   # its synthetic trees borrow the old names

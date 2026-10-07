@@ -1,4 +1,4 @@
-"""Split the sampling family of `verity.ml.circuits.ops` into its Definitions, its twins and its vocabulary.
+"""Split the sampling family of `verity_vllm.program.registry` into its Definitions, its twins and its vocabulary.
 
 The repository migration moves every Definition into `catalog/`, which imports only `verity`; before that, each registry module is
 split so that its Definition modules import only `verity` and other Definition modules. For the sampling family:
@@ -42,7 +42,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 VLLM = ROOT / "integrations" / "vllm"
-PKG = "verity.ml.circuits.ops"
+PKG = "verity_vllm.program.registry"
 REG = VLLM / "verity_vllm" / "program" / "registry"
 ALLOWLISTS = VLLM / "tests" / "lint" / "allowlists"
 DIGEST_TEST = VLLM / "tests" / "program" / "test_sampling_split.py"
@@ -99,19 +99,19 @@ EXCEPTIONS = {
                                                     "div.full tables of `program.kernels`); the keep word is that model's output",
 }
 #: where a Value type re-exported as another module's own (`prims.F32`, equal to core's but a distinct object) is taken from
-CORE_TYPES = "verity.ml.circuits.silicon.definitions.scalar"
+CORE_TYPES = "verity_catalog.definitions.scalar"
 
 #: rewrites no AST rule makes, each anchored on its exact text: (file, old, new, occurrences)
 PATCHES = (
-    ("verity/ml/circuits/ops/topp_keep_builder.py",
-     "@cache\ndef _ts():\n    from verity.ml.circuits.ops import topp_split\n    return topp_split\n\n\n", "", 1),
-    ("verity/ml/circuits/ops/topp_keep_builder.py", "_ts().spt_for(", "spt_for(", 1),
-    ("verity/ml/circuits/ops/topp_keep_builder.py", "_ts().z_group(", "z_group(", 2),
-    ("verity/ml/circuits/ops/topp_keep_builder.py", "from functools import cache\n", "", 1),
-    ("verity/ml/circuits/ops/topp_keep_builder.py",
-     "from verity.ml.circuits.ops.topp_word_gates import CW,",
-     "from verity.ml.circuits.ops.topp_geometry import spt_for, z_group\n"
-     "from verity.ml.circuits.ops.topp_word_gates import CW,", 1),
+    ("integrations/vllm/verity_vllm/program/registry/topp_keep_builder.py",
+     "@cache\ndef _ts():\n    from verity_vllm.program.registry import topp_split\n    return topp_split\n\n\n", "", 1),
+    ("integrations/vllm/verity_vllm/program/registry/topp_keep_builder.py", "_ts().spt_for(", "spt_for(", 1),
+    ("integrations/vllm/verity_vllm/program/registry/topp_keep_builder.py", "_ts().z_group(", "z_group(", 2),
+    ("integrations/vllm/verity_vllm/program/registry/topp_keep_builder.py", "from functools import cache\n", "", 1),
+    ("integrations/vllm/verity_vllm/program/registry/topp_keep_builder.py",
+     "from verity_vllm.program.registry.topp_word_gates import CW,",
+     "from verity_vllm.program.registry.topp_geometry import spt_for, z_group\n"
+     "from verity_vllm.program.registry.topp_word_gates import CW,", 1),
     ("integrations/vllm/tests/program/test_sampling_rows.py",
      "    for name, domain_ok in ((\"nv_logf\",",
      "    scalar = {\"nv_logf\": SP.nv_logf, \"nv_log1pf\": SP.nv_log1pf, \"nv_log1pf_v1_model\": SP.nv_log1pf_v1_model}\n"

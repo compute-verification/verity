@@ -31,8 +31,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-PKG = "verity.ml.circuits.ops"
-REGISTRY = Path("verity/ml/circuits/ops")
+PKG = "verity_vllm.program.registry"
+REGISTRY = Path("integrations/vllm/verity_vllm/program/registry")
 #: the family's Definition modules: after the split each imports only `verity` and other Definition modules
 DEFINITION_MODULES = ("fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla")
 #: verity#1130's (GLM-5.3's DSA indexer and FA3 sparse MLA): Definitions only, checked when present

@@ -1,6 +1,6 @@
 """Split the dense family's registry modules into Definitions, twins and vocabulary (dense, activation, norms, RoPE, GEMM bias).
 
-The family's Definition modules stay in `verity/ml/circuits/ops/` and import only `verity` and other Definition modules
+The family's Definition modules stay in `verity_vllm/program/registry/` and import only `verity` and other Definition modules
 (`DEFINITION_MODULES`, `READS`). Its twins and vocabulary leave the registry for the integration package (`MOVES`):
 
     registry/rope_difftest.py        -> properties/difftests/rope_difftest.py   difftest adapter (admission imports it by name)
@@ -109,7 +109,7 @@ _IMPORT = re.compile(r"^(?P<indent>[ \t]*)from[ \t]+" + re.escape(REGISTRY) + r"
 
 
 def _rewrite_imports(text: str, where: str) -> str:
-    """`from verity.ml.circuits.ops import m [as X]` of a moved module, to its new package; a statement importing a moved
+    """`from verity_vllm.program.registry import m [as X]` of a moved module, to its new package; a statement importing a moved
     module beside others is split in two."""
     by_name = {m.name: m for m in MOVES}
 

@@ -55,27 +55,27 @@ __all__ = ["fa3_masked_from", "AttnBlockV4"]
 CONSUMERS = {
     # a from-import of a moved and a kept name
     "integrations/vllm/verity_vllm/a.py": (
-        "from verity.ml.circuits.ops.fa2_check_inf import AttnBlockV5, fa2_masked_from\n\n"
+        "from verity_vllm.program.registry.fa2_check_inf import AttnBlockV5, fa2_masked_from\n\n"
         "X = (AttnBlockV5, fa2_masked_from(1, 1, 0, 64, False))\n"),
     # one statement binding both modules, both still used for their Definitions
     "integrations/vllm/verity_vllm/b.py": (
-        "from verity.ml.circuits.ops import fa2_check_inf as F2, fa3_check_inf as F3\n\n"
+        "from verity_vllm.program.registry import fa2_check_inf as F2, fa3_check_inf as F3\n\n"
         "X = (F2.AttnBlockV5, F3.AttnBlockV4, F2.fa2_masked_from(1, 1, 0, 64, False), F3.fa3_masked_from(1, 128, 0, 64, 4))\n"),
     # a function-local alias used only for the moved name: the import is replaced
     "integrations/vllm/tests/c.py": (
         "import os\n\n\n"
         "def f():\n"
-        "    from verity.ml.circuits.ops import fa3_check_inf as F3\n"
+        "    from verity_vllm.program.registry import fa3_check_inf as F3\n"
         "    return F3.fa3_masked_from(1, 128, 0, 64, 4), os.sep\n"),
     # a relative import from inside the registry, and a docstring mention with a dotted prefix
-    "verity/ml/circuits/ops/targets.py": (
+    "integrations/vllm/verity_vllm/program/registry/targets.py": (
         '"""Reads `registry.fa2_check_inf.fa2_masked_from` and `fa3_check_inf.fa3_masked_from`."""\n'
         "from . import fa2_check_inf as F2\n\n"
         "Y = F2.KBLOCK_M\n"),
     # a plain import of the module, read through its full name
     "tools/d.py": (
-        "import verity.ml.circuits.ops.fa3_check_inf\n\n"
-        "Z = verity.ml.circuits.ops.fa3_check_inf.fa3_masked_from(1, 128, 0, 64, 4)\n"),
+        "import verity_vllm.program.registry.fa3_check_inf\n\n"
+        "Z = verity_vllm.program.registry.fa3_check_inf.fa3_masked_from(1, 128, 0, 64, 4)\n"),
     "docs/notes.md": "The rule is `fa2_check_inf.fa2_masked_from`; `fa2_check_inf.AttnBlockV5` stays.\n",
 }
 
@@ -124,13 +124,13 @@ def test_the_move_and_every_import_form(tmp_path, files):
     assert "from verity.primitives.circuits.defs import composite\n\n\ndef AttnBlockV5" in fa2         # two blank lines where the rules were
 
     assert _read(repo, "integrations/vllm/verity_vllm/a.py").startswith(
-        "from verity.ml.circuits.ops.fa2_check_inf import AttnBlockV5\n"
-        "from verity.ml.circuits.ops.attention_vocab import fa2_masked_from\n")
+        "from verity_vllm.program.registry.fa2_check_inf import AttnBlockV5\n"
+        "from verity_vllm.program.registry.attention_vocab import fa2_masked_from\n")
     b = _read(repo, "integrations/vllm/verity_vllm/b.py")
     assert b.count("import attention_vocab") == 1 and "F2.AttnBlockV5, F3.AttnBlockV4" in b
     assert "attention_vocab.fa2_masked_from(1" in b and "attention_vocab.fa3_masked_from(1" in b
     c = _read(repo, "integrations/vllm/tests/c.py")
-    assert "    from verity.ml.circuits.ops import attention_vocab\n    return attention_vocab.fa3_masked_from(" in c
+    assert "    from verity_vllm.program.registry import attention_vocab\n    return attention_vocab.fa3_masked_from(" in c
     assert "fa3_check_inf" not in c
     t = _read(repo, f"{reg}/targets.py")
     assert "from . import fa2_check_inf as F2\nfrom . import attention_vocab\n" not in t      # F2 is unused after the rewrite: dropped
@@ -159,16 +159,16 @@ def test_a_later_main_with_a_new_consumer_is_rewritten(tmp_path, files):
     repo = _tree(tmp_path)
     _apply(repo)
     new = repo / "integrations/vllm/verity_vllm/e.py"
-    new.write_text("from verity.ml.circuits.ops.fa3_check_inf import fa3_masked_from as mf\n\nW = mf\n")
+    new.write_text("from verity_vllm.program.registry.fa3_check_inf import fa3_masked_from as mf\n\nW = mf\n")
     writes = _apply(repo)
     assert list(writes) == [new]
-    assert new.read_text().startswith("from verity.ml.circuits.ops.attention_vocab import fa3_masked_from as mf\n")
+    assert new.read_text().startswith("from verity_vllm.program.registry.attention_vocab import fa3_masked_from as mf\n")
 
 
 @pytest.mark.parametrize("rel,text,match", [
-    ("x.py", "from verity.ml.circuits.ops.fa2_check_inf import *\n", "import \\*"),
-    ("x.py", "from verity.ml.circuits.ops import fa2_check_inf as F2\nf = getattr(F2, 'fa2_masked_from')\n", "by name"),
-    ("x.py", "from verity.ml.circuits.ops import fa2_check_inf\ndef (:\n", "does not parse"),
+    ("x.py", "from verity_vllm.program.registry.fa2_check_inf import *\n", "import \\*"),
+    ("x.py", "from verity_vllm.program.registry import fa2_check_inf as F2\nf = getattr(F2, 'fa2_masked_from')\n", "by name"),
+    ("x.py", "from verity_vllm.program.registry import fa2_check_inf\ndef (:\n", "does not parse"),
 ])
 def test_what_it_cannot_rewrite_fails_loudly(tmp_path, files, rel, text, match):
     repo = _tree(tmp_path, {rel: text})

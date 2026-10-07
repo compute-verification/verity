@@ -48,8 +48,8 @@ REPO = Path(__file__).resolve().parents[4]
 VLLM = "integrations/vllm"
 REGISTRY_DIR = f"{VLLM}/verity_vllm/program/registry"
 QUARANTINE = f"{REGISTRY_DIR}/quarantine"
-QUARANTINE_MODULE = "verity.ml.circuits.ops.quarantine"
-REGISTRY_MODULE = "verity.ml.circuits.ops"
+QUARANTINE_MODULE = "verity_vllm.program.registry.quarantine"
+REGISTRY_MODULE = "verity_vllm.program.registry"
 #: Where `apply` puts the experimental package unless `--dest` names another directory.
 DEST = "experimental/vllm/quarantine"
 #: The experimental package's import name. Everything else that names it (its distribution, its docs, the rewritten imports of
@@ -86,24 +86,24 @@ KEPT: dict[str, str] = {
                            "the width-8 target spec (tests/program/test_rmsnorm_fused_target.py:32)",
     "SiluMul_v1": "the b1-eager and b1-eager-v2 vocabularies' silu_mul kind (verity_vllm/program/frontend/rules/vocab.py:106, :207); "
                   "the fold's silu_and_mul pattern (verity_vllm/observe/fold/patterns/activations.py:37); census/subcircuits.json:832",
-    "SiluMulBf16_v1": "SiluMul_v1's element (verity/ml/circuits/ops/prims.py:66); the word view of SiluMulBf16_v3 "
-                      "(verity/ml/circuits/ops/boolean_silu.py:139); D-SP1's frozen gate set (archive/sp1/common/src/gateset.rs:140)",
-    "SiluMul_v3": "SiluMul_v1's Boolean form, which the Boolean switch binds for it (verity/ml/circuits/ops/boolean_silu.py:148)",
-    "SiluMulBf16_v3": "SiluMulBf16_v1's Boolean form, SiluMul_v3's element (verity/ml/circuits/ops/boolean_silu.py:139)",
+    "SiluMulBf16_v1": "SiluMul_v1's element (verity_vllm/program/registry/prims.py:66); the word view of SiluMulBf16_v3 "
+                      "(verity_vllm/program/registry/boolean_silu.py:139); D-SP1's frozen gate set (archive/sp1/common/src/gateset.rs:140)",
+    "SiluMul_v3": "SiluMul_v1's Boolean form, which the Boolean switch binds for it (verity_vllm/program/registry/boolean_silu.py:148)",
+    "SiluMulBf16_v3": "SiluMulBf16_v1's Boolean form, SiluMul_v3's element (verity_vllm/program/registry/boolean_silu.py:139)",
     "Attention_v1": "the b1-eager vocabulary's attention kind (verity_vllm/program/frontend/rules/vocab.py:105); "
                     "FLASH_ATTENTION_LAUNCHES (verity_vllm/query/required.py:92)",
-    "AttentionHead_v1": "Attention_v1's callee (verity/ml/circuits/ops/b1.py:472)",
-    "AttnBlock_v1": "AttentionHead_v1's callee (verity/ml/circuits/ops/b1.py:414)",
+    "AttentionHead_v1": "Attention_v1's callee (verity_vllm/program/registry/b1.py:472)",
+    "AttnBlock_v1": "AttentionHead_v1's callee (verity_vllm/program/registry/b1.py:414)",
     "Serve_v1": "Family[Serve_v1], the certificate of record's program identity (verity_vllm/program/frontend/rules/family.py:487); "
-                "ServeHopper_v1 and ServeFp8_v1 are ports of it (verity/ml/circuits/ops/hopper.py:153, fp8.py:615)",
+                "ServeHopper_v1 and ServeFp8_v1 are ports of it (verity_vllm/program/registry/hopper.py:153, fp8.py:615)",
     "Serve_v2": "the b1-eager-v2 skeleton (verity_vllm/program/frontend/rules/vocab.py:179); the Hopper eager program "
-                "(verity/ml/circuits/ops/hopper.py:177); LServe_v1's skeleton (verity/ml/circuits/ops/lifted.py:1362)",
+                "(verity_vllm/program/registry/hopper.py:177); LServe_v1's skeleton (verity_vllm/program/registry/lifted.py:1362)",
     "Serve_v3": "Family[Serve_v3], the padded circuit derivation verifies against (verity_vllm/program/frontend/rules/family.py:517)",
     "LayerPre_v1": "Serve_v1's callee (verity_vllm/program/frontend/rules/family.py:545); LayerPreHopper_v1 and LayerPreFp8_v1 port it "
-                   "(verity/ml/circuits/ops/hopper.py:148, fp8.py:621)",
+                   "(verity_vllm/program/registry/hopper.py:148, fp8.py:621)",
     "LayerPost_v1": "Serve_v1's callee (verity_vllm/program/frontend/rules/family.py:551); LayerPostHopper_v1 and LayerPostFp8_v1 port it "
-                    "(verity/ml/circuits/ops/hopper.py:149, fp8.py:622)",
-    "Final_v1": "Serve_v1's callee (verity/ml/circuits/ops/b1.py:646); FinalHopper_v1 ports it (verity/ml/circuits/ops/hopper.py:150)",
+                    "(verity_vllm/program/registry/hopper.py:149, fp8.py:622)",
+    "Final_v1": "Serve_v1's callee (verity_vllm/program/registry/b1.py:646); FinalHopper_v1 ports it (verity_vllm/program/registry/hopper.py:150)",
 }
 
 #: The quarantine lanes that move: nothing in core's library code imports them.
@@ -116,7 +116,7 @@ class Promotion:
     `edits` (exact replacements, each of which must match) applied; otherwise its statements after its imports, but for its
     `SEMANTIC_ID` and `__all__`, go into `dst` before `dst`'s `__all__` (or at its end), and the `imports` `dst` lacks join its
     imports.  A merged module's `X.name`, for an alias `X` in `unqualify`, becomes `name`, which `dst` must bind (the sampling
-    family's split left `sampling` importing each primitive by name from `verity.ml.circuits.silicon.definitions`, not through `registry.prims`)."""
+    family's split left `sampling` importing each primitive by name from `verity_catalog.definitions`, not through `registry.prims`)."""
     src: str                                   # under QUARANTINE
     dst: str                                   # under REGISTRY_DIR
     edits: tuple[tuple[str, str], ...] = ()
@@ -128,14 +128,14 @@ class Promotion:
 #: LayerNorm beside the norms, GeluErf in `act`, the static-seed Gumbel argmax in `sampling` with the operand-seed select.
 PROMOTE: tuple[Promotion, ...] = (
     Promotion("ln/layer_norm_aten.py", "layer_norm.py", edits=(
-        ("from verity.ml.circuits.ops.quarantine.ln._common import BF16, F32, ZERO32, Array, P, f32c\n",
-         "from verity.primitives.circuits.types import Array\nfrom verity.ml.circuits.ops import prims as P\n"
-         "from verity.ml.circuits.ops.b1 import ZERO32, f32c\nfrom verity.ml.circuits.ops.prims import BF16, F32\n"),
+        ("from verity_vllm.program.registry.quarantine.ln._common import BF16, F32, ZERO32, Array, P, f32c\n",
+         "from verity.primitives.circuits.types import Array\nfrom verity_vllm.program.registry import prims as P\n"
+         "from verity_vllm.program.registry.b1 import ZERO32, f32c\nfrom verity_vllm.program.registry.prims import BF16, F32\n"),
         ("The lane's difftest (`layer_norm_aten_difftest.py`) is the bit-exact check.",
          "Its difftest (`layer_norm_difftest.py`) is the bit-exact check."))),
     Promotion("ln/layer_norm_aten_difftest.py", "layer_norm_difftest.py"),
     Promotion("ln/gelu_erf_table.py", "gelu_erf_table.py", edits=(("(see `gelu_erf_bf16.py`)", "(see `act.GeluErfBf16`)"),)),
-    Promotion("ln/gelu_erf_bf16.py", "act.py", imports=("from verity.ml.circuits.ops.gelu_erf_table import TABLE_WORDS",)),
+    Promotion("ln/gelu_erf_bf16.py", "act.py", imports=("from verity_vllm.program.registry.gelu_erf_table import TABLE_WORDS",)),
     Promotion("ln/gelu_erf.py", "act.py"),
     Promotion("ov_sampling/gumbel.py", "sampling.py", unqualify=("P",)),
 )
@@ -149,7 +149,7 @@ LANE_FILES = ("__init__.py", "_common.py")
 P08 = f"{VLLM}/tests/lint/allowlists/p08_facts.json"
 #: The target facts the promoted conformance strings and the GELU table's provenance carry out of P8's home
 #: (`program/registry/quarantine/`), allowlisted where they now live, as the promoted `dense` lane's are.
-P08_ADDED = tuple({"file": f"verity/ml/circuits/ops/{f}", "kind": k, "symbol": s, "detail": d} for f, k, s, d in (
+P08_ADDED = tuple({"file": f"verity_vllm/program/registry/{f}", "kind": k, "symbol": s, "detail": d} for f, k, s, d in (
     ("act.py", "sm-arch", "GeluErf", "sm_89"), ("act.py", "sm-arch", "GeluErfBf16", "sm_89"),
     ("gelu_erf_table.py", "gpu", "<module>", "rtx4090"), ("layer_norm.py", "sm-arch", "LayerNormAten", "sm_89")))
 
@@ -157,20 +157,20 @@ def redirects(dest: str) -> tuple[tuple[str, str, str], ...]:
     """Lines of core tests that name a moved lane by where it was: a use of a re-export of a promoted Definition imports the
     registry module that owns it, and a lint of the lane's directory lints the experimental package."""
     return tuple((f"{VLLM}/tests/{f}", old, new) for f, old, new in (
-        ("program/fixtures_query.py", "from verity.ml.circuits.ops.quarantine.ov_moe import moe as Q",
-         "from verity.ml.circuits.ops import moe as Q"),
-        ("program/_wout_prototype_20260917.py", "from verity.ml.circuits.ops.quarantine.ov_moe import moe as Q",
-         "from verity.ml.circuits.ops import moe as Q"),
-        ("query/test_boundary_oracle.py", "from verity.ml.circuits.ops.quarantine.ov_moe import moe as Q",
-         "from verity.ml.circuits.ops import moe as Q"),
-        ("program/test_gen_ov_moe_vu_shapes.py", "from verity.ml.circuits.ops.quarantine.ov_moe.moe import MoeExpertGemm",
-         "from verity.ml.circuits.ops.moe import MoeExpertGemm"),
+        ("program/fixtures_query.py", "from verity_vllm.program.registry.quarantine.ov_moe import moe as Q",
+         "from verity_vllm.program.registry import moe as Q"),
+        ("program/_wout_prototype_20260917.py", "from verity_vllm.program.registry.quarantine.ov_moe import moe as Q",
+         "from verity_vllm.program.registry import moe as Q"),
+        ("query/test_boundary_oracle.py", "from verity_vllm.program.registry.quarantine.ov_moe import moe as Q",
+         "from verity_vllm.program.registry import moe as Q"),
+        ("program/test_gen_ov_moe_vu_shapes.py", "from verity_vllm.program.registry.quarantine.ov_moe.moe import MoeExpertGemm",
+         "from verity_vllm.program.registry.moe import MoeExpertGemm"),
         ("collectives/test_tp_collective.py", 'rep = lint(REPO / "verity_vllm" / "program" / "registry" / "quarantine")',
          "rep = lint(Path(QC.__file__).resolve().parents[1])"),
     )) + (
         # the shipped PYTHONPATH's roots follow the root's dependencies, which now include the experimental member
-        ("tools/research/tests/test_pythonpath.py", '"verity/ml/provers/flock/python", "tools/circuit_check/src"]',
-         f'"verity/ml/provers/flock/python", "tools/circuit_check/src",\n              "{dest}"]'),
+        ("tools/research/tests/test_pythonpath.py", '"backends/flock/python", "tools/circuit_check/src"]',
+         f'"backends/flock/python", "tools/circuit_check/src",\n              "{dest}"]'),
     )
 
 
@@ -206,7 +206,7 @@ PACKAGE_DOC = f'''"""{PACKAGE} — the vLLM registry's quarantine lanes that cor
 The lanes core bound ({_lanes(PROMOTED_LANES)}) were promoted into `{REGISTRY_MODULE}`.
 
 Each lane is a sub-package of provisional numerical Definitions pending admission, or of re-exports of Definitions already promoted
-to `verity.ml.circuits.ops`, with a `*_difftest.py` adapter for `verity-vllm properties-admission` beside each. Admission
+to `verity_vllm.program.registry`, with a `*_difftest.py` adapter for `verity-vllm properties-admission` beside each. Admission
 is as in core's quarantine (`verity_vllm.properties.quarantine_lint`, `verity_vllm.properties.admission`): a body is a function of
 its operands and statics only, each module names its `SEMANTIC_ID = "<lane>/<Definition>@v<k>"`, a re-derived body takes a new
 version, and promotion into the registry is an integrator move. Nothing in core imports this package.
@@ -489,20 +489,20 @@ def promote_edits(dest: str | None) -> tuple[tuple[str, str, str], ...]:
         ("verity_vllm/program/frontend/rules/vocab.py", "(quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`)",
          "(`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`)"),
         ("verity_vllm/engine/profiles/gen_ln_patterns.py",
-         "from verity.ml.circuits.ops.quarantine.ln import gelu_erf, layer_norm_aten\n",
-         "from verity.ml.circuits.ops import act, layer_norm\n"),
+         "from verity_vllm.program.registry.quarantine.ln import gelu_erf, layer_norm_aten\n",
+         "from verity_vllm.program.registry import act, layer_norm\n"),
         ("verity_vllm/engine/profiles/gen_ln_patterns.py", "layer_norm_aten.VEC", "layer_norm.VEC"),
         ("verity_vllm/engine/profiles/gen_ln_patterns.py", "bind(layer_norm_aten.LayerNormAten,", "bind(layer_norm.LayerNormAten,"),
         ("verity_vllm/engine/profiles/gen_ln_patterns.py", "bind(gelu_erf.GeluErf,", "bind(act.GeluErf,"),
         ("tests/engine/test_gen_ln.py",
-         "from verity.ml.circuits.ops.quarantine.ln import ALL_DEFINITIONS, ALL_PRIMITIVES, gelu_erf_bf16, gelu_erf_table, "
+         "from verity_vllm.program.registry.quarantine.ln import ALL_DEFINITIONS, ALL_PRIMITIVES, gelu_erf_bf16, gelu_erf_table, "
          "layer_norm_aten\n",
-         "from verity.ml.circuits.ops import act, gelu_erf_table, layer_norm\n"),
+         "from verity_vllm.program.registry import act, gelu_erf_table, layer_norm\n"),
         ("tests/engine/test_gen_ln.py", "g = gelu_erf_bf16.gelu_erf_bf16_bits", "g = act.gelu_erf_bf16_bits"),
         ("tests/dead_code_keep.json",
-         '"verity.ml.circuits.ops.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, '
+         '"verity_vllm.program.registry.quarantine.ln.layer_norm_aten_difftest": "properties-admission adapter of LayerNormAten_v1, '
          'loaded by --adapter name"',
-         '"verity.ml.circuits.ops.quarantine": "the admission home of the quarantine lanes core binds, empty while none is '
+         '"verity_vllm.program.registry.quarantine": "the admission home of the quarantine lanes core binds, empty while none is '
          'pending; quarantine_lint\'s ROOT, protected.py, verify_lane.sh and P8\'s HOMES name it"'),
         ("tests/engine/test_gen_ln.py",
          "def test_lane_registry_lists_the_three_definitions():\n"
@@ -528,7 +528,7 @@ def promote_edits(dest: str | None) -> tuple[tuple[str, str, str], ...]:
          "RTX-4090-validated static-seed composites (`GumbelArgmaxBf16_v1`, `GumbelArgmaxTempBf16_v1`), the kernel's"),
         ("tests/program/test_sampling_operands.py",
          '    """The quarantine module re-exports this module\'s helpers (one transcription, one set of evidence)."""\n'
-         "    from verity.ml.circuits.ops.quarantine.ov_sampling import gumbel as Q\n"
+         "    from verity_vllm.program.registry.quarantine.ov_sampling import gumbel as Q\n"
          "    assert Q.noise_lane is S.noise_lane and Q.stream_key is S.stream_key and Q.nv_logf is S.nv_logf\n"
          "    assert Q.GumbelNoiseLane is S.GumbelNoiseLane and Q.GumbelStreamKey is S.GumbelStreamKey\n",
          '    """The libdevice logs and the Philox stream key at their fixed points."""\n'),
@@ -536,8 +536,8 @@ def promote_edits(dest: str | None) -> tuple[tuple[str, str, str], ...]:
          "model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).  `registry/fa3_check_inf.py` is FA3's",
          f"model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; {residue}).\n"
          "`registry/fa3_check_inf.py` is FA3's"),
-        (TARGETS, "    from verity.ml.circuits.ops import serve3, spec\n",
-         "    from verity.ml.circuits.ops import act, serve3, spec\n"),
+        (TARGETS, "    from verity_vllm.program.registry import serve3, spec\n",
+         "    from verity_vllm.program.registry import act, serve3, spec\n"),
         (TARGETS, '        ("GumbelTopPTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)),\n',
          '        ("GumbelTopPTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)),\n'
          "        # the static-seed Gumbel argmax (T = 0.7f) and the erf GELU; LayerNormAten is the b1-eager-v3 vocabulary's\n"
