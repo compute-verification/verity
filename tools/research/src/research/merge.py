@@ -3,6 +3,13 @@
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
 A train (built either way) is refused when it loses lines from its base that no ref removes in a commit of its own, as a merge
 in a ref's history that dropped them would make it (`reverted`), but for the paths of `--allow-removal PATH`.
+`research merge REF --fast [RUN ...] [--why TEXT] [--push]`: land REF on targeted checks of it rather than the full one
+(Daniel, 7 Oct: skip the full check where it's reasonable, revert what breaks; `gate_fast`): every refusal below but the full
+check's stays, a layout move or the gate's own code (`FULL_ONLY`) still needs the full check, and each RUN is a passing
+attempt of the clean commit that ran `check.py PART`, `suites.py`, the Lean check or circuit-check (`targeted`), the steps the
+declaration requires of the change (`lean-agreement` for C-Flock) passed among them; with no RUN, --why says why none is
+needed and the change is docs and removed lines alone. The merge carries `Checked:` and `Skipped-check:` trailers and is
+pushed past the push guard; the full check of main that follows every landing is the tool's `after_land`.
 `research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
 (`sweep`).
 `research merge --mirror [SHA]`: push SHA (default main's tip) to node 1's bare repository's main, as --push does (`push_mirror`).
@@ -426,6 +433,118 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
     raise Refused(f"{commit[:12]} changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must have run "
                   f"{', '.join(need)}; no attempt did ({'; '.join(why)}). Record it with what those steps need (for `check`: "
                   f"`uv run python tools/verity/check/check.py --record --on MACHINE` sends the agreement inputs)")
+
+
+#: what a targeted check runs (Daniel, 7 Oct: skip the full check where it's reasonable): `check.py PART...`, the changed
+#: suites, the Lean check of a Lake package, circuit-check; an attempt of any of these may let `--fast` land a commit
+TARGETED = ("tools/verity/check/check.py", "tools/verity/check/suites.py", "tools/verity/lean/check.py",
+            "tools/verity/lean/lean_audit.py", "circuit-check")
+#: what a targeted argv may start with before the script: `uv run` and Python, their flags, and the options that take a value
+LAUNCHER = re.compile(r"(\S*/)?python[\d.]*|uv|run|-q|--quiet|--locked|--frozen|--no-sync|-u")
+LAUNCHER_VALUE = ("--extra", "--project", "--package", "--python")
+#: what a targeted argv may never hold anywhere: a shell or an environment rewrite would make it another command, and help
+#: exits 0 having checked nothing
+NOT_TARGETED = ("bash", "sh", "-c", "env", "&&", "||", ";", "|", "-h", "--help")
+#: what lands only on a full check, whatever `--fast` cites: a layout move (`tools/move/`) and the gate's own code, where a
+#: broken check would hide every later failure (Daniel, 7 Oct, as `AGENTS.md` "Checking and merging" applies it)
+FULL_ONLY = ["tools/move/", "tools/verity/check/", "tools/verity/lean/", "tools/research/src/research/merge.py",
+             "tools/research/src/research/queue.py", "tools/research/src/research/gates.py",
+             "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/tool.py"]
+#: the trailer a `--fast` landing names the check it skipped with
+SKIPPED = "the full `check`, which trails main (Daniel, 7 Oct 22:25Z: skip the full check where it's reasonable, revert what breaks)"
+
+
+def targeted(argv) -> str | None:
+    """The script of `TARGETED` an attempt's ``argv`` ran, behind `SLOT_WRAP` or a `uv run`/Python launcher at most, or None."""
+    if not (isinstance(argv, list) and argv and all(isinstance(x, str) for x in argv)) or any(x in NOT_TARGETED for x in argv):
+        return None
+    run = argv
+    if tuple(argv[:2]) == SLOT_WRAP:
+        run = argv[argv.index("--") + 1:] if "--" in argv else []
+    i = next((k for k, x in enumerate(run) if x in TARGETED), None)
+    if i is None:
+        return None
+    k = 0
+    while k < i:
+        if run[k] in LAUNCHER_VALUE and k + 1 < i:
+            k += 2
+        elif LAUNCHER.fullmatch(run[k]):
+            k += 1
+        else:
+            return None
+    return run[i]
+
+
+def removes_only(repo: Path, base: str, commit: str) -> list[str]:
+    """The files ``base``..``commit`` changes other than by removing lines (deleting a test, a whole file, or a doc's `.md` edit
+    aside): empty when the change is docs and removals alone, which `--fast --why` lands on no run."""
+    rows = [r.split("\t") for r in _git(repo, "diff", "--no-renames", "--numstat", "-z", base, commit).stdout.split("\0")]
+    return [f[2] for f in rows if len(f) == 3 and f[0] != "0" and not f[2].endswith(".md")]
+
+
+def gate_fast(repo: Path, ref: str, into: str, store, runs: list[str], why: str | None, tool: str = "check", log=print,
+              remote: str = "origin") -> tuple[str, list[str]]:
+    """(commit, the attempts it lands on) when ``ref`` may land on a targeted check rather than the full one; `Refused` otherwise.
+    Every refusal of `gate` but the full check's stays: the checkout, main moved past ``ref`` unless tree-identical, a rewritten
+    history, a moved head or a missing grant (`unready`).  Each of ``runs`` must be a passing attempt of the clean commit
+    (`_read`) that ran a `targeted` script, with no failed verdict or step in its result; together they must have passed every
+    step the target's declaration requires of the change (`required_steps`: `lean-agreement` for C-Flock).  With no runs,
+    ``why`` must say why none is needed, and the change must be docs and removed lines alone (`removes_only`).  A change to
+    `FULL_ONLY` (a layout move, the gate's own code) needs the full check."""
+    commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
+    head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
+    if head != into:
+        raise Refused(f"the checkout is on {head or 'a detached HEAD'}, not {into}")
+    if _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
+        raise Refused(f"the {into} checkout has uncommitted changes")
+    if _git(repo, "merge-base", "--is-ancestor", "HEAD", commit, check=False).returncode and not tree_identical(repo, commit):
+        raise Refused(f"{into} has moved past {commit[:12]}: merge {into} into the branch, then check its new tip")
+    changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", "HEAD", commit).stdout.split("\0") if p]
+    if full := rule_touches(FULL_ONLY, changed):
+        raise Refused(f"{commit[:12]} changes {', '.join(full)}: a layout move or the gate's own code lands on a full `{tool}` "
+                      f"(`research merge {ref}` without --fast)")
+    if store.remote is not None:
+        try:
+            store.refresh(attempts_only=True)
+        except Exception as e:  # noqa: BLE001  (the local catalog still answers; say it may be behind)
+            log(f"research merge: refresh from the remote failed ({type(e).__name__}: {e}); using the local catalog")
+    from .commitmap import Maps  # noqa: PLC0415
+
+    if old := Maps.load(store).old_history(repo, commit, "HEAD"):
+        raise Refused(f"{commit[:12]} holds {len(old)} commit(s) a history rewrite replaced (e.g. {old[0][:12]}): merging it would bring the "
+                      f"old history back; move the branch onto the rewritten one with `research git remap` and push that")
+    if why_not := unready(repo, commit, store, remote, log):
+        raise Refused("; ".join(why_not))
+    if not runs:
+        if not (why or "").strip():
+            raise Refused("--fast with no run needs --why: what makes a check of this change unnecessary")
+        if bad := removes_only(repo, "HEAD", commit):
+            raise Refused(f"{commit[:12]} adds lines to {', '.join(bad[:5])}: only docs and removals land on no run; cite the "
+                          f"targeted runs of what it touches (`--fast RUN...`)")
+        return commit, []
+    for rid in runs:
+        got = _read(store, rid, None, commit)
+        if isinstance(got, str):
+            raise Refused(f"{rid}: {got}")
+        doc, _, result = got
+        if targeted(doc.get("argv")) is None:
+            raise Refused(f"{rid}: its command `{shlex.join(map(str, doc.get('argv') or []))}` is none of a targeted check's "
+                          f"({', '.join(TARGETED)})")
+        if result is not None and result.kind in REFUSED_KINDS:
+            raise Refused(f"{rid}: its result is {result.kind}, which passes no gate")
+        meta = result.meta if result is not None and isinstance(result.meta, dict) else {}
+        verdict = (meta.get("validation") or {}).get("status") if isinstance(meta.get("validation"), dict) else None
+        if verdict not in (None, "passed"):
+            raise Refused(f"{rid}: its result's verdict is {verdict}")
+        if "steps" in meta and (two := twice(meta["steps"])):
+            raise Refused(f"{rid}: {two}")
+        if bad := [s["step"] for s in meta.get("steps", []) if s.get("status") not in ("passed", "skipped")]:
+            raise Refused(f"{rid}: {', '.join(bad)} didn't pass")
+    need = required_steps(repo, "HEAD", commit, tool)
+    if missing := [s for s in need if not any(step_status(store, rid, s) == "passed" for rid in runs)]:
+        raise Refused(f"{commit[:12]} changes {', '.join(sorted({p for s in missing for p in need[s]}))}, where "
+                      f"{', '.join(missing)} must have passed in a cited run; none did")
+    return commit, list(runs)
 
 
 ZERO = "0" * 40
@@ -1265,7 +1384,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
     return tip if start else None
 
 
-def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
+def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check", verify: bool = True) -> int:
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
@@ -1275,7 +1394,8 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
         from .spec_alert import remote_head
 
         was = remote_head(repo, remote, into) if into == "main" else ""
-        r = _git(repo, "push", "-q", remote, f"refs/heads/{into}:refs/heads/{into}", check=False)
+        r = _git(repo, "push", "-q", *([] if verify else ["--no-verify"]), remote, f"refs/heads/{into}:refs/heads/{into}",
+                 check=False)
         if r.returncode:
             print(f"research merge: push of {into} to {remote} refused, nothing swept: {(r.stderr or r.stdout).strip()[-300:]}",
                   file=sys.stderr)
@@ -1288,6 +1408,35 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
                   f"so read this push's lean-audit.json changes yourself", file=sys.stderr)
     _sweep_after(repo, into, remote)
     return 0
+
+
+def _land_fast(repo: Path, a) -> int:
+    """`--fast`: merge ``a.ref`` on `gate_fast`'s targeted runs, with a `Checked:` trailer for each and a `Skipped-check:` for the
+    full check (and ``a.why``), then push past the push guard, which takes only a full check (`--no-verify`): this gate is the
+    one that judged it.  The full check of the landing follows it (`Tool.after_land`)."""
+    from .store.local import LocalStore
+
+    try:
+        commit, runs = gate_fast(repo, a.ref, a.into, LocalStore(a.store), a.fast, a.why, a.tool, remote=a.remote)
+    except Refused as e:
+        return refuse(PROG, str(e))
+    said = ", ".join(runs) or f"no run ({a.why})"
+    if a.dry_run:
+        print(f"research merge: {a.ref} ({commit[:12]}) may be merged into {a.into} on a targeted check: {said}")
+        return 0
+    trailers = [*(f"Checked: {r}" for r in runs), f"Skipped-check: {SKIPPED}", *([f"Why: {a.why.strip()}"] if a.why else [])]
+    msg = (a.message or f"Merge {a.ref} ({commit[:8]})") + "\n\n" + "\n".join(trailers)
+    r = _git(repo, "merge", "--no-ff", "-m", msg, commit, check=False)
+    if r.returncode:
+        print(f"research merge: git merge failed: {(r.stderr or r.stdout).strip()}", file=sys.stderr)
+        return 1
+    same = _git(repo, "rev-parse", "HEAD^{tree}").stdout == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout
+    print(f"research merge: merged {a.ref} ({commit[:12]}) into {a.into} on a targeted check: {said}"
+          + ("" if same else "; the merged tree differs from the checked one" + (", so it isn't pushed" if a.push else "")))
+    if not same:
+        _sweep_after(repo, a.into, a.remote)
+        return 1
+    return _push_and_sweep(repo, a.into, a.remote, a.push, a.tool, verify=False)
 
 
 def main(argv: list[str]) -> int:
@@ -1316,6 +1465,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--push", action="store_true", help="once the merge lands, push --into to --remote (never forced), then sweep; "
                     "without it the sweep runs before the push and can close nothing the merge landed")
     ap.add_argument("--tool", default="check", help="the tool whose passing attempt the merge requires (default check)")
+    ap.add_argument("--fast", nargs="*", default=None, metavar="RUN", help="land REF on targeted checks of it (passing attempts "
+                    "of `check.py PART`, `suites.py`, the Lean check or circuit-check) instead of the full check, which trails "
+                    "main (`gate_fast`); with no RUN, --why says why the change (docs, removed lines) needs none")
+    ap.add_argument("--why", default=None, help="--fast: why the targeted runs cited (or none) are enough; a trailer")
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
     ap.add_argument("--mirror", action="store_true", help=f"merge nothing: push REF (default --into's tip) to the main of "
                     f"${MIRROR_ENV}'s bare repository (default {MIRROR}'s), as --push does after the remote")
@@ -1418,6 +1571,10 @@ def main(argv: list[str]) -> int:
     if len(a.ref) != 1:
         ap.error("several refs need --train")
     a.ref = a.ref[0]
+    if a.why is not None and a.fast is None:
+        ap.error("--why goes with --fast")
+    if a.fast is not None:
+        return _land_fast(repo, a)
     try:
         commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote)
     except Refused as e:

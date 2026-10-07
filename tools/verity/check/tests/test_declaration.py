@@ -167,9 +167,13 @@ def test_check_of_parts_runs_only_their_jobs_and_lean_audit_on_every_package(mon
     assert _main_parts(monkeypatch, [])[1] is None, "no part: the whole check"
 
 
-def test_a_check_of_parts_is_refused_with_a_shard_or_inside_a_recorded_run(monkeypatch, capsys):
+def test_a_check_of_parts_is_refused_with_a_shard_and_runs_inside_a_recorded_run(monkeypatch, capsys):
+    """A recorded check of parts is a targeted check, which `research merge --fast` takes (Daniel, 7 Oct); no full gate does,
+    since its command isn't the declared one with check.py's flags (`research.merge.invocation`)."""
     assert _main_parts(monkeypatch, ["tests", "--shard", "1/3"]) == (2, None)
+    assert "without --shard" in capsys.readouterr().err
+    got = []
     monkeypatch.setattr(CHECK.os, "environ", {**CHECK.os.environ, "RESEARCH_RUN_ID": "r20261007-000000-abcd"})
-    monkeypatch.setattr(CHECK, "run", lambda *a: (_ for _ in ()).throw(AssertionError("ran")))
-    assert CHECK.main(["tests"]) == 2
-    assert "no gate takes part of a check" in capsys.readouterr().err
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only: got.append(only) or (True, []))
+    assert CHECK.main(["tests"]) == 0
+    assert {p.partition(":")[0] for p in got[0]} == D.select(CHECK.JOBS, ["tests"])

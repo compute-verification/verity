@@ -3,8 +3,8 @@
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
     ... PART...                                             only those parts (`tests`, `circuits`, `lean`: each job's `part` in
-                                                            ci.toml) and what their jobs need, after the preflight; outside a
-                                                            recorded run, since no gate takes part of a check
+                                                            ci.toml) and what their jobs need, after the preflight; recorded,
+                                                            a targeted check `research merge --fast` takes (no full gate does)
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -1363,9 +1363,8 @@ def main(argv: list[str]) -> int:
     picked = [a for a in rest if a in DECLARATION.PARTS]
     rest = [a for a in rest if a not in DECLARATION.PARTS]
     if picked:
-        if sharded or os.environ.get("RESEARCH_RUN_ID"):
-            print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
-                  file=sys.stderr)
+        if sharded:
+            print("check: a check of parts runs without --shard", file=sys.stderr)
             return 2
         try:
             chosen = DECLARATION.select(JOBS, picked)
