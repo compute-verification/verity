@@ -1,4 +1,4 @@
-"""P8: model and target facts live only in ``program/registry/quarantine/`` and ``engine/profiles/``.
+"""P8: model and target facts live only in ``verity/ml/circuits/ops/quarantine/`` and ``engine/profiles/``.
 
 The rule's literal scan: a string literal in code (docstrings excepted) naming a model (``model``), a vLLM layer class
 (``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x`` architecture (``sm-arch``), outside
@@ -59,7 +59,7 @@ def scan() -> tuple[R.Violation, ...]:
 
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    "Read model and target facts from program/registry/quarantine/ or the engine profile, not from a "
+                    "Read model and target facts from verity/ml/circuits/ops/quarantine/ or the engine profile, not from a "
                     "literal.")
 
 

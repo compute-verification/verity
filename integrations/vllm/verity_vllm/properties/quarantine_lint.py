@@ -17,6 +17,7 @@ Rules (AST, no import of the checked modules):
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import re
 import sys
@@ -28,7 +29,8 @@ from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import option
 from verity_vllm.properties.record import seal
 
-ROOT = REPO / "verity_vllm" / "program" / "registry" / "quarantine"
+#: `verity.ml.circuits.ops`'s quarantine, found without importing the package (which registers every family)
+ROOT = Path(importlib.util.find_spec("verity.ml.circuits.ops").submodule_search_locations[0]) / "quarantine"
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
                      "urllib", "requests", "torch", "triton", "numpy.random", "verity_vllm.observe", "verity_vllm.acquire", "verity_vllm.commit", "verity_vllm.check", "importlib", "ctypes", "threading",
                      "multiprocessing", "vllm")
@@ -107,7 +109,7 @@ def lint(root: Path = ROOT) -> dict[str, Any]:
     reports = [lint_file(p) for p in files]
     ids = [r["semantic_id"] for r in reports if r["semantic_id"] and not r["adapter"]]
     dup = sorted({i for i in ids if ids.count(i) > 1})
-    ok = all(r["status"] == "pass" for r in reports) and not dup
+    ok = root.is_dir() and all(r["status"] == "pass" for r in reports) and not dup
     return seal({"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
                  "duplicate_semantic_ids": dup, "files": reports}, ok)
 

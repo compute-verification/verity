@@ -18,7 +18,7 @@ VLLM = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("split_attention", VLLM / "tools" / "migrate" / "split_attention.py")
 S = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(S)
-REGISTRY = VLLM / "verity_vllm" / "program" / "registry"
+REGISTRY = VLLM.parents[1] / "verity" / "ml" / "circuits" / "ops"
 PKG = S.PKG
 
 #: another family's registry module -> the names a family Definition module may take from it (None: the whole module), and why
@@ -51,7 +51,7 @@ DEFINITION_MODULES = _definition_modules()
 
 def _violations(mod: str) -> list[str]:
     tree = ast.parse((REGISTRY / f"{mod}.py").read_text(encoding="utf-8"))
-    package = ["verity_vllm", "program", "registry"]
+    package = ["verity", "ml", "circuits", "ops"]
     out, aliases = [], {}
 
     def take(other: str, names: list[str], line: int) -> None:
@@ -113,4 +113,4 @@ def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
         "def f():\n    from verity.ml.circuits.ops import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
     assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == [
-        "imports verity_vllm.config", "imports verity.ml.circuits.ops.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"]
+        "imports verity.ml.circuits.ops.targets", "imports verity_vllm.config", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"]

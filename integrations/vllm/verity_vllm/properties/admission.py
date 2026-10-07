@@ -2,7 +2,7 @@
 body against the pinned production operation, bit-exact, in two halves so the torch venv and the 3.12 verity venv never meet:
 
     # on the pod, in the vLLM venv (torch + the production kernel):
-    verity-vllm properties-admission produce --adapter verity.ml.circuits.ops.quarantine.<lane>.<def>_difftest --n 32 --seed 7 --out DIR
+    verity-vllm properties-admission produce --adapter verity_vllm.properties.difftests.<def>_difftest --n 32 --seed 7 --out DIR
     # on the pod in /workspace/venv-py312 (or on the laptop after copying DIR):
     verity-vllm properties-admission check --adapter <same> --dir DIR --out quarantine.json [--append]
 
