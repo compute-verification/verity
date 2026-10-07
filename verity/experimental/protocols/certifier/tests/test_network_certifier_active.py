@@ -113,7 +113,7 @@ def test_the_shaper_is_run_shapers_rule():
         assert shaper.hands == [h for h in hands if h < len(syncs) * P.buckets]
 
 
-@pytest.mark.parametrize("name", ["last", "cover-2-1", "cover-2-0-fallback"])
+@pytest.mark.parametrize("name", ["last", "cover-2-1", "cover-2-0-fallback", "sticky-2-1-2"])
 def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
     """Frames arriving in any order at their ready buckets: the shaper's prover declares each window's sync at its
     first tick, the values `online.declare` gives on the whole run, and the records are `run_shaper`'s under them."""
@@ -128,7 +128,7 @@ def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
         frames, ready = [frames[j] for j in order], [ready[j] for j in order]
         prover = online.Prover(sync_set, P.buckets, online.rule(name), envelope)
         shaper, records, _ = feed_shaper(frames, ready, [], P, sync_set, prover=prover, windows=4)
-        want, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
+        want, _, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
         assert shaper.syncs == want
         assert records == run_shaper(frames, ready, want, Certifier("responses", P))
 
@@ -453,18 +453,18 @@ def test_a_choice_not_ready_at_its_window_declares_the_envelope():
               prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ENVELOPE), executor=held)
 
 
-@pytest.mark.parametrize("name", ["last", "cover-2-1"])
+@pytest.mark.parametrize("name", ["last", "cover-2-1", "sticky-2-1-2"])
 def test_with_every_choice_ready_the_proxy_declares_what_online_declare_does(name):
     """On the injected clock every choice is ready by its tick (`InlineExecutor`): under each lag the proxy declares
     `online.declare`'s syncs with the same lag on the frames as read, and its records are `run_shaper`'s under them.
     Some lag declares other than the choice at the tick would."""
     rule = online.rule(name)
-    at_tick, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE)
+    at_tick, _, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE)
     differs = False
     for lag in range(1, EGRESS.buckets):
         prover = online.Prover(SYNC_SET, EGRESS.buckets, rule, ENVELOPE, lag=lag)
         proxy, _ = asyncio.run(replay(honest(), prover, active.InlineExecutor()))
-        want, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE, lag=lag)
+        want, _, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE, lag=lag)
         assert proxy.shaper.syncs == want and proxy.choices.log["unready"] == []
         assert len(proxy.choices.log["choose_ms"]) == WINDOWS
         assert [r for r in proxy.records if r.link == "responses"] == \

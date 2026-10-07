@@ -335,9 +335,11 @@ docstring) and sizes:
   each recent window, the least δ per ρ that would have met the frames seen of it with the other windows as declared.
   `cover-K-M` takes the value of least estimated hand time whose δ is M buckets past every one of the last K windows'
   least δ at its ρ, `-fallback` declares the envelope (the largest δ and smallest ρ the calibration's prover declared)
-  while one of them was late under its own declaration, and `last` is `cover-1-0`. A window with no history declares
-  the envelope. A configuration cut from one run at a dropped window may start from the previous one's history
-  (`Prover(prior=…)`).
+  while one of them was late under its own declaration, `-rhoR` declares the chosen δ at the ρ R steps slower, and
+  `last` is `cover-1-0`. `sticky-K-M-N[-rhoR]` declares `cover-K-M[-rhoR]` only in windows 0, 1, 1+N, ...; in between
+  it keeps its value while that still has M buckets to spare, and otherwise escalates to a value fixed by the kept one.
+  A window with no history declares the envelope. A configuration cut from one run at a dropped window may start from
+  the previous one's history (`Prover(prior=…)`).
 - **The lag:** live, 1 … T − 1 buckets. It lets the choice be made off the proxy's tick, since from bucket w·T − lag on
   nothing changes it, and a choice not ready at w·T is declared as the envelope. `online.declare(lag=…)` replays the
   declarations with every choice ready, so it gives a live run's wherever its choices were ready; lag 0, the choice at
@@ -349,7 +351,8 @@ docstring) and sizes:
   the sender steers every declaration after its first (in the injected-clock replay, the burst, spread and bits
   senders each move the declared δ, and the wire differs from honest's in every window but the first). Live, whether
   a choice is ready by its tick depends on the proxy's load as well, which the sender can move too, and the same
-  bits are charged for it.
+  bits are charged for it. `Rule.choices` bounds how many values a sender could make a rule declare in a window:
+  about #Σ_sync for `cover`, at most 2 between a `sticky` rule's free windows.
 - **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
   larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
   link. A window is the configuration's, so the rate is the configurations' missed windows over their windows

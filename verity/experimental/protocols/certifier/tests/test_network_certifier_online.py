@@ -14,7 +14,7 @@ from verity.experimental.protocols.certifier.schedule import ClockSync, LogicalF
 T = 10
 SIGMA = SyncSet(tuple(range(6)), (Fraction(1, 2), Fraction(1), Fraction(2)))
 ENVELOPE = ClockSync(5, Fraction(1, 2))
-RULES = ("last", "cover-3-1", "cover-2-0-fallback")
+RULES = ("last", "cover-3-1", "cover-2-0-fallback", "cover-2-1-rho1", "sticky-2-1-3")
 
 
 def session_frames(rng: random.Random, anchor: int, horizon: int) -> list[tuple[int, int, int]]:
@@ -38,7 +38,7 @@ def split(frames: list[tuple[int, int, int]]) -> tuple[list[LogicalFrame], list[
 
 
 def declared(frames, rule: str, windows: int = 6, lag: int = 0) -> list[ClockSync]:
-    syncs, _ = online.declare([split(frames)], SIGMA, T, online.rule(rule), windows, ENVELOPE, lag=lag)
+    syncs, _, _ = online.declare([split(frames)], SIGMA, T, online.rule(rule), windows, ENVELOPE, lag=lag)
     return syncs
 
 
@@ -88,10 +88,12 @@ class Recording:
 
     def __init__(self, depth: int, seed: int) -> None:
         self.rng, self.given = random.Random(seed), []
-        self.rule = online.Rule("recording", depth, self.choose)
+        self.rule = online.Rule("recording", depth, self.choose, lambda *_: len(list(SIGMA)))
+        self.declared = []
 
-    def choose(self, past, sync_set, envelope):
+    def choose(self, past, sync_set, envelope, declared=()):
         self.given.append(list(past))
+        self.declared.append(tuple(declared))
         return self.rng.choice(list(sync_set))
 
 
@@ -102,7 +104,7 @@ def test_a_past_window_is_summarized_by_brute_force():
     for seed in range(60):
         frames = instance(rng)
         rec = Recording(3, seed)
-        syncs, _ = online.declare([split(frames)], SIGMA, T, rec.rule, 6, ENVELOPE)
+        syncs, _, _ = online.declare([split(frames)], SIGMA, T, rec.rule, 6, ENVELOPE)
         for w, past in enumerate(rec.given):
             seen_frames, seen_ready = split([f for f in frames if f[2] <= w * T])
             assert [p.window for p in past] == [u for u in range(max(0, w - 3), w)
@@ -130,7 +132,8 @@ def test_cover_meets_the_recent_windows_with_its_margin():
         for name, k, margin in (("cover-3-1", 3, 1), ("cover-2-2", 2, 2), ("last", 1, 0)):
             rec = Recording(k, 0)
             rule = online.rule(name)
-            syncs, _ = online.declare([split(frames)], SIGMA, T, online.Rule(name, k, rec.choose), 6, ENVELOPE)
+            spy = online.Rule(name, k, rec.choose, rule.choices)
+            syncs, _, _ = online.declare([split(frames)], SIGMA, T, spy, 6, ENVELOPE)
             for past in rec.given:
                 sync = rule.choose(past, SIGMA, ENVELOPE)
                 ok = [s for s in SIGMA if past and all(
@@ -165,21 +168,88 @@ def test_the_envelope_without_history_and_after_a_miss():
     plain, fallback = declared(frames, "cover-1-0", 3), declared(frames, "cover-1-0-fallback", 3)
     assert plain[:2] == fallback[:2] == [ENVELOPE, ClockSync(1, 2)]
     assert plain[2] == ClockSync(3, 2) and fallback[2] == ENVELOPE
-    _, history = online.declare([split(frames)], SIGMA, T, online.rule("cover-1-0"), 3, ENVELOPE)
-    syncs, _ = online.declare([split([(0, 0, 1)])], SIGMA, T, online.rule("cover-1-0"), 1, ENVELOPE, history)
+    _, history, _ = online.declare([split(frames)], SIGMA, T, online.rule("cover-1-0"), 3, ENVELOPE)
+    syncs, _, _ = online.declare([split([(0, 0, 1)])], SIGMA, T, online.rule("cover-1-0"), 1, ENVELOPE, history)
     assert syncs == [ClockSync(1, 2)]
 
 
 def test_one_clock_over_several_links():
     """Over two links, a past window is met only where it is met on both, so the declaration covers the slower."""
     fast, slow = [(0, 0, 1), (0, 1, 2)], [(0, 0, 4)]
-    syncs, _ = online.declare([split(fast), split(slow)], SIGMA, T, online.rule("last"), 2, ENVELOPE)
+    syncs, _, _ = online.declare([split(fast), split(slow)], SIGMA, T, online.rule("last"), 2, ENVELOPE)
     assert syncs[1].delta == 4
+
+
+def test_a_rho_margin_declares_a_slower_rho():
+    """`cover-K-M-rhoR` declares cover-K-M's δ at the ρ R steps of Σ_sync slower, or the slowest, and only those ρ
+    count among its choices."""
+    rng = random.Random(5)
+    rhos = sorted(SIGMA.rhos)
+    for _ in range(40):
+        frames = instance(rng)
+        rec = Recording(2, 0)
+        online.declare([split(frames)], SIGMA, T, rec.rule, 6, ENVELOPE)
+        for past in rec.given:
+            plain = online.rule("cover-2-1").choose(past, SIGMA, ENVELOPE)
+            slow = online.rule("cover-2-1-rho1").choose(past, SIGMA, ENVELOPE)
+            if plain == ENVELOPE:
+                assert slow == ENVELOPE
+            else:
+                assert slow == ClockSync(plain.delta, rhos[max(0, rhos.index(plain.rho) - 1)])
+    past = [online.Past(0, ENVELOPE, 1, False, ((0, 1), (0, 1), (0, 1)))]
+    assert online.rule("cover-1-1").choices(past, SIGMA, ENVELOPE) == 5 * 3
+    assert online.rule("cover-1-1-rho1").choices(past, SIGMA, ENVELOPE) == 5 * 2
+    assert online.rule("cover-1-0").choices([], SIGMA, ENVELOPE) == 1
+
+
+@pytest.mark.parametrize("name, free_rule", [("sticky-2-1-3", "cover-2-1"), ("sticky-2-1-3-rho1", "cover-2-1-rho1")])
+def test_sticky_keeps_its_declaration_between_free_windows(name, free_rule):
+    """`sticky-K-M-N[-rhoR]` declares cover-K-M[-rhoR] in windows 0, 1, 1+N, ...; in the others it keeps the
+    previous value while that has M buckets of δ to spare over the last K windows' frontier at its ρ, and otherwise
+    escalates to a value fixed by the previous one alone: the next δ up, or past the largest the next slower ρ. So a
+    sender chooses between at most two values there."""
+    rng = random.Random(6)
+    k, margin, every = 2, 1, 3
+    sticky, base = online.rule(name), online.rule(free_rule)
+    rhos, top = sorted(SIGMA.rhos), max(SIGMA.deltas)
+    kept = escalated = 0
+    for _ in range(60):
+        frames = instance(rng, windows=9)
+        given = []
+
+        def spy(past, sync_set, envelope, declared=(), given=given):
+            given.append(list(past))
+            return sticky.choose(past, sync_set, envelope, declared)
+
+        syncs, _, choices = online.declare([split(frames)], SIGMA, T, online.Rule("spy", k, spy, sticky.choices), 9,
+                                           ENVELOPE)
+        assert syncs == online.declare([split(frames)], SIGMA, T, sticky, 9, ENVELOPE)[0]
+        for w, (past, sync) in enumerate(zip(given, syncs, strict=True)):
+            if w in (0, 1, 4, 7):
+                assert sync == base.choose(past, SIGMA, ENVELOPE)
+                assert choices[w] == base.choices(past, SIGMA, ENVELOPE)
+                continue
+            p = syncs[w - 1]
+            i = rhos.index(p.rho)
+            up = (ClockSync(p.delta + 1, p.rho) if p.delta < top
+                  else ClockSync(top, rhos[i - 1]) if i > 0 else p)
+            assert choices[w] == len({p, up})
+            if all(q.frontier[i] is not None and q.frontier[i][0] + margin <= p.delta for q in past):
+                kept += 1
+                assert sync == p
+            else:
+                escalated += 1
+                assert sync == up
+    assert kept and escalated
 
 
 def test_rule_names():
     assert online.rule("last").depth == 1 and online.rule("cover-4-1-fallback").name == "cover-4-1-fallback"
-    for bad in ("cover", "cover-0-1", "cover-2-x", "cover-2-1-later", "first"):
+    assert online.rule("cover-3-3-rho1").name == "cover-3-3-rho1" and online.rule("sticky-3-2-8").depth == 3
+    assert online.rule("sticky-3-2-8-rho1").name == "sticky-3-2-8-rho1"
+    for bad in ("cover", "cover-0-1", "cover-2-x", "cover-2-1-later", "first", "sticky-3-2", "sticky-3-2-0",
+                "cover-3-2-rho", "cover-3-2-fallback-rho1", "sticky-3-2-8-fallback", "sticky-3-2-rho1",
+                "sticky-3-2-8-rho1-fallback"):
         with pytest.raises(ValueError):
             online.rule(bad)
     with pytest.raises(ValueError, match="after its anchor"):

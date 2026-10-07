@@ -10,16 +10,19 @@ change it. The lag is what a live prover needs to choose off its tick: from buck
 choice, so it can be computed elsewhere (`snapshot`) and declared at w·T. One not ready by then is declared as the
 envelope (`active.LaggedChoices`). Lag 0 is the choice at the tick itself, the replay's reference (`declare`).
 
-The rules are one family, `cover-K-M` (`rule`): the tightest value of Σ_sync that would have met each of the last K
+The rules (`rule`) build on `cover-K-M`: the tightest value of Σ_sync that would have met each of the last K
 windows' seen frames, with M buckets of δ to spare, at the least estimated hand time. `-fallback` declares the envelope
-instead while one of the last K windows was late under its own declaration. `last` is `cover-1-0`: the previous
-window's hindsight choice on what it showed. A window with no history declares the envelope.
+instead while one of the last K windows was late under its own declaration, and `-rhoR` declares the chosen δ at a
+ρ R steps slower. `last` is `cover-1-0`: the previous window's hindsight choice on what it showed.
+`sticky-K-M-N[-rhoR]` (`sticky`) declares `cover-K-M[-rhoR]` only every N windows and otherwise keeps or escalates
+its previous value. A window with no history declares the envelope.
 
 The bound doesn't depend on the rule, nor on the lag, nor on whether a choice was ready: the audit charges
 log2 #Σ_sync bits per window whatever chose the value, and the envelope is in Σ_sync
 (`SecurityProofs.EncardAccSeqsLeSync` counts every advice sequence). The rule sets liveness, since a window its
 declared sync doesn't meet is a violation (fail-closed), and the shaping latency. Since the prover reads the frames'
 ready buckets, a sender that times its writes steers the declarations: those charged bits become ones it can use.
+`Rule.choices` counts the values it could steer a window's declaration among.
 """
 
 from __future__ import annotations
@@ -46,27 +49,41 @@ class Past:
     frontier: tuple[tuple[int, int] | None, ...]
 
 
-Choose = Callable[[Sequence[Past], SyncSet, ClockSync], ClockSync]
+Choose = Callable[[Sequence[Past], SyncSet, ClockSync, Sequence[ClockSync]], ClockSync]
+Choices = Callable[[Sequence[Past], SyncSet, ClockSync, Sequence[ClockSync]], int]
 
 
 @dataclass(frozen=True, slots=True)
 class Rule:
-    """A causal choice: `choose(past, sync_set, envelope)`, where `past` holds the windows among the last `depth` that
-    have a seen frame, oldest first."""
+    """A causal choice: `choose(past, sync_set, envelope, declared)`, where `past` holds the windows among the last
+    `depth` that have a seen frame, oldest first, and `declared` every earlier declaration of the run.
+
+    `choices(...)`, on the same arguments, bounds the values `choose` could declare in this window over every set of
+    frames the sender could have shown it: a sender that times its writes picks among them, so log2 of it bounds the
+    advice bits it can use in the window. The bound charges log2 #Σ_sync whatever the rule."""
 
     name: str
     depth: int
     choose: Choose
+    choices: Choices
 
 
-def cover(k: int, margin: int = 0, fallback: bool = False) -> Rule:
-    """`cover-K-M[-fallback]`. Per ρ, δ is the largest frontier δ over the last k windows plus `margin`, rounded up to
-    Σ_sync. The value taken is the least estimated total hand time over those windows, ties to the smaller δ, then the
-    larger ρ: each window's frontier hand time plus its frames times the extra δ, an upper bound, since raising a
-    window's δ by d raises each of its frames' hand times by at most d."""
-    if k < 1 or margin < 0:
-        raise ValueError("cover needs k ≥ 1 and margin ≥ 0")
-    return Rule(f"cover-{k}-{margin}" + ("-fallback" if fallback else ""), k, _Cover(k, margin, fallback))
+def _up(deltas: Sequence[int], d: int) -> int | None:
+    j = bisect.bisect_left(deltas, d)
+    return deltas[j] if j < len(deltas) else None
+
+
+def cover(k: int, margin: int = 0, fallback: bool = False, rho_margin: int = 0) -> Rule:
+    """`cover-K-M[-rhoR][-fallback]`. Per ρ, δ is the largest frontier δ over the last k windows plus `margin`, rounded
+    up to Σ_sync. The value taken is the least estimated total hand time over those windows, ties to the smaller δ,
+    then the larger ρ: each window's frontier hand time plus its frames times the extra δ, an upper bound, since
+    raising a window's δ by d raises each of its frames' hand times by at most d. With `rho_margin` R, the declared ρ
+    is R steps of Σ_sync slower than the chosen one (or the slowest), which only raises hand times."""
+    if k < 1 or margin < 0 or rho_margin < 0:
+        raise ValueError("cover needs k ≥ 1 and margins ≥ 0")
+    c = _Cover(k, margin, fallback, rho_margin)
+    name = f"cover-{k}-{margin}" + (f"-rho{rho_margin}" if rho_margin else "") + ("-fallback" if fallback else "")
+    return Rule(name, k, c, c.choices)
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,36 +93,111 @@ class _Cover:
     k: int
     margin: int
     fallback: bool
+    rho_margin: int = 0
 
-    def __call__(self, past: Sequence[Past], sync_set: SyncSet, envelope: ClockSync) -> ClockSync:
+    def __call__(self, past: Sequence[Past], sync_set: SyncSet, envelope: ClockSync,
+                 declared: Sequence[ClockSync] = ()) -> ClockSync:
         recent = list(past)[-self.k:]
         if not recent or (self.fallback and any(p.late for p in recent)):
             return envelope
         deltas, rhos = sorted(sync_set.deltas), sorted(sync_set.rhos)
-        best: tuple[tuple[int, int, int], ClockSync] | None = None
-        for i, rho in enumerate(rhos):
+        best: tuple[tuple[int, int, int], int, int] | None = None
+        for i in range(len(rhos)):
             xs = [p.frontier[i] for p in recent]
             if None in xs:
                 break
-            j = bisect.bisect_left(deltas, max(d for d, _ in xs) + self.margin)
-            if j == len(deltas):
+            d = _up(deltas, max(d for d, _ in xs) + self.margin)
+            if d is None:
                 break
-            d = deltas[j]
             key = (sum(c + p.frames * (d - dm) for p, (dm, c) in zip(recent, xs, strict=True)), d, -i)
             if best is None or key < best[0]:
-                best = (key, ClockSync(d, rho))
-        return envelope if best is None else best[1]
+                best = (key, d, i)
+        return envelope if best is None else ClockSync(best[1], rhos[max(0, best[2] - self.rho_margin)])
+
+    def choices(self, past: Sequence[Past], sync_set: SyncSet, envelope: ClockSync,
+                declared: Sequence[ClockSync] = ()) -> int:
+        if not list(past)[-self.k:]:
+            return 1
+        deltas, rhos = sorted(sync_set.deltas), sorted(sync_set.rhos)
+        ds = {d for f in deltas if (d := _up(deltas, f + self.margin)) is not None}
+        values = {ClockSync(d, r) for d in ds for r in rhos[:max(1, len(rhos) - self.rho_margin)]}
+        return len(values | {envelope})
+
+
+def sticky(k: int, margin: int, every: int, rho_margin: int = 0) -> Rule:
+    """`sticky-K-M-N[-rhoR]`: `cover-K-M[-rhoR]` declares only in the run's first two windows and every N windows
+    after (w ≡ 1 mod N), each a free window. In the others the previous declaration p stays while it has M buckets
+    of δ to spare over each of the last K windows' frontier at its ρ; otherwise the rule escalates to a value fixed
+    by p alone: δ at least p's plus max(M, 1), or past the largest δ, the largest δ at the next slower ρ. So outside
+    a free window the sender chooses only between p and its escalation, one bit."""
+    if every < 1:
+        raise ValueError("sticky needs N ≥ 1")
+    if k < 1 or margin < 0 or rho_margin < 0:
+        raise ValueError("cover needs k ≥ 1 and margins ≥ 0")
+    s = _Sticky(_Cover(k, margin, False, rho_margin), every)
+    return Rule(f"sticky-{k}-{margin}-{every}" + (f"-rho{rho_margin}" if rho_margin else ""), k, s, s.choices)
+
+
+@dataclass(frozen=True, slots=True)
+class _Sticky:
+    """`sticky`'s choice, a value for the same reason as `_Cover`."""
+
+    base: _Cover
+    every: int
+
+    def _escalate(self, p: ClockSync, sync_set: SyncSet) -> ClockSync:
+        deltas, rhos = sorted(sync_set.deltas), sorted(sync_set.rhos)
+        if (d := _up(deltas, p.delta + max(self.base.margin, 1))) is not None:
+            return ClockSync(d, p.rho)
+        i = bisect.bisect_left(rhos, p.rho)
+        return ClockSync(deltas[-1], rhos[i - 1]) if i > 0 else p
+
+    def _free(self, declared: Sequence[ClockSync]) -> bool:
+        return not declared or (len(declared) - 1) % self.every == 0
+
+    def _keeps(self, p: ClockSync, past: Sequence[Past], sync_set: SyncSet) -> bool:
+        rhos = sorted(sync_set.rhos)
+        if p.rho not in rhos:
+            return False
+        i = rhos.index(p.rho)
+        return all((x := q.frontier[i]) is not None and x[0] + self.base.margin <= p.delta
+                   for q in list(past)[-self.base.k:])
+
+    def __call__(self, past: Sequence[Past], sync_set: SyncSet, envelope: ClockSync,
+                 declared: Sequence[ClockSync] = ()) -> ClockSync:
+        if self._free(declared):
+            return self.base(past, sync_set, envelope, declared)
+        p = declared[-1]
+        return p if self._keeps(p, past, sync_set) else self._escalate(p, sync_set)
+
+    def choices(self, past: Sequence[Past], sync_set: SyncSet, envelope: ClockSync,
+                declared: Sequence[ClockSync] = ()) -> int:
+        if self._free(declared):
+            return self.base.choices(past, sync_set, envelope, declared)
+        return len({declared[-1], self._escalate(declared[-1], sync_set)})
 
 
 def rule(name: str) -> Rule:
-    """A rule by name: `last`, or `cover-K-M` with an optional `-fallback`."""
+    """A rule by name: `last`, `cover-K-M` with an optional `-rhoR` and `-fallback`, or `sticky-K-M-N[-rhoR]`."""
     if name == "last":
-        return Rule("last", 1, cover(1).choose)
+        c = cover(1)
+        return Rule("last", 1, c.choose, c.choices)
     parts = name.split("-")
-    if parts[0] == "cover" and len(parts) in (3, 4) and parts[1].isdigit() and parts[2].isdigit() and \
-            (len(parts) == 3 or parts[3] == "fallback"):
-        return cover(int(parts[1]), int(parts[2]), len(parts) == 4)
-    raise ValueError(f"no sync rule {name!r}: last, or cover-K-M[-fallback]")
+    nums = parts[1:3]
+    if len(parts) >= 3 and all(x.isdigit() for x in nums):
+        k, m = int(parts[1]), int(parts[2])
+        rest = parts[3:]
+        n = None
+        if parts[0] == "sticky" and rest and rest[0].isdigit():
+            n, rest = int(rest[0]), rest[1:]
+        rho = 0
+        if rest and rest[0].startswith("rho") and rest[0][3:].isdigit():
+            rho, rest = int(rest[0][3:]), rest[1:]
+        if n is not None and not rest:
+            return sticky(k, m, n, rho)
+        if parts[0] == "cover" and rest in ([], ["fallback"]):
+            return cover(k, m, bool(rest), rho)
+    raise ValueError(f"no sync rule {name!r}: last, cover-K-M[-rhoR][-fallback] or sticky-K-M-N[-rhoR]")
 
 
 class _Link:
@@ -179,7 +271,8 @@ class _Link:
 
 class Prover:
     """The online prover of one spatial unit: `arrive(link, position, frame, ready)` as egress frames are read,
-    `declare()` at each window's first bucket. `syncs` holds the declarations so far.
+    `declare()` at each window's first bucket. `syncs` holds the declarations so far, and `choices` each one's
+    `Rule.choices`, or None for a choice made elsewhere, which isn't counted.
 
     Window w's choice (`choose`) sees the frames ready by w·T − `lag`, 0 ≤ lag < T, and the declarations of the windows
     before it. `snapshot()` is what it reads, as a prover of its own, so the choice can be made elsewhere once bucket
@@ -195,6 +288,7 @@ class Prover:
         self.sync_set, self.T, self.rule, self.envelope, self.lag = sync_set, window_buckets, rule, envelope, lag
         self.links = [_Link(window_buckets) for _ in range(links)]
         self.syncs: list[ClockSync] = []
+        self.choices: list[int | None] = []
         self.prior = list(prior)[-rule.depth:]
         self._past: dict[int, tuple[tuple[int, ...], Past]] = {}
 
@@ -204,7 +298,12 @@ class Prover:
     def declare(self, sync: ClockSync | None = None) -> ClockSync:
         """Declare the next window's sync: `sync`, a choice made elsewhere (`snapshot().choose()`, or the envelope
         when that wasn't ready), or else `choose()`."""
-        sync = self.choose() if sync is None else sync
+        if sync is None:
+            past, declared = self._view(), tuple(self.syncs)
+            sync = self.rule.choose(past, self.sync_set, self.envelope, declared)
+            self.choices.append(self.rule.choices(past, self.sync_set, self.envelope, declared))
+        else:
+            self.choices.append(None)
         self.syncs.append(sync)
         return sync
 
@@ -224,6 +323,10 @@ class Prover:
     def choose(self) -> ClockSync:
         """The next window's sync under the rule, from the frames ready by its first bucket less `lag` and the earlier
         declarations. It declares nothing."""
+        return self.rule.choose(self._view(), self.sync_set, self.envelope, tuple(self.syncs))
+
+    def _view(self) -> list[Past]:
+        """What the next window's choice reads: the summaries of its last `depth` windows with a seen frame."""
         w = len(self.syncs)
         for link in self.links:
             link.see(w * self.T - self.lag)
@@ -237,8 +340,7 @@ class Prover:
             past.append(self._past[u][1])
         for u in [u for u in self._past if u < w - self.rule.depth]:
             del self._past[u]
-        past = (self.prior + past)[-self.rule.depth:]
-        return self.rule.choose(past, self.sync_set, self.envelope)
+        return (self.prior + past)[-self.rule.depth:]
 
     def history(self) -> list[Past]:
         """At the end of the run, every frame read: the summaries of its last `depth` windows with a frame, with
@@ -281,13 +383,14 @@ class Prover:
 
 def declare(links: Sequence[tuple[Sequence[LogicalFrame], Sequence[int]]], sync_set: SyncSet, window_buckets: int,
             rule: Rule, windows: int, envelope: ClockSync, prior: Sequence[Past] = (),
-            lag: int = 0) -> tuple[list[ClockSync], list[Past]]:
+            lag: int = 0) -> tuple[list[ClockSync], list[Past], list[int | None]]:
     """Replay the online prover over one configuration: every frame arrives at once, with each link's frames in
     canonical order and their ready buckets, and window w's declaration sees only those ready by w·T − lag. Every
     choice is ready, so these are a live prover's declarations under the same lag whenever its were. Returns the
-    declarations and the run's `history()`."""
+    declarations, the run's `history()` and each declaration's `Rule.choices`."""
     prover = Prover(sync_set, window_buckets, rule, envelope, len(links), prior, lag)
     for i, (frames, ready) in enumerate(links):
         for k, (f, r) in enumerate(zip(frames, ready, strict=True)):
             prover.arrive(i, k, f, r)
-    return [prover.declare() for _ in range(windows)], prover.history()
+    syncs = [prover.declare() for _ in range(windows)]
+    return syncs, prover.history(), prover.choices
