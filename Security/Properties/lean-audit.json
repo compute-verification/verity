@@ -1,0 +1,209 @@
+{
+ "roots": ["Properties.Pouw", "Properties.Proofs.Pouw"],
+ "meaning": [
+  "Properties.Pouw",
+  "PouwCommit.Tagged",
+  "PouwCommit.Frame",
+  "PouwCommit.Rows",
+  "PouwCommit.Py",
+  "PouwCommit.Coins"
+ ],
+ "layers": {
+  "Properties.Pouw": {
+   "imports": ["Properties", "PouwCommit", "Flock"],
+   "except": [],
+   "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  }
+ },
+ "reads_exempt": {
+  "Flock.Bytes": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Flock.Hash": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Flock.Hm96": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Flock.HmRow": "C-Flock's hashes and hm96 leaf, read through PouwCommit: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+ },
+ "guarantees": {
+  "Properties.Pouw.Commit.coinAccepts": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.coinAccepts : Properties.Pouw.Commit.CoinAccepts"],
+   "assumptions": [],
+   "type_hash": "d53750168ca3e888be828d67ddf06ec2fce971334aab1109e34a6229fe8b556e"
+  },
+  "Properties.Pouw.Commit.coinNumbers": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.coinNumbers : Properties.Pouw.Commit.CoinNumbers"],
+   "assumptions": [],
+   "type_hash": "934b8a11ad7197e51167ecd3565cfc31bcb85cc279bc422d4a1f49434ee3d777"
+  },
+  "Properties.Pouw.Commit.coinRaises": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.coinRaises : Properties.Pouw.Commit.CoinRaises"],
+   "assumptions": [],
+   "type_hash": "2b5075ad8ae93629bac87f1ffdca90b1d18a30d172ee6b84d8080115d68da6bf"
+  },
+  "Properties.Pouw.Commit.depthServed": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.depthServed : Properties.Pouw.Commit.DepthServed"],
+   "assumptions": [],
+   "type_hash": "01a16ec0ddc275fd4fc2bdb86a99fbe7e6a7310463b578a4111fca9a4f34ee42"
+  },
+  "Properties.Pouw.Commit.domainRefusals": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.domainRefusals : Properties.Pouw.Commit.DomainRefusals"],
+   "assumptions": [],
+   "type_hash": "3027f3c9a6bed6a9a79e76b844ba678bcb31f3a8001b6b67436a898a30e7583b"
+  },
+  "Properties.Pouw.Commit.frameSizes": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.frameSizes : Properties.Pouw.Commit.FrameSizes"],
+   "assumptions": [],
+   "type_hash": "2fcbf326a4d9e4cbe51b6dd8ccd56bf540629951fe22d1650ead90a10658f4fd"
+  },
+  "Properties.Pouw.Commit.leafRefusals": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.leafRefusals : Properties.Pouw.Commit.LeafRefusals"],
+   "assumptions": [],
+   "type_hash": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33"
+  },
+  "Properties.Pouw.Commit.taggedSize": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Commit.taggedSize : Properties.Pouw.Commit.TaggedSize"],
+   "assumptions": [],
+   "type_hash": "a0793f07a8d7ded1d610bb98d1a056f90c8ee3d67d01be6f20c199627b1f395e"
+  }
+ },
+ "reads": {
+  "PouwCommit.Coins": {
+   "digest": "ace4da0a5d718e1bf453bbbbd2376f88683ded0d1fbf2546db9db641ee20adf5",
+   "definitions": {
+    "PouwCommit.COIN_BYTES": "9170dc99954072437073819839553dbd79cc80dc5ef5caa2e823f7da4bf164ab",
+    "PouwCommit.COIN_TAG": "494e3fdba2173b1fd9d292443e9c89a4dd1ff1c8065c83b754dd8fa5f13843fb",
+    "PouwCommit.CoinCommitment": "b0927865ea4cbb143fa98e44d44cabe33c4437189c521fac94369d1a7765ba9a",
+    "PouwCommit.CoinCommitment.epoch": "a7587db0ab5257bf8ffcf85460e5153b37930c99635ee3c54691f0ba6de7f447",
+    "PouwCommit.CoinCommitment.root": "786088ac8490b80cc175ff7734fb361262c64c544f4798c36d1e1f11e12763c8",
+    "PouwCommit.CoinOpening": "278537960e3c76ee0e09bcc1598101fba661347a1984164daa6b7e8ecf45fd35",
+    "PouwCommit.CoinOpening.after": "430c627da104f98095c2d8905c91ca4232a69bbd7549176ee91649ca7c225d99",
+    "PouwCommit.CoinOpening.coin": "d84d3af8f6a636c3fe0e380be73fba76d91ad663b03a22f1db5c31cf278e79f4",
+    "PouwCommit.CoinOpening.epoch": "4e7bb1e12a051accae374dfe8866fe9e18a73338a9c7c839893d4ca52e9544c5",
+    "PouwCommit.CoinOpening.label": "02093e272af4b512aa54a80f338b28b602e7617045cc80628fd6c1b0255307cc",
+    "PouwCommit.CoinOpening.path": "c330abc61c4743fa744b12d50a1692ff4639ba540061293e5a72534e249e90e5",
+    "PouwCommit.CoinOpening.salt": "0fabe1e7ba15a974c740cc788e044b676fa06f0bcdcc8c63023a6effa444393e",
+    "PouwCommit.LABELS": "0e86f8db39f45f0b72288f1e0a3f64c06595175aa1b0411016ba3169778f2068",
+    "PouwCommit.SCHEME": "a768d141c009d84cb876b8d54f97302102685b9a483e0d1601f55037a1947262",
+    "PouwCommit.coinDomain": "0ceadbac1ab7662d54dcefb0072d33d684b7378477b3a914c52ca91b194f326c",
+    "PouwCommit.coinReason": "6bbfa0756296cd79ed4f1e7cbac3589af982432e3350b2630bba8e2e85f66e4c",
+    "PouwCommit.leafValue": "0a086cb3d0509926f891a48895a6f8ed78a66a4395d9c22c21c6f497b9d493f7"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinNumbers",
+    "Properties.Pouw.Commit.coinRaises"
+   ]
+  },
+  "PouwCommit.Frame": {
+   "digest": "4b40e6aeabe65cc7666da3002869056926453b840d9d4d1fe97293e9026b7715",
+   "definitions": {
+    "PouwCommit.Domain": "9fec723b34bd2909ea66bff49fb2c521467390aa31017d446d8cae7c122addd4",
+    "PouwCommit.Domain.count": "656f0d5f545492183076ea329ae409106bab714818d56a577df3b42a746b0394",
+    "PouwCommit.Domain.empty": "3f671b685b1ab659b558a2deb0e355d3713a42526295f781a2d5cacc1c542637",
+    "PouwCommit.Domain.hash": "3ddf4a7a4b90d495b37fe287111a8a318edb371c57aecb1e033ac654b575b50b",
+    "PouwCommit.Domain.id": "54ada349d24dae444f091a13523a575bdf85ed1354533ce239986f7c772f9943",
+    "PouwCommit.Domain.leaf": "6b744e9638fca6bf9d7c96787fab20d6954fb5ce614d528fe451bdba2e45fafd",
+    "PouwCommit.Domain.mk?": "6e4492bda5d642b48c762eea0ab8476f7354fbe3e7f83917f7b0d9126fc09730",
+    "PouwCommit.Domain.node": "aa894427fc7bdf184914efed833b2df3e0da9ce176dbef3aa1dae04279b29dca",
+    "PouwCommit.Domain.pad": "0f3fab502e9a07f9d7978729d13d700a2ca1776e590a08a99ca2c1c6e1f4605d",
+    "PouwCommit.Domain.verify": "3c5fc91042e929bcca8dce56169ec91c2376cbbb051066b4a9b377fc9a357a0e",
+    "PouwCommit.FRAME": "57f7b9e4a4dba5d34e901ef8d86fff4f7f1048e98bbc3c9d8de929322821e65c",
+    "PouwCommit.Hash": "c823720d287776d44473b9dcb771e4fbf0e85d65c6b16e503b1454615b5fcaf1",
+    "PouwCommit.Hash.bytes": "a071cc206480399943c6ab049aae108f90b341cc3f70045a06af198cbc8ef07e",
+    "PouwCommit.Hash.run": "7205ebbd439afb11cd6351c5944f1b009d2f1b523a0b52ad3ae40ea87016cc63",
+    "PouwCommit.Hash.sha256": "b570aa8301307f10f2f0af68ce4dc75ef3b451955346ea451bf9e759db000aca",
+    "PouwCommit.Hash.sha512": "2d744f94140667fc2266d18cc60d4bdf6d961c9b5f2a1c359cc5cb2fccd8eacb",
+    "PouwCommit.Hash.tagged": "21b9f74299ffaf90e249d26cfa34021837f4c09d275a46990d24989339dbe0ce",
+    "PouwCommit.checkPath": "0588a9d5e634b7514c95675b40d8e1251a1cf22db15fdd8c32f77b7e3093a8b7",
+    "PouwCommit.depth": "0136cc0777f5f29d54f92d6529872dbc95db24e16e35fe5f8135f58bc429c323",
+    "PouwCommit.frameHash": "9d1eb1d308375cd7239f798d59ef95698c19a1ff87b6ba12a21f941637c56b96",
+    "PouwCommit.instReprHash.repr": "c55ef4c414901fd69be2a4afde393212707f6bada33e3c4f15c9d43f680f8843",
+    "PouwCommit.rangeIdentity": "78603c6c6af2df2ae1b5c19cbb561f6e9f2a3399071f4bc29dd3dc3b305bce5c"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinNumbers",
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.depthServed",
+    "Properties.Pouw.Commit.domainRefusals",
+    "Properties.Pouw.Commit.frameSizes",
+    "Properties.Pouw.Commit.leafRefusals"
+   ]
+  },
+  "PouwCommit.Py": {
+   "digest": "7d719352b3b33c4f74cf69e347a17c383991ebe23e0232d8fb8fea426cd82c06",
+   "definitions": {
+    "PouwCommit.pyRepr": "56b0dc4128f9707e95d63618145d9b417b09c0161b92fcc525e8c97ebf4efed3",
+    "_private.PouwCommit.Py.0.PouwCommit.hexDigits": "08f5b6c49d0c3c680daef5f3bcffc195977a9d28f66c1469241dc99e1f8bbd83"
+   },
+   "guarantees": ["Properties.Pouw.Commit.coinAccepts", "Properties.Pouw.Commit.coinRaises"]
+  },
+  "PouwCommit.Rows": {
+   "digest": "788abadf385c76b2c21340372a49fee24f80a6ae80456096e90d85bee97a3463",
+   "definitions": {
+    "PouwCommit.HM96_SALT": "dbc533cc5db92f51cbe9af0a95aee5ddb888bfd3c32d3e09f778df997a168714",
+    "PouwCommit.RowsDomain": "dab2c152186df7d1ef8c1465f319ff08454a819d1a2173003e82f79dc0d270b5",
+    "PouwCommit.RowsDomain.digests": "d2983b6b9499f54fc4b3b5c8286a4bbe123b26a5a23ff73dadcee4598b0b4b9f",
+    "PouwCommit.RowsDomain.frame": "451c567e846e624e9d4679a3047a615c0c90b00764a5ce9093e81a6f04b88afd",
+    "PouwCommit.RowsDomain.hm96": "01fec3cceebc46c48b316e7282f04ec506fbb439d2811dd8807d5debd25bc71e",
+    "PouwCommit.RowsDomain.leaf": "400f8a8208d73eaf0e87e6d128017874fd233ef61ecda5bff5cd141309eecc56"
+   },
+   "guarantees": ["Properties.Pouw.Commit.leafRefusals"]
+  },
+  "PouwCommit.Tagged": {
+   "digest": "b464f6cbdc1fc17fd4fc557edd5ea34f9c47065f04e534984c956f116d81d88f",
+   "definitions": {
+    "PouwCommit.Part": "aee42cda9131217517968052e4b7644623fd764e912aefbcb589ec0b5e4b30e4",
+    "PouwCommit.Part.bytes": "ffb517c36bf50224d2a884822f06671a9f593c0ab9002a5f5bf8dea53fa7605e",
+    "PouwCommit.Part.nat": "93624cad654e234fff3d30ea35c3fa6636e4fb9178e9a7ad515fd62d72e94c69",
+    "PouwCommit.Part.str": "4b4a2aa07fcfc6393d3b12556de04723b173102375d8012d65d81e7a7a43a130",
+    "PouwCommit.be8": "7f7c129c20e0f1473bb96831230422ccb9b587faf0172fed9733fe917abc4208",
+    "PouwCommit.frame": "a5b7bd971567d13eb2df89097905e578b3cab9fee845b709c3d3db579d0ae81e",
+    "PouwCommit.natBytes": "36bba4cbe596c64338ced255d7e42a32c3505739dffe83e812b3cfd597dcc44d",
+    "PouwCommit.tagged": "a2ac1ff4e1291811ae2edeb76f0ea2c80ff8748112bc63857340fad969fb3b44"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinNumbers",
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.domainRefusals",
+    "Properties.Pouw.Commit.frameSizes",
+    "Properties.Pouw.Commit.leafRefusals",
+    "Properties.Pouw.Commit.taggedSize"
+   ]
+  },
+  "Properties.Pouw.Commit": {
+   "digest": "2b8f1801f49a3dd4ac7da4a538b18c67d2b9925b375fceb7d3ed7992df996965",
+   "definitions": {
+    "Properties.Pouw.Commit.CoinAccepts": "3063d83c396c424a1c015414ec09ba2c4c0498de4244eb40e637c17676139c3b",
+    "Properties.Pouw.Commit.CoinNumbers": "ebf4b2d01ebc28e060bd4e40345dfad9deac9f93c91d22266f6a9d133851145d",
+    "Properties.Pouw.Commit.CoinOpens": "ba127d1e53486c81f83dab9b1aba5b54a88bf50bf6abcbb9a54aedce801a2531",
+    "Properties.Pouw.Commit.CoinRaises": "e4586bf1bf49595161880e22676295d3d91a485062cd45cb3890fc7716ad89be",
+    "Properties.Pouw.Commit.DepthServed": "2f873f3abe96acb266875ea11ad4da11c6f91c3be01cfc98b6ae6d27b010f7fe",
+    "Properties.Pouw.Commit.DomainRefusals": "a431d267bca6f9c6878d7778a59a6fb8c8fd3bf9c69a389392e8a22f56156183",
+    "Properties.Pouw.Commit.FrameSizes": "86c21e59981d31bc2bd8857a5399e8f24ddb38cbf23b36658eb8ab95cf6e7b82",
+    "Properties.Pouw.Commit.LeafRefusals": "1b6691449d0660b89a5fc0a0ea60b673300b5aa46caf37a60d0c4856571c6e4c",
+    "Properties.Pouw.Commit.TaggedSize": "adaac743223042de8f99af62a06e9dcb0fff89e1db0bf6b3df1a5ac3134fbaf4",
+    "Properties.Pouw.Commit.coinRoot": "a434574eaf71a6b85e392f525784e4b09491dda6080cecd0d6d924a25faa6de7"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinNumbers",
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.depthServed",
+    "Properties.Pouw.Commit.domainRefusals",
+    "Properties.Pouw.Commit.frameSizes",
+    "Properties.Pouw.Commit.leafRefusals",
+    "Properties.Pouw.Commit.taggedSize"
+   ]
+  }
+ },
+ "dependencies": {
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
+ }
+}
