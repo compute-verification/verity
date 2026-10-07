@@ -66,7 +66,7 @@
   }
  ],
  "encoding": "every byte string is lowercase hex; a path entry null means the node is lifted at that level",
- "generator": "python -m verity.primitives.commitments.vllm_v1.vectors",
+ "generator": "python -m verity.ml.commitments.vllm_v1.vectors",
  "hash": [
   {
    "digest": "43028e5782244ee64b304d6086d46b07a171327544a8a657c3fde058512730c0",

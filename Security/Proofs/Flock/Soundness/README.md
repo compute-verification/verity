@@ -189,7 +189,7 @@ link term per audit.
 | The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumption-notes/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`python tools/verity/lean/check.py ../Security/Proofs` to check every declaration (`lean-audit.json`).
+`python tools/verity/lean/check.py Security/Proofs` to check every declaration (`lean-audit.json`).
 
 ### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
 

@@ -35,7 +35,8 @@ SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 LEAN = HERE.parent / "verifier" / "lean"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-STATEMENT = "verity/flock-circuit+seed-injection"
+#: the set was recorded under f5df3bbc's identity, which the unversioned name no longer is (test_lean_hidden_outputs.py)
+STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 #: the fixture's unit reads two input groups, a form the soundness proof does not cover (verifier PROTOCOL.md §16.15), so
 #: `verify` refuses every session of it once every check has passed: this verdict is a pass, as `agree.py --lean-refuses`
 #: judges it

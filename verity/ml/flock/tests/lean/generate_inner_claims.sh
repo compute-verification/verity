@@ -13,7 +13,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 python3 "$here/../../verifier/selftest_records.py" "$set_dir/records-cpu" "$work/sessions" >&2
 (cd "$pkg" && lake build Flock >&2 &&
-  lake env lean --run "$here/InnerClaims.lean" verity/flock-circuit+seed-injection "$set_dir/stage/circuit.txt" \
+  lake env lean --run "$here/InnerClaims.lean" verity/flock-circuit@f5df3bbc+seed-injection "$set_dir/stage/circuit.txt" \
     "$set_dir/stage/pub-4.bin" "$work/sessions/honest") > "$work/dump.json"
 python3 - "$work/dump.json" "$here" <<'PY'
 import hashlib, json, sys

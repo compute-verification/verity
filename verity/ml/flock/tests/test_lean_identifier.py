@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
-VERIFIER = LEAN.parent
+VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
