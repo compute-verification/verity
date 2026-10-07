@@ -8,11 +8,18 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
 
 - `Evaluate/Prims.lean`: the primitives implemented, each with the signature the registry holds for it. E0 is the Boolean
   profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`) and `Input<w>_v1`; E1 the constant family `Const<w>[0x<hex>]_v1` and the
-  scalar primitives. Every other primitive, and `RegisteredInput<w>_v1`, is refused by name.
+  scalar primitives; E2 the FP32 and BF16 arithmetic and the casts that read no table. Every other primitive (the MUFU
+  tables, `F32ExpRn`, `F32ErfRn`, `NvLogf`, the tensor-core steps, ...), and `RegisteredInput<w>_v1`, is refused by name.
 - `Evaluate/Scalar.lean`: the scalar primitives (`verity.ml.circuits.ops.scalar`, and the vLLM integration's `I32Sub`,
   `I64ToI32`, `U32And`, `U32Xor`, `BitXor`, `SelectBit`), transcribed branch for branch from the Python. Each names the
   definition of `Security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
   proved in `Security/Proofs`, as the certifier's are, since code never requires `Security/`.
+- `Evaluate/Fp32.lean`, `Evaluate/Casts.lean`: the FP32 and BF16 arithmetic (`verity.ml.circuits.ops.fp32`,
+  `mufu.DivFullScaleA_v1`, and the vLLM integration's `F32Sub`, `F32Sqrt`, `F32MaxRef`, `F32GtStrict`, `F32FmaRm`,
+  `F32CeilFtz`, `I32ToF32` and `DivFullScaleA_v2`) and the casts of `verity.ml.circuits.ops.prims`: copies of
+  `Security/Definitions/Core/{Fp32,Prims}.lean` where Security defines the primitive, transcriptions of the Python where it
+  does not, each naming which. The `_v1` add, sub, mul and div return numpy's NaN on x86-64 (`Evaluate.Fp32.hostNan`),
+  which Security does not state.
 - `Evaluate/Walk.lean`: the gate walk (`Evaluate.evaluate`).
 - `Evaluate/Serve.lean`: `Evaluate.evaluateFn`, which `verity-evaluate` serves through the difftest harness's line protocol
   (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
@@ -28,6 +35,10 @@ uv run tools/verity/check/suites.py verity-core-evaluate           # the difftes
 `tests/test_difftest.py` holds it to the Python reference through `verity_difftest`, output for output and refusal for
 refusal: seeded random Boolean composites over every node form, drawn by a Hypothesis strategy with their inputs and with
 mutations both sides refuse; each scalar primitive on the whole grid of its operands' edge words, on drawn words, and on
-words out of range; every constant of the registry and the constant ids the Python reads; and explicit examples: the pinned
+words out of range; each FP32 and BF16 primitive the same way, its grid of FP edge words (signed zeros, subnormals, the
+extreme normals, ties and overflows on rounding, the infinities and every NaN class) batched in one Program per row,
+`Bf16ToF32` and `E4m3ToF32` on every word, and the GPU captures in `verity/ml/circuits/ops/tests/fixtures` (the FP32
+probe of `gpu-nan-2026-09-28`, and the fetched `cvt.rn.bf16.f32` campaign of `tc-total-2026-09-07`); every constant of the
+registry and the constant ids the Python reads; and explicit examples: the pinned
 2-bit adder of `boolean_vectors.json`, Boolean Definitions traced from the builders (up to the Ampere BF16 tensor-core
 step), and malformed programs and inputs.

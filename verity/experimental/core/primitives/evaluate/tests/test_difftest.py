@@ -15,7 +15,10 @@ the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table, real 
 `verity.ml.boolean`'s builders on their one-call Programs, also held to the word Definition each computes, and the malformed
 programs and inputs of `REFUSE`. E1's primitives each run on their one-call Program: every scalar primitive on the grid of its
 operands' edge words (also held to the Python primitive's own evaluator), on words a strategy draws, and on words out of
-range; every constant of the registry, and renamings of a constant that the Python's id pattern reads or refuses.
+range; every constant of the registry, and renamings of a constant that the Python's id pattern reads or refuses. E2's FP32
+and BF16 primitives each run batched, many calls in one Program: on the grid of their operands' FP edge words (held to the
+Python primitive's evaluator too), on drawn words, on words out of range, and on the GPU's captured words where the fixtures
+hold them.
 """
 from __future__ import annotations
 
@@ -38,6 +41,7 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.evaluation import reference
 from verity.ml.circuits.ops import fp32 as FP
+from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.ops.boolean import cast as BC
@@ -47,6 +51,8 @@ from verity.ml.circuits.program import RUN, Program, input_id
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
 from verity_vllm.program.registry import dsa as DSA
+from verity_vllm.program.registry import moe as MOE
+from verity_vllm.program.registry import prims as VP
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry import topp_word_gates as TW
 
@@ -67,15 +73,22 @@ SCALARS = (SC.F32Fabs, SC.F32Neg, SC.F32Fmaxf, SC.F32Fminf, SC.F32Sat, SC.F32Bit
            SC.I32Le, SC.I32Eq, SC.I32Add, DSA.I32Sub, RP.I64ToI32, DSA.U32And, TW.U32Xor, SC.BitAnd, SC.BitOr, TW.BitXor, SC.BitNot,
            TW.SelectBit, SC.SelectI32, SC.SelectF32, SC.SelectBf16)
 _SCALAR_IDS = frozenset(p.id for p in SCALARS)
+#: E2's FP32 and BF16 arithmetic and casts (`Evaluate.Fp32`, `Evaluate.Casts`), by the Python primitive each transcribes
+FLOATS = (FP.F32Add, FP.F32AddV2, RP.F32Sub, VP.F32SubV2, FP.F32Mul, FP.F32MulV2, FP.F32Div, FP.F32DivV2, FP.F32Fma, FP.F32FmaV2,
+          FP.F32AddFtz, FP.F32AddFtzV2, FP.F32SubFtz, FP.F32SubFtzV2, FP.F32MulFtz, FP.F32MulFtzV2, FP.F32FmaFtz, FP.F32FmaFtzV2,
+          FP.F32FmaSubFtz, FP.F32FmaSubFtzV2, MOE.F32FmaRm, MOE.F32FmaRmV2, RP.F32Sqrt, DSA.F32CeilFtz, TW.I32ToF32, FP.F32Max,
+          RP.F32MaxRef, RP.F32GtStrict, FP.GuardNegInfZero, MU.DivFullScaleA, VP.DivFullScaleAV2, FP.Bf16Add, FP.Bf16AddF2fp,
+          FP.Bf16MulF32, FP.Bf16MulBf16, P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16, P.E4m3ToF32, P.F32ToE4m3Sat, P.F32ToE2m1Sat)
+_FLOAT_IDS = frozenset(p.id for p in FLOATS)
 
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
     """The primitives the Lean evaluator implements: the Boolean profile's gates (E0), the constant family and the scalar
-    primitives (E1), and the run inputs of any width."""
+    primitives (E1), the FP32 and BF16 arithmetic and casts (E2), and the run inputs of any width."""
     m = input_id(fn.id)
     if m:
         return m[0] == RUN
-    return BL.is_gate(fn) or getattr(fn, "family", None) == "Const" or fn.id in _SCALAR_IDS
+    return BL.is_gate(fn) or getattr(fn, "family", None) == "Const" or fn.id in _SCALAR_IDS | _FLOAT_IDS
 
 
 def python_answer(desc: dict, inputs: list) -> dict:
@@ -379,16 +392,16 @@ def test_refusals(server):
 
 def test_refusals_name_what_is_refused(server):
     """A primitive the Lean does not implement, and a registered input, are refused by name, never evaluated."""
-    f32 = CompositeDefinition("DtF32Add", 1, (), lambda S: ((("a", SC.F32), ("b", SC.F32)), SC.F32),
-                              lambda B, S, a, b: B.call(FP.F32Add, a, b), register=False)
+    ex2 = CompositeDefinition("DtEx2", 1, (), lambda S: ((("x", SC.F32),), SC.F32), lambda B, S, x: B.call(MU.MufuEx2Ftz, x),
+                              register=False)
     _, main, leaves = _random_program(1)
     s = DT.Server(PORT.argv())
     with s:
-        got = [s.call("evaluate", request(desc_of(Program(bind(f32))), [[1], [2]])),
+        got = [s.call("evaluate", request(desc_of(Program(bind(ex2))), [[1]])),
                s.call("evaluate", request(desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves]))]
-    assert got[0][0] == "reject" and "F32Add_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
+    assert got[0][0] == "reject" and "MufuEx2Ftz_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
     assert got[1][0] == "reject" and "RegisteredInput1_v1" in got[1][1], got[1]
-    assert "not implemented" in python_answer(desc_of(Program(bind(f32))), [[1], [2]])["reject"]
+    assert "not implemented" in python_answer(desc_of(Program(bind(ex2))), [[1]])["reject"]
 
 
 def test_a_malformed_input_is_rejected_and_the_next_request_answered(server):
@@ -551,3 +564,171 @@ def test_constant_ids(server):
         cases.append(request(d, []))
     outputs = sum(w is not None for _, _, w in CONST_IDS)
     assert agree(server, cases) == (outputs, len(cases) - outputs) == (6, 10)
+
+
+# ---- E2: the FP32 and BF16 arithmetic and the casts ---------------------------------------------------------------------
+
+#: the FP32 edge words: the signed zeros, the least and largest subnormals and the half-way one, the least and largest
+#: normals, one and its neighbour, the halves of an ulp at one and at the largest normal (a tie on rounding, and an overflow
+#: on rounding past it), 2^24 and 2^±126 (the `div.full` scaling bounds), a few ordinary values, the infinities, and every
+#: NaN class: quiet and signalling, of both signs, with payloads, and the GPU's canonical `0x7FFFFFFF`
+F32_EDGES = (0x00000000, 0x80000000, 0x00000001, 0x80000001, 0x00400000, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x80800000,
+             0x7F7FFFFF, 0xFF7FFFFF, 0x3F800000, 0xBF800000, 0x3F800001, 0x33800000, 0xB3800000, 0x34000000, 0x73000000,
+             0x4B800000, 0x7E800000, 0x01800000, 0x3F000000, 0x3FB504F3, 0xC0400000, 0x40490FDB, 0x7F800000, 0xFF800000,
+             0x7FC00000, 0xFFC00000, 0x7F800001, 0xFF800001, 0x7FA00000, 0x7FC12345, 0x7FFFFFFF, 0xFFFFFFFF)
+#: the i32 edges `I32ToF32` reads: zero, ±1, the extremes, and the words about 2^24 and 2^31 where the conversion rounds,
+#: ties to even (2^24 + 1 down, 2^24 + 3 up) included
+I32_EDGES = (0, 1, 0xFFFFFFFF, 0x7FFFFFFF, 0x80000000, 0x80000001, 0x00FFFFFF, 0x01000000, 0x01000001, 0x01000002, 0x01000003,
+             0xFEFFFFFF, 0xFEFFFFFD, 0x7FFFFFC0, 0x7FFFFFBF, 0x7FFFFF7F, 0x80000040, 0x80000041)
+#: the BF16 edges, as `F32_EDGES` at 16 bits
+BF16_EDGES = (0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x0080, 0x8080, 0x7F7F, 0xFF7F, 0x3F80, 0xBF80, 0x3F81, 0x3B80, 0x4B80,
+              0x0100, 0x7F00, 0x3F00, 0xC040, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81, 0xFF81, 0x7FA0, 0x7FFF, 0xFFFF)
+#: the casts' bounds (E4M3: 448, its tie 464 with 480, 2^-6, 2^-9, 2^-10; E2M1: each boundary of `cast.E2M1_UP`), each with
+#: its neighbours and both signs
+_BOUNDS = (0x43E00000, 0x43E80000, 0x3C800000, 0x3B000000, 0x3A800000, 0x3A400000, 0x3E800000, 0x3F400000, 0x3FA00000,
+           0x3FE00000, 0x40200000, 0x40600000, 0x40A00000, 0x40C00000)
+#: one-operand FP32 words: the edges, the casts' bounds, and for every exponent field and both signs the mantissas 0, 1, the
+#: half, the half plus and minus one, and all ones (each binade's ends, its ties and the ceiling's fraction cases)
+F32_SWEEP = tuple(sorted({*F32_EDGES, *(s | (b + d) for b in _BOUNDS for d in (-1, 0, 1) for s in (0, 1 << 31)),
+                          *(s | (e << 23) | m for e in range(256) for m in (0, 1, 0x3FFFFF, 0x400000, 0x400001, 0x7FFFFF)
+                            for s in (0, 1 << 31))}))
+
+
+def _edges(fn: PrimitiveDefinition, t) -> tuple[int, ...]:
+    if fn is TW.I32ToF32:
+        return I32_EDGES + F32_EDGES
+    if t.w == 32:
+        return F32_SWEEP if len(fn.params) == 1 else F32_EDGES
+    return BF16_EDGES if t.w == 16 else tuple(range(1 << t.w))
+
+
+def _batch_call(fn: PrimitiveDefinition, n: int) -> dict:
+    """The Program of `n` calls of `fn`, a batch over the first axis of the program function's parameters."""
+    params = tuple((name, Array(n, t)) for name, t in fn.params)
+    main = CompositeDefinition(f"DtBatch{fn.name}{fn.version}x{n}", 1, (), lambda S: (params, Array(n, fn.ret)),
+                               lambda B, S, *a: B.batch(fn, *a, axes=(0,) * len(a)), register=False)
+    return desc_of(Program(bind(main)))
+
+
+@functools.cache
+def _batch_text(fid: str, n: int) -> str:
+    return json.dumps(_batch_call(next(p for p in FLOATS if p.id == fid), n))
+
+
+def _batch_request(fn: PrimitiveDefinition, rows: list[tuple[int, ...]]) -> dict:
+    """`fn` on each row of operand words, one batched request, its answer held to the Python primitive's own evaluator."""
+    desc = json.loads(_batch_text(fn.id, len(rows)))
+    x = [list(col) for col in zip(*rows)]
+    assert python_answer(desc, x) == {"output": [fn.evaluate(*r) for r in rows]}, fn.id
+    return request(desc, x)
+
+
+def _grid(fn: PrimitiveDefinition) -> list[list[tuple[int, ...]]]:
+    """Every combination of `fn`'s operands' edges, in rows grouped by the first operand (all at once for one operand)."""
+    first, *rest = (_edges(fn, t) for _, t in fn.params)
+    if not rest:
+        return [[(a,) for a in first]]
+    return [[(a, *r) for r in itertools.product(*rest)] for a in first]
+
+
+def _agree_on_grids(server, fns) -> int:
+    total = 0
+    for fn in fns:
+        grid = [[(a,) for a in range(1 << 16)]] if fn is P.Bf16ToF32 else _grid(fn)
+        cases = [_batch_request(fn, rows) for rows in grid]
+        assert agree(server, cases) == (len(cases), 0), fn.id
+        total += sum(map(len, grid))
+    return total
+
+
+def test_float_primitives_on_their_edge_grids(server):
+    """Every FP32 and BF16 primitive of one or two operands on every combination of its operands' edge words (`Bf16ToF32`
+    and `E4m3ToF32` on every word), each answer also the Python primitive's own evaluator's."""
+    assert _agree_on_grids(server, [fn for fn in FLOATS if len(fn.params) < 3]) == 114_078
+
+
+@pytest.mark.slow
+def test_the_fmas_on_their_edge_grids(server):
+    """The three-operand primitives (the FMAs: RN, FTZ, the negated addend, RM; v1 and v2) on every triple of FP32 edge words,
+    each answer also the Python primitive's own evaluator's."""
+    assert _agree_on_grids(server, [fn for fn in FLOATS if len(fn.params) == 3]) == 8 * 35 ** 3
+
+
+@st.composite
+def float_requests(draw) -> dict:
+    """An FP32 or BF16 primitive on eight rows of words, each drawn from its operand's edges or its whole range; one request
+    in ten has a word out of its range (2^w, 2^w + 1 or -1), which both sides refuse."""
+    fn = draw(st.sampled_from(FLOATS))
+    rows = [tuple(draw(st.one_of(st.sampled_from(_edges(fn, t)), st.integers(0, (1 << t.w) - 1))) for _, t in fn.params)
+            for _ in range(8)]
+    desc = json.loads(_batch_text(fn.id, len(rows)))
+    x = [list(col) for col in zip(*rows)]
+    if draw(st.integers(0, 9)) == 0:
+        i = draw(st.integers(0, len(x) - 1))
+        x[i][draw(st.integers(0, 7))] = draw(st.sampled_from([1 << fn.params[i][1].w, (1 << fn.params[i][1].w) + 1, -1]))
+    return request(desc, x)
+
+
+FLOAT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=float_requests(), package=PKG)
+
+
+@pytest.mark.slow
+def test_float_primitives_drawn(server):
+    stats = DT.run(FLOAT_PORT, examples=2000, seed=0, server=server)
+    assert stats.outputs >= 1500 and stats.rejects >= 100, stats
+
+
+def test_float_words_out_of_range_are_refused(server):
+    """A word of 2^w, -1, or a boolean for each operand of each FP32 and BF16 primitive, the others 0."""
+    cases = []
+    for fn in FLOATS:
+        desc = json.loads(_batch_text(fn.id, 1))
+        for i, (_, t) in enumerate(fn.params):
+            for bad in (1 << t.w, -1, True):
+                x = [[0] for _ in fn.params]
+                x[i] = [bad]
+                cases.append(request(desc, x))
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 80)
+
+
+FIXTURES = Path(__file__).resolve().parents[5] / "ml/circuits/ops/tests/fixtures"
+#: the GPU probe's instructions (`fixtures/gpu-nan-2026-09-28/fp32_ops.json`) by the `_v2` primitive each is
+GPU_OPS = {"add.rn.f32": FP.F32AddV2, "add.rn.ftz.f32": FP.F32AddFtzV2, "sub.rn.f32": VP.F32SubV2, "sub.rn.ftz.f32": FP.F32SubFtzV2,
+           "mul.rn.f32": FP.F32MulV2, "mul.rn.ftz.f32": FP.F32MulFtzV2, "div.rn.f32": FP.F32DivV2, "fma.rn.f32": FP.F32FmaV2,
+           "fma.rn.ftz.f32": FP.F32FmaFtzV2}
+
+
+def test_the_gpu_probe(server):
+    """The L40S / H100 probe of FP32 add, sub, mul, div and fma on every pair and triple of 15 specials (both signs of zero,
+    one and infinity, quiet and signalling NaNs with payloads): the `_v2` primitives give the GPU's words, Lean and Python."""
+    probe = json.loads((FIXTURES / "gpu-nan-2026-09-28/fp32_ops.json").read_text())
+    specials = [int(w, 16) for w in probe["specials"]]
+    cases, total = [], 0
+    for op, fn in GPU_OPS.items():
+        words = probe["ops"][op]
+        rows = list(itertools.product(specials, repeat=len(fn.params)))
+        want = [int(words[8 * k:8 * k + 8], 16) for k in range(len(rows))]
+        assert len(words) == 8 * len(rows)
+        assert [fn.evaluate(*r) for r in rows] == want, op
+        cases.append(_batch_request(fn, rows))
+        total += len(rows)
+    assert agree(server, cases) == (len(cases), 0) and total == 7 * 225 + 2 * 3375
+
+
+CVT = sorted(FIXTURES.glob("tc-total-2026-09-07/*/cvt_special.json"))
+
+
+@pytest.mark.skipif(not CVT, reason="the cvt.rn.bf16.f32 captures are fetched fixtures (research data fetch-fixtures)")
+def test_the_cvt_captures(server):
+    """The A100 and RTX 4090 `cvt.rn.bf16.f32` campaign, 4403 words per device, 84 of them NaN: `F2fpBf16_v1` gives the
+    measured word on each, and `F32ToBf16Rn_v1` on each that is not a NaN."""
+    cases = []
+    for path in CVT:
+        words = json.loads(path.read_text())["words"]
+        x = [int(e["x"], 16) for e in words]
+        assert [P.F2fpBf16.evaluate(w) for w in x] == [int(e["bf16"], 16) for e in words]
+        cases.append(_batch_request(P.F2fpBf16, [(w,) for w in x]))
+        finite = [(w,) for w in x if not FP.f32_is_nan(w)]
+        assert [P.F32ToBf16Rn.evaluate(*r) for r in finite] == [int(e["bf16"], 16) for e in words if not FP.f32_is_nan(int(e["x"], 16))]
+        cases.append(_batch_request(P.F32ToBf16Rn, finite))
+    assert len(CVT) == 2 and agree(server, cases) == (4, 0)
