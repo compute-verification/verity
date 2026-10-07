@@ -4,7 +4,7 @@ This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the tru
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game with perfect isolation
 (`../PROTOCOL.md`) are part of the security analysis, `Security/` (Daniel's Lean layout ruling, 5 Oct): the
 listing below names them by their modules before that move, which map as `Pous.Protocol` to `Definitions.Pous`,
-`Pous.Assumptions` to `Specs.Pous.Assumptions`, `Pous.Guarantees` to `Specs.Pous.Guarantees`, `Pous.SecurityProofs`
+`Pous.Assumptions` to `Models.Pous.Assumptions`, `Pous.Guarantees` to `Models.Pous.Guarantees`, `Pous.SecurityProofs`
 to `Proofs.Pous`, `PousTargets` to `Proofs.Pous.Targets` and `CheckAxioms` to `Proofs.Pous.CheckAxioms`
 (`python3 tools/move/lean.py --resolve MODULE`). Declarations kept their names. Conventions follow the other Lean
 packages: the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop`
@@ -117,8 +117,8 @@ guarantees cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the
 (`PousContinuous.pr_misses_le`, `pr_misses_gt_le`). When a changed record lands on `main`, Daniel gets a DM showing it
 (Verity's `AGENTS.md`).
 
-**Submissions** are one file that imports only the trusted layers (`Definitions.Pous`, `Specs.Pous.Assumptions`,
-`Specs.Pous.Guarantees`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
+**Submissions** are one file that imports only the trusted layers (`Definitions.Pous`, `Models.Pous.Assumptions`,
+`Models.Pous.Guarantees`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
 grader first and records their hashes; compiles the submission with `lean` in a scratch directory inside a user, mount,
 PID and network namespace where every other mount is read-only (so compile-time IO can change nothing, and its processes
 die with the build); checks the hashes again; then runs the grader. The grader loads the submission's `.olean` as data,
@@ -135,7 +135,7 @@ listed as a guarantee in `lean-audit.json` (`audit.py --update`, then review the
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
   ../../../../../Security/lean-toolchain ../../../../../Security/lakefile.toml ../../../../../Security/lake-manifest.json \
   ../../../../../Security/Proofs/lakefile.toml ../../../../../Security/Proofs/lake-manifest.json \
-  ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Specs/Pous/Assumptions.lean ../../../../../Security/Specs/Pous/Guarantees.lean \
+  ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Models/Pous/Assumptions.lean ../../../../../Security/Models/Pous/Guarantees.lean \
   ../../../../../Security/Proofs/Pous/Sanity.lean ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Specs/Pous/Assumptions ../../../../../Security/Specs/Pous/Guarantees -name '*.lean' | LC_ALL=C sort) > TRUSTED.sha256
+  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Models/Pous/Assumptions ../../../../../Security/Models/Pous/Guarantees -name '*.lean' | LC_ALL=C sort) > TRUSTED.sha256
 ~~~

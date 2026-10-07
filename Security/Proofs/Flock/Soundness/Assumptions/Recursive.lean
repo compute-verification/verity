@@ -12,7 +12,7 @@ files) and at the values it registers itself (the rounds' coins and the comb `co
 when the inner verifier accepts the inner transcript those commitments open to.
 
 C-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`), and so is the recursion's model
-(`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Stage`, and `Specs.lean`, which the `security`
+(`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Stage`, and `Models.lean`, which the `security`
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
 -/
 

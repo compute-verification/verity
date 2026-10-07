@@ -21,13 +21,13 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Code or analysis** (`AGENTS.md` "Lean"). Code the verifier runs, and anything the V[B] generator or a reference
   prover runs: `verity/core/service/flock/` (no dependencies); the PoUS grader stays with PoUS. Everything else is
   security analysis, under `Security/`: a definition or statement in `Definitions/<Area>/` or
-  `Specs/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
+  `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
   `security_proofs` in `Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
   `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. No new package: an area is a directory in each tree.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
-- **Definitions a guarantee reads go in `Definitions/` or `Specs/`**, not in a proof file. The Lean check lists where they are
+- **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file. The Lean check lists where they are
   (`reads` in `Security/lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
   `.olean` files, and a Lean check then reads what another agent's build left. A second Lean task on the same machine gets
@@ -109,7 +109,7 @@ simp with that.
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in its area's `Specs/<Area>/Assumptions` (C-Flock's in
+- **An assumption is a named `Prop`** in its area's `Models/<Area>/Assumptions` (C-Flock's in
   `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`). Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.experimental.claims`) and gives its rationale. Lean is the source of truth for
