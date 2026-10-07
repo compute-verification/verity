@@ -16,14 +16,14 @@ import types
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import evaluation as E
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import bind
-from verity_catalog.definitions.boolean import gemm as BG
-from verity.primitives.circuits.boolean import trace as TR
-from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
 from verity_vllm.program import boolean as SW
