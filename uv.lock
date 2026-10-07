@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -30,6 +30,7 @@ members = [
     "verity-circuit-check",
     "verity-cli",
     "verity-commitments-benchmarks",
+    "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-direct",
     "verity-flock",
@@ -1606,6 +1607,17 @@ requires-dist = [
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-core-sampled-proofs"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/service/sampled_proofs" }
+dependencies = [
+    { name = "hypothesis" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 
 [[package]]
 name = "verity-difftest"
