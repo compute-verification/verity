@@ -195,9 +195,9 @@ def torn(draw, text: str) -> str:
 @st.composite
 def scene(draw, kinds=("served", "budget", "served", "budget", "none")) -> tuple[str, str, str, list[list]]:
     """A record, an outer session to ask of it, and the ops aimed at the two, `(record, session, part, aimed)`. Most often
-    a recursive session opened and finished, its first k statements released and the next one asked; or a stream's
-    sessions stopped up to its budget, or one short of it, and the stream opened again; or nothing; then a few ops of any
-    kind."""
+    a recursive session opened and finished, its first k statements released and the next one asked (sometimes after a
+    slot of it whose holder died); or a stream's sessions stopped up to its budget, or one short of it, and the stream
+    opened again; or nothing; then a few ops of any kind."""
     ops, ask, again = [], None, None
     kind = draw(st.sampled_from(kinds))
     parts, stream = draw(VALID_PARTS), draw(STREAM)
@@ -207,6 +207,8 @@ def scene(draw, kinds=("served", "budget", "served", "budget", "none")) -> tuple
         k = draw(st.integers(0, len(parts)))
         ops += [again, ["finish", "r0000"]] + [["release", "r0000", p] for p in parts[:k]]
         ask = ("r0000", parts[k] if k < len(parts) else parts[0])
+        if draw(st.sampled_from([False, False, False, True])):
+            ops.append(["slot", *ask])
     elif kind == "budget":
         budget = draw(st.integers(1, 2))
         again = ["open", stream, parts, budget, None]
