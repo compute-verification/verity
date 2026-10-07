@@ -1,0 +1,12 @@
+{
+ "roots": ["CoreProtocol"],
+ "exempt": {
+  "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+ },
+ "escapes": {
+  "Core.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.Example's guards cover Protocol.case, which it runs on each line"
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}
