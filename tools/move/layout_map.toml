@@ -12,7 +12,7 @@
 # import name -> its package directory, before and after; a module outside every root is named by its path from the root
 # (`benchmarks.pouw.pearl_c4.replay`), and imports only by path.
 old = { verity = "verity", verity_catalog = "catalog/verity_catalog", verity_kernels = "kernels/verity_kernels", verity_experimental = "experimental/verity_experimental", verity_flock = "backends/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/circuit_check/src/circuit_check", cluster = "tools/cluster/src/cluster" }
-new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/verity_cli" }
+new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
 
 [paths]
 # --- ml/: Python and CUDA, provers, Python circuits, kernels (ml/ can't affect soundness)
@@ -136,7 +136,7 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "experi
 # and their pyprojects become suite-only (pytest and [tool.verity.tests], with `verity` among the inputs)
 merged = ["verity-catalog", "verity-kernels", "verity-experimental"]
 # distributions the move makes, by directory (their pyprojects are in [create])
-new = { "verity-cli" = "tools/verity" }
+new = { "verity-cli" = "tools/verity/cli" }
 
 [create]
 # new files: path = contents (the map is their source: a rerun writes them again when they differ, and never rewrites them)
@@ -151,7 +151,7 @@ land in core/. core/ never imports it."""
 "verity/experimental/protocols/__init__.py" = '''
 """The protocols in Python: PoUW, PoUS, the network certifier and sampled proofs, with the integrity profile (`profile`)."""
 '''
-"tools/verity/pyproject.toml" = '''[project]
+"tools/verity/cli/pyproject.toml" = '''[project]
 name = "verity-cli"
 version = "0.0.0"
 description = "`verity`: the repository's one command (check, bench, --remote), dispatching to the tools beside it."
@@ -166,11 +166,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# exact mode: plain editable mode would put tools/verity on sys.path, and with it check/, lean/ as import names
 packages = ["verity_cli"]
 dev-mode-exact = true
 '''
-"tools/verity/verity_cli/__init__.py" = '''
+"tools/verity/cli/verity_cli/__init__.py" = '''
 """`verity`: the repository's one command, dispatching to the tools beside it.
 
     verity check [ARGS]             the check a merge requires (check/check.py)
@@ -188,8 +187,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent.parent
-ROOT = HERE.parent.parent
+HERE = Path(__file__).resolve().parents[2]
+ROOT = HERE.parents[1]
 CHECK_PARTS = {"tests": HERE / "check" / "suites.py", "lean": HERE / "lean" / "audit.py",
                "move": HERE / "check" / "move_check.py"}
 
