@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import pwd
 import subprocess
 import sys
 from pathlib import Path
@@ -115,6 +116,7 @@ def node(tmp_path, monkeypatch):
     sha = _git(repo, "rev-parse", "HEAD")
     deps = tmp_path / "deps"
     (deps / F.deps_key(repo / "verity/Security") / "mathlib").mkdir(parents=True)
+    (deps / F.deps_key(repo / "verity/Security") / "mathlib/M.olean").write_text("m")
     pub = tmp_path / "publisher"
     _pkg(pub / "verity/Security", manifest=MANIFEST)
     (pub / "verity/Security/.lake/build/lib").mkdir(parents=True)
@@ -126,7 +128,7 @@ def node(tmp_path, monkeypatch):
     for k, v in {"FAKE_LOG": tmp_path / "sandbox.log", "FAKE_REPO": repo, "FAKE_BIN": tmp_path / "bin"}.items():
         monkeypatch.setenv(k, str(v))
     n = F.Node(jobs=tmp_path / "jobs", deps=deps, publisher=pub, sandbox=[sys.executable, str(tmp_path / "sandbox.py")],
-               python=sys.executable)
+               python=sys.executable, builder=pwd.getpwuid(os.getuid()).pw_name)
     return n, sha, repo, tmp_path
 
 
@@ -134,7 +136,20 @@ def _calls(tmp_path: Path) -> list[list[str]]:
     return [json.loads(ln) for ln in (tmp_path / "sandbox.log").read_text().splitlines()]
 
 
-def test_a_check_elaborates_the_file_in_a_tree_of_its_own_with_the_warm_deps_read_only_and_a_copy_of_the_warm_build(node):
+def test_the_deps_tree_is_new_directories_of_the_builds_user_holding_hard_links_to_the_shared_files(tmp_path):
+    src = tmp_path / "deps"
+    (src / "mathlib/.lake").mkdir(parents=True)
+    (src / "mathlib/.lake/A.olean").write_text("a")
+    (src / "lnk").symlink_to("mathlib")
+    dst = tmp_path / "tree/.lake/packages"
+    dst.parent.mkdir(parents=True)
+    assert F.link_tree(src, dst, os.getuid(), os.getgid()) == 2
+    assert (dst / "mathlib/.lake/A.olean").stat().st_ino == (src / "mathlib/.lake/A.olean").stat().st_ino
+    assert not (dst / "mathlib").is_symlink() and os.readlink(dst / "lnk") == "mathlib"
+    assert (dst / "mathlib/.lake").stat().st_ino != (src / "mathlib/.lake").stat().st_ino
+
+
+def test_a_check_elaborates_the_file_in_a_tree_of_its_own_with_the_warm_deps_linked_and_a_copy_of_the_warm_build(node):
     n, sha, repo, tmp = node
     out = tmp / "run/out"
     out.parent.mkdir()
@@ -143,8 +158,7 @@ def test_a_check_elaborates_the_file_in_a_tree_of_its_own_with_the_warm_deps_rea
     checkout, run = _calls(tmp)
     tree = checkout[checkout.index("--tree") + 1]
     assert checkout[:2] == ["checkout", sha] and Path(tree).parent == n.jobs and not Path(tree).exists()
-    deps = n.deps / F.deps_key(repo / "verity/Security")
-    assert run[run.index("--ro") + 1] == f"{deps}:{tree}/verity/Security/.lake/packages"
+    assert "--ro" not in run and "--deps" not in run
     assert run[run.index("--tree") + 1] == tree and "LAKE_ARTIFACT_CACHE=false" in run and run[run.index("--by") + 1] == "lean-file"
     spec = json.loads(run[-1])
     assert spec["warm"] == [[str(n.publisher / "verity/Security/.lake/build"), f"{tree}/verity/Security/.lake/build"]]
@@ -153,6 +167,7 @@ def test_a_check_elaborates_the_file_in_a_tree_of_its_own_with_the_warm_deps_rea
     summary = json.loads((out / "lean-file.json").read_text())
     assert [s["step"] for s in summary["steps"]] == [f"warm {n.publisher}/verity/Security/.lake/build", "imports", "elaborate"]
     assert all(s["rc"] == 0 for s in summary["steps"]) and summary["package"] == "verity/Security"
+    assert summary["deps"] == str(n.deps / F.deps_key(repo / "verity/Security")) and summary["deps_links"]["links"] == 1
     assert "built the imports of Definitions/A.lean" in (out / "lean.log").read_text()
 
 

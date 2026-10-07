@@ -8,8 +8,10 @@ dependencies and build, in a tree of its own inside `vy-lean-sandbox`; what an a
    another job writes. SHA must be on node 1's main; P (`git diff` against SHA, `research lean-file` sends the working tree's)
    is applied to it with `git apply` as root.
 2. FILE's package is the innermost directory above it with a lakefile. Its fetched dependencies are the daily publisher's
-   copy for its `lake-manifest.json` and `lean-toolchain` (`run_daily.deps_key`, under DEPS), bound read-only at the package's
-   `.lake/packages`; a package that has dependencies and no copy for its key is refused, since the build has no network.
+   copy for its `lake-manifest.json` and `lean-toolchain` (`run_daily.deps_key`, under DEPS), as the package's `.lake/packages`:
+   directories of the build's user's, so Lake can add its `.hash` files (a read-only bind fails on them), holding hard links
+   to the copy's files, root's and read-only, so nothing is copied and the build can't change what other jobs read. A package
+   that has dependencies and no copy for its key is refused: the build has no network to fetch them.
 3. Inside `vy-lean-sandbox run` (a `build` slot, as user lean-build): the publisher's `.lake/build` of the package and of each
    package it requires by path is copied in when the publisher's has the same manifest and toolchain and its daily run isn't
    building (Lake then rebuilds only what the patch and SHA changed since main's build), then `lake lean FILE -- --deps` builds
@@ -29,6 +31,7 @@ import argparse
 import hashlib
 import json
 import os
+import pwd
 import re
 import shutil
 import signal
@@ -63,6 +66,7 @@ class Node:
     deps: Path = Path("/workspace/lean-build/deps")
     publisher: Path = Path("/build/verity")
     publisher_unit: str = "vy-lean-cache-daily.service"
+    builder: str = "lean-build"
     sandbox: list[str] = field(default_factory=lambda: ["/usr/local/bin/vy-lean-sandbox"])
     python: str = "/usr/bin/python3"
 
@@ -155,6 +159,20 @@ def needs_deps(pkg: Path) -> bool:
     return m.is_file() and any(p.get("type") != "path" for p in json.loads(m.read_text()).get("packages", []))
 
 
+def link_tree(src: Path, dst: Path, uid: int, gid: int) -> int:
+    """``dst``: ``src``'s directories, made anew and owned by ``uid``, holding hard links to its files and symbolic links;
+    the number of links."""
+    n = 0
+    for d, dirs, files in os.walk(src):
+        t = dst / os.path.relpath(d, src)
+        t.mkdir(mode=0o755)
+        os.chown(t, uid, gid)
+        for name in [*files, *(x for x in dirs if os.path.islink(os.path.join(d, x)))]:
+            os.link(os.path.join(d, name), t / name, follow_symlinks=False)
+            n += 1
+    return n
+
+
 def _active(unit: str) -> bool:
     r = subprocess.run(["systemctl", "show", "-p", "ActiveState", "--value", unit], capture_output=True, text=True,
                        check=False)
@@ -208,7 +226,7 @@ def _run_sandbox(argv: list[str], log_path: Path) -> tuple[int, str]:
 
 
 def check(n: Node, sha: str, file: str, patch: Path | None, out: Path, slot_wait: float | None = None,
-          max_sec: int = MAX_SEC, geteuid=os.geteuid, active=_active, run_sandbox=_run_sandbox) -> int:
+          max_sec: int = MAX_SEC, geteuid=os.geteuid, getpwnam=pwd.getpwnam, active=_active, run_sandbox=_run_sandbox) -> int:
     if geteuid() != 0:
         raise Refused("run as root (`sudo -n vy-lean-file ...`): vy-lean-sandbox starts the build as lean-build")
     check_args(sha, file)
@@ -239,21 +257,22 @@ def check(n: Node, sha: str, file: str, patch: Path | None, out: Path, slot_wait
         pkg = package(tree, file)
         key = deps_key(tree / pkg)
         deps = n.deps / key if key else None
-        bind = []
-        if needs_deps(tree / pkg):
+        linked = needs_deps(tree / pkg)
+        if linked:
             if deps is None or not deps.is_dir():
                 raise Refused(f"{pkg}: no fetched dependencies for its manifest and toolchain ({key and key[:16]}) in {n.deps}; "
                               f"the build has no network to fetch them (the daily publisher makes them for main's)")
-            mount = tree / pkg / ".lake" / "packages"
-            mount.mkdir(mode=0o755, exist_ok=True)
-            bind = ["--ro", f"{deps}:{mount}"]
+            t1 = time.monotonic()
+            pw = getpwnam(n.builder)
+            links = link_tree(deps, tree / pkg / ".lake" / "packages", pw.pw_uid, pw.pw_gid)
+            summary["deps_links"] = {"links": links, "seconds": round(time.monotonic() - t1, 2)}
         copies, why = warm(n, tree, requires(tree, pkg), active)
-        summary.update(package=pkg, deps=str(deps) if bind else None, warm=[c[0] for c in copies])
+        summary.update(package=pkg, deps=str(deps) if linked else None, warm=[c[0] for c in copies])
         if why:
             log(why)
             summary["cold"] = why
         spec = {"package": str(tree / pkg), "file": os.path.relpath(file, pkg), "warm": copies}
-        rc, text = run_sandbox([*n.sandbox, "run", "--tree", str(tree), *bind, "-E", "LAKE_ARTIFACT_CACHE=false",
+        rc, text = run_sandbox([*n.sandbox, "run", "--tree", str(tree), "-E", "LAKE_ARTIFACT_CACHE=false",
                                 "--max-sec", str(max_sec), *(["--slot-wait", str(slot_wait)] if slot_wait is not None else []),
                                 "--by", "lean-file", "--", n.python, "-I", "-c", Path(__file__).read_text(), "_inside",
                                 json.dumps(spec)], lp)
