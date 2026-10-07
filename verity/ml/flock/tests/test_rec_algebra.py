@@ -30,10 +30,10 @@ from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+REPO = HERE.parents[3]
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
-LEAN = HERE.parent / "verifier" / "lean"
+LEAN = HERE.parents[2] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the set was recorded under f5df3bbc's identity, which the unversioned name no longer is (test_lean_hidden_outputs.py)
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
