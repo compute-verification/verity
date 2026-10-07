@@ -47209,7 +47209,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "414767fd4e462bc89875a8366df87848651ab5ea98c97fdd717b71c97b8ab186",
+   "digest": "ea65cd222f14b5b53c2b723f5355f0e3332ebed5024b8f7ad970110c25edf770",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -47250,6 +47250,7 @@
     "Flock.HmRow.EVALUABLE": "330c9f10310fe11080b8816408e976c202262b5b86d2a0ec6f92150fccd0c27c",
     "Flock.HmRow.HM_NET": "44cb1b37052af94e1caf5db19e17af968b55993c18d24718cec4a5e23332c598",
     "Flock.HmRow.MAX_COMPS": "1fbd229074e93ecd83e021c9fd63dab04ee5eff59b9e1181ffd53acaa5f3d572",
+    "Flock.HmRow.MAX_K_LOG": "a7e46ef15188b1a12b69db2ddfe5f82780f4f4ea39916d4a3afc381fc420c884",
     "Flock.HmRow.MsgBit": "ba4258e74f8707edc42a408a504e96d628c96e7167ebc8c8afdc557552288c78",
     "Flock.HmRow.MsgBit.const": "58785c995ae76268103f06f14d2c530b24e340c6f1f8d5e3d5b067f015f66dc5",
     "Flock.HmRow.MsgBit.digest": "4259fbedd057bb5b9d26dc6fdaf22d7cf593825b03254e8f2e59678953b0665b",
@@ -47296,6 +47297,7 @@
     "Flock.HmRow.evenRuns": "8765b28ed48180a1441cb56b2b84e098c6b45b99835bd285cfc41977f9e83c49",
     "Flock.HmRow.hex16": "12dc3acaacbb3091b3932a4959ee233f484701d4445c54e9deb5a1cfb15eed6f",
     "Flock.HmRow.isSha512Hex": "d45224822965131f484b3ab4bdf9ab5e2cb311cdb0ff5a8566ff840b77b65734",
+    "Flock.HmRow.kLogOf": "bd442e9a8080ff23304840f041063458c4c0d53e91d659bd6270f5a375a99f4d",
     "Flock.HmRow.loadPublic": "cc11b642fe1e6b67b5869ea4aa7f8cd1d0cde1540210a41c4b92e545e2510a5a",
     "Flock.HmRow.midstate": "ac9e9689f0fa2eb07799539faf9e96015a64097577dde9c8db12f28c427aa787",
     "Flock.HmRow.midstateOf": "01ed03cd41bf622f7dd471d066d7e7b9770ae0ade0776195af515fda4d9dca17",
@@ -47304,7 +47306,7 @@
     "Flock.HmRow.padBlock": "8e70252faaf687b1bebbd47bac5a7f624ae6aee50beb7310c91a096baf33670c",
     "Flock.HmRow.padTail": "8d2d799650b1a3f99e3df85f298fc56c9aa1599e97da96c6eeb019bd4cfaa1df",
     "Flock.HmRow.padWords": "a2ac062e508080df7a811963b369fbf00e03e87b71028eb0052d3cdded45d682",
-    "Flock.HmRow.parse": "2e4d59ed77c954d6e9e505df61507909ebc16e4c422dffac1a4984e930b3b355",
+    "Flock.HmRow.parse": "3377675e4fca18c18cfe0427242065ded620d7a68648fcfc594935973749af55",
     "Flock.HmRow.parseTyped": "2f7edac17b0a7946605604ea9bfcc45fbefe472428385f8afa88b15f72c70c17",
     "Flock.HmRow.partitionDigest": "68267df95776ed7534942c1d87d043397a2e561e47ee6112402cfb9254e478c0",
     "Flock.HmRow.pin": "057f4ace5b39af6e790a197a95edf20f8181e0d316196bc3f6ab368fe367a609",
