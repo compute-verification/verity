@@ -19,9 +19,10 @@
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
                                                    --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
-  research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
+  research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
-                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py)
+                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py);
+                                                   N targets (default 8) checked at once, each printed as it finishes
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
@@ -359,7 +360,8 @@ def cmd_verify(argv: list[str]) -> int:
 def cmd_preserved(argv: list[str]) -> int:
     """The durability gate (F7, `preserved.py`), three legs: the attempt manifest, every artifact it names (outputs + telemetry),
     and every local assertion about the attempt / its derivation / those artifacts must be verifiably on the remote.  Exit 0 iff so
-    for every target; else 1, the list of what is not, and which legs fail.  Exit 2 on a usage error (no targets)."""
+    for every target; else 1, the list of what is not, and which legs fail.  Exit 2 on a usage error (no targets).  Targets are checked
+    `--jobs` at a time and each one's lines are printed as it finishes (completion order); `--json` waits and keeps the given order."""
     from . import preserved as P
 
     ap = _ap("preserved")
@@ -367,16 +369,21 @@ def cmd_preserved(argv: list[str]) -> int:
     ap.add_argument("--mode", choices=list(P.MODES), default="head",
                     help="head: size + MD5 ETag per blob (read-back when unavailable), manifest read back (default); "
                          "readback: every object read back; recorded: trust the local catalog's verified remote replica (offline)")
+    ap.add_argument("--jobs", type=int, default=8, metavar="N", help="targets checked at once (default 8)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if not ns.targets:
         print("research data preserved: give at least one run id or art: id", file=sys.stderr)
         return 2
-    rep = P.check(LocalStore(ns.store), ns.targets, mode=ns.mode)
+
+    def say(t: dict) -> None:
+        print("\n".join(P.format_target(t)), flush=True)
+
+    rep = P.check(LocalStore(ns.store), ns.targets, mode=ns.mode, jobs=ns.jobs, on_target=None if ns.json else say)
     if ns.json:
         _dump(rep)
     else:
-        for line in P.format_report(rep):
+        for line in P.format_summary(rep):
             print(line)
     return 0 if rep["preserved"] else 1
 

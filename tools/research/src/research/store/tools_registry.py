@@ -11,6 +11,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Callable
 
 from .tool import Tool
 
@@ -87,6 +88,28 @@ def former_modules(module: str, moves: list[dict[str, str]] | None = None) -> li
                 out.append(path.replace("/", "."))
                 break
     return out
+
+
+def former_paths(path: str, moves: list[dict[str, str]] | None = None) -> list[str]:
+    """``path`` (a file, or a directory with or without its `/`) as each earlier layout named it, newest first: mapped back
+    through each move's renamed paths (`moves.json`; a directory maps as a prefix)."""
+    path, out = path.rstrip("/"), []
+    for paths in reversed(_moves() if moves is None else moves):
+        for old, new in sorted(paths.items(), key=lambda kv: -len(kv[1])):
+            old, new = old.rstrip("/"), new.rstrip("/")
+            if path == new or path.startswith(new + "/"):
+                path = old + path[len(new):]
+                out.append(path)
+                break
+    return out
+
+
+def resolve(path: str, exists: Callable[[str], bool], moves: list[dict[str, str]] | None = None) -> str | None:
+    """``path`` if ``exists`` holds for it, else the newest name an earlier layout gave it that does (`former_paths`), else None:
+    how a reader of an older commit or tree finds a file the layout moved since."""
+    if exists(path):
+        return path
+    return next((p for p in former_paths(path, moves) if exists(p)), None)
 
 
 def locate(spec_or_name: str, root: Path) -> tuple[str, str] | None:
