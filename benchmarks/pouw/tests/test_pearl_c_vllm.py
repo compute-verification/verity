@@ -20,9 +20,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.primitives.commitments import MerkleTree
-from verity.primitives.commitments.merkle import tree_levels
-from verity.protocols.accounting.work.pouw.audit import (
+from verity.ml.commitments import MerkleTree
+from verity.ml.commitments.merkle import tree_levels
+from verity.experimental.protocols.pouw.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -42,11 +42,11 @@ from verity.protocols.accounting.work.pouw.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.accounting.work.pouw.coins import Challenger, CoinCommitment
-from verity.protocols.accounting.work.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
-from verity.protocols.accounting.work.pouw.schemes import pearl_kw as P
+from verity.experimental.protocols.pouw.coins import Challenger, CoinCommitment
+from verity.experimental.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
+from verity.experimental.protocols.pouw.schemes import pearl_c as C
+from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW
+from verity.experimental.protocols.pouw.schemes import pearl_kw as P
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
@@ -726,7 +726,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
     """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
     and the source is given in the command, never drawn inside the run."""
-    from verity.primitives.randomness import derive
+    from verity.ml.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
     got = SD.fresh_trials(job, row, 50, src)
@@ -1499,9 +1499,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
-    """Every tree's hash is the scheme's format's (`verity.protocols.accounting.work.pouw.serving.HASH_FORMATS`), not a
+    """Every tree's hash is the scheme's format's (`verity.experimental.protocols.pouw.serving.HASH_FORMATS`), not a
     literal: -h3's hm96-sha512, keyed by the prover's salt key; and the path runs only its own schemes."""
-    from verity.protocols.accounting.work.pouw.serving import HASH_FORMATS, SchemeId, hash_format
+    from verity.experimental.protocols.pouw.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -1520,7 +1520,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves only
     the tile hashing, which reads C~ and U, the buffers each shape rotates."""
-    from verity.protocols.accounting.work.pouw.serving import Schedule
+    from verity.experimental.protocols.pouw.serving import Schedule
     s = PPD.scheme_of(SCHEME)
     with pytest.raises(ValueError, match="this path runs only tile_hash on a side lane, not a_tree$"):
         PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)

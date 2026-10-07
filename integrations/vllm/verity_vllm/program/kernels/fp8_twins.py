@@ -16,7 +16,7 @@ def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
     token row's K/G activation scales ([K/G], or [R, K/G] for R rows) and `w_s` the checkpoint's [N/G, K/G] block scales, both as u32
     words; returns [N/G, K/G] (or [R, N/G, K/G]) u32 words.  numpy's array multiply is `F32Mul_v1` on every product but a NaN, whose
     payload it takes from the other operand: those lanes go through the IR's evaluator."""
-    from verity.primitives.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation import evaluate_batch
     xs = np.asarray(x_s, dtype=np.uint32)
     ws = np.asarray(w_s, dtype=np.uint32)
     if ws.ndim != 2 or xs.ndim not in (1, 2) or xs.shape[-1] != ws.shape[1]:

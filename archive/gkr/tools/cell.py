@@ -1,5 +1,5 @@
 """Route (a) cell: A-GKR (this backend, the prime side with the sigma link, ``gpu/link.py``) and Flock (the binary side,
-``backends/flock/live``: ``flock-link cell-prove``) in ONE live session per batch, on the operands-committed statement
+``verity/ml/flock/live``: ``flock-link cell-prove``) in ONE live session per batch, on the operands-committed statement
 ``bf16-ampere+blake3`` (row leaves ``blake3-keyed/row/v2``, the leaf Flock proves) at K = 1536, and ``bf16-ampere-k<K>+blake3``
 at vLLM's reduction lengths (the same circuit files, ``steps`` = K / 16; Flock's row of 2K bytes is K / 512 BLAKE3 chunks).
 
@@ -140,7 +140,7 @@ def statement(cell: Path, instances: Path | None, n: int, flock: str | None, inp
 
 
 class PrimeLink:
-    """The prime prover's end of the live session: ``Prime`` frames (``backends/flock/live``: tag 8, the state and
+    """The prime prover's end of the live session: ``Prime`` frames (``verity/ml/flock/live``: tag 8, the state and
     the count; the answer tag 5, the words) on cell-prove's Unix socket, which forwards them on the session."""
 
     def __init__(self, path: Path) -> None:
@@ -477,7 +477,7 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
                 "composed_terms_log2": terms, "prime_by_component_log2": prime.get("by_component_log2"),
                 "hash_assumption": "collision resistance of SHA-512 (A-GKR Merkle), SHA-256 (Flock, transcripts), BLAKE3 (row leaves)",
                 "union_over": 1, "source": "archive/gkr/soundness.py (prime) + red-team-flock third audit (Flock terms)"}
-    sw = {"backend": {"name": br.BACKEND + " + Flock flock-128-r2 (backends/flock/live flock-link, CPU) + the sigma link (route (a))",
+    sw = {"backend": {"name": br.BACKEND + " + Flock flock-128-r2 (verity/ml/flock/live flock-link, CPU) + the sigma link (route (a))",
                       "commit": br.source_commit(), "relation": meta["relation"], "scheme": "frame-v3 blake3-keyed/row/v2",
                       "version": "route (a): gpu/link.py session-2xgf2_128/v2, flock-link Σ verity/link-L/v2"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "triton": triton.__version__, "numpy": np.__version__}}

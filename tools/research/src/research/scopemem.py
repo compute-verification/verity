@@ -17,7 +17,7 @@
 `node` reads the same for several runs on one machine, and that machine's state they may hold or wait on: every GPU_LEASE_DIRS
 directory's live leases and live waiters as gpu-lease writes them (an `<i>.owner` line whose pid lives and whose `<i>.lock`
 someone flocks; a `wait.*` file someone flocks), with node 1's `n1-lease.json` pool record and `n1-lease.limits`, and the
-check and Lean slots (`tools/check/slot.py` and `lean_slot.py`'s `--status --json` documents, when the caller loaded them).
+check and Lean slots (`tools/verity/check/slot.py` and `lean_slot.py`'s `--status --json` documents, when the caller loaded them).
 gpu-lease's locks are read from /proc/locks, never probed; slot.py probes its line's tickets, as `check.py --slots` does.
 
 Self-contained (stdlib, no package imports): `research status` and `research inspect` send this file to the run's machine
