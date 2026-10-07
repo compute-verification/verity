@@ -1,4 +1,4 @@
-"""The continuous audit's verifier as the Lean model states it (`lean/Pous/Protocol/Model/Continuous.lean`): the oracle
+"""The continuous audit's memory challenger as the Lean model states it (`verity/Security/Definitions/Pous/Model/Continuous.lean`): the oracle
 of `test_pous_continuous_difftest.py`. It imports nothing from `verity.protocols.accounting.space.pous`.
 
 Two restatements of one set of rules:
@@ -7,7 +7,7 @@ Two restatements of one set of rules:
   definition, which is its docstring after the first line, and `test_the_oracle_transcribes_the_lean_model` finds that
   text verbatim in the Lean file the first line names. A responder is a `ContMachine` (`rest`, `step`) whose `W`, `pp`,
   `C` and `ω` are fixed for a run and so closed over, and `f` is the primitive that answers its queries.
-* **On the verifier's clock** (`ClockOracle`): the same rules on what `audit.TimedVerifier` observes, nanoseconds on its
+* **On the verifier's clock** (`ClockOracle`): the same rules on what `audit.MemoryChallenger` observes, nanoseconds on its
   own clock. `(D, Q)` becomes `limit = Δ + RTT` and `(D_late, Q_late)` becomes `late_limit = Δ_late + RTT`, or `None`
   for a verifier without a hard deadline, which waits for every answer.
 
@@ -56,7 +56,7 @@ class Round:
 
 
 def run(f: Callable, p: Ret | Round) -> object:
-    """Lean `Prog.run` (`Pous/Protocol/Game/Oracle.lean`):
+    """Lean `Prog.run` (`verity/Security/Definitions/Pous/Game/Oracle.lean`):
 
     def run (f : M.Qry → M.Ans) : Prog M α → α
       | ret a => a
@@ -68,7 +68,7 @@ def run(f: Callable, p: Ret | Round) -> object:
 
 
 def depth(f: Callable, p: Ret | Round) -> int:
-    """Lean `Prog.depth` (`Pous/Protocol/Game/Oracle.lean`):
+    """Lean `Prog.depth` (`verity/Security/Definitions/Pous/Game/Oracle.lean`):
 
     def depth (f : M.Qry → M.Ans) : Prog M α → ℕ
       | ret _ => 0
@@ -81,7 +81,7 @@ def depth(f: Callable, p: Ret | Round) -> int:
 
 
 def work(f: Callable, p: Ret | Round) -> int:
-    """Lean `Prog.work` (`Pous/Protocol/Game/Oracle.lean`):
+    """Lean `Prog.work` (`verity/Security/Definitions/Pous/Game/Oracle.lean`):
 
     def work (f : M.Qry → M.Ans) : Prog M α → ℕ
       | ret _ => 0
@@ -94,7 +94,7 @@ def work(f: Callable, p: Ret | Round) -> int:
 
 
 def machine_round(mach, h: tuple, T: int, m: object, msg: int | None) -> Ret | Round:
-    """Lean `ContMachine.round` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `ContMachine.round` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def ContMachine.round {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n) (pp : Bits sch.t)
         (h : List (Fin sch.B)) : ℕ → List Bool → Option (Fin sch.B) → Prog M (Option (Bits sch.ℓ) × List Bool)
@@ -117,7 +117,7 @@ def machine_round(mach, h: tuple, T: int, m: object, msg: int | None) -> Ret | R
 
 
 def cont_verdict(D: int, Q: int, Q_late: int, f: Callable, p: Ret | Round, c: bytes) -> str:
-    """Lean `contVerdict` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contVerdict` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contVerdict {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : Prog M (Option (Bits ℓ) × σ))
         (c : Bits ℓ) : ContVerdict :=
@@ -140,7 +140,7 @@ def cont_verdict(D: int, Q: int, Q_late: int, f: Callable, p: Ret | Round, c: by
 
 @dataclass(frozen=True)
 class ContState:
-    """Lean `ContState` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `ContState` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     structure ContState (B : ℕ) : Type where
       sent : List (Fin B)
@@ -154,7 +154,7 @@ class ContState:
 
 
 def cont_start() -> ContState:
-    """Lean `ContState.start` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `ContState.start` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def ContState.start {B : ℕ} : ContState B := ⟨[], 0, []⟩
     """
@@ -162,7 +162,7 @@ def cont_start() -> ContState:
 
 
 def cont_send(arr: Callable[[int], int], s: ContState) -> int:
-    """Lean `contSend` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contSend` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contSend {B : ℕ} (arr : ℕ → ℕ) (s : ContState B) : ℕ := max (arr s.sent.length) s.closed
     """
@@ -170,7 +170,7 @@ def cont_send(arr: Callable[[int], int], s: ContState) -> int:
 
 
 def cont_mem(mach, arr: Callable[[int], int], s: ContState) -> tuple:
-    """Lean `contMem` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contMem` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contMem {sch : Scheme M} (mach : ContMachine sch) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code) (ω : M.Ω)
         (arr : ℕ → ℕ) (s : ContState sch.B) : List Bool :=
@@ -180,7 +180,7 @@ def cont_mem(mach, arr: Callable[[int], int], s: ContState) -> tuple:
 
 
 def cont_prog(mach, D_late: int, arr: Callable[[int], int], s: ContState, i: int) -> Ret | Round:
-    """Lean `contProg` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contProg` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contProg {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
         (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : Prog M (Option (Bits sch.ℓ) × List Bool) :=
@@ -190,7 +190,7 @@ def cont_prog(mach, D_late: int, arr: Callable[[int], int], s: ContState, i: int
 
 
 def cont_next(mach, D_late: int, f: Callable, arr: Callable[[int], int], s: ContState, i: int) -> ContState:
-    """Lean `contNext` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contNext` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contNext {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
         (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : ContState sch.B :=
@@ -202,7 +202,7 @@ def cont_next(mach, D_late: int, f: Callable, arr: Callable[[int], int], s: Cont
 
 
 def cont_after(mach, D_late: int, f: Callable, arr: Callable[[int], int], h: Sequence[int]) -> ContState:
-    """Lean `contAfter` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contAfter` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contAfter {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
         (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ) (h : List (Fin sch.B)) : ContState sch.B :=
@@ -216,7 +216,7 @@ def cont_after(mach, D_late: int, f: Callable, arr: Callable[[int], int], h: Seq
 
 @dataclass(frozen=True)
 class ContRecord:
-    """Lean `ContRecord` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `ContRecord` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     structure ContRecord : Type where
       held : ℕ
@@ -229,7 +229,7 @@ class ContRecord:
 
 def cont_record(mach, D: int, Q: int, D_late: int, Q_late: int, f: Callable, C: Sequence[bytes],
                 arr: Callable[[int], int], s: ContState, i: int) -> ContRecord:
-    """Lean `contRecord` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contRecord` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contRecord {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
         (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) : ContRecord :=
@@ -241,7 +241,7 @@ def cont_record(mach, D: int, Q: int, D_late: int, Q_late: int, f: Callable, C: 
 
 def cont_records(mach, D: int, Q: int, D_late: int, Q_late: int, f: Callable, C: Sequence[bytes],
                  arr: Callable[[int], int], s: ContState, indices: Sequence[int]) -> list[ContRecord]:
-    """Lean `contRecords` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contRecords` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contRecords {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
         (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ) : ContState sch.B → List (Fin sch.B) → List ContRecord
@@ -257,7 +257,7 @@ def cont_records(mach, D: int, Q: int, D_late: int, Q_late: int, f: Callable, C:
 
 
 def cont_accepts(f0: float, rs: Sequence[ContRecord]) -> bool:
-    """Lean `contAccepts` (`Pous/Protocol/Model/Continuous.lean`):
+    """Lean `contAccepts` (`verity/Security/Definitions/Pous/Model/Continuous.lean`):
 
     def contAccepts (f₀ : ℝ) (rs : List ContRecord) : Prop :=
       ((rs.filter fun r => r.verdict ≠ .hit).length : ℝ) ≤ f₀
@@ -290,7 +290,7 @@ class Record:
 class ClockOracle:
     """The verifier on its own clock (the module docstring, "On the verifier's clock"): `n` challenges, the `j`th
     asking for block `index(j)` of `C`. `named` is a verifier whose answers name their challenge
-    (`ContinuousVerifier.respond(j, …)`); an unnamed one credits every answer to the open challenge. Each action takes
+    (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge. Each action takes
     the clock reading `t` and returns what the verifier must do: the `(j, index)` it reveals, the `Record` it closes,
     or a `Refused`."""
 

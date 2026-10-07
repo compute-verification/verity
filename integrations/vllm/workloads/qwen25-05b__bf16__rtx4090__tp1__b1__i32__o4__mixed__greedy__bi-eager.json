@@ -132,7 +132,7 @@
   "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
   "lengths_only": false
  },
- "note": "R12 sweep qwen25-05b__bf16__rtx4090__tp1__b1__i32__o4__mixed__greedy__bi-eager: B=1 I<=32 O<=4 greedy arrivals=none; prompt lens [32], caps [4], arrive steps [0]; every request to max_tokens => 4 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.  PoUW row (#389): the target declares pouw:ncp-v2 beside sampled proofs; protocols_config fixes the beacon and the work law's K = 8.",
+ "note": "R12 sweep qwen25-05b__bf16__rtx4090__tp1__b1__i32__o4__mixed__greedy__bi-eager: B=1 I<=32 O<=4 greedy arrivals=none; prompt lens [32], caps [4], arrive steps [0]; every request to max_tokens => 4 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.  PoUW row (#389): the target declares pouw:ncp-v2 beside sampled proofs; protocols_config fixes the work law's K = 8 (the epoch's coins come from the run's challenger).",
  "target": {
   "protocols": [
    "pouw:ncp-v2",
@@ -141,7 +141,6 @@
  },
  "protocols_config": {
   "pouw": {
-   "beacon": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
    "draws": 8
   }
  }

@@ -16,9 +16,9 @@ def one : F128 := ⟨1, 0⟩
 
 @[inline] def add (a b : F128) : F128 := ⟨a.lo ^^^ b.lo, a.hi ^^^ b.hi⟩
 
-instance : Add F128 := ⟨add⟩
-instance : OfNat F128 0 := ⟨zero⟩
-instance : OfNat F128 1 := ⟨one⟩
+instance instAdd : Add F128 := ⟨add⟩
+instance instOfNatOfNatNat : OfNat F128 0 := ⟨zero⟩
+instance instOfNatOfNatNat_1 : OfNat F128 1 := ⟨one⟩
 
 @[inline] def isZero (a : F128) : Bool := a.lo == 0 && a.hi == 0
 
@@ -49,7 +49,7 @@ def mul (a b : F128) : F128 :=
   let m1h := mh ^^^ p0h ^^^ p2h
   reduce p0l (p0h ^^^ m1l) (p2l ^^^ m1h) p2h
 
-instance : Mul F128 := ⟨mul⟩
+instance instMul : Mul F128 := ⟨mul⟩
 
 def square (a : F128) : F128 := mul a a
 
@@ -116,10 +116,10 @@ def mul (a b : F256) : F256 :=
 /-- `K · F`, coordinate-wise. -/
 @[inline] def smul (a : F256) (s : F128) : F256 := ⟨a.c0 * s, a.c1 * s⟩
 
-instance : Add F256 := ⟨add⟩
-instance : Mul F256 := ⟨mul⟩
-instance : OfNat F256 0 := ⟨zero⟩
-instance : OfNat F256 1 := ⟨one⟩
+instance instAdd : Add F256 := ⟨add⟩
+instance instMul : Mul F256 := ⟨mul⟩
+instance instOfNatOfNatNat : OfNat F256 0 := ⟨zero⟩
+instance instOfNatOfNatNat_1 : OfNat F256 1 := ⟨one⟩
 
 end F256
 

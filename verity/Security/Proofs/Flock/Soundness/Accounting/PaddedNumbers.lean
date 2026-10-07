@@ -2,13 +2,13 @@ import Proofs.Flock.Soundness.Accounting.Padded
 import Proofs.Flock.Soundness.Accounting.Numbers
 
 /-!
-# The numbers with M1's padded level 0
+# The numbers with C-Flock ZK's padded level 0
 
 `padTableError` bounded rationally (`padTableError_le_up`), as `tableError` is in `Fast100`:
 `√ρ'` by a rational upper bound `s̄` with `ρ' ≤ s̄²` (`padQueryError_le`), and the padded code's
 MCA numerator by a crude closed form (`padMcaA_le`; its terms sit below 2^-200).
 
-At M1's values (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7 item 6: level-0 query
+At C-Flock ZK's values (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7 item 6: level-0 query
 counts `q₀ = 277, 242, 229` at `m = 25, 26, 27`, padding `t = 2q₀`, a pair of extra lanes per rep),
 every table is sound to `2^-205` at `η = 1/200` for every statement shape in range (`padTableError_le_m1`).
 The rational checks run in Lean's kernel (`decide +kernel`).
@@ -214,9 +214,9 @@ theorem padTableError_le_up (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
   have h2 := padRepError_le m k0 l₀ l₁ rest ext t e sbar hp hs st hst
   nlinarith
 
-/-! ## M1's values -/
+/-! ## C-Flock ZK's values -/
 
-/-- M1's level-0 query count at `m` (#123's `PROTOCOL.md` §7 item 6), where it differs from
+/-- C-Flock ZK's level-0 query count at `m` (#123's `PROTOCOL.md` §7 item 6), where it differs from
 `fast100`'s 218. -/
 def m1Queries₀ : ℕ → ℕ
   | 25 => 277
@@ -224,10 +224,10 @@ def m1Queries₀ : ℕ → ℕ
   | 27 => 229
   | _ => 218
 
-/-- M1's schedule at `m`: `fast100` with level 0's query count for the padded rate. -/
+/-- C-Flock ZK's schedule at `m`: `fast100` with level 0's query count for the padded rate. -/
 def m1Schedule (m : ℕ) : Schedule := ((fast100 m).getD default).withQueries₀ (m1Queries₀ m)
 
-/-- M1's padding at `m`: `t = 2q₀`, every distinct level-0 position the session opens. -/
+/-- C-Flock ZK's padding at `m`: `t = 2q₀`, every distinct level-0 position the session opens. -/
 def m1Pad (m : ℕ) : ℕ := 2 * m1Queries₀ m
 
 /-- The rational upper bounds on `√ρ'` at `m = 25, 26, 27` (eight digits, rounded up). -/
@@ -265,7 +265,7 @@ theorem padRadius_pos_of (l : Level) (t : ℕ) (sbar : ℚ) (h0 : 0 ≤ sbar)
   unfold Level.padRadius eta
   linarith
 
-/-- M1's padded level 0 meets the rational bounds' conditions. -/
+/-- C-Flock ZK's padded level 0 meets the rational bounds' conditions. -/
 theorem m1_padNumOK : ∀ m, 25 ≤ m → m ≤ 27 →
     PadNumOK ((m1Schedule m).levels.headD default) (m1Pad m) (m1SqrtUp m) := by
   intro m h1 h2
@@ -287,7 +287,7 @@ theorem m1_padNumOK : ∀ m, 25 ≤ m → m ≤ 27 →
       ?_ (by norm_num [m1SqrtUp])
     norm_num [Level.padRate, Level.logLen, m1Pad, m1Queries₀, m1SqrtUp]
 
-/-- M1's padded level 0 meets the soundness theorem's conditions. -/
+/-- C-Flock ZK's padded level 0 meets the soundness theorem's conditions. -/
 theorem m1_padOK : ∀ m, 25 ≤ m → m ≤ 27 →
     PadOK ((m1Schedule m).levels.headD default) (m1Pad m) := by
   intro m h1 h2
@@ -349,7 +349,7 @@ theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 27 → ∀ st : Stmt,
   · rw [m1Schedule_27] at hp hok ⊢
     exact padRepError_nonneg _ _ _ _ _ _ _ _ _ hp (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st
 
-/-- **The soundness number with M1's padded level 0**, `m = 25, 26, 27`: at most `2^-205` per
+/-- **The soundness number with C-Flock ZK's padded level 0**, `m = 25, 26, 27`: at most `2^-205` per
 table, for every statement shape in range. -/
 theorem padTableError_le_m1 : ∀ m, 25 ≤ m → m ≤ 27 → ∀ st : Stmt, st.InRange →
     padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by

@@ -417,7 +417,7 @@ def build() -> dict:
         except (ValueError, KeyError) as e:
             rejects.append([label, f"{type(e).__name__}: {e}"])
     return {
-        "about": "Pinned vectors of verity/primitives/circuits/PROTOCOL.md (the program format), checked by tests/ir/test_format_spec.py; written by it "
+        "about": "Pinned vectors of verity/primitives/circuits/PROTOCOL.md (the program format), checked by verity/primitives/circuits/tests/test_format_spec.py; written by it "
                  "with --write.",
         "canonical_json": {
             "in_domain": [[v, codec.canonical_json(v).decode()] for v in JCS_IN],

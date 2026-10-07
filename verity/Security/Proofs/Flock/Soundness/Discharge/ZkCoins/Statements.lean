@@ -9,8 +9,9 @@ import Proofs.Flock.Soundness.CROnly.Hm96Defs
   where `δ₁` is the leaf's hiding gap (`Assumptions.Hm96Hiding`).
 * `CommittedLeHm96`: the same at hm96-sha512 under the session's fresh uniform key, with `δ₁ = 2^-257` and no hypothesis
   on the key: the key is drawn with the blocks and salts, and the prover sees it.
-* `SessionCoinsSound`, `SessionCoinsHm96`: the batched `--zk` session on M2's coin tree (`sessionZKC`): table `j`'s
-  `padLinkError + (padRepError + εInner)²` plus `δ₁` (resp. `2^-257`) for each of the `1 + 2·J·R` committed rounds.
+* `SessionCoinsSound`, `SessionCoinsHm96`: the batched `--zk` session on C-Flock ZK's coin tree (`sessionZKC`): table
+  `j`'s `padLinkError + (padRepError + εInner)²` plus `δ₁` (resp. `2^-257`) for each of the `1 + 2·J·R` committed
+  rounds.
 
 The bound against live coins is `value`, the optimal adaptive prover's against independent live coins, so the table
 bound's square (`value_interleave_le`: two reps on independent coins) carries over whole; the commitment adds a sum over
@@ -46,9 +47,9 @@ def CommittedLeHm96 : Prop :=
           value p g.erase + Fintype.card I * ENNReal.ofReal (1 / 2 ^ 257)
 
 /-- **Soundness of table `j` in a batched `--zk` session on committed coins.** For every committed prover, the session
-on M2's coin tree (`sessionZKC`, `R` rounds a stream, any balanced decoders `dc`) accepts while table `j`'s committed
-values do not satisfy its statement with probability at most table `j`'s `padLinkError + (padRepError + εInner)²` plus
-`δ₁` for each of its `1 + 2·J·R` committed rounds. -/
+on C-Flock ZK's coin tree (`sessionZKC`, `R` rounds a stream, any balanced decoders `dc`) accepts while table `j`'s
+committed values do not satisfy its statement with probability at most table `j`'s
+`padLinkError + (padRepError + εInner)²` plus `δ₁` for each of its `1 + 2·J·R` committed rounds. -/
 def SessionCoinsSound : Prop :=
   ∀ {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
     (A : Model.Arith F K), A.Correct → ∀ (ts : List (ZkSession.TabZK F mPts)) (j : Fin ts.length)
@@ -60,9 +61,9 @@ def SessionCoinsSound : Prop :=
           (sessionZKC dc R A ts) dig My cs H τ ≤
         (ts.get j).bound + ((1 + 2 * ts.length * R : ℕ) : ℝ≥0∞) * δ₁
 
-/-- **Soundness of table `j` in a batched `--zk` session on M2's coin tree at hm96-sha512.** As `SessionCoinsSound`,
-with the leaves under a fresh uniform 2047-bit key that the prover sees: table `j`'s bound plus `2^-257` for each of
-the `1 + 2·J·R` committed rounds, with no hypothesis on the key. -/
+/-- **Soundness of table `j` in a batched `--zk` session on C-Flock ZK's coin tree at hm96-sha512.** As
+`SessionCoinsSound`, with the leaves under a fresh uniform 2047-bit key that the prover sees: table `j`'s bound plus
+`2^-257` for each of the `1 + 2·J·R` committed rounds, with no hypothesis on the key. -/
 def SessionCoinsHm96 : Prop :=
   ∀ {F K E : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] [Field E] [Fintype E]
     [DecidableEq E] {mPts : ℕ} (A : Model.Arith F K), A.Correct → Fintype.card E = 2 →

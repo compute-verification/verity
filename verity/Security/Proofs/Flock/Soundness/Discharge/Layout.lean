@@ -43,8 +43,8 @@ from the decoder's places and the executable's regions:
 * `Site`: at a drawn unit's site in its table's accepted statement, the population's `b ‖ c` at port `p`'s `hm96` output
   (`bc_site`) and, at each message-keyed unit input, its row's bit (`copy_site`);
 * `OutSite`: at a drawn statement, region "out"'s outputs at a proved unit's slot are the unit's in the registered
-  population's public file (`outVal_drawn`, `out_drawn`), and at a drawn unit's site the bits at its VU's output columns
-  are those outputs' (`out_site`);
+  population's public file (`outVal_drawn`, `out_drawn`), and at a drawn unit's site the bits at its template instance's
+  output columns are those outputs' (`out_site`);
 * `OfRows`: readers whose commit strings are units' row ports and single gates (`Readers.ofRows`), with Δ's copies
   from the row bits alone (`ofRows_copies`), the rows' `b ‖ c` (`ofRows_bcPinned`) and the single gates' bits
   (`ofRows_valPinned`; 1 on the constant's gates and 0 on the zero's, `gate_pub`);

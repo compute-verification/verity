@@ -253,6 +253,23 @@ def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue
     assert main([*plain, "--gpus", "1", "--cpus", "4", "--", "true"]) == 2
     assert "--gpus, --cpus declare a job to the queue and mean nothing without --queue" in capsys.readouterr().err
     assert main([*plain, "--kind", "lean-audit", "--", "true"]) == 2
+    assert main([*plain, "--gpu-host", "--", "true"]) == 2
+    assert "--gpu-host declare a job to the queue" in capsys.readouterr().err
+
+
+def test_gpu_host_reaches_the_queue_as_its_flag(tmp_path, monkeypatch, capsys):
+    from research import remote
+
+    specs = []
+
+    def place(src, run_id, spec):
+        specs.append(spec)
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "queue_placement", place)
+    base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--project", "p", "--source", str(tmp_path), "--max-min", "1"]
+    assert main([*base, "--gpu-host", "--", "true"]) == 3 and main([*base, "--", "true"]) == 3
+    assert [s["gpu-host"] for s in specs] == [True, False], "True becomes `cluster submit --gpu-host`; False is left out"
 
 
 def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):

@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Soundness
 import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 
 /-!
-# Soundness of a table with M1's padded level 0
+# Soundness of a table with C-Flock ZK's padded level 0
 
 **`table_sound_pad`.** For every prover strategy, the probability that the verifier accepts a table
 with the padded level 0 (both reps, each folding its own `e` extra lanes) while no family of witness
@@ -300,9 +300,9 @@ theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
         _ ≤ ENNReal.ofReal ε * ENNReal.ofReal ε := mul_le_mul' h0 h1
     · rw [padTableError, ENNReal.ofReal_add hlink0 (by positivity), sq, ENNReal.ofReal_mul hε]
 
-/-! ## At M1's values -/
+/-! ## At C-Flock ZK's values -/
 
-/-- M1's schedules have the `fast100` shape. -/
+/-- C-Flock ZK's schedules have the `fast100` shape. -/
 theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 27 →
     2 ≤ (m1Schedule m).levels.length ∧
       ((m1Schedule m).levels.headD default).lanes = (m1Schedule m).k0 ∧
@@ -311,7 +311,7 @@ theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 27 →
   intro m h1 h2
   interval_cases m <;> decide +kernel
 
-/-- **The table theorem at M1's values** (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7
+/-- **The table theorem at C-Flock ZK's values** (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7
 item 6): `m = 25, 26, 27`, level-0 query counts `277, 242, 229`, padding `t = 2q₀`, a pair of extra
 lanes per rep. For every prover strategy, the verifier accepts a table while the committed values
 do not satisfy the statement with probability at most `2^-205`, for every statement shape in

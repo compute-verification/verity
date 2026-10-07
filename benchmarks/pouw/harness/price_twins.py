@@ -91,7 +91,8 @@ def _q(num: str, den: str | None) -> Fraction:
 
 def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
     """The body of each `Pouw.Guarantees` definition that the audit's `reads` record, from its module's source under `lean`,
-    with whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix."""
+    with whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix, or
+    `def _root_.G : Prop :=` in any namespace (how `tools/lean/audit.py --lift` writes it)."""
     out = {}
     for module, group in audit.get("reads", {}).items():
         names = [d for d in group.get("definitions", {}) if d.startswith("Pouw.Guarantees.")]
@@ -101,8 +102,9 @@ def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
         text = path.read_text()
         for d in names:
             ns, short = d.rsplit(".", 1)
-            m = re.search(rf"^namespace {re.escape(ns)}\n(?:.*\n)*?def {re.escape(short)} : Prop :=\n((?:[ \t]+\S.*\n)+)", text,
-                          re.M)
+            m = (re.search(rf"^namespace {re.escape(ns)}\n(?:.*\n)*?def {re.escape(short)} : Prop :=\n((?:[ \t]+\S.*\n)+)",
+                           text, re.M)
+                 or re.search(rf"^def _root_\.{re.escape(d)} : Prop :=\n((?:[ \t]+\S.*\n)+)", text, re.M))
             if m:
                 out[d] = " ".join(m[1].split())
     return out
@@ -238,7 +240,7 @@ def load(path: Path = TABLE) -> list[dict]:
 
 
 def statement(line: str | None, version: str | None) -> str | None:
-    """The statement a panel line and version is γ for: the hashing format (-h1, -h2, ...) is outside γ's statement."""
+    """The statement a panel line and version is γ for: the hashing format (-h0, -h3) is outside γ's statement."""
     if not line or not version:
         return None
     return f"{line}/{re.sub(r'-h[0-9]+$', '', version)}"
