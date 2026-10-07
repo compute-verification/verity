@@ -24,7 +24,7 @@ edit is planned, and refused if it would leave a name of a promoted lane behind,
 changes nothing. `--promote-only` deletes and promotes but moves nothing: the `MOVE` lanes stay in core's quarantine, for a tree
 that has no `experimental/` yet.
 
-`snapshot` records circuit-check's task list and every registered Definition, each with its descriptor digest (sha256 of the
+`snapshot` records circuit-check's task list and every registered Definition, each with its descriptor digest (sha512 of the
 canonical JSON of its definition entry). `verify` compares two snapshots: the task list may lose only the deleted versions'
 targets and gain only what the promoted Definitions' bindings reach, and every other id must keep its digest.
 """
@@ -1017,7 +1017,7 @@ def _digest(fn) -> str:
     if not isinstance(fn, FunctionDefinition):
         return f"not a definition: {type(fn).__name__}"
     try:
-        return hashlib.sha256(canonical_json(definition_entry(fn))).hexdigest()
+        return hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest()
     except Exception as e:  # an unbound generic Definition has no self-contained entry; its id is what is compared
         return f"unencodable: {type(e).__name__}"
 

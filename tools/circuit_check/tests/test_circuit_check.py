@@ -141,7 +141,7 @@ def test_a_target_with_a_record_static_parses_as_its_id_prints_it(monkeypatch):
 
     monkeypatch.setattr(TG, "suite", lambda: SUITE)
     records = [fid for fid in SUITE if re.search(r"=\{[0-9a-f]{12}\}", fid)]
-    assert "StepBody_v1{C={d0dc81b7fa41},T=4,GEMM={1af1018d695c},ATTENTION={f63c865fa1fc},NORM={c0107547e710}}" in records
+    assert "StepBody_v1{C={e2f2f43eb046},T=4,GEMM={4130e3ca726d},ATTENTION={35db6738c571},NORM={4d524c30089f}}" in records
     for fid in records:
         assert TG.definition(fid).id == fid
     step = next(fid for fid in records if fid.startswith("StepBody_v1{"))

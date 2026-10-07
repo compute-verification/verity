@@ -21,8 +21,8 @@ from verity.primitives.circuits.boolean.forms import ONE, Circuit
 
 #: (ARITY, D) -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    (2, 1): (103101, 479098, 14170, "98e0dc34f59b9e7ef3145fe5a110225d53cbe2ef280c20750dd666c187f63dbc"),
-    (4, 1): (163576, 769803, 19049, "6745e9f7599cb374c60ebdca2cdf075db75a4dafda4de1467a39e519282d683a"),
+    (2, 1): (103101, 479098, 14170, "292bd91ed222d65237d273ed86f6cf1f5bc7237c282b12abbaf0df48bb84728f8b5804070b4cf078cd2c8e357122860c022298aba2bb87fdaa4f1e3f2a592e7b"),
+    (4, 1): (163576, 769803, 19049, "b8c72007efe698f6d379de091be61af8d46829b0641b989b58f762f475e3662d9df9c5e5ebd147b6b39998624c83788e150b30c86bb9520e61d236ed73fc80f5"),
 }
 #: ARITY -> (ANDs, C-Flock rows) one level adds: the node's compressions and the slot multiplexers; rows are the ANDs and the
 #: copies `sha512.commit` adds (an untraced `forms.Circuit`, no common-subexpression pass)

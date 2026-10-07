@@ -51,7 +51,7 @@ def _owned(fn) -> bool:
 
 def _digest(fn) -> str:
     from verity.primitives.circuits.codec import canonical_json, definition_entry
-    return hashlib.sha256(canonical_json(definition_entry(fn))).hexdigest()
+    return hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest()
 
 
 @lru_cache(maxsize=1)

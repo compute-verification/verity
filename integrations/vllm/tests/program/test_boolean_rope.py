@@ -54,8 +54,8 @@ LARGE = [bind(R.RoPE, NHEADS=n, D=d) for n, d in ((9, 64), (3, 64), (32, 96), (3
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "RopeOut_v2": (2966, 4608, 295, "5677d123ea2492ecbb3f4d477325ac7a6407d5a393ae8e094291b7640661c4fd"),
-    "RopeOutAdd_v2": (2966, 4608, 294, "358c043fb20c3738d2e852c96f10910877053f5c9dcd78cb3e90ccb6a54a3b02"),
+    "RopeOut_v2": (2966, 4608, 295, "d04513f5effb40ddb44a20c17342bac87dd8468fa2a4f4f42551a9026d9d9229b7c0ee2d90cbde79b122f60635499d5a5f5ec0534a687c95e9fb8f47fbaa614b"),
+    "RopeOutAdd_v2": (2966, 4608, 294, "d53f3f2e6b4dcca7d8bafca17d8a9c02d0d39073e1e13c6e493da779b1a8f62c5b28f37f8332a0d8e4f551e0e7dfa2f64cfeabb6dc9ef51a7f3748257b1f12b6"),
     "RoPEHead_v2{D=64}": (189824, 294912, 18848, "84bd8192e6ddd91076d45608e0fe5ecf41e3d90b8a4d6bf0b11537503c02cff2"),
     "RoPEHead_v2{D=96}": (284736, 442368, 28272, "73688224fdc345974ed4aab8267a07160d2fdee6062a088ad1fe229dd6e702ee"),
     "RoPEHead_v2{D=128}": (379648, 589824, 37696, "80f0ade7180aebd481c0dc897946d1f8d3517e9b4941c9f60bfe8d9a562e27f1"),

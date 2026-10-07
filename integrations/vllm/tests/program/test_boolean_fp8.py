@@ -21,13 +21,13 @@ from verity_vllm.program.registry import boolean_fp8 as BF
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "Fp8RowScale_v2": (2831, 6165, 354, "43dac6496871797298a15ce142f740e490e26a97cbb064fc81ad3bf0c65272be"),
+    "Fp8RowScale_v2": (2831, 6165, 354, "5756f5168724db73eee88d038ad7f83126995ededff4876db6f3ba7104617239414f5c1c044e23927a80443e329d7ff3a0b3cc4bd585c9d6ad5e47a3940a60c0"),
     "DotE4m3_v3{K=64}": (13598, 24402, 2036, "7a251da32da5f6a9a8b6017b12e942535ffafe3e9d651e402db64f88f1a15be8"),
     "ScaledMmFp8Coordinate_v2{K=64,BIAS=True}":
         (20579, 37013, 2428, "99f4d987af96906cf3edcc11e821e9f8ea9255440f2c5cb73c778d3cbe39c73b"),
     "Fp8ActQuant_v2{K=256}": (1027541, 2120408, 177916, "a7a3e66509772aa45d373d5ffa08244d8191f6d91455e23e5fa29644ec79b49b"),
     "QuantLinearFp8_v2{K=256,N=2,BIAS=True}":
-        (1150287, 2340846, 194988, "d5a207fbf4e703b6cf1db5798c3bac977b65702ca8a792eeeb757d3b8db8fae2"),
+        (1150287, 2340846, 194988, "c31762aa8015c4648a7a3dad8280e17845f04e1eed054f5183fb637c0f70621da4152bd007acb01fe119a090c1ad3288c2a1544dace8e5fd923fa63ec0ed2ad7"),
     "Fp8GroupQuant_v2{K=256,G=128}": (949674, 1979312, 152056, "92c13a1e3eb02c463da0ccb9ada8058908d621469de4834c56083148768d437b"),
     "ScaledMmFp8BlockCoordinate_v2{K=256,G=128}":
         (68288, 122732, 8913, "bba9b1f6c06f80f604a30ce4270070bfc40bfe51f8f355232bc1f37239ef5b4c"),
@@ -38,7 +38,7 @@ PINS = {
     "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}":
         (18256, 34804, 2050, "6e0d4f336ec3e4c04b1860d74083d883c4f64862b3bea5295a907cc124672b83"),
     "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}":
-        (50474, 94830, 4884, "7f57b9e8cd9f74b25f8d46bbe30974ae1b1dc50cabd0bfe3c2774c49a8828f38"),
+        (50474, 94830, 4884, "a827e1f5b0a81ac753963f667d592d2c970cda9d1a909b96e3a30ff81d7d85f19f6d628c158567d9bfb976f12170f83d4da6f540e5e7772d5b3e34e00d9fcaa8"),
 }
 #: the cc 12.0 (sm_120 mma.sync) and Hopper (wgmma) e4m3 k32 steps on bits, the no-swap linear's DOT
 SM120, HOPPER = BG.BlackwellE4m3QmmaDot32, BG.HopperE4m3QgmmaDot32

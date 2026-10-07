@@ -30,12 +30,12 @@ from verity_vllm.query import word as W
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "ArgmaxStep_v2": (134, 290, 20, "287e574afd405bbfe75099f548abd455d27c168fd4010ae36b2a5fe0caaa8780"),
+    "ArgmaxStep_v2": (134, 290, 20, "0422abdc1d8d51c1d43422cd68a396305832a3beabbc81352c8f28f63893ebc9c5b12d06c8ab61332e72e32aed2c2c594217babc149e3540a6059a171379957d"),
     "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (3415, 8032, 1261, "98838af65015f2151032e7c2bd7f020f85cbed9ae92797c7a5b30d5b5fbab282"),
     "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (3431, 8061, 1261, "ca37d2fb5fa1787c7c76a5228402d100d1ff6cc6640bf1927603d8f06594c41d"),
     "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (2577, 6036, 1197, "0baa92a7abaf8bc5ae77c85691213d81949a1aff8f47af0d43ea2d98d5e40300"),
-    "TokenSelect_v2{V=50}": (2661, 6252, 981, "b0f60b1de054e71834fde350139cc9c8b5d4d238249e2deb23cea9f33e5fba81"),
-    "TokenSelect_v2{V=200}": (10759, 25301, 3981, "5e7ac5c0747865d101a77d2ddc9d8ba72c6faf000719d9f302c759b8bb1ac90f"),
+    "TokenSelect_v2{V=50}": (2661, 6252, 981, "01242c512a75f2516c05b1e34532249ce4dee88a727ff61349e15416ee6792a41d1ea4401d0df4c9dbe349c4c6f4582d60208137f7029a343d9aa509bac6ebed"),
+    "TokenSelect_v2{V=200}": (10759, 25301, 3981, "e8b49b86aeef42b1d39cde82c945692e0e49fbfbdb87f79ca79df0b45e97b36fb9f4384927277df9b2b5ab2748cf110c412a6f9a9b2a978332bf4bdce079a194"),
     "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (6455, 16144, 2269, "3c8f8e02b05350235db6a09b031bfe4c02dd0d0c34fb92a20a178a1477bdb57c"),
     "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (6487, 16205, 2269, "3e515cd9eaecfd4b9623b7d9b863751590ba4a389bad6781b4e5e0b9f618f9e8"),
     "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (4593, 11076, 2205, "ef94f88b658a34b296fa33ec8aa7ceaafbb481701a582dee05cec7a6b87dddb5"),
