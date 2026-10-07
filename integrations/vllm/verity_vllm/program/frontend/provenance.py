@@ -29,8 +29,8 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.primitives.circuits.codec import canonical_json
-from verity.primitives.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 
 RULE_KINDS = ("hierarchy-around-unchanged-gates", "region-replacement")
 

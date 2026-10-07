@@ -80,7 +80,7 @@ research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
-             [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (tools/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
+             [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (infra/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
@@ -118,7 +118,7 @@ and a clean source at REF's exact commit, and when the target's tip is an ancest
 The attempt's own record and result must agree with the target's declaration: its command (`Tool.command`, in a check slot or
 not, plus check.py's own flags only), a result kind it produces (`check/v1`, never `lean-fast/v1`), a passed verdict and no step
 listed twice. Anything else, unreadable included, passes no gate, and a refusal exits 3. The merge commit carries a `Check:
-<attempt id>` trailer; `research` only reads the attempts of the repository's tool (`tools/check`). `--canary` checks, in scratch
+<attempt id>` trailer; `research` only reads the attempts of the repository's tool (`tools/verity/check`). `--canary` checks, in scratch
 stores, that every gate refuses each bad attempt in `CANARY` and admits a good one.
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
@@ -130,7 +130,7 @@ and fast-forwards to the longest prefix that passed.
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
 refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
-`tools/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
+`tools/verity/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
@@ -144,9 +144,9 @@ bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs th
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
-`lean-agreement` for `backends/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
-needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached in
-the checkout with the landed commit appended, and can't change the exit code; `check`'s is `tools/check/post_train.py`, the vLLM
+`lean-agreement` for `verity/{ml,core/service}/flock/`, less README.md and PROTOCOL.md; `--train --send FILE` ships what such a
+step needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached
+in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
 **Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
@@ -215,7 +215,7 @@ each with its repository file and owner (a Slack handle), and goes there only th
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
-that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
+that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`ops deploy`). A new
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
@@ -315,7 +315,7 @@ never a verdict, and `research merge --train` stops rather than bisecting. A
 declaration that exists but cannot be read also refuses. `--preflight TOOL`
 runs TOOL's preflight before a run of something else, such as a Lean record
 regeneration on a check pod, and refuses if the tree declares none. `check`
-declares `tools/check/preflight.py`: the tools `pod_setup.sh` installs, the
+declares `tools/verity/check/preflight.py`: the tools `pod_setup.sh` installs, the
 Lean dependencies (warm, or restorable from the store, never GitHub), one
 store read, `avx512f` when the run carries an upstream build that needs it,
 and free disk.
@@ -566,14 +566,14 @@ at = "10:30Z"
 weekday = "mon"                              # weekly; daily without it
 source = "/workspace/steward/verity"         # the tree it is launched from: its cwd, and its workspace on PYTHONPATH
 args = ["--on", "vy-lean-small", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_upstream", "--",
-        "python", "tools/lean/upstream.py", "verity/Security/Proofs", "--fetch", "--rev", "origin/main"]
+        "python", "tools/verity/lean/upstream.py", "Security/Proofs", "--fetch", "--rev", "origin/main"]
 ~~~
 
 `args` are `research run`'s and must put the run on a machine (`--on`). The steward runs `research run --id <run id> <args>`,
 which returns once the machine has started the workload detached, so a pass waits for the launch (at most 10 minutes), never
 for the run. It prints `LAUNCHED <name> <run id> on <machine>`, or `RUN-FAILED <name> <run id>: <why>`, and the next launch is
 the next period's; an invalid entry is one `RUN-FAILED <name>: <why>` line. The run's Attempt records what ran and how it
-ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/lean/tool.py`: `lean_audit`
+ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/verity/lean/tool.py`: `lean_audit`
 (`audit.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
 
 ### A lane's older notes

@@ -24,7 +24,7 @@ touches what `merge_requires` sends the Lean agreement for, and `upstream.json`'
 The dedupe key makes adding idempotent, and a deliberate re-run names a new one (--dedupe-key).  A merge check's is
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
 file the audit reads (each package, the packages its `proved_in` names, and every package these require by path, less the
-Lake packages nested in them, and `tools/lean/`; `tools/lean/lean_audit.py`'s inputs without check's own files).  So trains
+Lake packages nested in them, and `tools/verity/lean/`; `tools/verity/lean/lean_audit.py`'s inputs without check's own files).  So trains
 whose Lean inputs are the same share one regeneration, and the second add answers with the first job and its run.  The site
 is `$JOBS_URL`.  Exit 1 when the Job queue refuses, 4 when it can't be reached.
 """
@@ -46,7 +46,7 @@ from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKD
 from .dispatch import KINDS as DISPATCH_KINDS
 
 REPO = "danielreuter/verity"
-LEAN_TOOL = "tools/lean/"
+LEAN_TOOL = "tools/verity/lean/"
 LEAN_KEY_SCHEMA = "lean-regen-inputs/v1"
 
 
@@ -74,7 +74,7 @@ def _git(*args: str, cwd: Path | None = None) -> str:
 
 
 def lean_inputs(commit: str, packages: list[str], cwd: Path | None = None) -> dict[str, str]:
-    """{path: blob sha} of every tracked file `audit.py --build --update PACKAGE...` reads at `commit` (module docstring)."""
+    """{path: blob sha} of every tracked file `check.py --build --update PACKAGE...` reads at `commit` (module docstring)."""
     files = {}
     for entry in _git("ls-tree", "-r", "-z", "--full-tree", commit, cwd=cwd).split("\0"):
         if entry:
@@ -116,7 +116,7 @@ def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
 
 #: preflight.py's AVX512 (#440), for a tree from before it
 AVX512_BEFORE_PREFLIGHT = r"target-cpu=(native|x86-64-v4)\b|avx512"
-UPSTREAM = "backends/flock/verifier/upstream.json"
+UPSTREAM = "verity/ml/flock/verifier/upstream.json"
 
 
 def _show(commit: str, path: str, cwd: Path | None = None) -> str | None:
@@ -143,10 +143,10 @@ def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
     if pin is None:
         return False
     flags = json.loads(pin)["upstream"].get("rustflags") or "target-cpu=native"
-    pattern = _literal(_show(commit, "tools/check/preflight.py", cwd), "AVX512") or AVX512_BEFORE_PREFLIGHT
+    pattern = _literal(_show(commit, "tools/verity/check/preflight.py", cwd), "AVX512") or AVX512_BEFORE_PREFLIGHT
     if not re.search(pattern, flags):
         return False
-    rule = (_literal(_show(commit, "tools/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
+    rule = (_literal(_show(commit, "tools/verity/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
     from ..merge import rule_touches
 
     changed = [p for p in _git("diff", "--no-renames", "--name-only", "-z", base, commit, cwd=cwd).split("\0") if p]   # a rename's source too

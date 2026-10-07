@@ -181,7 +181,7 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
 #: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
-#: An `audit.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
+#: A `check.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
 #: where it printed the head's whole lean-audit.json change as the same statements (`research.queue.reviewed`).
 LEAN_REVIEW = "lean_review"
 
@@ -332,13 +332,13 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_DATASET, GROUP_EVIDENCE, TEXT, "the instance dataset a run or set draws from, e.g. bench-instances/v1"),
     _k(INSTANCES_TIER, GROUP_EVIDENCE, TEXT, "the tier within the dataset, e.g. vu-k1536"),
     _k(MISMATCHES, GROUP_EVIDENCE, INT, "tiles or instances that disagreed with the reference"),
-    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity_catalog.targets.target name)"),
+    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.ml.circuits.targets.target name)"),
     _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture ran on, as its UUID (nvidia-smi --query-gpu=uuid: GPU-...); the trust framework's device identity"),
     _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (tools/tc_probe/trust.py)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (benchmarks/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
     # approach
     _k(APPROACH, GROUP_APPROACH, TEXT, "on a run or artifact: the <campaign>/<slug> of the approach it belongs to"),

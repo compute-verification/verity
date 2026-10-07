@@ -602,7 +602,7 @@ def queued(p: subprocess.Popen) -> str:
 @needs_flock
 def test_under_the_agent_a_request_queues_at_once_with_its_flags_and_takes_exactly_the_gpus_it_is_granted(tmp_path):
     """GPU 0 is free, so gpu-lease's own rules would take it; under the agent it takes the granted GPU 2.  The wait file carries
-    what the agent's planner reads (tools/cluster's nebius2.job_of)."""
+    what the agent's planner reads (infra/cluster's nebius2.job_of)."""
     env = {**gpu_env(tmp_path), "GPU_LEASE_AGENT_POLL_S": "0.05"}
     gl = tmp_path / "gl"
     agent = hold_agent_lock(gl)
@@ -868,6 +868,8 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     a Verity job that finds no slot requeues the newest lent job, and nothing more is lent while it waits."""
     monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
     monkeypatch.setenv("FILL_VERITY_CPU_SLOTS", "2")
+    monkeypatch.setenv("FILL_VERITY_UNTIL", "9999-01-01T00:00:00+00:00")
+    monkeypatch.setenv("FILL_VERITY_STOP", "9999-01-01T01:00:00+00:00")
     spec = importlib.util.spec_from_file_location("fill_runner_lend", FILL_RUNNER)
     fr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fr)
@@ -2265,7 +2267,7 @@ def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
 def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_1(tmp_path):
     """submit's `place` asks `cluster submit` for node 2 with the row's research question and prints the placed.jsonl line; a
     refusal exits 3, and a queue that gives no answer prints nothing and exits 0, so it never holds a row back. The queue is a
-    stand-in `cluster` package that echoes its arguments (tools/cluster's own tests cover the placement)."""
+    stand-in `cluster` package that echoes its arguments (infra/cluster's own tests cover the placement)."""
     src = tmp_path / "cluster-src"
     (src / "src" / "cluster").mkdir(parents=True)
     (src / "descriptions").mkdir()
@@ -2288,7 +2290,7 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
     r = place(src, gpus="9")
     assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
-    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to tools/cluster's editable install
+    silent = tmp_path / "silent-cluster"     # answers nothing; a missing one would fall through to infra/cluster's editable install
     (silent / "src" / "cluster").mkdir(parents=True)
     (silent / "src" / "cluster" / "__init__.py").write_text("")
     (silent / "src" / "cluster" / "__main__.py").write_text("import sys\nsys.exit('no queue here')\n")
@@ -2611,6 +2613,37 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b")])
     (pool / "blocked").unlink()
     assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
+
+
+def test_gpu_stray_reads_only_the_gpu_variables_of_a_process(monkeypatch):
+    """Daniel's ruling (7 Oct): the probe reads another process's GPU variables and nothing else of its environment, which may
+    hold its secrets. Under sudo only the matching lines leave `grep`; read directly, the rest is dropped at once."""
+    spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    env = {"PATH": os.environ["PATH"], "CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all", "JOB_TOKEN": "dummy"}
+    p = subprocess.Popen(["cat"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        p.stdin.write(b"up\n")
+        p.stdin.flush()
+        assert p.stdout.readline() == b"up\n"          # cat echoes once it has exec'd with `env`
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        ran = []
+
+        def denied(self):
+            raise PermissionError(str(self))
+
+        def sudo(cmd, **kw):
+            ran.append(cmd)
+            return real_run(cmd[2:], **kw)              # the same grep, without sudo
+
+        real_run = subprocess.run
+        monkeypatch.setattr(m.Path, "read_bytes", denied)
+        monkeypatch.setattr(m.subprocess, "run", sudo)
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        assert ran == [["sudo", "-n", "grep", "-zaE", "^(NVIDIA_VISIBLE_DEVICES|CUDA_VISIBLE_DEVICES)=", f"/proc/{p.pid}/environ"]]
+    finally:
+        p.communicate()
 
 
 def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_read(monkeypatch, tmp_path):

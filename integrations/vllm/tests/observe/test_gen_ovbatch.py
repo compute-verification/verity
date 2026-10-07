@@ -8,7 +8,7 @@ import dataclasses
 from verity_vllm.observe.events import StepLink, StepStart
 from verity_vllm.observe.fold.fold import fold, instance_nodes
 from tests.observe import test_fold_synthetic as TFS
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.types import Array, Value
 
 memory = TFS.memory  # the fixture (real memory model when importable, else the in-test stub)
 

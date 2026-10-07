@@ -1,6 +1,6 @@
 # What infra's loops, timers and services run on the Nebius nodes, and the file of this repository each one comes from.
 # `research deploy drift` compares every entry with `main`; `research deploy install` installs entries from a pushed commit
-# (research/deploy.py). A file that a node's `managed` pattern matches and no entry lists is reported as a stray.
+# (`ops deploy`, infra/ops/verity_ops/deploy.py). A file that a node's `managed` pattern matches and no entry lists is reported as a stray.
 #
 # [[file]]: `path` on each of `nodes`, installed from `src`; `run` names the units that run it (`systemd:UNIT`,
 # `user-systemd:UNIT`, never a tmux session: tests/test_deploy.py), so install restarts them; `owner` is the Slack handle that
@@ -187,14 +187,14 @@ owner = "infra"
 # the dispatcher's `cluster submit` reads; no `run`: n1_lease.py runs it afresh every POLICY_EVERY_S
 [[tree]]
 path = "/workspace/verity-guest/cluster-policy"
-src = "tools/cluster"
+src = "infra/cluster"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
 # what the dispatcher's `cluster submit` places Jobs with ($VY_QUEUE_SRC); no `run`: each placement runs it afresh
 [[tree]]
 path = "/workspace/verity-guest/cluster-src"
-src = "tools/cluster"
+src = "infra/cluster"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
@@ -356,7 +356,7 @@ owner = "console"
 # the console imports cluster.usage from beside itself: node 1's python3 has no cluster package
 [[tree]]
 path = "/workspace/research/console/cluster"
-src = "tools/cluster/src/cluster"
+src = "infra/cluster/src/cluster"
 nodes = ["vy-nebius-1"]
 run = ["systemd:verity-console.timer"]
 required = true
@@ -485,13 +485,13 @@ owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-lean-cache/run-daily"
-src = "tools/lean/run_daily.py"
+src = "tools/verity/lean/run_daily.py"
 nodes = ["vy-nebius-1"]
 owner = "lean"
 
 [[file]]
 path = "/usr/local/lib/vy-lean-cache/cache.py"
-src = "tools/lean/cache.py"
+src = "tools/verity/lean/cache.py"
 nodes = ["vy-nebius-1"]
 owner = "lean"
 
@@ -507,7 +507,7 @@ src = "tools/research/src/research/pods/nebius/vy-lean-cache-daily.timer"
 nodes = ["vy-nebius-1"]
 owner = "lean"
 
-# ---- node 2: PoUW's node, Verity's guest (/workspace/pouw/infra, tools/cluster's agent)
+# ---- node 2: PoUW's node, Verity's guest (/workspace/pouw/infra, infra/cluster's agent)
 
 [[file]]  # in tmux pouw-infra-fill until its unit, held below, is deployed
 path = "/workspace/pouw/infra/bin/fill_runner.py"
@@ -625,6 +625,12 @@ src = "tools/research/src/research/pods/nebius/device_cores.sh"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 
+[[file]]  # after installing it, `sudo sysctl --system` (or the next boot) applies it
+path = "/etc/sysctl.d/90-vy-device-cores.conf"
+src = "tools/research/src/research/pods/nebius/device-cores-sysctl.conf"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
 [[file]]
 path = "/workspace/pouw/infra/bin/gpu-lease"
 src = "tools/research/src/research/pods/sh/gpu_lease.sh"
@@ -633,7 +639,7 @@ owner = "compute-accounting"
 
 [[file]]
 path = "/etc/systemd/system/vy-cluster-agent.service"
-by = "tools/cluster/vy-cluster-agent.service"
+by = "infra/cluster/vy-cluster-agent.service"
 nodes = ["vy-nebius-2"]
 run = ["systemd:vy-cluster-agent"]
 owner = "infra"
