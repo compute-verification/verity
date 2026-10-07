@@ -32,7 +32,15 @@ outcome's one canonical form:
 ```
 
 Canonical JSON has integers only. Write probabilities and δ as `Core.Ratio` strings (`"n/d"` in lowest terms, or `"n"`,
-Python's `str(Fraction)`).
+Python's `str(Fraction)`). `publicJson` never writes `null`.
+
+A protocol that consumes another's answer reads it with `Answer.ofJson` and its profile with `Integrity.ofJson`. Each
+accepts only what `toJson` writes (re-encoding must give the same canonical JSON) and only the shapes `answer` returns:
+an `accept` has no reason and both its public outputs and its profile, while a refusal has a reason and neither.
+
+`Protocol`, `Profile` and `Ratio` are the package's spec (`layers` in `lean-audit.json`): a property's statement may read
+them, and they import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
+profile's types derive `DecidableEq`.
 
 ## The command line (`CoreProtocol/Cli.lean`), the same for every protocol
 
