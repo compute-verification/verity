@@ -137,3 +137,13 @@ def test_canonical_json_is_leans():
         with pytest.raises(CC.Refused, match=why):
             CC.canonical(b)
 
+
+
+
+
+def test_the_data_is_what_the_lean_check_pins(tmp_path):
+    """Every case and this module's answer to it, byte for byte as the Lean package's record pins them."""
+    run = json.loads((PKG / "lean-audit.json").read_text())["runs"]["PouwCheck.DifftestMain"]
+    made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
+    assert made == run["data"]
+    assert run["args"] == ["{difftest/cases.jsonl}", "{difftest/python.jsonl}", str(vectors.COUNT)]

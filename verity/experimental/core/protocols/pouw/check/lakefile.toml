@@ -1,0 +1,29 @@
+# PoUW's check of one audit window as a core protocol (`core_protocol`'s `Core.Protocol`), the port of
+# `verity/experimental/protocols/pouw/core_check.py`: the verifier's parameters, the window's registration and its digest,
+# the proof service's answer, and PoUW's rule over them. Lean core only; its properties are stated in
+# `Security/Properties/Pouw/Check.lean`, and the difftest holds it to the Python on generated inputs.
+name = "pouw_check"
+defaultTargets = ["PouwCheck", "pouw-check", "pouw-check-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "core_protocol"
+path = "../../interface"
+
+[[require]]
+name = "pouw_window"
+path = "../window"
+
+[[lean_lib]]
+name = "PouwCheck"
+
+[[lean_exe]]
+name = "pouw-check"
+root = "PouwCheck.Main"
+
+[[lean_exe]]
+name = "pouw-check-difftest"
+root = "PouwCheck.DifftestMain"

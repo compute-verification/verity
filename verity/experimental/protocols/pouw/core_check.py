@@ -43,7 +43,7 @@ PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range"
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
-_DIGEST = re.compile(r"^[0-9a-f]{128}$")
+_DIGEST = re.compile(r"[0-9a-f]{128}")
 
 
 class Refused(ValueError):
@@ -135,7 +135,7 @@ def params(j: Any) -> dict:
         out[k] = r
     if not _nat(j["grid_bits"]):
         raise Refused("grid_bits is not a natural number")
-    if not (_str(j["query"]) and _DIGEST.match(j["query"])):
+    if not (_str(j["query"]) and _DIGEST.fullmatch(j["query"])):
         raise Refused("query is not a SHA-512 digest (128 hex digits)")
     rg = j["range"]
     if not (isinstance(rg, list) and len(rg) == 2 and all(_nat(x) for x in rg) and 1 <= rg[0] <= rg[1]):
