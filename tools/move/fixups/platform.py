@@ -84,6 +84,9 @@ EDITS = [
     # the verifier's Lean package is no longer under its scripts' directory, and the agreement reads both
     ("tools/verity/check/check.py", 'return [f for f in files if f.startswith(pre) and f != lean + "lean-audit.json"',
      'return [f for f in files if f.startswith((pre, lean)) and f != lean + "lean-audit.json"'),
+    # the stratified-draw check moved in beside the test, away from the Lean package `LEAN` names
+    ("verity/ml/flock/tests/test_lean_verifier.py", 'LEAN.parent / "stratified_agree.py"',
+     'Path(__file__).resolve().parent / "stratified_agree.py"'),
     # relative to `lean/`, which stays, not to the test that moved
     ("verity/experimental/protocols/pous/tests/test_pous_trusted.py", 'SECURITY = "../../../../Security/"',
      'SECURITY = "../../../../../Security/"'),

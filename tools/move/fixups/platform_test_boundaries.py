@@ -80,7 +80,6 @@ NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/cir
 #: ``verity/ml/`` that import experimental anyway (globs from ``verity/``), each with why.
 ML_IMPORTS_EXPERIMENTAL = {
     "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against experimental's Python verifiers",
-    "ml/flock/verifier/*_agree.py": "the agreement scripts run the Lean verifier against experimental's Python verifiers",
 }
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
