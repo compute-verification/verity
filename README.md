@@ -123,8 +123,8 @@ Install the workspace with [uv](https://docs.astral.sh/uv/), then run the tests 
 
 ~~~sh
 uv sync --all-packages --extra torch-cpu   # the workspace, every package editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run verity check tests                  # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run verity check circuits --all         # the property checks on every registered circuit
+uv run tools/verity/check/suites.py        # every test suite whose inputs changed since it last passed; --quick skips slow tests
+uv run circuit-check --all                 # the property checks on every registered circuit
 uv run --extra torch-cpu verity check      # the one check a merge requires; its Lean steps need lake
 ~~~
 
