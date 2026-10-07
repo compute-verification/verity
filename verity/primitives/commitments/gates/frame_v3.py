@@ -40,7 +40,8 @@ B = max(1, ceil((D - k - 1) / 8)): at most three node Definitions for D <= 24.
 
 **Cost.** The domain id is a value, so every message's first block is a compression in gates: a leaf (209 + 2 L + |SCHEMA|
 bytes) is two, a node (274 + L bytes; its level byte in the first block too) three. The layouts' selection is an AND per moved
-value bit: about 1,100 per two-byte node and 2,100 for a two-byte leaf. ``PARTS`` and ``READS`` in the tests pin the gates.
+value bit: about 1,150 ANDs for a two-byte node, 800 for a two-byte leaf and 1,550 for a three-byte one. ``PARTS`` and ``READS``
+in the tests pin the gates.
 """
 from __future__ import annotations
 
