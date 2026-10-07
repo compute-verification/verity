@@ -151,7 +151,7 @@ def small_vector() -> dict:
                           "response_sha512": _sha512(response)})
     final = Wi.final_message(s["epoch"], audit_id, Wi.FAIL_SUCCESS, delta, rtt, transcript, records)
     frames = s["messages"] + transcript
-    if Wi.verify_audit(frames, elapsed, verifier_source=SMALL_AUDIT_SOURCE) != final:
+    if Wi.verify_audit(frames, elapsed, verifier_source=SMALL_AUDIT_SOURCE, seen_audits=set()) != final:
         raise AssertionError("the reference verifier does not accept the small transcript")
     return {"w": SMALL.w, "c0": SMALL.c0, "manifest": s["manifest"].decode(), "W": w_bytes.hex(), "W_bit_length": 63 * SMALL.blocks,
             "w_commitment": s["commitment"].hex(), "setup_source": SMALL_SETUP_SOURCE.hex(), "setup_salt": s["salt"].hex(),
@@ -199,7 +199,7 @@ def _splice(data: bytes, start: int, stop: int, value: bytes) -> bytes:
 
 def _case(name: str, category: str, frames: list[bytes], elapsed: list[int], source: bytes, expected: int, stop_round: int,
           reused: bool = False) -> dict:
-    seen = None
+    seen: set = set()
     if reused:
         body = next(f for f in frames if f[5] == Wi.AUDIT_OPEN)[10:]
         seen = {(body[:Wi.D], body[Wi.D:Wi.D + Wi.S])}

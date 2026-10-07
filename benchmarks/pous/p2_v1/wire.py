@@ -390,13 +390,13 @@ def _parse_response(frame_bytes: bytes, block_bytes: int) -> tuple[bytes, bytes,
 
 def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier_source: bytes | None = None,
                  beacon_inputs: Mapping[int, bytes] | None = None,
-                 seen_audits: MutableSet[tuple[bytes, bytes]] | None = None, private_root: bytes | None = None) -> bytes:
+                 seen_audits: MutableSet[tuple[bytes, bytes]], private_root: bytes | None = None) -> bytes:
     """Verify a setup and one audit transcript, returning the exact FINAL frame.
 
     `frames` is SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*, SETUP_ROOT, AUDIT_OPEN, then alternating CHALLENGE and RESPONSE.
     A missing final response is a transport failure. `elapsed_ns[j]` is the verifier's measured challenge-to-response time
-    for round j. `private_root` is the root the verifier built from `W` itself, which a private setup's declared root must
-    be."""
+    for round j. `seen_audits` holds every `(epoch_id, audit_id)` pair this verifier has used, and gains this audit's.
+    `private_root` is the root the verifier built from `W` itself, which a private setup's declared root must be."""
     if not frames:
         raise WireError(FAIL_TRANSPORT, "empty transcript has no audit identity")
     try:
@@ -428,10 +428,9 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
     if opened.epoch_id != setup.epoch_id:
         return stop(FAIL_IDENTITY)
     pair = (opened.epoch_id, opened.audit_id)
-    if seen_audits is not None:
-        if pair in seen_audits:
-            return stop(FAIL_IDENTITY)
-        seen_audits.add(pair)
+    if pair in seen_audits:
+        return stop(FAIL_IDENTITY)
+    seen_audits.add(pair)
     if not verifier_source or opened.audit_id != R.audit_id(verifier_source, opened.epoch_id, opened.audit_counter):
         return stop(FAIL_IDENTITY)
     audit_key = None

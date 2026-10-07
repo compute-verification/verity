@@ -38,7 +38,7 @@ def test_every_negative_transcript_gives_its_pinned_final():
     codes = set()
     for case in doc["cases"]:
         frames = [bytes.fromhex(f) for f in case["frames"]]
-        seen = None
+        seen: set = set()
         if case["seen_audit_pair"]:
             body = next(f for f in frames if f[5] == Wi.AUDIT_OPEN)[10:]
             seen = {(body[:64], body[64:96])}
@@ -56,7 +56,8 @@ def test_the_small_audit_is_accepted_and_rebuilt_byte_for_byte():
     frames = [bytes.fromhex(m["bytes"]) for m in small["setup_messages"]] + [bytes.fromhex(small["audit_open"])]
     for x in small["exchanges"]:
         frames += [bytes.fromhex(x["challenge"]), bytes.fromhex(x["response"])]
-    final = Wi.verify_audit(frames, small["elapsed_ns"], verifier_source=bytes.fromhex(small["audit_source"]))
+    final = Wi.verify_audit(frames, small["elapsed_ns"], verifier_source=bytes.fromhex(small["audit_source"]),
+                            seen_audits=set())
     assert final.hex() == small["final"] and Wi.parse_final(final) == (True, 0, 2)
     assert V.small_vector() == small
     manifest_length, n, h = len(small["manifest"]), 8, 3
@@ -165,3 +166,13 @@ def test_a_private_setup_checks_the_declared_root_against_the_verifier_s_own():
     assert _verify([*setup[:2], wrong, *audit], small, private_root=root) == (False, 3, 0)
     with pytest.raises(ValueError, match="private setup"):
         _verify([*setup[:2], private, *audit], small)
+
+
+def test_seen_audit_ids_are_required_and_persist_across_audits():
+    """Spec §4: the verifier persists used `(epoch_id, audit_id)` pairs across audits and rejects reuse before round 0."""
+    small, setup, audit = _small_session()
+    with pytest.raises(TypeError):
+        Wi.verify_audit([*setup, *audit], small["elapsed_ns"], verifier_source=bytes.fromhex(small["audit_source"]))
+    seen: set = set()
+    assert _verify([*setup, *audit], small, seen_audits=seen) == (True, 0, 2)
+    assert _verify([*setup, *audit], small, seen_audits=seen) == (False, 2, 0)
