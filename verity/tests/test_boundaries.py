@@ -44,8 +44,9 @@ ALLOWED = {
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.
     "protocols.accounting.work.pouw": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
                                        "primitives.randomness", "protocols.profile", "protocols.verification.sampled_proofs"},
-    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service.
-    "protocols.accounting.communication.certifier": {"primitives.circuits", "primitives.commitments",
+    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
+    # are LMS signatures (`primitives.crypto.lms`).
+    "protocols.accounting.communication.certifier": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
                                                      "protocols.verification.sampled_proofs"},
 }
 #: Import names core never imports or names as a string: the other workspace distributions, external runtimes, and the

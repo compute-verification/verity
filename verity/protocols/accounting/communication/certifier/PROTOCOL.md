@@ -101,15 +101,18 @@ frame-v3's SHA-512 tree (`frame-v3-sha512`) doesn't fit, for three reasons:
 **The certificate** is the record digest and a signature over a 64-byte message that binds it to the key and the
 link-window, so a certificate can't be replayed onto another window, link, direction or key:
 
-    message = tagged_sha512("verity/network-certificate/v1",
-                            u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ record digest)
+    message = SHA-512( [tag] ‖ I ‖ [ [link] ‖ [direction] ‖ u64be window ] ‖ [record digest] ),
+              tag = "verity/network-certificate/v1", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
-I is the certifier's key id. The scheme is a stateful hash-based signature on SHA-512, LMS-shaped (n = 64, h = 20): the whole
-SHA-512 output, not truncated.
-The certifier's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`) and the audit as a `PublicKey`
-(`key_id`, `verify(message, signature)`), so the scheme is a parameter of both. A signer whose one-time-key state is missing, or
-behind the leaves it has used, refuses (`SignerRefused`). The certifier then publishes nothing for the link-window
-(`Issuer.refused` lists it), which fails closed as a `no-verdict`; it never signs with a reused leaf.
+This is LMS's network-certificate role digest (`verity.primitives.crypto.lms.certificate_message`), the message its in-proof
+verifier takes. I is the certifier's 16-byte LMS identifier. The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1,
+h = 20, the whole SHA-512 output, not truncated), and its unforgeability is `euf-cma/lms-sha512-n64`.
+The certifier's `Issuer` holds it as a `Signer` (`key_id`, `sign(message)`; `certificate.LmsSigner`) and the audit as a
+`PublicKey` (`key_id`, `verify(message, signature)`; `certificate.LmsKey`), so the scheme is a parameter of both. `LmsSigner`
+keeps its next unused leaf in an `lms.LeafState`, which it holds from its first signature on. A signer whose state is missing,
+behind the leaves its journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`). The certifier then
+publishes nothing for the link-window (`Issuer.refused` lists it), which fails closed as a `no-verdict`; it never signs with a
+reused leaf.
 
 **The check.** On egress the audit recomputes the record digest from the Program's grid, with a complete status, the
 deadline bit set and the parameters digest of `params` and Σ_sync, and compares it with the certificate's. Under
@@ -454,8 +457,9 @@ horizons, so they check the Lean statements on examples and prove nothing. By na
   - a certificate moved to another window, link or direction, relabelled, forged or checked under another key is a
     `signature` violation; an unset deadline bit is a `no-verdict`, another Σ_sync or Q a `mismatch`;
   - a signer whose state is missing or behind refuses, and that link-window is a `no-verdict`; it signs again once its
-    state is restored, never reusing a leaf. The signer is a test-only Lamport tree (`tests/toy_signer.py`), not the
-    certifier's scheme;
+    state is restored, never reusing a leaf. A second signer on held state, or one whose floor is past the state, refuses
+    too. The signer is the certifier's `LmsSigner` on a tree of 2^6 leaves (`tests/signers.py`), not the deployed 2^20;
+  - the certificate message is LMS's network-certificate role digest;
 - **`test_network_certifier_service.py`:** one link-window through the proof service: the round trip to an exhaustive
   accept, nothing of a certificate or a violation's kind in what the challenger keeps, each refused registration (an
   extra field, a certificate in the clear, a window other than the order), and each reject (a bad signature, a digest
