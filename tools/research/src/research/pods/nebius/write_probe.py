@@ -258,7 +258,7 @@ def alert_text(row: dict) -> str:
 
 
 def relay(ns: argparse.Namespace) -> int:
-    from research import slack
+    from verity_ops import slack
 
     reg = slack.load_registry(slack.registry_path())
     channel = slack.channel_id_for(reg, "agent-alerts")

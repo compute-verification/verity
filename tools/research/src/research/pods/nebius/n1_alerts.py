@@ -237,7 +237,7 @@ def watch_quotas(state: dict, snap: dict | None, now: float, post: Post, append:
 
 
 def slack_post(dry: bool) -> Post:
-    from research import slack
+    from verity_ops import slack
 
     reg = slack.load_registry(slack.registry_path())
     api, ch, routes = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry), slack.channel_id_for(reg, slack.FRONT_DOOR), slack.Routes()

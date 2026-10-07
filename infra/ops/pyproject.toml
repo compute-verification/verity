@@ -1,0 +1,28 @@
+[project]
+name = "verity-ops"
+version = "0.1.0"
+description = "Operations on the shared machines: deploys to the Nebius nodes, keepers, and messages between agents on Slack."
+requires-python = ">=3.11"
+dependencies = ["research"]
+
+[project.scripts]
+ops = "verity_ops.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_ops"]
+
+[tool.uv.sources]
+research = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# tools/research: verity_ops imports research; test_boundaries reads every Python file outside infra/.
+inputs = ["tools/research", ".agents/skills/using-slack/registry.json"]
+parallel = true

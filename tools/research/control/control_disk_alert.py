@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 
-from research import slack
+from verity_ops import slack
 from research.pods import budgets, connect
 
 SEEN = Path.home() / "control-disk/seen.json"

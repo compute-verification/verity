@@ -18,14 +18,14 @@ from waits import wait_runner
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
-REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
+REAL_ROOTS = ["tools/research/src", "tools/cluster/src", "infra/ops", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
               "backends/flock/python", "tools/circuit_check/src", "catalog", "kernels", "experimental"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
     d = P.import_roots_dir(REPO)
     assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["shim"] == ["verity"] and d["source"] == "pyproject.toml [tool.uv.workspace]"
-    names = ["research", "cluster", "verity", "verity.protocols.verification.sampled_proofs", "verity_vllm", "verity_sp1",
+    names = ["research", "cluster", "verity_ops", "verity", "verity.protocols.verification.sampled_proofs", "verity_vllm", "verity_sp1",
              "verity_numerical", "verity_flock", "circuit_check", "verity_catalog", "verity_kernels", "verity_experimental"]
     probe = "import importlib.util as u, sys; [print(n, u.find_spec(n).origin) for n in sys.argv[1:]]"
     # -S: no site-packages, so an editable install elsewhere cannot answer; find_spec locates without importing (no torch)

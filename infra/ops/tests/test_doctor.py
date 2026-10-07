@@ -15,8 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from research import cli, doctor, notes_sync, runs, secret_hint, slack
-from research.doctor import FINDING, OK, SKIP, Check
+from research import notes_sync, runs, secret_hint
+from verity_ops import cli, doctor, slack
+from verity_ops.doctor import FINDING, OK, SKIP, Check
 from research.pods import runpod
 from research.store import remote as store_remote
 

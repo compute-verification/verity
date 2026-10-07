@@ -21,7 +21,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from research import deploy
+from verity_ops import deploy
 
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
 CHECK = Path(__file__).resolve().parents[3] / "tools/check"

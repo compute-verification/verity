@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from research import deploy
+from verity_ops import deploy
 
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 FUTURE = 4102444800    # 2100-01-01: an mtime after any process here started
