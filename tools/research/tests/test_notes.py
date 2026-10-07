@@ -1165,7 +1165,7 @@ def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path,
 
 
 FRESH = ["--on", "vy-lean", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_audit", "--",
-         "python", "tools/lean/audit.py", "--all", "--build", "--fresh"]
+         "python", "tools/verity/lean/check.py", "--all", "--build", "--fresh"]
 
 
 def _run_toml(*entries: str) -> str:

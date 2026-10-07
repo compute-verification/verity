@@ -48,11 +48,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from service import spec as SP  # noqa: E402
-from verity.protocols.accounting.space.pous import memory_challenger as mc  # noqa: E402
-from verity.protocols.verification.sampled_proofs import service as S  # noqa: E402
+from verity.experimental.protocols.pous import memory_challenger as mc  # noqa: E402
+from verity.experimental.protocols.sampled_proofs import service as S  # noqa: E402
 
 ROOT = HERE.parents[2]
-TEST_SIGNER = ROOT / "verity" / "protocols" / "accounting" / "space" / "pous" / "tests" / "pous_test_signer.py"
+TEST_SIGNER = ROOT / "verity" / "experimental" / "protocols" / "pous" / "tests" / "pous_test_signer.py"
 DELTA = 2.0 ** -40
 STEP_NS = 26_000
 """The logical clock's advance per answer: the responder's time on the GPU (`r20261006-061825-bba8`'s 26 µs)."""
@@ -81,8 +81,8 @@ def signer_of(kind: str, lms_key: str | None, workers: int) -> tuple[Any, Any]:
 
 def setup_cpu(scheme_name: str, bps: int, segments: int) -> dict[str, Any]:
     """Setup on the CPU: `W` at random, its commitment, the verifier's salt and `C = Enc(W)` segment by segment."""
-    from verity.protocols.accounting.space.pous import schemes, setup
-    from verity.protocols.accounting.space.pous.schemes.p2 import P2Params
+    from verity.experimental.protocols.pous import schemes, setup
+    from verity.experimental.protocols.pous.schemes.p2 import P2Params
 
     base = schemes.get(scheme_name)
     params = dataclasses.replace(base.params, blocks_per_segment=bps, segments=segments) \
@@ -276,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def run(a: argparse.Namespace, out: Path) -> dict[str, Any]:
     """The honest audit and the controls (module docstring)."""
-    from verity.protocols.accounting.space.pous.schemes import p2
+    from verity.experimental.protocols.pous.schemes import p2
 
     zk = not a.no_zk
     if a.from_audit:

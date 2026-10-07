@@ -21,7 +21,7 @@ memory challenger's coin tree is already the sample over C, so a second sample o
 **Public items** (`PUBLIC`), each with its reason. The outcome's one output is the verdict. The memory challenger's
 signed session (header, round records, signature) and coin openings are visible to the claims check, and so are the
 answer digests `x` (`o0`'s commit strings): the signature is verified in the clear until LMS is verified in the
-proof (`verity.primitives.commitments.gates.lms`), which is the gap between this and a verdict-only audit.
+proof (`verity.ml.commitments.gates.lms`), which is the gap between this and a verdict-only audit.
 """
 from __future__ import annotations
 
@@ -31,18 +31,18 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import SpecializedDefinition, bind
-from verity.primitives.circuits.program import Program
-from verity.primitives.commitments import hm96
-from verity.primitives.commitments.identity import identity_digest_sha512
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.limits import VerificationLimits
-from verity.primitives.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
-from verity.primitives.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.protocols.accounting.space.pous import memory_challenger as mc
-from verity.protocols.accounting.space.pous.answer_circuit import PousAnswerRow
-from verity.protocols.verification.sampled_proofs import service as S
-from verity.protocols.verification.sampled_proofs.one_stage import partition as P, registration as R
+from verity.ml.circuits.defs import SpecializedDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.commitments import hm96
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.limits import VerificationLimits
+from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+from verity.experimental.protocols.pous import memory_challenger as mc
+from verity.experimental.protocols.pous.answer_circuit import PousAnswerRow
+from verity.experimental.protocols.sampled_proofs import service as S
+from verity.experimental.protocols.sampled_proofs.one_stage import partition as P, registration as R
 
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 HM = hm96.SHA512

@@ -1,4 +1,4 @@
-"""The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.accounting.space.pous.
+"""The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.experimental.protocols.pous.
 memory_challenger` against the responder, over the harness's responder wire (`band_gpu/memory_challenger.py`).
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
@@ -63,7 +63,7 @@ from band_gpu.memory_challenger import (  # noqa: E402
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-TEST_SIGNER = ROOT / "verity" / "protocols" / "accounting" / "space" / "pous" / "tests" / "pous_test_signer.py"
+TEST_SIGNER = ROOT / "verity" / "experimental" / "protocols" / "pous" / "tests" / "pous_test_signer.py"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
 the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the responder in `r20261006-061825-bba8`)."""
@@ -78,15 +78,15 @@ def test_signer() -> Any:
 
 
 def rtt_cap_ns() -> int:
-    from verity.protocols.accounting.space.pous.schemes import p2
+    from verity.experimental.protocols.pous.schemes import p2
     return p2.RTT_ALLOWANCE_CAP_NS
 
 
 def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = None) -> Any:
     """The memory challenger's S1 signer whose key is in `directory`, made there first when absent; at `params` other than
     `lms.DEPLOYED` (tests), under a `test/` id."""
-    from verity.primitives.crypto import lms
-    from verity.protocols.accounting.space.pous import memory_challenger as mc
+    from verity.ml.crypto import lms
+    from verity.experimental.protocols.pous import memory_challenger as mc
 
     p = params or lms.DEPLOYED
     d = Path(directory)
@@ -124,7 +124,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
 def signer_schemes(scheme: str) -> Mapping[str, Any]:
     """The mapping a session signed under `scheme` is judged by beside `memory_challenger.SCHEMES`: that one for S1's
     scheme, the test signer's for a test one."""
-    from verity.protocols.accounting.space.pous import memory_challenger as mc
+    from verity.experimental.protocols.pous import memory_challenger as mc
 
     return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
 
@@ -145,7 +145,7 @@ def service_binding(c_root: bytes, blocks: int) -> bytes:
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
           signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Each session's verdict under `memory_challenger.SCHEMES` and under the signer's own mapping."""
-    from verity.protocols.accounting.space.pous import memory_challenger as mc
+    from verity.experimental.protocols.pous import memory_challenger as mc
 
     out = []
     for s in sessions:
@@ -169,7 +169,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
     """The bad-signature control, on the honest audit's signed sessions: each with one signature bit flipped, and each with
     one round's receipt time moved 1 ns earlier after signing (an on-time bit forged), judged under the signer's own
     mapping (`signer_schemes`); every one must be rejected for its signature, and the unedited sessions must pass."""
-    from verity.protocols.accounting.space.pous import memory_challenger as mc
+    from verity.experimental.protocols.pous import memory_challenger as mc
 
     schemes = signer_schemes(doc["signer"]["scheme"])
     out = {"sessions": 0, "unedited_accepted": 0, "flipped_rejected": 0, "edited_rejected": 0}
@@ -204,9 +204,9 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
           lms_key: str | os.PathLike | None = None, keygen_workers: int = 1, c_root: bytes | None = None) -> dict[str, Any]:
     """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
     ran, off the timed path."""
-    from verity.protocols.accounting.space.pous import audit as pous_audit
-    from verity.protocols.accounting.space.pous import memory_challenger as mc
-    from verity.protocols.accounting.space.pous.protocol import StorageProfile
+    from verity.experimental.protocols.pous import audit as pous_audit
+    from verity.experimental.protocols.pous import memory_challenger as mc
+    from verity.experimental.protocols.pous.protocol import StorageProfile
 
     if signer not in ("lms", "test") or (signer == "lms") != (lms_key is not None):
         raise ValueError(f"the signer is 'lms' with a key directory or 'test' without one, not {signer!r}, {lms_key!r}")
@@ -308,7 +308,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.protocols.accounting.space.pous import audit as pous_audit
+    from verity.experimental.protocols.pous import audit as pous_audit
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)

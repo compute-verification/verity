@@ -2,7 +2,7 @@
 # PoUS through the proof service (service/driver.py) with C-Flock's prover and the Lean verifier of record, on a node's CPUs:
 #   research run --on NODE --project verity --cwd source --campaign pous --declared-output 'out/*' \
 #     -- bash benchmarks/pous/service/job.sh [K=4] [BPS=2] [SEGMENTS=1] [SCHEME=NAME] [SIGNER=lms LMS_KEY=DIR] [FROM_AUDIT=F]
-# Builds flock-circuit (Flock b684b12 and backends/flock's patches: link, gpu-link, sha512, glue, zk, vtime; features sha512,
+# Builds flock-circuit (Flock b684b12 and verity/ml/flock's patches: link, gpu-link, sha512, glue, zk, vtime; features sha512,
 # glue), the Lean flock-verify and a venv with numpy, once per input tree under $SVC_CACHE (kept), then runs the driver:
 # the CPU setup (SCHEME, else the driver's default, P2's registered codec) and a logical-clock session (default), or
 # FROM_AUDIT, a GPU harness's service-input.json. Results go to
@@ -28,11 +28,11 @@ build_circuit() {   # DEST/flock-circuit
   local D=$1 F=$W/flock
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
-  for p in link gpu-link; do git apply "$SRC/backends/flock/flock-$p-b684b12.patch" || return 1; done
-  cp -r "$SRC/backends/flock/live" crates/flock-live
+  for p in link gpu-link; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
+  cp -r "$SRC/verity/ml/flock/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime; do git apply "$SRC/backends/flock/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit" || return 1
@@ -43,7 +43,7 @@ build_lean() {      # DEST/.lake/build/bin/flock-verify
     | sh -s -- -y --default-toolchain none >/dev/null
   export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/backends/flock/verifier/lean" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
+  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
     && (cd "$D.tmp" && lake build flock-verify) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 build_python() {    # DEST: a venv
@@ -60,8 +60,8 @@ cached() {          # cached NAME KEY BUILDER: the build's directory, built once
 
 log "pous service: source ${RESEARCH_SOURCE_SHA:-$(git -C "$SRC" rev-parse HEAD 2>/dev/null)}, $TH CPUs, cache $CACHE"
 { lscpu | grep -E 'Model name|^CPU\(s\)'; taskset -pc $$; grep -E 'MemTotal|MemAvailable' /proc/meminfo; } > "$OUT/host.txt" 2>&1
-cached flock "$(tree_key backends/flock/live backends/flock/*.patch)" build_circuit > "$W/flock.dir" &
-cached lean "$(tree_key backends/flock/verifier/lean)" build_lean > "$W/lean.dir" &
+cached flock "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_circuit > "$W/flock.dir" &
+cached lean "$(tree_key verity/core/service/flock)" build_lean > "$W/lean.dir" &
 cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
 wait
 BIN=$(cat "$W/flock.dir")/flock-circuit LEAN=$(cat "$W/lean.dir")/.lake/build/bin/flock-verify PY=$(cat "$W/venv.dir")/bin/python
@@ -71,7 +71,7 @@ done
 sha256sum "$BIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 log "built"
 
-export PYTHONPATH=$SRC:$SRC/backends/flock/python:$SRC/catalog:$SRC/kernels
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/catalog:$SRC/kernels
 ARGS=(--out "$OUT" --flock "$BIN" --lean "$LEAN")
 if [ -n "${FROM_AUDIT:-}" ]; then ARGS+=(--from-audit "$FROM_AUDIT")
 else ARGS+=(--bps "${BPS:-2}" --segments "${SEGMENTS:-1}" --k "${K:-4}"); [ -n "${SCHEME:-}" ] && ARGS+=(--scheme "$SCHEME"); fi

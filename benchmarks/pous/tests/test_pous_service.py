@@ -9,8 +9,8 @@ import json
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.space.pous import setup
-from verity.protocols.accounting.space.pous.schemes import p2
+from verity.experimental.protocols.pous import setup
+from verity.experimental.protocols.pous.schemes import p2
 
 BENCH = Path(__file__).resolve().parents[1]
 NB = p2.P2().params.block_bytes
@@ -33,7 +33,7 @@ def test_the_spec_is_all_and_a_stream_registers_a_session(svc):
     """`All` (every round proved), the check's Program the unit's, and a session's registration through the public-items
     rule and one-stage's R1-R7 against the challenger's own ports."""
     SP, _ = svc
-    from verity.protocols.verification.sampled_proofs import service as S
+    from verity.experimental.protocols.sampled_proofs import service as S
 
     sp = SP.spec(NB)
     assert isinstance(sp.selection, S.All) and sp.check.public_outputs == ()
@@ -51,8 +51,8 @@ def test_the_spec_is_all_and_a_stream_registers_a_session(svc):
 
 def test_c_commitment_opens_each_leaf_and_binds_the_header(svc):
     SP, _ = svc
-    from verity.primitives.commitments.merkle import Commitment, Opening, verify_opening
-    from verity.protocols.accounting.space.pous import memory_challenger as mc
+    from verity.ml.commitments.merkle import Commitment, Opening, verify_opening
+    from verity.experimental.protocols.pous import memory_challenger as mc
 
     blocks, key = _blocks(5), b"\x11" * 32
     t = SP.commit_c([mc.block_digest(b) for b in blocks], key, b"setup")

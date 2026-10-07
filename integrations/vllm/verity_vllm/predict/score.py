@@ -164,7 +164,7 @@ def _workload_task(task: dict) -> dict:
 def predict_workload(phi: Phi) -> dict:
     """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
     lag the declared target resolves (`TargetProfile.lag()`)."""
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
     from verity_vllm.program.registry.catalog import load as load_registry
@@ -245,8 +245,8 @@ def first_divergence(pred: dict, traced: dict) -> dict:
 
 
 def equivalence(pred_program, traced_desc: dict) -> dict:
-    from verity.primitives.circuits.codec import decode_program
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.codec import decode_program
+    from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
     from verity_vllm.program.registry.catalog import load as load_registry
     load_registry()
