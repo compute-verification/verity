@@ -450,7 +450,10 @@ QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's 
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
     description in the --source tree (tools/cluster). Refused when the queue refuses the job."""
-    src = Path(source) / "tools" / "cluster" if source is not None else None
+    from .store import tools_registry
+
+    src = (Path(source) / (tools_registry.resolve("tools/cluster", lambda p: (Path(source) / p).is_dir()) or "tools/cluster")
+           if source is not None else None)
     if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
         raise Refused("--queue: the --source tree has no tools/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
