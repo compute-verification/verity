@@ -1,0 +1,18 @@
+# The security analysis's properties of the Lean code: what each component's executable Lean does, stated against its
+# functions (`Pouw`: PoUW's window). Its modules sit beside the trusted text's (`srcDir = ".."`) under a root of their own,
+# `Properties`, and it requires the code it states properties of, never `security`, so its statements read no Mathlib.
+name = "security_properties"
+srcDir = ".."
+defaultTargets = ["Properties"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "pouw_window"
+path = "../../verity/experimental/core/protocols/pouw/window"
+
+[[lean_lib]]
+name = "Properties"
+roots = ["Properties.Pouw", "Properties.Proofs.Pouw"]
