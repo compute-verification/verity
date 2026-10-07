@@ -1,6 +1,7 @@
 """The inner session's proxy and coin server (`verity_flock.rec_live`): the wire codec, how a round's frames are sorted into
-caps and the private free message, the message rows' and tops' salted commitments, and that the coin server is shown nothing
-of the hidden statement or a tree top while the proxy's session record keeps what the live server's would."""
+caps and the private free message, the message rows' and tops' salted commitments, that the coin server is shown nothing
+of the hidden statement or a tree top while the proxy's session record keeps what the live server's would, and the firewall's
+refusals (a session off its pinned schedule, a nonzero ``y``)."""
 from __future__ import annotations
 
 import hashlib
@@ -128,23 +129,34 @@ def test_a_top_is_committed_node_by_node_as_registered_rows():
         RL.top_rows(CAP0[:100])
 
 
-def _content():
-    """The session's rounds after the binding round: a free message and a fresh top, then Ligerito's copy of level 0's."""
-    return [_obs([5, 6, 7]) + _bytes(CAP1) + _sq(1, RL.KIND_SCALAR), _label(b"flock-ligerito") + _bytes(CAP0) + _sq(2)]
+def _content(n=1):
+    """The session's rounds after the binding round: a free message and a fresh top (``n`` coins), then Ligerito's copy of
+    level 0's."""
+    return [_obs([5, 6, 7]) + _bytes(CAP1) + _sq(n, RL.KIND_SCALAR if n == 1 else RL.KIND_SLICE),
+            _label(b"flock-ligerito") + _bytes(CAP0) + _sq(2)]
 
 
-def _session(proxy):
-    m = 4
-    hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"],
-                        "link": {"sigma": "ab" * 64, "m": m, "points": 2}, "rounds": "bytes retained", "digests": "sha512"},
-                       separators=(",", ":"))
-    out = [proxy.handle(RL.encode_req(RL.REQ_REGISTER)), proxy.handle(RL.encode_req(RL.REQ_HELLO, hello)),
+HELLO = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"],
+                    "link": {"sigma": "ab" * 64, "m": 4, "points": 2}, "rounds": "bytes retained", "digests": "sha512"},
+                   separators=(",", ":"))
+#: `_session`'s schedule (with ``n = 1``)
+SCHEDULE = {"kind": RL.KIND + "/schedule",
+            "hello": {"digests": "sha512", "flavor": "rs", "link": {"m": 4, "points": 2}, "profile": "fast100", "reps": 2,
+                      "rounds": "bytes retained", "tables": ["circuit"]},
+            "roots": {"circuit": 2}, "link": {"y": 2}, "streams": {"circuit/rep0": {"parent": "", "at": 0, "rounds": 3}},
+            "rounds": [{"stream": "circuit/rep0", "k": 0, "n": 6, "tops": [], "level0": 1, "commits": 0},
+                       {"stream": "circuit/rep0", "k": 1, "n": 1, "tops": [1], "level0": 0, "commits": 1},
+                       {"stream": "circuit/rep0", "k": 2, "n": 2, "tops": [], "level0": 1, "commits": 0}]}
+
+
+def _session(proxy, n=1):
+    out = [proxy.handle(RL.encode_req(RL.REQ_REGISTER)), proxy.handle(RL.encode_req(RL.REQ_HELLO, HELLO)),
            proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", CAP0)], [])),
            proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(32))),
            proxy.handle(RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"flock-circuit/fast100/rep0", 0)),
            proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _binding_round(), 6)),
-           proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content()[0], 1)),
-           proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content()[1], 2)),
+           proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content(n)[0], n)),
+           proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _content(n)[1], 2)),
            proxy.handle(RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"the proof")),
            proxy.handle(RL.encode_req(RL.REQ_FINISH))]
     return [RL.decode_resp(b) for b in out]
@@ -152,7 +164,7 @@ def _session(proxy):
 
 def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(tmp_path):
     coins = RL.CoinServer(_counter_rand())
-    proxy = RL.Proxy(coins, _salts())
+    proxy = RL.Proxy(coins, _salts(), schedule=SCHEDULE)
     resp = _session(proxy)
     assert resp[0] == (RL.RESP_DRAW, "null") and resp[1] == (RL.RESP_OK,)
     assert resp[2][0] == RL.RESP_COINS and len(resp[2][1]) == 8
@@ -187,15 +199,60 @@ def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(
     assert json.loads((tmp_path / "private.json").read_text())["roots"] == {"circuit": op0}
 
 
+def test_a_records_schedule_is_the_one_it_was_held_to():
+    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    _session(proxy)
+    sched = RL.schedule_of(proxy.coins.record())
+    assert sched == SCHEDULE and "sigma" not in json.dumps(sched)
+
+
 def test_a_binding_round_whose_cap_is_not_root_b_is_refused():
     """The firewall commits level 0's top once, at ``Commit``; a rep that binds another cap gets no coins."""
-    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts())
-    hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"], "link": {"sigma": "00", "m": 2, "points": 2}})
-    for req in ((RL.REQ_HELLO, hello), (RL.REQ_COMMIT, b"rf", [("circuit", CAP1 + CAP1)], []), (RL.REQ_LINK, bytes(32)),
+    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    for req in ((RL.REQ_HELLO, HELLO), (RL.REQ_COMMIT, b"rf", [("circuit", CAP1 + CAP1)], []), (RL.REQ_LINK, bytes(32)),
                 (RL.REQ_OPEN, "circuit/rep0", "", b"d", 0)):
         assert RL.decode_resp(proxy.handle(RL.encode_req(*req)))[0] in (RL.RESP_OK, RL.RESP_COINS)
     got = RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _binding_round(), 6)))
     assert got[0] == RL.RESP_REFUSED and "not the committed root_B" in got[1] and proxy.coins.rounds == []
+
+
+def _refusal(resp):
+    assert resp[0] == RL.RESP_REFUSED, resp
+    return resp[1]
+
+
+def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_sees_it():
+    assert _session(RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE))[-1][0] == RL.RESP_VERDICT
+    cases = {
+        "Hello": lambda s: s["hello"].update(reps=1),
+        "Commit's roots": lambda s: s["roots"].update(circuit=1),
+        "Open circuit/rep0": lambda s: s["streams"]["circuit/rep0"].update(at=1),
+        "round 0": lambda s: s["rounds"][0].update(n=5),
+        "round 1": lambda s: s["rounds"][1].update(commits=2),
+        "round 2": lambda s: s["rounds"][2].update(level0=0, tops=[2]),
+        "Finish's rounds": lambda s: s["rounds"].append({**s["rounds"][2], "k": 3}),
+    }
+    for what, edit in cases.items():
+        s = json.loads(json.dumps(SCHEDULE))
+        edit(s)
+        proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=s)
+        why = next(r[1] for r in _session(proxy) if r[0] == RL.RESP_REFUSED)
+        assert why.startswith(f"rec proxy: FIREWALL-REFUSED: {what}: "), (what, why)
+    s = json.loads(json.dumps(SCHEDULE))
+    s["rounds"][1]["n"] = 2
+    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=s)
+    _session(proxy)
+    assert len(proxy.coins.rounds) == 1, "the off-schedule round never reached the coin server"
+
+
+def test_a_link_whose_y_is_not_zero_is_refused():
+    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    proxy.handle(RL.encode_req(RL.REQ_HELLO, HELLO))
+    assert RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], [])))[0] == RL.RESP_COINS
+    y = bytearray(32)
+    y[17] = 1
+    assert _refusal(RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(y))))) == "rec proxy: FIREWALL-REFUSED: Link's y is not zero"
+    assert proxy.coins.link["y"] is None
 
 
 def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
@@ -215,26 +272,32 @@ def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
             return RL.read_frame(self.rf)
 
     bound, got = threading.Event(), {}
-    t = threading.Thread(target=lambda: got.update(res=RL.serve("127.0.0.1:0", tmp_path, _counter_rand(), sessions=2,
+    t = threading.Thread(target=lambda: got.update(res=RL.serve("127.0.0.1:0", tmp_path, _counter_rand(), sessions=3, schedule=SCHEDULE,
                                                                     ready=lambda a: (got.update(addr=a), bound.set()))))
     t.start()
     bound.wait()
-    for _ in range(2):
+    verdicts = []
+    for n in (1, 2, 1):
         w = Wire(got["addr"])
-        assert _session(w)[-1][0] == RL.RESP_VERDICT
+        verdicts.append(_session(w, n)[-1])
         w.sock.close()
     t.join()
-    assert [r["session"] for r in got["res"]] == [str(tmp_path / f"s{k}" / "session") for k in range(2)]
-    for k in range(2):
+    assert [v[0] for v in verdicts] == [RL.RESP_VERDICT] * 3 and json.loads(verdicts[1][1])["accepted"] is False
+    res = got["res"]
+    assert [r["session"] for r in res] == [str(tmp_path / "s0" / "session"), None, str(tmp_path / "s2" / "session")]
+    assert res[1]["refused"].startswith("rec proxy: FIREWALL-REFUSED: round 1: ") and res[1]["rounds"] == 1
+    assert json.loads((tmp_path / "schedule.json").read_text()) == SCHEDULE
+    assert RL.schedule_of(json.loads((tmp_path / "s0" / "public.json").read_text())) == SCHEDULE
+    for k in (0, 2):
         assert (tmp_path / f"s{k}" / "session" / "circuit.rep0.bin").read_bytes() == b"the proof"
         assert json.loads((tmp_path / f"s{k}" / "public.json").read_text())["message_rows"] == 1
+    assert not (tmp_path / "s1" / "session").exists() and len(json.loads((tmp_path / "s1" / "public.json").read_text())["rounds"]) == 1
     assert not (tmp_path / "session").exists()
 
 
 def test_coins_follow_the_link_exchange():
-    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts())
-    hello = json.dumps({"profile": "fast100", "reps": 2, "flavor": "rs", "tables": ["circuit"], "link": {"sigma": "00", "m": 2, "points": 2}})
-    proxy.handle(RL.encode_req(RL.REQ_HELLO, hello))
+    proxy = RL.Proxy(RL.CoinServer(_counter_rand()), _salts(), schedule=SCHEDULE)
+    proxy.handle(RL.encode_req(RL.REQ_HELLO, HELLO))
     proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], []))
     proxy.handle(RL.encode_req(RL.REQ_OPEN, "circuit/rep0", "", b"d", 0))
     got = RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_ROUND, "circuit/rep0", _binding_round(), 6)))
