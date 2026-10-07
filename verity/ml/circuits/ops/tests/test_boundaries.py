@@ -32,7 +32,7 @@ def test_silicon_is_stdlib_only() -> None:
                  for path in sorted(SILICON.rglob("*.py"))
                  for name, line in _imports(path)
                  if name.split(".")[0] not in sys.stdlib_module_names
-                 and not (name.split(".")[0] == "verity.ml.circuits" and name.startswith("verity.ml.circuits.silicon"))
+                 and not name.startswith("verity.ml.circuits.silicon")
                  and name not in FROM_VERITY]
     assert not offenders, "\n".join(offenders)
 

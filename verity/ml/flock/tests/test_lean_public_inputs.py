@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
-VERIFIER = LEAN.parent
+VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `stage/`: `circuit.stage(IL.lowering(rope_head.definition(sub), rope_head.UNIT + "/x4", group=4), set, 0, 4, out,
 #: public_inputs=PUBLIC)` on `generate(rope-head/d64/neox-bf16, 4, 20260926)`; `records-cpu/`: `flock-circuit selftest

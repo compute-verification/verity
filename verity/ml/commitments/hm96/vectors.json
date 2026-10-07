@@ -260,7 +260,7 @@
  ],
  "default_key_xor_gates": 135803,
  "encoding": "lowercase hex; bit t of a byte string is bit t & 7 of byte t >> 3; M[i][j] = key bit i + j (256 x 1024); mask = M * salt over GF(2); b = inner_digest XOR mask; c = SHA-256(salt_prefix || salt); leaf = SHA-256(leaf_prefix || b || c)",
- "generator": "python -m verity.primitives.commitments.hm96.vectors",
+ "generator": "python -m verity.ml.commitments.hm96.vectors",
  "key_label": "7665726974792f686d39362d7368613235362f6b65792f763100",
  "leaf_prefix_default_key": "7665726974792f686d39362d7368613235362f6c6561662f76310057b257a0ff12797c57aca8b55685dbbc0729c0de17c9a93ea8565fc19e3df6e00000000000",
  "leaves": [

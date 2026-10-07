@@ -576,7 +576,7 @@
   "root": "622b95c99f9357724d7bd8d3fe9ad71f1867bf476591973bafc5728a764d8982050e69c6c57a2a4c5f27ccb7f1c7c73cb3eba185af1eb0bce3a07c0ca36fb176"
  },
  "encoding": "lowercase hex; frame-v3 with SHA-512 for every hash (frame, tags and part framing unchanged); row_bytes are the row's words little-endian; a bit row's (sha512/row/v2) are its n_bits bits, each element least significant bit first, eight a byte, the last byte's fill zero; a row digest is SHA-512(prefix || row_bytes)",
- "generator": "python -m verity.primitives.commitments.frame_v3.vectors_sha512",
+ "generator": "python -m verity.ml.commitments.frame_v3.vectors_sha512",
  "row_leaves": [
   {
    "digest": "08842d5117b64019e14a907c06b1eed63a4dbe9c1a84e5ebb5e6b1b1e399154d8611715ed1a4586404ba8677715e31c9da8071635efaad91008b0510802d2cee",

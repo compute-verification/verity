@@ -351,7 +351,7 @@ mod tests {
     /// MUFU tables when `FLOCK_TABLE_ARCHIVE` names a directory of tables by SHA-512 (an archive's `sha512/`).
     #[test]
     fn v2_reproduces_the_verifiers_vectors() {
-        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../../../../backends");
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../../..");
         let Ok(text) = std::fs::read_to_string(repo.join("verity/ml/flock/verifier/lookup_v2_vectors.json")) else {
             return;
         };

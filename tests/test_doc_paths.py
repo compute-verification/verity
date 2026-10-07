@@ -114,7 +114,7 @@ def test_the_scan_reads_each_form_and_catches_a_dead_path():
     """The rules above, on a toy tree."""
     files = frozenset({"README.md", "tools/x/README.md", "tools/x/tests/test_a.py", "verity/primitives/b.py",
                        "archive/old/README.md", "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py"})
-    dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/ml", "archive", "archive/old", "fixtures",
+    dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/primitives", "archive", "archive/old", "fixtures",
                       "tests"})
     tree = (files, dirs, frozenset({"tools/x/tests/fixtures/big"}))
     docs = {
