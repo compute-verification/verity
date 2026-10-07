@@ -90,9 +90,6 @@ EDITS = [
     # relative to `lean/`, which stays, not to the test that moved
     ("verity/experimental/protocols/pous/tests/test_pous_trusted.py", 'SECURITY = "../../../../Security/"',
      'SECURITY = "../../../../../Security/"'),
-    # the protocols' Lean stays where it was until lean.py moves it
-    ("verity/experimental/protocols/pouw/tests/test_lean_package.py", 'SCRIPT = HERE / "lean" / "scripts" / "fp8atom_vectors.py"',
-     'SCRIPT = ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw" / "lean" / "scripts" / "fp8atom_vectors.py"'),
     # the catalog's silicon may import itself: the rewrite turned the import root into a dotted name
     ("verity/ml/circuits/ops/tests/test_boundaries.py",
      'and not (name.split(".")[0] == "verity.ml.circuits" and name.startswith("verity.ml.circuits.silicon"))',
