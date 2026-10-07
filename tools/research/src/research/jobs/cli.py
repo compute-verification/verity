@@ -74,7 +74,7 @@ def _git(*args: str, cwd: Path | None = None) -> str:
 
 
 def lean_inputs(commit: str, packages: list[str], cwd: Path | None = None) -> dict[str, str]:
-    """{path: blob sha} of every tracked file `audit.py --build --update PACKAGE...` reads at `commit` (module docstring)."""
+    """{path: blob sha} of every tracked file `check.py --build --update PACKAGE...` reads at `commit` (module docstring)."""
     files = {}
     for entry in _git("ls-tree", "-r", "-z", "--full-tree", commit, cwd=cwd).split("\0"):
         if entry:

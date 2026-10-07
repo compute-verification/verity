@@ -1,6 +1,6 @@
 # What infra's loops, timers and services run on the Nebius nodes, and the file of this repository each one comes from.
 # `research deploy drift` compares every entry with `main`; `research deploy install` installs entries from a pushed commit
-# (research/deploy.py). A file that a node's `managed` pattern matches and no entry lists is reported as a stray.
+# (`ops deploy`, infra/ops/verity_ops/deploy.py). A file that a node's `managed` pattern matches and no entry lists is reported as a stray.
 #
 # [[file]]: `path` on each of `nodes`, installed from `src`; `run` names the units that run it (`systemd:UNIT`,
 # `user-systemd:UNIT`, never a tmux session: tests/test_deploy.py), so install restarts them; `owner` is the Slack handle that
@@ -622,6 +622,12 @@ owner = "infra"
 [[file]]
 path = "/usr/local/sbin/vy-device-cores"
 src = "tools/research/src/research/pods/nebius/device_cores.sh"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
+[[file]]  # after installing it, `sudo sysctl --system` (or the next boot) applies it
+path = "/etc/sysctl.d/90-vy-device-cores.conf"
+src = "tools/research/src/research/pods/nebius/device-cores-sysctl.conf"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 
