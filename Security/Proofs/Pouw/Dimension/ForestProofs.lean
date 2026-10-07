@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.Dimension.Forest
+import Models.Pouw.Assumptions.Dimension.Forest
 import Proofs.Pouw.Dimension.PipeProofs
 import Mathlib.LinearAlgebra.Matrix.Rank
 import Mathlib.LinearAlgebra.Matrix.Block
