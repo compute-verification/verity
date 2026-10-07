@@ -535,7 +535,7 @@ def _stage(sh: A.Shape) -> list[tuple[str, dict, object]]:
     def bindings(defn, n: int, sub) -> dict:
         program = P.population_program(defn, n)
         return {"partition": P.digest(P.partition(program, P.template_instance_query(defn))),
-                "program": P.program_sha512(program), "program_digests": sub.program_digests(None)}
+                "program": P.program_sha512(program), "program_digests": FC.program_digests(sub)}
 
     out = []
     for level, lv in enumerate(A.fast100(sh.m).levels):
