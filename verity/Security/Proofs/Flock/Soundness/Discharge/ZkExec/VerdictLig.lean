@@ -11,8 +11,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 verdict accepts the opened rows, the inner check holds, and every requested row verifies (`OpensOKZ`). This file is the
 first: `ZkLigAccepts` takes exactly `ZkRepAccepts`'s hypotheses and concludes `pend.lig.verdict os.rows = true`.
 
-The compiled masked phase's Ligerito (`ZkLink.ligeritoPadZC`, then `ZkLink.ligTailC`) is M0's compiled Ligerito
-(`Model.recursiveRoundsC`, `Model.finalCheck`) at levels ≥ 1; at level 0 it batches the padded column
+The compiled masked phase's Ligerito (`ZkLink.ligeritoPadZC`, then `ZkLink.ligTailC`) is the non-ZK session's compiled
+Ligerito (`Model.recursiveRoundsC`, `Model.finalCheck`) at levels ≥ 1; at level 0 it batches the padded column
 `ZkLink.padColumnO`: the witness lanes folded, `ρ₁·row[2^k₀+2r] + ρ₂·row[2^k₀+2r+1]`, and the pads' correction
 `Model.padCorr` at `ȳ`, which is the executable's `Zk.padAt` at `PAD_C`.
 

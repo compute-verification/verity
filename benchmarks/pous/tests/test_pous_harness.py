@@ -1,6 +1,6 @@
 """The POUS-only harness (`benchmarks/pous/band_gpu/harness.py`, `bench.py --impl band-gpu`) on CPU: the band's reference codec
 stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the verifier is the
-harness's own `live.py` process.  The harness's timer is injected and the verifier runs on its logical clock (`--clock
+harness's own `memory_challenger.py` process.  The harness's timer is injected and the verifier runs on its logical clock (`--clock
 logical`: each answer's time is the responder's reported one), so no outcome here depends on a clock or on the machine's
 load: what is checked is that each step runs and each gate and control decides, not the numbers."""
 from __future__ import annotations
@@ -97,7 +97,7 @@ def _backend(params, flip_last: bool = False):
     from verity.protocols.accounting.space.pous.labels import salt_value, tag
 
     harness = _harness()
-    from band_gpu.live import scheme_of
+    from band_gpu.memory_challenger import scheme_of
 
     at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
     sch = scheme_of(at(params.d).name, at(params.d).params)
@@ -252,12 +252,12 @@ def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
 def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_there():
     """`--band-d 6`: the band at in-degree 6, unregistered (`band-chain/d6/v1` is the codec's name, not a registered byte
     format), whose segments round-trip and whose certificate at the frozen point is
-    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the verifier process rebuilds it from its manifest;
+    `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the memory challenger process rebuilds it from its manifest;
     d = 4 has no certificate and is refused."""
     from verity.protocols.accounting.space.pous import band, schemes
 
     harness = _harness()
-    from band_gpu.live import params_of, scheme_of
+    from band_gpu.memory_challenger import params_of, scheme_of
 
     small = harness.with_in_degree(_small(), 6)
     sch = scheme_of("band-chain/d6/v1", small)
@@ -536,28 +536,34 @@ def test_the_harness_asks_nvidia_smi_about_the_leased_or_cuda_device_never_gpu_0
     assert harness.cuda_uuid(0) == "GPU-1cd543c7-ad34"                                       # torch's UUID, as nvidia-smi writes it
 
 
+def _pod_sh(tmp_path, case: str, gpus: str, *args: str, **env: str):
+    """pod.sh IMPL=band-gpu AUDITS=0 ARGS on stub nvidia-smi, uv, lscpu, nvcc and torch's venv python (which logs its arguments
+    to py-args): its result, the nvidia-smi queries and the run directory."""
+    d = tmp_path / case
+    d.mkdir()
+    bin_dir, log, smi_env = _smi_stub(d, gpus)
+    for name, body in (("uv", "exit 0"), ("lscpu", "exit 0")):
+        (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
+        (bin_dir / name).chmod(0o755)
+    nvcc = d / "cuda" / "bin" / "nvcc"
+    nvcc.parent.mkdir(parents=True)
+    nvcc.write_text("#!/bin/sh\necho 'Cuda compilation tools, release 13.0, V13.0.88'\n")
+    nvcc.chmod(0o755)
+    py = d / "work" / "pous-bench" / "gpu312-torch2.14.0-cu130" / "bin" / "python"     # torch's venv, as if built
+    py.parent.mkdir(parents=True)
+    py.write_text(f"#!/bin/sh\necho \"$@\" >> {d / 'py-args'}\nexit 0\n")
+    py.chmod(0o755)
+    (d / "run").mkdir()
+    base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(d), "RESEARCH_RUN_DIR": str(d / "run"), "WORK": str(d / "work"),
+            "CUDA_HOME": str(d / "cuda")}
+    rc = subprocess.run(["bash", str(BENCH / "pod.sh"), "IMPL=band-gpu", "AUDITS=0", *args], cwd=ROOT, capture_output=True, text=True,
+                        env={**base, **smi_env, **env})
+    return rc, _queries(log), d / "run"
+
+
 def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_path):
     def run(case: str, gpus: str, **env: str):
-        d = tmp_path / case
-        d.mkdir()
-        bin_dir, log, smi_env = _smi_stub(d, gpus)
-        for name, body in (("uv", "exit 0"), ("lscpu", "exit 0")):
-            (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
-            (bin_dir / name).chmod(0o755)
-        nvcc = d / "cuda" / "bin" / "nvcc"
-        nvcc.parent.mkdir(parents=True)
-        nvcc.write_text("#!/bin/sh\necho 'Cuda compilation tools, release 13.0, V13.0.88'\n")
-        nvcc.chmod(0o755)
-        py = d / "work" / "pous-bench" / "gpu312-torch2.14.0-cu130" / "bin" / "python"     # torch's venv, as if built
-        py.parent.mkdir(parents=True)
-        py.write_text(f"#!/bin/sh\necho \"$@\" >> {d / 'py-args'}\nexit 0\n")
-        py.chmod(0o755)
-        (d / "run").mkdir()
-        base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(d), "RESEARCH_RUN_DIR": str(d / "run"), "WORK": str(d / "work"),
-                "CUDA_HOME": str(d / "cuda")}
-        rc = subprocess.run(["bash", str(BENCH / "pod.sh"), "IMPL=band-gpu", "AUDITS=0"], cwd=ROOT, capture_output=True, text=True,
-                            env={**base, **smi_env, **env})
-        return rc, _queries(log), d / "run"
+        return _pod_sh(tmp_path, case, gpus, **env)
 
     rc, calls, out = run("lease", "GPU-a GPU-b GPU-c", GPU_LEASE_UUID="GPU-b", CUDA_VISIBLE_DEVICES="1",
                          KERNELS='{"chain_pairs": false}')
@@ -576,6 +582,23 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
     assert rc.returncode == 2 and "name the run's GPU" in rc.stdout and calls == []
 
 
+def test_pod_sh_runs_the_placement_gate_first_and_stops_on_its_refusal(tmp_path):
+    """GATE_ROLE: placement.py's gate checks the run's machine before anything is built or timed; here the guarded node's record
+    is another machine's, so the run exits 4 with the verdict recorded and bench.py never starts."""
+    node = tmp_path / "n2.json"
+    node.write_text(json.dumps({"boot_id": "another-machine"}))
+    rc, _, out = _pod_sh(tmp_path, "gate", "GPU-only", "GATE_ROLE=memory-challenger", "GATE_CORES=124-127",
+                         f"GATE_PEERS=worker:vy-nebius-2={node}", "GATE_ABSENT=firewall challenger")
+    assert rc.returncode == 4 and "the placement gate refused this run as memory-challenger" in rc.stdout, rc.stdout[-2000:]
+    v = json.loads((out / "placement-gate.json").read_text())
+    assert v["role"] == "memory-challenger" and v["passed"] is False and v["absent"] == ["challenger", "firewall"]
+    assert any(p.startswith("vy-nebius-2 (worker): its boot_id ") and p.endswith(" is not the node's another-machine")
+               for p in v["problems"]), v["problems"]
+    assert v["cores"]["declared"] == "124-127" and not (tmp_path / "gate" / "py-args").exists()
+    rc, _, out = _pod_sh(tmp_path, "ungated", "GPU-only")
+    assert rc.returncode == 0 and not (out / "placement-gate.json").exists()                      # no GATE_ROLE: no gate
+
+
 def test_the_kernel_settings_and_the_loop_layout():
     harness = _harness()
     before = harness.set_kernels({})
@@ -590,3 +613,28 @@ def test_the_kernel_settings_and_the_loop_layout():
         harness.set_kernels(before)
     pl = harness.placements(WS["tensors"], 2000)
     assert [(name, off, size) for name, _, _, off, size in pl] == [("q", 0, 1024), ("k", 1024, 512)]   # down ends past 2000
+
+
+def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_and_responders_cpus():
+    harness = _harness()
+    here = sorted(os.sched_getaffinity(0))
+    if len(here) < 3:
+        pytest.skip("needs three CPUs")
+    started, stop, tid = threading.Event(), threading.Event(), []
+
+    def wait():
+        tid.append(threading.get_native_id())
+        started.set()
+        stop.wait()
+
+    t = threading.Thread(target=wait)
+    t.start()
+    started.wait()
+    try:
+        harness.leave_reserved(types.SimpleNamespace(verifier_cpu=here[0], responder_cpu=here[1]))
+        assert os.sched_getaffinity(0) == os.sched_getaffinity(tid[0]) == set(here[2:])     # a thread started before, too
+    finally:
+        stop.set()
+        t.join()
+        for x in os.listdir("/proc/self/task"):
+            os.sched_setaffinity(int(x), here)

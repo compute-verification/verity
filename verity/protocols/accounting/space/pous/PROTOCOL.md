@@ -19,7 +19,7 @@ those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of 
 ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for `DenseMeets` means within the
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
 over an ideal permutation `Π₂` of width `2m + 512`, proved in the ideal-permutation model. Its pebbling side and its ex
-post facto bounds are proved in this package (`Pous/SecurityProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
+post facto bounds are proved in Lean (`verity/Security/Proofs/Pous/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`)
 for dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the guarantees below (P3 with the concrete
 `H`, the band, and the dense chain scheme). They hold in the ideal-permutation model only. `Π₂` itself (Feistel-SHAKE)
 was taken as a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
@@ -104,7 +104,7 @@ without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f 
   `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) holds every block but each `(d + 1)`-th: every
   dropped row has all its parents held, and the audit accepts with probability 1. At 241.5 µs per call, `d = 12`
   holds while `Δ + RTT < 13 × 241.5 µs ≈ 3.14` ms, in the ideal-permutation model (at the reference `Π₂` a prover
-  answers in 24 µs from 1.53% of `C`, inside every deployed deadline: "Main caveat"). `audit.TimedVerifier` refuses
+  answers in 24 µs from 1.53% of `C`, inside every deployed deadline: "Main caveat"). `audit.MemoryChallenger` refuses
   a deadline past it (`band.check_deployment`), and `test_gap_attack_at_the_cliff` replays the attack on real labels.
 - `band.codec_for(d)` gives the codec for any in-degree; with `d ≥ B − 1` the band is the complete DAG, dense.
 
@@ -188,7 +188,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
      conditions in their docstrings, and `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` the same family at
      `D = 2`, `k = 97` and at `D = 1`, `k = 93`;
    - dense: `dense_pub_meets_64` and `seg_pub_meets_14` (a random-oracle `H`), and `chain_pub_meets_64` (the overwrite
-     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`lean/Pous/SecurityProofs/Chain/Flat.lean`;
+     chain), given `ChainExPostFacto`, which `chainExPostFacto_v6` proves (`verity/Security/Proofs/Pous/Chain/Flat.lean`;
      not a guarantee).
 
    An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
@@ -197,7 +197,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    The encoder is deterministic and public, so the server running it changes nothing in the timed game. A
    server-chosen or predictable salt would break the model's "`W` before coins" order.
 4. **Serve.** `layout.decode_tensor` decodes one tensor from the segments it overlaps.
-5. **Audit.** The verifier reveals `k` indices one at a time (`audit.TimedVerifier`, uniform with replacement, keyed
+5. **Audit.** The verifier reveals `k` indices one at a time (`audit.MemoryChallenger`, uniform with replacement, keyed
    by `audit.challenge_key` and bound to `vk`'s root). The challenge key is the verifier's own secret, kept secret
    until the audit starts (never a public beacon): a public key makes every challenged index computable in advance, so
    a prover holding little of `C` could rebuild only the challenged blocks within the deadline and pass. Each block
@@ -205,6 +205,24 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    `rtt_allowance_ns`, and must match `vk`. The audit accepts only if every answer is correct and on time. At 300 µs
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the verifier's RTT is measured.
+
+## Public outputs
+
+Under the proof service (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, "PoUS"), an
+audit makes public its verdict and nothing about a single round:
+
+- the verdict;
+- the salted roots of `W` and of the encoding `C`;
+- the salt;
+- the setup draw and its profile;
+- the openings of the memory challenger's coin tree, once the session has closed.
+
+Everything else is witness. The per-round on-time bits stay in the memory challenger's signed record, so a server can't
+steer what the auditor sees round by round. The memory challenger reveals each index from its coin tree, receives the
+whole 2,056-byte answer, hashes those bytes itself, and signs the index, the send and receipt times and the hash. The
+hash is the memory challenger's, not a commitment the server made, so the audit needs no possession claim. The
+reference here runs the rounds in the clear: `audit.AuditResult` keeps every answer and its latency, which is the
+memory challenger's record, never a public output.
 
 ## The generic protocol (`protocol`, `schemes`)
 
@@ -260,20 +278,37 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     its `λ = 128` row, for every block count from 2^8 to 2^23 and every payload width in range, `p2-2054B`'s among
     them, with no hypothesis; the certified store is 2^19 blocks (8 segments of 2^16). It is an abstract-M1 result, and
     the SMS-to-M1 instantiation assumption is not accepted (the spec's decision 8).
-  - SeqRoot sets `call_ns`, half the fastest single-core 16,448-bit root, and no root may fit within `Δ + RTT`. That
-    floor does not count cooperating cores, which the frozen spec allows within one chiplet. With them the fastest root
-    is an estimated 1.41–2.52 ms (art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c), so the
-    current `call_ns` admits windows the 2× margin does not cover. It stays until Daniel rules on the response window.
-  - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
+  - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854,029 ns), half the fastest 16,448-bit root with 8 cores of one chiplet
+    cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. v1's 1 ms RTT allowance
+    (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12), Daniel's ruling of
+    2026-10-04, keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 354 µs, so
+    `Δ + RTT ≤ 854 µs`.
+    - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
+      Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448).
+    - A root is 16,446 squarings plus about 20 multiplications (40 squaring-equivalents), so
+      16,486 × 361.55 ns = 5,960.5 µs. The note's 5.97 ms rounds τ_F to 362 ns first.
+    - The cooperation speedup is the measured 8-core one, 2,716.7 / 778.5 = 3.490× per squaring on one Zen 4 chiplet
+      (run `r20260929-060834-0ec4`, art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).
+    - The cooperating root is 5,960.5 / 3.490 = 1,708.1 µs, and half of it is 854,029.18 ns, rounded down to
+      `ROOT_CALL_NS`. The cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`: 500 + 354 = 854 µs. The
+      verifier accepts it and refuses 355 µs and v1's 1 ms, and the margin at the cap is 2.0001×.
+    - **Caveats** (§12): the 3.490× was measured on an untuned Zen 4 kernel and is applied to a modelled floor. The red
+      team's sync model (t_sync = 20–40 ns per squaring, `coop.log`) gives 4.24× and 5.55× at 8 cores, and under it
+      the margin at the cap is 1.64× and 1.26×. The cap rests on the measured speedup.
+    - **Sources:** `note:20261004T2102Z-report-relay-p2-redteam-timing`, with its scripts and logs in
+      art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57. The review that found v1's cap unsafe is
+      art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c.
+  - `Scheme.experimental` carries the remaining reasons: the SMS-to-M1 instantiation is not accepted, and the
+    XOR-then-reduce compression attack on it is open. The verifier audits an experimental scheme only with
     `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
 
   P3 has no certificate: the concrete-`H` guarantees have its parameters, but their chain starts from a different `h_0`
   ("P3 (research)").
-- **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
+- **`protocol.MemoryChallenger`** is `audit.MemoryChallenger` at the certificate's `k`. It refuses:
   - a `k` below the certificate's;
   - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
     band and dense, `Δ + RTT` must stay under 1.449 ms (a model-level bound: at the reference `Π₂` a prover answers
-    from 1.53% of `C` well inside it, "Main caveat"). `TimedVerifier` alone refuses only past the band's cliff, at
+    from 1.53% of `C` well inside it, "Main caveat"). `MemoryChallenger` alone refuses only past the band's cliff, at
     about 3.14 ms (3,139,500 ns at `d = 12`);
   - a scheme with no certificate at its parameters.
 
@@ -313,15 +348,15 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   and `vk` root. `VERITY_POUS_SLOW=1` also encodes a whole band12 segment through the interface against
   `band/64kb/segment`.
 
-## The continuous audit's verifier (`continuous`)
+## The continuous audit's memory challenger (`continuous`)
 
-`continuous.ContinuousVerifier(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
-continuous audit's model, `lean/Pous/Protocol/Model/Continuous.lean`, with the guarantee
+`continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the verifier of the
+continuous audit's model, `verity/Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
 `Pous.SecurityProofs.ContinuousAudit` (#954): `n` challenges over time, drawn as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
 stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). The verifier is
-one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces the three requirements that
-`lean/Pous/SecurityProofs/Continuous/Verifier.lean` proves of the model's verifier:
+one `audit.MemoryChallenger` over the stream with a hard deadline, and it enforces the three requirements that
+`verity/Security/Proofs/Pous/Continuous/Verifier.lean` proves of the model's verifier:
 
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
    index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
@@ -331,23 +366,23 @@ one `audit.TimedVerifier` over the stream with a hard deadline, and it enforces 
    whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
    even when both ask for the same block.
 2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
-   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `TimedVerifier`
+   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `MemoryChallenger`
    refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
    `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
    3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
-   conservative. `ContinuousVerifier` refuses to run without a hard deadline.
+   conservative. `ContinuousMemoryChallenger` refuses to run without a hard deadline.
 3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
    or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
    `Δ + RTT`, rejected ones included.
 
-Run the continuous audit only on `ContinuousVerifier`, never on a bare `TimedVerifier` with `late_deadline_ns`. Its
+Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `MemoryChallenger` with `late_deadline_ns`. Its
 `respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
 `j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
 the send time, so the audit would credit storage the responder does not hold (#954's red team).
 
 **The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
 window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the verifier to enforce (#953).
-`TimedVerifier(..., audit_cap=...)` and `ContinuousVerifier(..., audit_cap=...)` enforce it on the verifier's clock,
+`MemoryChallenger(..., audit_cap=...)` and `ContinuousMemoryChallenger(..., audit_cap=...)` enforce it on the verifier's clock,
 counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5 µs ≈ 363.5 ms.
 - An answer received more than `audit_cap · call_ns` after the first challenge's send is rejected unchecked and aborts
   the audit (`ends_at`). So does a challenge closed after that time by `expire()` or the next `challenge()`.
@@ -368,8 +403,8 @@ reply naming any challenge but the open one is dropped. Once the hard deadline h
 challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open. A transport
 that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open. The caller
 chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the verifier's own
-randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `TimedVerifier` is
-unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests each requirement.
+randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`, `MemoryChallenger` is
+unchanged, the single audit's memory challenger. `tests/test_pous_continuous.py` tests each requirement.
 
 ## API
 
@@ -386,9 +421,9 @@ unchanged, the single audit's verifier. `tests/test_pous_continuous.py` tests ea
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `TimedVerifier` refuses a band deadline past the cliff |
+| `audit` | `challenge_key`, `HonestResponder`, `MemoryChallenger` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `MemoryChallenger` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `MemoryChallenger` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
@@ -442,7 +477,7 @@ a version bump in the strings they carry.
 
 `vk` (`docs/p3-instantiation.md` §4) is a SHA-256 Merkle tree over the blocks, with the shape of RFC 6962. Each leaf
 is `SHA256(0x00 || tag_s || u16(v) || c2_v)` and each node is `SHA256(0x01 || l || r)`. The verifier keeps the root and
-every leaf digest. A root-only verifier checks the server's audit path. This follows the instantiation's byte format
+every leaf digest. A root-only memory challenger checks the server's audit path. This follows the instantiation's byte format
 rather than `verity.primitives.commitments`' frame v3.
 
 ## Rounds
@@ -468,7 +503,7 @@ column storage, whole lower labels as separators, meet in the middle through `P�
 `tests/` covers:
 
 - round trips on every backend and shape;
-- known-answer vectors for `F`, `Π`, `P_T`, `H` and whole segments (`fixtures/vectors.json`; the 64 KB segment with
+- known-answer vectors for `F`, `Π`, `P_T`, `H` and whole segments (`tests/fixtures/vectors.json`; the 64 KB segment with
   `VERITY_POUS_SLOW=1`);
 - `H` recomputed from the spec's text;
 - the RFC 6962 tree and the timed and simulated audits;
@@ -482,11 +517,11 @@ column storage, whole lower labels as separators, meet in the middle through `P�
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
   (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
 - the continuous audit's verifiers against the Lean model (`test_pous_continuous_difftest.py`). `pous_continuous_model.py`
-  transcribes the verifier of `lean/Pous/Protocol/Model/Continuous.lean` definition by definition (a test finds each
+  transcribes the verifier of `verity/Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each
   one word for word in the Lean file) and restates it on the verifier's clock. Fuzzed and scripted traces (answers at
   and one nanosecond past each deadline, wrong, pipelined, stale and dropped answers) must agree with it action for
   action, and Lean `ContMachine`s run against the verifier must get `contRecords`' verdicts and `contAccepts`;
-- the Lean vectors (`fixtures/lean_vectors.json`).
+- the Lean vectors (`tests/fixtures/lean_vectors.json`).
 
 The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean's `c1'`, `topLabel'`, `transpose`,
 `decodeLower`, `tagOf`, the decoder, `bandGraph` and `colRound` on small cases. It proves by `rfl` that its generic
@@ -514,45 +549,45 @@ the timed audit and the simulator with the dense codec as default.
 
 ## In Lean (`lean/`)
 
-- **Trusted, reviewed once:** `Pous/Protocol/Game` (bits, uniform probability, parallel oracle programs `Prog`),
-  `Pous/Protocol/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
-  `Pous/Protocol/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `Pous/Assumptions.lean` and
-  `Pous/Guarantees.lean`.
+- **Trusted, reviewed once:** `verity/Security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs `Prog`),
+  `verity/Security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
+  `verity/Security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `verity/Security/Specs/Pous/Assumptions.lean` and
+  `verity/Security/Specs/Pous/Guarantees.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
-- **Proofs:** `Pous/SecurityProofs/`, checked by Verity's `tools/lean/audit.py` against `lean-audit.json`.
-  `Pous/SecurityProofs.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
+- **Proofs:** `verity/Security/Proofs/Pous/`, checked by Verity's `tools/lean/audit.py` against `lean-audit.json`.
+  `verity/Security/Proofs/Pous.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
 - **Untrusted submissions:** `grade.sh FILE Pous.Guarantees.X` grades one file against one guarantee (`lean/README.md`).
 
 ### The band
 
-`Pous.BandChain.chainBand B d ℓ c dom` (`Pous/Protocol/Model/BandChain.lean`) is the band over the overwrite chain on
+`Pous.BandChain.chainBand B d ℓ c dom` (`verity/Security/Definitions/Pous/Model/BandChain.lean`) is the band over the overwrite chain on
 one ideal permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segments of it. The proofs are in this package
-(`Pous/SecurityProofs/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and
+(`verity/Security/Proofs/Pous/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and
 `sponge-dense/`), with no hypothesis: `Pous.SecurityProofs.BandChainMeets64` gives `Meets` at 64 KiB, `B = 512`,
 `D = 5`, `Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments
 (14 GiB), with per-segment and with global salts, `BandMultiMeets14K106` at `k = 106` per segment, and
 `BandMultiMeetsFamily` the `k = 111` row for every segment count `N` with `1 ≤ N ≤ 2^64`
-(`Pous/SecurityProofs/Chain/Family.lean`). `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1` and
+(`verity/Security/Proofs/Pous/Chain/Family.lean`). `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1` and
 `BandMultiMeetsFamilyD0` are that family at fewer rounds, `D = 2` with `k = 97` for every `d ≥ 2`, `D = 1` with
 `k = 93` for every `d ≥ 1` and `D = 0` with `k = 89` for every `d`, and
 `BandChainMeets64Rounds2` and `BandChainMeets64Rounds1` their one-segment rows
-(`Pous/SecurityProofs/Chain/FamilyRounds.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
-exact setup check (`Pous/Protocol/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings;
+(`verity/Security/Proofs/Pous/Chain/FamilyRounds.lean`). `BandPubMeets*` are the same rows with an untrusted server encoding and the
+exact setup check (`verity/Security/Definitions/Pous/Model/PubEncoder.lean`), under the four deployment conditions in their docstrings;
 `BandPubMeetsFamily`, `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` are `BandMultiMeetsFamily`'s and its two rows at
-fewer rounds (`Pous/SecurityProofs/Chain/PubFamily.lean`, `PubRounds.lean`). The
+fewer rounds (`verity/Security/Proofs/Pous/Chain/PubFamily.lean`, `PubRounds.lean`). The
 band needs `d ≥ D`.
 
 ### The graded audit
 
-The graded audit (`Pous/Protocol/Model/Graded.lean`, `GradedMeets` in `Pous/Protocol/Accounting/GradedMeets.lean`) is
+The graded audit (`verity/Security/Definitions/Pous/Model/Graded.lean`, `GradedMeets` in `verity/Security/Definitions/Pous/Accounting/GradedMeets.lean`) is
 the sequential audit with a grace of `t` late answers. A round is late when its program takes more than `D` rounds or
 `Q` queries on its own path, and every round, late or not, stays within a hard bound `(D_late, Q_late)`. The audit
 accepts when every answer is correct and at most `t` are late; at `t = 0` it is the sequential audit
 (`gradedMeets_zero_iff`). `Pous.SecurityProofs.BandGradedMeetsFamily` proves, with no hypothesis, the band at every
 segment count from 1 to `2^64` and every `d ≥ 5`, at `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, for
 `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, whenever `5 ≤ D_late ≤ d`, `D_late ≤ 12` and `Q_late ≥ 2^20`
-(`Pous/SecurityProofs/Graded/`: `theorem1_ii_graded` with the binomial tail `pr_hits_ge_le_binomial`).
+(`verity/Security/Proofs/Pous/Graded/`: `theorem1_ii_graded` with the binomial tail `pr_hits_ge_le_binomial`).
 
 The game assumes three requirements on the protocol, and the certificate says nothing about a protocol that breaks one:
 
@@ -577,7 +612,7 @@ audit's duration:** it aborts, without accepting, an audit that lasts more than 
 (≈ 6.3 ms) for the worst row's 242 gaps if every round answers at its deadline.
 `Pous.SecurityProofs.BackgroundRebuildExcluded` proves the counts, and that programs which know `W` but hold no state
 about `Π₂`, each within any `T ≤ 1,505` sequential calls and `2^128` queries, output every label of a segment with
-probability at most `2^-128` (`Pous/SecurityProofs/Rebuild/`). The bound rests on the cap, which is the proof's reach,
+probability at most `2^-128` (`verity/Security/Proofs/Pous/Rebuild/`). The bound rests on the cap, which is the proof's reach,
 not on `R(d)`.
 
 It excludes only re-encoding a *whole* segment from `W` with *no* state about `Π₂`, and is not a claim that no rebuild
@@ -589,7 +624,7 @@ and the cap's conversion into wall-clock time, count whole `Π₂` calls and so 
 at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes nothing, answering each challenge from 1.53% of `C` in 481
 Keccak-f, less than one call ("Main caveat").
 
-No graded verifier exists yet: `audit.TimedVerifier` and `protocol.Verifier` accept only when every answer is correct
+No graded verifier exists yet: `audit.MemoryChallenger` and `protocol.MemoryChallenger` accept only when every answer is correct
 and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
 
 ### The dense scheme
@@ -621,7 +656,7 @@ same rounds, work and acceptance probability, and the restricted oracle is again
 `tag_injective_14` record the index-level fact: the tagged keying is the global one relabeled injectively.
 
 **Over the overwrite chain** (`Pous.Sponge.chainDense`, `H` the overwrite chain on an ideal permutation, proved with no
-hypothesis in `Pous/SecurityProofs/Chain/Flat.lean`): `Pous.SecurityProofs.ChainDenseMeets64`, 512 blocks of 64 KiB at
+hypothesis in `verity/Security/Proofs/Pous/Chain/Flat.lean`): `Pous.SecurityProofs.ChainDenseMeets64`, 512 blocks of 64 KiB at
 `D = 5`, `Q = 2^20`, `k = 111`; and the deployment point, `Pous.SecurityProofs.ChainDenseMeets111`, `2^16` blocks of
 1 KiB at `D = 64`, `Q = 2^20`, `k = 111`. The deployment was pinned at `k = 107`, which the ex post facto argument does
 not reach; it is re-pinned at `k = 111`, four challenges more.
@@ -632,7 +667,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
   isolation: both outside Lean;
 - decode cost, which isn't modeled.
 
-## Guarantees (`lean/Pous/Guarantees.lean`)
+## Guarantees (`verity/Security/Specs/Pous/Guarantees.lean`)
 
 | Statements | What | Status |
 |---|---|---|
@@ -650,12 +685,12 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 | `SampledAuditProd`, `SampledAuditSeq`, `SampledAuditSim` | "fewer than `k` answerable" gives a sampled-audit bound | proved |
 | `StackedAuditSeq`, `StackedAuditOnePercent` | the stacked one-way scheme's audit clause; the second is conditional on a depth-robust graph | proved |
 | `DenseMeets` | the dense scheme S1 meets `Meets` with no named assumption, in the ideal-hash model only (security, correctness and rate, not decode cost) | proved |
-| `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`Pous/Protocol/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
-| `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`Pous/Protocol/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
+| `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`verity/Security/Definitions/Pous/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
+| `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106`, `BandMultiMeetsFamily` | the band over the overwrite chain (`verity/Security/Definitions/Pous/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment; every segment count from 1 to `2^64` at `k = 111` | proved |
 | `BandMultiMeetsFamilyD2`, `BandMultiMeetsFamilyD1`, `BandMultiMeetsFamilyD0`, `BandChainMeets64Rounds2`, `BandChainMeets64Rounds1` | the band at fewer rounds: every segment count from 1 to `2^64` at `D = 2`, `k = 97`, every `d ≥ 2`, at `D = 1`, `k = 93`, every `d ≥ 1`, and at `D = 0`, `k = 89`, every `d`; one segment (64 KiB) at `D = 2` and `D = 1` | proved |
-| `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global`, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2`, `BandPubMeetsFamilyD1` | the same band rows with a public encoder and the exact setup check (`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) | proved |
-| `BandGradedMeetsFamily` | the band with up to `t` late answers (`Pous/Protocol/Model/Graded.lean`, `Pous/Protocol/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
-| `BackgroundRebuildExcluded` | under the graded verifier's cap of `1,505 · call_ns` on an audit's duration, no audit re-encodes a whole band segment from `W` alone (`Pous/Protocol/Accounting/Rebuild.lean`): every row's rounds last under 1,479 call-times at `D_late ≤ 12`, re-encoding costs `R(d) ≥ R(5) = 3,057`, and programs with no state about `Π₂` re-encode a whole segment within `1,505` calls with probability at most `2^-128`. A prefix, or a whole segment from a few held labels, can be rebuilt within the cap | proved |
+| `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global`, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2`, `BandPubMeetsFamilyD1` | the same band rows with a public encoder and the exact setup check (`verity/Security/Definitions/Pous/Model/PubEncoder.lean`, `verity/Security/Definitions/Pous/Accounting/PubMeets.lean`) | proved |
+| `BandGradedMeetsFamily` | the band with up to `t` late answers (`verity/Security/Definitions/Pous/Model/Graded.lean`, `verity/Security/Definitions/Pous/Accounting/GradedMeets.lean`): every segment count from 1 to `2^64`, `d ≥ 5`, `D = 5`, `(t, k) = (0, 111), (1, 160), (2, 203), (3, 243)`, each late round within `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` | proved |
+| `BackgroundRebuildExcluded` | under the graded verifier's cap of `1,505 · call_ns` on an audit's duration, no audit re-encodes a whole band segment from `W` alone (`verity/Security/Definitions/Pous/Accounting/Rebuild.lean`): every row's rounds last under 1,479 call-times at `D_late ≤ 12`, re-encoding costs `R(d) ≥ R(5) = 3,057`, and programs with no state about `Π₂` re-encode a whole segment within `1,505` calls with probability at most `2^-128`. A prefix, or a whole segment from a few held labels, can be rebuilt within the cap | proved |
 | `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 | `B5Stacked` | the one-way bound on Fisch's stacked graph | proved |
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
@@ -666,7 +701,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
 `Pous.ColumnGame`, is being drafted.
 
-## Named assumptions (`lean/Pous/Assumptions.lean`)
+## Named assumptions (`verity/Security/Specs/Pous/Assumptions.lean`)
 
 Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
@@ -693,14 +728,16 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 Done, in this package: in the random-oracle model, the dense re-certificate at `POINT_64K` (`dense_meets_64`), the
 multi-segment lemma (`seg_meets_14`, 14 GB) and its form for the code's per-segment `tag_s` domains
-(`segTag_meets_14`), in `lean/Pous/SecurityProofs/Dense/`. Over the overwrite chain, the ex post facto bounds
+(`segTag_meets_14`), in `verity/Security/Proofs/Pous/Dense/`. Over the overwrite chain, the ex post facto bounds
 `ChainExPostFactoG` and `ChainExPostFacto` (`chainExPostFactoG_v6`, `chainExPostFacto_v6`), and from them the band,
 the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
-`lean/Pous/SecurityProofs/Chain/Flat.lean`. Pending:
+`verity/Security/Proofs/Pous/Chain/Flat.lean`. Pending:
 
 - P3's certificate: the code's `h_0` and Lean's `iv(domP3 tag L v)` differ ("P3 (research)").
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
+- The memory challenger: its committed coin tree and its signed per-round record ("Public outputs"). Today
+  `audit.TimedVerifier` runs the rounds and holds their record in the clear.
 - In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
   `p3-meets` (P3 with a random-oracle `H`) come in later PRs.

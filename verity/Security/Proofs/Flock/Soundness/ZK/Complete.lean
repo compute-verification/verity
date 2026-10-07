@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Assumptions
 import Proofs.Flock.Soundness.Model.LigeritoPad
 
 /-!
-# Zero knowledge: the reference prover is complete, and M1's level-0 padding is onto
+# Zero knowledge: the reference prover is complete, and C-Flock ZK's level-0 padding is onto
 
 What masking adds to a table keeps the verifier accepting:
 
@@ -15,9 +15,9 @@ What masking adds to a table keeps the verifier accepting:
   This is the identity (★) of §4.3 at every position, in the model's own terms.
 * **`inner_complete`, the masked verifier's inner check.** On the reference prover's output, `⟨λ, Y₁⟩ = θ + β·τ`, and at
   every opened pads position `Code(Y)_k = C_h[k] + β·C_μ[k]`; every opened leaf is the leaf of its opened content.
-* **`padOnto_M1`.** Lemma B's row (ii) for M1's code (`zk::lane_codeword`): at distinct opened positions, no more than
-  `t_pad` of them, a padding `(X_L + κ)·μ` over the first `t_pad` novel-basis polynomials reaches every vector of values,
-  given `X_L + κ ≠ 0` there (`Assumptions.PadNonvanishing`, §1.2).
+* **`padOnto_M1`.** Lemma B's row (ii) for C-Flock ZK's code (`zk::lane_codeword`): at distinct opened positions, no
+  more than `t_pad` of them, a padding `(X_L + κ)·μ` over the first `t_pad` novel-basis polynomials reaches every vector
+  of values, given `X_L + κ ≠ 0` there (`Assumptions.PadNonvanishing`, §1.2).
 * **`padsOnto_monomial`.** Row (viii) for the pads code: at distinct nonzero points, no more than the padding's length,
   the padding `x^s·Σ_j pad_j·x^j` reaches every vector of values.
 
@@ -43,11 +43,11 @@ theorem sum_embed_swap {α : Type} (s : Finset α) {n : ℕ} (A : Arith F K) (a 
   exact Finset.sum_congr rfl fun ℓ _ => Finset.sum_congr rfl fun j _ => by ring
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- **Level 0's padded column is the codeword of the restarted table** (§4.3 (★), completeness of M1's level-0 row check
-against `Model.padColumn`). Lane `ℓ < 2^|ch|` of the committed table holds `Enc(P_ℓ) + Pad(μ_ℓ)` at position `p`, and extra
-lane `xl i` holds `Enc(R_i) + Pad(μR_i)`, where `Pad(μ)(p) = Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols+j})(ω_p)` is M1's padding and
-the code has `d = cols + 1` bits. With `ȳ = Σ_ℓ eq(ch, ℓ)·μ_ℓ + Σ_i ρ_i·μR_i`, the verifier's column is
-`Σ_c y₁'[c]·X̂_c(ω_p)`, `y₁' = Σ_ℓ eq(ch, ℓ)·P_ℓ + Σ_i ρ_i·R_i`. -/
+/-- **Level 0's padded column is the codeword of the restarted table** (§4.3 (★), completeness of C-Flock ZK's level-0
+row check against `Model.padColumn`). Lane `ℓ < 2^|ch|` of the committed table holds `Enc(P_ℓ) + Pad(μ_ℓ)` at position
+`p`, and extra lane `xl i` holds `Enc(R_i) + Pad(μR_i)`, where `Pad(μ)(p) = Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols+j})(ω_p)` is
+C-Flock ZK's padding and the code has `d = cols + 1` bits. With `ȳ = Σ_ℓ eq(ch, ℓ)·μ_ℓ + Σ_i ρ_i·μR_i`, the verifier's
+column is `Σ_c y₁'[c]·X̂_c(ω_p)`, `y₁' = Σ_ℓ eq(ch, ℓ)·P_ℓ + Σ_i ρ_i·R_i`. -/
 theorem padColumn_honest [CharP K 2] (A : Arith F K) (cols t : ℕ) (c₀ : F) (ch : List K) {e : ℕ} (ρ : Fin e → K)
     (xl : Fin e → ℕ) (C : Oracle F) (P : ℕ → Fin (2 ^ cols) → F) (μ : ℕ → Fin t → F) (R : Fin e → Fin (2 ^ cols) → F)
     (μR : Fin e → Fin t → F) (p : ℕ)
@@ -90,9 +90,9 @@ theorem padColumn_honest [CharP K 2] (A : Arith F K) (cols t : ℕ) (c₀ : F) (
   linear_combination two (∑ ℓ ∈ Finset.range (2 ^ ch.length), eqList ch ℓ * A.embed (∑ j, μ ℓ j * Gc j))
     + two (∑ i, ρ i * A.embed (∑ j, μR i j * Gc j))
 
-/-! ## M1's level-0 padding is onto the opened positions -/
+/-! ## C-Flock ZK's level-0 padding is onto the opened positions -/
 
-/-- **Lemma B's row (ii) for M1's code**: when the table's level-0 code at its opened positions `pos` is M1's (message in
+/-- **Lemma B's row (ii) for C-Flock ZK's code**: when the table's level-0 code at its opened positions `pos` is C-Flock ZK's (message in
 `[0, 2^cols)`, padding `c₀·X̂_j + X̂_{2^cols+j}` at `cols + 1` bits), the positions are distinct, there are at most
 `t_pad ≤ 2^cols` of them, and `X_L + κ` vanishes at none (`PadNonvanishing`), the padding reaches every vector of values
 there. -/
