@@ -1,0 +1,16 @@
+{
+ "roots": ["Evaluate"],
+ "exempt": {
+  "Evaluate.Main": "the verity-evaluate executable's entry point, one line; its loop is Evaluate.serve, audited under Evaluate"
+ },
+ "layers": {
+  "Evaluate": {
+   "imports": ["Evaluate", "Flock", "Lean"],
+   "except": [],
+   "why": "the evaluator is code: Lean core and C-Flock's verifier only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
+ "dependencies": {
+  "toolchain": "b5b9a408c7654696506015fe40f040fbe98c3793af80b4a74463b9d2317af501"
+ }
+}
