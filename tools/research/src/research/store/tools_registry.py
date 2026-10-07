@@ -91,13 +91,19 @@ def former_modules(module: str, moves: list[dict[str, str]] | None = None) -> li
 
 def locate(spec_or_name: str, root: Path) -> tuple[str, str] | None:
     """(module, attr) of the declaration ``root`` holds for a tool, under its module or one an earlier layout gave it; None
-    when it holds none."""
+    when it holds none.  The current module is looked for before `moves.json` is read, so an unreadable one can't hide a
+    declaration at its current path (`merge.required_steps` would then require no step)."""
     module, _, attr = REGISTRY.get(spec_or_name, spec_or_name).rpartition(":")
-    for m in (module, *former_modules(module)) if module else ():
+    if not module:
+        return None
+
+    def holds(m: str) -> bool:
         rel = Path(*m.split("."))
-        if (root / rel.with_suffix(".py")).is_file() or (root / rel / "__init__.py").is_file():
-            return m, attr
-    return None
+        return (root / rel.with_suffix(".py")).is_file() or (root / rel / "__init__.py").is_file()
+
+    if holds(module):
+        return module, attr
+    return next(((m, attr) for m in former_modules(module) if holds(m)), None)
 
 
 def from_tree(spec_or_name: str, root: Path) -> Tool:
