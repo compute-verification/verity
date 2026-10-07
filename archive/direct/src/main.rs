@@ -772,7 +772,7 @@ fn write_result(b: BenchNumbers) {
         FieldKind::BabyBear => 4,
     };
     let per_vu_cells = (steps * committed_width) as u64;
-    // bench.contract native_reference(FIRST.name) == verity_catalog.targets.target.FIRST.native_peak: the A100 SXM4 dense
+    // bench.contract native_reference(FIRST.name) == verity.ml.circuits.targets.target.FIRST.native_peak: the A100 SXM4 dense
     // BF16 tensor-core peak with FP32 accumulate, 312 TFLOP/s; one GemmCoordinate<K> VU is 2K flop.  This bench is
     // BF16-only (the fingerprint below names profile FIRST); a bench of another target divides by that target's own
     // Target.native_peak, never by this constant.  overhead.vs_native_peak == rate.native_peak / rate.proved.

@@ -7,11 +7,11 @@ Definitions (the bodies are `dsa`'s, written once over `dsa.Ops`), so each one's
     DsaMqaLogit_v2{H,D}, DsaMqaLogits_v2{N,H,D}
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
-The callees are core's Boolean FP32 pieces (`verity_catalog.definitions.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
+The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
-Each composite is one traced circuit (`flat`): its body over those callees, compiled (`verity.primitives.circuits.evaluation.bits.compile`) and its
+Each composite is one traced circuit (`flat`): its body over those callees, compiled (`verity.ml.circuits.evaluation.bits.compile`) and its
 gates traced again (`trace.trace`), so a constant operand is folded and a value its calls share (the log2f polynomial's ``t``,
 the scale every quantized element divides by, a row's mean) is computed once (`Q_word`'s no-recompute rule).
 """
@@ -19,20 +19,20 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from verity.primitives.circuits.evaluation import bits as BS
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import Coll, concat
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.boolean import attention as BA
-from verity_catalog.definitions.boolean import cast as BC
-from verity_catalog.definitions.boolean import elementwise as EW
-from verity_catalog.silicon import fp as FP
-from verity_catalog.definitions.boolean import gemm as BG
-from verity_catalog.definitions.boolean import mufu as BM
-from verity_catalog.definitions.boolean import scalar as SC
-from verity.primitives.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.primitives.circuits.boolean.trace import definition
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.boolean import attention as BA
+from verity.ml.circuits.ops.boolean import cast as BC
+from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.silicon import fp as FP
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.ops.boolean import mufu as BM
+from verity.ml.circuits.ops.boolean import scalar as SC
+from verity.ml.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import dsa as D
 from verity_vllm.program.registry.boolean_attention import _Bits
 from verity_vllm.program.registry.topp_word_gates import I32ToF32 as I32ToF32V1

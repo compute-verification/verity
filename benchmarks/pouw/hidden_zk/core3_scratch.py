@@ -3,10 +3,10 @@ C-Flock has no piece for on this branch (@circuits' #885 lands core's own). `sta
 row units only, and every result staged with them is labelled 'core3 scratch'. E4m3ToF32 is a 256-entry table read
 (`fp.lookup`, 201 ANDs, checked on every byte); F32ToE2m1Sat is seven threshold comparisons and a NaN select (180 ANDs,
 checked on 40k words)."""
-from verity_catalog.definitions import prims as P
-from verity_catalog.silicon import fp
-from verity.primitives.circuits.boolean.forms import NOT, const_bits, mux, sub
-from verity_catalog.silicon import cast
+from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.boolean.forms import NOT, const_bits, mux, sub
+from verity.ml.circuits.silicon import cast
 
 E4M3_TABLE = [cast.e4m3_to_f32_word(b) for b in range(256)]
 
