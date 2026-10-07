@@ -1,5 +1,4 @@
-import Lean.Data.Json
-import Flock.Canon
+import VStar.PyJson
 import VStar.RecOpen
 
 /-!
@@ -13,7 +12,7 @@ reads, through any rows); every AND of these units is live, and `laid` refuses a
 out differently.
 
 `text` is `ir_lower.netlist`: a header line `flock-ir-unit/v2 name rows const` and each side's groups, one line
-`|A| A.. |B| B..` per row, then (a lowering's text) `LEAVES` and the leaf maps in canonical JSON. A circuit file's sections
+`|A| A.. |B| B..` per row, then (a lowering's text) `LEAVES` and the leaf maps as `json.dumps` writes them (`pyDumps`). A circuit file's sections
 are the same text without `LEAVES`.
 -/
 
@@ -62,6 +61,7 @@ def deadRow (st : St) (outs : Array Lin) : Option Nat := Id.run do
 
 /-- The unit's layout, ports of 16 bits. -/
 def UnitC.laid (u : UnitC) : Except String Laid := do
+  if u.inWords == 0 then throw s!"{u.name}: a unit of no input words (ir_lower.layout lays out no group for it)"
   if let some v := deadRow u.st u.outs then
     throw s!"{u.name}: AND {v} reaches no output; ir_lower.layout leaves such rows out, which this layout does not"
   pure (layout u.st (Array.replicate u.inWords 16) (Array.replicate u.outWords 16) u.outs)
