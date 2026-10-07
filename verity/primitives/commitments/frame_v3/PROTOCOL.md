@@ -274,8 +274,8 @@ hashes no index, and a leaf (its own tag) and a node (its level's key) cannot co
 - **Vectors and conformance.** `verity/primitives/commitments/tests/test_frame_b3.py` rebuilds each message from this layout,
   pins a domain id, leaf, node, pad, empty root and root, and rebuilds the root with the `blake3` package when that is
   installed. `verity.primitives.crypto.blake3` itself matches that package on `vectors.json`'s BLAKE3 cases, hash and keyed
-  (`test_frame_v3.py`). Pearl-C's device kernels
-  (`benchmarks/pouw/pearl_c/hash.cuh`) are checked against this reference on the host (`test_pearl_c_hash_host.py`).
+  (`test_frame_v3.py`). Pearl-C's BLAKE3 device kernels, checked against this reference on the host while Pearl-C hashed
+  with BLAKE3, are kept unmaintained in `archive/pouw-blake3/pearl_c/` (`hash.cuh`).
 - **Hashes.** Binding a value to a position rests on `cr/blake3`. As in §6, which statement and session a root belongs to
   also rests on `binding` and the positions' identity, both SHA-256 identity digests, so a Table 1 row citing this mode
   cites `cr/sha-256` beside `cr/blake3`.

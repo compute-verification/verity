@@ -132,10 +132,11 @@ Newest first. Each is Daniel's unless it names the coordinator.
     attests.
 - 2026-10-06 (8:14 AM PDT): a protocol carries no policy parameter. It surfaces what its draw established (ε at δ, in the
   integrity profile), and accounting decides later what it accepts. The model's size is public.
-- 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3`, PoUS's P2
-  (v4) and its key expansion, core's `randomness.derive`, and LMS (n = 64, no truncation). No hash flags or modular
-  hashing in research mode, and performance requirements relax as far as that needs. BLAKE3 code leaves the served path
-  for `archive/`, kept but not maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained, with
+- 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3` (its cost over
+  the BLAKE3 formats accepted), PoUS's P2 (v4) and its key expansion, core's `randomness.derive`, and LMS (n = 64, no
+  truncation). No hash flags or modular hashing in research mode, and performance requirements relax as far as that
+  needs. BLAKE3 code leaves the served path for `archive/` (Pearl-C's is `archive/pouw-blake3/`), kept but not
+  maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained (BLAKE3 in `schemes/pearl_kw.py`), with
   `cr/blake3` its assumption alone.
 - 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
   owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).

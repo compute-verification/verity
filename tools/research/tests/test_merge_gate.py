@@ -629,6 +629,51 @@ def test_a_grant_carries_at_landing_as_at_prepare(tmp_path, monkeypatch, capsys)
     assert f"research merge: grant red-team carried from pr:20@{old} to {restacked[:12]} (restack" in capsys.readouterr().out
 
 
+def test_a_grant_on_a_stacked_pr_carries_when_only_the_pr_below_it_moved(tmp_path, monkeypatch, capsys):
+    """Proofs' 12 stacked heads (7 Oct): judged against `main`, a stacked PR's change holds its parent's, so any new commit on the
+    parent voided the child's grant though the child's own patch was byte-identical.  The gate takes each head's change against
+    the PR below it in the train, as it does for the grants a PR needs, at `--prepare` and at landing."""
+    from research.queue import carry
+    from research.store.local import LocalStore
+
+    _store_remote(tmp_path, monkeypatch)
+    main, _feat, _tip = _repos(tmp_path)
+    audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
+    pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
+    origin, heads = _origin_with(tmp_path, main, {
+        "tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json"]\n',
+        "lean-audit.json": json.dumps(audit, indent=1)}, {30: {"p.txt": "parent\n"}})
+
+    def commit_on(start: str, branch: str, files: dict[str, str]) -> str:
+        _git(main, "checkout", "-q", "-b", branch, start)
+        for path, text in files.items():
+            (main / path).write_text(text)
+        _git(main, "add", *files)
+        _git(main, "commit", "-q", "-m", branch)
+        _git(main, "checkout", "-q", "main")
+        return _git(main, "rev-parse", branch)
+
+    old = commit_on(heads[30], "pr31", {"lean-audit.json": pinned})
+    LocalStore().add_label(f"pr:31@{old}", "grant", "red-team", "reviewer")
+    parent = commit_on(heads[30], "pr30-fixed", {"p.txt": "parent, fixed\n"})
+    new = commit_on(parent, "pr31-restacked", {"lean-audit.json": pinned})
+    _git(main, "push", "-q", "-f", "origin", f"{parent}:refs/pull/30/head", f"{new}:refs/pull/31/head")
+    assert carry(main, "main", old, new) == (False, "its change against main differs (p.txt)"), "from main, the parent's commit counts"
+    monkeypatch.chdir(main)
+    capsys.readouterr()
+    pins = [f"30@{parent[:9]}", f"31@{new[:9]}"]
+    assert merge_main(["--train", "--prepare", "train-prep/st", *pins, "--lint", "true"]) == 0, capsys.readouterr().err
+    said = f"research merge: grant red-team carried from pr:31@{old} to {new[:12]} (restack; lean-audit.json change identical)"
+    assert said in capsys.readouterr().out
+    _git(main, "fetch", "-q", "origin", "train-prep/st:train-prep/st")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "tip"), _git(main, "rev-parse", "train-prep/st"))
+    assert _record(tmp_path, tmp_path / "tip", monkeypatch, *CHECKED) == 0
+    monkeypatch.chdir(main)
+    capsys.readouterr()
+    assert merge_main(["train-prep/st", "--dry-run"]) == 0, capsys.readouterr().err
+    assert said in capsys.readouterr().out
+
+
 def test_a_head_with_two_merge_bases_carries_no_grant_and_needs_every_one(tmp_path, monkeypatch, capsys):
     """Red team of #955: a head merging #30's commit (which `main` merged too) into the reviewed head while keeping the reviewed
     tree drops #30's pins.  Its merge bases with `main` are both the reviewed head's base and #30's commit; `git merge-base`
