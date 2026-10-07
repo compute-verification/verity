@@ -35,7 +35,8 @@ SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 LEAN = HERE.parent / "verifier" / "lean"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-STATEMENT = "verity/flock-circuit+seed-injection"
+#: the set was recorded under f5df3bbc's identity, which the unversioned name no longer is (test_lean_hidden_outputs.py)
+STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 FLIP = 1 << 17
 
 #: a message element changed (by FLIP), and the residuals that move off zero: 0 is the zerocheck, 1 the lincheck, 2 + k claim
