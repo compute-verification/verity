@@ -169,7 +169,7 @@ def test_git_merges_two_branches_that_add_guarantees_and_refuses_a_real_conflict
         monkeypatch.setenv(k, v)
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
-    for f in ("merge.py", "audit.py"):
+    for f in ("merge.py", "check.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text("lean-audit.json merge=lean-audit\n")
     rec = repo / "pkg" / "lean-audit.json"
