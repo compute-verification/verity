@@ -9,8 +9,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from circuit_check.targets import TINY_FP8
-    from verity.primitives.circuits.defs import bind
-    from verity_catalog.definitions.prims import BlackwellE4m3QmmaDot32
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.registry import fp8
 
     return [
