@@ -1,6 +1,6 @@
-"""The window statement in gates (`circuit.window_statement`): the word primitive is `window.window_problem` on P entry rows
-and ℓ, and its bit form equals it on an honest toy window and on one control per refusal of `window_problem`, each a
-window the honest one becomes under one change."""
+"""The window statement in gates (`circuit.window_statement`): the word primitive is `window.window_problem` on P entry rows,
+ℓ and the pass's -h3 tile root, and its bit form equals it on an honest toy window and on one control per refusal of
+`window_problem`, each a window the honest one becomes under one change."""
 from __future__ import annotations
 
 import struct
@@ -21,10 +21,14 @@ def _d(n: int) -> bytes:
     return bytes([n]) * 64
 
 
+#: the pass's -h3 tile root every honest call names
+H3 = _d(60)
+
+
 def _window(real_a=(3, 2), rows_b=4, filler=(1, 2)):
     out, at = [], 0
     for c, a in enumerate(real_a):
-        out.append(Wd.Entry("call", at, at + a * rows_b, a, rows_b, _d(2 * c + 1), _d(2 * c + 2), _d(100 + c)))
+        out.append(Wd.Entry("call", at, at + a * rows_b, a, rows_b, _d(2 * c + 1), _d(2 * c + 2), H3, _d(100 + c)))
         at += a * rows_b
     work = Wd.bucket(at)
     out.append(Wd.Entry("filler", at, work.n, *filler, _d(50), _d(51)))
@@ -34,7 +38,7 @@ def _window(real_a=(3, 2), rows_b=4, filler=(1, 2)):
 def _big():
     """15 calls of 2^13 x 2^17 tiles each, the most an entry holds, and the filler: level 254, N = 2^34."""
     call = 1 << 30
-    out = [Wd.Entry("call", c * call, (c + 1) * call, 1 << 13, 1 << 17, _d(1), _d(2), _d(3)) for c in range(P - 1)]
+    out = [Wd.Entry("call", c * call, (c + 1) * call, 1 << 13, 1 << 17, _d(1), _d(2), H3, _d(3)) for c in range(P - 1)]
     work = Wd.bucket((P - 1) * call)
     fill = work.n - (P - 1) * call
     out.append(Wd.Entry("filler", (P - 1) * call, work.n, 1 << 13, -(-fill // (1 << 13)), _d(4), _d(5)))
@@ -51,7 +55,8 @@ def _bytes(rows, e, at, value: bytes):
 
 ROWS, LEVEL = _window()
 NONE = Wd.Entry("none").row()
-#: name: (rows, level, the refusal of `window_problem` it is a control of; None for a window the statement holds on)
+#: name: (rows, level, the refusal of `window_problem` it is a control of, None for a window the statement holds on[, the
+#: pass's root when it is not H3])
 CASES = {
     "honest": (ROWS, LEVEL, None),
     "big": (*_big(), None),
@@ -64,6 +69,10 @@ CASES = {
     "side a 2^13+1": (_set(ROWS, 2, n_a=(1 << 13) + 1), LEVEL, "side a holds 8193 rows"),
     "side b 2^17+1": (_set(ROWS, 2, n_b=(1 << 17) + 1), LEVEL, "side b holds 131073 rows"),
     "filler record": (_set(ROWS, 2, record=_d(1)), LEVEL, "the filler's record is not zero"),
+    "filler root_h3": (_set(ROWS, 2, root_h3=H3), LEVEL, "the filler's -h3 root is not zero"),
+    "empty entry root_h3": (_set(ROWS, P - 1, root_h3=H3), LEVEL, "an empty entry is not the zero row"),
+    "call of another pass": (_set(ROWS, 1, root_h3=_d(61)), LEVEL, "entry 1: its -h3 root is not the pass's"),
+    "another pass": (ROWS, LEVEL, "entry 0: its -h3 root is not the pass's", _d(61)),
     "no call": ([_set(ROWS, 2, lo=0)[2]] + [NONE] * (P - 1), 0, "the calls, then one filler"),
     "no filler": (ROWS[:2] + [NONE] * (P - 2), LEVEL, "the calls, then one filler"),
     "two fillers": (ROWS[:3] + [ROWS[2]] + ROWS[4:], LEVEL, "the calls, then one filler"),
@@ -83,15 +92,22 @@ def _words(rows) -> list[int]:
     return [w for row in rows for w in struct.unpack(f"<{Wd.ENTRY_WORDS}H", row)]
 
 
+def _root(case) -> bytes:
+    return case[3] if len(case) > 3 else H3
+
+
 def test_each_control_is_one_refusal_of_the_window_statement():
-    for name, (rows, level, why) in CASES.items():
-        got = Wd.window_problem(rows, Wd.Work.at(level), P)
+    for name, case in CASES.items():
+        rows, level, why = case[:3]
+        got = Wd.window_problem(rows, Wd.Work.at(level), P, _root(case))
         assert (got is None) if why is None else (got is not None and why in got), (name, got)
 
 
 def test_the_word_primitive_is_the_window_statement():
-    for name, (rows, level, why) in CASES.items():
-        assert evaluate(WS.PouwWindowStatement, _words(rows), level) == (int(why is None),), name
+    for name, case in CASES.items():
+        rows, level, why = case[:3]
+        root = list(struct.unpack("<32H", _root(case)))
+        assert evaluate(WS.PouwWindowStatement, _words(rows), level, root) == (int(why is None),), name
 
 
 def test_the_gates_are_the_word_primitive():
@@ -99,7 +115,8 @@ def test_the_gates_are_the_word_primitive():
     names = list(CASES)
     words = np.array([np.array(_words(CASES[k][0]), dtype=np.uint16).reshape(P, Wd.ENTRY_WORDS) for k in names])
     levels = np.array([CASES[k][1] for k in names], dtype=np.uint16)
-    got = evaluate_words(WS.PouwWindowStatementBits, words, levels).reshape(-1)
+    roots = np.array([np.frombuffer(_root(CASES[k]), dtype="<u2") for k in names])
+    got = evaluate_words(WS.PouwWindowStatementBits, words, levels, roots).reshape(-1)
     assert dict(zip(names, got.tolist())) == {k: int(CASES[k][2] is None) for k in names}
 
 
