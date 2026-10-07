@@ -81,8 +81,6 @@ NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/cir
 ML_IMPORTS_EXPERIMENTAL = {
     "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against experimental's Python verifiers",
     "ml/flock/verifier/*_agree.py": "the agreement scripts run the Lean verifier against experimental's Python verifiers",
-    "ml/commitments/tests/test_sha512_framings.py": "tests experimental's multiproof over ml's SHA-512 framings",
-    "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites resolve in experimental's claims",
 }
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {

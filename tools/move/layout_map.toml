@@ -38,6 +38,9 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "experimental/verity_experimental/" = "verity/experimental/"
 "experimental/tests/" = "verity/experimental/tests/"
 "experimental/pyproject.toml" = "verity/experimental/pyproject.toml"
+# no test in ml imports experimental: the two that exercise its multiproof and its claims run with its tests
+"verity/primitives/commitments/tests/test_sha512_framings.py" = "verity/experimental/tests/commitments/test_sha512_framings.py"
+"verity/primitives/commitments/tests/test_hm96.py" = "verity/experimental/tests/commitments/test_hm96.py"
 # experimental's planner and consumers of sampled proofs join the protocol (no module name clashes)
 "experimental/verity_experimental/sampled_proofs/" = "verity/experimental/protocols/sampled_proofs/"
 "verity/claims/" = "verity/experimental/claims/"
@@ -114,6 +117,8 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "verity
 "verity.primitives" = "verity.ml"
 "verity.primitives.circuits" = "verity.ml.circuits"
 "verity.primitives.commitments" = "verity.ml.commitments"
+"verity.primitives.commitments.tests.test_hm96" = "verity.experimental.tests.commitments.test_hm96"
+"verity.primitives.commitments.tests.test_sha512_framings" = "verity.experimental.tests.commitments.test_sha512_framings"
 "verity.primitives.crypto" = "verity.ml.crypto"
 "verity.primitives.randomness" = "verity.ml.randomness"
 "verity.protocols" = "verity.experimental.protocols"
