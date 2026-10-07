@@ -34,7 +34,7 @@ from verity_vllm.program.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "6b71d820f6508d24d85de35f383ab531d9efe382a16ce28650cf649041cdb26e"),
+    "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "afe7da5c3245a9ec9d6631f1b9b6b686f2c83af71edd52fd8e0c35cd2dee4af2702d65488815ed365213797fb33d77e830fe82d929c5ef3417e60cd05fc59a7d"),
     "MoeSum_v2{TOPK=8,H=8}": (41776, 67160, 6112, "4c068e14ab23ebb919f4090677ab7cd17c3935c82fe382e6f8cd1ad24bff1210ebffabe282250d4adbda4e23521fa6759ef72a6b539bd49bf4967e6e38f4a699"),
     "NvExpf_v2": (11372, 21804, 880, "a91ca00bbe5e644fd206e1be3fe064234dc439382fb2201d823f0c8568646e186262ad31cd26a6253072854294694606fa977c8005650aaf938b23a50ebe16f7"),
     "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": (126243, 239434, 10631,

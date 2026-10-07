@@ -126,7 +126,9 @@ def test_3_the_signed_stage2_block_is_unchanged_by_the_factoring():
     #   de34ef2c82f65eb4  pad G1 5261740d7 (ORDINARY class: ORD statics in the lifted ids) -- the same block, the same relation; the Stage 2
     #                     evidence JSON (dump_routes.py at v2) still carries the v0.7 digest and is compared only when it names the current stack.
     #   43bb1ede072b2031  the re-baseline re-key (the k16 step AmpereBF16TcDot16_v1 -> core's _v2; nothing else moved).
-    STAGE2_DIGESTS = {"1dd831feee7ac882": "pad v0.7 (B7)", "de34ef2c82f65eb4": "pad G1 5261740d7 (ORD statics)", "43bb1ede072b2031": "re-key (TcDot16 v2)"}
+    #   52de640566245b7f  the same descriptor, digested with SHA-512 (the identity re-baseline).
+    STAGE2_DIGESTS = {"1dd831feee7ac882": "pad v0.7 (B7)", "de34ef2c82f65eb4": "pad G1 5261740d7 (ORD statics)", "43bb1ede072b2031": "re-key (TcDot16 v2)",
+                      "52de640566245b7f": "SHA-512"}
     assert d[:16] in STAGE2_DIGESTS, d
     if os.path.exists(STAGE2_EVIDENCE):
         ev = json.load(open(STAGE2_EVIDENCE))["program_digest"]
