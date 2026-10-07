@@ -15,6 +15,7 @@ spec.loader.exec_module(CHECK)
 
 def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
@@ -120,6 +121,7 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
            "inputs": {"art": "art:i", "sha256": ins}, "ci": {"seed": 1, "fuzz": 2}}
     (v / "upstream.json").write_text(json.dumps(pin))
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", v / "lean")
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", v / "upstream.json")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 64)
     return tmp_path / "out", sent
@@ -217,7 +219,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/", "!README.md", "!PROTOCOL.md"]}
+    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/", "backends/flock/verifier/lean/", "!README.md",
+                                                       "!PROTOCOL.md"]}
     pin = __import__("json").loads((ROOT / "backends" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
@@ -407,7 +410,7 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     assert CHECK.main([]) == 2
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
-    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("backends/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -495,7 +498,7 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
                 else:
                     assert top in sys.stdlib_module_names or top == "__future__", f"{m}.py imports {n}"
     assert {"agree", "fuzz", "redigest", "transcript_check"} <= seen
-    readers = [here / f"{m}.py" for m in sorted(seen)] + [here / "lean" / "lakefile.toml"]
+    readers = [here / f"{m}.py" for m in sorted(seen)] + [CHECK.FLOCK_LEAN / "lakefile.toml"]
     assert not (named := [p.name for p in readers if "lean-audit" in p.read_text()]), (
         f"{', '.join(named)} mention lean-audit, which agreement_closure leaves out of the agreement's cache key")
 
@@ -674,7 +677,7 @@ def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_pa
     assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
     assert argv[argv.index("--deps") + 1] == audit[audit.index("--deps") + 1], "and its kept dependencies"
     assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
-    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "no-verifier")
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
     assert len(CHECK.groups(out, 8)) == 3
 
 
@@ -788,6 +791,39 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert "check: changes under backends/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    assert "check: changes under backends/flock/, backends/flock/verifier/lean/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)
+
+
+def test_the_trees_lean_steps_run_rather_than_skip():
+    """On this tree, wherever the layout puts the Lean verifier's package (`FLOCK_LEAN`), the Lean steps are the build, the
+    unit-cut conformance, the audit and the agreement; a tree with the verifier but no package there fails rather than skips."""
+    assert (CHECK.FLOCK_LEAN / "lakefile.toml").is_file()
+    steps = CHECK.lean_steps(ROOT / "nowhere")
+    assert [n for n, _, _ in steps] == ["lean-build", "lean-unit-cut", "lean-audit", "lean-agreement"]
+    assert all(not isinstance(argv, str) for _, argv, _ in steps[:3])
+
+
+def test_a_verifier_without_its_lean_package_fails_rather_than_skips(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "moved-away")
+    [(name, detail, _)] = CHECK.lean_steps(tmp_path)
+    assert name == "lean" and isinstance(detail, str) and not detail.startswith("skipped:")
+
+
+def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agreements_cache():
+    """A file of the Lean verifier's own package, wherever the layout puts it (`FLOCK_LEAN`), needs the agreement and the
+    red-team grant to merge and is read by the agreement (so a change to it misses a cached pass): a rule that still named
+    the package's old place would pass such a change unchecked."""
+    from research.merge import rule_touches
+    from research.queue import Rules
+
+    rel = CHECK.FLOCK_LEAN.relative_to(ROOT).as_posix()
+    changed = [f"{rel}/Flock/Gate.lean"]
+    spec2 = importlib.util.spec_from_file_location("check_tool_lean", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    assert rule_touches(list(tool.CHECK.merge_requires["lean-agreement"]), changed)
+    rules = Rules.parse((ROOT / "tools" / "check" / "queue.toml").read_text())
+    assert rule_touches(list(next(r for r in rules.grants if r.role == "red-team").paths), changed)
+    assert CHECK.agreement_closure(changed) == changed

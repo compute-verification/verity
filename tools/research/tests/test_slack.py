@@ -453,8 +453,9 @@ def test_a_slack_error_through_the_broker_is_slacks_own(broker, registry, capsys
 def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
     with pytest.raises(slack.SlackError, match="not in BROKER_METHODS"):
         slack.Slack(None).call("chat.delete", channel=COORD, ts="1.0")
-    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", "1.0", "--text", "x" * slack.BROKER_MAX_BODY)
-    assert rc == 2 and "more than the broker takes" in err and not broker.requests
+    with pytest.raises(slack.SlackError, match="more than the broker takes"):
+        slack.Slack(None).call("chat.postMessage", channel=COORD, text="x" * slack.BROKER_MAX_BODY)
+    assert not broker.requests
 
 
 def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
@@ -1077,6 +1078,22 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 2                                             # a quiet post still reaches the names it starts with
     assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
+
+
+def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "infra")
+    lines = [f"*@infra:* row {i} " + "x" * 90 for i in range(80)] + ["see <!date^1791361800^{time}|1:30 AM PDT (08:30Z)> -> " + "y " * 900]
+    assert run(capsys, "send", "--as", "circuits", "--to", "@infra", "--text", "\n".join(lines))[0] == 0
+    root = fake.messages[COORD][1]
+    rest = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]
+    assert len(rest) >= 2 and not [m for m in fake.messages[COORD] if not m.get("thread_ts") and m["ts"] not in (box, root["ts"])]
+    assert all(len(m["text"].encode()) <= slack.POST_MAX + 20 for m in [root, *rest])
+    assert all(m["text"].startswith(f"({i}/{len(rest) + 1}) ") and slack.tags_of(m["text"]) == [slack.QUIET]
+               for i, m in enumerate(rest, 2))
+    body = "\n".join(slack.FOOTER_RE.sub("", re.sub(r"^\(\d+/\d+\) ", "", m["text"])) for m in [root, *rest])
+    assert body.split() == f"<!subteam^SINFRA|@infra> {chr(10).join(lines)}".split()
+    assert "<!date^1791361800^{time}|1:30 AM PDT (08:30Z)>" in body
+    assert len(bells(fake, box)) == 1
 
 
 def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
