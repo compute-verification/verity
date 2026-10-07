@@ -153,7 +153,7 @@ EOF
 systemctl daemon-reload
 systemctl enable --now vy-lease.service
 systemctl enable --now vy-deadline.timer
-systemctl enable --now vy-clocks.service
+if command -v nvidia-smi > /dev/null; then systemctl enable --now vy-clocks.service; fi   # a CPU-only VM has no GPUs to lock
 
 nvidia-smi -pm 1 > /dev/null 2>&1 || log "nvidia-smi -pm 1 refused (persistence mode stays off)"
 date -u +%Y-%m-%dT%H:%M:%SZ > /var/lib/vy-setup.done

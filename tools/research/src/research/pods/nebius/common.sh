@@ -24,7 +24,7 @@ DATA_DEVICE_ID=data                                # the guest sees /dev/disk/by
 SG_NAME=${VM_NAME}-ssh
 SSH_CIDRS=${NEBIUS_SSH_CIDRS:-0.0.0.0/0}           # comma-separated, at most 8; port 22 only either way
 SSH_USER=research                                  # Nebius reserves root and admin: neither may log in over ssh
-RATE_USD_PER_HOUR=14.40
+RATE_USD_PER_HOUR=${NEBIUS_RATE_USD_PER_HOUR:-14.40}   # the GPU preset's; a CPU-only VM (cpu-d3) states its own
 MACHINE=${VM_NAME}
 PROJECT=verity
 
