@@ -171,6 +171,12 @@ EDITS = [
     ("tools/verity/check/tests/test_check.py", '(tmp_path / "backends" / "flock" / "é.py")',
      '(tmp_path / "verity" / "ml" / "flock" / "é.py")'),
     ("tools/research/tests/test_jobs_dispatch.py", '(repo / "backends" / "flock" / "é.rs")', '(repo / "verity" / "ml" / "flock" / "é.rs")'),
+    # shell anchors on the script's own directory, one level off where the script moved (layout.py recomputes Python's only)
+    ("tools/verity/check/pod_setup.sh", 'ROOT=$(cd "$(dirname "$0")/../.." && pwd)', 'ROOT=$(cd "$(dirname "$0")/../../.." && pwd)'),
+    ("verity/ml/flock/check_build.sh", 'ROOT=$(cd "$(dirname "$0")/../.." && pwd)', 'ROOT=$(cd "$(dirname "$0")/../../.." && pwd)'),
+    ("verity/ml/flock/tests/lean/generate.sh", 'root=$(cd "$here/../../../.." && pwd)', 'root=$(cd "$here/../../../../.." && pwd)'),
+    ("verity/experimental/tests/sampled_proofs/lean/generate.sh", '${1:-$here/../../../../verity/Security/Proofs}',
+     '${1:-$here/../../../../../Security/Proofs}'),
     # the Lean check's entry point is `check.py` (the row moves it); these load it by its bare name
     ("tools/verity/lean/check.py", 'prog="audit.py"', 'prog="check.py"'),
     ("tools/verity/lean/merge.py", '"lean_audit_for_merge", HERE / "audit.py")', '"lean_audit_for_merge", HERE / "check.py")'),
