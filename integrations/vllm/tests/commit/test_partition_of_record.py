@@ -97,7 +97,7 @@ def test_the_commit_reads_the_programs_the_builds_recorded(tmp_path):
     for name, sha in (("build_request_LP8_T2", SHA_A), ("build/rank1/build_request_LP8_T2", SHA_B), ("build_step", None)):
         d = tmp_path / name
         d.mkdir(parents=True)
-        (d / "result.json").write_text(json.dumps({"program": {"digest": "0" * 64, **({"sha512": sha} if sha else {})}}))
+        (d / "result.json").write_text(json.dumps({"program": {"digest": sha} if sha else {}}))
     assert program_digests(str(tmp_path), None) == {SHA_A, SHA_B}
 
 

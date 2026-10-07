@@ -444,7 +444,7 @@ def test_parse_and_json_roundtrip_stable_id():
         assert from_json(doc) == q
         assert from_json(json.loads(json.dumps(doc))) == q
         qid = query_id(q)
-        assert len(qid) == 64 and qid == query_id(from_json(doc))
+        assert len(qid) == 128 and qid == query_id(from_json(doc))
         assert qid not in seen
         seen.add(qid)
     # spelling-independent: whitespace / quotes / equivalent constructors
