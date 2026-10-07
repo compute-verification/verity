@@ -55,7 +55,7 @@ That gives the responder nothing `rest` lacks: `rest` may compute anything betwe
 returns the memory the responder would hold at the later send time has the same records.
 
 **The three requirements are theorems about this memory challenger.**
-`verity/Security/Proofs/Pous/Continuous/Verifier.lean` proves each one for every machine:
+`Security/Proofs/Pous/Continuous/Verifier.lean` proves each one for every machine:
 
 1. **No pipelining** (rule 1; `PousContinuous.no_pipelining`, `PousContinuous.close_le_send`). Round `j`'s record
    depends only on `i_0, …, i_j`, and round `j + 1` is sent no earlier than round `j` closed.

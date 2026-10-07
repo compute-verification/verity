@@ -5,10 +5,10 @@ import Definitions.Pous.Model.Audit
 
 Added on 3 Oct 2026, with `Pous.Guarantees.BandGradedMeetsFamily` (PR #905), after the red
 team's hold on unbounded late rounds (`red-team-905`). `GradedMeets`
-(`verity/Security/Definitions/Pous/Accounting/GradedMeets.lean`) is `Meets` with this audit in place of the sequential
+(`Security/Definitions/Pous/Accounting/GradedMeets.lean`) is `Meets` with this audit in place of the sequential
 one.
 
-**The game.** It is the sequential audit (`verity/Security/Definitions/Pous/Model/Audit.lean`) with a grace of `t` late
+**The game.** It is the sequential audit (`Security/Definitions/Pous/Model/Audit.lean`) with a grace of `t` late
 rounds, each within a hard bound `(D_late, Q_late)` with `D ≤ D_late` and `Q ≤ Q_late`:
 
 1. Setup and preprocessing are as in the sequential audit: `W` arbitrary, `(pp, C) := enc W ω r`, and an `S`-bit state
@@ -25,7 +25,7 @@ rounds, each within a hard bound `(D_late, Q_late)` with `D ≤ D_late` and `Q �
    rounds are late.
 
 At `t = 0` it is the sequential audit: `PousGraded.gradedAuditSecure_zero_iff`
-(`verity/Security/Proofs/Pous/Graded/Theorem.lean`) proves
+(`Security/Proofs/Pous/Graded/Theorem.lean`) proves
 `GradedAuditSecure … k 0 δ ε ↔ AuditSecure … .sequential … k δ ε` whenever `D ≤ D_late` and `Q ≤ Q_late`.
 
 **Why late rounds are bounded.** With no bound the game is not a conservative model of a storage server at `t ≥ 1`. A
@@ -49,7 +49,7 @@ protocol that breaks one. `PROTOCOL.md` ("The graded audit") states them as requ
 2. **A hard deadline.** An answer past `Δ_late` rejects, and a wrong or missing answer rejects. `(D_late, Q_late)` is
    what the adversary completes within `Δ_late`, as `(D, Q)` is within `Δ`. A responder that runs past
    `(D_late, Q_late)` is rejected; the same responder stopped at `(D_late, Q_late)` (`PousGraded.cut`,
-   `verity/Security/Proofs/Pous/Graded/Theorem.lean`) is a `GradedResponder` and answers as it does on every round the
+   `Security/Proofs/Pous/Graded/Theorem.lean`) is a `GradedResponder` and answers as it does on every round the
    memory challenger accepts, so `GradedResponder.bounded` is the deadline.
 3. **Every answer past `Δ` is counted late.** A round over `(D, Q)` on its own path answers past `Δ`, so the memory
    challenger counts at least the game's late rounds, and accepting with at most `t` counted implies the game's

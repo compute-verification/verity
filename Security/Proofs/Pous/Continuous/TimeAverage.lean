@@ -5,7 +5,7 @@ import Proofs.Pous.Continuous.PerAnswer
 # The continuous audit's time-averaged bound: `Pous.Guarantees.ContinuousTimeAverage`
 
 The proof, pinned as `Pous.SecurityProofs.ContinuousTimeAverage`. The memory challenger and the
-responder are `verity/Security/Definitions/Pous/Model/Continuous.lean`'s; the memory challenger draws one coin and one
+responder are `Security/Definitions/Pous/Model/Continuous.lean`'s; the memory challenger draws one coin and one
 index per slot, and a challenge arrives at slot `t` iff its coin is below `a`.
 
 1. **The arrivals before `t`** (`pre`) are a prefix of all the arrivals, because the arrivals are sorted

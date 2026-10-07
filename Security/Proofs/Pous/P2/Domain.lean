@@ -4,7 +4,7 @@ import Proofs.Pous.P2.Rows
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
 
 P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. The abstract model `Pous.m1p B w p b`
-(`verity/Security/Definitions/Pous/Model/M1p.lean`) draws `B` independent uniform permutations of `Fin p`; they act on
+(`Security/Definitions/Pous/Model/M1p.lean`) draws `B` independent uniform permutations of `Fin p`; they act on
 `w`-bit strings through the numeric value and fix the tail `[p, 2^w)`. Each block carries `b` payload bits,
 zero-extended to `w` bits. These are theorems about `m1p` at P2's parameters, not about the concrete P2's
 square–mask–square maps. This file proves, with no hypothesis beyond what the rows discharge:
@@ -30,8 +30,8 @@ The route:
    (`20·w ≤ 21·b`). No payload and no code block lies in the tail (`pad_lt`, `m1p_code`), and the code blocks are
    uniform on `[0, p)` (`m1p_code_uniform`).
 
-The generic count (`PousGen`, from `a2/A2.lean`) is `verity/Security/Proofs/Pous/P2/Count.lean`, the certificate
-plumbing (`PousP2`, from `p2/P2Meets.lean` up to `meets_m1_of_row`) is `verity/Security/Proofs/Pous/P2/Rows.lean`, and
+The generic count (`PousGen`, from `a2/A2.lean`) is `Security/Proofs/Pous/P2/Count.lean`, the certificate
+plumbing (`PousP2`, from `p2/P2Meets.lean` up to `meets_m1_of_row`) is `Security/Proofs/Pous/P2/Rows.lean`, and
 A3′ is `PousTrackA.a3_prime_lam`. This module is the new part (`PousP2p`).
 -/
 

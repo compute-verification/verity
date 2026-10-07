@@ -6,7 +6,7 @@ import Proofs.Pous.Continuous.PerAnswer
 # Completeness of the continuous audit: `Pous.Guarantees.ContinuousComplete`
 
 The proof of `Pous.Guarantees.ContinuousComplete`, pinned as `Pous.SecurityProofs.ContinuousComplete`, over the
-memory challenger of `verity/Security/Definitions/Pous/Model/Continuous.lean`. It is the graded audit's tail rule
+memory challenger of `Security/Definitions/Pous/Model/Continuous.lean`. It is the graded audit's tail rule
 (`PousGraded.pr_hits_ge_le_binomial`) read the other way round: there a round's success is a hit, bounded by `p₀`; here
 it is a miss, bounded by `q`.
 

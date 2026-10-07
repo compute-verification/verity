@@ -17,7 +17,7 @@ sequential multiplications, not in oracle queries.
 
 Queries: `add a b` and `mul a b` on labels, answering the label of the sum or product, and `one`, answering `φ(1)`.
 A label `≥ p` names no element: a ring query on one is answered by the junk label `junkLabel a b = a`, its first
-argument unchanged (as `permAct` fixes the tail `[p, 2^w)` in `verity/Security/Definitions/Pous/Model/M1p.lean`).
+argument unchanged (as `permAct` fixes the tail `[p, 2^w)` in `Security/Definitions/Pous/Model/M1p.lean`).
 `key j part` answers one half of block `j`'s keys: `K_j` (`mask`) or `τ_j` (`offset`), framed per (block, purpose) as
 P2-EXP-IO frames SHAKE256. Parity, negation, equality and XOR act on labels, locally and for free. The labeling is
 dense, so naming a label hands the adversary a uniform element for free. At `φ = id`, `p2ring` is `schemes/p2.py`'s

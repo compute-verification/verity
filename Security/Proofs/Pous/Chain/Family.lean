@@ -7,7 +7,7 @@ The generator is in the POUS Project store's `lean/submissions/band-multi/family
 `flatten_chain.py`, the generator of `Flat.lean`.
 
 The POUS Project store's `lean/submissions/band-multi/BandMultiFamily.lean` and `BandMultiFamilyFinal.lean`, each
-in its own `section`, flattened as `Flat.lean`'s band modules are. `verity/Security/Proofs/Pous.lean` states the pinned
+in its own `section`, flattened as `Flat.lean`'s band modules are. `Security/Proofs/Pous.lean` states the pinned
 form, `BandMultiMeetsFamily`.
 -/
 

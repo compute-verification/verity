@@ -36,11 +36,11 @@ import Mathlib.Data.Fintype.Sum
 P3 with a concrete `H`, the band, the dense chain scheme and the public encoder: every module of their proofs
 outside Mathlib and `Pous`, in import order, each in its own `section`, as graded (the POUS Project store's
 `lean/submissions/p3-concrete-multi/grading/` and `lean/submissions/sponge-dense/grading/`). The definitions the
-trusted layer provides (`verity/Security/Definitions/Pous/Model/P3Chain.lean`,
-`verity/Security/Definitions/Pous/Model/BandChain.lean`, `verity/Security/Definitions/Pous/Model/PubEncoder.lean`,
-`verity/Security/Definitions/Pous/Accounting/PubMeets.lean`) are removed from their source modules, and each source
+trusted layer provides (`Security/Definitions/Pous/Model/P3Chain.lean`,
+`Security/Definitions/Pous/Model/BandChain.lean`, `Security/Definitions/Pous/Model/PubEncoder.lean`,
+`Security/Definitions/Pous/Accounting/PubMeets.lean`) are removed from their source modules, and each source
 namespace `PousX` of those copies is renamed `Pous.X`, so the proofs are about the trusted constants.
-`verity/Security/Proofs/Pous.lean` states the pinned forms.
+`Security/Proofs/Pous.lean` states the pinned forms.
 -/
 
 /-! ════ SpongeDense ════ -/
@@ -53243,8 +53243,8 @@ set_option relaxedAutoImplicit true
 # The public-encoder audit game: the lane's remainder after the move into the trusted layer
 
 The trusted definitions of the public-encoder workstream now live in the trusted layer, verbatim and under the same
-names: `verity/Security/Definitions/Pous/Model/PubEncoder.lean` (`SetupCheck` … `PubAuditSecure`) and
-`verity/Security/Definitions/Pous/Accounting/PubMeets.lean` (`PubMeets`), as this file planned. Only `Scheme.EncDec`,
+names: `Security/Definitions/Pous/Model/PubEncoder.lean` (`SetupCheck` … `PubAuditSecure`) and
+`Security/Definitions/Pous/Accounting/PubMeets.lean` (`PubMeets`), as this file planned. Only `Scheme.EncDec`,
 which no pinned statement reads, stays here. Every file that imported this one builds unchanged, because the names and
 terms are the same.
 -/

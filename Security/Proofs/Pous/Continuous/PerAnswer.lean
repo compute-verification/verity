@@ -10,7 +10,7 @@ import Proofs.Pous.Continuous.Verifier
 # The continuous audit from `TimedINC`: `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`
 
 The proofs of both guarantees, pinned as `Pous.SecurityProofs.PerAnswer` and `Pous.SecurityProofs.ContinuousAudit`,
-over the memory challenger of `verity/Security/Definitions/Pous/Model/Continuous.lean`. Neither uses a hypothesis about
+over the memory challenger of `Security/Definitions/Pous/Model/Continuous.lean`. Neither uses a hypothesis about
 the responder's timing. The memory challenger's rules enter through `Continuous/Verifier.lean`: each round's record
 depends only on the indices up to its own (`contRecords_ofFn`), and a hit returned the right block within `(D, Q)`
 (`hit_on_time`).

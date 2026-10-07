@@ -27,7 +27,7 @@ import Definitions.Pous.Model.Continuous
 # Guarantees
 
 The statements `grade.sh` grades against. A submission proves exactly one of them, as
-`theorem solution : Pous.Guarantees.<Name>`. Named assumptions (`verity/Security/Models/Pous/Assumptions.lean`) appear as
+`theorem solution : Pous.Guarantees.<Name>`. Named assumptions (`Security/Models/Pous/Assumptions.lean`) appear as
 hypotheses of the pinned `Prop`, never as axioms. "Pinned as drafted" means the binders and conclusion are the draft's,
 verbatim.
 -/
@@ -515,7 +515,7 @@ def DenseMeets : Prop :=
 /-! ### P3 with a concrete `H`: the overwrite chain on `Π₂` (`Definitions.Pous.Model.P3Chain`)
 
 Added on 28 Sep 2026. Accepted on 29 Sep 2026: red team GO. The proofs are in this package
-(`Pous.SecurityProofs.P3Concrete*`, from `verity/Security/Proofs/Pous/Chain/Flat.lean`).
+(`Pous.SecurityProofs.P3Concrete*`, from `Security/Proofs/Pous/Chain/Flat.lean`).
 
 The model is `Pous.Sponge.p3ChainModel 220 2384`: a tweakable ideal permutation `P` of 64 KB labels (an independent
 uniform permutation per tweak `(tag, layer, node)`) and an untweaked ideal permutation `Π₂` of `2·524480 + 512` bits,
@@ -566,7 +566,7 @@ def P3ConcreteMeets64D12 : Prop :=
 Added on 29 Sep 2026. Red team: `bc-22298e90-fd61-5062-a836-0b7a423cab8a`, GO
 (`docs/lean-trusted-layer-review.md` §§52–57). The proofs
 are in this package (`Pous.SecurityProofs.Band*`, `Pous.SecurityProofs.ChainDense*`, from
-`verity/Security/Proofs/Pous/Chain/Flat.lean`), and each was graded PASS
+`Security/Proofs/Pous/Chain/Flat.lean`), and each was graded PASS
 (`lean/submissions/sponge-dense/grading/GRADE.txt`).
 
 The model is `Pous.Sponge.idealPerm (2·524288 + 512)`: one uniform permutation `Π₂` of `1049088` bits, queried both
@@ -656,7 +656,7 @@ Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z; `D = 0` approved 3 
 statement is a band pin above with only the round budget `D`, the challenge count `k` and the
 bound on the in-degree `d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there (`D = 0` puts no
 bound on `d`, since the responder makes no `Π₂` call). The proofs are
-`verity/Security/Proofs/Pous/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D`
+`Security/Proofs/Pous/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D`
 and `k` as parameters. -/
 
 /-- **Unconditional: the band store at `D = 2` rounds and `k = 97`, at every segment count from 1 to 2^64.**
@@ -760,7 +760,7 @@ def BandPubMeets14Global : Prop :=
 `BandMultiMeetsFamily` with an untrusted server encoding the data (`PubMeets ↔ Meets` at every `N`: `band_pub_iff_seg`,
 `band_pub_iff_seg_global`), under the same four deployment conditions (§48). At `N = 448` it is `BandPubMeets14` and
 `BandPubMeets14Global`. Added on 3 Oct 2026. Proof:
-`PousPub.band_pub_meets_family_final` (`verity/Security/Proofs/Pous/Chain/PubFamily.lean`); here
+`PousPub.band_pub_meets_family_final` (`Security/Proofs/Pous/Chain/PubFamily.lean`); here
 `Pous.SecurityProofs.BandPubMeetsFamily`. -/
 def BandPubMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
@@ -775,7 +775,7 @@ def BandPubMeetsFamily : Prop :=
 1 to 2^64.** `BandPubMeetsFamily` at `D = 2` and `k = 97`, for every `d ≥ 2`: it is `BandMultiMeetsFamilyD2` with an
 untrusted server encoding the data and the exact check (`PubMeets ↔ Meets` at every `N`), both domain layouts, under
 the same four deployment conditions (§48). Added on 3 Oct 2026. Proof:
-`PousPub.band_pub_meets_family_d2` (`verity/Security/Proofs/Pous/Chain/PubRounds.lean`); here
+`PousPub.band_pub_meets_family_d2` (`Security/Proofs/Pous/Chain/PubRounds.lean`); here
 `Pous.SecurityProofs.BandPubMeetsFamilyD2`. -/
 def BandPubMeetsFamilyD2 : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 2 ≤ d →
@@ -822,7 +822,7 @@ def ChainDenseMeets111 : Prop :=
 /-! ### The band with grace `t` (`Definitions.Pous.Model.Graded`, `Definitions.Pous.Accounting.GradedMeets`)
 
 Added on 3 Oct 2026 (PR #905). The game's requirements on the protocol are in
-`verity/Security/Definitions/Pous/Model/Graded.lean` and `PROTOCOL.md`, "The graded audit". -/
+`Security/Definitions/Pous/Model/Graded.lean` and `PROTOCOL.md`, "The graded audit". -/
 
 /-- **Unconditional: the band store with up to `t` late answers, at every segment count from 1 to 2^64.** For every `N`
 with `1 ≤ N ≤ 2^64`, every `d ≥ 5`, every hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` and
@@ -842,7 +842,7 @@ on `D_late` are `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. That window argum
 `Π₂` calls, so they hold in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes
 nothing, rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call (red team, 4 Oct 2026,
 art:7617c8017e80). The statement itself is about the ideal model and is unaffected. Proof:
-`PousGraded.band_graded_meets_family` (`verity/Security/Proofs/Pous/Graded/Band.lean`); here
+`PousGraded.band_graded_meets_family` (`Security/Proofs/Pous/Graded/Band.lean`); here
 `Pous.SecurityProofs.BandGradedMeetsFamily`. -/
 def BandGradedMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
@@ -861,7 +861,7 @@ Added on 3 Oct 2026. Red team: needed. The memory challenger enforces the three 
 rules: it reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts
 every answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and
 both hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
-(`verity/Security/Definitions/Pous/Model/Continuous.lean`).
+(`Security/Definitions/Pous/Model/Continuous.lean`).
 -/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
@@ -935,7 +935,7 @@ cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its fi
 consecutive held labels restart the chain, so two held runs (10 labels, 2.0% of the segment) at `d = 5`, or four
 (48 labels, 9.4%) at `d = 12`, let a prover re-encode a whole segment within the cap. That gap between the storage held
 at rest and what is present when a challenge arrives is not bounded here. Proof: `PousRebuild.background_rebuild_excluded`
-(`verity/Security/Proofs/Pous/Rebuild/`); here `Pous.SecurityProofs.BackgroundRebuildExcluded`. -/
+(`Security/Proofs/Pous/Rebuild/`); here `Pous.SecurityProofs.BackgroundRebuildExcluded`. -/
 def BackgroundRebuildExcluded : Prop :=
   Pous.Rebuild.rebuildCalls (2 ^ 9) 5 = 3057 ∧ Pous.Rebuild.rebuildCalls (2 ^ 9) 12 = 6578 ∧
   (∀ d : ℕ, 5 ≤ d → 3057 ≤ Pous.Rebuild.rebuildCalls (2 ^ 9) d) ∧
@@ -953,7 +953,7 @@ def BackgroundRebuildExcluded : Prop :=
 /-! ### Completeness of the continuous audit
 
 Added on 3 Oct 2026. Red team: needed. `ContinuousAudit` bounds what the memory challenger
-of `verity/Security/Definitions/Pous/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same memory
+of `Security/Definitions/Pous/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same memory
 challenger rejects, for a responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q`
 is a parameter.
 -/
@@ -1006,7 +1006,7 @@ def ContinuousComplete : Prop :=
 
 Added on 3 Oct 2026. Red team: needed. The memory challenger of `ContinuousAudit`,
 unchanged, run on arrivals it draws itself: one coin per slot of one unit
-(`verity/Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals drawn by the memory challenger"). Arrivals queue
+(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals drawn by the memory challenger"). Arrivals queue
 behind an open round (rule 1). The memory is read at every idle slot, not only at send times, and the bound is
 normalized by the expected number of challenges `λT`, not the realized one. -/
 
@@ -1024,7 +1024,7 @@ fraction of the `T` slots (Markov).
 
 This is an average over the idle slots, not over the whole period: it does not bound the explorer's
 `ε̄ = (1/T)·Σ_t ε_t`. The memory is not read at a busy slot, and the responder chooses which slots are busy
-(`verity/Security/Definitions/Pous/Model/Continuous.lean`, "The responder chooses the busy slots"). In an accepted run
+(`Security/Definitions/Pous/Model/Continuous.lean`, "The responder chooses the busy slots"). In an accepted run
 off the event, with `0 < a` and `ε_proof ≥ 0`, `ε̄ ≤ ε_proof + g + (busy slots)/T` whatever the memory at a busy slot,
 and a responder that pads every hit to `D` units makes about 2.5% of the slots busy at `D = 2` and 9.9% at `D = 5`
 (100 challenges/s on 241.5 µs slots) without a miss. Neither is proved here. `a ≤ b` keeps `a/b` a probability,

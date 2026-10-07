@@ -10,7 +10,7 @@ schedule. The compression certificate is the one `BandChainMeets64` uses, `Timed
 unconditional `chainExPostFactoG_v6`, and its `π` is at most `2·2^-1128` (`chainPiSeg_fam_le`, as
 `seg_union_term_one` uses it). So `ε_proof = 1 − (β − B)/|C| = 3182352/2^28 ≈ 1.1855%` (`band64_epsProof`), and the
 stopped union costs `n·(β + 1)·π ≤ n·2^-1098`. The scope is the continuous audit's
-(`verity/Security/Definitions/Pous/Model/Continuous.lean`): conditional on the arrivals, storage at send times, and `g`
+(`Security/Definitions/Pous/Model/Continuous.lean`): conditional on the arrivals, storage at send times, and `g`
 normalized by the realized number of challenges, never `λT`.
 -/
 
