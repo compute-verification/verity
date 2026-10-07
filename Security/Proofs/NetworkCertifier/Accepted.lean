@@ -1,5 +1,6 @@
 import Properties.Proofs.NetworkCertifier.Run
 import Proofs.NetworkCertifier.Code
+import Proofs.NetworkCertifier.Schedule
 
 /-!
 # An accepted run is a run of the certifier program (5b)
@@ -9,6 +10,9 @@ import Proofs.NetworkCertifier.Code
 program's `expectedRow` being the reference's (`CodeExpectedRow`). The declared syncs are one value of Σ_sync per window,
 the same on every link (the check's `advice` and one-clock tests, through `acceptsIff`), so they are advice of the
 reference's constant-rate Program, and the device's rows and statuses are what its `Accepted` asks.
+
+`EncardAcceptedObservationsLe` follows: accepted runs' observation sequences are among Theorem 3's `AccSeqs` of that
+Program, so they number at most `#Ac · |Σ_sync|^W · D^(W·T)` (`NetTiming.encard_accSeqs_le_constantRate`).
 -/
 
 open NetworkCheck hiding Params
@@ -61,5 +65,14 @@ theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
     rw [es]
     exact ⟨hd.symm, hr.symm⟩
   · exact Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact ht)
+
+theorem encardAcceptedObservationsLe : EncardAcceptedObservationsLe := by
+  intro p K In Ac _ ss frames op linkOf D hdel hrho hlink
+  refine le_trans (Set.encard_le_encard ?_)
+    (NetTiming.encard_accSeqs_le_constantRate (S := p.grid.allocation) p.grid.buckets p.windows ss frames op _ D)
+  rintro o ⟨hlen, hjit, c, e, dev, eg, ig, a, hacc, hpd, hhon, hcr, hlms, hrows, hstat, hfr⟩
+  obtain ⟨σ, -, hA⟩ := acceptedRunsAreProgramRuns p c e dev eg ig ss frames a op o linkOf hacc hpd hhon hcr hlms
+    hdel hrho hlen hrows hstat hlink hfr
+  exact ⟨hlen, hjit, (a, σ), hA⟩
 
 end Proofs.NetworkCertifier

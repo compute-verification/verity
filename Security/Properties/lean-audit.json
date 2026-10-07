@@ -40,7 +40,7 @@
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "Models.Core.Assumptions", "Definitions.NetworkCertifier"],
+   "imports": ["NetworkCheck.Check", "Models.Core.Assumptions", "Definitions.NetworkCertifier", "Mathlib.Data.Set.Card"],
    "except": [],
    "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
   }
@@ -279,6 +279,9 @@
    "signature": ["Properties.Pouw.Window.windowCreditsTheCalls : Properties.Pouw.Window.WindowCreditsTheCalls"],
    "assumptions": [],
    "type_hash": "52fab289d105e851e1d4ccdee06d7c06029873beb28f59d7a8b84e754a4df0d0"
+  },
+  "Proofs.NetworkCertifier.encardAcceptedObservationsLe": {
+   "owner": "@network-accounting"
   }
  },
  "reads": {

@@ -1,6 +1,7 @@
 import NetworkCheck.Check
 import Models.Core.Assumptions
 import Definitions.NetworkCertifier
+import Mathlib.Data.Set.Card
 
 /-!
 # The network certificate check: what its Lean code (`NetworkCheck.Check`) does
@@ -11,7 +12,7 @@ link-window and what an undecided outcome means, that the honest transcript is a
 under SHA-512's collision resistance and LMS's unforgeability: a run of the certifier program under the declared advice.
 Each is a `Prop`; `Properties.Proofs.NetworkCertifier` proves the ones about the code, and
 `Proofs.NetworkCertifier.Accepted` (in `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) the
-last, `AcceptedRunsAreProgramRuns`.
+last two, `AcceptedRunsAreProgramRuns` and the count it gives, `EncardAcceptedObservationsLe`.
 
 The predicates below say what a link-window's records, certificate and digests are, in the check's own terms; none
 restates the check. A link-window is a direction, a link of the unit in that direction and a window `w < W`.
@@ -322,5 +323,38 @@ def AcceptedRunsAreProgramRuns : Prop :=
         ∃ s, link.syncs[w.1]? = some s ∧ (σ w).1.1 = s.delta ∧ (σ w).2.1 = s.rho) ∧
       NetTiming.Accepted (NetTiming.constantRate (S := p.grid.allocation) p.grid.buckets p.windows ss frames) op
         (p.windows * p.grid.buckets) o (a, σ)
+
+/-- The observation sequences of accepted runs, with jitter classes below `D`: each is the `W·T` buckets' rows and
+statuses of an honest device whose unit the check accepted under the run's assumptions, read through `linkOf` as in
+`AcceptedRunsAreProgramRuns`, whose opened frames are `frames` of the operator's ingress and some advice `a`. -/
+def AcceptedObservations (p : Params) {K : Nat} {In Ac : Type}
+    (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame)
+    (op : Nat → List (NetTiming.Obs p.egress.size K p.grid.allocation) → In) (linkOf : Fin K → Direction × String)
+    (D : Nat) : Set (List (NetTiming.Obs p.egress.size K p.grid.allocation)) :=
+  {o | o.length = p.windows * p.grid.buckets ∧ (∀ x ∈ o, x.jitter < D) ∧
+    ∃ (c : Commitment) (e : Evidence) (dev : Device p) (eg ig : ByteArray) (a : Ac),
+      protocol.Accepts p c e ∧ ParamsDigests p eg ig ∧ Honest p dev eg ∧
+      Verity.Assumptions.Sha512CollisionFreeOn Flock.Sha512.hash (RunStrings p c e dev eg) ∧
+      Verity.Assumptions.LmsEufCma (runAccepts p c) (Signed dev) ∧
+      (∀ t (ht : t < o.length), o[t].rows = fun ℓ => dev.rows ℓ t) ∧
+      (∀ t (ht : t < o.length) κ,
+        o[t].status κ = .complete ↔ dev.status (linkOf κ).1 (linkOf κ).2 (t / p.grid.buckets) = none) ∧
+      (∀ t < p.windows * p.grid.buckets, ∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link →
+        (frames (NetTiming.ingressUpTo op o t) a ℓ).map (fun f => (f.payload, f.anchor, f.index)) =
+          link.frames.map (fun f => (f.payload, f.anchor, f.index)))}
+
+/-- **What accepted runs can carry (Theorem 3 for the check).** Over every accepted run under the hypotheses of
+`AcceptedRunsAreProgramRuns`, the device's content is a function of the frames and the per-window sync advice
+`Fin W → Σ_sync`, so the accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`
+(`ss.size = |Σ_sync|`): `NetTiming.Guarantees.EncardAccSeqsLeConstantRate` with `n = W·T`. -/
+def EncardAcceptedObservationsLe : Prop :=
+  ∀ (p : Params) {K : Nat} {In Ac : Type} [Fintype Ac] (ss : NetTiming.SyncSet)
+    (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame)
+    (op : Nat → List (NetTiming.Obs p.egress.size K p.grid.allocation) → In) (linkOf : Fin K → Direction × String)
+    (D : Nat),
+    (∀ δ, δ ∈ p.syncSet.deltas ↔ δ ∈ ss.deltas) → (∀ ρ, ρ ∈ p.syncSet.rhos ↔ ρ ∈ ss.rhos) →
+    (∀ κ, (linkOf κ).2 ∈ linkNames p (linkOf κ).1) →
+    (AcceptedObservations p frames op linkOf D).encard ≤
+      ((Fintype.card Ac * ss.size ^ p.windows * D ^ (p.windows * p.grid.buckets) : ℕ) : ℕ∞)
 
 end Properties.NetworkCertifier
