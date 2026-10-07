@@ -325,6 +325,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let zk := args.contains "--zk"
   if zk && (argOf args "--coins").isSome then
     IO.eprintln "verify --zk: a --zk session's coins are its keyed coin tree, so --coins (a plain session's) does not apply"; return 2
+  if tags.plainLeaves then
+    IO.eprintln s!"verify: refused: {tags.name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): a form the soundness proof does not cover yet"
+    return 2
   let coins := if zk then Coins.tree (Zk.coinSpec (tags.tableNames count))
     else if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let tags := tags.withCoins coins
