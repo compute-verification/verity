@@ -73,12 +73,13 @@ def arrive (l : Link) (position anchor index : Nat) (ready : Int) : Link := Id.r
                     ready := l.ready.push r }
   return l
 
-/-- `_Link.see`: extend the seen prefix to the frames ready by `bucket`. (Python refuses a frame ready no later than its
-anchor's bucket; a device whose clock is monotone never reads one.) -/
-def see (l : Link) (bucket : Int) : Link := Id.run do
+/-- `_Link.see`: extend the seen prefix to the frames ready by `bucket`, refusing, as Python raises `ValueError`, a frame
+ready no later than its anchor's bucket. -/
+def see (l : Link) (bucket : Int) : Except String Link := do
   let mut l := l
   for k in [l.seen:l.ready.size] do
     if l.ready[k]! ≤ bucket then
+      if (l.anchor[k]! : Int) ≥ l.ready[k]! then throw "a frame is ready only after its anchor's bucket"
       let w := l.anchor[k]! / l.T
       l := { l with positions := l.positions.insert w ((l.positions.getD w #[]).push k), seen := k + 1 }
     else break
@@ -196,10 +197,11 @@ def summarize (p : Prover) (u frames : Nat) : Past := Id.run do
   let own := p.syncs[u]?.getD p.envelope
   return ⟨u, own, frames, (cost own).isNone, frontier⟩
 
-/-- `Prover.declare`: the next window's sync, from the frames ready by its first bucket and the earlier declarations. -/
-def declare (p : Prover) : Prover × ClockSync := Id.run do
+/-- `Prover.declare`: the next window's sync, from the frames ready by its first bucket and the earlier declarations;
+refused where `see` refuses a frame. -/
+def declare (p : Prover) : Except String (Prover × ClockSync) := do
   let w := p.syncs.size
-  let p := { p with link := p.link.see (w * p.T : Nat) }
+  let p := { p with link := ← p.link.see (w * p.T : Nat) }
   let mut seen := #[]
   for u in [w - p.rule.k:w] do
     let n := p.link.count u

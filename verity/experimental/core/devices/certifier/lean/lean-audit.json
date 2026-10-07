@@ -7,11 +7,11 @@
  },
  "runs": {
   "CertifierDevice.DifftestMain": {
-   "why": "1,500 traces on which step, replayed from init, does what the checkout's active.Proxy does driven event by event: every link write, server connection, server write and its drain, and published record with its grid's parameters, in order, and at the end the declared syncs, the shaper's hand times, the egress frames read and both counts; honest traces accepted with egress grids equal to NetworkCertifier.expectedRow's, and every fault reason (late ticks and stalls, backlogs, refused and late forwards, overflow on either grid, advice outside Σ_sync, the malformed inputs) and the online prover",
+   "why": "1,500 traces on which step, replayed from init, does what the checkout's active.Proxy does driven event by event: every link write, server connection, server write and its drain, and published record with its grid's parameters, in order, and at the end the declared syncs, the shaper's hand times, the egress frames read and both counts; honest traces accepted with egress grids equal to NetworkCertifier.expectedRow's, and every fault reason (late ticks and stalls, backlogs, refused and late forwards, overflow on either grid, advice outside Σ_sync, the malformed inputs), the online prover, and its refusal of a frame ready before its anchor, which crashes the proxy",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1500"],
    "data": {
-    "difftest/instances.jsonl": "dc932f86c0da343ed3198694c1787c801d7c38e2929c742c7dab5d8b9e805b94",
-    "difftest/python.jsonl": "6f9e2c91d07eb8305ac684cd88927a9ca314f332ba8be3dd3bbdc67f790042c5"
+    "difftest/instances.jsonl": "a1996af88b3f5557e4ed460b115d3337791b4f627f0a0922e18da1a9bf1ca006",
+    "difftest/python.jsonl": "1dcc0fbc48f3ef982497c148fb0c03d464cb5c128d23169bfd6967b8b21c59a3"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },

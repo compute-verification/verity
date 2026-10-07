@@ -8,11 +8,11 @@ import Lean.Data.Json
 `active.Proxy` does on each, driven event by event in a world the script holds. `CertifierDevice/DifftestMain.lean`
 reads both files and fails unless `evaluate`, which replays each trace through `step` from `init`, gives every result
 exactly: each action in order (a link write's bytes, a connection, a server write's bytes and whether it waits for its
-drain, a record's link, window, grid and status with its grid's parameters), and at the end the declared syncs, the
-shaper's hand times, the log of egress frames read and the two counts. On an honest trace, which carries the Program's
-frames, it also fails unless every record is complete and each egress record's grid is `NetworkCertifier.expectedRow`'s
-under the syncs `step` declared. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and
-not a proof.
+drain, a record's link, window, grid and status with its grid's parameters, a crash's reason), and at the end the
+declared syncs, the shaper's hand times, the log of egress frames read and the two counts. On an honest trace, which
+carries the Program's frames, it also fails unless every record is complete and each egress record's grid is
+`NetworkCertifier.expectedRow`'s under the syncs `step` declared. The Lean audit runs it (`runs` in `lean-audit.json`):
+compiled evaluation, a test and not a proof.
 -/
 
 namespace CertifierDevice.Difftest
@@ -112,6 +112,7 @@ def actionJson : Action → Json
   | .connect s => .arr #[.str "connect", toJson s]
   | .writeUpstream s b drain => .arr #[.str "upstream", toJson s, hexJson b, toJson drain]
   | .publish r p => .arr #[.str "publish", recordJson r, paramsJson p]
+  | .crash reason => .arr #[.str "crash", .str reason]
 
 /-- The bits of a frame's bytes, most significant first: the payload `NetworkCertifier`'s Program carries. -/
 def bitsOf (b : ByteArray) : List Bool := b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit (7 - i)
@@ -165,14 +166,18 @@ def evaluate (j : Json) : Except String (String × Json) := do
 /-- The results' fields, in the order they are compared. -/
 def fields : List String := ["actions", "syncs", "hands", "frames", "link_frames_read", "requests_released"]
 
-/-- A run's outcome: accepted, or the reasons its records name. -/
+/-- A run's outcome: accepted, the reasons its records name, or a crash, after the reasons published before it. -/
 def outcome (results : Json) : String :=
-  let reasons := ((results.getObjValD "actions").getArr?.toOption.getD #[]).toList.filterMap fun a =>
+  let actions := ((results.getObjValD "actions").getArr?.toOption.getD #[]).toList
+  let reasons := actions.filterMap fun a =>
     match a with
     | .arr #[.str "publish", r, _] => match r.getObjValD "status" with | .str x => some x | _ => none
     | _ => none
   let distinct := reasons.foldl (fun acc x => if acc.contains x then acc else acc ++ [x]) []
-  if distinct.isEmpty then "accepted" else ",".intercalate (distinct.mergeSort (· ≤ ·))
+  let crashed := actions.any fun a => match a with | .arr #[.str "crash", _] => true | _ => false
+  let faults := ",".intercalate (distinct.mergeSort (· ≤ ·))
+  if crashed then (if distinct.isEmpty then "crash" else s!"crash after {faults}")
+  else if distinct.isEmpty then "accepted" else faults
 
 /-- How the Lean side's results for instance line `i` differ from Python's, and the instance's path and outcome. -/
 def differences (i : Nat) (inst python : String) : List String × String :=

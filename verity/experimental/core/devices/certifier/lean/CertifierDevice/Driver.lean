@@ -14,8 +14,8 @@ sends what it read, with the clock's reading, to one channel; so does each conne
 in order, and when a grid's tick is due (`origin + t·τ`) it ticks it with the clock's reading then and, on egress, the
 link's backlog. It performs each action as the device returns it: a write with `drain` is delivered once the write
 returns. It closes a stream's connection when it takes the read that ends it, as `active.py` closes its writer then, and
-when both grids have run all their ticks it closes the connections still open and the link, as `Proxy.run` does, and
-returns.
+when both grids have run all their ticks, or the device crashes, it closes the connections still open and the link,
+as `Proxy.run`'s `finally` does, and returns, or throws the crash's reason as `Proxy.run` raises it.
 -/
 
 namespace CertifierDevice
@@ -50,6 +50,7 @@ def run (w : Core.World Out) (c : Config) : IO Unit := do
   let mut st := init c
   let mut conns : Std.HashMap Nat Conn := {}
   let mut queue : Array Event := #[]
+  let mut crashed := none
   while !st.done do
     let ev? ← if h : 0 < queue.size then
         let ev := queue[0]
@@ -98,7 +99,9 @@ def run (w : Core.World Out) (c : Config) : IO Unit := do
           conn.write bytes
           if drain then queue := queue.push (.delivered s (← w.clock))
       | .publish record params => w.publish (record, params)
+      | .crash reason => crashed := some reason
   for (_, conn) in conns do conn.close
   w.link.close
+  if let some reason := crashed then throw (IO.userError reason)
 
 end CertifierDevice
