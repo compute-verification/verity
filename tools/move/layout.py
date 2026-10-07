@@ -704,11 +704,6 @@ class Run:
         common = 0
         while common < min(len(new_dirs), len(tparts)) and new_dirs[common] == tparts[common]:
             common += 1
-        if not segs:
-            if common < len(tparts):
-                self.note("anchors not recomputed", f"{where}: {m.group(0)} (was {anchor or 'the root'})")
-                return m.group(0)
-            common = len(tparts)
         new_up = len(new_dirs) - common
         rest = tparts[common:]
         r = m.group("r") or ""
@@ -716,6 +711,8 @@ class Run:
             f"{m.group('head')}{r}" + ".parent" * (new_up + 1)
         q = m.group("q") or '"'
         out = base + "".join(f" / {q}{s}{q}" for s in rest)
+        if not segs and rest:
+            out = f"({out})"                        # the file left the directory it anchored at: join its way back
         if out == m.group(0) or (new_up == up and rest == segs):
             return m.group(0)
         self._count(where, "anchors")
