@@ -1263,7 +1263,7 @@ def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict |
 
 
 def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
-    from . import slack
+    from verity_ops import slack
 
     reg = slack.load_registry(slack.registry_path())
     api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)

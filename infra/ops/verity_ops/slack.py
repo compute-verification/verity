@@ -68,7 +68,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 try:
-    from .timefmt import both, slack_dates
+    from research.timefmt import both, slack_dates
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), timezone.utc):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
@@ -1266,7 +1266,7 @@ def publish_route(root: Path, r: dict, message: str) -> str:
     """Write `routes.d/<name>.json` in the notes clone at `root` and push it: the line `notes sync` printed."""
     if not (root / ".git").exists():
         try:
-            from . import notes_sync
+            from research import notes_sync
             notes_sync.ensure_clone(root)
         except ImportError:
             pass
@@ -1278,7 +1278,7 @@ def publish_route(root: Path, r: dict, message: str) -> str:
     p.write_text(json.dumps(r, indent=2) + "\n")
     rel = f"{ROUTES_DIR}/{r['name']}.json"
     try:
-        from . import notes_sync
+        from research import notes_sync
     except ImportError:                                             # a single file: plain git
         for args in (["add", rel], ["commit", "-q", "-m", message, "--", rel], ["pull", "-q", "--rebase", "--autostash"], ["push", "-q"]):
             out = __import__("subprocess").run(["git", "-C", str(root), *args], capture_output=True, text=True)

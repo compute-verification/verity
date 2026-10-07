@@ -21,7 +21,7 @@
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
-                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
+                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (`ops keeper`, verity_ops/keeper.py)
   research compare <original>... <replay> [--expect E] [--json]
                                                  # the replay's verdict from the store (same | within-band | differs | expected-change);
                                                  # --dirs: two run dirs' differences and ratios, which the workload contract judges
@@ -55,9 +55,9 @@
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
-                                                 # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
+                                                 # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (`ops doctor`, verity_ops/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
-                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
@@ -72,7 +72,7 @@
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
   research msg send|close|list|read|names|subscribe|traffic|ask-daniel|... [--dry-run]
-                                                 # messages between agents, on Slack (`research slack` too; research/slack.py; skill using-slack)
+                                                 # messages between agents, on Slack (`research slack` too; `ops msg`, verity_ops/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -1341,6 +1341,21 @@ def cmd_usage(argv: list[str]) -> int:
     return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
 
 
+OPS_COMMANDS = ("doctor", "keeper", "deploy", "msg", "slack")
+OPS_SRC = Path(__file__).resolve().parents[4] / "infra" / "ops"
+
+
+def hand_to_ops(cmd: str, rest: list[str]) -> int:
+    """`research doctor|keeper|deploy|msg|slack ...` is `ops ...` (infra/ops), exec'd in this interpreter with this tree's
+    infra/ops first on its path, so a venv synced before verity-ops existed still runs it. research never imports it."""
+    env = dict(os.environ)
+    if (OPS_SRC / "verity_ops" / "cli.py").is_file():
+        env["PYTHONPATH"] = str(OPS_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execve(sys.executable, [sys.executable, "-m", "verity_ops", cmd, *rest], env)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
@@ -1355,6 +1370,8 @@ def main(argv: list[str] | None = None) -> int:
 
     recover()
     cmd, rest = argv[0], argv[1:]
+    if cmd in OPS_COMMANDS:
+        return hand_to_ops(cmd, rest)
     if cmd == "run":
         return cmd_run(rest)
     if cmd == "status":
@@ -1371,10 +1388,6 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
-    if cmd == "doctor":
-        from .doctor import main as doctor_main
-
-        return doctor_main(rest)
     if cmd == "disk-hold":
         from .disk import main as disk_main
 
@@ -1403,18 +1416,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(rest)
-    if cmd == "keeper":
-        from .keeper import main as keeper_main
-
-        return keeper_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
         return pods_main(rest)
-    if cmd == "deploy":
-        from .deploy import main as deploy_main
-
-        return deploy_main(rest)
     if cmd == "monitors":
         from .monitors import main as monitors_main
 
@@ -1443,10 +1448,6 @@ def main(argv: list[str] | None = None) -> int:
         from .commitmap import main as git_main
 
         return git_main(rest)
-    if cmd in ("msg", "slack"):
-        from .slack import main as slack_main
-
-        return slack_main(rest, prog=f"research {cmd}")
     if cmd == "usage":
         return cmd_usage(rest)
     age = checkout_age()

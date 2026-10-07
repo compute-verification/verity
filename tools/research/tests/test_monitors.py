@@ -281,7 +281,7 @@ def test_the_command_line_lists_and_rejects_unknown_ids(capsys):
 
 
 def test_every_monitor_names_an_owner_a_severity_an_action_and_what_it_checks():
-    from research import slack
+    from verity_ops import slack
 
     handles = {h["handle"] for h in slack.load_registry(slack.registry_path())["handles"]}
     assert set(M.HANDLES) <= handles
@@ -802,7 +802,7 @@ def test_a_source_that_cant_be_read_is_logged_and_the_next_source_still_posts():
 def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None) -> list:
     """slack_post's Slack: `_post` records (channel, the text's first line, thread) unless `fail(channel, thread)` returns an
     error to raise; chat.getPermalink raises `permalink` when given."""
-    from research import slack as S
+    from verity_ops import slack as S
     posts = []
 
     class Api:
@@ -833,7 +833,7 @@ def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None) -> lis
 
 
 def test_an_alert_whose_pointer_fails_is_posted_once_and_its_pointer_once_slack_takes_it(monkeypatch):
-    from research import slack as S
+    from verity_ops import slack as S
     left = [2]
 
     def fail(ch, thread):
@@ -853,7 +853,7 @@ def test_an_alert_whose_pointer_fails_is_posted_once_and_its_pointer_once_slack_
 
 
 def test_a_clear_into_a_deleted_thread_is_a_post_of_its_own(monkeypatch, capsys):
-    from research import slack as S
+    from verity_ops import slack as S
     posts = fake_slack(monkeypatch, lambda ch, thread: thread and S.SlackError("conversations.replies: thread_not_found"))
     src, rstate = FakeSource("node1"), {}
     M.relay_pass(rstate, [src], M.slack_post(False), T0)
