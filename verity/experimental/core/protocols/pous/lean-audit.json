@@ -1,5 +1,19 @@
 {
  "roots": ["PousCheck"],
+ "exempt": {
+  "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof"
+ },
+ "runs": {
+  "PousCheck.DifftestMain": {
+   "why": "generated instances on which PousCheck's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths)",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "400"],
+   "data": {
+    "difftest/instances.jsonl": "4acab31060b049d30b81ad131bf60b51d65edddf562fa13f79b7d8957bad4804",
+    "difftest/python.jsonl": "327eebfd3af3eff997026655c6808634574123a16132070d8bd97d81e566c1f5"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
  "layers": {
   "PousCheck": {
    "imports": ["PousCheck", "Flock"],
@@ -8,6 +22,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "c294f2a04d5984ba7be879bb0074fc8a4db0da2b7bc5dc8673e7fe8d09dd640a"
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
  }
 }
