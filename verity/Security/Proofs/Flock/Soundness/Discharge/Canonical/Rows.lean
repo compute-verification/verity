@@ -40,7 +40,7 @@ variable {W : ℕ}
 /-- **A canonical row's value**: a width `ℓ < 2^64` (a u64 bit length) and no bit set past it. -/
 def CanonShaped (v : BitVal W) : Prop := v.1.val < 2 ^ 64 ∧ ∀ i : Fin W, v.1.val ≤ i.val → v.2 i = false
 
-instance : DecidablePred (CanonShaped (W := W)) := fun _ => inferInstanceAs (Decidable (_ ∧ _))
+instance instDecidablePredBitValCanonShaped : DecidablePred (CanonShaped (W := W)) := fun _ => inferInstanceAs (Decidable (_ ∧ _))
 
 /-- A value's `ℓ` bits. -/
 def rowBitsOf (v : BitVal W) : List Bool := List.ofFn fun i : Fin v.1.val => Layout.BitVal.get v i.val
