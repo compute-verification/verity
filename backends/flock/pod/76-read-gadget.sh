@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The hidden-read kill experiment (read_gadget.py): GemmCoordinate<K> class statements with and without two hidden Merkle reads
-# a VU, each proved in loopback --zk sessions on the CPU under /usr/bin/time, every case with the same instances, cores and
+# a template instance, each proved in loopback --zk sessions on the CPU under /usr/bin/time, every case with the same instances, cores and
 # session counts; then Lean's flock-verify on each case's last session. Run from the verity tree (research run --cwd source);
 # CPU only. Outputs under out/ (flat): host.txt, check.json, stage-<case>.json, statement-<case>.txt, live.tsv (one LIVE record
 # per proof: case, json), time-{prove,serve}-<case>.txt (peak RSS and wall time), prove-/serve- logs, lean-<case>.log and

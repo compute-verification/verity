@@ -10,8 +10,9 @@
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order.
 5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
-   source is the epoch's draw coin, which the challenger opens after the verifier recorded the transcript.  `Lottery`: the
-   tiles whose digest, read little-endian, is at most ``target·|rows|·|cols|·k`` (Pearl's mining rule).  The prover opens
+   source is the epoch's draw coin, which the challenger opens after the verifier recorded the transcript.  Served
+   accounting uses only this sampled audit.  `Lottery` is Pearl's mining rule, not one of the audit's laws, and stays
+   unwired: the tiles whose digest, read little-endian, is at most ``target·|rows|·|cols|·k``.  The prover opens
    each selected tile's strips and leaf; the verifier recomputes the tile through the scheme.
 6. **Profile.**  When every selected tile passes, `WorkProfile` states what that establishes.
 
