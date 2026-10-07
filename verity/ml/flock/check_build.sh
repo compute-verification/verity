@@ -10,7 +10,7 @@
 # RUST_TOOLCHAIN (default the pin below, installed through rustup when missing: a machine's default toolchain doesn't decide it,
 # and an agent VM's, 1.83, can't parse upstream's edition-2024 manifests)
 set -euo pipefail
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 F=${FLOCK_CHECKOUT:-$HOME/.cache/verity/flock-b684b12}
 RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}
 export PATH="$HOME/.cargo/bin:$PATH"

@@ -108,7 +108,7 @@ def test_every_suite_input_and_artifact_is_in_this_tree():
     """A suite's inputs key its pass cache: one that isn't there keys nothing, and a test that skips on a missing file then
     passes with nothing checked. An artifact is a Lake build's output, so its package must be here."""
     tables = _suite_tables()
-    assert "verity/pyproject.toml" in tables
+    assert "verity/ml/circuits/pyproject.toml" in tables
     bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)]
     bad += [(f, a) for f, t in tables.items() for a in t.get("artifacts", [])
             if not (ROOT / a.split("/.lake/")[0] / "lakefile.toml").is_file()]
@@ -271,9 +271,9 @@ def test_each_check_catches_a_dangling_path():
 
     from research.store.tool import Tool
 
-    tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/ml/flock/live/**", "verity/**"],
+    tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/ml/flock/live/**", "elsewhere/**"],
                 after_land=["python", "tools/verity/check/x.py"], merge_requires={"s": ["verity/flock/"]})
-    assert tool_problems("t", tool, files) == ["closure glob 'verity/**' matches no tracked file",
+    assert tool_problems("t", tool, files) == ["closure glob 'elsewhere/**' matches no tracked file",
                                                "command names 'verity/ml/flock/run.sh', which isn't tracked",
                                                "merge_requires['s'] prefixes ['verity/flock/'] match no tracked file"]
     gkr = frozenset({"archive/gkr/gpu/tool.py", "archive/gkr/gpu/run.py"})
@@ -283,9 +283,9 @@ def test_each_check_catches_a_dangling_path():
     tool.spec = "elsewhere.gkr.gpu.tool:G"
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]
 
-    text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / "tools" / "check" / "x.py"\n'
-            'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/ml/flock/live"\nD = ("backends/gone/x.py", "data/a.json")\n'
+    text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[3]\nA = ROOT / "tools" / "verity" / "check" / "x.py"\n'
+            'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/ml/flock/live"\nD = ("verity/gone/x.py", "data/a.json")\n'
             'E = Path(__file__).parent / "data" / "b.json"\nF = "origin/main"\n')
     got = dangling_constants(files | {"tools/verity/check/y.py"}, read=lambda f: text if f == "tools/verity/check/y.py" else "")
-    assert got == ["tools/verity/check/y.py:4: tools/verity/lean (join)", "tools/verity/check/y.py:6: backends/gone/x.py (string)",
+    assert got == ["tools/verity/check/y.py:4: tools/verity/lean (join)", "tools/verity/check/y.py:6: verity/gone/x.py (string)",
                    "tools/verity/check/y.py:7: tools/verity/check/data/b.json (join)"]
