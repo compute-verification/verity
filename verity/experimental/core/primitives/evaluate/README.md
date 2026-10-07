@@ -8,8 +8,8 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
 
 - `Evaluate/Prims.lean`: the primitives implemented, each with the signature the registry holds for it. E0 is the Boolean
   profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`) and `Input<w>_v1`; E1 the constant family `Const<w>[0x<hex>]_v1` and the
-  scalar primitives; E2 the FP32 and BF16 arithmetic and the casts that read no table. Every other primitive (the MUFU
-  tables, `F32ExpRn`, `F32ErfRn`, `NvLogf`, the tensor-core steps, ...), and `RegisteredInput<w>_v1`, is refused by name.
+  scalar primitives; E2 the FP32 and BF16 arithmetic and the casts that read no table; E3 the tensor-core dot steps. Every
+  other primitive (the MUFU tables, `F32ExpRn`, `F32ErfRn`, `NvLogf`, ...), and `RegisteredInput<w>_v1`, is refused by name.
 - `Evaluate/Scalar.lean`: the scalar primitives (`verity.ml.circuits.ops.scalar`, and the vLLM integration's `I32Sub`,
   `I64ToI32`, `U32And`, `U32Xor`, `BitXor`, `SelectBit`), transcribed branch for branch from the Python. Each names the
   definition of `Security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
@@ -20,6 +20,12 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   `Security/Definitions/Core/{Fp32,Prims}.lean` where Security defines the primitive, transcriptions of the Python where it
   does not, each naming which. The `_v1` add, sub, mul and div return numpy's NaN on x86-64 (`Evaluate.Fp32.hostNan`),
   which Security does not state.
+- `Evaluate/TC/`: the seven tensor-core dot steps of `verity.ml.circuits.ops.prims` (`Dots.lean`: Ampere's and Hopper's BF16,
+  Hopper's and sm_120's E4M3, sm_120's E5M2, NVFP4 and MXFP4), on copies of Security's step semantics: `Spec.lean` of
+  `Security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of `Pouw/Fp8Atom/{E4M3,Atom}.lean` and
+  `Pouw/PearlC/Sm120.lean` (`tc_dot_total_e4m3`), `Fp4.lean` of `Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2 step
+  and the FP4 primitives' rules outside the block-scaled model (NaN scales, non-finite accumulators, MXFP4's overflow to
+  `±inf`) are transcribed from the Python; Security has none yet.
 - `Evaluate/Walk.lean`: the gate walk (`Evaluate.evaluate`).
 - `Evaluate/Serve.lean`: `Evaluate.evaluateFn`, which `verity-evaluate` serves through the difftest harness's line protocol
   (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
@@ -38,7 +44,12 @@ mutations both sides refuse; each scalar primitive on the whole grid of its oper
 words out of range; each FP32 and BF16 primitive the same way, its grid of FP edge words (signed zeros, subnormals, the
 extreme normals, ties and overflows on rounding, the infinities and every NaN class) batched in one Program per row,
 `Bf16ToF32` and `E4m3ToF32` on every word, and the GPU captures in `verity/ml/circuits/ops/tests/fixtures` (the FP32
-probe of `gpu-nan-2026-09-28`, and the fetched `cvt.rn.bf16.f32` campaign of `tc-total-2026-09-07`); every constant of the
+probe of `gpu-nan-2026-09-28`, and the fetched `cvt.rn.bf16.f32` campaign of `tc-total-2026-09-07`); each tensor-core dot
+step batched on every pair of its format's edge codes under every FP32 edge accumulator, on pairs of specials across its
+groups, on every pair of edge scale bytes, on 3118 accumulators over structured operands, on drawn words and on words out of
+range, its traced Boolean Definition evaluated gate by gate against it, and the captures: the RTX 4090 golden records, the
+A100 and RTX 4090 special-value campaign, the H100 HGMMA and wgmma records, the RTX PRO 6000's E5M2 and MXFP4 tiles, and
+autoproof's RTX 5090 NVFP4 vectors (the large ones fetched, `research data fetch-fixtures`); every constant of the
 registry and the constant ids the Python reads; and explicit examples: the pinned
 2-bit adder of `boolean_vectors.json`, Boolean Definitions traced from the builders (up to the Ampere BF16 tensor-core
 step), and malformed programs and inputs.

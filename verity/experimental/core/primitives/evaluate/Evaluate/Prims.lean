@@ -1,6 +1,7 @@
 import Flock.Program
 import Evaluate.Scalar
 import Evaluate.Casts
+import Evaluate.TC.Dots
 
 /-!
 # The primitives the evaluator implements
@@ -12,6 +13,7 @@ Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands 
 - E1: the constant family `Const<w>[0x<hex>]_v1` (`verity.ml.circuits.ops.prims.const`, of which the constant bits are the
   1-bit members), and the scalar primitives of `Evaluate.Scalar`.
 - E2: the FP32 and BF16 arithmetic of `Evaluate.Fp32` and the casts of `Evaluate.Casts`.
+- E3: the tensor-core dot steps of `Evaluate.TC.Dots`, an array operand's words in leaf order.
 
 A primitive is recognized by its id and must declare the signature the registry holds for it, parameter names included
 (`codec.decode_program`'s check). Every other primitive is refused by name, never guessed: `RegisteredInput<w>_v1`
@@ -140,6 +142,26 @@ def floats : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) 
    ("F32ToE4m3Sat_v1", #[("x", f32)], e4m3, unary f32ToE4m3Sat),
    ("F32ToE2m1Sat_v1", #[("x", f32)], e2m1, unary f32ToE2m1Sat)]
 
+/-- `n` operand words from index `i`: one array operand's leaves. -/
+private def seg (xs : Array Nat) (i n : Nat) : List Nat := (xs.extract i (i + n)).toList
+
+/-- The tensor-core dot steps by id (`verity.ml.circuits.ops.prims`), with the signatures the registry holds for them. -/
+def dots : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
+  open TC in
+  let bf := #[("acc", f32), ("a", .array 16 bf16), ("b", .array 16 bf16)]
+  let fp8 := #[("acc", f32), ("a", .array 32 e4m3), ("b", .array 32 e4m3)]
+  let fp4 (n : Nat) := #[("acc", f32), ("a", .array 64 e2m1), ("b", .array 64 e2m1), ("sa", .array n e4m3),
+    ("sb", .array n e4m3)]
+  [("AmpereBF16TcDot16_v2", bf, f32, fun xs => ampereBf16Dot16 xs[0]! (seg xs 1 16) (seg xs 17 16)),
+   ("HopperBF16WgmmaDot16_v1", bf, f32, fun xs => hopperBf16Dot16 xs[0]! (seg xs 1 16) (seg xs 17 16)),
+   ("HopperE4m3QgmmaDot32_v1", fp8, f32, fun xs => hopperE4m3Dot32 xs[0]! (seg xs 1 32) (seg xs 33 32)),
+   ("BlackwellE4m3QmmaDot32_v1", fp8, f32, fun xs => blackwellE4m3Dot32 xs[0]! (seg xs 1 32) (seg xs 33 32)),
+   ("BlackwellE5m2QmmaDot32_v1", fp8, f32, fun xs => blackwellE5m2Dot32 xs[0]! (seg xs 1 32) (seg xs 33 32)),
+   ("BlackwellNvf4OmmaDot64_v1", fp4 4, f32,
+    fun xs => blackwellNvf4Dot64 xs[0]! (seg xs 1 64) (seg xs 65 64) (seg xs 129 4) (seg xs 133 4)),
+   ("BlackwellMxf4OmmaDot64_v1", fp4 2, f32,
+    fun xs => blackwellMxf4Dot64 xs[0]! (seg xs 1 64) (seg xs 65 64) (seg xs 129 2) (seg xs 131 2))]
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -148,7 +170,7 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   | none, none, some (w, b) => some (.gate fun _ => b, #[], .value w)
   | none, none, none =>
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
-    else ((scalars ++ floats).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
+    else ((scalars ++ floats ++ dots).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2
@@ -162,7 +184,7 @@ def ofDefn (d : Defn) : Flock.V Prim := do
     return .input w
   | none =>
     let some (p, params, ret) := byId? d.key
-      | throw s!"primitive {d.key}: not implemented by this evaluator (E0 to E2: the Boolean profile, the constants, the scalar primitives, and the FP32 and BF16 arithmetic and casts that read no table)"
+      | throw s!"primitive {d.key}: not implemented by this evaluator (E0 to E3: the Boolean profile, the constants, the scalar primitives, the FP32 and BF16 arithmetic and casts that read no table, and the tensor-core dot steps)"
     if !(sameParams d.params params && d.ret == ret) then throw s!"primitive {d.key} signature differs from the registry"
     return p
 
