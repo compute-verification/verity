@@ -1,7 +1,7 @@
 [project]
 name = "verity-ops"
 version = "0.1.0"
-description = "Operations on the shared machines: deploys to the Nebius nodes, keepers, and messages between agents on Slack."
+description = "Operations on the shared machines: deploys to the Nebius nodes and keepers."
 requires-python = ">=3.11"
 dependencies = ["research"]
 
@@ -23,6 +23,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# tools/research: verity_ops imports research; test_boundaries reads every Python file outside infra/.
-inputs = ["tools/research", ".agents/skills/using-slack/registry.json"]
+# verity_ops imports research, and deploy reads research's pods/nebius/deploy.toml.
+inputs = ["tools/research"]
 parallel = true

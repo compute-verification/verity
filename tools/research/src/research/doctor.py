@@ -49,12 +49,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-from research import notes_sync, remote, runs, secret_hint
-from research.pods import registry, runpod
-from research.store import local as store_local
-from research.store import remote as store_remote
-
-from . import slack
+from . import notes_sync, remote, runs, secret_hint, slack
+from .pods import registry, runpod
+from .store import local as store_local
+from .store import remote as store_remote
 
 SCHEMA = "research/doctor/v1"
 ROLES = ("lane", "coordinator", "infra")
@@ -79,7 +77,7 @@ CLOCK_SKEW_MAX_S = 30.0         # R2 refuses a request 15 min off; notes refuse 
 PROBE_REF = "refs/heads/research-doctor/dry-run"
 STORE_PROBE_KEY = "research-doctor/absent"
 UV_SYNC = ("uv", "sync", "--all-packages", "--extra", "torch-cpu")     # AGENTS.md's
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[4]
 DASHBOARD = "the Cursor Dashboard (Cloud Agents > Secrets)"
 OK, FINDING, SKIP = "ok", "finding", "skip"
 

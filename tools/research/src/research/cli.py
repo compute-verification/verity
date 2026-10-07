@@ -55,7 +55,7 @@
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
-                                                 # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (`ops doctor`, verity_ops/doctor.py)
+                                                 # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
                                                  # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
@@ -72,7 +72,7 @@
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
   research msg send|close|list|read|names|subscribe|traffic|ask-daniel|... [--dry-run]
-                                                 # messages between agents, on Slack (`research slack` too; `ops msg`, verity_ops/slack.py; skill using-slack)
+                                                 # messages between agents, on Slack (`research slack` too; research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -1341,12 +1341,12 @@ def cmd_usage(argv: list[str]) -> int:
     return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
 
 
-OPS_COMMANDS = ("doctor", "keeper", "deploy", "msg", "slack")
+OPS_COMMANDS = ("keeper", "deploy")
 OPS_SRC = Path(__file__).resolve().parents[4] / "infra" / "ops"
 
 
 def hand_to_ops(cmd: str, rest: list[str]) -> int:
-    """`research doctor|keeper|deploy|msg|slack ...` is `ops ...` (infra/ops), exec'd in this interpreter with this tree's
+    """`research keeper|deploy ...` is `ops ...` (infra/ops), exec'd in this interpreter with this tree's
     infra/ops first on its path, so a venv synced before verity-ops existed still runs it. research never imports it."""
     env = dict(os.environ)
     if (OPS_SRC / "verity_ops" / "cli.py").is_file():
@@ -1388,6 +1388,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
+    if cmd == "doctor":
+        from .doctor import main as doctor_main
+
+        return doctor_main(rest)
     if cmd == "disk-hold":
         from .disk import main as disk_main
 
@@ -1448,6 +1452,10 @@ def main(argv: list[str] | None = None) -> int:
         from .commitmap import main as git_main
 
         return git_main(rest)
+    if cmd in ("msg", "slack"):
+        from .slack import main as slack_main
+
+        return slack_main(rest, prog=f"research {cmd}")
     if cmd == "usage":
         return cmd_usage(rest)
     age = checkout_age()

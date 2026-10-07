@@ -130,7 +130,7 @@ def drift_step(state: dict, reps: dict, post: Callable[[str, "str | None"], "str
 
 
 def slack_post(dry: bool) -> Callable[[str, "str | None"], "str | None"]:
-    from verity_ops import slack
+    from research import slack
 
     reg = slack.load_registry(slack.registry_path())
     api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)

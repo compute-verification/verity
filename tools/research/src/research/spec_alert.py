@@ -181,7 +181,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
     """DM Daniel what the push from ``old`` to ``new`` changed in the spec; True when it was sent or there was nothing to
     send. A failure is printed and posted to #agent-alerts, and returns False; nothing raises, since the push has happened
     and the caller still has its own steps after a landing to run."""
-    from verity_ops.slack import Slack, SlackError, human_entry, load_registry, registry_path
+    from .slack import Slack, SlackError, human_entry, load_registry, registry_path
 
     try:
         text = message(repo, old, new, web(repo, remote), prs)

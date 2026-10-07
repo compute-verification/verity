@@ -146,7 +146,7 @@ def test_the_relay_keeps_its_place_through_an_unmounted_log_and_a_failed_post(tm
     import re
     import subprocess
 
-    from verity_ops import slack
+    from research import slack
 
     rows = [json.dumps({"key": f"k{i}", "node": "vy-nebius-2", "ts": f"t{i}", "mb_per_s": 20, "pid": i, "user": "research",
                         "cmd": "python3 job.py", "paths": ["/workspace/x"], "cgroup": "/user.slice", "allocation": "none"})
