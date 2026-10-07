@@ -1,4 +1,4 @@
-import Specs.Nci.Guarantees
+import Models.Nci.Guarantees
 import Proofs.Core
 
 /-!

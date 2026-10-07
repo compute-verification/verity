@@ -8,7 +8,7 @@ wrong, in place of "at least `K₀` units are wrong". Its proof is
 `Flock.SecurityProofs.EndToEndDrawn : Flock.Guarantees.EndToEndDrawn`.
 
 C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.Composed.DrawnJ`, and `Specs.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.Composed.DrawnJ`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndDrawn` does.
 -/
 
