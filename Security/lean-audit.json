@@ -49,6 +49,7 @@
   "Definitions.NetworkCertifier",
   "Models.NetworkCertifier.Assumptions",
   "Models.NetworkCertifier.Guarantees",
+  "Models.Flock.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
@@ -124,6 +125,11 @@
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions", "Models.Pouw.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
+  },
+  "Models.Flock.Guarantees": {
+   "imports": ["Mathlib", "Models.Flock.Guarantees"],
+   "except": [],
+   "why": "a guarantee is a Prop over Mathlib, never over a proof"
   },
   "Definitions.Pouw": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw"],
