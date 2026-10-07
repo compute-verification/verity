@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.Dimension.H100PeakTc
+import Models.Pouw.Assumptions.Dimension.H100PeakTc
 import Proofs.Pouw.Dimension.H100WProofs
 
 /-!
