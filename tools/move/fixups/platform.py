@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 
 #: path -> (sha256 of the generated file it replaces, the file to write)
 WHOLE = {
-    "tests/test_boundaries.py": ("188ee6f068f12ad50e57bce76d7f0490c99b0301628be8304a73a24fe0f9d26e",
+    "tests/test_boundaries.py": ("48cac7dc6d3c220e9009e0004d1cbcc4369463f34bb1914bd2fcdbcbd44ae234",
                                  HERE / "platform_test_boundaries.py"),
 }
 

@@ -97,8 +97,7 @@ def _separate(rel: Path) -> bool:
 
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (``verity/Security/.lake`` holds its dependencies' checkouts, Mathlib's scripts among them) or a ``SEPARATE``
-    tree."""
+    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree."""
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
                   and not _separate(p.relative_to(SRC)))
