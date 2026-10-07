@@ -1,4 +1,4 @@
-import Specs.Pous.Guarantees
+import Models.Pous.Guarantees
 
 /-!
 # Open targets (untrusted)
