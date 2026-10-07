@@ -52,14 +52,23 @@ def _rfc6962_root(leaves):
 
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 8, 13, 24])
 def test_merkle_paths(count):
-    leaves = [hashlib.sha256(bytes([i])).digest() for i in range(count)]
+    leaves = [hashlib.sha512(bytes([i])).digest() for i in range(count)]
     t = MerkleTree(leaves)
     assert t.root == _rfc6962_root(leaves)
     for i in range(count):
         assert verify_path(t.root, count, i, leaves[i], t.path(i))
-        assert not verify_path(t.root, count, i, hashlib.sha256(b"x").digest(), t.path(i))
+        assert not verify_path(t.root, count, i, hashlib.sha512(b"x").digest(), t.path(i))
         if count > 1:
             assert not verify_path(t.root, count, (i + 1) % count, leaves[i], t.path(i))
+
+
+def test_a_path_with_a_sibling_that_is_not_a_digest_is_refused():
+    """Every sibling is a 64-byte node digest (the P2 spec's RESPONSE, `sibling[64]`): a path whose sibling has another
+    length is refused even when the root was built from it."""
+    leaf = hashlib.sha512(b"leaf").digest()
+    for sibling in (b"x" * 63, b"x" * 65, b""):
+        assert not verify_path(node_hash(leaf, sibling), 2, 0, leaf, [sibling])
+        assert not verify_path(node_hash(sibling, leaf), 2, 1, leaf, [sibling])
 
 
 def test_vk_is_the_spec(world):
