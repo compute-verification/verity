@@ -30,7 +30,7 @@ from tests.observe import test_fold_synthetic as toy
 from tests.observe.test_fold_synthetic import (A_COS, A_DOWN_W, A_EMBED, A_GU_W, A_LN1, A_LN2, A_NORM, A_O_W, A_QKV_W, BF, BN, C, I32D, I64D,
                                                       W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM, W_O, W_QKV, Ids, V, _as3, _kv_flat,
                                                       _slot, memory)  # noqa: F401 - `memory` is the fixture
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
 
 BS = 4

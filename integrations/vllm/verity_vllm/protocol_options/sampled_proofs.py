@@ -1,7 +1,7 @@
 """Sampled proofs as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
 
 Its one scheme, ``vllm-v1``, is the Commit path as it runs today: the commitment scheme `verity_vllm.commit.scheme`
-(`verity.primitives.commitments.vllm_v1`) over the required values of the row's Program, and the replay's draw: up to
+(`verity.ml.commitments.vllm_v1`) over the required values of the row's Program, and the replay's draw: up to
 `--replay-per-stratum` units of every stratum, uniformly (`commit.challenge.stratum_picks`).  Its hooks
 are the Commit's committer and taps, which the Commit installs exactly as before; this option adds none.  A row whose
 target declares no protocols never reaches this module: `protocol_options.commit_context` returns None first.
@@ -36,4 +36,4 @@ def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     return Option(name=entry, hooks=target.hooks(entry),
                   details={"commitment_scheme": commitment_scheme.NAME, "law": LAW,
-                           "challenge": "legacy (the run root)" if challenge.LEGACY else "verity.primitives.randomness.derive from an auditor key"})
+                           "challenge": "legacy (the run root)" if challenge.LEGACY else "verity.ml.randomness.derive from an auditor key"})
