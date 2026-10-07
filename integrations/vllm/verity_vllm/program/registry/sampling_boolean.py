@@ -11,7 +11,7 @@ of small Boolean Definitions, so a partition query cuts it at any vocabulary siz
 
     TokenSelectStage_v1{V,L}           level L: the level's candidates in groups of G = 64, each group one member Call; a stage's
                                        nodes read only its parameters and it returns all they produce, so `Q_word` cuts each member
-                                       on its own (`verity.primitives.circuits.cut.separable`)
+                                       on its own (`verity.ml.circuits.cut.separable`)
     ArgmaxLeaf_v1{G,FIRST,FINAL}       G bf16 words -> the group's candidate (FIRST: the row's first group)
     ArgmaxMerge_v1{G,IW,FINAL}         G candidates with IW-bit indices -> their best, with an (IW + 6)-bit index
 
@@ -28,13 +28,13 @@ The same tree over f32 words (`F32GtStrict_v1`'s order, `scalar.f32_key`: 33-bit
 """
 from __future__ import annotations
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import Coll, concat
-from verity.primitives.circuits.types import Array, Tuple
-from verity.primitives.circuits.boolean import trace as TR
-from verity.primitives.circuits.boolean.forms import ONE, OR, ZERO, NOT, add
-from verity_catalog.definitions.boolean.scalar import bf16_gt_strict, bf16_key, f32_key, gt_u, select
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import ONE, OR, ZERO, NOT, add
+from verity.ml.circuits.ops.boolean.scalar import bf16_gt_strict, bf16_key, f32_key, gt_u, select
 from verity_vllm.program.registry import b1
 
 __all__ = ["ArgmaxLeaf", "ArgmaxMerge", "ArgmaxStep", "F32ArgmaxLeaf", "F32ArgmaxMerge", "F32ArgmaxStage", "G", "GB", "TokenSelect",

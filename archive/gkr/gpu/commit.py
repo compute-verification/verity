@@ -1,6 +1,6 @@
 """Operand commitment ("A-GKR, operands committed"): the statement publishes, per VU, the row digests of its x row
 and W column, and the verifier checks them natively against the commitment scheme's trees
-(``verifier/src/commitments.rs``; scheme ``frame-v3`` of ``verity.primitives.commitments``, row leaves ``sha256/row/v1`` or
+(``verifier/src/commitments.rs``; scheme ``frame-v3`` of ``verity.ml.commitments``, row leaves ``sha256/row/v1`` or
 ``blake3-keyed/row/v2``).  Claimed as ``R+sha256`` / ``R+blake3``.
 
 Statement files (beside the Params-only files and ``public.bin``):
@@ -106,7 +106,7 @@ def input_set(path, n: int, word_bits: int = 16):
 
 
 def binding(iset: InstanceSet, lo: int, hi: int, tree: str, schema: str) -> bytes:
-    from verity.primitives.commitments import identity_digest
+    from verity.ml.commitments import identity_digest
 
     return bytes.fromhex(identity_digest(BINDING_TAG, {"dataset": iset.dataset, "tier": iset.tier, "manifest_sha256": iset.manifest_sha256,
                                                        "lo": int(lo), "hi": int(hi), "K": int(iset.K), "tree": tree, "schema": schema}))
@@ -126,7 +126,7 @@ def row_bytes(rows: np.ndarray, word_bits: int) -> np.ndarray:
 
 
 def row_digests(rows: np.ndarray, word_bits: int, role: int, leaf: str) -> list[bytes]:
-    from verity.primitives.commitments.frame_v3 import RowLeaf
+    from verity.ml.commitments.frame_v3 import RowLeaf
 
     raw = row_bytes(rows, word_bits)
     layout = RowLeaf(leaf, role, word_bits, int(np.asarray(rows).shape[1])).layout()
@@ -139,8 +139,8 @@ def limbs(digest: bytes) -> list[int]:
 
 def vllm_domain(base_relation: str, iset: InstanceSet, lo: int, vus: int, n_y: int, y_width: int, port: str):
     """``vllm_v1.rs operand_domain``: the provisional step domain of port ``a`` / ``b`` / ``y``."""
-    from verity.primitives.commitments import identity_digest
-    from verity.primitives.commitments.vllm_v1 import StepDomain
+    from verity.ml.commitments import identity_digest
+    from verity.ml.commitments.vllm_v1 import StepDomain
 
     def d(kind: str, doc: dict) -> bytes:
         return bytes.fromhex(identity_digest(f"{VLLM_MAP_TAG}/{kind}/v0", doc))
@@ -201,10 +201,10 @@ class Commitment:
 def commit(leaf: str, base_relation: str, iset: InstanceSet, lo: int, x: np.ndarray, w: np.ndarray, y: np.ndarray,
            y_width: int) -> Commitment:
     """The trees of the input set: ``x`` / ``w`` ``(vus, K)`` rows, ``y`` ``(vus, n_y)`` public words."""
-    from verity.primitives.commitments import RangeIndexedDomain
-    from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-    from verity.primitives.commitments.merkle import CommitmentDomain
-    from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X
+    from verity.ml.commitments import RangeIndexedDomain
+    from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.ml.commitments.merkle import CommitmentDomain
+    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
 
     if leaf not in LEAVES:
         raise ValueError(f"commit: leaf {leaf!r}")
@@ -217,7 +217,7 @@ def commit(leaf: str, base_relation: str, iset: InstanceSet, lo: int, x: np.ndar
     if y.min(initial=0) < 0 or y.max(initial=0) >> (8 * y_width):
         raise ValueError(f"commit: a y word exceeds {word_schema(y_width)}")
     if leaf == VLLM:
-        from verity.primitives.commitments.vllm_v1 import domain_digest, fold, pos_leaf
+        from verity.ml.commitments.vllm_v1 import domain_digest, fold, pos_leaf
 
         doms = {p: vllm_domain(base_relation, iset, lo, vus, n_y, y_width, p) for p in PORTS}
         dig = {"a": [pos_leaf(r.tobytes()) for r in row_bytes(x, iset.word_bits)],

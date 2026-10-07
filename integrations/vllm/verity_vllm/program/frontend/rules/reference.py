@@ -11,8 +11,8 @@ import math
 import numpy as np
 import torch
 
-from verity.primitives.circuits.refs import Coll, array_of
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.refs import Coll, array_of
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
@@ -240,7 +240,7 @@ class ElementwiseRefRule(OpRule):
         flat, scalar_rec = [], None
         for i, c in enumerate(colls):
             if i == sc:
-                from verity.primitives.circuits.refs import broadcast
+                from verity.ml.circuits.refs import broadcast
                 space, idx, leaf = c.leaf  # the one Input leaf of the 0-d weight field
                 flat.append(Coll(Array(n, Value(w)), broadcast(space, idx, leaf, n)))
                 wl = ctx.weight_of(ops[i])
@@ -460,7 +460,7 @@ class MatmulRefRule(OpRule):
         for i in range(nb):
             for m in range(M):
                 outs.append(ctx.call(fn, a_flat[i][m], bT[i], node=node, rule=self, name=f"{ctx.hint_name(node)}[{i},{m}]"))
-        from verity.primitives.circuits.refs import array_of
+        from verity.ml.circuits.refs import array_of
         ctx.define(node, array_of(outs).reshape(_tensor_type(((N,) if vec else batch + (M, N)), w)))
         wl = ctx.weight_of(bn)
         if wl is not None:
@@ -572,7 +572,7 @@ class EmbeddingRefRule(OpRule):
             if narrow is not None:
                 tok = ctx.call(narrow, tok, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]/i32")
             outs.append(ctx.call(fn, tok, table, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]"))
-        from verity.primitives.circuits.refs import array_of
+        from verity.ml.circuits.refs import array_of
         ctx.define(node, array_of(outs).reshape(_tensor_type(tuple(shp) + (H,), 32 if DT == "f32" else 16)))
         ctx.bind_weight_role(tn, self, "embedding.table", V=V, H=H)
         pad = self._padding_idx(node)
@@ -807,7 +807,7 @@ class ArgmaxRefRule(OpRule):
         V = shape_of(rows[0].type)[0][0]
         fn = ctx.kind("argmax", node, V=V, DT=DT)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
-        from verity.primitives.circuits.refs import array_of
+        from verity.ml.circuits.refs import array_of
         out = array_of(outs) if lead else outs[0]
         ctx.define(node, out.reshape(_tensor_type(tuple(lead), 32)) if lead else out)
         ctx.record(self, node, {"dtype": DT, "V": V, "rows": len(rows), "result": "I32 token (torch int64)"}, emitted=f"{fn.id} x{len(rows)}")
@@ -845,7 +845,7 @@ class IntCatNarrowRule(OpRule):
         return True
 
     def emit(self, node, ctx):
-        from verity.primitives.circuits.refs import array_of, concat
+        from verity.ml.circuits.refs import array_of, concat
         parts = [ctx.coll(p) for p in node.args[0]]
         narrow = ctx.kind("i64_to_i32", node)
         outs, n64 = [], 0

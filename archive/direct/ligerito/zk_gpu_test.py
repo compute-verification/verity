@@ -150,7 +150,7 @@ def test_cost_at_real_n(kp1):
     out["K"] = len(sched)
     # baseline 1: Blake3 leaf hashing of the round-1 codeword (2^{k1+2} leaves of C_1 words) -- a real Ligerito cost
     try:
-        from kernels.hash_gpu import merkle
+        from verity.ml.kernels.hash_gpu import merkle
         C1 = 1 << kp1
         R = 4 << k1
         U = torch.zeros((C1, R), dtype=torch.int32, device=DEV)         # (rows-of-values, leaves) as merkle.commit wants

@@ -1,6 +1,6 @@
 // The NVFP4 block-scaled mainloop on sm_120a: one TM x 128 tile of C = A B^T into registers, each accumulator the chain of
 // mma.sync kind::mxf4nvf4 scale_vec::4X m16n8k64 atoms (E2M1 codes, a UE4M3 scale per 16 along k) from +0 in ascending k,
-// which is BLACKWELL_SM120_NVF4's chain (verity_catalog.silicon.models): the words are the model's, whatever the schedule.
+// which is BLACKWELL_SM120_NVF4's chain (verity.ml.circuits.silicon.models): the words are the model's, whatever the schedule.
 //
 // Operands, as CUTLASS's and cuBLASLt's NVFP4 GEMMs take them: A (M x K) and B (N x K) K-major, two codes a byte (element 2i
 // in the low nibble); their scales in the 128 x 4 tiled layout, scale (r, c) (c = k / 16) at
