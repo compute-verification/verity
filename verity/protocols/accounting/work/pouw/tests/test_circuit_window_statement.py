@@ -25,10 +25,12 @@ def _d(n: int) -> bytes:
 H3 = _d(60)
 
 
-def _window(real_a=(3, 2), rows_b=4, filler=(1, 2)):
+def _window(real_a=(3, 2), rows_b=4, filler=(1, 2), m=16, cols=1):
+    """Calls of m x k x 64·cols at pass tiles 0, ⌈m/64⌉·cols, ..., then the filler."""
     out, at = [], 0
     for c, a in enumerate(real_a):
-        out.append(Wd.Entry("call", at, at + a * rows_b, a, rows_b, _d(2 * c + 1), _d(2 * c + 2), H3, _d(100 + c)))
+        out.append(Wd.Entry("call", at, at + a * rows_b, a, rows_b, _d(2 * c + 1), _d(2 * c + 2), H3, _d(100 + c),
+                            tile0=c * -(-m // 64) * cols, cols=cols, m=m))
         at += a * rows_b
     work = Wd.bucket(at)
     out.append(Wd.Entry("filler", at, work.n, *filler, _d(50), _d(51)))
@@ -36,9 +38,11 @@ def _window(real_a=(3, 2), rows_b=4, filler=(1, 2)):
 
 
 def _big():
-    """15 calls of 2^13 x 2^17 tiles each, the most an entry holds, and the filler: level 254, N = 2^34."""
-    call = 1 << 30
-    out = [Wd.Entry("call", c * call, (c + 1) * call, 1 << 13, 1 << 17, _d(1), _d(2), H3, _d(3)) for c in range(P - 1)]
+    """15 calls of 2^13 x 2^17 tiles each, the most an entry holds, each of m = 2^13 and cols = 2^11 (2^18 pass tiles), the
+    last ending at pass tile 2^40, and the filler: level 254, N = 2^34."""
+    call, span = 1 << 30, 1 << 18
+    out = [Wd.Entry("call", c * call, (c + 1) * call, 1 << 13, 1 << 17, _d(1), _d(2), H3, _d(3), tile0=(1 << 40) - (P - 1 - c) * span,
+                    cols=1 << 11, m=1 << 13) for c in range(P - 1)]
     work = Wd.bucket((P - 1) * call)
     fill = work.n - (P - 1) * call
     out.append(Wd.Entry("filler", (P - 1) * call, work.n, 1 << 13, -(-fill // (1 << 13)), _d(4), _d(5)))
@@ -63,6 +67,29 @@ CASES = {
     "sides at 2^D": (_set(ROWS, 2, n_a=1 << 13, n_b=1 << 17), LEVEL, None),
     "kind 3": (_bytes(ROWS, 0, 0, b"\3"), LEVEL, "not an entry row: kind 3"),
     "pad word": (_bytes(ROWS, 1, 47, b"\x80"), LEVEL, "bytes 40..48 are not zero"),
+    "second pad word": (_bytes(ROWS, 0, 271, b"\x01"), LEVEL, "bytes 264..272 are not zero"),
+    "filler tile0": (_set(ROWS, 2, tile0=1), LEVEL, "the filler's tile0, cols and m are not zero"),
+    "filler cols": (_set(ROWS, 2, cols=1), LEVEL, "the filler's tile0, cols and m are not zero"),
+    "filler m": (_set(ROWS, 2, m=1 << 63), LEVEL, "the filler's tile0, cols and m are not zero"),
+    "empty entry m": (_set(ROWS, P - 1, m=16), LEVEL, "an empty entry is not the zero row"),
+    "m 0": (_set(ROWS, 0, m=0), LEVEL, "its m 0 is not"),
+    "m 24": (_set(ROWS, 0, m=24), LEVEL, "its m 24 is not a multiple of 16"),
+    "m 2^13 + 16": (_set(ROWS, 0, m=(1 << 13) + 16), LEVEL, "its m 8208"),
+    "m 2^64 − 16": (_set(ROWS, 0, m=(1 << 64) - 16), LEVEL, "its m"),
+    "m at n_a": (*_window(real_a=(16, 2), filler=(4, 8)), None),
+    "m below n_a": (*_window(real_a=(17, 2), filler=(4, 8)), "from n_a = 17"),
+    "cols 0": (_set(ROWS, 0, cols=0), LEVEL, "its cols 0 is not"),
+    "cols 2^11 + 1": (_set(ROWS, 0, cols=(1 << 11) + 1), LEVEL, "its cols 2049"),
+    "cols 2^64 − 1": (_set(ROWS, 0, cols=(1 << 64) - 1), LEVEL, "its cols"),
+    "n_b at 64·cols": (*_window(rows_b=64, filler=(4, 8)), None),
+    "n_b beyond 64·cols": (*_window(rows_b=65, filler=(4, 8)), "64·cols >= n_b = 65"),
+    "n_b within 64·cols": (*_window(rows_b=65, cols=2, filler=(4, 8)), None),
+    "pass tiles to 2^40": (_set(ROWS, 1, tile0=(1 << 40) - 1), LEVEL, None),
+    "pass tiles past 2^40": (_set(ROWS, 1, tile0=1 << 40), LEVEL, "its pass tiles [1099511627776"),
+    "tile0 2^64 − 1": (_set(ROWS, 1, tile0=(1 << 64) - 1), LEVEL, "its pass tiles"),
+    "pass tiles overlap": (_set(ROWS, 1, tile0=0), LEVEL, "entry 1: its pass tiles start at 0, before the last call's end 1"),
+    "pass tiles out of order": (_set(_set(ROWS, 0, tile0=5), 1, tile0=4), LEVEL, "entry 1: its pass tiles start at 4"),
+    "pass tiles apart": (_set(ROWS, 1, tile0=7), LEVEL, None),
     "hi 2^40": (_set(ROWS, 2, hi=1 << 40), LEVEL, "is not of 40-bit indices"),
     "empty entry": (_set(ROWS, P - 1, root_b=_d(1)), LEVEL, "an empty entry is not the zero row"),
     "side a 0": (_set(ROWS, 0, n_a=0), LEVEL, "side a holds 0 rows"),
