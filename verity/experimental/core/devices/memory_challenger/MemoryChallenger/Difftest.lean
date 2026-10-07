@@ -1,5 +1,6 @@
 import Difftest
 import MemoryChallenger.Protocol
+import MemoryChallenger.Step
 
 /-!
 # The difftest's Lean half
@@ -80,9 +81,42 @@ def verdictFn (j : Json) : V Json := do
   pure (Json.mkObj [("accepted", .bool v.accepted), ("reasons", .arr (v.reasons.map Json.str)),
     ("late", Lean.toJson v.late), ("wrong", Lean.toJson v.wrong)])
 
+private def event (j : Json) : V Event := do
+  if let .ok now := j.getObjValAs? Nat "tick" then return .tick now
+  if let .ok r := j.getObjVal? "received" then return .received (← J.nat r "now" "received") (← hex r "bytes")
+  if (j.getObjVal? "closed").isOk then return .closed
+  if let .ok q := j.getObjValAs? Nat "reserved" then return .reserved (.ok q)
+  if let .ok e := j.getObjValAs? String "refused" then return .reserved (.error e)
+  throw "an event is {tick}, {received: {now, bytes}}, {closed}, {reserved} or {refused}"
+
+def outJ : Out → Json
+  | .commitment c => Json.mkObj [("commitment", c.toJson)]
+  | .session s os => Json.mkObj [("openings", .arr (os.map CoinOpening.toJson)), ("session", s.toJson)]
+
+private def actionJ : Action → Json
+  | .send b => Json.mkObj [("send", hexJ b)]
+  | .publish o => Json.mkObj [("publish", outJ o)]
+  | .reserve => Json.mkObj [("reserve", .null)]
+
+/-- A session's `Config`: its coins `CoinTree.draw`n, its signer a test signer's key (`testKey`). -/
+def configOf (c : Json) : V Config := do
+  let coins ← CoinTree.draw (← hex c "source") (← hex c "session") (← J.nat c "blocks" "config") (← J.nat c "k" "config")
+    (← hex c "key") (← hexes c "salts")
+  let height ← J.nat c "height" "config"
+  Config.make coins (← J.nat c "limit_ns" "config") (← J.nat c "block_bytes" "config") (← hex c "binding")
+    (← testKey (← hex c "secret") height) (testScheme height)
+
+/-- `step` over a session's events: each event's actions, and whether the session ended unsigned. -/
+def stepFn (j : Json) : V Json := do
+  let cfg ← configOf (← J.get j "config" "input")
+  let (s, out) := run cfg (← (← J.arr j "events" "input").toList.mapM event)
+  pure (Json.mkObj [("actions", .arr (out.map fun acts => .arr (acts.map actionJ).toArray)),
+    ("refused", .bool s.refusal.isSome)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn),
   ("records_root", recordsRootFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
-  ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("verdict", verdictFn)]
+  ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("verdict", verdictFn),
+  ("step", stepFn)]
 
 end MemoryChallenger.Difftest

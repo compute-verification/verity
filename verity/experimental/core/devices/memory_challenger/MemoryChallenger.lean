@@ -3,4 +3,7 @@ import MemoryChallenger.LmsSign
 import MemoryChallenger.Records
 import MemoryChallenger.Verdict
 import MemoryChallenger.Protocol
+import MemoryChallenger.Step
+import MemoryChallenger.Driver
+import MemoryChallenger.MemoryWorld
 import MemoryChallenger.Difftest

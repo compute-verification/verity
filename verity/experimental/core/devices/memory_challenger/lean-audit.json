@@ -1,14 +1,30 @@
 {
- "roots": ["MemoryChallenger"],
+ "roots": [
+  "MemoryChallenger"
+ ],
  "exempt": {
   "MemoryChallenger.Main": "the memory-challenger executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.protocol, audited under MemoryChallenger",
   "MemoryChallenger.TestMain": "the memory-challenger-test executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.testProtocol, audited under MemoryChallenger",
-  "MemoryChallenger.DifftestMain": "the memory-challenger-difftest executable's entry point, one line; it serves MemoryChallenger.Difftest.table, audited under MemoryChallenger, a test and not a proof"
+  "MemoryChallenger.DifftestMain": "the memory-challenger-difftest executable's entry point, one line; it serves MemoryChallenger.Difftest.table, audited under MemoryChallenger, a test and not a proof",
+  "MemoryChallenger.DriveMain": "the memory-challenger-drive executable's entry point: the difftest's line protocol around MemoryChallenger.MemoryWorld.driveFn, audited under MemoryChallenger, a test and not a proof"
+ },
+ "escapes": {
+  "MemoryChallenger.drive.loop": "partial def: the driver's event loop, which runs until the session ends, as long as the link and the clock take; its properties are step's, which is total",
+  "MemoryChallenger.drive.perform": "partial def: performs one step's actions, and for a reserve the actions of the reservation's step, which holds no reserve"
  },
  "layers": {
   "MemoryChallenger": {
-   "imports": ["Flock", "Randomness", "Lms", "CoreProtocol", "World", "MemoryChallenger"],
-   "except": ["MemoryChallenger.Difftest"],
+   "imports": [
+    "Flock",
+    "Randomness",
+    "Lms",
+    "CoreProtocol",
+    "World",
+    "MemoryChallenger"
+   ],
+   "except": [
+    "MemoryChallenger.Difftest"
+   ],
    "why": "the challenger is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS, world and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryChallenger.Difftest) also imports the difftest server"
   }
  },

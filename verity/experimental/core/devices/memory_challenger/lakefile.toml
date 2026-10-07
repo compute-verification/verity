@@ -1,7 +1,7 @@
 # PoUS's memory challenger as executable Lean: its record formats and crypto, `verdict` as a core protocol, and the
 # challenger itself as a pure `step` with a driver over `Core.World`. Code: Lean core and the packages below, no Mathlib.
 name = "core_memory_challenger"
-defaultTargets = ["MemoryChallenger", "memory-challenger", "memory-challenger-test", "memory-challenger-difftest"]
+defaultTargets = ["MemoryChallenger", "memory-challenger", "memory-challenger-test", "memory-challenger-difftest", "memory-challenger-drive"]
 
 [leanOptions]
 autoImplicit = false
@@ -47,3 +47,8 @@ root = "MemoryChallenger.TestMain"
 [[lean_exe]]
 name = "memory-challenger-difftest"
 root = "MemoryChallenger.DifftestMain"
+
+# `drive` over an in-memory world (`MemoryChallenger.MemoryWorld`), for the difftest of the driver.
+[[lean_exe]]
+name = "memory-challenger-drive"
+root = "MemoryChallenger.DriveMain"
