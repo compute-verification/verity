@@ -182,7 +182,7 @@ def derived_modules(layout: Layout) -> dict[str, str]:
         if not (old.endswith("/") or old.endswith(".py")):
             continue
         a, b = module_name(old, layout.old_roots), module_name(new, layout.new_roots)
-        if a and b and a != b:
+        if a and b and (a != b or old == new):     # a row that keeps a directory keeps its modules' names too
             out[a] = b
         if old.endswith("/") and (r := next((n for n, d in layout.old_roots.items() if d == old.rstrip("/")), None)):
             if b and r != b:

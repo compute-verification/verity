@@ -90,6 +90,124 @@ paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "experi
 # the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
 # says otherwise
 "backends.flock" = "verity.ml.flock"
+"backends.flock.verifier.lean" = "backends.flock.verifier.lean"
+"catalog.census" = "benchmarks.census"
+"catalog.tests" = "verity.ml.circuits.ops.tests"
+"experimental.tests" = "verity.experimental.tests"
+"kernels.hash_gpu" = "verity.ml.kernels.hash_gpu"
+"tools.check" = "tools.verity.check"
+"tools.circuit_check" = "tools.verity.circuit_check"
+"tools.cluster" = "infra.cluster"
+"tools.lean" = "tools.verity.lean"
+"tools.native_peak" = "benchmarks.native_peak"
+"tools.tc_probe" = "benchmarks.tc_probe"
+"tools.tc_probe_fp4" = "benchmarks.tc_probe_fp4"
+"verity.claims" = "verity.experimental.claims"
+"verity.primitives" = "verity.ml"
+"verity.primitives.circuits" = "verity.ml.circuits"
+"verity.primitives.commitments" = "verity.experimental.commitments"
+"verity.primitives.crypto" = "verity.experimental.crypto"
+"verity.primitives.randomness" = "verity.experimental.randomness"
+"verity.protocols" = "verity.experimental.protocols"
+"verity.protocols.accounting.communication.certifier" = "verity.experimental.protocols.certifier"
+"verity.protocols.accounting.communication.certifier.lean" = "verity.protocols.accounting.communication.certifier.lean"
+"verity.protocols.accounting.space.pous" = "verity.experimental.protocols.pous"
+"verity.protocols.accounting.space.pous.lean" = "verity.protocols.accounting.space.pous.lean"
+"verity.protocols.accounting.work.pouw" = "verity.experimental.protocols.pouw"
+"verity.protocols.accounting.work.pouw.lean" = "verity.protocols.accounting.work.pouw.lean"
+"verity.protocols.verification.sampled_proofs" = "verity.experimental.protocols.sampled_proofs"
+"verity_catalog.definitions" = "verity.ml.circuits.ops"
+"verity_catalog.silicon" = "verity.ml.circuits.silicon"
+"verity_catalog.targets" = "verity.ml.circuits.targets"
+"verity_experimental" = "verity.experimental"
+"verity_kernels" = "verity.ml.kernels"
+
+[aliases]
+# adds old names that no file in the tree carries any more. [retired] lists the old paths the move empties, and [drop] the
+# files it deletes (an `__init__.py` of a package level that goes, a pyproject whose distribution folds into `verity`).
+
+[roots]
+# import name -> its package directory, before and after; a module outside every root is named by its path from the root
+# (`benchmarks.pouw.pearl_c4.replay`), and imports only by path.
+old = { verity = "verity", verity_catalog = "catalog/verity_catalog", verity_kernels = "kernels/verity_kernels", verity_experimental = "experimental/verity_experimental", verity_flock = "backends/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/circuit_check/src/circuit_check", cluster = "tools/cluster/src/cluster" }
+new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/verity_cli" }
+
+[paths]
+# --- ml/: Python and CUDA, provers, Python circuits, kernels (ml/ can't affect soundness)
+"verity/primitives/__init__.py" = "verity/ml/__init__.py"
+"verity/primitives/circuits/" = "verity/ml/circuits/"
+"catalog/verity_catalog/definitions/" = "verity/ml/circuits/ops/"
+"catalog/verity_catalog/silicon/" = "verity/ml/circuits/silicon/"
+"catalog/verity_catalog/targets/" = "verity/ml/circuits/targets/"
+"catalog/tests/" = "verity/ml/circuits/ops/tests/"
+"catalog/pyproject.toml" = "verity/ml/circuits/ops/pyproject.toml"
+"kernels/verity_kernels/" = "verity/ml/kernels/"
+"kernels/hash_gpu/" = "verity/ml/kernels/hash_gpu/"
+# C-Flock keeps its distribution and import name (`verity_flock` depends on verity-vllm and verity-numerical, which depend on
+# `verity`, so it can't fold into `verity`); its verifier's Lean is lean.py's
+"backends/flock/" = "verity/ml/flock/"
+"backends/flock/verifier/lean/" = "backends/flock/verifier/lean/"
+
+# --- experimental/: work in progress, including today's Python verifiers until their Lean versions land in core/
+"experimental/verity_experimental/" = "verity/experimental/"
+"experimental/tests/" = "verity/experimental/tests/"
+"experimental/pyproject.toml" = "verity/experimental/pyproject.toml"
+"verity/primitives/commitments/" = "verity/experimental/commitments/"
+"verity/primitives/crypto/" = "verity/experimental/crypto/"
+"verity/primitives/randomness/" = "verity/experimental/randomness/"
+"verity/claims/" = "verity/experimental/claims/"
+"verity/protocols/" = "verity/experimental/protocols/"
+"verity/protocols/accounting/work/pouw/" = "verity/experimental/protocols/pouw/"
+"verity/protocols/accounting/space/pous/" = "verity/experimental/protocols/pous/"
+"verity/protocols/accounting/communication/certifier/" = "verity/experimental/protocols/certifier/"
+"verity/protocols/verification/sampled_proofs/" = "verity/experimental/protocols/sampled_proofs/"
+# the protocols' Lean is lean.py's
+"verity/protocols/accounting/work/pouw/lean/" = "verity/protocols/accounting/work/pouw/lean/"
+"verity/protocols/accounting/space/pous/lean/" = "verity/protocols/accounting/space/pous/lean/"
+"verity/protocols/accounting/communication/certifier/lean/" = "verity/protocols/accounting/communication/certifier/lean/"
+
+# --- tools/: the verity command, the run recorder and the run-store client
+"tools/check/" = "tools/verity/check/"
+"tools/circuit_check/" = "tools/verity/circuit_check/"
+"tools/lean/" = "tools/verity/lean/"
+
+# --- infra/: our machines, cluster, deploys and messaging
+"tools/cluster/" = "infra/cluster/"
+
+# --- benchmarks/: the measuring side (the census, and the GPU probes that measure the silicon)
+"catalog/census/" = "benchmarks/census/"
+"tools/tc_probe/" = "benchmarks/tc_probe/"
+"tools/tc_probe_fp4/" = "benchmarks/tc_probe_fp4/"
+"tools/native_peak/" = "benchmarks/native_peak/"
+
+[retired]
+paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/primitives/", "verity/claims/",
+         "tools/check/", "tools/circuit_check/", "tools/lean/", "tools/cluster/", "tools/tc_probe/", "tools/tc_probe_fp4/",
+         "tools/native_peak/"]
+
+[drop]
+paths = ["catalog/verity_catalog/__init__.py", "kernels/pyproject.toml", "experimental/verity_experimental/commitments/__init__.py",
+         "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/communication/__init__.py",
+         "verity/protocols/accounting/space/__init__.py", "verity/protocols/accounting/work/__init__.py",
+         "verity/protocols/verification/__init__.py"]
+
+[tokens]
+# directories that no row moves whole, as they read in text after the move (each rewrite is reported as approximate)
+"catalog" = "verity/ml/circuits"
+"catalog/verity_catalog" = "verity/ml/circuits"
+"kernels" = "verity/ml/kernels"
+"experimental" = "verity/experimental"
+"verity/primitives" = "verity/ml"
+"verity/protocols/accounting" = "verity/experimental/protocols"
+"verity/protocols/accounting/work" = "verity/experimental/protocols"
+"verity/protocols/accounting/space" = "verity/experimental/protocols"
+"verity/protocols/accounting/communication" = "verity/experimental/protocols"
+"verity/protocols/verification" = "verity/experimental/protocols"
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
+# says otherwise
+"backends.flock" = "verity.ml.flock"
 "catalog.census" = "benchmarks.census"
 "catalog.tests" = "verity.ml.circuits.ops.tests"
 "experimental.tests" = "verity.experimental.tests"
