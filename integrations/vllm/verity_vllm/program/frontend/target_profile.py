@@ -77,7 +77,7 @@ class TargetProfile:
                            conformance on committed bytes; fused region == composed relations NOT established; Daniel's ruling M-0285).
                            Omitted from `to_json()` when None: eager profiles serialise (and digest) exactly as before.
     fp8_block_gemm      -> [R15 fp8] env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
-                           (`verity/ml/kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
+                           (`kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
                            DeepGEMM, CUTLASS, ...).  `"cutlass"` -> `VLLM_USE_DEEP_GEMM=0` (both DeepGEMM kernels excluded; on cc 9.x
                            the selector takes `CutlassFp8BlockScaledMMKernel`, the sm90 blockwise CUTLASS GEMM whose arithmetic is the
                            registered `ScaledMmFp8Block_v1`); None = vLLM's own selection (DeepGEMM JIT when its toolchain exists —

@@ -18,7 +18,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
   engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
-  program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
+  program/            Program            registry/ frontend/ lifting/ kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
@@ -54,7 +54,7 @@ constructor + a facts table).  Never: commit, decide what is required.
 primitive families through `verity.primitives.circuits.codec.register_lazy_family`), lowering (`frontend/`: the torch frontend, `derive`, `rules/`
 = lowering rules, the vLLM meta export, `target_profile`, the correspondence emitter `emit.py`, the collective export ops),
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
-and `verity/ml/kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
+and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
 proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core
 binds were promoted into `registry/`).

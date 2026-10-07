@@ -160,7 +160,7 @@ def install(model, mode: str, committer=None):
     count = {"forward": 0, "rows": 0}
     ext = None
     if mode in ("ncp", "pearl"):
-        from verity.ml.kernels import load
+        from kernels import load
         ext = load()
     sites = vllm_site.discover(model)
     stats["layers"] = len(sites)

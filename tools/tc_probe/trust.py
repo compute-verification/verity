@@ -1129,7 +1129,7 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     siblings = [i for i, ins in INSTRUCTIONS.items() if ins.model is not None and subject.model is not None and ins.model is subject.model and i != subject.instruction]
     all_entries = [e for e in _load_discrepancies(repo_path) if e.get("profile") in subject.names]
     d_entries = [e for e in all_entries if d_class(e) == "numerics"]      # model vs hardware words: these gate the levels
-    binding_entries = [e for e in all_entries if d_class(e) == "binding"]  # which verity/ml/kernels/shapes realise the chain: dossier caveats
+    binding_entries = [e for e in all_entries if d_class(e) == "binding"]  # which kernels/shapes realise the chain: dossier caveats
     datasets = _datasets_for(subject, repo_path) + _contract_instance_sets(subject)
 
     # ---- HYPOTHESIS ----

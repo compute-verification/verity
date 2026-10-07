@@ -8,7 +8,7 @@ Gates, before any timing (a failing gate stops the run and names its first diffe
   whose TurboSHAKE128 meets RFC 9861's vectors;
 - the device committer (`pouw_cuda/ncp2_kernels.cu`) against `pouw_native`, leaf for leaf, on `pouw_device.gate_calls`
   with Qwen2.5-0.5B's four linears (`pouw_device.first_difference`);
-- #218's route-U GEMM (`verity/ml/kernels/pouw_gemm.cu` `ncp_route_u`) on `ncp-v2`'s own X and Y against `pouw_native`'s tile words.
+- #218's route-U GEMM (`kernels/pouw_gemm.cu` `ncp_route_u`) on `ncp-v2`'s own X and Y against `pouw_native`'s tile words.
 
 Timings, for each Qwen2.5-0.5B linear at m = 16, 256 and 2,048 rows:
 - ``bf16``: ``a @ w.T`` in BF16 (cuBLAS), what serving runs;
@@ -145,7 +145,7 @@ def gate_committer() -> list[dict]:
     return out
 
 
-#: `ncp_route_u`'s tile (BM, BN) by config, largest first (`verity/ml/kernels/pouw_gemm.cu` launch<MT, NT, WM, WN, ...>: BM = WM·MT·16,
+#: `ncp_route_u`'s tile (BM, BN) by config, largest first (`kernels/pouw_gemm.cu` launch<MT, NT, WM, WN, ...>: BM = WM·MT·16,
 #: BN = WN·NT·8; K a multiple of 64)
 ROUTE_U_TILES = {0: (128, 256), 1: (16, 256), 2: (16, 16)}
 #: the gate call for config 0: gate_up at 128 rows
@@ -388,7 +388,7 @@ def main() -> None:
     save("host_gate", host_gate())
     if not args.dry_run:
         import torch
-        from verity.ml.kernels import load
+        from kernels import load
 
         save("device", torch.cuda.get_device_name())
         if args.fused_only:

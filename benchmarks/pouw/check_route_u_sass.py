@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from verity.ml.kernels import load  # noqa: E402
+from kernels import load  # noqa: E402
 
 
 def main() -> None:
