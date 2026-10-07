@@ -1,5 +1,5 @@
-"""`verity_flock.rec_vstage`, V*'s statements over an inner session, on rec-algebra's fixture session transcribed as the rec
-proxy would have recorded it (each round's caps, ``c_k`` and coins for the verifier; its row and salt for the prover). The
+"""`verity_flock.rec_vstage`, V*'s statements over an inner session, on rec-algebra's fixture session replayed through the rec
+proxy (each round's salted tops, ``c_k`` and coins for the verifier; its tops, row and salts for the prover). The
 verifier's side from the public record alone (the table's shape, the fold points, every round's value rebuilt from its two
 ``c_k``, the openings' coefficients) against the Lean verifier's values (`fixtures/inner_claims.json`); the prover's running
 sums giving the algebra exactly the consistency sums of the openings, so both reps hold; and each forgery (a message, a running
@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -40,31 +41,40 @@ def _fold() -> dict:
 
 @pytest.fixture(scope="module")
 def inner(tmp_path_factory) -> Path:
-    """The fixture's honest session as `rec_live.Proxy.write` lays it out."""
+    """The fixture's honest session replayed through the firewall (`rec_live.Proxy`, seeded salts), whose coin server returns
+    the recorded coins, as `rec_live.Proxy.write` lays it out. The session ran on seeded coins: its Hello is replayed without
+    the coin scheme."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
-    g = random.Random(5)
-    rounds, private = [], []
-    for st in rec["streams"]:
-        for k, rd in enumerate(st["rounds"]):
-            s = RL.split_round(bytes.fromhex(rd["msg"]), k == 0 and not st["parent"])
-            rows = RL.message_rows(s.free)
-            salts = [g.randbytes(192) for _ in rows]
-            rounds.append({"stream": st["stream"], "k": k, "caps": [c.hex() for c in s.caps],
-                           "commits": [b.hex() for b in RL.commit_rows(rows, salts)], "n": rd["n"], "coins": rd["coins"]})
-            private.append({"stream": st["stream"], "k": k, "elements": [RL.f128_hex(v) for v in s.free], "rows": rows,
-                            "salts": [x.hex() for x in salts], "nonces": [x.hex() for x in s.nonces]})
+    g, pending = random.Random(5), bytearray()
+
+    def rand(n: int) -> bytes:
+        out = bytes(pending[:n])
+        del pending[:n]
+        assert len(out) == n, "a coin the record does not hold"
+        return out
+
+    coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
+    proxy = RL.Proxy(RL.CoinServer(rand), lambda: g.randbytes(192))
+    send = lambda *req: RL.decode_resp(proxy.handle(RL.encode_req(*req)))
     hello = json.loads(rec["hello"])
-    hello["link"] = {k: v for k, v in hello["link"].items() if k != "sigma"}
-    link = {"roots": rec["link"]["root_b"], "points": [x for p in rec["link"]["points"] for x in p], "y": rec["link"]["y"]}
-    d = tmp_path_factory.mktemp("inner")
-    (d / "public.json").write_text(json.dumps({"kind": RL.KIND, "hello": hello, "link": link, "rounds": rounds,
-                                               "message_rows": sum(len(r["commits"]) for r in rounds), "row_words": RL.ROW_WORDS}))
-    (d / "private.json").write_text(json.dumps({"kind": RL.KIND + "/private", "rounds": private}))
-    (d / "session").mkdir()
+    del hello["coins"]
+    lk = rec["link"]
+    pending += coins(x for p in lk["points"] for x in p)
+    assert send(RL.REQ_HELLO, json.dumps(hello))[0] == RL.RESP_OK
+    assert send(RL.REQ_COMMIT, bytes.fromhex(lk["root_f"]), [(t, bytes.fromhex(v)) for t, v in lk["root_b"].items()], [])[0] == RL.RESP_COINS
+    assert send(RL.REQ_LINK, coins(lk["y"]))[0] == RL.RESP_OK
+    for st in rec["streams"]:
+        assert send(RL.REQ_OPEN, st["stream"], st["parent"] or "", st["label"].encode(), st["at"])[0] == RL.RESP_OK
+        for rd in st["rounds"]:
+            pending += coins(rd["coins"])
+            assert send(RL.REQ_ROUND, st["stream"], bytes.fromhex(rd["msg"]), rd["n"]) == (RL.RESP_COINS, [int(c, 16) for c in rd["coins"]])
     for r in (0, 1):
-        shutil.copyfile(SET / "records-cpu" / f"honest.rep{r}.proof", d / "session" / f"circuit.rep{r}.bin")
+        assert send(RL.REQ_PROOF, "circuit", r, (SET / "records-cpu" / f"honest.rep{r}.proof").read_bytes())[0] == RL.RESP_OK
+    assert send(RL.REQ_FINISH)[0] == RL.RESP_VERDICT
+    d = tmp_path_factory.mktemp("inner")
+    proxy.write(d)
     return d
 
 
@@ -74,7 +84,7 @@ def side(inner):
     registrations and the verifier's entries."""
     public, private, proofs = V.load(inner)
     vf = S.verifier(public, _fold())
-    qs = V.queries(public, proofs)
+    qs = V.queries(public, private, proofs)
     coefs = S.coefficients(vf, qs)
     program = O.session_program((inner / "public.json").read_bytes())
     mrs = S.message_rounds(public, private, vf.sh)
@@ -87,6 +97,19 @@ def _ports(vf, chain, mrs, rep: int, acc: O.Chain | None = None) -> list[list[in
     a0, a1 = (acc or chain).rep_ends(rep)
     rows = (acc or chain).reg.rows
     return [mr["rows"][rep] for mr in mrs] + [list(rows[a0]), list(rows[a1])]
+
+
+def test_the_record_holds_every_top_salted_and_the_openings_climb_to_them(inner):
+    """Replayed through the firewall, the coin server's record holds no tree top in the clear (level 0's ``root_B``, each
+    later level's cap: one ``b || c`` a node), V*'s opened tops are the proofs' caps, and every opening climbs to its node."""
+    public, private, proofs = V.load(inner)
+    text = (inner / "public.json").read_text()
+    for r, b in proofs.items():
+        caps = [lv.cap for lv in V.decode(b)["levels"]]
+        assert [list(t.nodes) for t in V.tops(public, private, f"circuit/rep{r}")] == caps
+        assert not any(n.hex() in text for c in caps for n in c)
+    assert [len(bcs) for bcs in public["link"]["roots"].values()] == [len(V.decode(proofs[0])["levels"][0].cap)]
+    assert all(V.opens(q) for q in V.queries(public, private, proofs))
 
 
 def test_the_shape_and_the_fold_points_are_the_verifiers(inner):
@@ -216,3 +239,15 @@ def test_inner_fold_gives_inner_claims_comb_and_extras(inner, tmp_path):
     assert (out["m"], out["k_log"]) == (INNER["m"], INNER["k_log"])
     assert out["extras"] == INNER["reps"][0]["extras"] == INNER["reps"][1]["extras"]
     assert [r["comb"] for r in out["reps"]] == [d["comb"] for d in INNER["reps"]]
+
+
+def test_inner_folds_plain_leaf_scheme_is_the_staged_one():
+    """`InnerFold.lean --plain-leaves` pins the META ``leaf_scheme`` a recursive session's inner statement is staged with."""
+    from verity_flock import circuit as FC
+
+    src = (HERE / "lean" / "InnerFold.lean").read_text()
+    body = src[src.index("def leafSchemePlain : Json :="):].split("\n\n", 1)[0]
+    got = dict(re.findall(r'\("(\w+)", \.str "([^"]*)"\)', body))
+    got.update({k: int(v) for k, v in re.findall(r'\("(\w+)", toJson \((\d+) : Nat\)\)', body)})
+    assert got == FC.LEAF_SCHEME_PLAIN
+    assert 'merkleLeaf := "flock-leaf/sha512-unsalted"' in src and FC.LEAF_SCHEME_PLAIN["id"] == "flock-leaf/sha512-unsalted"

@@ -85,6 +85,20 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
     PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None, merkle_hash: MERKLE }
 }
 
+/// A statement's Merkle hash: [`MERKLE`], or plain SHA-512 leaves for a plain-leaf statement (`circuit::leaf_scheme_plain`).
+fn merkle(c: &Composite) -> HashKind {
+    if c.plain_leaves() { HashKind::Sha512 } else { MERKLE }
+}
+
+/// The statement's trees take hm96 salts.
+fn salted(st: &Stmt) -> bool {
+    merkle(&st.c) == MERKLE && cfg!(feature = "sha512")
+}
+
+fn pcs_of(st: &Stmt, lig: LigeritoProfile) -> PcsParams {
+    PcsParams { merkle_hash: merkle(&st.c), ..params(st.m, lig) }
+}
+
 /// `--zk`: M1's masked protocol (`flock_live::zk_veil`), pinned in the identity (both sides must agree).
 fn zk_mode() -> bool {
     flag("--zk")
@@ -109,7 +123,7 @@ fn seed_coins() -> bool {
 
 /// M1's pad layout for the statement: the algebraic phase's, then Ligerito level 0's (its OOD samples and lane rounds).
 fn zk_layout(st: &Stmt) -> Layout {
-    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
     Layout::new(st.m, st.c.k_log, lc.ood_samples[0], lc.initial_k)
 }
 
@@ -163,7 +177,7 @@ fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
 fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
     use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
     let tr = Instant::now();
-    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
     let (lanes, l, t) = ((1usize << lc.initial_k) + EXTRA_LANES, 1usize << lc.initial_log_msg_cols, zk_t_pad(st.m));
     let draw = |stream: u64, lanes: usize, n: usize| -> Vec<Vec<F128>> {
         if zero { vec![vec![F128::ZERO; n]; lanes] } else { rng.f128s_lanes(stream, lanes, n) }
@@ -214,7 +228,7 @@ fn identity(c: &Composite) -> Value {
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
            "seed_injection": cfg!(feature = "seed-injection"),
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
-           "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
+           "hashes": {"merkle": format!("{} (every Ligerito level)", merkle(c).as_str()),
                       "round_digest": "sha512 (framing: the coin server retains every round's bytes and the replay compares them)",
                       "statement_digest": "sha512", "sigma": "sha512", "coin_commitment": "sha512",
                       "coin_derivation": "sha512 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
@@ -412,7 +426,7 @@ impl CircuitVerifier {
         let t = Instant::now();
         let (commitment, proof): (Commitment, R1csProofLigerito) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
         ph.decode_s = t.elapsed().as_secs_f64();
-        let pcs = params(st.m, LigeritoProfile::Fast100);
+        let pcs = pcs_of(st, LigeritoProfile::Fast100);
         if commitment.params != pcs {
             return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
         }
@@ -448,7 +462,7 @@ impl CircuitVerifier {
 fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
                                                                  root: &[u8; 64], points: &[Vec<F128>], rep: usize, ch: &mut Ch)
     -> Result<(Vec<(&'static str, zkv::Lin)>, flock_core::pcs::ligerito::zk::Level0ZkRecord), String> {
-    let pcs = params(st.m, LigeritoProfile::Fast100);
+    let pcs = pcs_of(st, LigeritoProfile::Fast100);
     if commitment.params != pcs {
         return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
     }
@@ -840,7 +854,7 @@ fn prove_cpu(st: &Stmt, wt: WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &
     let WitData::Host((z, a, b, zl)) = wt else { panic!("the CPU prover takes a host witness") };
     let tp = Instant::now();
     let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
-        &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
+        &st.r1cs, &pcs_of(st, lig), z, a, b, zl, &st.circuit,
         &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() },
         ch,
     );
@@ -932,7 +946,7 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
     let tl0 = Instant::now();
     let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
     let t_level0 = tl0.elapsed().as_secs_f64();
-    let trees = params(st.m, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
+    let trees = pcs_of(st, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
     let reps = [0usize, 1].map(|rep| {
         let id = id0 + rep as u64 * (1 + trees);
@@ -948,7 +962,7 @@ fn level0_root(st: &Stmt, wt: &WitData, lig: LigeritoProfile, level0: Option<&fl
                salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Vec<u8> {
     #[allow(irrefutable_let_patterns)]
     let WitData::Host((z, ..)) = wt else { panic!("a table committed before the session opens takes a host witness") };
-    let pcs = params(st.m, lig);
+    let pcs = pcs_of(st, lig);
     #[cfg(feature = "sha512")]
     {
         let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
@@ -1067,9 +1081,9 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
     let (proof, commitment) = if std::env::var("FC_ZK_FRAMED").is_ok() {
         let mut rounds = |content: &[u8], n: usize| replay_round(&mut mch, content, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
         let mut fr = Framer { pending: frame_domain(&domain(&st.c, rep)), rounds: &mut rounds };
-        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut fr)
+        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &pcs_of(st, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut fr)
     } else {
-        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut mch)
+        prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &pcs_of(st, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut mch)
     };
     let t_upstream = tp.elapsed().as_secs_f64();
     zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, json!({}))
@@ -1237,7 +1251,7 @@ fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[V
     -> Result<[Vec<F128>; 2], String> {
     use flock_core::pcs::ligerito::zk::{lane_codeword, pad_codeword};
     use flock_field::F256;
-    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config()?;
+    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config()?;
     let (log_msg, lanes) = (lc.initial_log_msg_cols, 1usize << lc.initial_k);
     type M2 = [[F128; 2]; 2];
     let wmat = |rho: [F256; 2]| -> M2 { [[rho[0].c0, rho[1].c0], [rho[0].c1, rho[1].c1]] };
@@ -1598,7 +1612,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     }
     let clear: Vec<Value> = total.iter().filter(|(k, _)| k.starts_with("CLEAR")).map(|(k, (_, b))| json!({"class": k, "bytes": b})).collect();
     let unattributed = total.get("UNATTRIBUTED").map(|x| x.1).unwrap_or(0);
-    let lc = flock_core::pcs::ligerito::zk::prover_config(params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().unwrap(), zk_queries0(st.m).unwrap());
+    let lc = flock_core::pcs::ligerito::zk::prover_config(pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().unwrap(), zk_queries0(st.m).unwrap());
     let ligerito = json!({"m": st.m, "t_pad0": zk_t_pad(st.m), "initial_k": lc.initial_k, "initial_log_msg_cols": lc.initial_log_msg_cols, "recursive_ks": lc.recursive_ks,
         "recursive_log_msg_cols": lc.recursive_log_msg_cols, "log_inv_rates": lc.log_inv_rates, "queries": lc.queries, "ood_samples": lc.ood_samples,
         "grinding_bits": lc.grinding_bits});
@@ -2218,7 +2232,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     };
     let reused = matches!(reuse, Reuse::Take(t) if kept(t));
     let (proof, commitment, ph, wph, hph) =
-        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Stream(ch), Some(salts), reuse,
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &pcs_of(st, lig), &domain(&st.c, rep), hook, Live::Stream(ch), salted(st).then_some(salts), reuse,
                                                  native_sha));
     let ts = Instant::now();
     let bytes = bincode::serialize(&(commitment, proof)).unwrap();
@@ -2238,7 +2252,7 @@ fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook
                  -> (R1csProofLigerito, Commitment, Value) {
     use flock_live::gpu_circuit::{Live, Reuse, prove_circuit};
     let (proof, commitment, ph, wph, hph) =
-        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &pcs_of(st, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
                                                  Reuse::None, native_sha));
     let bk = gpu_buckets(wt, ph, wph, hph, false, native_sha);
     eprintln!("GPUPHASE\t{bk}");
@@ -2634,9 +2648,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 (Some(r), l, s)
             };
             #[cfg(feature = "sha512")]
-            let level0 = (!plan.gpu).then(|| {
+            let level0 = (!plan.gpu && salted(st)).then(|| {
                 let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
-                Arc::new(s.expand(s.level0_id(), params(st.m, lig).n_leaves()))
+                Arc::new(s.expand(s.level0_id(), pcs_of(st, lig).n_leaves()))
             });
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let tl0 = Instant::now();
@@ -4208,6 +4222,10 @@ fn main() {
         if links > 0 {
             eprintln!("links: {links} cut wire(s) checked on the population's public file");
         }
+    }
+    // --zk's level 0 hides behind hm96 salts: a plain-leaf statement is a recursive session's inner one, ZK off
+    if zk_mode() && c.plain_leaves() {
+        refuse("--zk: the statement's trees have plain SHA-512 leaves (flock-leaf/sha512-unsalted), a ZK-off statement".into());
     }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));

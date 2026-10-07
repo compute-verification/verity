@@ -84,6 +84,12 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
                "salt_source": "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored", "key": "default_key, a statement constant for every tree",
                "key_sha512": "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744"
                              "a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22"}
+#: The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
+#: firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
+#: SHA-512 digest itself (``HashKind::Sha512``, the Lean verifier's ``MerkleScheme.sha512``) and an opening carries no salt.
+#: ZK off only: ``flock-circuit --zk`` refuses it (``live/src/circuit.rs``'s ``leaf_scheme_plain`` is the same object).
+LEAF_SCHEME_PLAIN = {"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
+                     "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}
 SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
 SHA_LOG = HM_LOG = 18
 MASK_LOG = 14
@@ -495,7 +501,8 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
-            v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None) -> str:
+            v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None,
+            leaf_scheme: dict | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -506,6 +513,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     exactly their words, named after its first (META ``out_row_ports``), so that a unit reading the row as one input port
     has the writer's leaf; ``v2_out_rows``: runs (one port or several) each committed as one ``sha512/row/v2`` row of exactly
     their words (PoUW's ok, tile digest and role-W rows), in place of a lone port's row zero-padded to whole blocks.
+    ``leaf_scheme``: the proof's own Merkle leaves (META ``leaf_scheme``), :data:`LEAF_SCHEME` by default or
+    :data:`LEAF_SCHEME_PLAIN`.
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
@@ -618,7 +627,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "ports": [[p.name, p.words, p.comps] for p in ports], "input_ports": len(ins), "out_ports": outs, "ranges": ranges,
             "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": leaves_in, "leaves_out": lv["out"],
             **({"public_inputs": pins, "leaves_public": leaves_public} if pins else {}),
-            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, orows, sub, counts), "leaf_scheme": LEAF_SCHEME,
+            "row_key_sha512": LEAF_SCHEME["key_sha512"], "dummy": _dummy(low, in_ports, ins, outs, orows, sub, counts),
+            "leaf_scheme": leaf_scheme or LEAF_SCHEME,
             **({"out_row_ports": counts} if seg_out_rows or max(counts, default=1) > 1 else {}),
             **({"links": links} if links else {}), **({"definition": definition} if definition else {}),
             # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
