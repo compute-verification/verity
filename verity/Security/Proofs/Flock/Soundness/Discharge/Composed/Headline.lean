@@ -16,10 +16,10 @@ import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 * **zero knowledge**: at every draw `verify --zk` sets up, the verifier's view of the session's table at the executable's
   leaves (`coinedOf P (tablesAtZK dj y₀ S R)`) is within `2·|Hid|·2^-193` of `S_shvzk`'s, which reads only the public
   values, both ways (Lemma B, `session_shvzk_hm96`, with `PadOnto` from `PadNonvanishing` by `padOnto_M1`, which
-`ZK.padNonvanishing40` proves at M1's padding constant).
+`ZK.padNonvanishing40` proves at C-Flock ZK's padding constant).
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
-it), A3 (`hA3`), A6 and the coin server (`RecordsLiveZK`, and `DrawOkZK` at each of the law's draws),
+it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each of the law's draws),
 and `hash-derived-key` (`Assumptions.HashDerivedKey` at hm96-sha512's key). `CoinedOfSetup` is proved
 (`coinedOf_setup`), and `RunsZC` at the law's draws is `ZkExec.runsZC_live`.
 
@@ -68,7 +68,7 @@ At a refused coin the honest prover stops before it sends anything that depends 
 statement at every coin vector, refused ones included, is `ZkEveryCoin.zk_session_view_all`.
 
 Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector. It covers a verifier that chooses its
-coins because the coin server commits every coin at `Hello`, before the prover's first message (`coin_tree.rs`; the
+coins because the challenger commits every coin at `Hello`, before the prover's first message (`coin_tree.rs`; the
 prover checks each opening against the commitment before it uses the coin), so the coins are fixed before anything the
 prover sends; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`). No statement here models that
 commitment yet. -/
@@ -95,9 +95,9 @@ theorem zk_session_composed
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's draw at each of the law's draws
     (hDraw : ∀ ω, DrawOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

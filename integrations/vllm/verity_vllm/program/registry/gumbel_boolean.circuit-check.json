@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "GumbelLaneHead_v1": {
+   "and": 1556
+  },
+  "GumbelLaneRounds_v1": {
+   "and": 5035
+  },
+  "GumbelSetup_v1{N=2}": {
+   "and": 911
+  },
+  "GumbelSetup_v1{N=64}": {
+   "and": 3859
+  },
+  "GumbelStreamKeyHead_v1": {
+   "and": 4960
+  },
+  "GumbelStreamKeyTail_v1": {
+   "and": 4285
+  },
+  "GumbelStreamKey_v2": {
+   "and": 9245
+  },
+  "NvLogf_v3": {
+   "and": 43280
+  }
+ }
+}

@@ -308,7 +308,7 @@ noncomputable abbrev tablesAtZK : Finset (Fin n) → Reg → TabZK 𝔽 mPts := 
 
 /-! ## The live session's record -/
 
-/-- **`wr` is the coin server's record of the live `--zk` session** (#862's `RecordsLive` at `--zk`): whenever
+/-- **`wr` is the challenger's record of the live `--zk` session** (#862's `RecordsLive` at `--zk`): whenever
 flock-verify accepts what `wr` writes for the outcome `o` at draw `S`, the record carries the draw `dj S`, the proof
 files are `o`'s, and the record decodes to a session whose table's `root_B`, link points and rep streams' rounds are
 `o`'s. -/
@@ -323,7 +323,7 @@ def RecordsLiveZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
         sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = pick (o.rep0, o.rep1) r
 
-/-- **The coin server's draw at `S`, at `--zk`** (#862's `DrawOk` at `zkInputs I`): it proves `S`, and setupH sets up
+/-- **The challenger's draw at `S`, at `--zk`** (#862's `DrawOk` at `zkInputs I`): it proves `S`, and setupH sets up
 at it under the `--zk` tags and coin tree with `mPts` link points. -/
 def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
@@ -333,7 +333,7 @@ def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : 
 /-! ## The statement -/
 
 /-- **Wherever flock-verify accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
-`--statement` tags are untyped, with `wr` the coin server's record (`RecordsLiveZK`): whenever the draw `S` is `DrawOkZK`
+`--statement` tags are untyped, with `wr` the challenger's record (`RecordsLiveZK`): whenever the draw `S` is `DrawOkZK`
 (pointwise: link points depend on `|S|`, so no `mPts` holds at every draw) and `verify --zk` accepts what `wr` writes
 for `o` at it, setupH's statement `st` at `dj S` under the `--zk` tags is
 well formed (`StmtWF`, `RegionsWF`), `Zk.schedule st.m` is `(sch, t_pad)`, the draw has a `DrawSetupZK` at `st`, `sch`

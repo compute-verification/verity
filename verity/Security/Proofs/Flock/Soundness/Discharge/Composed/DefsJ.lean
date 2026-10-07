@@ -155,7 +155,7 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
 open Classical in
 /-- **Table `j` at draw `S`** (`tableAtZK` at table `j`): the table `verify --zk` sets up at table `j`'s inputs and draw
 when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at table 0's inputs, which every
-session `verify --zk` accepts has: `setupZJ_of_verifiesZK`). -/
+session `verify --zk` accepts at a draw `DrawOkZKJ` admits has: `setupZJ_of_acceptsZK`). -/
 noncomputable def tableZJ (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table

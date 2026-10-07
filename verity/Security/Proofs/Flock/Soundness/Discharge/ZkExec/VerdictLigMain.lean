@@ -5,9 +5,10 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
 
 `zk_ligerito_accepts`: when `Zk.ligerito` accepts, the compiled masked phase's Ligerito, played with the proof's
 messages on the coins the executable consumed, ends in a result whose verdict at the proof's openings is true. The
-lane phase and level 0's padded queries are new (`lane_vals`, `queryLevel0_val`, `padE_eq`); the level loop is M0's
-(`LigeritoRun.lean`), with an invariant that drops M0's caps and requests (`LoopRelV`): level 0's request is on
-`2^k₀ + 4` wide rows, which M0's `ReqOK` does not describe, and the verdict reads neither.
+lane phase and level 0's padded queries are new (`lane_vals`, `queryLevel0_val`, `padE_eq`); the level loop is the
+non-ZK session's (`LigeritoRun.lean`), with an invariant that drops the non-ZK session's caps and requests (`LoopRelV`):
+level 0's request is on `2^k₀ + 4` wide rows, which the non-ZK session's `ReqOK` does not describe, and the verdict
+reads neither.
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -17,7 +18,7 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- The level loop's invariant before iteration `i`: M0's `LoopRel` without its caps and requests. -/
+/-- The level loop's invariant before iteration `i`: the non-ZK session's `LoopRel` without its caps and requests. -/
 structure LoopRelV (sch : Flock.Schedule) (p : LigeritoProof) (o : Opens 𝔽 Dig) (i : ℕ)
     (v : ℕ × Array ByteArray × Array (Array F256) × ℕ) (stE : LState) (t : Flock.Transcript)
     (stM : LigStateC 𝔽 𝕂 Dig) : Prop where
@@ -34,7 +35,7 @@ structure LoopRelV (sch : Flock.Schedule) (p : LigeritoProof) (o : Opens 𝔽 Di
   pos : ∀ cs ∈ stE.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size
   level : stM.level = i + 1
 
-/-- What the level loop ends with: M0's `LoopFinal` without its residual length, caps and requests. -/
+/-- What the level loop ends with: the non-ZK session's `LoopFinal` without its residual length, caps and requests. -/
 structure LoopFinalV (sch : Flock.Schedule) (p : LigeritoProof) (o : Opens 𝔽 Dig) (b : ℕ → 𝔽) (ini : List 𝕂)
     (v : ℕ × Array ByteArray × Array (Array F256) × ℕ) (stE : LState) (pend : PendL 𝔽 Dig) : Prop where
   size : v.2.2.1.size = sch.levels.size - 1

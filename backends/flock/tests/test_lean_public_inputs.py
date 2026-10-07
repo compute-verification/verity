@@ -36,7 +36,7 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 BLOCKS = Path(__file__).resolve().parent / "fixtures" / "public-inputs-blocks"
 PUBLIC = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
 XH = {"port": "xh", "words": 32, "seed": "test/rope-x", "derivation": "test/rope-x/second-word"}
-STATEMENT = "verity/flock-circuit+seed-injection"
+STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 CASES = {"honest": True, "public_input_claim_false": False, "output_claim_false": False, "digest_claim_false": False,
          "output_row_committed_false": False}
 OWN_REFUSAL = "is not the verifier's own recomputation (seed rope/positions, derivation verity/rope/neox-bf16/cos-sin/v1)"

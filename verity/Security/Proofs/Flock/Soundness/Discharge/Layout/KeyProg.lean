@@ -7,7 +7,7 @@ set_option Elab.async false
 /-!
 # `lay` and `rs` at the circuit's program on Δ's source keys
 
-`Placed.keyProg c hU n` is the program of `n` units of the circuit `c`'s VU rows, each unit's input `x` on the input gate
+`Placed.keyProg c hU n` is the program of `n` units of the circuit `c`'s template instance rows, each unit's input `x` on the input gate
 of its Δ key (`Aliased.keyIdx`): gate `2 + u·B + b` for unit `u` and the first input `b` with `x`'s key, gate 1 for the
 zero, gate 0 for the constant. Its row bits (`keyRowOf`) are the input gates whose key is message bit `bit` of byte
 `byte` of a row port `q` (`Aliased.Src.msg`): bit `8·byte + bit` of unit `u`'s row `q`. Every other wire is a single
@@ -15,11 +15,11 @@ gate. At [e2e-placed]'s places (`Placed.Sites.progPlaces_keyProg`):
 
 * `keyRowOf_wire`: a column of unit `u`'s own instance on a row bit of unit `u'` is an input column of `u = u'` with that
   message key;
-* `keyProg_copies`: Δ's copies (`copy_site` at each drawn unit's VU and block; each message column is in the block by
-  the parse, `msgCol_lt_of_parse`);
+* `keyProg_copies`: Δ's copies (`copy_site` at each drawn unit's template instance and block; each message column is in
+  the block by the parse, `msgCol_lt_of_parse`);
 * `keyProg_bcPinned`: the rows' `b ‖ c` is the registration's, the population's public file (`bc_site`), at each drawn
-  unit's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions; `bcSite_keyProg` gives the VU's bound
-  from the parse when the unit returns the outputs, `vu_lt_pow2`);
+  unit's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions; `bcSite_keyProg` gives the template
+  instance's bound from the parse when the unit returns the outputs, `vu_lt_pow2`);
 * `keyProg_valPinned`: the single gates hold the registration's bits: 1 at the constant, 0 at the zero, and at the units'
   committed gates the registration's bit (`hout`, the returned outputs' pin), when every input a computed row reads has
   the zero or a row bit as its key (`KeysRow`).
@@ -66,7 +66,7 @@ theorem oneAt_uniform_val : ∀ (n : ℕ) (u : Fin n),
 end uniform
 
 /-- **A message column is in the block**, in a circuit `HmRow.parse` accepted: message bit `b < 8` of byte `byte` of row
-port `p` at VU `g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
+port `p` at template instance `g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
 theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
     (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
@@ -167,9 +167,9 @@ theorem unit_count_pow2 {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (ht :
     not_or, Bool.not_eq_false] at hur
   exact hur.2
 
-/-- **Every VU is below `2^⌊log₂ c.g⌋`** in a circuit `HmRow.parse` accepted whose unit returns the outputs: there the
-unit range's `c.g · c.upv` slots are a power of two, so `c.g` is one. (A tail that returns the outputs has no such
-check.) -/
+/-- **Every template instance is below `2^⌊log₂ c.g⌋`** in a circuit `HmRow.parse` accepted whose unit returns the
+outputs: there the unit range's `c.g · c.upv` slots are a power of two, so `c.g` is one. (A tail that returns the
+outputs has no such check.) -/
 theorem vu_lt_pow2 {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) (ho : c.outNet = c.unitNet) {g : ℕ} (hg : g < c.g) :
     g < 2 ^ c.g.log2 := by
@@ -186,7 +186,7 @@ theorem vu_lt_pow2 {tags : Tags} {bytes : ByteArray} {tables : List (String × B
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
-/-- The number of input columns of the circuit's VU rows. -/
+/-- The number of input columns of the circuit's template instance rows. -/
 noncomputable abbrev keyB : ℕ := (Placed.circuitRows c hU).nIn
 
 /-- The gates of `keyProg c hU n`. -/
@@ -362,7 +362,7 @@ variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabS
   (si : Placed.Sites plan tab)
 
 /-- **Bit `k` of row port `q` at a drawn unit's site**: message bit `k % 8` of byte `k / 8` (`Typed.msgCol`) at the
-unit's VU, in its block. -/
+unit's template instance, in its block. -/
 noncomputable def keyRowAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (k : ℕ) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
@@ -370,8 +370,8 @@ noncomputable def keyRowAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin
       (Typed.msgCol (si.acc S R u h).st.c (si.vu S R u h) q.val (k / 8) (k % 8))
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row port `q`'s `b ‖ c` at a drawn unit's site**: its `hm96` slot's output (`bcAddr`) at the unit's VU, in its
-block. -/
+/-- **Row port `q`'s `b ‖ c` at a drawn unit's site**: its `hm96` slot's output (`bcAddr`) at the unit's template
+instance, in its block. -/
 noncomputable def keyBcAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (j : Fin 128)
     (t : Fin 8) : Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
@@ -379,7 +379,7 @@ noncomputable def keyBcAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin 
   else ⟨0, Nat.two_pow_pos _⟩
 
 /-- **Row port `q`'s salt at a drawn unit's site**: `saltCol` (the `hm96` slot's salt input, [e2e-hm]'s
-`Discharge.Hm.saltCol`) at the unit's VU, in its block. -/
+`Discharge.Hm.saltCol`) at the unit's template instance, in its block. -/
 noncomputable def keySaltAddr (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (S : Finset (Fin n)) (R : Reg)
     (u : Fin n) (q : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n)) (j : Fin 192) (t : Fin 8) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -459,8 +459,8 @@ theorem keyProg_bcPinned
 
 include hparse in
 set_option linter.unusedVariables false in
-/-- **`BcSite` at a site of `keyProg`'s places** in a circuit whose unit returns the outputs: the VU is below
-`2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), the proved units are in the population by the draw's decoding
+/-- **`BcSite` at a site of `keyProg`'s places** in a circuit whose unit returns the outputs: the template instance is
+below `2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), the proved units are in the population by the draw's decoding
 (`proved_lt_population`), and the other conditions are `BcSite`'s. -/
 theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (h : u ∈ S)
     {pop : Public} {d : Lean.Json} {D : Draw.UnitDraw} (hd : (si.acc S R u h).draw = some d)

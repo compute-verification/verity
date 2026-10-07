@@ -98,7 +98,12 @@
       "usergroup": "S0C5U3Q04JD",
       "owns": [
         "verity/protocols/accounting/work/pouw/",
-        "verity/protocols/compliance/nci/",
+        "verity/Security/Definitions/Pouw/",
+        "verity/Security/Specs/Pouw/",
+        "verity/Security/Proofs/Pouw/",
+        "verity/Security/Definitions/Nci.lean",
+        "verity/Security/Specs/Nci/",
+        "verity/Security/Proofs/Nci/",
         "benchmarks/pouw/",
         ".agents/skills/kernel-engineering/"
       ]
@@ -111,17 +116,23 @@
       "usergroup": "S0C5VRGBZFE",
       "owns": [
         "verity/protocols/accounting/space/pous/",
+        "verity/Security/Definitions/Pous/",
+        "verity/Security/Specs/Pous/",
+        "verity/Security/Proofs/Pous/",
         "benchmarks/pous/"
       ]
     },
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
-      "remit": "Network accounting: the network warden (verity/protocols/accounting/communication/warden) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/protocols/accounting/communication/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
       "owns": [
-        "verity/protocols/accounting/communication/warden/",
+        "verity/protocols/accounting/communication/certifier/",
+        "verity/Security/Definitions/NetworkCertifier/",
+        "verity/Security/Specs/NetworkCertifier/",
+        "verity/Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
       ]
     },
