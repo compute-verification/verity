@@ -483,8 +483,20 @@ class Coll:
         t = self.type
         if not isinstance(t, Array):
             raise TypeError(f"axis {axis} requires nested Arrays, got {t!r}")
-        _, member_t = remove_axis(t, axis)
-        parts = [self[i].take(axis - 1, m).refs for i in range(t.n)]
+        n, member_t = remove_axis(t, axis)
+        if m < 0:
+            m += n
+        if not 0 <= m < n:
+            raise IndexError(m)
+        # one run of the member's leaves per index over the axes before `axis`, cut from `refs` directly: slicing each
+        # outer element first would cost every member a pass over all of `refs`
+        outer, inner = 1, t
+        for _ in range(axis):
+            outer *= inner.n
+            inner = inner.elem
+        L = inner.elem.leaves
+        stride = inner.n * L
+        parts = [self.refs.slice(k * stride + m * L, k * stride + (m + 1) * L) for k in range(outer)]
         return Coll(member_t, concat(parts))
 
     @property
