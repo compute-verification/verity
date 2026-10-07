@@ -19,7 +19,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[3]
 LEAN = ROOT / "verity" / "Security"
-SCRIPT = HERE / "lean" / "scripts" / "fp8atom_vectors.py"
+SCRIPT = ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw" / "lean" / "scripts" / "fp8atom_vectors.py"
 POLICY = json.loads((LEAN / "lean-audit.json").read_text())
 RUNS = json.loads((LEAN / "Proofs" / "lean-audit.json").read_text())["runs"]
 

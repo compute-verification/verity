@@ -81,6 +81,12 @@ EDITS = [
     ("tools/verity/check/tests/test_move_check.py", 'ROOT / "tools" / "check" / "move_check.py")',
      'ROOT / "tools" / "verity" / "check" / "move_check.py")'),
     ("verity/experimental/protocols/pouw/tests/test_lean_package.py", "ROOT = HERE.parents[4]\n", "ROOT = HERE.parents[3]\n"),
+    # relative to `lean/`, which stays, not to the test that moved
+    ("verity/experimental/protocols/pous/tests/test_pous_trusted.py", 'SECURITY = "../../../../Security/"',
+     'SECURITY = "../../../../../Security/"'),
+    # the protocols' Lean stays where it was until lean.py moves it
+    ("verity/experimental/protocols/pouw/tests/test_lean_package.py", 'SCRIPT = HERE / "lean" / "scripts" / "fp8atom_vectors.py"',
+     'SCRIPT = ROOT / "verity" / "protocols" / "accounting" / "work" / "pouw" / "lean" / "scripts" / "fp8atom_vectors.py"'),
     # the catalog's silicon may import itself: the rewrite turned the import root into a dotted name
     ("verity/ml/circuits/ops/tests/test_boundaries.py",
      'and not (name.split(".")[0] == "verity.ml.circuits" and name.startswith("verity.ml.circuits.silicon"))',
@@ -97,6 +103,13 @@ EDITS = [
      'CODE_DIRS = [*CORE_DIRS, "catalog", "kernels", "experimental"]\n',
      "#: The code the integration imports besides its own: `verity`, with the catalog, the kernels and experimental in it.\n"
      "CODE_DIRS = [*CORE_DIRS]\n"),
+    ("integrations/vllm/tests/pipeline/test_experiment_index.py",
+     '    """The dirty check covers each directory that ships core (`research_tools.CORE_DIRS`), not one hand-written path, and the\n'
+     "    catalog's, the kernels' and experimental's beside it (`research_tools.CODE_DIRS`).\"\"\"\n"
+     "    assert set(research_tools.CORE_DIRS) < set(research_tools.CODE_DIRS)\n",
+     '    """The dirty check covers each directory that ships core (`research_tools.CORE_DIRS`), not one hand-written path, and\n'
+     '    every other directory the integration imports (`research_tools.CODE_DIRS`)."""\n'
+     "    assert set(research_tools.CORE_DIRS) <= set(research_tools.CODE_DIRS)\n"),
     ("integrations/vllm/verity_vllm/ops/pod_bootstrap.sh",
      'DISTS="catalog kernels experimental"   # the distributions under their groupings: verity.ml.circuits, verity.ml.kernels, '
      'verity.experimental\nfor G in $DISTS; do [ -d "$CORE/$G" ] || { echo "BOOTSTRAP_FAIL_TREE: no $G beside $ROOT" >&2; exit 3; }; '
@@ -140,6 +153,10 @@ EDITS = [
     ("integrations/vllm/tests/ops/test_pod_bootstrap.py",
      '"research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "distributions_from_tree", "numpy_import",',
      '"research_telemetry_from_tree", "sampled_proofs_from_tree", "distributions_from_tree", "numpy_import",'),
+    # Lean data a Python script writes names the module it was computed by (Lean files are never rewritten)
+    ("**/Definitions/Pouw/PearlC/RowPrimVectors.lean", "from `verity.protocols.accounting.work.pouw.circuit.words`",
+     "from `verity.experimental.protocols.pouw.circuit.words`"),
+    ("**/Definitions/Pouw/Fp8Atom/Vectors.lean", "verity_catalog.silicon", "verity.ml.circuits.silicon"),
     # the commitment vectors name the module that writes them (the vectors files are never rewritten: digests pin them)
     *((f, GENERATOR + "verity.primitives.commitments.", GENERATOR + "verity.ml.commitments.") for f in VECTORS),
 ]
@@ -167,8 +184,19 @@ def main(root: Path) -> int:
             texts[path] = p.read_text(encoding="utf-8") if p.is_file() else None
         return texts[path]
 
+    def resolve(path: str) -> str:
+        """A glob names the one file it matches outside a Lake build directory (Lean files, wherever lean.py put them)."""
+        if "*" not in path:
+            return path
+        found = sorted(q.relative_to(root).as_posix() for q in root.glob(path) if ".lake" not in q.parts)
+        if len(found) != 1:
+            problems.append(f"{path}: matches {found or 'nothing'}, not one file")
+            return path
+        return found[0]
+
     for path, old, new in EDITS:
         assert old not in new, (path, old)
+        path = resolve(path)
         t = text(path)
         if t is None:
             problems.append(f"{path}: missing")

@@ -13,7 +13,7 @@ import pytest
 
 LEAN = Path(__file__).parents[4] / "protocols" / "accounting" / "space" / "pous" / "lean"
 #: the trusted layer's directory as TRUSTED.sha256 names it, relative to `lean/` (the grader and its driver are here)
-SECURITY = "../../../../Security/"
+SECURITY = "../../../../../Security/"
 COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort\) > TRUSTED\.sha256)$", re.M)
 LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 

@@ -1,3 +1,4 @@
 """Python and CUDA: the provers, the Python versions of core's circuits (`circuits`, with `ops`, what models compute, and
 `silicon`, what the GPUs actually compute), the commitments, crypto and randomness they use, and the kernels. Nothing here
-affects soundness, and nothing here imports `verity.experimental`."""
+affects soundness, and nothing here imports `verity.experimental` but the tests and agreement scripts that
+`tests/test_boundaries.py` names."""
