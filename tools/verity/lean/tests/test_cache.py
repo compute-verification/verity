@@ -522,7 +522,7 @@ def test_prune_keeps_the_newest_commits_and_what_they_name(s3, tmp_path):
 # ---------------------------------------------------------------- integration never reads it
 
 def test_the_audit_runs_lake_with_the_cache_off():
-    spec = importlib.util.spec_from_file_location("lean_audit_env", HERE.parent / "audit.py")
+    spec = importlib.util.spec_from_file_location("lean_audit_env", HERE.parent / "check.py")
     A = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(A)
     e = A.lake_env()
