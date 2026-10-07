@@ -36,6 +36,7 @@ pub mod circuit;
 pub mod firewall;
 pub mod glue;
 pub mod pure_block;
+pub mod release;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;

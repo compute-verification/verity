@@ -4260,7 +4260,7 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
                     s
                 }));
             }
-            prove_sessions(st, inst, &base, &seeds, 0, &addrs.join(","), ahead, &mut |_, v, proofs| got.push((v, proofs)));
+            prove_sessions(st, inst, &base, &seeds, 0, &addrs.join(","), ahead, None, &mut |_, v, proofs| got.push((v, proofs)));
         });
         let wall_s = ts.elapsed().as_secs_f64();
         let recs: Vec<Value> = (0..SESSIONS).map(|k| {
@@ -4350,9 +4350,13 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 /// `verify_ahead` proved sessions send their proofs and wait for their verdicts on their own threads while the next session
 /// proves (0: each verdict before the next session starts); every warm verdict comes before the first timed session starts.
 /// `emit` takes each session's record and proofs, in session order.
+/// With `fw` (`--firewall-state`), each session is an outer session of `fw`'s recursive session at its part, run through
+/// `flock_live::release::outer_session`: it takes the firewall's outer slot, is admitted or refused on the firewall's record
+/// before it connects, leaves its proofs at their release time if the recursive session has a schedule, and every stop
+/// reaches the challenger as a cut, never as `Finish`.
 #[allow(clippy::too_many_arguments)]
 fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[ProverSeed], warm: usize, addr: &str, verify_ahead: usize,
-                  emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
+                  fw: Option<&ReleaseArgs>, emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
     let n = seeds.len();
     let pipeline = base.tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
     let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
@@ -4402,6 +4406,28 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 emit_one(r, join(h), rtt);
             }
         }
+        if let Some(fw) = fw {
+            let addr = addrs[run % addrs.len()];
+            let mut rtt = (0.0, 0.0, 0);
+            let out = flock_live::release::outer_session(&fw.rec, &fw.session, &fw.part, &flock_live::release::SystemClock,
+                || eprintln!("firewall: {} at {} waits for the outer slot", fw.session, fw.part),
+                || {
+                    let mut tcp = TcpTransport::connect(addr).map_err(|e| format!("the challenger at {addr}: {e}"))?;
+                    rtt = tcp.ping_rtt(30);
+                    session_proved(st, inst, shared(tcp), &plan, seeds[run])
+                        .map_err(|(v, _)| v["why"].as_str().map_or_else(|| v["why"].to_string(), str::to_string))
+                },
+                |p: &Proved| p.res.clone(),
+                |p| {
+                    let (v, proofs) = session_finish(p);
+                    (v["accepted"] == true, (v, proofs))
+                })
+                .unwrap_or_else(|e| refuse(format!("--firewall-state {}: {e}", fw.rec.state.display())));
+            let (mut v, proofs) = out.sent.unwrap_or_else(|| (json!({"accepted": false, "why": out.why}), Vec::new()));
+            v["firewall"] = json!({"session": fw.session, "part": fw.part, "outcome": out.outcome, "why": out.why});
+            emit_one(run, (v, proofs), rtt);
+            continue;
+        }
         let mut tcp = TcpTransport::connect(addrs[run % addrs.len()]).unwrap();
         let rtt = tcp.ping_rtt(30);
         let proved = session_proved(st, inst, shared(tcp), &plan, seeds[run]);
@@ -4422,6 +4448,38 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
     while let Some((r, rtt, h)) = verdicts.pop_front() {
         emit_one(r, join(h), rtt);
     }
+}
+
+/// `prove --firewall-state DIR --session ID --part NAME`: the firewall's release side (PROTOCOL.md §10.5) on the state
+/// directory `verity_flock.firewall` shares. It runs behind the send check only, proves one session (the firewall serves
+/// each statement of a recursive session once), and refuses `FC_VERIFY_AHEAD`: the outer slot is held until each
+/// session's verdict, so no session's verdict can wait while the next one proves.
+struct ReleaseArgs {
+    rec: flock_live::release::Record,
+    session: String,
+    part: String,
+}
+
+fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
+    let state = arg("--firewall-state", "");
+    if state.is_empty() {
+        return None;
+    }
+    if !firewall_on(st) {
+        refuse("--firewall-state: the release side runs behind the send check (--zk with FC_FIREWALL=1)".into());
+    }
+    if sessions != 1 {
+        refuse(format!("--firewall-state proves one session (--warm 0 --runs 1), not {sessions}: the firewall serves each statement once"));
+    }
+    if std::env::var("FC_VERIFY_AHEAD").is_ok_and(|v| !v.is_empty() && v != "0") {
+        refuse("--firewall-state refuses FC_VERIFY_AHEAD: the outer slot is held until each session's verdict".into());
+    }
+    let (session, part) = (arg("--session", ""), arg("--part", ""));
+    if session.is_empty() || part.is_empty() {
+        refuse("--firewall-state takes --session ID (the recursive session: rec_live's firewall.json) and --part NAME".into());
+    }
+    let rec = flock_live::release::Record::new(&state).unwrap_or_else(|e| refuse(format!("--firewall-state {state}: {e}")));
+    Some(ReleaseArgs { rec, session, part })
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -4637,7 +4695,8 @@ fn main() {
             let base = Plan { gpu: flag("--gpu"), tables, split, zk_self_check, ..Plan::default() };
             let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
             let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
-            prove_sessions(&st, &inst, &base, &seeds, warm, &arg("--verifier", "127.0.0.1:7500"), verify_ahead, &mut |run, v, proofs| {
+            let fw = release_args(&st, warm + runs);
+            prove_sessions(&st, &inst, &base, &seeds, warm, &arg("--verifier", "127.0.0.1:7500"), verify_ahead, fw.as_ref(), &mut |run, v, proofs| {
                 if !dump.is_empty() {
                     std::fs::create_dir_all(&dump).unwrap();
                     for (r, p) in proofs.iter().enumerate() {

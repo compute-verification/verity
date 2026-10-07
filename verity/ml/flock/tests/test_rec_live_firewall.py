@@ -179,7 +179,7 @@ def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop()
     """A Commit before Hello or after the first, a Link before Commit or after the first, and a Finish before the last
     round are refused by the firewall itself, before any call on the coin server, so wherever one comes the coin server's
     calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it
-    (review-zk-firewall's r4)."""
+    (review-zk-gateway's r4)."""
     two = ("circuit/rep0", "circuit/rep1")
     sched = _schedule(two)
     reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
