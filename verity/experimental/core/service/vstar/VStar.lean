@@ -3,6 +3,9 @@ import VStar.Residuals
 import VStar.RecOpen
 import VStar.Unit
 import VStar.InnerRepCheck
+import VStar.Algebra
+import VStar.Parts
+import VStar.Stage
 import VStar.Stream
 import VStar.PyJson
 import VStar.Compose
