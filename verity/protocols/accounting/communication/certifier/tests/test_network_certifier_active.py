@@ -6,8 +6,10 @@ import asyncio
 import json
 import math
 import random
+import resource
 from collections import defaultdict
 from concurrent.futures import Executor, Future
+from pathlib import Path
 
 import pytest
 from verity.protocols.accounting.communication.certifier import active, online
@@ -482,6 +484,17 @@ def test_the_worker_process_chooses_what_the_prover_does():
     finally:
         pool.shutdown()
     assert sync == prover.choose()
+
+
+def test_reserve_fds_grows_the_fd_table_to_the_open_files_limit():
+    """The proxy grows its fd table before its clock starts (`active.reserve_fds`), so no socket of a burst waits for the
+    kernel to grow it under a second thread."""
+    soft = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+    want = 1 << 14 if soft == resource.RLIM_INFINITY else min(soft, 1 << 14)
+    active.reserve_fds(1 << 14)
+    status = Path("/proc/self/status").read_text().splitlines()
+    size = next(int(line.split()[1]) for line in status if line.startswith("FDSize:"))
+    assert size >= want
 
 
 def test_a_late_tick_fails_closed_and_does_not_slip():

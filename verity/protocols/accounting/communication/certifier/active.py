@@ -58,6 +58,8 @@ import heapq
 import itertools
 import math
 import multiprocessing
+import os
+import resource
 import struct
 import time
 from collections import deque
@@ -214,6 +216,21 @@ def _choose(snapshot: Prover) -> tuple[ClockSync, float]:
     return sync, round((time.perf_counter() - t0) * 1000, 1)
 
 
+def reserve_fds(limit: int = 1 << 16) -> None:
+    """Grow this process's fd table now, to its open-files limit or `limit` if less. Linux grows it on demand, and once
+    the process has a second thread (an executor's, a publisher's) each growth waits for an RCU grace period, tens of
+    ms, inside the `socket()` that needed it: live, the first burst of upstream connections then missed its slack."""
+    soft = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+    top = (limit if soft == resource.RLIM_INFINITY else min(soft, limit)) - 1
+    fd = os.open(os.devnull, os.O_RDONLY)
+    try:
+        if top > fd:
+            os.dup2(fd, top)
+            os.close(top)
+    finally:
+        os.close(fd)
+
+
 def worker() -> ProcessPoolExecutor:
     """The proxy's worker for its online choices: one spawned process, started before it returns, so that its
     start-up imports don't share window 0 with the proxy's forwards. A thread would hold the proxy's GIL."""
@@ -333,6 +350,7 @@ class Proxy:
         self.upstream, self.egress, self.ingress = upstream, egress, ingress
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
         self.windows = len(syncs) if windows is None else windows
+        reserve_fds()
         self.choices = None if prover is None else LaggedChoices(prover, executor or worker())
         self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, self.choices, self.windows)
         self.bucketer = Bucketer(Certifier(ingress_link, ingress))
