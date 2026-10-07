@@ -122,7 +122,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_security_package_requires_only_mathlib():
-    """The security analysis's trusted text (`Security`: Definitions and Specs) is what every guarantee is stated
+    """The security analysis's trusted text (`Security`: Definitions and Models) is what every guarantee is stated
     in, so it requires nothing of the repository and no ArkLib: a path dependency here would put a component or a proof
     under every guarantee."""
     assert SECURITY in lake_packages()
