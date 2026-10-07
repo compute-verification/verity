@@ -25,9 +25,10 @@ hypothesis on the statement's form.
 `Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome` argument for
 argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s, after `withCoins`, then `Zk.tags`
 at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The circuit, public file and tables are the
-bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`. The flag is `false`: with
-`--public-inputs` the check refuses every session, and without it `buildSession` passes `setupTables` no public input
-words, the setup `Accepts` models. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
+bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`. The flag is `false`: without
+`--public-inputs` `buildSession` passes `setupTables` no public input words, the setup `Accepts` models. With them the
+check passes only a canonical `--zk` statement (`check_okP`), and what the verifier accepts there is `ZkPubIn`'s
+(`VerifiesZKP`, in `ZkPubIn/Headline.lean`). A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
 requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a drawn
 session's draw, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLaw` on a session without a draw. So a session
 `verifyCmd` accepts satisfies `Verifies` (under `--zk`, `VerifiesZK`). `verifyCmd` refuses more, which only shrinks the
@@ -105,28 +106,35 @@ def pubOf (t : Tags) (I : Inputs) : Public :=
   | .ok p => p
   | .error _ => default
 
-theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
-    (h : ProvedScope.check t zk cf pf tables count false = .ok ()) :
+/-- **What the check gives, with or without the verifier's own public input words** (`p`): the statement rules, the circuit
+and the public file as the check reads them (`HmIn`'s at `p`), no shared-row public file, the circuit's form, and at
+`p` the canonical format. -/
+theorem check_okP {t : Tags} {zk p : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
+    (h : ProvedScope.check t zk cf pf tables count p = .ok ()) :
     (t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
       (zk = true ∨ count ≤ 1)) ∧
-    ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧ pub.tables = none ∧
-      (ProvedScope.scopeOk c = true ∨ ProvedScope.canonicalOk t zk c = true) := by
+    ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf p = .ok pub ∧ pub.tables = none ∧
+      (ProvedScope.scopeOk c = true ∨ ProvedScope.canonicalOk t zk c = true) ∧
+      (p = true → ProvedScope.canonicalOk t zk c = true) := by
   unfold ProvedScope.check at h
   split at h
   · cases h
   rename_i hf
-  have hall : ∀ r ∈ ProvedScope.statementRules t zk count false, r.1 = true := by
+  have hall : ∀ r ∈ ProvedScope.statementRules t zk count, r.1 = true := by
     unfold ProvedScope.firstFailure at hf
     rw [Option.map_eq_none_iff, List.find?_eq_none] at hf
     intro r hr
     simpa using hf r hr
   simp only [ProvedScope.statementRules, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq,
-    Bool.not_eq_true', Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, Bool.not_false] at hall
-  obtain ⟨h1, h2, h3, h4, h5, -⟩ := hall
+    Bool.not_eq_true', Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq] at hall
+  obtain ⟨h1, h2, h3, h4, h5⟩ := hall
   refine ⟨⟨h1, h2, h3, h4, h5⟩, ?_⟩
   split at h
   · cases h
   rename_i c hc
+  split at h
+  · cases h
+  rename_i hpc
   split at h
   · cases h
   rename_i pub hp
@@ -135,8 +143,18 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   rename_i ht
   split at h
   · rename_i hs
-    exact ⟨c, pub, hc, hp, by simpa using ht, (Bool.or_eq_true _ _).mp hs⟩
+    refine ⟨c, pub, hc, hp, by simpa using ht, (Bool.or_eq_true _ _).mp hs, fun hp' => ?_⟩
+    simpa [hp'] using hpc
   · cases h
+
+theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
+    (h : ProvedScope.check t zk cf pf tables count false = .ok ()) :
+    (t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
+      (zk = true ∨ count ≤ 1)) ∧
+    ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧ pub.tables = none ∧
+      (ProvedScope.scopeOk c = true ∨ ProvedScope.canonicalOk t zk c = true) :=
+  let ⟨hr, c, pub, hc, hp, ht, hs, _⟩ := check_okP h
+  ⟨hr, c, pub, hc, hp, ht, hs⟩
 
 namespace Checks
 

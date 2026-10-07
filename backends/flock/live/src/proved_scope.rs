@@ -112,15 +112,12 @@ pub fn canonical_why(c: &Composite) -> Option<String> {
 }
 
 /// `ProvedScope.statementRules`' first failure among those a live statement can fail: `name` is the statement as the Lean
-/// verifier names it, `typed` whether it is `verity/flock-circuit/types`, `tables` the session's tables and `public_inputs`
-/// whether it has public input ports.
-pub fn statement_why(name: &str, typed: bool, zk: bool, tables: usize, public_inputs: bool) -> Option<String> {
+/// verifier names it, `typed` whether it is `verity/flock-circuit/types` and `tables` the session's tables.
+pub fn statement_why(name: &str, typed: bool, zk: bool, tables: usize) -> Option<String> {
     if typed {
         Some(format!("{name}, a typed statement"))
     } else if !zk && tables > 1 {
         Some(format!("{tables} tables in a session without --zk"))
-    } else if public_inputs {
-        Some("public input ports (--public-inputs)".into())
     } else {
         None
     }
@@ -135,10 +132,15 @@ pub fn lean_name(c: &Composite) -> String {
 /// **`ProvedScope.check`** on a statement the live build set up: its circuit, its public file (`inst`), `--zk` and its tables.
 /// Its circuit is in `scopeOk` or, under `--zk`, in the canonical format (`canonicalOk`: every live statement has hidden
 /// outputs); a circuit in neither is refused with `canonical_why` when it has a bit row under `--zk`, else `circuit_why`.
+/// A circuit with public input ports sets up only under the verifier's own `--public-inputs` (`HmIn.checkOwn`), which the
+/// check passes only in the canonical format under `--zk`.
 pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result<(), String> {
     let typed = c.statement() == crate::typed::STATEMENT;
-    if let Some(why) = statement_why(&lean_name(c), typed, zk, tables, !c.public_inputs.is_empty()) {
+    if let Some(why) = statement_why(&lean_name(c), typed, zk, tables) {
         return Err(refusal(&why));
+    }
+    if !c.public_inputs.is_empty() && !(zk && canonical_why(c).is_none()) {
+        return Err(refusal("public input ports (--public-inputs)"));
     }
     if inst.tables.is_some() {
         return Err(refusal("a shared-row public file (header shared_rows)"));
@@ -177,12 +179,11 @@ mod tests {
                    "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover");
         assert!(is_refusal(&refusal("public input ports (--public-inputs)")));
         assert!(!is_refusal("R7: no proof for circuit/rep0 (lone rep)"));
-        assert_eq!(statement_why("verity/flock-circuit/types+seed-injection", true, true, 2, true).unwrap(),
+        assert_eq!(statement_why("verity/flock-circuit/types+seed-injection", true, true, 2).unwrap(),
                    "verity/flock-circuit/types+seed-injection, a typed statement");
-        assert_eq!(statement_why("verity/flock-circuit", false, false, 2, true).unwrap(), "2 tables in a session without --zk");
-        assert_eq!(statement_why("verity/flock-circuit", false, true, 2, true).unwrap(), "public input ports (--public-inputs)");
-        assert_eq!(statement_why("verity/flock-circuit", false, true, 2, false), None);
-        assert_eq!(statement_why("verity/flock-circuit", false, false, 1, false), None);
+        assert_eq!(statement_why("verity/flock-circuit", false, false, 2).unwrap(), "2 tables in a session without --zk");
+        assert_eq!(statement_why("verity/flock-circuit", false, true, 2), None);
+        assert_eq!(statement_why("verity/flock-circuit", false, false, 1), None);
     }
 
     #[test]
@@ -213,10 +214,11 @@ mod tests {
         assert!(cuts_covered(&net(vec![Group { col: 0, words: 1, bits: vec![16] }], 1, vec![]), 4, &[]));
     }
 
-    /// `check` accepts a circuit in the canonical format under `--zk` alone, and refuses each other form with the Lean
-    /// verifier's reason: without `--zk` the v1-row rule's, under it the first canonical conjunct the circuit fails (an
-    /// output row padded past its port's word, a segmented row, VUs per block not a power of two, a unit past `2^32` rows),
-    /// and before either a tail, public input ports (under `--zk` too, in the canonical format) and a shared-row public file.
+    /// `check` accepts a circuit in the canonical format under `--zk` alone, with public input ports or without, and refuses
+    /// each other form with the Lean verifier's reason: without `--zk` the v1-row rule's, under it the first canonical
+    /// conjunct the circuit fails (an output row padded past its port's word, a segmented row, VUs per block not a power of
+    /// two, a unit past `2^32` rows), and before either a tail, public input ports outside the canonical format under
+    /// `--zk` and a shared-row public file.
     #[test]
     fn the_canonical_format_is_accepted_under_zk_alone() {
         use crate::circuit::tests::{flat_tail_statement, flat_v2_statement};
@@ -246,14 +248,23 @@ mod tests {
         let tail = parse(flat_tail_statement());
         assert_eq!(canonical_why(&tail).as_deref(), Some("a circuit whose outputs a tail stage computes (META out_net)"));
         assert_eq!(refused(&tail, &inst), refusal("a circuit whose outputs a tail stage computes (META out_net)"));
-        let mut public = c.clone();
-        public.public_inputs = vec![("x".into(), 64)];
-        assert_eq!(refused(&public, &inst), refusal("public input ports (--public-inputs)"));
+        // public input ports: in the canonical format under `--zk` alone (test_lean_canonical_format's
+        // `test_a_canonical_statement_with_a_public_input_port_passes_under_zk_alone`), else refused for them, before the
+        // circuit's own reason
+        let ports = |c: &Composite| {
+            let mut p = c.clone();
+            p.public_inputs = vec![("x".into(), 64)];
+            p
+        };
+        let public = ports(&c);
+        assert_eq!(check(&public, &inst, true, 1), Ok(()));
+        assert_eq!(check(&public, &inst, true, 2), Ok(()));
+        assert_eq!(check(&public, &inst, false, 1), Err(refusal("public input ports (--public-inputs)")));
+        assert_eq!(refused(&ports(&g3), &inst), refusal("public input ports (--public-inputs)"));
+        assert_eq!(refused(&ports(&tail), &inst), refusal("public input ports (--public-inputs)"));
         inst.tables = Some(RowTables { counts: vec![1, 1], rows: None, salts: None, refs: vec![] });
         assert_eq!(refused(&c, &inst), refusal("a shared-row public file (header shared_rows)"));
-        // public input ports are a statement rule's, before the public file's (test_lean_canonical_format's
-        // `test_a_canonical_statement_with_a_public_input_port_is_refused_for_its_ports`)
-        assert_eq!(refused(&public, &inst), refusal("public input ports (--public-inputs)"));
+        assert_eq!(refused(&public, &inst), refusal("a shared-row public file (header shared_rows)"));
     }
 
     #[test]

@@ -89,20 +89,22 @@ def circuitWhy (tags : Tags) (zk : Bool) (c : Circuit) : String :=
 def circuitOf (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) : V Circuit :=
   if tags.hiddenOutputs then HmOut.parse tags file tables else HmRow.parse tags file tables
 
-/-- The public file as the headlines read it: `HmOut`'s for a statement with hidden outputs, else `HmRow`'s. -/
-def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
-  if tags.hiddenOutputs then HmOut.loadPublic tags c file else HmRow.loadPublic tags c file
+/-- The public file as the headlines read it: `HmOut`'s for a statement with hidden outputs, else `HmRow`'s; with the
+verifier's own public input words (`publicInputs`), `HmIn`'s at the circuit's public input ports, as `Stmt.setupHidden`
+loads it, every instance's public words at its end. -/
+def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) (publicInputs : Bool := false) : V Public :=
+  if publicInputs then HmIn.parse c >>= fun pi => HmIn.loadPublic tags c pi file
+  else if tags.hiddenOutputs then HmOut.loadPublic tags c file else HmRow.loadPublic tags c file
 
 /-- The forms of `verify`'s statement the proof covers, each with what a statement outside it is: an hm96-sha512 row
-statement (`Stmt.setupTables`, the setup the proof models), untyped, with retained rounds and `hm96-sha512/v1` leaves, at
-most one table without `--zk`, and no public input ports (the proof's setup takes no `--public-inputs`). -/
-def statementRules (tags : Tags) (zk : Bool) (count : Nat) (publicInputs : Bool) : List (Bool × String) :=
+statement (`Stmt.setupTables`, the setup the proof models), untyped, with retained rounds and `hm96-sha512/v1` leaves, and
+at most one table without `--zk`. -/
+def statementRules (tags : Tags) (zk : Bool) (count : Nat) : List (Bool × String) :=
   [(tags.hm96Rows, s!"{tags.name}, a statement before hm96-sha512 rows"),
    (!tags.typed, s!"{tags.name}, a typed statement"),
    (tags.retainRounds, s!"{tags.name}, a statement without retained rounds"),
    (tags.merkleLeaf == "hm96-sha512/v1", s!"{tags.name}, a statement with {tags.merkleLeaf} leaves"),
-   (zk || decide (count ≤ 1), s!"{count} tables in a session without --zk"),
-   (!publicInputs, "public input ports (--public-inputs)")]
+   (zk || decide (count ≤ 1), s!"{count} tables in a session without --zk")]
 
 /-- The first rule that fails, by what it refuses. -/
 def firstFailure (rules : List (Bool × String)) : Option String := (rules.find? fun r => !r.1).map (·.2)
@@ -110,17 +112,20 @@ def firstFailure (rules : List (Bool × String)) : Option String := (rules.find?
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
 
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
-file as the proof reads them, no shared-row public file, and `scopeOk` or `canonicalOk`. `tags` are the session's (under
-`--zk`, `Zk.tags`'s), `count` its tables and `publicInputs` whether the verifier holds its own public input words.
-`canonicalOk` keeps a tail refused (`c.outNet == c.unitNet`): `formatOk` puts no condition on a tail's stage nets, and
-the session headline's `keyProg` reads the unit nets only. -/
+file as the proof reads them, public input words only at a circuit `canonicalOk` passes, no shared-row public file, and
+`scopeOk` or `canonicalOk`. `tags` are the session's (under `--zk`, `Zk.tags`'s), `count` its tables and `publicInputs`
+whether the verifier holds its own public input words (`--public-inputs F`): the claim at them is the canonical
+headline's, so at any other circuit they are refused. `canonicalOk` keeps a tail refused (`c.outNet == c.unitNet`):
+`formatOk` puts no condition on a tail's stage nets, and the session headline's `keyProg` reads the unit nets only. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (publicInputs : Bool) : Except String Unit :=
-  match firstFailure (statementRules tags zk count publicInputs) with
+  match firstFailure (statementRules tags zk count) with
   | some why => .error (refusal why)
   | none => match circuitOf tags circuitFile tables with
     | .error e => .error (refusal s!"a circuit that does not parse ({e})")
-    | .ok c => match publicOf tags c publicFile with
+    | .ok c =>
+      if publicInputs && !canonicalOk tags zk c then .error (refusal "public input ports (--public-inputs)")
+      else match publicOf tags c publicFile publicInputs with
       | .error e => .error (refusal s!"a public file that does not load ({e})")
       | .ok pub =>
         if pub.tables.isSome then .error (refusal "a shared-row public file (header shared_rows)")

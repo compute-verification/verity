@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
 import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 import Proofs.Flock.Soundness.Discharge.Canonical.Headline
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Headline
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts
@@ -23,6 +24,11 @@ whether the session has one table) and states in each case the strongest claim t
 
 Each claim's event is `FlockVerifyAccepts zk I` at the live session's transcript, and each is the headline's statement
 with `hh`, `hv` (`Layout.scopeOk` of the circuit) and `hn` read off the case.
+
+With the verifier's own public input words (`--public-inputs F`, `own` F's bytes) the check passes only a canonical
+`--zk` statement (`check_okP`): under `--zk` the claim is `SoundZHJCP` (`ZkPubIn.zk_session_soundC_verifiesP`, the live
+subset draw), its event `VerifiesZKP I own`; without `--zk` the check refuses every statement
+(`check_publicInputs_noZk`).
 
 The sixteen `FailClosed` headlines make eight distinct claims: the six soundness bounds (each its own game: the law,
 stratified or the live subset draw, and the outputs, public or hidden) and the two zero-knowledge views. The other eight
@@ -680,6 +686,75 @@ end
 
 section
 
+open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
+  HiddenExec Composed ZkHidden StrictCR ZkPubIn
+open FlockSoundness.Discharge.Tables (LiveOutJ)
+open scoped ENNReal
+
+set_option linter.unusedVariables false in
+/-- The claim at a `--zk --public-inputs F` statement of any number of tables (`own` F's bytes), the law the live subset
+draw: `ZkPubIn.zk_session_soundC_verifiesP`'s. The check passes `--public-inputs` only in the canonical format, at hidden
+outputs. -/
+def SoundZHJCP (I : Inputs) (own : ByteArray) : Prop :=
+  ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the law (the live subset draw) and A3
+    (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
+    (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
+    -- the coin server's draw at each of the law's draws
+    (hDraw : ∀ ω, DrawOkZKHJP I own dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    -- the coin server's record of the live session
+    (hRec : RecordsLiveZKJP I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr)
+    -- the count curve's parameters
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
+    -- the live prover
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJP dj y₀) N wr)))
+    {qF qS : ℝ}
+    (hCR : ∀ hs : ScopeZP I,
+        let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
+          (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+          (decodesOnZKJA_of_runsOnZCJA execArith hs512 _ _ wr _ _ _ _ _
+            (runsZCJH_liveCP I own hs.typed hs.parseH hs.formatOk dj y₀ wr _ hs.tagsOkZHJ hRec hDraw)) τ
+        ∀ ω j, TableCRZ execArith hs512 (planZHJP dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+          (zcStrat execArith hs512 (planZHJP dj y₀) (cont σ ω)) qF qS),
+    prob (fun o => VerifiesZKP I own o.2.2 ∧ ∀ hs : ScopeZP I,
+        let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
+          (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+          (decodesOnZKJA_of_runsOnZCJA execArith hs512 _ _ wr _ _ _ _ _
+            (runsZCJH_liveCP I own hs.typed hs.parseH hs.formatOk dj y₀ wr _ hs.tagsOkZHJ hRec hDraw)) τ
+        K₀ ≤ (((keyProgP (circZ I) hs.built n (piZP I)).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+          (Xpub (pubOnes (circZ I) hs.built n (piZP I) own) (pubZeros (circZ I) hs.built n (piZP I) own)
+            (XplurZC execArith hs512 ((keyProgP (circZ I) hs.built n (piZP I)).partition (Layout.outsOf (circZ I) hs.built n))
+              (planZHJP dj y₀) (tabZHJP dj y₀)
+              ((rsZCP dj y₀ hs.typed hs.parseH hs.formatOk hs.parsePi hs.loadP hs.built).bindingZ
+                (rsZCP_computes dj y₀ hs.typed hs.parseH hs.formatOk hs.parsePi hs.loadP hs.built))
+              (reg σ) (cont σ) k Rw))).card)
+        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
+      ⨆ hs : ScopeZP I,
+        (let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
+          (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+          (decodesOnZKJA_of_runsOnZCJA execArith hs512 _ _ wr _ _ _ _ _
+            (runsZCJH_liveCP I own hs.typed hs.parseH hs.formatOk dj y₀ wr _ hs.tagsOkZHJ hRec hDraw)) τ
+        (Law.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJP dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        linkBoundZC execArith hs512 ((keyProgP (circZ I) hs.built n (piZP I)).partition (Layout.outsOf (circZ I) hs.built n))
+          (planZHJP dj y₀) (tabZHJP dj y₀)
+          ((rsZCP dj y₀ hs.typed hs.parseH hs.formatOk hs.parsePi hs.loadP hs.built).bindingZ
+            (rsZCP_computes dj y₀ hs.typed hs.parseH hs.formatOk hs.parsePi hs.loadP hs.built))
+          k Rw M ρ t' (reg σ) (cont σ))
+
+theorem soundZHJCP (I : Inputs) (own : ByteArray) : SoundZHJCP I own :=
+  @fun _ _ _ dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+    ZkPubIn.zk_session_soundC_verifiesP I own dj y₀ wr dg N kd hkd Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
+
+end
+
+section
+
 open Flock Exec ZkExec
 
 /-- **Soundness, over everything flock-verify accepts.** At every statement `I`, with or without `--zk`: the live session's
@@ -687,11 +762,13 @@ probability that `flock-verify verify` accepts (`FlockVerifyAccepts zk I`) while
 units are wrong is at most the case's bound. Without `--zk`, `SoundExec` (public outputs) or `SoundExecH` (hidden);
 under `--zk`, at one table `SoundZ` with zero knowledge `ViewZ` (public) or `SoundZH` (hidden), and at every number of
 tables `SoundZJ` (public) or `SoundZHJ` with zero knowledge `ViewZHJ` (hidden); at hidden outputs, a circuit outside
-`Layout.scopeOk` is in the canonical format, and the claim there is `SoundZHJC`. No hypothesis on the circuit file or
-the statement's form: the verifier refuses every statement the claims do not cover (`Flock.ProvedScope.check`), and
-there the event is empty. -/
+`Layout.scopeOk` is in the canonical format, and the claim there is `SoundZHJC`. With the verifier's own public input
+words (`--public-inputs F`, `own` F's bytes), under `--zk` the probability that it accepts (`VerifiesZKP I own`) while at
+least `K` units are wrong is at most `SoundZHJCP`'s bound, and without `--zk` the check refuses every statement. No
+hypothesis on the circuit file or the statement's form: the verifier refuses every statement the claims do not cover
+(`Flock.ProvedScope.check`), and there the event is empty. -/
 theorem flock_verify_sound (zk : Bool) (I : Inputs) :
-    if hh : I.tags.hiddenOutputs = true then
+    (if hh : I.tags.hiddenOutputs = true then
       if zk then
         (if hv : Layout.scopeOk (circZ I) = true then (∀ hn : I.count ≤ 1, SoundZH I hh hv hn) ∧ SoundZHJ I hh hv
           else SoundZHJC I (Bool.eq_false_of_ne_true hv)) ∧ ViewZHJ I
@@ -699,7 +776,16 @@ theorem flock_verify_sound (zk : Bool) (I : Inputs) :
     else
       if zk then
         (∀ hn : I.count ≤ 1, SoundZ I (Bool.eq_false_of_ne_true hh) hn ∧ ViewZ I) ∧ SoundZJ I (Bool.eq_false_of_ne_true hh)
-      else SoundExec I (Bool.eq_false_of_ne_true hh) := by
+      else SoundExec I (Bool.eq_false_of_ne_true hh)) ∧
+    (if zk then ∀ own : ByteArray, SoundZHJCP I own
+      else ProvedScope.check I.tags false I.circuitFile I.publicFile I.tables I.count true ≠ .ok ()) := by
+  refine ⟨?_, ?_⟩
+  swap
+  · cases zk
+    · show ProvedScope.check I.tags false I.circuitFile I.publicFile I.tables I.count true ≠ .ok ()
+      exact check_publicInputs_noZk
+    · show ∀ own : ByteArray, SoundZHJCP I own
+      exact fun own => @soundZHJCP I own
   split
   · next hh =>
     cases zk

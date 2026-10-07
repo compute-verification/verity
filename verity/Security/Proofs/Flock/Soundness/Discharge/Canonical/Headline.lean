@@ -16,8 +16,9 @@ at each statement it passes (`hs : ScopeZ I`), and at a statement the check refu
 The one condition on the statement is which binding the claim is about: a circuit outside `Layout.scopeOk` (`hv`).
 There the check accepts only the canonical format at a `--zk` statement with hidden outputs (`parse_formatOk`), so `hv`
 gives hidden outputs (`ScopeZ.hidden`) and `formatOk` (`ScopeZ.formatOk`); a circuit in `Layout.scopeOk` is
-`FailClosed.ZkHidden`'s. `FailClosed.flock_verify_sound` takes both. What the headline does not yet say (a tail's
-outputs, public inputs, registered reads, all of which the check refuses) is in `Gaps.lean`.
+`FailClosed.ZkHidden`'s. `FailClosed.flock_verify_sound` takes both. The headline at the verifier's public inputs is
+`ZkPubIn.zk_session_sound_canonicalP` (`ZkPubIn/Headline.lean`); what neither says yet (a tail's outputs, registered
+reads, both of which the check refuses) is in `Gaps.lean`.
 
 **Proof work.** None: every declaration here is proved, and so is every one it uses.
 -/

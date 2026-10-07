@@ -3,8 +3,8 @@ with (`ProvedScope.check`) passes a statement with hidden outputs whose unit ret
 unsegmented `sha512/row/v2` rows, each output row exactly its ports' words (`ProvedScope.canonicalOk`). Without `--zk` the
 same circuit is refused by the v1-row rule. Under it a circuit outside the format is refused for the first conjunct it
 fails (`ProvedScope.canonicalWhy`), and a shared-row public file, the form registered reads take, is refused before
-either. A canonical statement with a public input port sets up under the verifier's own `--public-inputs` file and is
-refused for its ports, which no claim covers yet; a file that is not the verifier's own is refused at setup. A stratified
+either. A canonical statement with a public input port sets up under the verifier's own `--public-inputs` file and passes
+under `--zk` alone; a file that is not the verifier's own is refused at setup. A stratified
 draw at a statement only the format admits is refused (`ProvedScope.canonicalLaw`). The statements are
 `test_lean_verifier`'s toys, none with a proof, and `verify` reaches the form check only in a session that passed every
 other check (§16.15), so the check is run alone (`flock-verify scope`), and a canonical toy's session of its record alone
@@ -125,16 +125,16 @@ def public_input_toy(tmp_path_factory):
     return d
 
 
-def test_a_canonical_statement_with_a_public_input_port_is_refused_for_its_ports(public_input_toy):
-    """With the verifier's own file the statement sets up (a session meets its own checks, here its missing proof file) and
-    the form check refuses it for its public input ports, under `--zk` and without: the canonical headline's setup takes no
-    `--public-inputs`, so no soundness claim covers them (of the claim at them, `Canonical.public_pinnedC` is proved and
-    `Canonical/Gaps.lean` states the rest). The live server refuses the same form for the same reason
-    (`the_canonical_format_is_accepted_under_zk_alone`). Without the file, setup refuses it."""
+def test_a_canonical_statement_with_a_public_input_port_passes_under_zk_alone(public_input_toy):
+    """With the verifier's own file the statement sets up (a session meets its own checks, here its missing proof file),
+    and the form check passes it under `--zk` by the format alone (`ZkPubIn.zk_session_sound_canonicalP` is the claim at
+    it) and refuses it for its public input ports without: no claim covers public inputs outside the canonical format.
+    The live server gives the same verdicts (`the_canonical_format_is_accepted_under_zk_alone`). Without the file, setup
+    refuses it."""
     d = public_input_toy
-    for zk in (True, False):
-        v = _scope(d, zk=zk, own=d / "own.bin")
-        assert (v["ok"], v["why"]) == (False, _refusal("public input ports (--public-inputs)")), v
+    assert _scope(d, zk=True, own=d / "own.bin") == {"ok": True, "why": "", "canonical": True}
+    v = _scope(d, zk=False, own=d / "own.bin")
+    assert (v["ok"], v["why"]) == (False, _refusal("public input ports (--public-inputs)")), v
     why = _why(d, zk=True, own=d / "own.bin")
     assert why.startswith("session files: ") and why.endswith("/session/circuit.rep0.bin"), why
     assert _why(d, zk=True) == ("setup: public inputs: the circuit names public input ports; pass the verifier's own "

@@ -17,6 +17,7 @@ import Proofs.Flock.Soundness.Discharge.ZkPubIn.ComposedJ
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.RunsJ
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Sound
 import Proofs.Flock.Soundness.Discharge.ZkPubIn.Custody
+import Proofs.Flock.Soundness.Discharge.ZkPubIn.Headline
 
 /-!
 # One hidden-output `--zk` sampled session with the verifier's public inputs
@@ -51,5 +52,7 @@ event (`DecodesOnZKJA`, `RunsOnZCJA`, `zk_headline_exec_tablesA`). `RunsJ`: `Run
 canonical `J` tables (`runsZCJH_liveCP`), from the coin server's record and draw at `own` (`RecordsLiveZKJP`,
 `DrawOkZKHJP`). `Sound`: the canonical session with the verifier's public inputs is sound at the public transcript
 `Xpub pubOnes pubZeros XplurZC` (`zk_session_soundCP`), at `zk_session_soundC`'s bound. `Custody`: the same at the record's custody and the printed
-draw file (`drawOkZKHJP_of_file`, `zk_session_soundCP_custody_json`).
+draw file (`drawOkZKHJP_of_file`, `zk_session_soundCP_custody_json`). `Headline`: both over what flock-verify accepts
+(`VerifiesZKP`: `AcceptsZKP` and the statement check at `--public-inputs`, `ScopeZP`), `zk_session_soundC_verifiesP` and
+`zk_session_sound_canonicalP`.
 -/

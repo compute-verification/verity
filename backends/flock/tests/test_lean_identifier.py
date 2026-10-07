@@ -1,8 +1,8 @@
 """A statement's identifier (PROTOCOL.md §16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be
 the verifier's own `--identifier F` in RFC 8785 form, or the Lean verifier refuses the statement; a header with one and no
 `F`, and `F` with a header that names none, refuse too. The public digest binds the header, so Σ binds the identifier, and a
-session's verdict reports it. The fixture's public input ports are a form the soundness proof does not cover (§16.15), so
-`verify` refuses its sessions, for that once every check has passed.
+session's verdict reports it. The fixture's public input ports, without `--zk` and outside the canonical format, are a form
+the soundness proof does not cover (§16.15), so `verify` refuses its sessions, for that once every check has passed.
 
 The statement is `test_lean_public_inputs.py`'s fetched fixture (RoPE x4, its recorded CPU selftest sessions), with the
 identifier added to its public file's header. It catches what `test_circuit.py` can't: the executable verifier's own

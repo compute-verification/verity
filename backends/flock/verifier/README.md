@@ -19,10 +19,11 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 `verify` fails closed (§16.15): every session of a statement whose form the soundness proof does not cover is refused
 with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`), once every check
 has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
-rows, the typed statements, public input ports, several tables without `--zk`, shared-row public files, and circuits
-outside `Layout.scopeOk` (a unit reading more than one input group, a tail that computes the outputs, among others),
-except, at a `--zk` statement with hidden outputs, a circuit in the canonical I/O format whose unit returns the outputs
-(§16.16's V1, `Flock.ProvedScope.canonicalOk`). Those statements still parse, set up and verify (`statement` prints their
+rows, the typed statements, several tables without `--zk`, shared-row public files, and circuits outside
+`Layout.scopeOk` (a unit reading more than one input group, a tail that computes the outputs, among others), except, at
+a `--zk` statement with hidden outputs, a circuit in the canonical I/O format whose unit returns the outputs (§16.16's
+V1, `Flock.ProvedScope.canonicalOk`). The verifier's own public input words (`--public-inputs F`) are accepted only at
+such a circuit. Those statements still parse, set up and verify (`statement` prints their
 digest and Σ), and the agreement check compares a session refused for its form alone as accepted (D12, `vectors.json`'s
 `lean_refuses`). A session drawn by a law no soundness claim draws by is refused at setup, with `refused: <why>: no
 soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without a

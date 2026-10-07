@@ -1508,7 +1508,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 3. retained rounds (§6.2) and `hm96-sha512/v1` leaves (`<name>, a statement without retained rounds`, `... with <leaf>
    leaves`);
 4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`;
-5. no public input ports: `public input ports (--public-inputs)`;
+5. the verifier's own public input words (`--public-inputs F`) only at a circuit in rule 7's canonical format, at a `--zk`
+   statement with hidden outputs (`ProvedScope.canonicalOk`), the form the claim at them covers:
+   `public input ports (--public-inputs)`;
 6. no shared-row public file: `a shared-row public file (header shared_rows)`;
 7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
    outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
@@ -1534,7 +1536,8 @@ format (`Canonical.parse_formatOk`), and `FailClosed.*`'s headlines and `Canonic
 `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is the one
 theorem: at every statement, with or without `--zk`, it states the headline of the statement's case (public or hidden
 outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several, and at hidden outputs `Layout.scopeOk` or
-the canonical format). The live server refuses the same statements with the same reason (`backends/flock/live`'s
+the canonical format), and with `--public-inputs F` the canonical headline at the verifier's own words
+(`ZkPubIn.zk_session_sound_canonicalP` over `VerifiesZKP`, `FailClosed.SoundZHJCP`). The live server refuses the same statements with the same reason (`backends/flock/live`'s
 `proved_scope`), also after the session's checks: its verdict is the refusal, and `without_refusal` keeps the session's
 verdict otherwise.
 
@@ -1545,8 +1548,9 @@ It narrows §16.10 and §16.13. V1 (below) is in §16.15's statement check: at a
 circuit outside `Layout.scopeOk` is accepted exactly when it is in this format and its unit returns the outputs. The
 soundness package states its binding and the session headline at this format (`FlockSoundness/Discharge/Canonical/`),
 all of it under the root import but `Gaps.lean`. The headline (`zk_session_sound_canonical`, and `SoundZHJC` in
-`FailClosed.flock_verify_sound`) is proved from V1 (`parse_formatOk`); the two statements of `Gaps.lean` are `sorry`,
-and it states the third, the session at public inputs, in words.
+`FailClosed.flock_verify_sound`) is proved from V1 (`parse_formatOk`), and so is the session at the verifier's public
+inputs (`ZkPubIn.zk_session_sound_canonicalP`, and `SoundZHJCP`), which V1 accepts with `--public-inputs F`; the two
+statements of `Gaps.lean` (a tail's outputs, registered reads) are `sorry`.
 
 - **Rows.** Every row, input or output, is §16.10's bit row (`hm96-sha512/row/v2`) at its own `ℓ < 2^64`:
   `x = SHA-512(P(ℓ) ‖ bytes)`, `B = ⌈ℓ/8⌉` bytes, bits low first, fill bits zero, then SHA-512's own padding
@@ -1564,9 +1568,9 @@ and it states the third, the session at public inputs, in words.
 - **Shared rows** (§16.10 `shared_rows`) are tables of rows in this form, and nothing changes for them. The headline covers
   them (`Canonical/Shared.lean`); the check still refuses a shared-row public file (§16.15 rule 6). Public input ports are
   in the format (a public leaf is a zero leaf of `leaves_in`), and a public leaf holds the verifier's own word
-  (`Canonical.public_pinnedC`), but the session headline doesn't cover them yet (§16.15 rule 5 refuses them). Registered
-  reads (§16.10) require `v1` rows until V3. `Canonical/Gaps.lean` states what each of these needs, and what a tail's
-  outputs need.
+  (`Canonical.public_pinnedC`); the session headline at the verifier's own words covers them
+  (`ZkPubIn.zk_session_sound_canonicalP`), and §16.15 rule 5 accepts `--public-inputs F` here. Registered reads (§16.10)
+  require `v1` rows until V3. `Canonical/Gaps.lean` states what they need, and what a tail's outputs need.
 - **VUs.** `vus_per_block` is a power of two for every circuit (D9, §16.10; `formatOk`'s `vusPow2` restates it).
   `Digest(p)` has `⌊log₂ G⌋` free VU bits, so its claim reaches only the VUs below `2^⌊log₂ G⌋`, which is every VU.
 - **Instances and retirements.**
