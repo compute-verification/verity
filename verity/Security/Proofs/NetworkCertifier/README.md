@@ -46,7 +46,7 @@ lake env lean CheckAxioms.lean                              # the axioms of the 
 
 **Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Specs/NetworkCertifier/Assumptions.lean` and
 `../../Specs/NetworkCertifier/Guarantees.lean`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
-as `docs/…` and `internal/…` name the network-transparency project store, where the covert-capacity note
+as `docs/…` and `internal/…` name network accounting's project store, where the covert-capacity note
 (`docs/network-transparency/timing-channel.md`) and the reviews live.
 
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,

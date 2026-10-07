@@ -36,12 +36,17 @@ ALLOWED = {
     "primitives.crypto": set(),
     "primitives.commitments": {"primitives.circuits", "primitives.crypto"},
     "protocols.profile": {"primitives.circuits"},
-    "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "protocols.profile"},
+    # The two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`), and the proof
+    # service's challenger draws with it (`service.Stream.select`).
+    "protocols.verification.sampled_proofs": {"primitives.circuits", "primitives.commitments", "primitives.randomness",
+                                              "protocols.profile"},
     "protocols.accounting.space.pous": {"claims", "primitives.circuits", "primitives.commitments", "primitives.randomness"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.
     "protocols.accounting.work.pouw": {"primitives.circuits", "primitives.commitments", "primitives.crypto",
                                        "primitives.randomness", "protocols.profile", "protocols.verification.sampled_proofs"},
-    "protocols.accounting.communication.certifier": {"primitives.commitments"},
+    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service.
+    "protocols.accounting.communication.certifier": {"primitives.circuits", "primitives.commitments",
+                                                     "protocols.verification.sampled_proofs"},
 }
 #: Import names core never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.

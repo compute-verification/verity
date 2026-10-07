@@ -17,3 +17,4 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
 import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+import Proofs.Flock.Soundness.Discharge.ZkLink.Public

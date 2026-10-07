@@ -4,10 +4,10 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 /-!
 # V*'s opening: the row's leaf climbs to the top
 
-`_climb` of `verity_flock.rec_open`'s `RecOpen_v3` (rec-step3), as the verifier's builder (`Flock.HmNets`) states it: the
-leaf is plain SHA-512 of the row's bits from the IV (the inner statement's `flock-leaf/sha512-unsalted`), it climbs `H`
-levels through the siblings in `aux` (512 bits each, bottom up) at the directions `d` (`climbFrom`), and `out` is the node
-reached and 512 zero bits.
+`_climb` of `verity_flock.rec_open`'s `RecOpen_v3` (rec-step3) and `RecOpen_v4` (#1347), which share it, as the
+verifier's builder (`Flock.HmNets`) states it: the leaf is plain SHA-512 of the row's bits from the IV (the inner
+statement's `flock-leaf/sha512-unsalted`), it climbs `H` levels through the siblings in `aux` (512 bits each, bottom up)
+at the directions `d` (`climbFrom`), and `out` is the node reached and 512 zero bits.
 
 `sound_climbRow`: whenever the rows hold, if the row's forms carry its bytes, `aux`'s sibling forms carry 64-byte siblings
 and the directions are the position's low bits, `out` carries the verifier of record's climb of the row's leaf,
@@ -27,8 +27,8 @@ open Flock FlockSoundness.Discharge.Hm
 /-- `aux`'s `H` siblings, 512 bits each from bit `512 h` (`aux[16 · NODE_WORDS · h : 16 · NODE_WORDS · (h + 1)]`). -/
 def sibForms (aux : List Lin) (H : ℕ) : List (List Lin) := (List.range H).map fun h => (aux.drop (512 * h)).take 512
 
-/-- `RecOpen_v3`'s `_climb`: SHA-512 of `row` from the IV climbs `H` levels through `aux`'s siblings at the directions `d`;
-the node reached, then 512 zero bits. -/
+/-- `RecOpen_v3`'s and `RecOpen_v4`'s `_climb`: SHA-512 of `row` from the IV climbs `H` levels through `aux`'s
+siblings at the directions `d`; the node reached, then 512 zero bits. -/
 def climbRow (H : ℕ) (row aux d : List Lin) : M (List Lin) := do
   let leaf ← shaFrom (preCv [] 0) row 0
   let top ← climbFrom d 0 leaf (sibForms aux H)

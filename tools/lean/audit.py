@@ -201,12 +201,50 @@ def lake_env() -> dict[str, str]:
     return env
 
 
+#: per auditing thread, the largest resident set of any process `run` has waited for since `took` last recorded it
+_peak = threading.local()
+
+
 def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600) -> tuple[int, str]:
-    r = subprocess.run(argv, cwd=cwd, env=lake_env(), capture_output=True, text=True, timeout=timeout)
-    text = r.stdout + r.stderr
+    """``argv``'s exit code and its output. It is reaped with `os.wait4`, whose usage covers the process and every
+    descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`)."""
+    p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    got: dict[str, str] = {}
+    readers = [threading.Thread(target=lambda k, f: got.__setitem__(k, f.read()), args=(k, f), daemon=True)
+               for k, f in (("out", p.stdout), ("err", p.stderr))]
+    for r in readers:
+        r.start()
+    expired = threading.Event()
+    timer = threading.Timer(timeout, lambda: (expired.set(), p.kill()))
+    timer.start()
+    try:
+        _, status, usage = os.wait4(p.pid, 0)
+    except BaseException:
+        p.kill()
+        p.wait()
+        raise
+    finally:
+        timer.cancel()
+    p.returncode = os.waitstatus_to_exitcode(status)
+    for r in readers:
+        r.join()
+    p.stdout.close()
+    p.stderr.close()
+    _peak.bytes = max(getattr(_peak, "bytes", 0), usage.ru_maxrss * 1024)          # Linux reports it in KiB
+    text = got.get("out", "") + got.get("err", "")
     if log is not None:
         log.write_text(text)
-    return r.returncode, text
+    if expired.is_set():
+        raise subprocess.TimeoutExpired(argv, timeout, output=text)
+    return p.returncode, text
+
+
+def took(rep: dict, step: str, since: float) -> None:
+    """Record ``step``'s seconds and the peak resident set of the processes it ran (`peak_gib`), then start the next."""
+    rep["seconds"][step] = round(time.monotonic() - since, 1)
+    if peak := getattr(_peak, "bytes", 0):
+        rep.setdefault("peak_gib", {})[step] = round(peak / 2**30, 1)
+    _peak.bytes = 0
 
 
 def load(pkg: Path) -> dict:
@@ -1446,7 +1484,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         raise ValueError(f"the audit's output {work} is inside the package {pkg}")
     work.mkdir(parents=True, exist_ok=True)
     rep["toolchain"] = (pkg / "lean-toolchain").read_text().strip()
-    t = time.monotonic()
+    t, _peak.bytes = time.monotonic(), 0
     if build:
         rep["sandbox"] = sandboxed()
         for step, argv in (("setup", None),
@@ -1805,7 +1843,8 @@ def main(argv: list[str]) -> int:
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
             if "modules" in rep:
                 head += (f"  {n} declarations in {rep['modules']} modules; axioms {', '.join(rep['axioms']) or 'none'}; "
-                         f"{len(rep['guarantees'])} guarantees; {rep['seconds']}")
+                         f"{len(rep['guarantees'])} guarantees; {rep['seconds']}" +
+                         (f"; peak GiB {rep['peak_gib']}" if rep.get("peak_gib") else ""))
             if "sandbox" in rep:
                 head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
             print(head, flush=True)
