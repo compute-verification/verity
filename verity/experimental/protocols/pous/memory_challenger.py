@@ -405,7 +405,7 @@ class MemoryChallenger:
         self._open = None
         r = Round(j, i, send, receipt, block_digest(block))
         self.rounds.append(r)
-        if r.elapsed_ns > self.commitment.limit_ns:
+        if not 0 <= r.elapsed_ns <= self.commitment.limit_ns:
             self.ended = LATE
         elif len(self.rounds) == self.coins.k:
             self.ended = COMPLETE
