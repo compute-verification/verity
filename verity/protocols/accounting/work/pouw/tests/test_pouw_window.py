@@ -19,6 +19,7 @@ from verity.primitives.commitments.indexed import RangeIndexedDomain
 from verity.primitives.commitments.merkle import CommitmentDomain, tree_levels
 from verity.primitives.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.accounting.work.pouw import window as Wd
+from verity.protocols.accounting.work.pouw.protocol import Shape, grid_tiles
 
 
 def test_the_grid_is_the_numbers_of_at_most_s_plus_1_significant_bits():
@@ -86,9 +87,11 @@ H3 = _d(60)
 
 
 def _entries(work, real_a=(3, 2), rows_b=4, filler=(1, 2), bound=5):
+    """Calls of 16 x k x 64 at pass tiles 0, 1, ..., then the filler."""
     out, at = [], 0
     for c, a in enumerate(real_a):
-        out.append(Wd.Entry("call", at, at + a * rows_b, a, rows_b, _d(2 * c + 1), _d(2 * c + 2), H3, _d(100 + c)))
+        out.append(Wd.Entry("call", at, at + a * rows_b, a, rows_b, _d(2 * c + 1), _d(2 * c + 2), H3, _d(100 + c),
+                            tile0=c, cols=1, m=16))
         at += a * rows_b
     out.append(Wd.Entry("filler", at, work.n, *filler, _d(50), _d(51)))
     return out + [Wd.Entry("none")] * (bound - len(out))
@@ -99,42 +102,90 @@ def _rows(entries):
 
 
 def test_an_entry_is_one_fixed_width_row():
-    """An entry row is 304 bytes (152 u16 words): kind, lo, hi, n_a, n_b and a zero word as u64 LE, then root_a, root_b,
-    root_h3 and the record's SHA-512, each digest on a 128-bit word; it round-trips through its bytes, its words and its
-    JSON, and a row of another length, an unknown kind or a nonzero pad is no entry."""
-    e = Wd.Entry("call", 5, 17, 3, 4, _d(1), _d(2), _d(3), _d(4))
+    """An entry row is 336 bytes (168 u16 words): kind, lo, hi, n_a, n_b and a zero word as u64 LE, then root_a, root_b and
+    root_h3, then tile0, cols, m and a zero word as u64 LE, then the record's SHA-512, each digest on a 128-bit word; it
+    round-trips through its bytes, its words and its JSON, and a row of another length, an unknown kind or a nonzero pad is
+    no entry."""
+    e = Wd.Entry("call", 5, 17, 3, 4, _d(1), _d(2), _d(3), _d(4), tile0=7, cols=2, m=80)
     row = e.row()
-    assert len(row) == Wd.ENTRY_BYTES == 304 and len(e.words()) == Wd.ENTRY_WORDS == 152 and Wd.ENTRY_BITS == 2432
-    assert struct.unpack_from("<6Q", row) == (1, 5, 17, 3, 4, 0)
-    assert (row[48:112], row[112:176], row[176:240], row[240:304]) == (_d(1), _d(2), _d(3), _d(4))
+    assert len(row) == Wd.ENTRY_BYTES == 336 and len(e.words()) == Wd.ENTRY_WORDS == 168 and Wd.ENTRY_BITS == 2688
+    assert struct.unpack_from("<6Q", row) == (1, 5, 17, 3, 4, 0) and struct.unpack_from("<4Q", row, 240) == (7, 2, 80, 0)
+    assert (row[48:112], row[112:176], row[176:240], row[272:336]) == (_d(1), _d(2), _d(3), _d(4))
     assert all(row.index(_d(n)) % 16 == 0 for n in (1, 2, 3, 4)) and Wd.ENTRY_BYTES % 16 == 0
     assert Wd.Entry.from_row(row) == e == Wd.Entry.from_words(e.words()) == Wd.Entry.from_json(e.to_json())
-    assert Wd.Entry("none").row() == bytes(304) and Wd.Entry("filler").row()[0] == 2
-    assert Wd.entry_digest(e) == sha512_row_v2_digest(row, 2432)
-    for bad, why in ((row[:-1], "304 bytes"), (b"\3" + row[1:], "kind 3"), (row[:40] + b"\1" + row[41:], "40..48")):
+    assert Wd.Entry("none").row() == bytes(336) and Wd.Entry("filler").row()[0] == 2
+    assert Wd.entry_digest(e) == sha512_row_v2_digest(row, 2688)
+    for bad, why in ((row[:-1], "336 bytes"), (b"\3" + row[1:], "kind 3"), (row[:40] + b"\1" + row[41:], "40..48"),
+                     (row[:264] + b"\1" + row[265:], "264..272")):
         with pytest.raises(ValueError, match=why):
             Wd.Entry.from_row(bad)
     for bad in (Wd.Entry("tile"), Wd.Entry("call", root_a=bytes(63)), Wd.Entry("call", root_h3=bytes(32)),
-                Wd.Entry("call", lo=1 << 64)):
+                Wd.Entry("call", lo=1 << 64), Wd.Entry("call", m=-1)):
         with pytest.raises(ValueError):
             bad.row()
     with pytest.raises(ValueError):
-        Wd.Entry.from_words([1 << 16] * 152)
+        Wd.Entry.from_words([1 << 16] * 168)
     assert Wd.record_digest({"b": 1, "a": [2]}) == hashlib.sha512(b'{"a":[2],"b":1}').digest()
 
 
 def test_the_layout_bounds_each_entry():
-    ok = Wd.Entry("call", 0, 6, 2, 3, _d(1), _d(2), H3, _d(3))
+    ok = Wd.Entry("call", 0, 6, 2, 3, _d(1), _d(2), H3, _d(3), tile0=5, cols=1, m=16)
     assert Wd.layout_problem(ok) is None and Wd.layout_problem(Wd.Entry("none")) is None
-    assert Wd.layout_problem(replace(ok, n_a=1 << 13, n_b=1 << 17)) is None
-    filler = replace(ok, kind="filler", root_h3=bytes(64), record=bytes(64))
+    big = replace(ok, n_a=1 << 13, n_b=1 << 17, m=1 << 13, cols=1 << 11, tile0=(1 << 40) - (1 << 18))
+    assert Wd.layout_problem(big) is None and Wd.pass_tiles(big) == 1 << 18
+    filler = replace(ok, kind="filler", root_h3=bytes(64), record=bytes(64), tile0=0, cols=0, m=0)
     assert Wd.layout_problem(filler) is None
     for bad, why in ((replace(ok, hi=1 << 40), "40-bit"), (Wd.Entry("none", hi=1), "zero row"),
                      (Wd.Entry("none", record=_d(1)), "zero row"), (Wd.Entry("none", root_h3=_d(1)), "zero row"),
+                     (Wd.Entry("none", m=16), "zero row"),
                      (replace(ok, n_a=0), "side a holds 0"), (replace(ok, n_a=(1 << 13) + 1), "2\\^13"),
                      (replace(ok, n_b=(1 << 17) + 1), "side b"), (replace(filler, root_h3=H3), "filler's -h3 root"),
-                     (replace(filler, record=_d(3)), "filler's record")):
+                     (replace(filler, record=_d(3)), "filler's record"), (replace(filler, tile0=1), "filler's tile0"),
+                     (replace(filler, cols=1), "filler's tile0"), (replace(filler, m=16), "filler's tile0"),
+                     (replace(ok, m=0), "its m 0"), (replace(ok, m=24), "multiple of 16"),
+                     (replace(ok, m=(1 << 13) + 16), "its m"), (replace(ok, n_a=17, m=16), "from n_a = 17"),
+                     (replace(ok, cols=0), "its cols 0"), (replace(ok, cols=(1 << 11) + 1), "its cols"),
+                     (replace(ok, n_b=65), "n_b = 65"), (replace(big, tile0=big.tile0 + 1), "pass tiles")):
         assert re.search(why, Wd.layout_problem(bad)), (bad, why)
+
+
+def test_a_side_row_is_its_operand_row_then_its_index():
+    """A side row is the operand row's words, then one 128-bit word: its index as a u32 (two u16 words, low first) and
+    six zero words; fp8-p at k = 4096 gives 2,120 words."""
+    words = list(range(16))
+    row = Wd.side_row(words, 0x1_2345)
+    assert row == words + [0x2345, 1, 0, 0, 0, 0, 0, 0] and Wd.side_index(row) == 0x1_2345
+    assert len(Wd.side_row([0] * (4096 // 2 + 64), 8191)) == 2120
+    for bad in ((words[:-1], 0), (words, -1), (words, 1 << 32), (words, True)):
+        with pytest.raises(ValueError):
+            Wd.side_row(*bad)
+    for bad in (row[:-1] + [1], row[:8], words[:8] + [1 << 16] + [0] * 7):
+        with pytest.raises(ValueError):
+            Wd.side_index(bad)
+
+
+def test_tile_read_finds_the_pass_leaf_from_the_rows_a_unit_reads():
+    """p and at from the entry row and the two side rows' indices alone are the pass's tile holding word (I, J), in
+    `audit.tile_refs`'s order (workload order, then each call's 64 x 64 tiles row-major, the last row and column of tiles
+    possibly short), and the word's (row, column, tile height) in it."""
+    shapes = [(80, 128), (16, 64), (64, 192), (48, 64)]
+    refs, tile0 = [], []
+    for c, (m, n) in enumerate(shapes):
+        tile0.append(len(refs))
+        refs += [(c, t) for t in grid_tiles(Shape(m, 32, n), 64, 64)]
+    for c, (m, n) in enumerate(shapes):
+        entry = Wd.Entry("call", tile0=tile0[c], cols=-(-n // 64), m=m)
+        for i in range(m):
+            for j in range(0, n, 7):
+                p, at = Wd.tile_read(entry, i, j)
+                cc, tile = refs[p]
+                assert cc == c and i in tile.rows and j in tile.cols, (c, i, j)
+                assert at == tile.rows.index(i) | tile.cols.index(j) << 6 | (len(tile.rows) // 16 - 1) << 12
+    for bad in ((80, 0), (0, 128), (-1, 0)):
+        with pytest.raises(ValueError):
+            Wd.tile_read(Wd.Entry("call", tile0=0, cols=2, m=80), *bad)
+    with pytest.raises(ValueError):
+        Wd.tile_read(Wd.Entry("filler"), 0, 0)
 
 
 def test_tile_at_maps_a_drawn_index_to_its_entry_and_dense_rows():
@@ -169,14 +220,16 @@ def test_the_window_statement_refuses_each_departure_from_the_layout():
         "then one filler": ([replace(es[2], lo=0)] + [Wd.Entry("none")] * 4, 5),
         "not the layout: side b holds 0": (es[:1] + [replace(es[1], n_b=0)] + es[2:], 5),
         "not the layout: an empty entry": (es[:4] + [Wd.Entry("none", n_a=1)], 5),
+        "entry 1: its pass tiles start at 0, before the last call's end 1": (es[:1] + [replace(es[1], tile0=0)] + es[2:], 5),
     }
     for want, (entries, bound, *work) in cases.items():
         got = Wd.window_problem(_rows(entries), work[0] if work else w, bound, H3)
         assert got and want in got, (want, got)
-    for bad, why in ((es[0].row()[:-2], "entry 0: not an entry row: an entry row is 304 bytes"),
+    for bad, why in ((es[0].row()[:-2], "entry 0: not an entry row: an entry row is 336 bytes"),
                      (b"\7" + es[0].row()[1:], "entry 0: not an entry row: kind 7")):
         assert Wd.window_problem([bad] + _rows(es[1:]), w, 5, H3).startswith(why)
     assert "entry 0: its -h3 root" in Wd.window_problem(_rows(es), w, 5, _d(61))
+    assert Wd.window_problem(_rows([es[0], replace(es[1], tile0=9)] + es[2:]), w, 5, H3) is None
     with pytest.raises(ValueError, match="64 bytes"):
         Wd.window_problem(_rows(es), w, 5, H3[:32])
     assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "drawn", "root_W"}
@@ -283,18 +336,44 @@ def test_sessions_hold_the_largest_served_draw_at_both_points():
 
 
 def test_the_pinned_vectors_are_the_layout():
-    """``vectors/window.json`` is `window_vectors.vectors()`: the toy window's entry rows, a side tree, the root and F_σ.
-    The rows are dense (call 0's refused A row 2 is no leaf), and the vectors agree with the window statement."""
+    """``vectors/window.json`` is `window_vectors.vectors()`: the toy window's entry rows, its records and side rows'
+    indices, each real tile's (p, at), a side tree, the root and F_σ.  The rows are dense (call 0 keeps A rows 0, 1 and 70
+    of 80), and the vectors agree with the window statement, records and indices included."""
     pinned = json.loads(V.OUT.read_text())
     assert pinned == json.loads(json.dumps(V.vectors()))
     rows = [bytes.fromhex(e["row"]) for e in pinned["entries"]]
     work = Wd.Work.at(pinned["window"]["work"]["level"])
     root_h3, domain_h3 = (bytes.fromhex(pinned["window"][k]) for k in ("root_h3", "domain_h3"))
-    assert Wd.window_problem(rows, work, V.P, root_h3) is None and work.n == 9
+    records, indices = pinned["records"], pinned["indices"]
+    assert Wd.window_problem(rows, work, V.P, root_h3, records=records, indices=indices) is None and work.n == 9
     call = Wd.Entry.from_row(rows[0])
-    assert (call.n_a, call.n_b, call.hi, call.root_h3) == (3, 2, 6, root_h3)
+    assert (call.n_a, call.n_b, call.hi, call.root_h3, call.tile0, call.cols, call.m) == (3, 2, 6, root_h3, 3, 2, 80)
     assert Wd.Entry.from_row(rows[2]).root_h3 == bytes(64)
-    assert pinned["side"]["rows"] == 3 and len(pinned["side"]["path_of_1"]) == 13
+    assert pinned["side"]["rows"] == 3 and len(pinned["side"]["path_of_1"]) == 13 and Wd.side_index(pinned["side"]["row_1"]) == 1
+    assert [(r["p"], r["at"] >> 12) for r in pinned["tile_reads"]][4:6] == [(5, 0), (6, 0)]
+    moved = [{**records[0], "tile0": 4}] + records[1:]
+    assert "not the one the entry binds" in Wd.window_problem(rows, work, V.P, root_h3, records=moved)
+    swapped = [{"a": [1, 0, 70], "b": [5, 64]}] + indices[1:]
+    assert "side-a rows' indices are not its record's keep" in Wd.window_problem(rows, work, V.P, root_h3, records=records,
+                                                                                 indices=swapped)
+    assert "side-b rows' indices are not zero" in Wd.window_problem(rows, work, V.P, root_h3, records=records,
+                                                                    indices=indices[:2] + [{"a": [0], "b": [3]}])
     reg = pinned["public_inputs"]["registration"]
     for sigma, f in enumerate(pinned["public_inputs"]["sessions"]):
         assert Wd.public_inputs(reg, pinned["public_inputs"]["drawn"], sigma, V.CAP, domain_h3) == bytes.fromhex(f)
+
+
+def test_a_record_is_held_to_its_entry():
+    """A call's record gives its entry's tile0, cols = ⌈n/64⌉ and m, and its keep is n_a and n_b strictly increasing
+    indices of [0, m) and [0, n): with the side rows' indices held to it, i -> I and j -> J are injective."""
+    rec = {"shape": [80, 32, 100], "tile0": 3, "keep": {"a": [0, 1, 79], "b": [5, 99]}}
+    entry = Wd.Entry("call", 0, 6, 3, 2, record=Wd.record_digest(rec), tile0=3, cols=2, m=80)
+    assert Wd.record_problem(entry, rec) is None
+    for bad, why in (({**rec, "tile0": 4}, "tile0, cols and m"),
+                     ({**rec, "keep": {"a": [0, 0, 79], "b": [5, 99]}}, "side-a keep"),
+                     ({**rec, "keep": {"a": [0, 1, 80], "b": [5, 99]}}, "side-a keep"),
+                     ({**rec, "keep": {"a": [0, 1, 79], "b": [99, 5]}}, "side-b keep"),
+                     ({**rec, "keep": {"a": [0, 1], "b": [5, 99]}}, "side-a keep"),
+                     ({**rec, "shape": [80, 32, 129]}, "cols and m"), ({"tile0": 3}, "no shape")):
+        assert why in Wd.record_problem(replace(entry, record=Wd.record_digest(bad)), bad), (bad, why)
+    assert "binds" in Wd.record_problem(entry, {**rec, "tile0": 4})
