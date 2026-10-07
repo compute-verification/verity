@@ -1,7 +1,7 @@
-"""The NVFP4 draft target (``verity_catalog.targets.target.NVFP4_SM120``) and its pinned vectors.
+"""The NVFP4 draft target (``verity.ml.circuits.targets.target.NVFP4_SM120``) and its pinned vectors.
 
 Like ``test_fp8_targets.py``: each clause of the statement is pinned to the code that implements it (the model, the
-program builder, the family) and the recorded ``catalog/verity_catalog/silicon/captures/vectors`` replay on the model.  The vectors are model
+program builder, the family) and the recorded ``verity/ml/circuits/silicon/captures/vectors`` replay on the model.  The vectors are model
 replays, not hardware captures: their evidence is the instruction pin the target names (lane fp4-re's 0-mismatch
 sweeps on the RTX 5090), and a semantic drift in the model, the program or the vector fails here.
 """
@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from verity_catalog.silicon.instructions import INSTRUCTIONS
-from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4, BlockScaledAlignAdd
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4, BlockScaledAlignAdd
 from verity_sp1.proofs.families import make_tensor_core_gate_set
 from verity_sp1.proofs.programs import gemm_accumulator_nvfp4
-from verity_catalog.targets.target import FP8_ADA_MMA, NVFP4_SM120, TARGETS, TC_VECTORS
+from verity.ml.circuits.targets.target import FP8_ADA_MMA, NVFP4_SM120, TARGETS, TC_VECTORS
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 

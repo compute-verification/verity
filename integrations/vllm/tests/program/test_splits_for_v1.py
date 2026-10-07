@@ -49,8 +49,8 @@ def test_threshold_table_rtx_pro_6000_188_sms():
 
 
 def test_lifted_splits_primitives_resolve_at_188_sms():
-    from verity.primitives.circuits.codec import _lookup_primitive
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.codec import _lookup_primitive
+    from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program.registry import lifted as L
     assert _lookup_primitive(REGISTRY, "SplitsForSMS188_v1") is L.splits_for_prim(188)
     assert _lookup_primitive(REGISTRY, "LSplitsForSMS188_v1") is L.l_splits_for(188)
