@@ -6,11 +6,14 @@ Take the slot, then admit the session (`Firewall.Record`); `prove` runs it up to
 proofs are sent and the challenger's verdict decides release or stop. `decide` is everything before the send: the
 firewall's own decision, which `Firewall.Protocol` checks with the send check as `Flock.Firewall.Contract.run`. The prover,
 the send check and the send are given here as what they returned, a fault (Rust's panic) included: a fault anywhere is a
-stop, never the firewall's end.
+stop, never the firewall's end. Each of the session's ops on the record is one `Record.op`, which reads the record again,
+as Rust's does: an error is a record the firewall can't read, and the session ends there with nothing sent.
 -/
 import Firewall.Record
 
 namespace Core.Firewall
+
+open Flock (V)
 
 /-- What a step outside the firewall (the prover, the send check) returned. -/
 inductive Run where
@@ -32,25 +35,27 @@ inductive Decision where
   | go (a : Admitted)
   deriving Inhabited
 
-/-- Everything before the send, at time `now` (ms): the decision and the events after it. A stop's event is not yet
-recorded (`outerSession` records it). -/
-def decide (evs : Events) (s part : String) (now : Nat) (prove ready : Run) : Decision × Events :=
-  match admit (slot evs s part) s part with
-  | (.error why, evs) => (.refused why, evs)
-  | (.ok a, evs) => (after a, evs)
-where
-  after (a : Admitted) : Decision :=
-    match prove with
-    | .err why => .stop why
+/-- What the prover, the send check and the clock (`now`, ms) decide of an admitted session. -/
+def Decision.after (a : Admitted) (now : Nat) (prove ready : Run) : Decision :=
+  match prove with
+  | .err why => .stop why
+  | .fault m => .stop (faultWhy m)
+  | .ok =>
+    match ready with
+    | .err why => .stop s!"the send check refused: {why}"
     | .fault m => .stop (faultWhy m)
     | .ok =>
-      match ready with
-      | .err why => .stop s!"the send check refused: {why}"
-      | .fault m => .stop (faultWhy m)
-      | .ok =>
-        match a.releaseMs with
-        | some t => if now > t then .stop s!"missed its release time ({now} ms, after {t} ms)" else .go a
-        | none => .go a
+      match a.releaseMs with
+      | some t => if now > t then .stop s!"missed its release time ({now} ms, after {t} ms)" else .go a
+      | none => .go a
+
+/-- Everything before the send, at time `now` (ms): the decision and the record after it. A stop's event is not yet
+recorded (`outerSession` records it). -/
+def decide (r : Record) (s part : String) (now : Nat) (prove ready : Run) : V (Decision × Record) := do
+  let ((), r) ← r.op fun evs => ((), slot evs s part)
+  match ← r.op (admit · s part) with
+  | (.error why, r) => pure (.refused why, r)
+  | (.ok a, r) => pure (.after a now prove ready, r)
 
 inductive Kind where
   | release
@@ -72,18 +77,21 @@ structure Served where
   deriving Inhabited, Repr
 
 /-- One outer session: `send` is the challenger's verdict on the proofs sent (true: accepted), or a fault while sending. -/
-def outerSession (evs : Events) (s part : String) (now : Nat) (prove ready : Run) (send : Except String Bool) :
-    Served × Events :=
-  match decide evs s part now prove ready with
-  | (.refused why, evs) => ({ kind := .refused, why := some why, sentAt := none }, evs)
-  | (.stop why, evs) => ({ kind := .stop, why := some why, sentAt := none }, (stop evs s part why).2)
-  | (.go a, evs) =>
+def outerSession (r : Record) (s part : String) (now : Nat) (prove ready : Run) (send : Except String Bool) :
+    V (Served × Record) := do
+  match ← decide r s part now prove ready with
+  | (.refused why, r) => pure ({ kind := .refused, why := some why, sentAt := none }, r)
+  | (.stop why, r) => stopped why none r
+  | (.go a, r) =>
     match send with
-    | .ok true => ({ kind := .release, why := none, sentAt := a.releaseMs }, release evs s part)
-    | .ok false => stopped "the challenger's verdict rejects it" a evs
-    | .error m => stopped (faultWhy m) a evs
+    | .ok true =>
+      let ((), r) ← r.op fun evs => ((), release evs s part)
+      pure ({ kind := .release, why := none, sentAt := a.releaseMs }, r)
+    | .ok false => stopped "the challenger's verdict rejects it" a.releaseMs r
+    | .error m => stopped (faultWhy m) a.releaseMs r
 where
-  stopped (why : String) (a : Admitted) (evs : Events) : Served × Events :=
-    ({ kind := .stop, why := some why, sentAt := a.releaseMs }, (stop evs s part why).2)
+  stopped (why : String) (sentAt : Option Nat) (r : Record) : V (Served × Record) := do
+    let (_, r) ← r.op (stop · s part why)
+    pure ({ kind := .stop, why := some why, sentAt }, r)
 
 end Core.Firewall
