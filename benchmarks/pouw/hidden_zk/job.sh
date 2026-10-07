@@ -14,7 +14,8 @@
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
-#      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED
+#      `flock-verify scope` with honest-own's flags gives the statement check's verdict (scope.out): it passes
+#      --public-inputs only in the canonical format, and where it refuses summarize.py expects each check REFUSED
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
@@ -185,6 +186,10 @@ open(sys.argv[3], 'wb').write(h + b'\n' + p[len(p) - len(b):])" "$D/public-input
     for g in "${globs[@]}"; do [[ $tag == $g || $cfg/$tag == $g ]] && { keep+=("$c"); break; }; done
   done
   cmds=("${keep[@]}")
+  local sflags="--zk --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub.bin"
+  [[ $role == tile* || $role == hidden* ]] || sflags+=" --public-inputs $D/public-inputs.bin"
+  bash -c "$(vlimit $cap) exec $LEAN scope $sflags" > "$O/scope.out" 2> "$O/scope.err"
+  log "  scope: $(grep '^SCOPE ' "$O/scope.out" | cut -c1-240) $(tail -1 "$O/scope.err" | cut -c1-160)"
   log "  lean: ${#cmds[@]} checks ($LEAN_ONLY), $par at a time, cap $cap GB each"
   for c in "${cmds[@]}"; do
     tag=${c%%|*} args=${c#*|}

@@ -62,3 +62,32 @@ def test_a_stage_only_config_claims_no_pass(tmp_path):
     s = _summary(tmp_path, HZ_STAGE_ONLY="1", HZ_LEAN="st-*")
     assert (s["stage_only"], s["all_pass"], s["lean_checks"]) == (True, None, None)
     assert s["zk"] is None and s["controls"] == {} and s["lean"] == {} and s["circuit_sha512"] == "ab"
+
+
+def test_a_check_is_held_to_the_statement_checks_verdict(tmp_path):
+    """Where `flock-verify scope` refuses, each check passes only refused for the same reason or, when it must not accept,
+    rejected; where it passes, each check gives its own verdict, a refusal failing an honest one."""
+    d = _staged(tmp_path)
+    _proved(d, {})
+    why = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
+
+    def verdicts(**v):
+        for tag, (accepted, reason) in v.items():
+            (d / f"lean-{tag}.out").write_text("VERDICT " + json.dumps({"accepted": accepted, "why": reason}))
+            (d / f"lean-{tag}.time").write_text(TIME)
+
+    (d / "scope.out").write_text("SCOPE " + json.dumps({"ok": False, "why": why, "canonical": False}) + "\n")
+    verdicts(**{"honest-own": (False, why), "honest-wrong": (False, "public inputs: a differing word")})
+    s = _summary(tmp_path)
+    assert s["scope"]["ok"] is False and s["all_pass"] is True
+    assert {t: (c["expect"], c["verdict"], c["pass"]) for t, c in s["lean"].items()} == {
+        "honest-own": ("REFUSED", "REFUSED", True), "honest-wrong": ("REFUSED", "REJECT", True)}
+    verdicts(**{"honest-own": (False, why.replace("public input ports (--public-inputs)", "a typed statement"))})
+    assert _summary(tmp_path)["lean"]["honest-own"]["pass"] is False
+    verdicts(**{"honest-own": (True, "")})
+    assert _summary(tmp_path)["lean"]["honest-own"]["pass"] is False
+    (d / "scope.out").write_text("SCOPE " + json.dumps({"ok": True, "why": "", "canonical": True}) + "\n")
+    s = _summary(tmp_path)
+    assert s["lean"]["honest-own"] == s["lean"]["honest-own"] | {"expect": "ACCEPT", "verdict": "ACCEPT", "pass": True}
+    verdicts(**{"honest-own": (False, why)})
+    assert _summary(tmp_path)["lean"]["honest-own"]["pass"] is False
