@@ -231,8 +231,9 @@ def test_inner_fold_gives_inner_claims_comb_and_extras(inner, tmp_path):
         pytest.skip("lake is not installed")
     meta, n = S.meta(SET / "stage" / "circuit.txt"), S.instances(SET / "stage" / "pub-4.bin")
     (tmp_path / "points.json").write_text(json.dumps(S.points(json.loads((inner / "public.json").read_text()), meta, n)))
-    p = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "lean" / "InnerFold.lean"), "verity/flock-circuit+seed-injection",
-                        str(SET / "stage" / "circuit.txt"), str(SET / "stage" / "pub-4.bin"), str(tmp_path / "points.json")],
+    p = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "lean" / "InnerFold.lean"),
+                        "verity/flock-circuit@f5df3bbc+seed-injection", str(SET / "stage" / "circuit.txt"),
+                        str(SET / "stage" / "pub-4.bin"), str(tmp_path / "points.json")],
                        cwd=LEAN, capture_output=True, text=True, check=False)
     assert p.returncode == 0, p.stderr[-2000:]
     out = json.loads(p.stdout)
