@@ -27,8 +27,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   side of each entry (a call, or the filler) is one frame-v3-sha512 tree of its kept rows only, in order, padded to 2^D
   leaves under the window's side domain (`pouw.window.side_domain` of the window root's domain, one-stage's served domain
   of the window's program, partition and context: one per window and side).  Each entry is one fixed-width entry row
-  (`pouw.window.Entry`: kind, tile range, each side's row count and root, the SHA-512 of the call's record, which holds the
-  kept rows' places in the call), an ``hm96-sha512/row/v2`` row in the **window root** (port ``entries``), padded with
+  (`pouw.window.Entry`: kind, tile range, each side's row count and root, the root of the pass's -h3 tile commitment
+  (`root_h3_of`), the SHA-512 of the call's record, which holds the kept rows' places in the call), an
+  ``hm96-sha512/row/v2`` row in the **window root** (port ``entries``), padded with
   empty entries to the public bound P (L2).  W, every weight the pass's k = n = K calls read, is
   committed by weight row (BF16, ``hm96-sha512/row/v2``) in **W's root**, beside it; the tiles read the formed B̃ rows of
   each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
@@ -353,11 +354,13 @@ def filler_shape(fill: int) -> tuple[int, int]:
     return -(-fill // b), b
 
 
-def commit_window(params: dict, calls: list[dict], root_w: str, salts: dict | None = None) -> tuple[dict, dict, dict]:
+def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, salts: dict | None = None
+                  ) -> tuple[dict, dict, dict]:
     """The window's commitment from its calls (each `{"record", "words": {"a", "b"}}`, a side's words None where the scheme
-    refused the row): (``commitment.json``, ``advice.json``, the prover's rows).  Each side tree holds the kept rows only,
-    and the call's record (`advice["records"]`, its SHA-512 in the entry) gains their places in the call (``keep``).
-    `salts` replays the salts of an earlier commit's prover file (`load`)."""
+    refused the row) of the pass whose -h3 tile commitment's root is `root_h3`: (``commitment.json``, ``advice.json``, the
+    prover's rows).  Each side tree holds the kept rows only, and the call's record (`advice["records"]`, its SHA-512 in
+    the entry) gains their places in the call (``keep``).  `salts` replays the salts of an earlier commit's prover file
+    (`load`)."""
     k = params["k"]
     zero = [0] * L.ROW_WORDS["fp8-p"](k)
     keeps = [{s: [i for i, w in enumerate(c["words"][s]) if w is not None] for s in SIDES} for c in calls]
@@ -381,12 +384,13 @@ def commit_window(params: dict, calls: list[dict], root_w: str, salts: dict | No
             dom, schema = side_domain(params, ell, s)
             root, priv[e][s] = commit_side(dom, schema, s, ws[s], salts[e][s] if salts else _salts(len(ws[s])))
             roots[s] = bytes.fromhex(root)
+        call = kind == "call"
         entries.append(Wd.Entry(kind, at, at + size, len(ws["a"]), len(ws["b"]), roots["a"], roots["b"],
-                                Wd.record_digest(records[e]) if kind == "call" else bytes(64)))
+                                root_h3 if call else bytes(64), Wd.record_digest(records[e]) if call else bytes(64)))
         at += size
     entries += [Wd.Entry("none")] * (params["entries"] - len(entries))
     records += [None] * (params["entries"] - len(records))
-    problem = Wd.window_problem([x.row() for x in entries], work, params["entries"], params["grid_bits"])
+    problem = Wd.window_problem([x.row() for x in entries], work, params["entries"], root_h3, params["grid_bits"])
     if problem:
         raise ValueError(f"the window statement fails on the committer's own advice: {problem}")
     dom = window_domain(params, ell)
@@ -396,7 +400,8 @@ def commit_window(params: dict, calls: list[dict], root_w: str, salts: dict | No
              {"port": "W", "root": root_w, "leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}]
     public = {"schema": SCHEMA, "context": params["context"], "level": ell, "items": items_of(params, ell, root_w),
               "roots": roots}
-    advice = {"schema": SCHEMA, "level": ell, "real": real, "entries": [x.to_json() for x in entries], "records": records,
+    advice = {"schema": SCHEMA, "level": ell, "real": real, "root_h3": root_h3.hex(), "entries": [x.to_json() for x in entries],
+              "records": records,
               "entry_salts": [s.hex() for s in esalts], "window_path": [path(levels, e) for e in range(len(entries))]}
     priv["entries"] = esalts
     return public, advice, priv
@@ -874,6 +879,14 @@ def _pass(pass_dir: Path):
     return PD, man, hashlib.sha256(raw).hexdigest(), calls
 
 
+def root_h3_of(man: dict) -> bytes:
+    """The root of the pass's -h3 tile commitment (its manifest's ``commitment``), which each call's entry registers."""
+    root = bytes.fromhex((man.get("commitment") or {}).get("root") or "")
+    if len(root) != 64:
+        raise SystemExit(f"the pass's tile commitment root is {len(root)} bytes, not a SHA-512 (-h3) root's 64")
+    return root
+
+
 def _weights(man: dict, calls: list[dict]) -> list[int]:
     return sorted({int(u["weight"]) for u in calls})
 
@@ -930,7 +943,7 @@ def cmd_commit(a) -> int:
             for j in range(n):
                 yield data[2 * K * j:2 * K * (j + 1)]
     root_w, _ = commit_weights(params, w_rows())
-    public, advice, priv = commit_window(params, window, root_w)
+    public, advice, priv = commit_window(params, window, root_w, root_h3_of(man))
     advice["provenance"] = {"run": man.get("run"), "manifest_sha256": sha, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
