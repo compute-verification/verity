@@ -103,15 +103,16 @@ def test_a_round_that_is_not_a_round_is_refused():
         RL.split_round(_bytes(b"12345") + _sq(1), first_of_rep=False)
 
 
-def test_message_rows_hold_eight_elements_each_and_commit_as_registered_rows():
+def test_a_rounds_message_is_one_row_of_whole_blocks_committed_as_a_registered_row():
     vs = [(i << 64) | (i * 3 + 1) for i in range(11)]
-    rows = RL.message_rows(vs)
-    assert len(rows) == 2 and all(len(r) == RL.ROW_WORDS for r in rows)
-    assert RL.row_elements(rows[0]) + RL.row_elements(rows[1])[:3] == vs and RL.row_elements(rows[1])[3:] == [0] * 5
-    assert RL.message_rows([]) == []
+    (row,) = RL.message_rows(vs)
+    assert len(row) == 2 * RL.ROW_WORDS
+    assert RL.row_elements(row)[:11] == vs and RL.row_elements(row)[11:] == [0] * 5
+    assert RL.message_rows([]) == [] and len(RL.message_rows(vs[:8])[0]) == RL.ROW_WORDS
+    other = RL.message_rows(vs[:3])[0][:RL.ROW_WORDS] * 2
     salts = [bytes([i]) * 192 for i in range(1, 3)]
-    reg = G.Registered.commit("00" * 64, "msgs", rows, salts)
-    assert RL.commit_rows(rows, salts) == list(reg.bcs)
+    reg = G.Registered.commit("00" * 64, "msgs", [row, other], salts)
+    assert RL.commit_rows([row, other], salts) == list(reg.bcs)
 
 
 def _session(proxy):

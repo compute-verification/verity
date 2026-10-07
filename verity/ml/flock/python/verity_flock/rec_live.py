@@ -16,11 +16,12 @@ A round's content is the transcript-v2 frames the prover absorbed since its last
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (its bytes public), a
 proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the statement digest
 (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
-laid out as rows of :data:`ROW_WORDS` u16 words (each element 8 words, its 16 bytes lo LE then hi LE; the last row
-zero-padded) and each row is committed as a registered row is (``verity.experimental.protocols.sampled_proofs.one_stage.registered``:
-``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is the list of the rows' ``b || c``. A round with no free
-message has an empty ``c_k``. The rows and salts are the prover's: V*'s units open them against the registered value the
-verifier builds from every ``c_k`` it received (`message_rows`, `commit_rows`).
+laid out as one row of whole :data:`ROW_WORDS`-word blocks (each element 8 words, its 16 bytes lo LE then hi LE; the last
+block zero-padded) and committed as a registered row is (``verity.experimental.protocols.sampled_proofs.one_stage.registered``:
+``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is that row's ``b || c``: one commitment a round, as
+one port of V*'s algebra reads it. A round with no free message has an empty ``c_k``. The row and salt are the prover's:
+V*'s algebra opens each round's row against the registered value the verifier builds from that round's ``c_k`` of both reps
+(`message_row`, `commit_rows`).
 
 At ``Finish`` the proxy writes the session directory (``session.json``, a ``flock-live-session/v1`` record that
 ``flock-circuit replay`` and the Lean verifier check, and ``<table>.rep<r>.bin``), the coin server's record ``public.json``
@@ -52,10 +53,9 @@ CAP_NODE_BYTES = 64
 REQ_HELLO, REQ_LINK, REQ_OPEN, REQ_ROUND, REQ_PROOF, REQ_FINISH, REQ_COMMIT, REQ_PRIME, REQ_PING, REQ_REGISTER = range(1, 11)
 RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_DRAW = range(1, 7)
 
-#: u16 words per message row: one SHA-512 block, 8 field elements
+#: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
 F_WORDS = 8
-F_PER_ROW = ROW_WORDS // F_WORDS
 MASK64 = (1 << 64) - 1
 
 
@@ -265,18 +265,17 @@ def split_round(content: bytes, first_of_rep: bool) -> Split:
 
 
 def message_rows(free: list[int]) -> list[list[int]]:
-    """``F_k`` as rows of :data:`ROW_WORDS` u16 words: element ``i`` is words ``8 (i mod 8) ..`` of row ``i // 8``, its lo
-    then hi 64 bits as little-endian u16 words; the last row zero-padded. No rows for an empty message."""
+    """``F_k`` as its round's one row (none for an empty message): element ``i`` is words ``8 i ..``, its lo then hi 64 bits
+    as little-endian u16 words, zero words up to whole blocks of :data:`ROW_WORDS`."""
     words: list[int] = []
     for v in free:
         words += [(v >> (16 * j)) & 0xFFFF for j in range(F_WORDS)]
-    words += [0] * (-len(words) % ROW_WORDS)
-    return [words[i:i + ROW_WORDS] for i in range(0, len(words), ROW_WORDS)]
+    return [words + [0] * (-len(words) % ROW_WORDS)] if words else []
 
 
 def row_elements(row: list[int]) -> list[int]:
-    """`message_rows`' inverse on one row: its 8 field elements."""
-    return [sum(row[F_WORDS * i + j] << (16 * j) for j in range(F_WORDS)) for i in range(F_PER_ROW)]
+    """`message_rows`' inverse on one row: its ``len(row) / 8`` field elements (the padding's zeros last)."""
+    return [sum(row[F_WORDS * i + j] << (16 * j) for j in range(F_WORDS)) for i in range(len(row) // F_WORDS)]
 
 
 def commit_rows(rows: list[list[int]], salts: list[bytes]) -> list[bytes]:
