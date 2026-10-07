@@ -51,6 +51,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `move`: layout moves.
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
+  - `control/`: the control pod's boot script and loops.
   - `nebius/`: the console's units.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
   the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.
@@ -64,7 +65,7 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
 - `verity.experimental` may import `verity.ml`. `verity.ml` never imports `verity.experimental`, apart from the files
-  `ML_IMPORTS_EXPERIMENTAL` names (C-Flock's tests and agreement scripts among them). `verity/core/` never imports
+  `ML_IMPORTS_EXPERIMENTAL` names (C-Flock's tests). `verity/core/` never imports
   `verity/experimental/`.
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
