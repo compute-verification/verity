@@ -1,7 +1,8 @@
 """Reference harness: `tele run --attempt-dir D --stage S [--timeout T] -- CMD...` (design §8).
 
 Writes job.json (unless present), status.json{running}, starts the sidecar in its own session (setsid) with --root-pid = the workload,
-emits span_start, runs CMD in its own process group with stdout/stderr tee'd to D/stdout.log / D/stderr.log (or inherited with --inherit-io),
+emits span_start, runs CMD in its own process group with RESEARCH_RUN_DIR=D and OUT=D/out (created first; custody uploads all of it) and
+stdout/stderr tee'd to D/stdout.log / D/stderr.log (or inherited with --inherit-io),
 on timeout writes cancel_intent{actor: timeout} then SIGTERM -> grace -> SIGKILL with cancel_results, records rc/signal/pid/pgid in
 status.json, stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
@@ -59,6 +60,7 @@ def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: 
 
 
 CONTROL_TIMEOUT = Path("control") / "timeout_s"     # attempt-dir relative; written by `tele set-timeout`, re-read by the run loop
+OUT_DIR = "out"                                     # attempt-dir relative; the workload's $OUT, which custody always uploads in full
 #: The clock (seconds) the stage timeout runs on; a test replaces it to decide when the deadline passes.  The recorded times
 #: (started_mono, ended_mono, wall_s) stay on time.monotonic, the clock of every event's t_mono.
 clock = time.monotonic
@@ -153,10 +155,11 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         out_f = open(d / "stdout.log", "ab")
         err_f = open(d / "stderr.log", "ab")
         stdout, stderr = out_f, err_f
+    (d / OUT_DIR).mkdir(exist_ok=True)
     t_start, armed = time.monotonic(), clock()
     try:
         proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None,
-                                env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve())})
+                                env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve()), "OUT": str((d / OUT_DIR).resolve())})
     except OSError as e:
         set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage)
         em.emit("mark", stage=a.stage, name="spawn_failed", error=str(e))
@@ -270,8 +273,8 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--input", action="append", default=[], help="name=path input artifact reference")
     ap.add_argument("--profile-key", action="append", default=[], help="environment variable NAMES to record (allowlist); values are read from the environment")
     ap.add_argument("--declared-output", action="append", default=[], metavar="GLOB",
-                    help="run-dir-relative glob of files custody uploads (repeatable; `*` crosses `/`); other files are listed by size and "
-                         "hash, not uploaded, past 256 MiB. See .agents/skills/writing-runs/SKILL.md")
+                    help="run-dir-relative glob of files custody uploads beside all of out/ ($OUT) (repeatable; `*` crosses `/`); other "
+                         "files are listed by size and hash, not uploaded, past 256 MiB. See .agents/skills/writing-runs/SKILL.md")
     ap.add_argument("--reservation-gpu", default=None)
     ap.add_argument("--reservation-host-memory-bytes", type=int, default=None)
     ap.add_argument("--policy", default=None, help="policy toml; its version + sha256 are recorded")
