@@ -46,18 +46,13 @@ def _roots() -> list[tuple[str, Path]]:
 
 @cache
 def discover() -> dict[str, dict[str, Path]]:
-    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name. A package
-    whose directory lies inside another top-level package's (`verity_flock` in `verity/ml/flock/python/`) names the sidecars
-    under it: the outer package's walk skips them, which would otherwise name each file a second time."""
+    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name."""
     out: dict[str, dict[str, Path]] = {}
-    roots = _roots()
     with CC.internal():
-        for pkg, root in roots:
-            top = pkg.partition(".")[0]
-            inner = [r for q, r in roots if r != root and r.is_relative_to(root) and q.partition(".")[0] != top]
+        for pkg, root in _roots():
             for kind in ("py", "json"):
                 for p in sorted(root.rglob(f"*{SUFFIX}.{kind}")):
-                    if "__pycache__" in p.parts or any(p.is_relative_to(r) for r in inner):
+                    if "__pycache__" in p.parts:
                         continue
                     stem = p.name[:-len(f"{SUFFIX}.{kind}")]
                     parts = [pkg, *p.relative_to(root).parent.parts]
