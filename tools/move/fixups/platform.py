@@ -168,6 +168,11 @@ EDITS = [
     ("**/Definitions/Pouw/Fp8Atom/Vectors.lean", "verity_catalog.silicon", "verity.ml.circuits.silicon"),
     # the commitment vectors name the module that writes them (the vectors files are never rewritten: digests pin them)
     *((f, GENERATOR + "verity.primitives.commitments.", GENERATOR + "verity.ml.commitments.") for f in VECTORS),
+    # check's toy trees write the flock file the rewritten rule names; the join is under tmp_path, which the move doesn't see
+    ("tools/verity/check/tests/test_check.py", '(tmp_path / "backends" / "flock" / "verify.rs")',
+     '(tmp_path / "verity" / "ml" / "flock" / "verify.rs")'),
+    ("tools/verity/check/tests/test_check.py", '(tmp_path / "backends" / "flock" / "é.py")',
+     '(tmp_path / "verity" / "ml" / "flock" / "é.py")'),
 ]
 
 #: (path, first line, the line it stops before): the text from one to the other goes.
