@@ -1,7 +1,8 @@
 {
  "roots": ["CertifierDevice"],
  "exempt": {
-  "CertifierDevice.DifftestMain": "the difftest against active.Proxy, under `runs`: compiled evaluation of CertifierDevice.Difftest.main, audited under CertifierDevice, a test and not a proof"
+  "CertifierDevice.DifftestMain": "the difftest against active.Proxy, under `runs`: compiled evaluation of CertifierDevice.Difftest.main, audited under CertifierDevice, a test and not a proof",
+  "CertifierDevice.SmokeMain": "a smoke run of run on the host's clock in an in-memory loopback world, run by hand: it reads the wall clock, so it is no test, and nothing proves anything of it"
  },
  "runs": {
   "CertifierDevice.DifftestMain": {
@@ -39,9 +40,14 @@
    "imports": ["CertifierDevice.Frame", "CertifierDevice.Shaper"],
    "except": [],
    "why": "the device is code: Lean core, C-Flock's bytes, certifier_program and network_check only, no Mathlib and nothing of Security"
+  },
+  "CertifierDevice.World": {
+   "imports": ["CertifierDevice.Device", "Std.Sync.Channel"],
+   "except": [],
+   "why": "the host the device needs, kept minimal so the shared World can replace it: Lean core's IO and channels over the device, nothing of Security"
   }
  },
  "dependencies": {
-  "toolchain": "b5b9a408c7654696506015fe40f040fbe98c3793af80b4a74463b9d2317af501"
+  "toolchain": "d8b527e419e64c4043e058369dc95a9b52f7b4c9757761a5394a3b98467ef82b"
  }
 }
