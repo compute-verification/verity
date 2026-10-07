@@ -10,7 +10,7 @@ must agree.
 
 The functions, `pous-setup-difftest` (`PousCheck.SetupDifftest.table`): the maps d, σ and D (`_Field`), the keys
 (`expand_prefix`, `sha512_keys`, and which candidate t is), `decode_segment` with its refusals by kind, the commitment with
-its manifest, and the tagged hash absorbed in pieces. The spec's §7 file is held to §7's SHA-512, and each of its vectors and
+its manifest (the identity hash itself is `core_identity`'s, difftested there). The spec's §7 file is held to §7's SHA-512, and each of its vectors and
 σ rejection cases to what Lean computes from the vector's inputs.
 
 The maps and the setup keep to widths where Python's `_Field.square` reduces fully (`4·c0² < 2^w`, the spec's ladder and
@@ -33,7 +33,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity.experimental.protocols.pous import protocol, setup
 from verity.experimental.protocols.pous.schemes import p2 as P2
-from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.ml.commitments.identity import canonical_json_bytes
 from verity_difftest import protocol as P
 
 LEAN = Path(__file__).resolve().parents[1]
@@ -153,16 +153,6 @@ def commit(i) -> dict:
     if len(w) != q.w_bytes:
         raise D.Reject(f"W has {len(w)} bytes")
     return {"commitment": setup.commit(q, w).hex(), "manifest": canonical_json_bytes(q.manifest()).decode()}
-
-
-def tagged(i) -> dict:
-    payload = _bytes(i, "payload")
-    pieces = i.get("pieces")
-    if not isinstance(pieces, list) or not all(isinstance(n, int) and not isinstance(n, bool) and n >= 0 for n in pieces):
-        raise D.Reject("pieces is missing or not a list of naturals")
-    if sum(pieces) != len(payload):
-        raise D.Reject("the pieces are not the payload")
-    return {"digest": tagged_sha512(_str(i, "tag"), payload).hex(), "sha512": hashlib.sha512(payload).hexdigest()}
 
 
 # The protocol's reference: `SetupProtocol`'s decoders and check over `verifier_key(…, mode=PUBLIC)`.
@@ -424,24 +414,11 @@ def commit_inputs(draw) -> dict:
             "w": rng.randbytes(max(size, 0)).hex()}
 
 
-@st.composite
-def tagged_inputs(draw) -> dict:
-    rng = random.Random(draw(st.integers(0, 1 << 32)))
-    payload = rng.randbytes(draw(st.sampled_from([0, 1, 111, 112, 127, 128, 129, 255, 256, rng.randrange(2000)])))
-    cuts = sorted(rng.randrange(len(payload) + 1) for _ in range(draw(st.integers(0, 3))))
-    pieces = [b - a for a, b in zip([0] + cuts, cuts + [len(payload)])]
-    if draw(st.integers(0, 9)) == 0:
-        pieces.append(1)
-    tag = draw(st.sampled_from(["verity-pous/w-commitment/v2", "t", "verity/x" * 40]))
-    return {"tag": tag, "payload": payload.hex(), "pieces": pieces}
-
-
 FNS = {
     "maps": _fn("maps", maps, map_inputs()),
     "keys": _fn("keys", keys, KEY_INPUTS),
     "decode": _fn("decode", decode, DECODE_INPUTS),
     "commit": _fn("commit", commit, commit_inputs()),
-    "tagged": _fn("tagged", tagged, tagged_inputs()),
 }
 fn_server = D.server_fixture(FNS["maps"])
 

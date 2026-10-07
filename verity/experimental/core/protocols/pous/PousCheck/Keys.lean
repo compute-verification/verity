@@ -1,5 +1,5 @@
+import Identity.Sha512
 import PousCheck.P2
-import PousCheck.Prim.Sha512
 
 /-!
 P2 v4's per-block keys (`p2/PROTOCOL.md` §4, `schemes/p2.py`'s `expand_prefix`, `stream`, `below`, `sha512_keys`):
@@ -18,14 +18,14 @@ Two prefix bodies, the same streams after them:
   frame(prime id) ‖ frame(salt)`, its 24-byte salt from the generic `setup.draw_salt`;
 - the spec's (§4, and the vectors of §7): the same with `frame(model commitment) ‖ frame(setup salt)`, 64 and 32 bytes.
 
-The prefix is absorbed once (`Prim.Sha512`'s midstate) and each chunk is one compression after it. The counter is a
+The prefix is absorbed once (`Identity.Sha512`'s midstate) and each chunk is one compression after it. The counter is a
 `u32be`, so a stream has at most `2^32` chunks: `t` reads candidates while they fit, and a stream with none below `p` among
 them is an error here, an `OverflowError` in Python (probability `(c0/2^w)^⌊2^38/n⌋`).
 -/
 
 namespace PousCheck.Keys
 
-open PousCheck.Prim
+open PousCheck.Prim Identity
 
 def KEYS_TAG : ByteArray := "verity/pous/p2/keys/v4\x00".toUTF8
 def PROTOCOL_ID : String := "p2/v4"

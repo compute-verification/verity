@@ -12,9 +12,8 @@ import PousCheck.Setup
 * `keys`: `Keys.packagePrefix` and `Expander.keys` (`expand_prefix`, `sha512_keys`): K, t and which candidate t is, or
   the salt's refusal;
 * `decode`: `Setup.decodeSegment` (`decode_segment`): the payload, or the kind of refusal;
-* `commit`: `Commit.commit` and `Commit.manifest` (`setup.commit`, `canonical_json_bytes(params.manifest())`); `tagged`:
-  `Commit.taggedSha512` (`identity.tagged_sha512`), and `Prim.Sha512` absorbing the payload in the given pieces against
-  `hashlib.sha512`;
+* `commit`: `Commit.commit` and `Commit.manifest` (`setup.commit`, `canonical_json_bytes(params.manifest())`), the
+  commitment over `Identity.taggedState` (the identity hash itself is `core_identity`'s, difftested there);
 * `vector` and `sigma`: an entry of the spec's §7 file (`benchmarks/pous/p2_v1/vectors.json`, schema `p2-test-vectors/v4`):
   its own `sha512` (of its canonical JSON without it) and whether §7 pins it, its K, t, rejection index and `D(c)` under the
   spec's prefix (`Keys.specPrefix`); a σ rejection case's `p`, `r ⊕ K` and `σ_K(r)`. The test holds these to the file's
@@ -70,15 +69,6 @@ def commit (i : Json) : V Json := do
   return Json.mkObj [("commitment", hex (← Commit.commit q (← bytes i "w"))),
     ("manifest", .str (String.fromUTF8! (← Commit.manifest q)))]
 
-def tagged (i : Json) : V Json := do
-  let payload ← bytes i "payload"
-  let pieces ← (← Flock.J.arr i "pieces" "instance").mapM (Flock.J.asNat · "piece")
-  let (st, off) := pieces.foldl (init := (Prim.Sha512.init, 0)) fun (st, off) n =>
-    (st.update (payload.extract off (off + n)), off + n)
-  if off != payload.size then throw "tagged: the pieces are not the payload"
-  if Flock.Sha512.hash payload != st.finalize then throw "tagged: Prim.Sha512 is not Flock.Sha512.hash"
-  return Json.mkObj [("digest", hex (Commit.taggedSha512 (← str i "tag") payload)), ("sha512", hex st.finalize)]
-
 def without (keys : List String) : Json → Json
   | .obj kvs => .obj (keys.foldl (fun m k => m.erase k) kvs)
   | j => j
@@ -94,7 +84,7 @@ def ENTRY_SHA512 : List (Nat × String) := [
 prefix, with `c < p` and the payload's bound. -/
 def vector (v : Json) : V Json := do
   let q : P2.Params := ⟨← nat v "w", ← nat v "c0", 2 ^ 16, 8⟩
-  let entry := Flock.hexOf (Prim.Sha512.hash (← Flock.canon (without ["sha512"] v)).toUTF8)
+  let entry := Flock.hexOf (Flock.Sha512.hash (← Flock.canon (without ["sha512"] v)).toUTF8)
   let e := Keys.Expander.ofPrefix (Keys.specPrefix q (← bytes v "model_commitment") (← bytes v "setup_salt"))
   let (k, t, a) ← e.keys q (← nat v "segment") (← nat v "block")
   let b := if q.w == W_BITS then 16432 else 8 * (q.blockBytes - 1)
@@ -112,7 +102,7 @@ def sigma (v : Json) : V Json := do
     ("rejects", .bool (r ^^^ k ≥ q.p)), ("sigma", hexW (P2.sigma q.p r k) q.blockBytes)]
 
 def table : String → Option Difftest.Fn :=
-  Difftest.table [("maps", maps), ("keys", keys), ("decode", decode), ("commit", commit), ("tagged", tagged),
-    ("vector", vector), ("sigma", sigma)]
+  Difftest.table [("maps", maps), ("keys", keys), ("decode", decode), ("commit", commit), ("vector", vector),
+    ("sigma", sigma)]
 
 end PousCheck.SetupDifftest
