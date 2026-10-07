@@ -3,12 +3,12 @@
     python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetTiming.Difftest.rawOfJson` reads it, and
-`DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.protocols.accounting.communication.certifier`:
+`DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.experimental.protocols.certifier`:
 `schedule.expected_grids` of each egress link (`rows`), `Audit.check_link`'s verdicts (`verdicts`) and the first bucket
 of each recorded window whose row differs from the expected one (`diff`), `Audit.check_ingress_link`'s verdict for
 every boundary link-window (`status`), and whether the audit accepts every link-window of the first `m` windows
 (`accepted`) and every status there (`complete`), for `m = 0 … W`. The Lean audit runs `NetTimingDifftest.lean` on
-both files (`runs` in `lean-audit.json`, which pins their SHA-256), and `verity/protocols/accounting/communication/certifier/tests/
+both files (`runs` in `lean-audit.json`, which pins their SHA-256), and `verity/experimental/protocols/certifier/tests/
 test_network_certifier_lean_difftest.py` checks that this script still writes them.
 
 An instance has one to three egress links and up to two ingress links, varied `T`, `W`, allocation, `Σ_sync` (δ, and ρ
@@ -26,10 +26,10 @@ import random
 from fractions import Fraction
 from pathlib import Path
 
-import verity.protocols.accounting.communication.certifier
-from verity.protocols.accounting.communication.certifier.audit import Audit
-from verity.protocols.accounting.communication.certifier.grid import GridParams, Reason, Record, Status, Certifier
-from verity.protocols.accounting.communication.certifier.schedule import (ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets,
+import verity.experimental.protocols.certifier
+from verity.experimental.protocols.certifier.audit import Audit
+from verity.experimental.protocols.certifier.grid import GridParams, Reason, Record, Status, Certifier
+from verity.experimental.protocols.certifier.schedule import (ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets,
                                             run_shaper)
 
 COUNT = 10_000
@@ -183,13 +183,13 @@ def write(out: Path, count: int = COUNT) -> dict[str, Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.protocols.accounting.communication.certifier is audited")
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.experimental.protocols.certifier is audited")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--count", type=int, default=COUNT)
     a = ap.parse_args()
-    here = Path(verity.protocols.accounting.communication.certifier.__file__).resolve()
+    here = Path(verity.experimental.protocols.certifier.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.protocols.accounting.communication.certifier comes from {here}, not from the checkout {a.verity}")
+        raise SystemExit(f"verity.experimental.protocols.certifier comes from {here}, not from the checkout {a.verity}")
     write(a.out, a.count)
 
 

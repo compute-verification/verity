@@ -107,13 +107,13 @@ Newest first. Each is Daniel's unless it names the coordinator.
   unclear (it changes agreed semantics, deletes what another owner may use, or crosses owners) goes to Daniel with a
   recommendation.
 - 2026-10-06 (9:45 AM PDT): the benchmark comparison tables (`verity_numerical.bench`'s `views`, `tables`, `drilldown`
-  and `store_tables`, spec `kb/TABLES.md`) and `verity.claims`, their label registry, go to `archive/`; the docs site is
+  and `store_tables`, spec `kb/TABLES.md`) and `verity.experimental.claims`, their label registry, go to `archive/`; the docs site is
   Daniel's to settle later. A certificate cites the Lean assumptions it rests on by name. The circuit templates, input
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:
-  `backends/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
-  frozen numerical work goes to `archive/`, and `verity/protocols/accounting/{work,space,communication}/<name>` flattens
-  to `verity/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
+  `verity/ml/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
+  frozen numerical work goes to `archive/`, and `verity/experimental/protocols/accounting/{work,space,communication}/<name>` flattens
+  to `verity/experimental/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
   recommendation to make, and the full tree is being settled with Daniel. "Network transparency" is "network
   accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
@@ -179,7 +179,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
   and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
   `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
-- 2026-10-05 (8:53 AM PDT): the Lean audit is the Lean check. `tools/lean/audit.py` becomes `lean_check.py` (the CI
+- 2026-10-05 (8:53 AM PDT): the Lean audit is the Lean check. `tools/verity/lean/audit.py` becomes `lean_check.py` (the CI
   step `lean-check`), and each package's `lean-audit.json` becomes `lean-lock.json`, its lock. The alert that DMs
   Daniel treats the renamed lock as a move, so the rename sends no DM. Until lean's rename lands, docs say "the Lean
   check" and "the lock" and keep the current paths.
@@ -199,7 +199,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   proof, and progress is never measured by which workloads' files fall inside a proof's scope. Pushback is welcome:
   send it to Daniel through @proofs.
 - 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
-  detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
+  detached job after each train lands on `main` (`tools/verity/check/post_train.py`, started by `research merge --push`) and labels
   the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
   cheap tier only (its T0 checks, about four minutes), and under `VERITY_STORE_REQUIRED=1` a fixture or input that doesn't
   resolve fails rather than skips.
@@ -207,7 +207,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
 - 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`ALLOWED` in
-  `verity/tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+  `tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
   edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
@@ -259,7 +259,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   said yes to, each naming its research question (`--question`, or a `question` label on its run). There is no filler:
   idle GPUs beat padded ones, a steward reports idle GPUs instead of offering them as backfill, and approved backfill runs
   on preemptible leases.
-- 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
+- 2026-09-30: the Lean infrastructure lane changes `tools/verity/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
   lane's proofs when no guarantee's record changes; a changed record in another lane's package goes through that lane. What a
   headline theorem may rest on, what "proved" means, retiring a theorem a table cites, spend past a budget line and any

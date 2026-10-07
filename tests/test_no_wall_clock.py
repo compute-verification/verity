@@ -135,7 +135,7 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order (as
     verity-flock did, r20260929-015410-5a20). Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
     that suite declares the build outputs it uses under `[tool.verity.tests] artifacts`, which key its cached pass."""
-    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
+    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(check)
     names = {}

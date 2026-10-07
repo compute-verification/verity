@@ -11,10 +11,10 @@ width conversions a `.to(dtype)` cast needs as *one call*: batched `Bf16ToF32_v1
 
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import Builder, CompositeDefinition
-from verity.primitives.circuits.refs import Coll
+from verity.ml.circuits.defs import Builder, CompositeDefinition
+from verity.ml.circuits.refs import Coll
 from verity_vllm.program.registry import prims as P
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.types import Array, Value
 
 F32 = Value(32)
 BF16 = Value(16)

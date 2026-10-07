@@ -7,7 +7,7 @@ Every hint here mirrors one constraint of :mod:`relation`; a wrong hint fails th
 from __future__ import annotations
 
 import numpy as np
-from verity_catalog.silicon.models import BLACKWELL_SM120_NVF4
+from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4
 
 from ..compile import P, Expr, System
 from .relation import (

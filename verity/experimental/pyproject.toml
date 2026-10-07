@@ -1,0 +1,15 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: the Lean-evaluated exfiltration vectors record the sha256 of the soundness package's files they were generated
+# from (tests/sampled_proofs/lean/generate.sh), and a test compares them with the tree.
+inputs = ["verity", "verity/Security/Proofs/Flock/Soundness/Audit/Influence.lean",
+          "verity/Security/Proofs/Flock/Soundness/Audit/Law.lean",
+          "verity/Security/Proofs/Flock/Soundness/Audit/Stratified.lean",
+          "verity/Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
+          "verity/Security/Proofs/lake-manifest.json",
+          "verity/Security/Proofs/lean-toolchain"]
+parallel = true

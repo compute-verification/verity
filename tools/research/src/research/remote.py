@@ -449,10 +449,10 @@ QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's 
 
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (tools/cluster). Refused when the queue refuses the job."""
-    src = Path(source) / "tools" / "cluster" if source is not None else None
+    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
+    src = Path(source) / "infra" / "cluster" if source is not None else None
     if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
-        raise Refused("--queue: the --source tree has no tools/cluster with `cluster submit` (the queue's description and client)")
+        raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,

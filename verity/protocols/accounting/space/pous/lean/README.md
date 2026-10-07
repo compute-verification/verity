@@ -2,7 +2,7 @@
 
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game with perfect isolation
-(`../PROTOCOL.md`) are part of the security analysis, `verity/Security/` (Daniel's Lean layout ruling, 5 Oct): the
+(`../../../../../experimental/protocols/pous/PROTOCOL.md`) are part of the security analysis, `verity/Security/` (Daniel's Lean layout ruling, 5 Oct): the
 listing below names them by their modules before that move, which map as `Pous.Protocol` to `Definitions.Pous`,
 `Pous.Assumptions` to `Specs.Pous.Assumptions`, `Pous.Guarantees` to `Specs.Pous.Guarantees`, `Pous.SecurityProofs`
 to `Proofs.Pous`, `PousTargets` to `Proofs.Pous.Targets` and `CheckAxioms` to `Proofs.Pous.CheckAxioms`
@@ -85,7 +85,7 @@ Pous/SecurityProofs/Rebuild/        proved: under the verifier's duration cap, n
 Pous/SecurityProofs/SecureErasure/  proved: `DigestAU` (Digest), secure erasure from the audit by counting
                                     (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
                                     `f = 1/19`, `ε = 2^-128` (Band)
-lean-audit.json                     the policy and guarantee records for tools/lean/audit.py
+lean-audit.json                     the policy and guarantee records for tools/verity/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets
 Grader/{Main,Registry}.lean, grade.sh, TRUSTED.sha256   the grader (allowed axioms and pinned targets compiled in),
@@ -96,7 +96,7 @@ submissions/reference.lean          the grader's positive control
 ~~~bash
 lake build                          # the grader (the default target)
 (cd ../../../../../Security/Proofs && lake exe cache get && lake build Proofs.Pous)   # PoUS's analysis; Mathlib prebuilt
-python3 ../../../../../../tools/lean/audit.py --build --fresh . ../../../../../Security   # Verity's Lean audit
+python3 ../../../../../../tools/verity/lean/audit.py --build --fresh . ../../../../../Security   # Verity's Lean audit
 (cd ../../../../../Security/Proofs && lake env lean Pous/CheckAxioms.lean)   # the headline theorems' axioms
 bash grade.sh submissions/reference.lean Pous.Guarantees.KFloor   # one JSON line, exit 0 iff PASS
 bash check.sh                       # the audit, the open targets, and the grader's controls
@@ -107,7 +107,7 @@ bash check.sh                       # the audit, the open targets, and the grade
 grader and its sandbox. Everything else is checked by machine. Docstring paths such as `lean/submissions/…` and
 `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
-**The audit.** `tools/lean/audit.py` audits every declaration under `Pous`: allowed axioms, named assumptions, escapes,
+**The audit.** `tools/verity/lean/audit.py` audits every declaration under `Pous`: allowed axioms, named assumptions, escapes,
 orphan files, import layers (Protocol imports no assumption, guarantee or proof; Assumptions only Protocol; Guarantees
 no proof), a kernel replay, and the guarantees' records. `lean-audit.json` lists as guarantees the sanity theorems,
 every `Pous.SecurityProofs.X` (among them the stacked one-way bound, the band certificate, and the dense scheme at the

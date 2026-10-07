@@ -3,7 +3,7 @@
     PYTHONPATH=<verity> python scripts/h1t_vectors.py <copy of internal/pouw/hardness> [--out DIR]
 
 The expected values come from an exact transcription of `docs/pouw/hardness-shaped-matrices.md` §3.1 over fractions,
-with the atom from `verity_catalog.silicon` (`tc_dot_total_e4m3` on `HOPPER_E4M3_K32`) and the chain in numpy float32. Before
+with the atom from `verity.ml.circuits.silicon` (`tc_dot_total_e4m3` on `HOPPER_E4M3_K32`) and the chain in numpy float32. Before
 anything is written, three other computations must agree with it:
 * Track H's `h1_tagged.h1t_ref`, driven by a stub generator that returns the vectors' salt fields, and Track H's
   `h1_tagged.chain` on the operands it forms (the pinned map, bit for bit);
@@ -31,8 +31,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_catalog.silicon import models
-from verity_catalog.silicon.total_fp8 import tc_dot_total_e4m3
+from verity.ml.circuits.silicon import models
+from verity.ml.circuits.silicon.total_fp8 import tc_dot_total_e4m3
 
 P = models.HOPPER_E4M3_K32
 SEED = 2026092901

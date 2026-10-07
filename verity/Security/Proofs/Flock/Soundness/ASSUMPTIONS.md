@@ -125,7 +125,7 @@ coins.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about Lean's `IO.getRandomBytes`, so it doesn't cover these bytes.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
-  `live/src/coin_seed.rs`, through `verity.primitives.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
+  `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
   coins as above (The headline, its coins).
 - **Tree coins (`--zk`).** Under `--zk` the coins are committed, not drawn round by round (`coin-tree/hm96-sha512/v2`,
@@ -244,7 +244,7 @@ Boolean-semantics lemma replaces the per-template `RowsCert`.
 drawn after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session draws them under
 `FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
 then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
-`PROTOCOL.md` §7.1). The benches run M0 so by default (`backends/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
+`PROTOCOL.md` §7.1). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
 `61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
 from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
 That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
@@ -276,7 +276,7 @@ prefix on the dummy witness, within `2·|LeafPos|·2^-193` both ways (`ZK.Table.
 vector and T1 on every pre-final leaf), and elsewhere Lemma B.
 Which verifiers: at each coin vector `zk_session_view` is honest-verifier zero knowledge for those fixed coins. It covers
 a verifier that chooses its coins only because the coin server commits every coin at `Hello`, before the prover's first
-message (`backends/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
+message (`verity/ml/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
 uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
 No statement models that commitment yet, so this order of messages and the binding assumption are what the
 malicious-verifier claim rests on beyond the theorems.
@@ -285,16 +285,16 @@ malicious-verifier claim rests on beyond the theorems.
 - `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
   (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
 
-**A4. `verity.primitives.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
+**A4. `verity.ml.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
 (`prf/sha-512`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
 (`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`, on SHA-256 before one hash moved it).
 
 - **Statement.** A secret of `S` uniform bytes (A5) gives the key `Randomness.derive`. For a test `E` of the key's
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
-  `η`. `Randomness.lean` is the Lean spec of `verity.primitives.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
-  `verity/primitives/randomness/tests/vectors.json`, and Python matches its vectors
-  (`backends/flock/tests/test_randomness_spec.py`).
+  `η`. `Randomness.lean` is the Lean spec of `verity.ml.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
+  `verity/ml/randomness/tests/vectors.json`, and Python matches its vectors
+  (`verity/ml/flock/tests/test_randomness_spec.py`).
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
   misses `B`), and `η` enters its bound.
@@ -445,7 +445,7 @@ before the session's first coin, not bounds state by state.
   claimed.
 - **Table 1** cites Flock's soundness under the `live-verifier` model and the collision resistance of each row's hashes
   (`cr/sha-512` in the C-Flock SHA-512 row); A1's proof took `rs-proximity-johnson` off. An audit's integrity profile
-  would add `SHA512CRExpected` as `ecr/sha-512`, a `verity.claims` id that no row cites yet.
+  would add `SHA512CRExpected` as `ecr/sha-512`, a `verity.experimental.claims` id that no row cites yet.
 
 ## What is pinned
 
@@ -493,7 +493,7 @@ watch list is the `upstream` section of `lean-audit.json`, one entry per stateme
 - `tensor-fold`: the fold union in `LigeritoLevels`;
 - `novel-basis`: the novel basis (`Arith.Correct.xhat_poly`, `L ≤ 40`).
 
-`python tools/lean/upstream.py verity/Security/Proofs` prints each entry's status at the pinned
+`python tools/verity/lean/upstream.py verity/Security/Proofs` prints each entry's status at the pinned
 revisions: the upstream theorems about it, which are proved, and which nobody has acknowledged. The audit runs that pass
 over ArkLib, with ArkLib's own `sorry` baseline, and fails on a proved theorem no entry acknowledges. `--lean`, the
 exact pass over everything imported (VCVio and CompPoly too), is run at a dependency bump.

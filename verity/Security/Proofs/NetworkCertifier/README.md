@@ -35,17 +35,17 @@ Difftest.lean        tested: the definitions evaluated on an instance (expectedR
 NetTimingDifftest.lean         the difftest's run (`runs` in lean-audit.json): every instance against the Python audit's
                                results
 ../../../protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py    the difftest's data: 10,000 random instances and the Python audit's results on them
-lean-audit.json                the policy and guarantee records for tools/lean/audit.py
+lean-audit.json                the policy and guarantee records for tools/verity/lean/audit.py
 CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
 ~~~
 
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
-python3 ../../../../tools/lean/audit.py .                      # Verity's Lean audit
+python3 ../../../../tools/verity/lean/audit.py .                      # Verity's Lean audit
 lake env lean CheckAxioms.lean                              # the axioms of the 35 statements, 16 witnesses and 3 lemmas
 # the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
-uv run python ../../../protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py ../../../protocols/accounting --out /tmp/dt
+uv run python ../../../protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py ../../../experimental/protocols/accounting --out /tmp/dt
 lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000
 ~~~
 
@@ -54,7 +54,7 @@ lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp
 as `docs/…` and `internal/…` name network accounting's project store, where the covert-capacity note
 (`docs/network-transparency/timing-channel.md`) and the reviews live.
 
-**The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
+**The audit.** `tools/verity/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
 record, a kernel replay, and the 4 guarantees' records, whose meaning it follows through those three (`meaning`). It then
@@ -125,7 +125,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 ## The records
 
 The lock (`lean-audit.json`'s `guarantees`) holds the four guarantees, the theorems whose bounds the calibration reports
-(`verity.protocols.accounting.communication.certifier.calibration`, `PROTOCOL.md`'s "Capacity"), each listed as `NetTiming.SecurityProofs.G` and
+(`verity.experimental.protocols.certifier.calibration`, `PROTOCOL.md`'s "Capacity"), each listed as `NetTiming.SecurityProofs.G` and
 proved by the lemma of the same statement whose name it spells in UpperCamelCase:
 
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
@@ -167,7 +167,7 @@ that added them (danielreuter/verity#894), and the review of the content version
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
 `n ≤ W·T`. All 35 statements and 16 witnesses are proved. The reference
-implementation, `verity/protocols/accounting/communication/certifier` (`verity.protocols.accounting.communication.certifier`), mirrors 19 of the statements and the three
+implementation, `verity/experimental/protocols/certifier` (`verity.experimental.protocols.certifier`), mirrors 19 of the statements and the three
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks

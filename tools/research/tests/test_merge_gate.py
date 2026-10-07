@@ -22,17 +22,17 @@ def _git(repo: Path, *args: str) -> str:
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
-#: the throwaway target's tools/check/check.py: it passes as check does, with a passing `check/v1` result, or runs the Python in
+#: the throwaway target's tools/verity/check/check.py: it passes as check does, with a passing `check/v1` result, or runs the Python in
 #: $FAKE_CHECK instead (`_checked`)
 CHECK_PY = f"import os\nexec(os.environ.get('FAKE_CHECK') or {_RESULT % 'passed'!r})\n"
 #: the command the throwaway target declares for `check`: the gate admits only a run of it, with a passing result of a kind the
 #: declaration produces
-CHECKED = (sys.executable, "tools/check/check.py")
+CHECKED = (sys.executable, "tools/verity/check/check.py")
 #: the throwaway target's declaration of `check`, which the gate reads `command`, `produces` and `merge_requires` from
 DECL = ("from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', "
         f"command={list(CHECKED)!r}, produces=['check/v1']{{}})\n")
 #: what a throwaway target holds of its check: the declaration and the script it declares
-CHECK_FILES = {"tools/check/tool.py": DECL.format(""), "tools/check/check.py": CHECK_PY}
+CHECK_FILES = {"tools/verity/check/tool.py": DECL.format(""), "tools/verity/check/check.py": CHECK_PY}
 
 
 def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
@@ -40,7 +40,7 @@ def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
     main = tmp_path / "main"
     (main / "mytools").mkdir(parents=True)
     (main / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "verity" / "check").mkdir(parents=True)
     for rel, text in CHECK_FILES.items():
         (main / rel).write_text(text)
     (main / "a.txt").write_text("a\n")
@@ -56,9 +56,9 @@ def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
 
 
 def _declared_by_the_throwaway_repo(monkeypatch) -> None:
-    """`--tool check` imports `tools.check.tool` whenever `tools` is importable in this process (the suite's own checkout, from
+    """`--tool check` imports `tools.verity.check.tool` whenever `tools` is importable in this process (the suite's own checkout, from
     sys.path or an earlier test's import) and reads the throwaway repo's file only when that fails: make it fail."""
-    for name in ("tools", "tools.check", "tools.check.tool"):
+    for name in ("tools", "tools.verity.check", "tools.verity.check.tool"):
         monkeypatch.setitem(sys.modules, name, None)
 
 
@@ -207,7 +207,7 @@ def test_prepare_pushes_the_pinned_train_and_never_touches_the_checkout(tmp_path
     tip = _git(origin, "rev-parse", "train-prep/1")
     out = capsys.readouterr().out
     assert f"pushed origin/train-prep/1 = {tip[:12]} (tree {_git(origin, 'rev-parse', 'train-prep/1^{tree}')[:12]})" in out
-    assert f"`tools/check/train.sh {tip[:12]} MACHINE`" in out, "the branch is only on origin; train.sh resolves the sha here"
+    assert f"`tools/verity/check/train.sh {tip[:12]} MACHINE`" in out, "the branch is only on origin; train.sh resolves the sha here"
     assert _git(origin, "rev-parse", "train-prep/1^1") == _git(origin, "rev-parse", "main") and _git(origin, "rev-parse", "train-prep/1^2") == a
     assert _git(origin, "log", "-1", "--format=%s", "train-prep/1") == f"Merge #7 ({a[:8]})"
     assert _git(main, "symbolic-ref", "--short", "HEAD") == "lander-work" and (main / "a.txt").read_text() == "uncommitted\n"
@@ -406,7 +406,7 @@ def test_a_change_under_a_rules_paths_goes_into_a_train_only_with_its_grant_at_i
     main, _feat, _tip = _repos(tmp_path)
     audit = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {}}
     _origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
+        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
         "lean-audit.json": json.dumps(audit, indent=1)}, {
         20: {"lean-audit.json": json.dumps({**audit, "guarantees": {"P.t": {"type_hash": "2"}}}, indent=1)},
         21: {"x.txt": "x\n"}})
@@ -415,10 +415,10 @@ def test_a_change_under_a_rules_paths_goes_into_a_train_only_with_its_grant_at_i
     pins, lint = [f"20@{heads[20][:9]}", f"21@{heads[21][:9]}"], ["--lint", "true"]
     assert merge_main(["--train", "--prepare", "train-prep/g", *pins, *lint]) == 3
     err = capsys.readouterr().err
-    assert f"#20 needs the red-team grant at {heads[20][:12]} (tools/check/queue.toml: from its rule, which names no `by`)" in err
+    assert f"#20 needs the red-team grant at {heads[20][:12]} (tools/verity/check/queue.toml: from its rule, which names no `by`)" in err
     assert f"`research data label pr:20@{heads[20]} grant red-team --by REVIEWER`" in err and "#21" not in err
     assert merge_main(["--train", "--prepare", "train-prep/g", f"side@{heads[20][:9]}", *lint]) == 3
-    assert "side needs the red-team grant (tools/check/queue.toml), which only a pull request's pinned head can hold" \
+    assert "side needs the red-team grant (tools/verity/check/queue.toml), which only a pull request's pinned head can hold" \
         in capsys.readouterr().err
     assert merge_main(["--train", "pr20", "--tool", "mytools.decl_check:T", "--command", shlex.join(CHECKED)]) == 3
     out, err = capsys.readouterr()
@@ -436,7 +436,7 @@ def _pr_train(tmp_path: Path, monkeypatch, rules: str | None = None, grant: str 
     _store_remote(tmp_path, monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
     if rules:
-        (main / "tools" / "check" / "queue.toml").write_text(rules)
+        (main / "tools" / "verity" / "check" / "queue.toml").write_text(rules)
         _git(main, "add", "-A")
         _git(main, "commit", "-q", "-m", "queue rules")
     origin = _remote(tmp_path, main)
@@ -493,7 +493,7 @@ def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(t
 
     _store_remote(tmp_path, monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
-    origin, heads = _origin_with(tmp_path, main, {"tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["f.txt"]\n'},
+    origin, heads = _origin_with(tmp_path, main, {"tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["f.txt"]\n'},
                                  {30: {"f.txt": "the lock\n"}})
     _git(main, "checkout", "-q", "pr30")
     (main / "g.txt").write_text("on top\n")
@@ -576,7 +576,7 @@ def test_a_grant_carries_into_a_train_across_a_restack_or_a_merge_of_main_and_no
     audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
     pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
     origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
+        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
         "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": pinned}})
     old = heads[20]
     LocalStore().add_label(f"pr:20@{old}", "grant", "red-team", "reviewer")
@@ -611,7 +611,7 @@ def test_a_grant_carries_at_landing_as_at_prepare(tmp_path, monkeypatch, capsys)
     audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
     pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
     origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
+        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
         "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": pinned}})
     old = heads[20]
     LocalStore().add_label(f"pr:20@{old}", "grant", "red-team", "reviewer")
@@ -641,7 +641,7 @@ def test_a_grant_on_a_stacked_pr_carries_when_only_the_pr_below_it_moved(tmp_pat
     audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
     pinned = json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}}, indent=1)
     origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json"]\n',
+        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json"]\n',
         "lean-audit.json": json.dumps(audit, indent=1)}, {30: {"p.txt": "parent\n"}})
 
     def commit_on(start: str, branch: str, files: dict[str, str]) -> str:
@@ -693,7 +693,7 @@ def test_a_head_with_two_merge_bases_carries_no_grant_and_needs_every_one(tmp_pa
 
     next_day()
     origin, _ = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
+        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
         "lean-audit.json": json.dumps(audit, indent=1),
         "other/lean-audit.json": json.dumps({**audit, "pins": {"O.t": {"type_hash": "old"}}}, indent=1)}, {})
     next_day()
@@ -733,7 +733,7 @@ def test_a_train_the_store_cant_answer_for_is_refused_as_stale_not_as_the_rules(
     main, _feat, _tip = _repos(tmp_path)
     audit = {"roots": ["P"], "pins": {"P.t": {"type_hash": "1"}}, "reads": {}}
     _origin, heads = _origin_with(tmp_path, main, {
-        "tools/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
+        "tools/verity/check/queue.toml": '[[grant]]\nrole = "red-team"\npaths = ["lean-audit.json", "other/"]\n',
         "lean-audit.json": json.dumps(audit, indent=1)}, {20: {"lean-audit.json": json.dumps({**audit, "pins": {"P.t": {"type_hash": "2"}}})}})
 
     def unreachable(store, prefix):
@@ -779,7 +779,7 @@ def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_t
 
 def test_merge_admits_only_a_result_of_a_kind_the_targets_declaration_produces(tmp_path, monkeypatch, capsys):
     """Refusing the kinds it knew to refuse let through a `check` attempt with no result (`research run --tool check -- python3
-    tools/lean/audit.py --no-replay PKG` writes none) and a result of any other kind (red team, #966).  The gate admits only a
+    tools/verity/lean/audit.py --no-replay PKG` writes none) and a result of any other kind (red team, #966).  The gate admits only a
     kind the target's own declaration produces (`check/v1` for check), and nothing when the target declares none."""
     from research.merge import produced
 
@@ -791,7 +791,7 @@ def test_merge_admits_only_a_result_of_a_kind_the_targets_declaration_produces(t
     err = capsys.readouterr().err
     assert "refused: it published no result, and the target's declaration of the tool produces check/v1" in err
     assert "refused: its result is a bench-result/v1, and the target's declaration of the tool produces check/v1" in err
-    (main / "tools" / "check" / "tool.py").write_text(DECL.replace(", produces=['check/v1']", "").format(""))
+    (main / "tools" / "verity" / "check" / "tool.py").write_text(DECL.replace(", produces=['check/v1']", "").format(""))
     _git(main, "commit", "-q", "-am", "check produces nothing")
     _git(feat, "merge", "-q", "main")
     assert _checked(tmp_path, feat, monkeypatch) == 0
@@ -833,8 +833,8 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
     behind `slot.py` when it was sent to a machine, followed by check.py's own flags.  Anything else is another command."""
     from research.merge import unlike
 
-    cmd = ("uv", "run", "--locked", "python", "tools/check/check.py")
-    slot = ["python3", "tools/check/slot.py"]
+    cmd = ("uv", "run", "--locked", "python", "tools/verity/check/check.py")
+    slot = ["python3", "tools/verity/check/slot.py"]
     for argv in ([*cmd], [*cmd, "--keep-going"], [*cmd, "--no-cache", "--cores", "8"], [*cmd, "--keep-going", "--verdicts-in", "v.tgz"],
                  [*cmd, "--verdicts-in", "v.tgz", "--cores", "4"], [*slot, "--", *cmd], [*slot, "--by", "x", "--", *cmd],
                  [*slot, "--priority", "--by", "gates", "--", *cmd, "--keep-going"]):
@@ -938,7 +938,7 @@ def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, mon
     elsewhere but not one under flock/; one where it passed admits both."""
     _declared_by_the_throwaway_repo(monkeypatch)
     main, feat, _tip = _repos(tmp_path)
-    (main / "tools" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
+    (main / "tools" / "verity" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
     _git(main, "add", "-A")
     _git(main, "commit", "-q", "-m", "rule")
     _git(feat, "merge", "-q", "main")
@@ -969,8 +969,8 @@ def test_a_file_renamed_out_of_a_path_rule_requires_its_step(tmp_path):
     from research.merge import required_steps
 
     main, _feat, _tip = _repos(tmp_path)
-    (main / "tools" / "check").mkdir(parents=True, exist_ok=True)
-    (main / "tools" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
+    (main / "tools" / "verity" / "check").mkdir(parents=True, exist_ok=True)
+    (main / "tools" / "verity" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
                                                       "CHECK = Tool(name='check', version='1', merge_requires={'agree': ['flock/']})\n")
     (main / "flock").mkdir()
     (main / "flock" / "x.txt").write_text("x\n")
@@ -989,7 +989,7 @@ def test_a_stacked_train_meets_the_steps_the_declaration_main_gained_from_the_tr
     _declared_by_the_throwaway_repo(monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
     _git(main, "checkout", "-q", "-b", "A")
-    (main / "tools" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
+    (main / "tools" / "verity" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
     _git(main, "commit", "-q", "-am", "A: the rule")
     _git(main, "checkout", "-q", "-b", "C")
     (main / "flock").mkdir()
@@ -1088,23 +1088,23 @@ def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_b
 
 
 def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_path):
-    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.py"`), which no prefix of a
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/ml/flock/\\303\\251.py"`), which no prefix of a
     `merge_requires` rule matched, so a train changing such a file required no `lean-agreement`."""
     from research.merge import required_steps
 
     repo = tmp_path / "repo"
     (repo / "mytools").mkdir(parents=True)
     (repo / "mytools" / "agree.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1', "
-                                               "merge_requires={'lean-agreement': ['backends/flock/', '!README.md']})\n")
+                                               "merge_requires={'lean-agreement': ['verity/ml/flock/', '!README.md']})\n")
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "backends" / "flock").mkdir(parents=True)
+    (repo / "verity" / "ml" / "flock").mkdir(parents=True)
     (repo / "backends" / "flock" / "é.py").write_text("x = 1\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "é")
-    assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["backends/flock/"]}
+    assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/ml/flock/"]}
 
 
 def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_admits_the_control(tmp_path, monkeypatch, capsys):
@@ -1162,7 +1162,7 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
                 "refused it") in capsys.readouterr().out
 
     monkeypatch.chdir(tmp_path)
-    assert merge_main(["--canary"]) == 3 and "no tools/check/tool.py, its declaration of `check`" in capsys.readouterr().err
+    assert merge_main(["--canary"]) == 3 and "no tools/verity/check/tool.py, its declaration of `check`" in capsys.readouterr().err
     for argv in (["--canary", "feat"], ["--canary", "--sweep"], ["--json", "feat"]):
         try:
             merge_main(argv)

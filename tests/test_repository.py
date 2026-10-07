@@ -61,14 +61,14 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
 #: (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "catalog/census/workloads.json": 384 * 1024,
+    "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
     "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
     "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
-    "catalog/verity_catalog/definitions/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
@@ -181,7 +181,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "kernels/")
+UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "verity/ml/kernels/")
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
@@ -196,7 +196,7 @@ def _testpaths(tracked: list[str]) -> list[str]:
 
 
 def test_every_test_file_is_in_a_suite() -> None:
-    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    """`tools/verity/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
     directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
     tracked = _tracked()
     testpaths = _testpaths(tracked)

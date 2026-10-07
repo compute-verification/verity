@@ -7,7 +7,7 @@ analysis, the compiled proof, the knowledge extractor, the spec deviations, the 
 and the post-quantum and root-reuse analyses.
 
 Lane `flock-soundness`, level 4a of the formal-verification plan: the interactive mode only. The Lean development is
-this directory (`FlockSoundness/`). The verifier it is about is specified in `../../../../../backends/flock/verifier/PROTOCOL.md` (PR #85). The work is
+this directory (`FlockSoundness/`). The verifier it is about is specified in `../../../../ml/flock/verifier/PROTOCOL.md` (PR #85). The work is
 staged along a16z's zkVM security stages (DESIGN.md §7).
 
 ## 1. Theorems
@@ -35,7 +35,7 @@ at most `tableError(fast100 m, shape)`:
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (`value_batch_le`, `Audit/README.md`).
 - **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Model/LigeritoPad.lean`). M1 (#123,
-  `backends/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
+  `verity/ml/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
     queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
@@ -181,7 +181,7 @@ link term per audit.
 | The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumption-notes/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`python tools/lean/audit.py verity/Security/Proofs` to check every declaration (`lean-audit.json`).
+`python tools/verity/lean/audit.py verity/Security/Proofs` to check every declaration (`lean-audit.json`).
 
 ### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
 

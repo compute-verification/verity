@@ -494,7 +494,7 @@ def test_rules_refuse_what_they_cannot_place():
 
 
 def test_until_the_move_the_rules_are_read_from_tools_check(world):
-    moved = world.change({"tools/check/queue.toml": RULES.replace('paths = ["integrations/vllm/"]', 'paths = ["integrations/vllm/", "!README.md"]')})
+    moved = world.change({"tools/verity/check/queue.toml": RULES.replace('paths = ["integrations/vllm/"]', 'paths = ["integrations/vllm/", "!README.md"]')})
     _git(world.dev, "rm", "-q", "ci/queue.toml")
     _git(world.dev, "commit", "-q", "-m", "rules where they are before the move")
     _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
@@ -598,12 +598,12 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     seen = world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -629,7 +629,7 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     world.gh.put(1, h2, ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and _git(wt, "rev-parse", "HEAD") == h2
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
-    h3 = world.change({"tools/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
+    h3 = world.change({"tools/verity/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
     world.gh.put(1, h3, ready=False)
     assert tier(world.gh.prs[1]) is None
     assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite
@@ -640,7 +640,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": "name = \"flock\"\n"})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": "name = \"flock\"\n"})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -650,7 +650,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
                                'mkdir -p .lake && echo built > .lake/built\n')
     (bin_ / "lake").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("FAKE_LAKE_LOG", str(ran))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -668,7 +668,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
 
 
-RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["backends/flock/", "!README.md"]\n'
+RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["verity/ml/flock/", "!README.md"]\n'
 
 
 def _move_main(world: World, files: dict[str, str]) -> str:
@@ -787,7 +787,7 @@ def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     `lean-audit.json` the granted head didn't change included."""
     q = _carrying(world, RULES + RED_TEAM)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    flock = {"backends/flock/x.py": "x = 1\n"}
+    flock = {"verity/ml/flock/x.py": "x = 1\n"}
     world.gh.put(1, old := world.change(flock))
     _grant(world, 1, old, "red-team")
     assert [m.pr for m in q.sync()[0]] == [1]
@@ -795,7 +795,7 @@ def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     world.gh.put(1, new := world.change(flock))
     assert [m.head for m in q.sync()[0]] == [new]
     assert f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} (restack; no lean-audit.json change)" in world.logs
-    for extra, why in (({"backends/flock/y.py": "y = 1\n"}, "its change against origin/main differs (backends/flock/y.py)"),
+    for extra, why in (({"verity/ml/flock/y.py": "y = 1\n"}, "its change against origin/main differs (verity/ml/flock/y.py)"),
                        ({"a.txt": "a, too\n"}, "its change against origin/main differs (a.txt)"),
                        ({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
                         "its lean-audit.json patch isn't byte-identical (pkg/lean-audit.json)")):
@@ -812,7 +812,7 @@ def test_a_grant_on_a_head_git_cannot_compare_carries_nothing(world):
 
     q = _carrying(world, RULES + RED_TEAM)
     q.sync()                                                    # the clone first: a local clone hardlinks every object there is
-    flock = {"backends/flock/x.py": "x = 1\n"}
+    flock = {"verity/ml/flock/x.py": "x = 1\n"}
     unseen = world.change(flock)                                # on the origin, but never a PR head the queue fetched
     ghost = "0123456789abcdef" * 2 + "01234567"
     for h in (unseen, ghost):
@@ -862,10 +862,10 @@ def test_a_submodule_pinned_elsewhere_is_another_change_whatever_git_is_told_to_
 
     _git(world.dev, "config", "diff.ignoreSubmodules", "all")
     a, b = (_git(world.dev, "commit-tree", "origin/main^{tree}", "-m", m) for m in ("a", "b"))
-    old = _gitlink(world, "backends/flock/vendored", a)
+    old = _gitlink(world, "verity/ml/flock/vendored", a)
     _move_main(world, {"d.txt": "landed meanwhile\n"})
-    new, restacked = _gitlink(world, "backends/flock/vendored", b), _gitlink(world, "backends/flock/vendored", a)
-    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (backends/flock/vendored)")
+    new, restacked = _gitlink(world, "verity/ml/flock/vendored", b), _gitlink(world, "verity/ml/flock/vendored", a)
+    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (verity/ml/flock/vendored)")
     assert carry(world.dev, "origin/main", old, restacked) == (True, "restack; no lean-audit.json change")
     assert Rules.parse(RULES + RED_TEAM).needs(world.dev, "origin/main", new) == {"red-team"}
 
@@ -1019,12 +1019,12 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
 
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     seen = world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -1076,11 +1076,11 @@ def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_reposito
 
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
 
@@ -1323,10 +1323,10 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     tier ran tools/research on vy-nebius-1 failed it (#985, #1021)."""
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(world.tmp / "the-machines-pycache"))
     monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
@@ -1352,10 +1352,10 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
     It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": 'name = "flock"\n'})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": 'name = "flock"\n'})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))

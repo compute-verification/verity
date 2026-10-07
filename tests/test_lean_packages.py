@@ -26,7 +26,7 @@ def test_every_lake_package_is_audited():
     pkgs = lake_packages()
     assert len(pkgs) >= 3
     missing = [str(p.relative_to(ROOT)) for p in pkgs if not (p / "lean-audit.json").exists()]
-    assert not missing, f"Lake packages without a lean-audit.json (tools/lean/README.md): {missing}"
+    assert not missing, f"Lake packages without a lean-audit.json (tools/verity/lean/README.md): {missing}"
 
 
 def test_one_toolchain():
@@ -96,16 +96,16 @@ def test_lean_module_roots_are_disjoint():
 
 
 def test_every_record_merges_with_the_driver():
-    """`.gitattributes` sends every `lean-audit.json` to `tools/lean/merge.py`, and each record's `reads` digests are the ones
+    """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and each record's `reads` digests are the ones
     the driver recomputes from their definitions."""
-    spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "lean" / "merge.py")
+    spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     merge = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(merge)
     assert f"lean-audit.json merge={merge.NAME}" in (ROOT / ".gitattributes").read_text().splitlines()
     stale = [f"{p.relative_to(ROOT)}: {m}" for p in lake_packages()
              for m, g in json.loads((p / "lean-audit.json").read_text()).get("reads", {}).items()
              if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
-    assert not stale, (f"reads digests that are not the SHA-256 of their definitions (`python tools/lean/merge.py --normalize "
+    assert not stale, (f"reads digests that are not the SHA-256 of their definitions (`python tools/verity/lean/merge.py --normalize "
                        f"FILE` recomputes them): {stale}")
 
 
