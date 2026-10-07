@@ -9,14 +9,15 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll, array_of
-from verity.ir.types import Array, Value
+from verity.primitives.circuits.refs import Coll, array_of
+from verity.primitives.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import attention_scale, dtype_is, from_rows, kv_logs, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.registry.targets import UnregisteredTarget
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16
@@ -299,7 +300,11 @@ class FusedAddRmsNormRule(InPlaceRule):
         rr, _ = rows_of(ctx.coll(res))
         wc = ctx.coll(w)
         N = xr[0].type.n
-        fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
+        try:
+            fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps, TARGET=active_target_profile())
+        except UnregisteredTarget as e:
+            refuse("numerics_unregistered", node, ctx.module_path(node), f"the declared target has no registered fused_add_rms_norm kind: {e}")
         ns, rs = [], []
         for i, (a, b) in enumerate(zip(xr, rr)):
             o = ctx.call(fn, a, b, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]")

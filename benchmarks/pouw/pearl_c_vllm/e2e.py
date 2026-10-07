@@ -81,7 +81,7 @@ CYCLE = ("fp8", "pearlc", "fp8", "pearlc-nohash", "fp8", "bf16")
 #: the fallback's engine lifetimes: base, arm, base, arm, each timing its share of the reps
 BLOCKS = 4
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
-#: the served y's bound against the float product (the scheme's tested bound, protocols/pouw's sm120 useful-output test)
+#: the served y's bound against the float product (the scheme's tested bound, verity/protocols/accounting/work/pouw's sm120 useful-output test)
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
@@ -125,8 +125,8 @@ def install(model, args, beacon: bytes):
     """Every LinearBase layer's apply, found by type (`verity_vllm.linear.vllm_site`), through one `Stack` whose executor is a
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  Returns the run, the weights by id and
     the stack; the stack starts inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
-    from verity_pouw.audit import Epoch, Workload
-    from verity_pouw.protocol import Matmul, Shape
+    from verity.protocols.accounting.work.pouw.audit import Epoch, Workload
+    from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.linear import vllm_site
     from verity_vllm.linear.api import Stack
@@ -713,16 +713,20 @@ def smoke(args) -> None:
 
 def wikitext_windows(model: str, limit: int | None) -> list[list[int]]:
     """WikiText-2's test split (`WIKITEXT`, from the Hugging Face cache) joined with blank lines, tokenized, and cut into
-    non-overlapping windows of BOS and `WINDOW` − 1 tokens; the last partial window is dropped, and `limit` keeps the first."""
+    non-overlapping windows of BOS and `WINDOW` − 1 tokens; the last partial window is dropped, and `limit` keeps the first.
+    BOS is the tokenizer's, else the model config's `bos_token_id` (Qwen3's tokenizer names none; its config 151643)."""
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
-    from transformers import AutoTokenizer
+    from transformers import AutoConfig, AutoTokenizer
     repo, rev, name = WIKITEXT
     text = "\n\n".join(pq.read_table(hf_hub_download(repo, name, repo_type="dataset", revision=rev)).column("text").to_pylist())
     tok = AutoTokenizer.from_pretrained(model)
+    bos = tok.bos_token_id if tok.bos_token_id is not None else AutoConfig.from_pretrained(model).bos_token_id
+    if bos is None:
+        raise ValueError(f"{model}: neither its tokenizer nor its config names a BOS token")
     ids = tok(text, add_special_tokens=False)["input_ids"]
     body = WINDOW - 1
-    out = [[tok.bos_token_id, *ids[i:i + body]] for i in range(0, len(ids) - body + 1, body)]
+    out = [[bos, *ids[i:i + body]] for i in range(0, len(ids) - body + 1, body)]
     return out[:limit] if limit else out
 
 
@@ -793,7 +797,7 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
-    from verity_pouw.serving import SCHEDULES
+    from verity.protocols.accounting.work.pouw.serving import SCHEDULES
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)

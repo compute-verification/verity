@@ -32,6 +32,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from verity_vllm.pipeline import research_tools
+
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
 SMALL_FILE_SHA_LIMIT = 64 << 20  # sha256 only for files up to 64 MiB (program.json, reports); bigger ones carry size only
@@ -91,7 +93,8 @@ def code_version(repo: Path) -> dict:
             pass
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", "../../packages/verity/src/verity"], cwd=repo,
+        code = [f":/{d}" for d in research_tools.CODE_DIRS]
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}
     except Exception:  # noqa: BLE001

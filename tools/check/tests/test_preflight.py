@@ -32,7 +32,8 @@ def _sha(b: bytes) -> str:
 
 def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned: bool = True) -> Path:
     t = tmp_path / "tree"
-    (t / "tools" / "check").mkdir(parents=True)
+    for d in ("check", "lean"):
+        (t / "tools" / d).mkdir(parents=True)
     (t / "tools" / "check" / "pod_setup.sh").write_text("set -e\nUV_VERSION=${UV_VERSION:-0.12.20}\n")
     for pkg, deps in (("backends/flock/verifier/lean", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
         d = t / pkg
@@ -43,7 +44,7 @@ def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned:
         (d / "lake-manifest.json").write_text(json.dumps({"packages": deps}))
     (t / "backends" / "flock" / "verifier" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
     deps = {PF.LA.deps_key(t / "pkg" / "a"): {"package": "pkg/a", "sha256": _sha(BUNDLE), "bytes": len(BUNDLE), "run": "r1"}} if pinned else {}
-    (t / "tools" / "check" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
+    (t / "tools" / "lean" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
     for args in (["init", "-q"], ["add", "."], ["commit", "-q", "-m", "tree"]):         # not this machine's git config (a signing helper)
         subprocess.run([GIT, "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=t, check=True, capture_output=True,
                        env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
@@ -161,6 +162,18 @@ def test_lean_dependencies_come_from_the_store_or_nowhere(tmp_path, path):
     _, fails = _run(tmp_path, tree, inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), warm=False)
     assert fails == [f"pkg/a: its Lean dependencies ({k[:12]}) are not warm here and the run carries no URL for their bundle: send "
                      f"`$(uv run python tools/check/check.py --lean-deps-files)`"]
+
+
+@pytest.mark.parametrize("parts, refused", [(["pytest", "lean-build"], False), ([], False), (["lean-audit:pkg/a"], True)])
+def test_a_shard_needs_only_the_dependencies_of_the_packages_it_audits(tmp_path, path, parts, refused):
+    """A shard is sent URLs only for the bundles its own audits restore (`check.py --record --shard`), so asking it for any other
+    package's would refuse every shard but the audits' on a pod where one bundle is cold (r20261005-072556-7bc7)."""
+    tree = _tree(tmp_path)
+    inputs = _inputs(tmp_path)
+    (inputs / PF.CHECK.SHARD_PARTS).write_text(json.dumps(parts))
+    facts, fails = _run(tmp_path, tree, inputs=inputs, custody=_custody(tmp_path, BUNDLE, UPSTREAM), warm=False)
+    assert bool(fails) == refused and (not refused or "are not warm here and the run carries no URL" in fails[0])
+    assert refused or "store: the pinned upstream build read with the run's custody key" in facts
 
 
 def test_an_unpinned_manifest_would_clone_from_github_and_is_refused(tmp_path, path):

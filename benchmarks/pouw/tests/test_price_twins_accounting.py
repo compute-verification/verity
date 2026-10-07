@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from verity_pouw.protocol import Matmul, Shape
-from verity_pouw.schemes import get
-from verity_pouw.schemes import pearl_c as C
-from verity_pouw.schemes import pearl_c_debit as D
-from verity_pouw.schemes import pearl_c_work as W
-from verity_pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
+from verity.protocols.accounting.work.pouw.schemes import get
+from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
+from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D
+from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
+from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
@@ -108,7 +108,7 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
 @pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
 def test_h100_gamma_is_rev1s_pin(pin, n):
     """`pearl-c-h100-v1`'s γ at the cap is `DeviceRev1Gamma.lean`'s, read off the repository's pin."""
-    sig = " ".join(" ".join(json.loads(P.REPO_AUDIT.read_text())["pins"][pin]["signature"]).split())
+    sig = " ".join(" ".join(P.guarantees(json.loads(P.REPO_AUDIT.read_text()))[pin]["signature"]).split())
     lit = P._GAMMA_LITERAL.search(sig)
     s = get("pearl-c-h100-v1")
     assert gamma(s, n, Fraction(0), "forming-credited", "unit") == Fraction(int(lit[1]), int(lit[2]))

@@ -38,7 +38,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ir.defs import bind
+from verity.primitives.circuits.defs import bind
 from verity_vllm.program.registry import act as _ACT
 from verity_vllm.program.registry import moe as _MOE
 from verity_vllm.program.registry import targets as T
@@ -297,7 +297,7 @@ class MoEFusedExperts:
         # 4. silu_and_mul on the pair rows ------------------------------------------------------------------------
         silu_r = SiluAndMul().match(silu, ctx)
         if not isinstance(silu_r, Compute):
-            return unsupported(node, "silu_and_mul inside the MoE scope did not resolve as SiluMul_v1",
+            return unsupported(node, "silu_and_mul inside the MoE scope did not resolve as SiluMul",
                                detail=getattr(silu_r, "detail", None), reason=getattr(silu_r, "reason", None))
         if silu_r.rows != P:
             return unsupported(node, "silu_and_mul rows are not the M*TOPK pair rows", rows=silu_r.rows, P=P)

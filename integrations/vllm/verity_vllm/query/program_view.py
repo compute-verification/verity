@@ -1,8 +1,8 @@
-"""A `verity.proofs.query.Program` view of a derived Program.
+"""A `verity_vllm.query.units.Program` view of a derived Program.
 
 Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Program, in body order):
 
-* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`, `verity.ir.codec`): the `program_fn` definition's body
+* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`, `verity.primitives.circuits.codec`): the `program_fn` definition's body
   nodes give every Call's Definition, output type and operand references; `annotations["node_hints"]` gives its name.
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
@@ -39,7 +39,7 @@ from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Iterator, Sequence
 
-from verity.proofs.query import ValueRef
+from verity_vllm.query.units import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
            "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows"]
@@ -446,7 +446,7 @@ def _static_value(v: Any) -> Any:
 
 def spec_statics(spec: str) -> dict[str, Any]:
     """The binding record of a spec id as Python values (`{"f64": hex}` -> float, lists -> tuples), in id order."""
-    from verity.ir.codec import _split_record
+    from verity.primitives.circuits.codec import _split_record
     out: dict[str, Any] = {}
     for k, v in _split_record(_spec_record_id(spec)):
         try:
@@ -457,8 +457,8 @@ def spec_statics(spec: str) -> dict[str, Any]:
 
 
 def ports_of_type(t) -> tuple[Port, ...]:
-    """The output ports of a `verity.ir.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""
-    from verity.ir.types import Record, Tuple as TupleT
+    """The output ports of a `verity.primitives.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""
+    from verity.primitives.circuits.types import Record, Tuple as TupleT
 
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves
@@ -484,8 +484,8 @@ class TypeReprError(ValueError):
 
 
 def parse_type_repr(s: str):
-    """The `repr` of a `verity.ir.types.Type` back to a Type: `Value<32>`, `Array<31,Value<32>>`, `(A, B)`, `{name: A, other: B}`."""
-    from verity.ir.types import Array, Record, Tuple as TupleT, Value
+    """The `repr` of a `verity.primitives.circuits.types.Type` back to a Type: `Value<32>`, `Array<31,Value<32>>`, `(A, B)`, `{name: A, other: B}`."""
+    from verity.primitives.circuits.types import Array, Record, Tuple as TupleT, Value
     pos = 0
     n = len(s)
 
@@ -558,7 +558,7 @@ def _registry():
     """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.load`); a module that
     fails to import is reported with the lookup that needed it, never treated as "not registered"."""
     try:
-        from verity.ir.defs import REGISTRY  # noqa: F401
+        from verity.primitives.circuits.defs import REGISTRY  # noqa: F401
     except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
         from verity_vllm.query.manifest.format import RegistryUnavailable
         raise RegistryUnavailable(e) from e
@@ -575,7 +575,7 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     hit = _PORTS_CACHE.get(spec)
     if hit is not None:
         return hit
-    from verity.ir.codec import lookup_primitive
+    from verity.primitives.circuits.codec import lookup_primitive
     reg, errors = _registry()
     base = spec_base(spec)
     d = reg.defs.get(base)
@@ -726,8 +726,8 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
-    from verity.ir.codec import decode_program
-    from verity.ir.refs import runs
+    from verity.primitives.circuits.codec import decode_program
+    from verity.primitives.circuits.refs import runs
     if registry is None:
         registry, _errors = _registry()
     decoded = decode_program(desc, registry)
@@ -739,10 +739,10 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     for k, n in enumerate(body.nodes):
         b.add(k, _spec_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out), (runs(a.refs) for a in n.args))
     outs = b.outputs(runs(body.ret))
-    from verity.ir.codec import program_digest
+    from verity.primitives.circuits.codec import program_digest
     return b.view(outs, program_digest(desc), "descriptor")
 
 
 def _spec_id(fn) -> str:
-    from verity.ir.codec import _spec_id as sid
+    from verity.primitives.circuits.codec import _spec_id as sid
     return sid(fn)

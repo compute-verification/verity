@@ -12,10 +12,10 @@ import types
 
 import pytest
 
-from verity.evaluation import evaluate
-from verity.ir.cut import call_scope
-from verity.ir.defs import bind
-from verity.ir.layout import resolve
+from verity.primitives.circuits.evaluation import evaluate
+from verity.primitives.circuits.cut import call_scope
+from verity.primitives.circuits.defs import bind
+from verity.primitives.circuits.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import fp8
 from verity_vllm.query import word as W
@@ -208,9 +208,14 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
         return types.SimpleNamespace(val=lambda v: Alloc(None, v), dtype_of=dtypes.get, shape_of_node=shapes.get, weight_of=lambda v: "w")
 
     node, rule = types.SimpleNamespace(args=(out, a, b, a_s, b_s), kwargs={}), R.CutlassScaledMmFp8BlockRule()
-    assert rule.applies(node, derive_ctx()) is True
-    assert "b_scales (48, 20) (want [48, 21])" in rule.applies(node, derive_ctx(nb=20))
-    assert "K=6208 is not a multiple" in rule.applies(node, derive_ctx(k=K + 64))
+    clear_observations()
+    try:
+        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=(9, 0)))
+        assert rule.applies(node, derive_ctx()) is True
+        assert "b_scales (48, 20) (want [48, 21])" in rule.applies(node, derive_ctx(nb=20))
+        assert "K=6208 is not a multiple" in rule.applies(node, derive_ctx(k=K + 64))
+    finally:
+        clear_observations()
 
     seen = []
     monkeypatch.setattr(R, "shape", lambda ctx, v: (K, N))

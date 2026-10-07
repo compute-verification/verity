@@ -11,7 +11,7 @@ One line per fact on stdout, one per failure on stderr. It checks:
   run sees;
 - that each Lean package's dependencies are warm on this machine, or restorable from the store: `lean-deps.json` pins a bundle
   for its manifest and toolchain and the run carries its presigned URL (`check.py --lean-deps-files`), so the audit never
-  clones them from GitHub;
+  clones them from GitHub; for a shard (`check.py`'s `SHARD_PARTS` among its inputs), only each package the shard audits;
 - that the store answers: every bundle still to restore, or else one pinned object, is read with the run's custody key
   (RESEARCH_PREFLIGHT_CUSTODY), else through its sent URL;
 - that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
@@ -58,7 +58,7 @@ def _module(path: Path, name: str):
     return m
 
 
-LA = _module(ROOT / "tools" / "check" / "lean_audit.py", "check_preflight_lean_audit")
+LA = _module(ROOT / "tools" / "lean" / "lean_audit.py", "check_preflight_lean_audit")
 CHECK = _module(ROOT / "tools" / "check" / "check.py", "check_preflight_check")
 SLOT = _module(ROOT / "tools" / "check" / "slot.py", "check_preflight_slot")
 
@@ -318,14 +318,19 @@ def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpui
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
     urls = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}
+    shard = inputs / CHECK.SHARD_PARTS if inputs is not None else None
+    audited = packages
+    if shard is not None and shard.is_file():
+        named = set(json.loads(shard.read_text()))
+        audited = [p for p in packages if f"lean-audit:{p}" in named]
     facts, fails = checkout(root, sha)
     f, x = setup(root, packages)
     facts, fails = facts + f, fails + x
     if x:
         fails.append(f"prepare the pod: `{POD_SETUP}`")
-    f, x, restore = lean_deps(root, packages, cache, urls)
+    f, x, restore = lean_deps(root, audited, cache, urls)
     facts, fails = facts + f, fails + x
-    for f, x in (store(restore or probe(root, packages), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs, shared)):
+    for f, x in (store(restore or probe(root, audited), urls, custody), cpu(root, inputs, cpuinfo), disk(root, cache, restore, usage, runs, shared)):
         facts, fails = facts + f, fails + x
     return facts, fails
 

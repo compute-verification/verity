@@ -8,10 +8,11 @@ the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) l
             gives only while `main` is an ancestor.
   gate      `research merge`'s gate, ported: the Attempt `attempts/{run id}.json` of the job's run in the evidence store is a
             `check` of exactly the tip, clean, done with rc 0, its result is of a kind `main`'s declaration `produces` and not
-            in `research.merge.REFUSED_KINDS`, and every step `main`'s `merge_requires` asks for the change (main..tip,
-            `rule_touches`) passed in that result.  The worker's report of "passed" is never the verdict.  The declaration
-            is `CHECK = Tool(...)` in main's `tools/check/tool.py`, parsed and its keywords read as literals (`declared`),
-            never run; one this can't read lands nothing.
+            in `research.merge.REFUSED_KINDS` and lists each step once (as `research merge` requires: it reads a step's first
+            entry), and every step `main`'s `merge_requires` asks for the change (main..tip, `rule_touches`) passed in that
+            result.  The worker's report of "passed" is never the verdict.  The declaration is `CHECK = Tool(...)` in main's
+            `tools/check/tool.py`, parsed and its keywords read as literals (`declared`), never run; one this can't read lands
+            nothing.
   land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward; a refusal (a
             push in between) rebuilds the train too.
   sweep     then every open PR whose head is on `main` and whose base isn't `main` is closed with a comment naming the landing
@@ -46,8 +47,8 @@ HOLD = "hold"
 RECORD = "lean-audit.json"
 #: audit.py's ORDER and merge.py's SORTED / NESTED, for the stand-in record merge
 ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
-         "upstream", "pins", "reads", "dependencies")
-SORTED = {"pins", "reads", "dependencies", "compile_time"}
+         "upstream", "guarantees", "reads", "dependencies")
+SORTED = {"guarantees", "reads", "dependencies", "compile_time"}
 NESTED = {"upstream"}
 _MISSING = object()
 REBUILDS = 3
@@ -474,6 +475,8 @@ class TrainService(JobService):
         except ValueError as e:
             return str(e)
         art = (a.get("outputs") or {}).get("result")
+        if art is not None and not isinstance(art, str):
+            return f"run {tr.run_id}'s result id isn't a string"
         result = self.store.manifests.get(art) if art else None
         if art and not isinstance(result, dict):
             return f"run {tr.run_id}'s result {art} isn't in the store"
@@ -483,8 +486,15 @@ class TrainService(JobService):
         if kind not in kinds:
             what = f"'s result is a {kind}" if kind else f"'s result {art} has no kind" if art else " published no result"
             return f"run {tr.run_id}{what}, and {TOOL_PY} on main produces {', '.join(kinds) or 'nothing'}"
+        meta = result.get("meta")
+        listed = meta.get("steps", []) if isinstance(meta, dict) else None
+        if not (isinstance(listed, list) and all(isinstance(s, dict) and isinstance(s.get("step"), str) for s in listed)):
+            return f"run {tr.run_id}'s result has steps this gate can't read"
+        names = [s["step"] for s in listed]
+        if again := next((n for i, n in enumerate(names) if n in names[:i]), None):
+            return f"run {tr.run_id}'s result lists step {again} more than once"
         changed = sorted(self.github.changed(main, tr.tip))
-        steps = {s.get("step"): s.get("status") for s in (result.get("meta") or {}).get("steps", [])}
+        steps = {s["step"]: s.get("status") for s in listed}
         missing = [f"{step} {steps.get(step, 'absent')}" for step, rule in sorted(rules.items())
                    if rule_touches(rule, changed) and steps.get(step) != "passed"]
         return f"the change needs {', '.join(missing)} to have passed in run {tr.run_id}" if missing else None

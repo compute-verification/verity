@@ -6,7 +6,9 @@ The model (the explorer note, §1): challenges arrive at Poisson rate λ over a 
 is wrong or later than τ = (d + 1) · call_ns(b) / m, just under the band's cliff; the verifier accepts iff the misses F ≤ f₀,
 the (1 − α) quantile of the honest miss count, Poisson with mean λT · S_H(τ).  Then P[accept and ε̄ > ε_proof(d) + g(f₀)]
 ≤ β with g(f) = min over θ > 0 of (θf + ln(1/β)) / ((1 − e^−θ) λT).  The honest model sets only the false-alarm rate, never
-soundness.
+soundness.  ε_proof(d) is an ideal-permutation-model bound, and τ counts whole `Π₂` calls of `call_ns`, the model's unit: at
+the reference Feistel-SHAKE256 `Π₂` a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, about a tenth of a call, so
+neither bounds an adversary there (red team, 4 Oct 2026, art:7617c8017e80).
 
 The page evaluates the file with plain floats and closed forms only (§6 "The rules"), and `evaluate` is that evaluation
 here, from the file alone:
@@ -156,8 +158,9 @@ FINE = np.arange(int(1.002e5 / H_US) + 1) * H_US
 
 
 def call_ns(block_bytes: int) -> int:
-    """The adversary's fastest `Π₂` call on `block_bytes` labels (`verity_pous.primitives.pi2_call_ns`, in bits)."""
-    from verity_pous.primitives import pi2_call_ns
+    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.protocols.accounting.space.pous.primitives.pi2_call_ns`, in bits): the
+    ideal-permutation model's unit, not the adversary's floor at the reference Feistel-SHAKE256 `Π₂`."""
+    from verity.protocols.accounting.space.pous.primitives import pi2_call_ns
 
     return pi2_call_ns(8 * block_bytes)
 

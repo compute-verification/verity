@@ -49,10 +49,10 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from verity.ir.defs import PrimitiveDefinition
-from verity.ir.evaluate import evaluate_call
-from verity.ir.layout import FunctionCall, Scope, resolve
-from verity.ir.refs import Affine, Concat, Refs, Strided, runs
+from verity.primitives.circuits.defs import PrimitiveDefinition
+from verity.primitives.circuits.evaluate import evaluate_call
+from verity.primitives.circuits.layout import FunctionCall, Scope, resolve
+from verity.primitives.circuits.refs import Affine, Concat, Refs, Strided, runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, WeightSource
 from verity_vllm.observe.fold.fold import FoldResult
@@ -76,7 +76,7 @@ class VU:
     child unit `path` is the descent `((node index in the enclosing body, member count), ...)` exactly as
     `Replayer.plan_child` returns it, `member` the member index at the LAST level and `members` the member indices
     at the levels above it (`len(members) == len(path) - 1`; `()` for a one-level descent).  `plan_child` omits the
-    members because `evaluate_child` draws them at random; an exhaustive unit must name them."""
+    members because tier A draws them at random (`tier_a_pool`); an exhaustive unit must name them."""
 
     node: int
     path: tuple[tuple[int, int], ...] = ()

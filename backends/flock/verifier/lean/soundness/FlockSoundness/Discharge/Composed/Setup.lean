@@ -57,19 +57,26 @@ theorem padPos_lt {L t : ℕ} (qs : List ℕ) (h : t ≤ L) (i : Fin t) : padPos
 
 /-- **M1's level-0 padding geometry at the draw**: from the table's `PadOK` (`cols ≤ logLen ≤ 40`, `t ≤ 2^cols`) and
 `padPos`. -/
+theorem bodyOf_geometry_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
+    let C := coinedOf P Tz st
+    C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
+      ∀ c, C.Admits c → Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1) := by
+  intro C
+  have hp := (Tz).hpad
+  have hcl : (Tz).sch.level₀.logCols ≤
+      (Tz).sch.level₀.logLen :=
+    (Nat.pow_le_pow_iff_right (by norm_num : 1 < 2)).mp (le_trans (Nat.le_add_right _ _) hp.hk)
+  have ht2 : (Tz).t ≤ 2 ^ ((Tz).sch.level₀.logCols + 1) :=
+    le_trans hp.ht (Nat.pow_le_pow_right (by norm_num) (Nat.le_succ _))
+  exact ⟨le_trans hcl hp.hd, hp.ht, le_rfl, fun c _ => ⟨padPos_injective _ ht2, padPos_lt _ ht2⟩⟩
+
+/-- `bodyOf_geometry` at the draw. -/
 theorem bodyOf_geometry (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
-      ∀ c, C.Admits c → Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1) := by
-  intro C
-  have hp := (tablesAtZK (Reg := Reg) dj y₀ S R).hpad
-  have hcl : (tablesAtZK (Reg := Reg) dj y₀ S R).sch.level₀.logCols ≤
-      (tablesAtZK (Reg := Reg) dj y₀ S R).sch.level₀.logLen :=
-    (Nat.pow_le_pow_iff_right (by norm_num : 1 < 2)).mp (le_trans (Nat.le_add_right _ _) hp.hk)
-  have ht2 : (tablesAtZK (Reg := Reg) dj y₀ S R).t ≤ 2 ^ ((tablesAtZK (Reg := Reg) dj y₀ S R).sch.level₀.logCols + 1) :=
-    le_trans hp.ht (Nat.pow_le_pow_right (by norm_num) (Nat.le_succ _))
-  exact ⟨le_trans hcl hp.hd, hp.ht, le_rfl, fun c _ => ⟨padPos_injective _ ht2, padPos_lt _ ht2⟩⟩
+      ∀ c, C.Admits c → Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1) :=
+  bodyOf_geometry_of P _ _
 
 theorem pt_injective {a b : ℕ} (ha : a < 2 ^ 63) (hb : b < 2 ^ 63)
     (h : fOf (⟨(a + 1).toUInt64, 0⟩ : F128) = fOf ⟨(b + 1).toUInt64, 0⟩) : a = b := by
@@ -91,12 +98,11 @@ theorem pt_ne_zero {a : ℕ} (ha : a < 2 ^ 63) : fOf (⟨(a + 1).toUInt64, 0⟩ 
 
 /-- **The pads onto at the draw**: `padsOnto_pow` at the opened pads points `p + 1`, distinct and nonzero by `padPos`
 below `2^63`, `Q ≤ K_PAD`. -/
-theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
-    let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+theorem bodyOf_padsOnto_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
+    let C := coinedOf P Tz st
     ∀ c, C.Admits c → (C.T c).tab.PadsOnto := by
   intro C c _ r
-  let B := bodyOf (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+  let B := bodyOf (Tz) st
   have hQ : Zk.Q ≤ max (min B.padN (2 ^ 63)) Zk.Q := le_max_right _ _
   have hL : max (min B.padN (2 ^ 63)) Zk.Q ≤ 2 ^ 63 := max_le (min_le_right _ _) (by decide)
   have hlt := fun k => lt_of_lt_of_le (padPos_lt (B.padQueries r c.rest) hQ k) hL
@@ -104,24 +110,42 @@ theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ :
     (fun k => fOf ⟨(padPos (max (min B.padN (2 ^ 63)) Zk.Q) Zk.Q (B.padQueries r c.rest) k + 1).toUInt64, 0⟩)
     (fun i j h => padPos_injective _ hQ (pt_injective (hlt i) (hlt j) h)) (fun k => pt_ne_zero (hlt k)) (by decide)
 
+/-- `bodyOf_padsOnto` at the draw. -/
+theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
+    let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
+    ∀ c, C.Admits c → (C.T c).tab.PadsOnto :=
+  bodyOf_padsOnto_of P _ _
+
+/-- **A `--zk` table of a setup has Lemma B's facts** (`coinedOf_setup` at any table `Tz` over `st`'s statement at its
+regions, `st` a `MaskSetup` that avoids the mask slot). -/
+theorem coinedOf_setup_of (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (hS : Tz.S = stmtOf st hwf (regionsOf st))
+    (M : MaskSetup st) (hdm : avoidsMask st = true) :
+    (coinedOf P Tz st).S = Tz.S ∧ (coinedOf P Tz st).z.nC = Zk.RANK_POINTS ∧
+    (coinedOf P Tz st).z.nMask = (maskWordsOf st).length ∧
+    (∀ x, (coinedOf P Tz st).maskWords x = (maskWordsOf st).getD x 0) ∧
+    Nonempty (coinedOf P Tz st).Rest ∧ CoinedOK execArith (fOf Zk.PAD_C) (coinedOf P Tz st) := by
+  obtain ⟨g1, g2, g3, g4⟩ := bodyOf_geometry_of P Tz st
+  refine ⟨rfl, rfl, rfl, fun _ => rfl, ⟨(bodyOf _ _).rest0⟩, g1, g2, g3, fun c hc => ?_⟩
+  have hβ : ∀ r, ((coinedOf P Tz st).T c).β r = fOf (c.beta r) := fun _ => rfl
+  have hρ : ∀ r, ((coinedOf P Tz st).T c).ρ r 0 = GF256.of (c.rho r).1 ∧
+      ((coinedOf P Tz st).T c).ρ r 1 = GF256.of (c.rho r).2 :=
+    fun _ => ⟨rfl, rfl⟩
+  have hw : ∀ k x, ((coinedOf P Tz st).T c).eqw k x =
+      fOf (eqWord ((coinedOf P Tz st).points c k) ((coinedOf P Tz st).maskWords x)) :=
+    fun _ _ => rfl
+  have he : ∀ a : F128, ((coinedOf P Tz st).T c).embed (fOf a) =
+      GF256.of ⟨a, 0⟩ := fun _ => rfl
+  obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc hβ hρ hw he
+  exact ⟨g4 c hc, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto_of P Tz st c hc, hb,
+    innerOf_holds_of P Tz st hwf hS M hdm c hc⟩
+
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true) :
     CoinedOfSetup (Reg := Reg) P I dj y₀ := by
   intro S R y
-  obtain ⟨g1, g2, g3, g4⟩ := bodyOf_geometry (Reg := Reg) P I dj y₀ S R y
-  refine ⟨rfl, rfl, rfl, fun _ => rfl, ⟨(bodyOf _ _).rest0⟩, g1, g2, g3, fun c hc => ?_⟩
-  have hβ : ∀ r, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).β r = fOf (c.beta r) := fun _ => rfl
-  have hρ : ∀ r, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 0 = GF256.of (c.rho r).1 ∧
-      ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).ρ r 1 = GF256.of (c.rho r).2 :=
-    fun _ => ⟨rfl, rfl⟩
-  have hw : ∀ k x, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).eqw k x =
-      fOf (eqWord ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).points c k) ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).maskWords x)) :=
-    fun _ _ => rfl
-  have he : ∀ a : F128, ((coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st).T c).embed (fOf a) =
-      GF256.of ⟨a, 0⟩ := fun _ => rfl
-  obtain ⟨hrank, hW, hb⟩ := coin_facts _ c hc.1 hβ hρ hw he
-  exact ⟨g4 c hc.1, ⟨hβ, hρ, hw, he⟩, hrank, fun _ _ => rfl, hW, bodyOf_padsOnto P I dj y₀ S R y c hc.1, hb,
-    innerOf_holds P I dj y₀ S R y ht (hdm S y) c hc⟩
+  exact coinedOf_setup_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZK_eq dj y₀ S R y]; rfl)
+    (maskSetup_of_setupH ((ZkExec.zkTags_typed I).trans ht) y.x.h) (hdm S y)
 
 end FlockSoundness.Discharge.Composed

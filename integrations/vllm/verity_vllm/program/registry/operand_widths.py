@@ -6,8 +6,8 @@ from __future__ import annotations
 from itertools import chain, repeat
 from typing import Iterable, Iterator, Sequence
 
-from verity.ir.layout import WIDE_FAN_IN
-from verity.ir.types import Type
+from verity.primitives.circuits.layout import WIDE_FAN_IN
+from verity.primitives.circuits.types import Type
 
 
 class WidthRuns:

@@ -12,142 +12,27 @@ symbols, which name `config.json` keys and the tensor-parallel size, so nothing 
 every entry is listed, each entry's layers are the inventory's, each tap names an inventory module and reads tensors of the
 shape the inventory gives that rank, every kernel expectation (`expect`) holds, and every Definition a Program cites is
 registered.  `check_target` holds the device and the process-wide switches the inventory was built under against the map's
-target.  `identities` expands the taps of one step into canonical value ids (`verity_vllm.commit.identity`), and `counts`
-totals them by Program status.  A tap marked `target_only` runs only on the map's target device (its kernels have no build
-for the devices the inventory and the tests run on).
+target.  Reading a map and expanding one step's taps (`identities`, `committer_names`, `counts`) is `verity_vllm.commit.capture_map`,
+which the committer's sources read too.  A tap marked `target_only` runs only on the map's target device (its kernels have no
+build for the devices the inventory and the tests run on).
 
     verity-vllm capture-map check --map M.json --config config.json --inventory inv.json [--rank R]
     verity-vllm capture-map counts --map M.json --config config.json
-    verity-vllm capture-map ids --map M.json --config config.json --t 0 --phase prefill --rank 0
+    verity-vllm capture-map ids --map M.json --config config.json --t 0 --phase prefill --rank 0 [--route R] [--binder B --names]
+        [--off-target]
 """
 from __future__ import annotations
 
-import ast
 import json
-import operator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit.identity import NAMED_LAYERS, format_id, value_id
+from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, TP_KINDS, MapError, at_layer, committer_names,
+                                            counts, dim, evaluate, identities, layer_set, load, symbols, tap_layers,
+                                            tap_value_id)
+from verity_vllm.commit.identity import NAMED_LAYERS
 from verity_vllm.config import option
-
-SCHEMA = "verity-vllm/capture-map/v0"
-#: a tap's Program today: registered and conformance-tested; being built (on a named branch); a registered family whose kernel
-#: variant is not yet pinned; a value only moved (checked by word equality against the taps it copies); none (bound by the Commit,
-#: reported as an unverified unit)
-STATUSES = ("exists", "tonight", "port", "copy", "committed-only")
-DISPOSITIONS = ("taps", "container", "fused", "weights-only", "inactive")
-TP_KINDS = ("replicated", "column", "partial", "reduced", "gathered", "vocab-shard")
-LAYER_VAR = "i"
-
-_BIN = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod}
-_CMP = {ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt, ast.LtE: operator.le, ast.Gt: operator.gt,
-        ast.GtE: operator.ge}
-_CALLS = {"max": max, "min": min}
-
-
-class MapError(ValueError):
-    """A capture map that cannot be read: an unknown symbol, an expression outside the grammar, a malformed field."""
-
-
-def load(path: Path | str) -> dict[str, Any]:
-    cmap = json.loads(Path(path).read_text())
-    if cmap.get("schema") != SCHEMA:
-        raise MapError(f"{path}: schema {cmap.get('schema')!r}, expected {SCHEMA}")
-    return cmap
-
-
-def evaluate(expr: str, env: dict[str, int]) -> int | bool:
-    """An integer or boolean expression over `env`: + - * // %, comparisons (chained), and/or/not, max/min, integer literals."""
-
-    def ev(n: ast.AST):
-        if isinstance(n, ast.Expression):
-            return ev(n.body)
-        if isinstance(n, ast.Constant) and isinstance(n.value, (int, bool)):
-            return n.value
-        if isinstance(n, ast.Name):
-            if n.id not in env:
-                raise MapError(f"{expr!r}: unknown symbol {n.id!r}")
-            return env[n.id]
-        if isinstance(n, ast.BinOp) and type(n.op) in _BIN:
-            return _BIN[type(n.op)](ev(n.left), ev(n.right))
-        if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.USub):
-            return -ev(n.operand)
-        if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.Not):
-            return not ev(n.operand)
-        if isinstance(n, ast.BoolOp):
-            vals = [ev(v) for v in n.values]
-            return all(vals) if isinstance(n.op, ast.And) else any(vals)
-        if isinstance(n, ast.Compare) and all(type(o) in _CMP for o in n.ops):
-            left = ev(n.left)
-            for o, c in zip(n.ops, n.comparators):
-                right = ev(c)
-                if not _CMP[type(o)](left, right):
-                    return False
-                left = right
-            return True
-        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _CALLS and not n.keywords:
-            return _CALLS[n.func.id](*(ev(a) for a in n.args))
-        raise MapError(f"{expr!r}: {ast.dump(n)[:60]} is outside the expression grammar")
-
-    try:
-        tree = ast.parse(expr, mode="eval")
-    except SyntaxError as e:
-        raise MapError(f"{expr!r}: {e.msg}") from None
-    return ev(tree)
-
-
-def config_value(config: dict[str, Any], path: str) -> Any:
-    """`a.b.0` reads config["a"]["b"][0]."""
-    v: Any = config
-    for part in path.split("."):
-        if isinstance(v, list) and part.isdigit():
-            v = v[int(part)]
-        elif isinstance(v, dict) and part in v:
-            v = v[part]
-        else:
-            raise MapError(f"config has no {path!r} (at {part!r})")
-    return v
-
-
-def symbols(cmap: dict[str, Any], config: dict[str, Any], tp: int) -> dict[str, int]:
-    """The map's symbols for one config at tensor-parallel size `tp`: a config key, or `=expr` over the symbols before it and `tp`."""
-    env: dict[str, int] = {"tp": tp}
-    for name, src in cmap["symbols"].items():
-        v = evaluate(src[1:], env) if src.startswith("=") else config_value(config, src)
-        if not isinstance(v, int) or isinstance(v, bool):
-            raise MapError(f"symbol {name} = {src!r} is {v!r}, not an integer")
-        env[name] = v
-    return env
-
-
-def layer_set(cmap: dict[str, Any], name: str, env: dict[str, int]) -> list[int]:
-    expr = cmap["layer_sets"].get(name)
-    if expr is None:
-        raise MapError(f"no layer set {name!r}")
-    return [i for i in range(env["L"]) if evaluate(expr, {**env, LAYER_VAR: i})]
-
-
-def dim(expr: int | str, env: dict[str, int], free: dict[str, Any]) -> int | str:
-    """A shape entry: an integer, a symbol or `=expr`; one that reads a free symbol (a per-step size such as the token count)
-    is kept as written."""
-    if isinstance(expr, int):
-        return expr
-    src = expr[1:] if expr.startswith("=") else expr
-    names = {n.id for n in ast.walk(ast.parse(src, mode="eval")) if isinstance(n, ast.Name)}
-    if names & free.keys():
-        return expr
-    return int(evaluate(src, env))
-
-
-def tap_layers(cmap: dict[str, Any], tap: dict[str, Any], env: dict[str, int]) -> list[int] | None:
-    """The layers a per-layer tap is captured at; None for a model-level tap (`layer`: one of the named layers)."""
-    return None if "layer" in tap else layer_set(cmap, tap["layers"], env)
-
-
-def _at(pattern: str, layer: int | None) -> str:
-    return pattern.replace("{" + LAYER_VAR + "}", str(layer)) if layer is not None else pattern
 
 
 def _walk(rec: dict[str, Any], path: str) -> Any:
@@ -238,6 +123,11 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
         route = t.get("route")
         if route is not None and route not in cmap.get("routes", {}):
             problems.append(f"{where}: unknown route {route!r}")
+        c = t.get("commit")
+        if c is not None and c.get("binder") not in cmap.get("binders", {}):
+            problems.append(f"{where}: commit binder {c.get('binder')!r} is not one of the map's binders")
+        if c is not None and "layers" in t and "{" + LAYER_VAR + "}" not in c.get("name", ""):
+            problems.append(f"{where}: commit name {c.get('name')!r} must name its layer")
         try:
             layers = tap_layers(cmap, t, env)
             shape = [dim(d, env, free) for d in t["shape"]]
@@ -260,12 +150,19 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
                 ten = tensors.get(name)
                 if ten is None:
                     if not w.get("after_load"):
-                        problems.append(f"{where}: weight {_at(w['param'], layer)} is not in the inventory")
+                        problems.append(f"{where}: weight {at_layer(w['param'], layer)} is not in the inventory")
                     break
                 if "rows" in w and ten["shape"][-2:-1] != [dim(w["rows"], env, free)]:
-                    problems.append(f"{where}: weight {_at(w['param'], layer)} has shape {ten['shape']}, the map's rows "
+                    problems.append(f"{where}: weight {at_layer(w['param'], layer)} has shape {ten['shape']}, the map's rows "
                                     f"{w['rows']} = {dim(w['rows'], env, free)}")
                     break
+
+    site = cmap.get("route_site")
+    if site is not None:
+        problems += [f"route_site {k}: unknown route {r!r}" for k in ("true", "false", "decode_tokens") for r in site.get(k, ())
+                     if r not in cmap.get("routes", {})]
+        if not by_pattern.get(site["module"]):
+            problems.append(f"route_site: module {site['module']!r} is not in the inventory")
 
     for pid, p in programs.items():
         if p["status"] not in STATUSES:
@@ -314,42 +211,6 @@ def check_target(cmap: dict[str, Any], doc: dict[str, Any]) -> list[str]:
     return out + [f"switch {k} = {v!r}, the inventory has {got.get(k)!r}" for k, v in target.get("switches", {}).items()
                   if got.get(k) != v]
 
-
-def identities(cmap: dict[str, Any], env: dict[str, int], *, profile: str, request: str, t: int, phase: str,
-               routes: tuple[str, ...] | None = None, rank: int | None = None) -> list[str]:
-    """The canonical value ids of every tap one step captures on one rank (`s=<rank>` when `rank` is given), for the step's
-    `routes` (all of them when None)."""
-    out = []
-    for tap in cmap["taps"]:
-        if tap.get("route") is not None and routes is not None and tap["route"] not in routes:
-            continue
-        if tap.get("phases") and phase not in tap["phases"]:
-            continue
-        layers = tap_layers(cmap, tap, env)
-        for layer in (layers if layers is not None else [None]):
-            name = tap["layer"] if layer is None else layer
-            out.append(format_id(value_id(profile, request, t, phase, name, _at(tap["op"], layer), tap["port"], shard=rank)))
-    return out
-
-
-def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | None = None) -> dict[str, Any]:
-    """Module entries, module types, tap templates and taps per step and rank (for `routes`; all when None), each by status."""
-    status = {pid: p["status"] for pid, p in cmap["programs"].items()}
-    per_status = dict.fromkeys(STATUSES, 0)
-    templates = dict.fromkeys(STATUSES, 0)
-    target_only = 0
-    for tap in cmap["taps"]:
-        if tap.get("route") is not None and routes is not None and tap["route"] not in routes:
-            continue
-        layers = tap_layers(cmap, tap, env)
-        n = 1 if layers is None else len(layers)
-        per_status[status[tap["program"]]] += n
-        templates[status[tap["program"]]] += 1
-        target_only += n if tap.get("target_only") else 0
-    return {"module_entries": len(cmap["modules"]), "module_types": len({m["type"] for m in cmap["modules"]}),
-            "tap_templates": sum(templates.values()), "tap_templates_by_status": templates,
-            "taps_per_step": sum(per_status.values()), "taps_per_step_by_status": per_status,
-            "target_only_taps_per_step": target_only}
 
 
 def check_document(cmap: dict[str, Any], doc: dict[str, Any], config: dict[str, Any], tp: int, registry: Any = None,
@@ -402,6 +263,12 @@ class IdsOptions:
     phase: str = option("--phase", default="prefill", choices=("prefill", "decode"))
     route: list[str] | None = option("--route", action="append", default=None, help="the step's routes (default: all)")
     rank: int | None = option("--rank", type=int, default=None, help="the tensor-parallel rank (`s=`; default: none)")
+    binder: list[str] | None = option("--binder", action="append", default=None,
+                                      help="only the taps this committer binder binds (`commit.binder`; default: every tap)")
+    names: bool = option("--names", action="store_true", default=False,
+                         help="each bound tap's id and the tensor name the committer binds it as")
+    off_target: bool = option("--off-target", action="store_true", default=False,
+                              help="a rank off the map's target device: leave out the target_only taps")
     cmd: str = field(default="ids", init=False)
 
 
@@ -414,8 +281,13 @@ def main(a: CheckOptions | CountsOptions | IdsOptions) -> int:
     tp = a.tp or cmap["target"]["tensor_parallel_size"]
     env = symbols(cmap, config, tp)
     if a.cmd == "ids":
-        for cid in identities(cmap, env, profile=a.profile, request=a.request, t=a.t, phase=a.phase,
-                              routes=tuple(a.route) if a.route else None, rank=a.rank):
+        step = {"phase": a.phase, "routes": tuple(a.route) if a.route else None, "binders": tuple(a.binder) if a.binder else None,
+                "on_target": not a.off_target}
+        if a.names:
+            for name, (tap, layer) in committer_names(cmap, env, rank=a.rank or 0, **step).items():
+                print(tap_value_id(tap, layer, profile=a.profile, request=a.request, t=a.t, phase=a.phase, rank=a.rank), name)
+            return 0
+        for cid in identities(cmap, env, profile=a.profile, request=a.request, t=a.t, rank=a.rank, **step):
             print(cid)
         return 0
     if a.cmd == "counts":

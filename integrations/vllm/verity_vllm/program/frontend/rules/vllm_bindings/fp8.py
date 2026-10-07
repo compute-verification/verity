@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll
+from verity.primitives.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
-from verity_vllm.program.registry.fp8 import weight_blocks
+from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
 # -- [R15 fp8] the block-scaled FP8 linear: dynamic per-token-group activation quant + the blockwise CUTLASS scaled GEMM -----------------
@@ -20,6 +20,7 @@ FP8_E4M3 = torch.float8_e4m3fn
 #: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3, use_ue8m0=False)` as vLLM's
 #: `QuantFP8(group_shape=(1, 128), use_ue8m0=False)` calls it for `CutlassFp8BlockScaledMMKernel`); the Definition `Fp8GroupQuant_v1{K,G}`
 #: hard-codes eps and the e4m3 range, so a launch with other values is refused (another kernel configuration, not this Definition).
+#: `group_size` is the blockwise GEMM's block; the quant takes any of `fp8.QUANT_GROUPS`.
 FP8_QUANT_PINS = {"group_size": 128, "eps": 1e-10, "fp8_min": -448.0, "fp8_max": 448.0, "use_ue8m0": False}
 
 
@@ -38,7 +39,8 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
                     applies_to="_C.per_token_group_fp8_quant(x, Tensor! x_q, Tensor! x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0, column_major_scales, tma_aligned_scales)",
                     preconditions=("x is bf16 [.., K] with K % group_size == 0", "x_q is an unwritten allocation float8_e4m3fn [.., K]",
                                    "x_s is an unwritten allocation (or a view of one) f32 [.., K/group_size]",
-                                   "group_size == 128, eps == 1e-10f, fp8_min/max == -448/448, use_ue8m0 == False (the pinned Definition)"),
+                                   "group_size in fp8.QUANT_GROUPS (64, 128), eps == 1e-10f, fp8_min/max == -448/448, use_ue8m0 == False "
+                                   "(the pinned Definition)"),
                     evidence_domain="structural; numerics: Fp8GroupQuant_v1 (exact-model-tested on the H100 against _C.per_token_group_fp8_quant)")
 
     def targets(self):
@@ -60,8 +62,8 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
             return r
         xs_shape = shape(ctx, a["x"])
         G = a["group_size"]
-        if not isinstance(G, int) or G != FP8_QUANT_PINS["group_size"]:
-            return f"numerics_unregistered: group_size={G!r}; Fp8GroupQuant_v1 is pinned for group 128"
+        if not isinstance(G, int) or isinstance(G, bool) or G not in QUANT_GROUPS:
+            return f"numerics_unregistered: group_size={G!r}; Fp8GroupQuant_v1 is registered for the groups {list(QUANT_GROUPS)}"
         if xs_shape[-1] % G:
             return f"K={xs_shape[-1]} is not a multiple of the group size {G}"
         for key in ("eps", "fp8_min", "fp8_max"):
@@ -99,23 +101,32 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
     """`_C.cutlass_scaled_mm(out! bf16 [.., N], a e4m3 [.., K], b = W.T ([K, N] view of e4m3 W [N, K]), a_scales f32 [.., K/G],
     b_scales = Ws.T ([K/G, cdiv(N, G)] view of f32 Ws [cdiv(N, G), K/G]: N may end mid-block, `fp8.weight_blocks`), bias None)` ->
     `scaled_mm_fp8_block{K,N,G}` per token row (the active target's `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1 by
-    default, ScaledMmFp8Block_v1 per-coordinate); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
+    default, ScaledMmFp8Block_v1 per-coordinate; the version 3 forms over the target's step where it is not Hopper's,
+    `registry.targets.fp8_block_dot`); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
-    [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named."""
+    [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named.  A target whose GEMM record
+    has no blockwise step is refused: `_C.cutlass_scaled_mm` runs that target's own blockwise kernel under the same op and kernel class."""
     modes = frozenset({"profile"})
     info = RuleInfo("CutlassScaledMmFp8Block[vllm]", 1, "in-place-binding",
                     applies_to="_C.cutlass_scaled_mm(Tensor! out, a e4m3, b e4m3 [K, N], a_scales f32 [.., K/G], b_scales f32 [K/G, cdiv(N, G)], bias None)",
-                    preconditions=("a is a float8_e4m3fn value [.., K]; out an unwritten bf16 allocation [.., N]",
+                    preconditions=("the active target's GEMM record has a blockwise FP8 step (`GemmTarget.fp8_block_dot`, registry.targets.fp8_block_dot)",
+                                   "a is a float8_e4m3fn value [.., K]; out an unwritten bf16 allocation [.., N]",
                                    "b is a transposed view of an e4m3 [N, K] matrix; b_scales a transposed view of an f32 [cdiv(N, G), K/G] matrix, G = 128",
                                    "a_scales is an f32 value [.., K/G] (the group scales the quant rule computed)", "bias is None",
                                    "K % G == 0 (N need not be: the last weight block may be partial)"),
                     evidence_domain="structural; numerics: ScaledMmFp8Block_v1 (exact-model-tested on the H100 against the blockwise _C.cutlass_scaled_mm, both dispatch "
-                                    "variants) and ScaledMmFp8BlockSharedScale_v1, its function restated")
+                                    "variants) and ScaledMmFp8BlockSharedScale_v1, its function restated; off hopper their version 3 forms over "
+                                    "the target's step (model-untested until that target's capture)")
 
     def targets(self):
         return _C_op("cutlass_scaled_mm")
 
     def applies(self, node, ctx):
+        from verity_vllm.program.registry import targets as T
+        try:
+            T.fp8_block_dot(active_target_profile())
+        except T.UnregisteredTarget as e:
+            return f"numerics_unregistered: {e}"
         if len(node.args) < 5:
             return "unexpected operator arity"
         out, a, b, a_s, b_s = node.args[:5]
@@ -164,12 +175,16 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         srows, _ = rows_of(ctx.coll(a_s))
         if len(rows) != len(srows):
             refuse("shape", node, ctx.module_path(node), f"a has {len(rows)} rows but a_scales {len(srows)}")
-        scale = active_target_profile().effective_fp8_scale_construction()
-        fn = ctx.kind("scaled_mm_fp8_block", node, K=K, N=N, G=G, SCALE=scale)
+        from verity_vllm.program.registry import targets as T
+        tp = active_target_profile()
+        scale = tp.effective_fp8_scale_construction()
+        dot = T.fp8_block_dot(tp)
+        fn = ctx.kind("scaled_mm_fp8_block", node, K=K, N=N, G=G, SCALE=scale, **({} if dot is None else {"FP8_DOT": dot}))
         outs = [ctx.call(fn, r, s, w, ws, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, (r, s) in enumerate(zip(rows, srows))]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.record(self, node, {"K": K, "N": N, "G": G, "rows": len(rows), "scale": scale, "b_view": str(getattr(b, "target", None)),
-                                "b_scales_view": str(getattr(b_s, "target", None))}, emitted=f"{fn.id} x{len(rows)}")
+                                "b_scales_view": str(getattr(b_s, "target", None)), **({} if dot is None else {"dot": dot.id})},
+                   emitted=f"{fn.id} x{len(rows)}")
 
 
 class SameDtypeCastRule(ViewRule):

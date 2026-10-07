@@ -4,7 +4,7 @@ serving engine and no other protocol.
 One run, in order:
 
 1. **Kernel gates.** The scheme's pinned vector encoded on the device (`band/64kb/segment`, a whole segment; dense:
-   `dense/64kb/prefix16`), and `--reference-segments` segments of the run's `C` equal to `verity_pous`'s own encoding, and the
+   `dense/64kb/prefix16`), and `--reference-segments` segments of the run's `C` equal to `verity.protocols.accounting.space.pous`'s own encoding, and the
    round trip (decoding all of `C` gives back `W`). **A failed kernel gate stops the run; it times nothing and publishes no
    measurements** (a wrong kernel must not produce a flattering number).
 2. **Encode.** `W` (the weight set's bytes, filled as `bench.py`'s reference fills them) to `C` on the device, every segment in
@@ -29,13 +29,15 @@ One run, in order:
      decoded and `W`'s block XORed in, timed together), as an adversary would; the limit minus each recomputed answer's
      recorded device time is the measured margin the certificate's headroom only models.
 6. **The step floor.** The fastest single `Π₂` call on one row over the Feistel kernels (`STEP_VARIANTS`) — the fastest honest
-   kernel, an upper bound on an attacker's, who picks its best kernel and may overclock. The SM clock is sampled while it runs,
-   and the floor is scaled to the maximum clock and to a +15% overclock; a single Keccak-f latency is measured beside it. A
-   call under the certificate's `call_ns` is a gap in the profile.
+   kernel, an upper bound on the fastest whole call, which an attacker may beat with its best kernel and an overclock. It is
+   not an upper bound on an attacker's answer: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no call, and
+   rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team, 4 Oct 2026,
+   art:7617c8017e80). The SM clock is sampled while it runs, and the floor is scaled to the maximum clock and to a +15%
+   overclock; a single Keccak-f latency is measured beside it. A call under the certificate's `call_ns` is a gap in the profile.
 7. **NVMe** (`--nvme-dir`, optional): one block's read latency from a file there.
 8. **Clocks.** The GPU's clocks, throttle reasons, temperature and power before and after, and the SM clock per timed step.
 
-`vk` is built from `C`'s leaves; gate 1's reference segments check `C` against `verity_pous`. The verifier's full private
+`vk` is built from `C`'s leaves; gate 1's reference segments check `C` against `verity.protocols.accounting.space.pous`. The verifier's full private
 setup (it encodes all of `W` itself) is `bench.py --impl reference`'s.
 """
 from __future__ import annotations
@@ -63,7 +65,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 LIVE = HERE / "live.py"
 SALT = bytes(range(24))
-VECTORS = ROOT / "protocols" / "pous" / "tests" / "fixtures" / "vectors.json"
+VECTORS = ROOT / "verity" / "protocols" / "accounting" / "space" / "pous" / "tests" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
 """How far past the limit the late control holds an answer (the red team's limit + 50 µs)."""
 PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
@@ -371,16 +373,16 @@ def _nvcc_version() -> str | None:
 
 
 def vector_bytes(label: str, n: int) -> bytes:
-    """The pinned vectors' input stream (`protocols/pous/tests/pous_vectors.py`'s `_bytes`)."""
+    """The pinned vectors' input stream (`verity/protocols/accounting/space/pous/tests/pous_vectors.py`'s `_bytes`)."""
     return hashlib.shake_256(b"verity-pous/vectors/" + label.encode()).digest(n)
 
 
 def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any] | None = None) -> dict[str, Any]:
     """The scheme's pinned vector, encoded on the device: its pinned blocks' digest, and one segment's encode time.  The vector
     is pinned at the registered point, so a band run at another in-degree encodes it at the registered `d`
-    (`backend.encode_at`); the run's own `d` is gated against `verity_pous` by `reference_gate`."""
+    (`backend.encode_at`); the run's own `d` is gated against `verity.protocols.accounting.space.pous` by `reference_gate`."""
     import torch
-    from verity_pous import schemes
+    from verity.protocols.accounting.space.pous import schemes
 
     vector, label, count = PINNED[name]
     pinned = pinned or json.loads(VECTORS.read_text())
@@ -405,7 +407,7 @@ segment count from 1 to 2^64 at `D = 5`, `k = 111`, 241.5 µs, with the cliff at
 
 def with_in_degree(base: Any, d: int) -> Any:
     """The band's geometry at in-degree `d` (`--band-d`), refused below `MIN_BAND_D`: such a band has no certificate."""
-    from verity_pous.band import BandParams
+    from verity.protocols.accounting.space.pous.band import BandParams
 
     if not isinstance(base, BandParams):
         raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
@@ -424,7 +426,7 @@ def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
 
 
 def reference_gate(scheme: Any, c: bytes, w: bytes, picks: list[int], workers: int) -> dict[str, Any]:
-    """`picks`' segments of `C` equal to `verity_pous`'s encoding of the same segments of `W`, in spawned processes (this one
+    """`picks`' segments of `C` equal to `verity.protocols.accounting.space.pous`'s encoding of the same segments of `W`, in spawned processes (this one
     runs CUDA and torch threads, which a fork would copy mid-flight)."""
     seg = scheme.params.segment_bytes
     jobs = [(scheme.name, scheme.params, s, w[s * seg:(s + 1) * seg]) for s in picks]
@@ -521,7 +523,7 @@ def _verifier_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any,
 
 
 def _verifier_env() -> dict[str, str]:
-    paths = [str(ROOT / "packages" / "verity" / "src"), str(ROOT / "protocols" / "pous"), os.environ.get("PYTHONPATH", "")]
+    paths = [str(ROOT), str(ROOT / "verity" / "protocols" / "accounting" / "space" / "pous"), os.environ.get("PYTHONPATH", "")]
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
 
 
@@ -665,7 +667,8 @@ def _recomputer(backend: Backend, c: Any, tags: Any, dropped: list[int], w_host:
 
 
 def step_floor(backend: Backend, reps: int, call_ns: int | None, facts: dict[str, Any]) -> dict[str, Any] | None:
-    """The fastest single-row `Π₂` call over `STEP_VARIANTS` — the fastest honest kernel, an upper bound on an attacker's —
+    """The fastest single-row `Π₂` call over `STEP_VARIANTS` — the fastest honest kernel, an upper bound on the fastest
+    whole call but not on an attacker's answer, which resumes kept round states without a call (module docstring, step 6) —
     with the SM clock sampled while it runs, scaled to the maximum clock and a +15% overclock, and one Keccak-f beside it."""
     if backend.step is None:
         return None
@@ -687,7 +690,8 @@ def step_floor(backend: Backend, reps: int, call_ns: int | None, facts: dict[str
     scaled = floor * sampled / max_mhz if sampled and max_mhz else None
     keccak = backend.keccak_latency(reps) if backend.keccak_latency is not None else None
     return {"variants": variants, "fastest": fastest, "min_s": floor,
-            "label": "fastest honest kernel (an upper bound on the adversary's floor)",
+            "label": "fastest honest kernel for a whole call (not an upper bound on the adversary's floor, which "
+                     "resumes kept round states in about a tenth of a call)",
             "sampled_sm_mhz": sampled, "sampled_nvidia_smi_id": facts.get("before", {}).get("nvidia_smi_id"),
             "at_max_clock_s": scaled, "at_plus15pct_overclock_s": scaled / 1.15 if scaled else None,
             "keccak_f_s": keccak, "certificate_call_ns": call_ns,
@@ -759,8 +763,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     """One harness run (the module docstring's steps).  `backend`, `base` (the scheme's geometry before `W` sizes it) and
     `vectors` replace the GPU kernels, the registered geometry and the pinned vectors (the CPU tests)."""
     import torch
-    from verity_pous import schemes
-    from verity_pous.verifier import leaf_hash
+    from verity.protocols.accounting.space.pous import schemes
+    from verity.protocols.accounting.space.pous.verifier import leaf_hash
 
     from .live import scheme_of
 

@@ -3,19 +3,29 @@
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...`: build a train and push it as BRANCH for its check (`prepare`).
 `research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
 (`sweep`).
+`research merge --mirror [SHA]`: push SHA (default main's tip) to node 1's bare repository's main, as --push does (`push_mirror`).
+`research merge --canary [--tool check] [--json]`: the gates' self-test, run daily: attempts the merge gate, the push guard and the
+train gate must refuse and a control they must admit, in scratch stores (`canary`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
-a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean, and a
-result of a kind the target's declaration of the tool produces (`Tool.produces`: `check/v1` for check; an attempt with no result,
-or one whose attempt or result can't be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-fast/v1`,
-which skips the kernel replay).  With a usable remote the catalog's attempts are refreshed first, so an attempt recorded on
-another machine counts.  Refused as well: a
+a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean, as
+the attempt's own record says (the index only finds it); a run of the command the target's declaration of the tool names
+(`Tool.command`, in a check slot or not, followed by nothing but check.py's own flags: `unlike`); and its own result, of a kind
+that declaration produces (`Tool.produces`: `check/v1` for check; an attempt with no result, or whose record or result can't
+be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-fast/v1`, which skips the kernel replay), with
+the verdict passed and no step listed twice.  A sharded check (`check.py --shard K/N`, one Attempt per shard, its result a
+`check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
+reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
+commit's own `tools/check/`, every part once, every job of its `ci.toml`, no step failed) and the combine's steps theirs; a
+shard alone passes nothing.  With a usable remote the catalog's attempts are refreshed first, so an attempt
+recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
 train checked on the train ahead of it lands after that one), since otherwise the merged tree is not the one that was checked;
 merge the target into the branch and check the new tip.  The steps a change requires are read from the target's declaration and
 the diff from its tip either way.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with
---dry-run), 1 refused, 2 usage.
+--dry-run), 1 a failure past the gate (git's merge, the push, the sweep, a train's offending ref), 2 usage, 3 refused
+(`research.gates.refuse`: the gate, the push guard, a train or its build).
 
 After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
 the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
@@ -27,10 +37,14 @@ head that landed (GitHub's "delete head branch" fires only on merges made on Git
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
-`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct).
+`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
+same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
+push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
+it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
-from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`).
+from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
+reads each again when the tip lands, with its ready mark and grants (`unready`).
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
 that doesn't parse (`_merge`).  Before a train is built, each ref whose change needs a TRAIN_GRANTS grant under
@@ -43,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -51,22 +66,201 @@ import tempfile
 import time
 from pathlib import Path
 
+from .gates import FINDING, OK, REFUSED, git_env, refuse
+
+PROG = "research merge"
+
 
 class Refused(Exception):
     pass
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
+    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape", env=git_env())
     if check and r.returncode:
         raise Refused(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r
 
 
 #: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
-#: `lean-fast/v1` is the Lean fast path's (`tools/check/lean_changed.py --records`), an audit without the kernel replay,
+#: `lean-fast/v1` is the Lean fast path's (`tools/lean/lean_changed.py --records`), an audit without the kernel replay,
 #: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
+#: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
+#: `--priority` and `--by NAME` when given, then `--`
+SLOT_WRAP = ("python3", "tools/check/slot.py")
+#: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
+#: or `--cores N`
+CHECK_FLAGS = ("--no-cache", "--keep-going")
+
+
+def invocation(argv, command) -> tuple[str, object]:
+    """What an attempt's ``argv`` ran of the target's declared ``command``: ("check", None), ``command`` itself, in a check slot
+    (`SLOT_WRAP`) or not, followed by nothing but check.py's own flags (`CHECK_FLAGS`); ("shard", (K, N)), the same with
+    `--shard K/N` once (`tools/check/check.py`'s sharding); ("combine", [run ids]), ``command`` with `--combine RUN...` and
+    nothing else; or ("refused", why) for anything else."""
+    if not command:
+        return "refused", "the target's declaration of the tool names no command to hold it to"
+    if not (isinstance(argv, list) and all(isinstance(x, str) for x in argv)):
+        return "refused", "its record has no argv"
+    run = argv
+    if tuple(argv[:2]) == SLOT_WRAP:
+        opts = argv[2:]
+        opts = opts[1:] if opts[:1] == ["--priority"] else opts
+        opts = opts[2:] if opts[:1] == ["--by"] and len(opts) > 1 else opts
+        run = opts[1:] if opts[:1] == ["--"] else argv
+    if run[:len(command)] != list(command):
+        return "refused", f"its command `{shlex.join(argv)}` isn't the target's declared `{shlex.join(command)}`"
+    tail = run[len(command):]
+    if tail[:1] == ["--combine"]:
+        ids = tail[1:]
+        return ("combine", ids) if ids and not any(x.startswith("-") for x in ids) else (
+            "refused", f"its command gives the declared one `{shlex.join(tail)}`, which check.py doesn't take")
+    rest = [x for x in tail if x not in CHECK_FLAGS]
+    if "--verdicts-in" in rest[:-1]:
+        i = rest.index("--verdicts-in")
+        rest = rest[:i] + rest[i + 2:]
+    mode: tuple[str, object] = ("check", None)
+    if "--shard" in rest[:-1] and (m := re.fullmatch(r"([1-9]\d*)/([1-9]\d*)", rest[rest.index("--shard") + 1])):
+        i = rest.index("--shard")
+        mode, rest = ("shard", (int(m.group(1)), int(m.group(2)))), rest[:i] + rest[i + 2:]
+    if rest and not (rest[0] == "--cores" and len(rest) == 2 and rest[1].isdigit()):
+        return "refused", f"its command gives the declared one `{shlex.join(rest)}`, which check.py doesn't take"
+    return mode
+
+
+def unlike(argv, command) -> str | None:
+    """Why an attempt's ``argv`` isn't a whole run of the target's declared ``command``, or None (`invocation`'s "check"): a
+    shard passes no gate alone, and a combine only through `refused`'s reading of its shards."""
+    mode, arg = invocation(argv, command)
+    if mode == "shard":
+        return (f"it is shard {arg[0]}/{arg[1]} of a sharded check, which passes no gate alone: `check.py --record --combine` "
+                "its set")
+    if mode == "combine":
+        return "it combines shards, which only the gate's own reading of them admits"
+    return arg if mode == "refused" else None
+
+
+#: a sharded check's shard result (`tools/check/check.py --shard`): never a kind the tool produces, read only by `shard_set`
+SHARD_KIND = "check-shard/v1"
+
+
+def declared_jobs(repo: Path, commit: str) -> list[str] | str:
+    """The job names ``commit``'s own `tools/check/ci.toml` declares, or why they can't be read."""
+    import tomllib
+
+    r = _git(repo, "show", f"{commit}:tools/check/ci.toml", check=False)
+    try:
+        jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", [])] if r.returncode == 0 else None
+    except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
+        jobs = None
+    if not jobs or not all(isinstance(j, str) for j in jobs):
+        return f"{commit[:12]}'s tools/check/ci.toml can't be read for the jobs a check runs"
+    return jobs
+
+
+def _read(store, run_id: str, tool: str | None, commit: str | None):
+    """(record, result id, result manifest or None) of the attempt, or why it can't pass whatever it ran: its record can't be
+    read, or doesn't say it is a passing ``tool`` attempt of the clean ``commit``, or its result can't be read."""
+    try:
+        doc = store.get_attempt(run_id)
+    except Exception as e:  # noqa: BLE001  (a guard never fails open)
+        return f"its attempt can't be read ({type(e).__name__}: {e})"
+    if not isinstance(doc, dict):
+        return "its attempt can't be read"
+    st, src = doc.get("status") or {}, doc.get("source") or {}
+    said = {"tool": (doc.get("tool") or {}).get("name"), "commit": src.get("commit"), "dirty": src.get("dirty"),
+            "state": st.get("state"), "rc": st.get("rc")}
+    want = {"tool": tool, "commit": commit, "dirty": False, "state": "done", "rc": 0}
+    if off := [f"{k} {said[k]}" for k, v in want.items() if v is not None and said[k] != v]:
+        return f"its record says {', '.join(off)}, not the index's passing check"
+    art = (doc.get("outputs") or {}).get("result")
+    try:
+        return doc, art, store.get_manifest(art) if art else None
+    except Exception as e:  # noqa: BLE001  (a guard never fails open)
+        return f"its result can't be read ({type(e).__name__}: {e})"
+
+
+def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check",
+              command: tuple[str, ...] = ()) -> tuple[list[dict] | None, str | None]:
+    """(the steps of the one check the shard attempts ``ids`` make, None) when together they are a passing check of the clean
+    ``commit``, else (None, why).  Each must be a passing ``tool`` attempt of ``commit`` whose command is the declared
+    ``command`` with `--shard K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that shard, ``commit`` and
+    its config (``commit``'s tree of `tools/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
+    together, one N with K = 1..N once each, one list of every part, which their parts make exactly once and which covers every
+    job ``commit``'s `ci.toml` declares, and the same steps outside their parts (the preflight), passed in each.  The steps: those
+    once, then each part as its shard's step ran it."""
+    if not ids or len(set(ids)) != len(ids):
+        return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
+    config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/check", check=False).stdout.strip()
+    if not config:
+        return None, f"{commit[:12]} has no tools/check/ to hold the shards' config to"
+    jobs = declared_jobs(repo, commit)
+    if isinstance(jobs, str):
+        return None, jobs
+    shards: dict[int, tuple[str, dict, list[dict]]] = {}
+    plans = set()
+    for rid in ids:
+        got = _read(store, rid, tool, commit)
+        if isinstance(got, str):
+            return None, f"{rid}: {got}"
+        doc, art, result = got
+        mode, arg = invocation(doc.get("argv"), command)
+        if mode != "shard":
+            return None, f"{rid}: {arg if mode == 'refused' else 'it is not a shard (`check.py --shard K/N`)'}"
+        kind = result.kind if result else None
+        if kind != SHARD_KIND:
+            return None, f"{rid}: its result is {f'a {kind}' if kind else 'missing'}, not a {SHARD_KIND}"
+        meta = result.meta if isinstance(result.meta, dict) else {}
+        sh = meta.get("shard") if isinstance(meta.get("shard"), dict) else {}
+        steps = meta.get("steps", [])
+        if meta.get("run_id") != rid:
+            return None, f"{rid}: its result names run {meta.get('run_id')}"
+        if (meta.get("validation") or {}).get("status") != "passed":
+            return None, f"{rid}: its result's verdict is {(meta.get('validation') or {}).get('status')}, not passed"
+        if why := twice(steps):
+            return None, f"{rid}: {why}"
+        if (sh.get("k"), sh.get("n")) != arg:
+            return None, f"{rid}: its result is shard {sh.get('k')}/{sh.get('n')}, its command {arg[0]}/{arg[1]}"
+        if sh.get("commit") != commit or sh.get("config") != config:
+            return None, (f"{rid}: its result checked commit {sh.get('commit')} with config {sh.get('config')}, not {commit[:12]}'s "
+                          f"tools/check/ ({config[:12]})")
+        if not all(isinstance(sh.get(f), list) and all(isinstance(p, str) for p in sh[f]) for f in ("parts", "all")):
+            return None, f"{rid}: its result doesn't list its parts and every part"
+        if bad := [s["step"] for s in steps if s.get("status") not in ("passed", "skipped")]:
+            return None, f"{rid}: {', '.join(bad)} didn't pass"
+        ran = [p for s in steps for p in (s.get("parts") or [])]
+        if not all(isinstance(p, str) for p in ran) or sorted(ran) != sorted(sh["parts"]):
+            return None, f"{rid}: its steps ran {', '.join(map(str, ran)) or 'nothing'}, not its shard's parts"
+        if arg[0] in shards:
+            return None, f"shard {arg[0]}/{arg[1]} is named twice ({shards[arg[0]][0]}, {rid})"
+        shards[arg[0]] = (rid, sh, steps)
+        plans.add((arg[1], json.dumps(sh["all"])))
+    if len(plans) != 1:
+        return None, "the shards are of different plans (their N, or every part they say an unsharded check covers)"
+    (n, _), = plans
+    if missing := [k for k in range(1, n + 1) if k not in shards]:
+        return None, f"shard {', '.join(f'{k}/{n}' for k in missing)} is not among them"
+    every = shards[1][1]["all"]
+    covered = [p for k in sorted(shards) for p in shards[k][1]["parts"]]
+    if len(set(every)) != len(every):
+        return None, "their list of every part names one twice"
+    if sorted(covered) != sorted(every):
+        again = sorted({p for p in covered if covered.count(p) > 1})
+        return None, (f"their parts aren't every part once (twice: {', '.join(again) or 'none'}; in no shard: "
+                      f"{', '.join(sorted(set(every) - set(covered))) or 'none'}; not a part: "
+                      f"{', '.join(sorted(set(covered) - set(every))) or 'none'})")
+    if uncovered := [j for j in jobs if not any(p == j or p.startswith(j + ":") for p in every)]:
+        return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml declares"
+    names = {p.partition(":")[0] for p in every}
+    common = [[s["step"] for s in shards[k][2] if not s.get("parts")] for k in sorted(shards)]
+    if any(sorted(c) != sorted(common[0]) for c in common) or names & set(common[0]):
+        return None, "the shards ran different steps outside their parts, or a job outside its parts"
+    out = [{"step": s, "status": "passed" if all(x.get("status") == "passed" for k in shards for x in shards[k][2] if x["step"] == s)
+            else "skipped", "shards": [shards[k][0] for k in sorted(shards)]} for s in common[0]]
+    part = {p: {"step": p, "status": s.get("status"), "shard": k, "run_id": shards[k][0], "seconds": s.get("seconds")}
+            for k in sorted(shards) for s in shards[k][2] for p in (s.get("parts") or [])}
+    return out + [part[p] for p in every], None
 
 
 def declaration(repo: Path, tool: str):
@@ -74,9 +268,8 @@ def declaration(repo: Path, tool: str):
     checkout has none."""
     from .store import tools_registry
 
-    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
     try:
-        return tools_registry._from_file(module, attr, repo)
+        return tools_registry.from_tree(tool, repo)
     except Exception:  # noqa: BLE001  (a declaration that can't be read is none)
         return None
 
@@ -87,42 +280,83 @@ def produced(repo: Path, tool: str) -> frozenset[str]:
     return frozenset(getattr(declaration(repo, tool), "produces", None) or ())
 
 
-def refused(store, run_id: str, kinds: frozenset[str]) -> str | None:
-    """Why the attempt can't pass the gate whatever its exit status, or None: its result is not of a kind in ``kinds`` (the
-    tool's `produced`; an attempt that published no result has none), or is in `REFUSED_KINDS`, or it or its result can't be
-    read."""
-    try:
-        doc = store.get_attempt(run_id)
-        if doc is None:
-            return "its attempt can't be read"
-        art = (doc.get("outputs") or {}).get("result")
-        kind = store.get_manifest(art).kind if art else None
-    except Exception as e:  # noqa: BLE001  (a guard never fails open)
-        return f"its result can't be read ({type(e).__name__}: {e})"
+def declared_command(repo: Path, tool: str) -> tuple[str, ...]:
+    """The command the target's declaration of ``tool`` runs (`Tool.command`); none when it has no declaration, so that no
+    attempt passes."""
+    return tuple(getattr(declaration(repo, tool), "command", None) or ())
+
+
+def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, commit: str | None = None,
+            command: tuple[str, ...] | None = None, repo: Path | None = None) -> str | None:
+    """Why the attempt can't pass the gate whatever the index says of it, or None: its record can't be read, or doesn't say
+    what the index row did (a passing ``tool`` attempt of the clean ``commit``), or ran something other than ``command`` (the
+    tool's `declared_command`, `unlike`; with none, nothing passes), or its result can't be read, is in `REFUSED_KINDS`, is not
+    of a kind in ``kinds`` (the tool's `produced`; an attempt that published no result has none), is another run's, has a
+    verdict other than passed, or lists a step twice (the gates would read it two ways).  A `--combine` of shards passes only
+    when, read in ``repo`` (the target's checkout), its shards are a passing check of ``commit`` (`shard_set`) and its steps are
+    the ones they make."""
+    got = _read(store, run_id, tool, commit)
+    if isinstance(got, str):
+        return got
+    doc, art, result = got
+    mode, ids = invocation(doc.get("argv"), command)
+    if mode != "combine" and (why := unlike(doc.get("argv"), command)):
+        return why
+    kind = result.kind if result else None
     if kind in REFUSED_KINDS:
         return f"its result is a {kind}, which no merge accepts"
     if kind not in kinds:
-        return ((f"its result is a {kind}" if kind else "it published no result") +
+        return ((f"its result is a {kind}" if kind else f"its result {art} has no kind" if art else "it published no result") +
                 f", and the target's declaration of the tool produces {', '.join(sorted(kinds)) or 'nothing'}")
+    meta = result.meta if isinstance(result.meta, dict) else {}
+    if meta.get("run_id") != run_id:
+        return f"its result names run {meta.get('run_id')}, not this one"
+    validation = meta.get("validation")
+    verdict = validation.get("status") if isinstance(validation, dict) else None
+    if verdict != "passed":
+        return f"its result's verdict is {verdict}, not passed"
+    if why := twice(meta.get("steps", [])):
+        return why
+    if mode == "combine":
+        if repo is None or commit is None:
+            return "it combines shards, which this gate reads only in the target's checkout, for a commit"
+        steps, why = shard_set(store, repo, commit, ids, tool or "check", command or ())
+        if why:
+            return f"its shards aren't a passing check: {why}"
+        seen = sorted((s["step"], s.get("status")) for s in meta.get("steps", []))
+        if seen != sorted((s["step"], s["status"]) for s in steps):
+            return "its steps aren't the ones its shards make"
     return None
 
 
-def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], tree: str | None = None, maps=None) -> list[str]:
+def twice(steps) -> str | None:
+    """Why a result's ``steps`` can't be read one way, or None: each is an object naming its step, and no step is listed twice
+    (`step_status` would read the first and the train gate the last)."""
+    if not (isinstance(steps, list) and all(isinstance(s, dict) and isinstance(s.get("step"), str) for s in steps)):
+        return "its result has steps this gate can't read"
+    names = [s["step"] for s in steps]
+    if again := next((n for i, n in enumerate(names) if n in names[:i]), None):
+        return f"its result lists step {again} more than once"
+    return None
+
+
+def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], command: tuple[str, ...], tree: str | None = None,
+            maps=None, repo: Path | None = None) -> list[str]:
     """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first, less those `refused` names
-    (``kinds``: the result kinds that may pass, the target's `produced`).  After a history rewrite (`commitmap`), an attempt of
-    an old commit counts for its image when the map says the rewrite kept the tree and, where the attempt recorded its tree,
-    that tree is ``tree``."""
+    (``kinds`` and ``command``: the result kinds that may pass and the command that must have run, the target's `produced` and
+    `declared_command`).  After a history rewrite (`commitmap`), an attempt of an old commit counts for its image when the map
+    says the rewrite kept the tree and, where the attempt recorded its tree, that tree is ``tree``."""
     rows = store.index.sql("SELECT id FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 AND state = 'done' "
                            "AND rc = 0 ORDER BY start_utc DESC", (tool, commit))
-    ids = [r[0] for r in rows]
+    found = [(r[0], commit) for r in rows]
     for old in (maps.equivalent(commit)[1:] if maps else []):
         rows = store.index.sql("SELECT id, manifest_json FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 "
                                "AND state = 'done' AND rc = 0 ORDER BY start_utc DESC", (tool, old))
         for rid, doc in rows:
             recorded = (json.loads(doc).get("source") or {}).get("tree") if doc else None
             if tree is None or recorded in (None, tree):
-                ids.append(rid)
-    return [rid for rid in ids if refused(store, rid, kinds) is None]
+                found.append((rid, old))
+    return [rid for rid, c in found if refused(store, rid, kinds, tool, c, command, repo) is None]
 
 
 def tree_identical(repo: Path, commit: str) -> bool:
@@ -133,8 +367,9 @@ def tree_identical(repo: Path, commit: str) -> bool:
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
 
-def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print) -> tuple[str, str]:
-    """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise."""
+def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
+    """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
+    merges whose head on ``remote`` moved or that lacks its ready mark or a grant (`unready`)."""
     commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into:
@@ -154,12 +389,14 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
     if old := maps.old_history(repo, commit, "HEAD"):
         raise Refused(f"{commit[:12]} holds {len(old)} commit(s) a history rewrite replaced (e.g. {old[0][:12]}): merging it would bring the "
                       f"old history back; move the branch onto the rewritten one with `research git remap` and push that")
+    if why := unready(repo, commit, store, remote, log):
+        raise Refused("; ".join(why))
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
-    kinds = produced(repo, tool)
-    ids = passing(store, commit, tool, kinds=kinds, tree=tree, maps=maps)
+    kinds, command = produced(repo, tool), declared_command(repo, tool)
+    ids = passing(store, commit, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
     if not ids:
         rows = store.index.sql("SELECT id, state, rc, source_dirty FROM attempts WHERE tool = ? AND source_commit = ?", (tool, commit))
-        why = {r[0]: refused(store, r[0], kinds) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
+        why = {r[0]: refused(store, r[0], kinds, tool, commit, command, repo) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
         seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}{f' refused: {why[r[0]]}' if why.get(r[0]) else ''}"
                          for r in rows) or "none"
         raise Refused(f"no passing `{tool}` attempt for {commit} in the evidence store (attempts of it: {seen}); "
@@ -196,7 +433,7 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
     passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
     `research merge` commit has, its merged parent's when the two trees are equal."""
     bad = []
-    kinds = produced(repo, tool)
+    kinds, command = produced(repo, tool), declared_command(repo, tool)
     for line in lines:
         f = line.split()
         if len(f) != 4 or f[2] != f"refs/heads/{into}" or f[1] == ZERO:
@@ -204,10 +441,109 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
         tip = f[1]
         tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
         parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
-        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, kinds=kinds, tree=tree)
-                   for x in [tip, *parents[1:]]):
+        if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree
+                   and passing(store, x, tool, kinds=kinds, command=command, tree=tree, repo=repo) for x in [tip, *parents[1:]]):
             bad.append(tip)
     return bad
+
+
+CANARY_SCHEMA = "research/merge-canary/v1"
+#: `--canary`'s attempts of one commit, each alone in a store: (case, what it is, whether the train gate judges it: that gate
+#: holds its job's own run to the record and the result's kind and steps, not to the command or the verdict); every gate that
+#: judges a case must refuse all but the control
+CANARY = (("no-result", "a passing check that published no result", True),
+          ("wrong-kind", "a passing check whose result is a bench-result/v1", True),
+          ("refused-kind", "a passing check whose result is the Lean fast path's lean-fast/v1", True),
+          ("unreadable-record", "a passing check whose attempt record can't be read", True),
+          ("disagreeing-record", "a check the index lists as passing whose record says rc 1", True),
+          ("wrong-command", "a passing result of `bash -c '<the declared command> || true'`", False),
+          ("failed-verdict", "a run of the declared command whose result's verdict is failed", False),
+          ("repeated-step", "a run of the declared command whose result lists a step as passed, then as failed", True),
+          ("control", "a run of the declared command whose passing result is of a kind the declaration produces", True))
+
+
+def canary(repo: Path, tool: str = "check") -> dict:
+    """The `research/merge-canary/v1` report of `--canary`: each CANARY attempt, alone in a scratch store with no remote, put to
+    the gate and the push guard for a commit of a scratch repository whose declaration of ``tool`` is ``repo``'s own, and, for
+    `check`, to the train gate (`jobs.trains.TrainService.gate`, on its fakes holding the same declaration, record and result);
+    ``ok`` when every gate that judges a case refuses every bad one and admits the control.  Nothing of ``repo``'s or the
+    evidence store's is read or written beyond that declaration."""
+    from .jobs import trains
+    from .runs import new_run_id
+    from .store import tools_registry
+    from .store.local import LocalStore
+
+    module = (tools_registry.locate(tool, repo) or tools_registry.REGISTRY.get(tool, tool).rpartition(":"))[0]
+    rel = Path(*module.split(".")).with_suffix(".py")
+    if not (repo / rel).is_file():
+        raise Refused(f"this checkout has no {rel}, its declaration of `{tool}`: run the canary in the target's checkout")
+    kinds = sorted(produced(repo, tool))
+    command = list(declared_command(repo, tool))
+    candidate = "a change no step of the declaration covers\n"
+    ident = ("-c", "user.name=research merge canary", "-c", "user.email=canary@research.invalid", "-c", "commit.gpgsign=false",
+             "-c", "core.hooksPath=/dev/null")
+    cases = []
+    with tempfile.TemporaryDirectory(prefix="research-merge-canary-") as tmp:
+        scratch = Path(tmp) / "repo"
+        (scratch / rel).parent.mkdir(parents=True)
+        (scratch / rel).write_bytes((repo / rel).read_bytes())
+        _git(Path(tmp), "init", "-q", "-b", "main", str(scratch))
+        _git(scratch, "add", "-A")
+        _git(scratch, *ident, "commit", "-q", "-m", "the canary's target")
+        base = _git(scratch, "rev-parse", "HEAD").stdout.strip()
+        _git(scratch, "checkout", "-q", "-b", "candidate")
+        (scratch / "candidate.txt").write_text(candidate)
+        _git(scratch, "add", "candidate.txt")
+        _git(scratch, *ident, "commit", "-q", "-m", "the canary's candidate")
+        commit = _git(scratch, "rev-parse", "HEAD").stdout.strip()
+        _git(scratch, "checkout", "-q", "main")
+        for case, what, trained in CANARY:
+            store = LocalStore(Path(tmp) / f"store-{case}", config_path=Path(tmp) / "no-remote.toml")
+            kind = {"no-result": None, "wrong-kind": "bench-result/v1", "refused-kind": "lean-fast/v1"}.get(
+                case, kinds[0] if kinds else "check/v1")
+            rid = new_run_id()
+            steps = [{"step": "suites", "status": "passed"}] + [{"step": "suites", "status": "failed"}] * (case == "repeated-step")
+            meta = {"schema": "research/result/v0.1", "kind": kind, "run_id": rid, "steps": steps,
+                    "validation": {"status": "failed" if case == "failed-verdict" else "passed", "checker": f"{PROG} --canary"}}
+            art = store.put_artifact(kind, meta) if kind else None
+            record = {
+                "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": tool, "version": None}, "derivation": "drv:" + "0" * 64,
+                "reuse_key": None, "argv": ["bash", "-c", f"{shlex.join(command)} || true"] if case == "wrong-command" else command,
+                "params": {}, "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [],
+                "source": {"commit": commit, "dirty": False}, "closure": None, "execution": {}, "cost": None,
+                "status": {"state": "done", "rc": 0}, "outputs": {"result": art} if art else {}, "telemetry": None}
+            store.put_attempt(record)
+            if case in ("unreadable-record", "disagreeing-record"):
+                store.attempt_path(rid).unlink()
+                store.attempt_path(rid).write_text("{" if case == "unreadable-record" else
+                                                   json.dumps(record | {"status": {"state": "done", "rc": 1}}))
+            try:
+                gate(scratch, commit, "main", store, tool, log=lambda *_: None)
+                at_gate = "admitted"
+            except Refused as e:
+                at_gate = f"refused: {e}"
+            pushed = unchecked_pushes(scratch, [f"refs/heads/main {commit} refs/heads/main {base}"], store, "main", tool)
+            at_train = None
+            if trained and tool == "check":
+                try:
+                    on_disk = json.loads(store.attempt_path(rid).read_text())
+                except ValueError:
+                    on_disk = None
+                svc = trains.TrainService(
+                    github=trains.FakeGitHub(commits={base: {"parents": [], "files": {trains.TOOL_PY: (repo / trains.TOOL_PY).read_text()}},
+                                                      commit: {"parents": [base], "files": {"candidate.txt": candidate}}},
+                                             refs={"main": base}),
+                    store=trains.FakeStore(attempts={rid: on_disk} if isinstance(on_disk, dict) else {},
+                                           manifests={art: {"kind": kind, "meta": meta}} if art else {}))
+                why = svc.gate(trains.Train(id=1, prs=[], base=base, tip=commit, job=None, land=False, requirements={},
+                                            by="canary", run_id=rid))
+                at_train = f"refused: {why}" if why else "admitted"
+            want = "admitted" if case == "control" else "refused"
+            seen = [at_gate, "refused" if pushed else "admitted", at_train]
+            cases.append({"case": case, "attempt": what, "want": want, "gate": at_gate, "push_guard": seen[1], "train_gate": at_train,
+                          "ok": all(s.split(":")[0] == want for s in seen if s is not None)})
+    return {"schema": CANARY_SCHEMA, "tool": tool, "produces": kinds, "command": command, "cases": cases,
+            "ok": all(c["ok"] for c in cases)}
 
 
 def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> Path | None:
@@ -230,7 +566,7 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
     rules = getattr(declaration(repo, tool), "merge_requires", None)
     if not rules:
         return {}
-    changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
+    changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", base, commit).stdout.split("\0") if p]   # a rename's source too
     out = {}
     for step, rule in rules.items():
         if hit := rule_touches(rule, changed):
@@ -363,7 +699,7 @@ def _strict_json(text: str) -> bool:
 
 
 def broken_json(tree: Path, theirs: str) -> list[str]:
-    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' pins change one
+    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' guarantees change one
     `lean-audit.json`) and that don't parse (`_strict_json`) though both sides' did."""
     mb = _git(tree, "merge-base", "HEAD^1", theirs).stdout.strip()
     changed = [set(_git(tree, "diff", "--name-only", "-z", mb, rev).stdout.split("\0")) for rev in ("HEAD^1", theirs)]
@@ -421,8 +757,8 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
 
 #: the grants of `research queue`'s rules (role: what it attests) a train's pull request must hold at its pinned head before its
 #: check is spent; the lander applies the rules' other grants by hand
-TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed pins and "
-                                      "the definitions they read (lane contract §5)"}
+TRAIN_GRANTS = {"statement-reviewer": "a named reviewer read what `tools/lean/audit.py --update` prints for its changed guarantees "
+                                      "and the definitions they read (lane contract §5)"}
 
 
 def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=print) -> list[str]:
@@ -430,18 +766,18 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head (and,
     for a lean-audit.json change, a `lean_review` that printed it whole as the same statements: `research.queue.reviewed`), or
     the ref isn't a pinned pull request, which is all a grant can be on."""
-    from .queue import RULES, RULES_BEFORE_MOVE, QueueError, Rules, StoreGrants, grant_target
+    from .queue import QueueError, StoreGrants, grant_target
 
-    for path in (RULES, RULES_BEFORE_MOVE):
-        r = _git(repo, "show", f"{base}:{path}", check=False)
-        if r.returncode == 0:
-            break
-    else:
+    try:
+        rules = queue_rules(repo, base)
+    except QueueError as e:
+        raise Refused(f"the queue's rules: {e}") from e
+    if rules is None:
         return []
+    path = rules.source
     grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
     out = []
     try:
-        rules = Rules.parse(r.stdout, path)
         lean = {g.role for g in rules.grants if g.lean_audit}
         for label, sha in pins:
             pr = int(label[1:]) if label.startswith("#") else None
@@ -458,6 +794,81 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                             f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
     except QueueError as e:
         raise Refused(f"the queue's rules ({path}): {e}") from e
+    return out
+
+
+def queue_rules(repo: Path, base: str):
+    """`research queue`'s rules as ``base`` has them (`RULES`, else `RULES_BEFORE_MOVE`), or None when it has no rules file."""
+    from .queue import RULES, RULES_BEFORE_MOVE, Rules
+
+    for path in (RULES, RULES_BEFORE_MOVE):
+        r = _git(repo, "show", f"{base}:{path}", check=False)
+        if r.returncode == 0:
+            return Rules.parse(r.stdout, path)
+    return None
+
+
+#: the subject `_chain` gives a pinned pull request's merge onto a train
+MERGED_PR = re.compile(r"Merge #(\d+) \(([0-9a-f]{7,40})\)")
+
+
+def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]:
+    """Why ``commit`` can't land for a pull request it merges above the checkout's HEAD (a first-parent `Merge #N (SHA)` commit
+    `_chain` wrote, whose second parent is the pinned head): N's head on ``remote`` is no longer that head, closed or not, or
+    `pr:N@{head}` lacks `ready = true` asserted by someone other than `merge-queue` (the owner's word; who asserted it isn't matched
+    to the PR's owner, which is mostly a Cursor agent id with no map to a lane) or a grant its change needs under the queue's rules
+    as HEAD has them (`Rules.needs`, every role, not only TRAIN_GRANTS) for what it adds onto the train below its merge (a PR stacked
+    on another in the train needs no grant for that one's change), read after pulling the labels from the store's remote; or N is
+    stacked on another pull request whose head on ``remote`` is in what N adds, so neither on main nor pinned below N at that
+    head (a grant at N's head covers N's own change, not its base's).  What can't be read refuses."""
+    from .queue import QueueError, StoreGrants, grant_target
+
+    out, pins = [], []
+    for line in _git(repo, "log", "--first-parent", "--format=%P%x00%s", f"HEAD..{commit}").stdout.splitlines():
+        parents, _, subject = line.partition("\0")
+        if m := MERGED_PR.fullmatch(subject):
+            onto, sha = (parents.split() + ["", ""])[:2]
+            if sha.startswith(m[2]):
+                pins.append((int(m[1]), sha, onto))
+            else:
+                out.append(f"#{m[1]}'s merge names {m[2]} but merges {sha[:12] or 'nothing'}")
+    grants = StoreGrants(store, lambda s: log(s.replace("research queue:", "research merge:", 1)))
+    prs: dict[str, list[int]] = {}
+    if pins:
+        r = _git(repo, "ls-remote", remote, "refs/pull/*/head", check=False)
+        if r.returncode:
+            raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {remote}'s pull request heads can't be "
+                          f"read ({(r.stderr or r.stdout).strip()[-200:]})")
+        for line in r.stdout.splitlines():
+            h, _, ref = line.partition("\t")
+            prs.setdefault(h, []).append(int(ref.split("/")[2]))
+    try:
+        rules = queue_rules(repo, "HEAD") if pins else None
+        for n, sha, onto in pins:
+            r = _git(repo, "fetch", "-q", remote, f"pull/{n}/head", check=False)
+            head = None if r.returncode else _git(repo, "rev-parse", "FETCH_HEAD").stdout.strip()
+            if head != sha:
+                out.append(f"#{n} was merged at {sha[:12]}, but its head on {remote} " + (
+                    f"is now {head[:12]}: rebuild the train on the new head and check that" if head else
+                    f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
+                continue
+            for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
+                for m in prs.get(h, []):
+                    # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
+                    if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
+                        out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
+                                   f"it in the tip at that head: pin {m}@{h[:9]} before it, or rebase #{n} off it")
+            if (by := grants.readied_by(n, sha)) == {"merge-queue"}:
+                out.append(f"#{n}'s ready at {sha[:12]} is by merge-queue, not its owner: the owner relabels it (research data "
+                           f"label {grant_target(n, sha)} ready true --by LANE)")
+            elif not by:
+                out.append(f"#{n} is not marked ready at {sha[:12]} (`ready = true` on {grant_target(n, sha)}: `research queue "
+                           f"ready {n} --by LANE`)")
+            need = rules.needs(repo, onto, sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
+            if missing := need - grants(n, sha):
+                out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
+    except QueueError as e:
+        raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e
     return out
 
 
@@ -524,6 +935,8 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
     _git(repo, "worktree", "add", "-q", "-b", branch, str(tree), "HEAD")
     try:
         chain = _chain(tree, pins, stamp)
+        if why := unready(repo, chain[-1], store, remote, log):
+            raise Refused("; ".join(why) + "; nothing was checked")
         need = required_steps(repo, "HEAD", chain[-1], tool)
         if need and on and not sends:
             raise Refused(f"the train changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must run "
@@ -534,7 +947,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
             _git(tree, "checkout", "-q", "--detach", chain[k - 1])
             _record(tree, spec or tool, command, on, project, log, sends)
             try:
-                gate(repo, chain[k - 1], into, store, tool, log=lambda *_: None)
+                gate(repo, chain[k - 1], into, store, tool, log=lambda *_: None, remote=remote)
                 ok = True
             except Refused as e:
                 ok = False
@@ -550,7 +963,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
             bad = refs[hi - 1]
         land = chain[hi - 1] if bad is None else (chain[lo - 1] if lo else None)
         if land is not None:
-            gate(repo, land, into, store, tool, log)
+            gate(repo, land, into, store, tool, log, remote)
             _git(repo, "merge", "--ff-only", "-q", land)
         return land, bad
     finally:
@@ -643,15 +1056,53 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
+MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-1", "RESEARCH_MERGE_MIRROR", 120
+
+
+def mirror_name() -> str | None:
+    name = os.environ.get(MIRROR_ENV, MIRROR).strip()
+    return None if name.lower() in ("", "none", "off") else name
+
+
+def _mirror_target(name: str) -> tuple[list[str], str]:
+    """``name``'s ssh argv, as `research deploy` and `research run --on` reach it, and its bare repository."""
+    from . import remote
+
+    m = remote.resolve_machine(name, "verity")
+    t = remote.ssh_host_target(m)
+    return remote.ssh_argv(t["host"], t["port"], user=t["user"]), f"{m['root']}/{remote.POD_GIT_REPO}"
+
+
+def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
+    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward. False, after one line naming the
+    failure and the command that reruns it, when it doesn't land."""
+    from .remote import git_push_url
+
+    rerun = f"cd {shlex.quote(str(repo))} && research merge --mirror {sha}"
+    try:
+        ssh, bare = (target or _mirror_target)(name)
+        r = run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, bare), f"{sha}:refs/heads/main"],
+                cwd=repo, capture_output=True, text=True, timeout=MIRROR_TIMEOUT_S)
+        why = None if r.returncode == 0 else f"git push exited {r.returncode}: {' '.join((r.stderr or r.stdout).split())[-300:]}"
+    except subprocess.TimeoutExpired:
+        why = f"no answer within {MIRROR_TIMEOUT_S} s"
+    except Exception as e:                                      # noqa: BLE001: a machine that can't be reached fails only this push
+        why = f"{type(e).__name__}: {e}"
+    if why:
+        print(f"research merge: main ({sha[:12]}) not pushed to {name} ({why}); rerun: {rerun}", file=sys.stderr)
+        return False
+    print(f"research merge: pushed main ({sha[:12]}) to {name}:{bare}")
+    return True
+
+
 def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
     does changes the merge's result.  Returns the argv started, None when the declaration names none."""
     from .store import tools_registry
 
-    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
     try:
-        argv = [*tools_registry._from_file(module, attr, repo).after_land]
+        argv = [*tools_registry.from_tree(tool, repo).after_land]
     except Exception:  # noqa: BLE001  (a tool the checkout does not declare runs nothing after a landing)
         return None
     if not argv:
@@ -672,7 +1123,8 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
     """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
-    says so, and `research merge --sweep` after the push does it."""
+    says so, and `research merge --sweep` after the push does it. Main on origin goes to the mirror too, before `after_land`
+    starts, and the mirror can fail without failing the merge."""
     if push:
         from .spec_alert import alert, remote_head
 
@@ -689,13 +1141,15 @@ def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = 
             else:
                 print(f"research merge: no {remote}/{into} before the push to compare with; no spec change was looked for, "
                       f"so read this push's lean-audit.json changes yourself", file=sys.stderr)
+        if into == "main" and remote == "origin" and (name := mirror_name()):
+            push_mirror(repo, _git(repo, "rev-parse", f"refs/heads/{into}").stdout.strip(), name)
         after_land(repo, tool, _git(repo, "rev-parse", "HEAD").stdout.strip())
     _sweep_after(repo, into, remote)
     return 0
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="research merge", description=__doc__.split("\n\n")[1])
+    ap = argparse.ArgumentParser(prog=PROG, description=__doc__.split("\n\n")[1])
     ap.add_argument("ref", nargs="*", help="the commit to merge (a branch, tag or sha); with --train, several, in merge order")
     ap.add_argument("--sweep", action="store_true", help="merge nothing: close the open pull requests on the remote's --into and "
                     "retarget the ones based on a branch that is (with --dry-run: say what it would do)")
@@ -705,7 +1159,8 @@ def main(argv: list[str]) -> int:
                     "a pass, bisect to the offending ref on a failure")
     ap.add_argument("--on", default=None, metavar="MACHINE", help="--train: record the tool on this machine (research run --on)")
     ap.add_argument("--project", default=None, help="--train: the project the run belongs to (required with --on)")
-    ap.add_argument("--command", default=None, help="--train: the workload command (default the tool declaration's)")
+    ap.add_argument("--command", default=None, help="--train: the workload command (default the tool declaration's); refused "
+                    "unless the target's declared command, with check.py's own flags at most, since the gate takes no other")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="--train --on: ship this file with every run (research run --send)")
     ap.add_argument("--prepare", default=None, metavar="BRANCH", help="--train: record and land nothing; build the train, run --lint "
                     "on it and push it to --remote as BRANCH (never forced), for `tools/check/train.sh BRANCH MACHINE`")
@@ -718,22 +1173,62 @@ def main(argv: list[str]) -> int:
                     "without it the sweep runs before the push and can close nothing the merge landed")
     ap.add_argument("--tool", default="check", help="the tool whose passing attempt the merge requires (default check)")
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
+    ap.add_argument("--mirror", action="store_true", help=f"merge nothing: push REF (default --into's tip) to the main of "
+                    f"${MIRROR_ENV}'s bare repository (default {MIRROR}'s), as --push does after the remote")
     ap.add_argument("--dry-run", action="store_true", help="check the gate, merge nothing")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--guard-push", action="store_true", help="the pre-push hook `research merge` installs: read git's pre-push "
                     "lines on stdin and refuse a push that adds to --into a commit with no passing --tool attempt of its tree")
+    ap.add_argument("--canary", action="store_true", help="merge nothing: put the attempts every gate must refuse (CANARY: no "
+                    "result, a result of another kind or a refused one, a record that can't be read or disagrees with the index, "
+                    "another command, a failed verdict, a step listed twice) and a control it must admit to the gate, the push guard "
+                    "and the train gate, in scratch stores, under this checkout's declaration of --tool; exit 1 unless all are "
+                    "refused and the control admitted")
+    ap.add_argument("--json", action="store_true", help=f"--canary: print its report as JSON ({CANARY_SCHEMA})")
     a = ap.parse_args(argv)
     from .store.local import LocalStore
 
     repo = Path.cwd()
+    if a.json and not a.canary:
+        ap.error("--json goes with --canary")
+    if a.canary:
+        if a.ref or a.train or a.sweep or a.guard_push or a.mirror:
+            ap.error("--canary takes no refs and no other mode")
+        try:
+            report = canary(repo, a.tool)
+        except Refused as e:
+            return refuse(PROG, str(e))
+        if a.json:
+            print(json.dumps(report, indent=1))
+        for c in report["cases"]:
+            gates = (("the gate", c["gate"]), ("the push guard", c["push_guard"]), ("the train gate", c["train_gate"]))
+            seen = ", ".join(f"{name} {got.split(':')[0]} it" if got else f"{name} doesn't judge it" for name, got in gates)
+            wrong = "; ".join(f"{name}: {got}" for name, got in gates if got and got.split(":")[0] != c["want"])
+            print(f"research merge: canary: {c['case']} ({c['attempt']}): {seen}" + ("" if c["ok"] else f"; it must be {c['want']}: "
+                  f"{wrong}"), file=sys.stderr if a.json else sys.stdout)
+        if not report["ok"]:
+            print(f"research merge: canary FAILED: a gate admits what it must refuse, or refuses the control (`--tool {a.tool}` "
+                  f"produces {', '.join(report['produces']) or 'nothing'})", file=sys.stderr)
+        return OK if report["ok"] else FINDING
     if a.guard_push:
         bad = unchecked_pushes(repo, sys.stdin.read().splitlines(), LocalStore(a.store), a.into, a.tool)
         for c in bad:
-            print(f"research merge: refused push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; "
-                  "land it with `research merge` (the hook fails closed: `git push --no-verify` only with root's yes)", file=sys.stderr)
-        return 1 if bad else 0
+            refuse(PROG, f"the push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; land it with "
+                         "`research merge` (the hook fails closed: `git push --no-verify` only with root's yes)")
+        return REFUSED if bad else OK
     if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
         print(f"research merge: installed the push guard {hook}", file=sys.stderr)
+    if a.mirror:
+        if len(a.ref) > 1 or a.train or a.sweep:
+            ap.error("--mirror takes at most one ref")
+        if not (name := mirror_name()):
+            print(f"research merge: ${MIRROR_ENV} turns the mirror off", file=sys.stderr)
+            return 1
+        r = _git(repo, "rev-parse", "--verify", f"{a.ref[0] if a.ref else 'refs/heads/' + a.into}^{{commit}}", check=False)
+        if r.returncode:
+            print(f"research merge: no commit {a.ref[0] if a.ref else a.into}", file=sys.stderr)
+            return 1
+        return 0 if push_mirror(repo, r.stdout.strip(), name) else 1
     if a.sweep:
         if a.ref or a.train:
             ap.error("--sweep takes no refs")
@@ -753,8 +1248,7 @@ def main(argv: list[str]) -> int:
         try:
             tip, tree = prepare(repo, a.ref, a.prepare, onto, a.remote, lint, LocalStore(a.store))
         except Refused as e:
-            print(f"research merge: refused: {e}", file=sys.stderr)
-            return 1
+            return refuse(PROG, str(e))
         print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
               f"check it with `tools/check/train.sh {tip[:12]} MACHINE`, land it with `research merge {a.prepare}`")
         return 0
@@ -763,24 +1257,24 @@ def main(argv: list[str]) -> int:
 
         decl = tools_registry.load(a.tool, repo)
         command = shlex.split(a.command) if a.command else list(decl.command)
+        if why := unlike(command, declared_command(repo, decl.name)):
+            return refuse(PROG, f"the train's check would pass no gate: {why}; nothing was checked")
         try:
             land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send,
                               remote=a.remote)
         except Refused as e:
-            print(f"research merge: refused: {e}", file=sys.stderr)
-            return 1
+            return refuse(PROG, str(e))
         moved = f"{a.into} fast-forwarded to {land[:12]}" if land else f"{a.into} unchanged"
         print(f"research merge: train {' '.join(a.ref)}: " + (f"`{decl.name}` passed; {moved}" if bad is None else f"{bad} breaks it; {moved}"))
         pushed = _push_and_sweep(repo, a.into, a.remote, a.push, a.tool) if land else 0
-        return 0 if bad is None and not pushed else 1
+        return OK if bad is None and not pushed else FINDING
     if len(a.ref) != 1:
         ap.error("several refs need --train")
     a.ref = a.ref[0]
     try:
-        commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool)
+        commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote)
     except Refused as e:
-        print(f"research merge: refused: {e}", file=sys.stderr)
-        return 1
+        return refuse(PROG, str(e))
     if a.dry_run:
         print(f"research merge: {a.ref} ({commit[:12]}) may be merged into {a.into}: `{a.tool}` passed in {attempt}")
         return 0

@@ -23,19 +23,24 @@ is arithmetic on a value the Program itself produced, exactly as the token id is
 The router's exponential is `NvExpf_v1`: the CUDA math-library `expf` sequence exactly as nvcc emits it for sm_89 (transcribed from the
 PTX of a kernel calling `expf`, CUDA 12.x headers; `cvt.sat` / `fma.rm` / `ex2.approx.ftz` / exponent-field scaling) -- bit-exact against
 `_moe_C::topk_softmax`'s weights (cov-moe: 192/192 words; R13 xcheck: every routed weight of every pattern).
+
+GLM-5.3's router (DeepSeek-V3's `noaux_tc`: sigmoid scores, `e_score_correction_bias` for selection only, one group, top-8 of 256,
+renormalized, x2.5) is `MoeRouterSigmoidBias_v1`: vLLM 0.28.1rc1.dev472's `GroupedTopKRouter` -> `fused_grouped_topk` ->
+`_moe_C.grouped_topk` -> `single_group_topk_{block,warp}_kernel<float, float, int, SIGMOID, 256, 8>` on the f32 logits of
+`GateLinear` (bf16 weight and input, f32 output), its weights and ids returned as the kernel writes them.
 """
 from __future__ import annotations
 
 from fractions import Fraction
 
-from verity.ir.defs import bind, composite, primitive
-from verity.ir.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ir.types import Array, Tuple
-from verity.ml.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+from verity.primitives.circuits.defs import bind, composite, primitive
+from verity.primitives.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.primitives.circuits.types import Array, Tuple
+from verity_catalog.definitions.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R
-from verity_vllm.program.registry.prims import BF16, F32, I32, _decode, f32_of, bits_of
+from verity_vllm.program.registry.prims import BF16, BIT, F32, I32, _decode, f32_of, bits_of
 
 SEMANTIC_ID = "moe/FusedMoE@v1"   # (the quarantine module kept its ov-moe id)
 
@@ -373,7 +378,240 @@ def MoeRouterTopKOrderedNorm(B, S, logits):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# expert GEMMs: one (token, slot) pair, the expert index as an I32 value operand, the row gather inside the body
+# the sigmoid router with a selection bias (DeepSeek-V3 / GLM `noaux_tc`, one group): `_moe_C.grouped_topk(scores, 1, 1, TOPK,
+# renormalize=True, scale, bias, SIGMOID)` -> `single_group_topk_{block,warp}_kernel<float, float, int, SIGMOID, 256, 8>`
+# ---------------------------------------------------------------------------------------------------------
+
+#: `sigmoid_accurate(x) = 0.5f * tanhf(0.5f * x) + 0.5f` as nvcc emits it (CUDA 13, no fast math; the same SASS on sm_89, sm_90,
+#: sm_100 and sm_120), with h = x * 0.5:
+#:   FMUL   a = |h| * 0x4038AA3B (2 log2 e)       FSETP.GE big = |h| >= 0x41102CB4 (9.0109)   FSETP.GE poly = !(|h| >= 0x3F19999A (0.6))
+#:   MUFU.EX2 e = 2^a    FADD d = e + 1    MUFU.RCP r = 1/d    FFMA t = r * -2 + 1    FSEL t = big ? 1 : t    LOP3 t |= sign(h)
+#:   s = h * h; p = fma(s, 0x3C80F082, 0xBD563CAE); p = fma(s, p, 0x3E085941); p = fma(s, p, 0xBEAAA9ED); q = fma(s, p, +0)
+#:   @poly t = fma(h, q, h)                        FFMA sig = t * 0.5 + 0.5
+#: `|h| >= c` is `|h| > pred(c)` (false on NaN, as FSETP.GE is), and `t |= sign(h)` is `h < 0 ? -t : t` where it is read (t >= +0,
+#: and the polynomial is taken at h = +-0 and NaN).  For |x| >= 18.02 the sigmoid is exactly 0 or 1.
+C_SIG_2LOG2E = b1.const(32, 0x4038AA3B)
+C_SIG_P0, C_SIG_P1, C_SIG_P2, C_SIG_P3 = (b1.const(32, c) for c in (0x3C80F082, 0xBD563CAE, 0x3E085941, 0xBEAAA9ED))
+C_SIG_BELOW_06 = b1.const(32, 0x3F199999)
+C_SIG_BELOW_9 = b1.const(32, 0x41102CB3)
+C_NEG2 = b1.f32c(-2.0)
+C_1EM20 = b1.f32c(1e-20)
+
+
+@composite("NvSigmoid", 1, [], lambda S: ((("x", F32),), F32), conformance="not-yet-established")
+def NvSigmoid(B, S, x):
+    """`sigmoid_accurate(x)` of `grouped_topk_kernels.cu` (`0.5f * tanhf(0.5f * x) + 0.5f`) as the SASS computes it (the constants
+    above): CUDA's `tanhf` of h = x/2 by `1 - 2 / (2^(2|h| log2 e) + 1)` through MUFU.EX2 and MUFU.RCP with h's sign for
+    0.6 <= |h| < 9.01, 1 with h's sign beyond, an odd degree-9 polynomial below, then one FFMA.  NaN -> NaN (`F32Fma_v1`'s word)."""
+    zero = B.call(b1.ZERO32)
+    half, one = B.call(C_HALF), B.call(ONE32)
+    h = B.call(P.F32Mul, x, half)
+    ah = B.call(F32Fabs, h)
+    r = B.call(P.MufuRcpFtz, B.call(P.F32Add, B.call(P.MufuEx2Ftz, B.call(P.F32Mul, ah, B.call(C_SIG_2LOG2E))), one))
+    big = B.call(P.SelectF32, B.call(F32GtStrict, ah, B.call(C_SIG_BELOW_9)), one, B.call(P.F32Fma, r, B.call(C_NEG2), one))
+    big = B.call(P.SelectF32, B.call(F32GtStrict, zero, h), B.call(F32Neg, big), big)
+    s = B.call(P.F32Mul, h, h)
+    p = B.call(P.F32Fma, s, B.call(C_SIG_P0), B.call(C_SIG_P1))
+    p = B.call(P.F32Fma, s, p, B.call(C_SIG_P2))
+    p = B.call(P.F32Fma, s, p, B.call(C_SIG_P3))
+    q = B.call(P.F32Fma, s, p, zero)
+    t = B.call(P.SelectF32, B.call(F32GtStrict, ah, B.call(C_SIG_BELOW_06)), big, B.call(P.F32Fma, h, q, h))
+    return B.call(P.F32Fma, t, half, half)
+
+
+def nv_sigmoid_bits(x: int) -> int:
+    """The SASS of `sigmoid_accurate` instruction by instruction on one f32 encoding (FSETP.GE, FSEL and the LOP3 sign OR as they
+    are; the probes' and tests' reference for `NvSigmoid_v1`)."""
+    h = P.F32Mul.evaluate(x, 0x3F000000)
+    ah = h & 0x7FFFFFFF
+    a = P.F32Mul.evaluate(ah, 0x4038AA3B)
+    s = P.F32Mul.evaluate(h, h)
+    poly = not f32_of(ah) >= f32_of(0x3F19999A)
+    big = f32_of(ah) >= f32_of(0x41102CB4)
+    p = P.F32Fma.evaluate(s, 0x3C80F082, 0xBD563CAE)
+    e = P.MufuEx2Ftz.evaluate(a)
+    p = P.F32Fma.evaluate(s, p, 0x3E085941)
+    d = P.F32Add.evaluate(e, 0x3F800000)
+    p = P.F32Fma.evaluate(s, p, 0xBEAAA9ED)
+    q = P.F32Fma.evaluate(s, p, 0)
+    r = P.MufuRcpFtz.evaluate(d)
+    t = 0x3F800000 if big else P.F32Fma.evaluate(r, 0xC0000000, 0x3F800000)
+    t |= h & 0x80000000
+    if poly:
+        t = P.F32Fma.evaluate(h, q, h)
+    return P.F32Fma.evaluate(t, 0x3F000000, 0x3F000000)
+
+
+@composite("MoeRouterBiasScore", 1, [], lambda S: ((("x", F32), ("sig", F32), ("b", F32)), F32), conformance="not-yet-established")
+def MoeRouterBiasScore(B, S, x, sig, b):
+    """`preprocess_score<float, float, SIGMOID>`'s selection score from the logit x, its sigmoid and the correction bias b:
+    `biased = b + sig` (FADD), `biased == 0 ? +0 : biased`, and -inf (`InvalidScore`) when x or b is not finite.  Never NaN or -0."""
+    zero = B.call(b1.ZERO32)
+    biased = B.call(P.F32Add, b, sig)
+    sel = B.call(P.SelectF32, B.call(F32Eq, biased, zero), zero, biased)
+    ok = B.call(BitAnd, B.call(F32IsFinite, x), B.call(F32IsFinite, b))
+    return B.call(P.SelectF32, ok, sel, B.call(b1.NEG_INF32))
+
+
+@composite("MoeRouterSigmoidScore", 1, [], lambda S: ((("x", F32), ("b", F32)), Tuple(F32, F32)), conformance="not-yet-established")
+def MoeRouterSigmoidScore(B, S, x, b):
+    """One expert's `preprocess_score<float, float, SIGMOID>`: (its sigmoid `NvSigmoid_v1(x)`, its selection score
+    `MoeRouterBiasScore_v1(x, sig, b)`)."""
+    sig = B.call(NvSigmoid, x)
+    return tuple_of(sig, B.call(MoeRouterBiasScore, x, sig, b))
+
+
+@composite("RouterArgmaxOkStep", 1, [],
+           lambda S: ((("carry", Tuple(BIT, F32, I32, I32)), ("ok", BIT), ("x", F32)), Tuple(Tuple(BIT, F32, I32, I32), I32)),
+           conformance="model-untested")
+def RouterArgmaxOkStep(B, S, carry, ok, x):
+    """Greedy argmax step over (found, best, best_index, i) among the entries with ok set: take (x, i) iff ok and (nothing found
+    yet or x > best; strict, so the lowest index wins ties), then i += 1."""
+    found, best, best_i, i = carry[0], carry[1], carry[2], carry[3]
+    take = _ok_take(B, found, best, ok, x)
+    nf = B.call(BitOr, found, ok)
+    nb = B.call(P.SelectF32, take, x, best)
+    ni = B.call(P.SelectI32, take, i, best_i)
+    return tuple_of(tuple_of(nf, nb, ni, B.call(P.I32Add, i, B.call(b1.const(32, 1)))), ni)
+
+
+def _ok_take(B, found: Coll, best: Coll, ok: Coll, x: Coll) -> Coll:
+    return B.call(BitAnd, ok, B.call(BitOr, B.call(BitNot, found), B.call(F32GtStrict, x, best)))
+
+
+def _first_max(B, s: list[Coll]) -> Coll:
+    """`MoeRouterFirst_v1(s)`: `RouterArgmaxStep_v1`'s scan over s[1 .. E-2], then the last expert's step for its index alone (a
+    scan's last step would also compute a best value and an i + 1 nothing reads)."""
+    c0, c1 = B.call(b1.const(32, 0)), B.call(b1.const(32, 1))
+    if len(s) == 1:
+        return c0
+    carry = tuple_of(s[0], c0, c1)
+    if len(s) > 2:
+        carry = B.scan(RouterArgmaxStep, carry, xs=(_array(s[1:-1]),))[0]
+    return B.call(P.SelectI32, B.call(F32GtStrict, s[-1], carry[0]), carry[2], carry[1])
+
+
+@composite("MoeRouterBiasNext", 1, ["E"], lambda S: ((("s", Array(S.E, F32)), ("w", F32), ("e", I32)), I32),
+           conformance="not-yet-established")
+def MoeRouterBiasNext(B, S, s, w, e):
+    """Slot k of the kernel's top-k from slot k-1's (w = s[e], e): the first maximum among the experts after it in the order of
+    the kernel's 64-bit keys `(TwiddleIn(s) << 32) | (65535 - i)` (value descending, then lower expert first): `s_i < w`, or
+    `s_i == w` and `i > e`.  The selection scores are never NaN or -0, and -inf (`InvalidScore`) ranks by index like any value,
+    so the experts not after (w, e) are left out by a flag, not a masking value; each round's operands are its own (`q_i`).
+    `RouterArgmaxOkStep_v1`'s scan runs over experts 1 .. E-2 and the last expert's step gives the index alone."""
+    if S.E < 2:
+        raise ValueError("E must be at least 2 (a slot after the first)")
+    neg_inf = B.call(b1.NEG_INF32)
+    ok, q = [], []
+    for i in range(S.E):
+        ci = B.call(b1.const(32, i))
+        after = B.call(BitOr, B.call(F32GtStrict, w, s[i]), B.call(BitAnd, B.call(F32Eq, s[i], w), B.call(BitNot, B.call(P.I32Le, ci, e))))
+        ok.append(after)
+        q.append(B.call(P.SelectF32, after, s[i], neg_inf))
+    carry = tuple_of(ok[0], q[0], B.call(b1.const(32, 0)), B.call(b1.const(32, 1)))
+    if S.E > 2:
+        carry = B.scan(RouterArgmaxOkStep, carry, xs=(_array(ok[1:-1]), _array(q[1:-1])))[0]
+    return B.call(P.SelectI32, _ok_take(B, carry[0], carry[1], ok[-1], q[-1]), carry[3], carry[2])
+
+
+@composite("MoeRouterPickPair", 1, ["E"], lambda S: ((("s", Array(S.E, F32)), ("v", Array(S.E, F32)), ("e", I32)), Tuple(F32, F32)),
+           conformance="not-yet-established")
+def MoeRouterPickPair(B, S, s, v, e):
+    """`(s[e], v[e])` for an id in [0, E) (s[0], v[0] past the end): one comparison of e per expert, read by both gathers."""
+    a, b = s[0], v[0]
+    for i in range(1, S.E):
+        hit = B.call(P.I32Eq, B.call(b1.const(32, i)), e)
+        a, b = B.call(P.SelectF32, hit, s[i], a), B.call(P.SelectF32, hit, v[i], b)
+    return tuple_of(a, b)
+
+
+#: `cg::reduce(warp, x, cg::plus<float>{})` on float: shfl.bfly with lane masks 16, 8, 4, 2, 1, each lane adding the other's value to
+#: its own (the SASS of both kernels on sm_89 .. sm_120).
+WARP_BUTTERFLY = (16, 8, 4, 2, 1)
+
+
+def _lane0_sum(B, z: list[Coll]) -> Coll:
+    """Lane 0's `cg::reduce(warp, lane_unbiased, plus)` when lanes [0, len(z)) hold z and the others +0: the butterfly's adds lane 0
+    depends on, an add with a +0 lane dropped (it is exact: no z is -0 or NaN), so at TOPK = 8 ``((z0 + z4) + (z2 + z6)) + ((z1 +
+    z5) + (z3 + z7))``."""
+    memo: dict[tuple[int, int], Coll | None] = {}
+
+    def lane(j: int, t: int) -> Coll | None:
+        if j == 0:
+            return z[t] if t < len(z) else None
+        if (j, t) not in memo:
+            a, b = lane(j - 1, t), lane(j - 1, t ^ WARP_BUTTERFLY[j - 1])
+            memo[j, t] = a if b is None else b if a is None else B.call(P.F32Add, a, b)
+        return memo[j, t]
+
+    return lane(len(WARP_BUTTERFLY), 0)
+
+
+ROUTER_KERNELS = ("block", "warp")
+
+
+def _router_kernel(S) -> str:
+    if S.KERNEL not in ROUTER_KERNELS:
+        raise ValueError(f"KERNEL must be one of {ROUTER_KERNELS}, got {S.KERNEL!r}")
+    if not 1 <= S.TOPK <= 32:
+        raise ValueError("TOPK must be in [1, 32] (one warp lane per slot)")
+    return S.KERNEL
+
+
+@composite("MoeRouterSigmoidNorm", 1, ["TOPK", "SCALE", "KERNEL"],
+           lambda S: ((("w", Array(S.TOPK, F32)), ("v", Array(S.TOPK, F32))), Array(S.TOPK, F32)), conformance="not-yet-established")
+def MoeRouterSigmoidNorm(B, S, w, v):
+    """`write_outputs(renormalize=True, routed_scaling_factor=SCALE)` from slot k's selection score w[k] and v[k]: the unbiased score
+    is v[k] (`KERNEL="block"`, the sigmoid read back from shared memory) or `w[k] - v[k]` with v[k] the expert's bias (`"warp"`,
+    FADD).  `finite_k = w[k] != -inf`, `z_k = finite_k ? unbiased : 0`, `sum` = lane 0's warp reduction (`_lane0_sum`), then
+    `z_k * (SCALE / (sum + 1e-20f))` (FADD, `div.rn.f32`, FMUL) for a finite slot and +0 for the others, or `1.f / TOPK` in every
+    slot when no slot is finite."""
+    kernel = _router_kernel(S)
+    zero, neg_inf = B.call(b1.ZERO32), B.call(b1.NEG_INF32)
+    fin = [B.call(BitNot, B.call(F32Eq, w[k], neg_inf)) for k in range(S.TOPK)]
+    u = [v[k] if kernel == "block" else B.call(F32Sub, w[k], v[k]) for k in range(S.TOPK)]
+    z = [B.call(P.SelectF32, fin[k], u[k], zero) for k in range(S.TOPK)]
+    scale = B.call(P.F32Div, B.call(b1.f32c(S.SCALE)), B.call(P.F32Add, _lane0_sum(B, z), B.call(C_1EM20)))
+    any_fin = fin[0]
+    for k in range(1, S.TOPK):
+        any_fin = B.call(BitOr, any_fin, fin[k])
+    even = B.call(b1.const(32, P.F32Div.evaluate(bits_of(1.0), bits_of(float(S.TOPK)))))
+    return _array([B.call(P.SelectF32, any_fin, B.call(P.SelectF32, fin[k], B.call(P.F32Mul, z[k], scale), zero), even)
+                   for k in range(S.TOPK)])
+
+
+@composite("MoeRouterSigmoidBias", 1, ["E", "TOPK", "SCALE", "KERNEL"],
+           lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
+           conformance="exact-model-tested; the RTX PRO 6000's (cc 12.0, 188 SMs) _moe_C.grouped_topk at E=256, TOPK=8, SCALE=2.5, "
+                       "both launches: 10,240 rows bit-exact against this Program and every MUFU-range logit word (65,873,464) "
+                       "against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs r20261003-090316-1374 and "
+                       "r20261003-091025-e5e7, art:a827deda); cc 9.0 not yet captured")
+def MoeRouterSigmoidBias(B, S, logits, bias):
+    """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
+    token row of f32 router logits (`GateLinear`'s f32 output) and the f32 `e_score_correction_bias`: per expert the sigmoid
+    and the selection score (`MoeRouterSigmoidScore_v1`); the TOPK largest selection scores in the kernel's key order,
+    value descending then lower expert first (`MoeRouterFirst_v1`'s first maximum, then `MoeRouterBiasNext_v1`, each slot's score
+    and second value read by `MoeRouterPickPair_v1`); then `MoeRouterSigmoidNorm_v1`.  Returns (topk_weights, topk_ids) as the
+    kernel writes them.
+
+    `KERNEL` is the launch: `single_group_topk_block_kernel` (`"block"`; at E = 256 for num_tokens <= 1024) reads the unbiased
+    score back from shared memory, `single_group_topk_warp_kernel` (`"warp"`, more tokens) recovers it as score - bias.  Both
+    select by `reduceTopK` over 32 lanes of E/32 sorted keys; at E = 256, TOPK = 8 (the tier `<256, 8>`: eight keys per lane, at
+    most seven shifted out) its result is exactly the TOPK largest keys."""
+    kernel = _router_kernel(S)
+    if S.TOPK > S.E:
+        raise ValueError("TOPK must not exceed E")
+    scores = B.batch(MoeRouterSigmoidScore, logits, bias, axes=(0, 0))
+    sig, s = _array([scores[e][0] for e in range(S.E)]), _array([scores[e][1] for e in range(S.E)])
+    v = sig if kernel == "block" else bias
+    ids = [_first_max(B, [s[e] for e in range(S.E)])]
+    pairs = [B.call(bind(MoeRouterPickPair, E=S.E), s, v, ids[0])]
+    for _ in range(1, S.TOPK):
+        ids.append(B.call(bind(MoeRouterBiasNext, E=S.E), s, pairs[-1][0], ids[-1]))
+        pairs.append(B.call(bind(MoeRouterPickPair, E=S.E), s, v, ids[-1]))
+    out = B.call(bind(MoeRouterSigmoidNorm, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=kernel), _array([p[0] for p in pairs]),
+                 _array([p[1] for p in pairs]))
+    return tuple_of(out, _array(ids))
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -501,6 +739,7 @@ def MoeSum(B, S, y):
 
 
 ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, RouterArgmaxStep, MoeRouterTopK, MoeRouterTopKNorm, MoeRouterProbs,
-       MoeRouterFirst, MoeRouterNext, MoeRouterPick, MoeRouterTopKOrdered, MoeRouterTopKOrderedNorm, MoeExpertRow,
+       MoeRouterFirst, MoeRouterNext, MoeRouterPick, MoeRouterTopKOrdered, MoeRouterTopKOrderedNorm, NvSigmoid, MoeRouterBiasScore,
+       MoeRouterSigmoidScore, RouterArgmaxOkStep, MoeRouterBiasNext, MoeRouterPickPair, MoeRouterSigmoidNorm, MoeRouterSigmoidBias, MoeExpertRow,
        MoeExpertCoordinate, MoeExpertGemm, MoeExpertCoordinateW, MoeExpertGemmW, MoeExpertCoordinateV2, MoeExpertGemmV2,
        MoeExpertCoordinateWV2, MoeExpertGemmWV2, MoeSumCoordinate, MoeSum]

@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import argparse
 
+from research.pythonpath import package_paths, workspace_root
 from research.store.tool import Tool
+
+TREE = workspace_root(__file__)
 
 
 def parse(argv: list[str]) -> dict:
@@ -38,8 +41,8 @@ COMMIT_COST = Tool(
     name="commit_cost",
     version="1",
     command=["python", "benchmarks/commitments/commit_cost.py"],
-    closure=["benchmarks/commitments/**", "packages/verity/src/verity/commitments/**", "packages/verity/src/verity/errors.py",
-             "backends/shared/hash_gpu/**"],
+    closure=["benchmarks/commitments/**", *package_paths(TREE, "verity", "primitives/commitments/**", "errors.py"),
+             "kernels/hash_gpu/**"],
     key_params=["scheme", "leaves", "leaf_bytes", "impl"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse,
@@ -60,7 +63,7 @@ HIDING_LEAF_COST = Tool(
     name="hiding_leaf_cost",
     version="1",
     command=["python", "benchmarks/commitments/hiding_leaf_cost.py"],
-    closure=["benchmarks/commitments/**", "packages/verity/src/verity/commitments/**", "packages/verity/src/verity/errors.py",
+    closure=["benchmarks/commitments/**", *package_paths(TREE, "verity", "primitives/commitments/**", "errors.py"),
              "integrations/vllm/verity_vllm/commit/hiding.py", "integrations/vllm/verity_vllm/commit/scheme.py"],
     key_params=["row_bytes", "rows"],
     produces=["bench-result/v1", "run-files/v1"],
@@ -84,9 +87,9 @@ SERVING_COMMIT_COST = Tool(
     name="serving_commit_cost",
     version="1",
     command=["python", "benchmarks/commitments/serving_commit_cost.py"],
-    closure=["benchmarks/commitments/**", "packages/verity/src/verity/commitments/**", "packages/verity/src/verity/errors.py",
+    closure=["benchmarks/commitments/**", *package_paths(TREE, "verity", "primitives/commitments/**", "errors.py"),
              "integrations/vllm/verity_vllm/commit/serving_rows.py", "integrations/vllm/verity_vllm/commit/hiding.py",
-             "backends/numerical/python/verity_numerical/bench/input_sets.py"],
+             "benchmarks/numerical/python/verity_numerical/bench/input_sets.py"],
     key_params=["input_set", "n", "workers"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_serving,

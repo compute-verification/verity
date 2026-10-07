@@ -620,6 +620,31 @@ def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags,
     assert needs_avx512(commit, base, repo) is want
 
 
+def test_a_flock_file_whose_name_git_quotes_still_asks_for_avx512(tmp_path):
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"backends/flock/\\303\\251.rs"`), which the agreement's
+    rule never matched, so a change to such a file asked for no AVX-512 machine."""
+    from research.jobs.cli import needs_avx512
+
+    repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / "backends" / "flock" / "é.rs").write_text("fn f() {}")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "é")
+    assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
+
+
+def test_a_check_asks_for_avx512_for_a_file_renamed_out_of_the_agreements_paths(tmp_path):
+    """git reports a rename by its destination alone unless asked not to, which would leave out the agreement the file's old
+    path runs."""
+    from research.jobs.cli import needs_avx512
+
+    repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "mv", "backends/flock/src.rs", "src.rs")
+    _git(repo, "commit", "-qm", "move")
+    assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
+
+
 def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_path, monkeypatch, capsys):
     from research.jobs.cli import needs_avx512
 

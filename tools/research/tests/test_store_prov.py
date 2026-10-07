@@ -256,6 +256,82 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
     assert t.name == "mine" and t.spec == "mytools.decl:T"
 
 
+def test_former_modules_map_a_module_back_through_each_move():
+    moves = [{"backends/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
+             {"tools/lean_agreement/": "tools/agree/"}]
+    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "backends.flock.verifier.tool"]
+    assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
+    assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
+    assert tools_registry.former_modules("tools.check.tool", moves) == []
+    shipped = json.loads(tools_registry.MOVES.read_text())["moves"]
+    assert all(isinstance(m["paths"], dict) for m in shipped)
+    assert tools_registry.former_modules("archive.gkr.gpu.tool") == ["backends.gkr.gpu.tool"]
+
+
+def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_path, monkeypatch):
+    """Red-team 1171: `locate` read `moves.json` before looking at the current path, so a corrupt one made `merge.declaration`
+    none and `merge.required_steps` require nothing (a train sent no lean-agreement inputs)."""
+    from research import merge
+
+    moves = tmp_path / "moves.json"
+    moves.write_text("{not json")
+    monkeypatch.setattr(tools_registry, "MOVES", moves)
+    monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
+    repo = tmp_path / "repo"
+    (repo / "tools/agree").mkdir(parents=True)
+    (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
+                                              "command=['true'], merge_requires={'agreement': ['backends/flock/']})\n")
+    (repo / "backends/flock").mkdir(parents=True)
+    (repo / "backends/flock/a.py").write_text("x = 1\n")
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
+    git("init", "-q")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "change")
+
+    assert tools_registry.locate("agree", repo) == ("tools.agree.tool", "AGREE")
+    assert merge.declaration(repo, "agree").name == "agree"
+    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["backends/flock/"]}
+    (repo / "tools/agree/tool.py").unlink()
+    with pytest.raises(json.JSONDecodeError):
+        tools_registry.locate("agree", repo)
+    assert merge.declaration(repo, "agree") is None
+
+
+def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatch):
+    """`research run --tool`, `research merge`'s reads of the target's declaration, `after_land` and a run's preflight read
+    a tool's declaration from the tree they're given: one from before a layout move holds it under its old path."""
+    from research import merge, remote
+
+    moves = tmp_path / "moves.json"
+    moves.write_text(json.dumps({"moves": [{"paths": {"backends/flock/verifier/tool.py": "tools/agree/tool.py"}}]}))
+    monkeypatch.setattr(tools_registry, "MOVES", moves)
+    monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
+    decl = ("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', command=['true'], "
+            "preflight=['echo', '{tag}'], after_land=['echo', 'landed'])\n")
+    for tree, rel in (("old", "backends/flock/verifier/tool.py"), ("new", "tools/agree/tool.py")):
+        (tmp_path / tree / rel).parent.mkdir(parents=True)
+        (tmp_path / tree / rel).write_text(decl.replace("{tag}", tree))
+    (tmp_path / "none").mkdir()
+
+    old, new, none = tmp_path / "old", tmp_path / "new", tmp_path / "none"
+    assert tools_registry.locate("agree", new) == ("tools.agree.tool", "AGREE")
+    assert tools_registry.locate("agree", old) == ("backends.flock.verifier.tool", "AGREE")
+    assert tools_registry.locate("agree", none) is None
+    assert tools_registry.load("agree", old).name == "agree" and tools_registry.load("agree", old).spec == "tools.agree.tool:AGREE"
+    assert remote.tool_preflight(["--tool", "agree"], old) == ["echo", "old"]
+    assert remote.tool_preflight(["--tool", "agree"], new) == ["echo", "new"]
+    assert merge.declaration(old, "agree").name == "agree"
+    assert merge.after_land(old, "agree", "c0ffee", log=lambda *a: None, spawn=lambda argv, **kw: None) == ["echo", "landed", "c0ffee"]
+
+    with pytest.raises(ImportError, match="declares no such tool"):
+        tools_registry.from_tree("agree", none)
+    assert merge.declaration(none, "agree") is None
+    assert remote.tool_preflight(["--tool", "agree"], none) is None
+    with pytest.raises(remote.PreflightFailed, match="does not declare"):
+        remote.tool_preflight([], none, asked="agree")
+
+
 def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     tc = tools_registry.load("tc_probe", REPO)
     argv = ["python", "tools/tc_probe/tc_probe.py", "--arch", "sm_89", "--out", "/run/dir", "--sweep", "--n-random", "1000", "--families", "random,subnormal"]
@@ -265,13 +341,13 @@ def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     _, key2 = tc.resolve_params(argv + ["--instruction", "mma.sync.m16n8k16"], REPO)
     assert key2["instruction"] == "mma.sync.m16n8k16"
     assert D.derivation_id(tc, {}, key, {"hw.family": "rtx4090"}, tc.key_conditions) != D.derivation_id(tc, {}, key2, {"hw.family": "rtx4090"}, tc.key_conditions)
-    _, key3 = tc.resolve_params(argv + ["--replay-golden", "packages/verity/tests/ml/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
+    _, key3 = tc.resolve_params(argv + ["--replay-golden", "catalog/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
     assert key3["replay_golden"].startswith("sha256:")
 
 
 def test_bench_vu_declaration_resolves_dataset_root_by_content():
     bv = tools_registry.load("bench_vu", REPO)
-    argv = ["python", "-m", "backends.direct.ligero.run", "bench-vu", "--mode", "fiat-shamir", "--zk", "--total-vus", "1000", "--device", "cuda", "--out", "/x"]
+    argv = ["python", "-m", "archive.direct.ligero.run", "bench-vu", "--mode", "fiat-shamir", "--zk", "--total-vus", "1000", "--device", "cuda", "--out", "/x"]
     params, key = bv.resolve_params(argv, REPO)
     assert key["cmd"] == "bench-vu" and key["mode"] == "fiat-shamir" and key["zk"] is True and key["total_vus"] == 1000
     assert "device" not in key and "out" not in key and "vus" not in key
@@ -555,7 +631,8 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
 
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "packages/verity/src/verity/ml/tc", ".gitignore", "uv.lock"],
+    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "tools/tc_probe", "catalog/verity_catalog/silicon",
+                          "catalog/verity_catalog/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
                          cwd=REPO, capture_output=True, check=True).stdout
     subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
     assert (src_dir / "tools/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
@@ -575,7 +652,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
     assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "tools.tc_probe.tool:TC_PROBE"}
-    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "packages/verity/src/verity/ml/tc/silicon.py" in store["closure"]
+    assert "tools/tc_probe/tc_probe.py" in store["closure"] and "catalog/verity_catalog/silicon/silicon.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"

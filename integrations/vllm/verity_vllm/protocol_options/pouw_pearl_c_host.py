@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 import blake3
-from verity.commitments import RangeIndexedDomain
-from verity.commitments.merkle import domain_message
-from verity_pouw.audit import activation_binding, rows_domain
+from verity.primitives.commitments import RangeIndexedDomain
+from verity.primitives.commitments.merkle import domain_message
+from verity.protocols.accounting.work.pouw.audit import activation_binding, rows_domain
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 136 bytes)
 UPLOAD_SLOTS = 1024
