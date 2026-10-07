@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""`python3 tools/move/fixups/platform.py`: the platform layout move's hand fixups, at the root of the tree `tools/move/layout.py`
+just moved. Commit the move first, run this, and commit what it changes as the move's second commit (restack.py's move commit
+must stay exactly the script's output).
+
+Each edit replaces text the generated tree holds with its fixed form, and fails when it finds neither, so a regenerated tree
+that drifted from the one these were written against stops here instead of passing half fixed. A file written whole
+(`tests/test_boundaries.py`, from `platform_test_boundaries.py` beside this script) replaces the generated one only while that is
+byte for byte what it replaced when this was written, so a rule main adds in the meantime fails here rather than being
+dropped. A second run changes nothing. Exit 0 when every fixup is applied, 1 otherwise.
+"""
+from __future__ import annotations
+
+import hashlib
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+
+#: path -> (sha256 of the generated file it replaces, the file to write)
+WHOLE = {
+    "tests/test_boundaries.py": ("188ee6f068f12ad50e57bce76d7f0490c99b0301628be8304a73a24fe0f9d26e",
+                                 HERE / "platform_test_boundaries.py"),
+}
+
+VECTORS = ["verity/ml/commitments/frame_v3/vectors.json", "verity/ml/commitments/frame_v3/vectors_sha512.json",
+           "verity/ml/commitments/hm96/vectors.json", "verity/ml/commitments/hm96/vectors_sha512.json",
+           "verity/ml/commitments/vllm_v1/vectors.json", "verity/ml/commitments/vllm_v1/vectors_sha512.json"]
+
+#: how the vectors files name their writer (split, so the tree's module-string check doesn't read the old name as a command)
+GENERATOR = '"generator": "python -m' + ' '
+
+#: (path, old, new): `old` replaced by `new`, which must not contain it.
+EDITS = [
+    # C-Flock, the one backend scanned, is under ml/ now
+    ("tests/test_backend_boundaries.py",
+     "ROOT = Path(__file__).resolve().parents[1]\n#: The integrations' import packages",
+     "ROOT = Path(__file__).resolve().parents[1]\n#: The backends' tree: C-Flock, the backend in development.\n"
+     'BACKENDS = ROOT / "verity" / "ml" / "flock"\n#: The integrations\' import packages'),
+    ("tests/test_backend_boundaries.py", 'for path in sorted((ROOT / "backends").rglob("*.py")):',
+     'for path in sorted(BACKENDS.rglob("*.py")):'),
+    ("tests/test_backend_boundaries.py", '"""The scan walks `backends/`: a backend that moved out of it',
+     '"""The scan walks C-Flock\'s tree: a backend that moved out of it'),
+    ("tests/test_backend_boundaries.py",
+     'assert origin.is_relative_to(ROOT / "backends"), f"{name} is at {origin}, outside the scanned backends/"',
+     'assert origin.is_relative_to(BACKENDS), f"{name} is at {origin}, outside the scanned {BACKENDS.relative_to(ROOT)}/"'),
+    # verity's own pyproject folded into the root's; ml/circuits' is its main suite
+    ("tests/test_gate_paths.py", 'assert "verity/pyproject.toml" in tables', 'assert "verity/ml/circuits/pyproject.toml" in tables'),
+    # the toy tree's dangling closure glob must match none of its files, which are under verity/ now
+    ("tests/test_gate_paths.py", 'closure=["verity/ml/flock/live/**", "verity/**"],',
+     'closure=["verity/ml/flock/live/**", "elsewhere/**"],'),
+    ("tests/test_gate_paths.py", '''assert tool_problems("t", tool, files) == ["closure glob 'verity/**' matches no tracked file",''',
+     '''assert tool_problems("t", tool, files) == ["closure glob 'elsewhere/**' matches no tracked file",'''),
+    ("tests/test_gate_paths.py", r'''ROOT = Path(__file__).resolve().parents[2]\nA = ROOT / "tools" / "check" / "x.py"\n''',
+     r'''ROOT = Path(__file__).resolve().parents[3]\nA = ROOT / "tools" / "verity" / "check" / "x.py"\n'''),
+    # the toy's top-level directories come from its files, which no longer include backends/
+    ("tests/test_gate_paths.py", r'''D = ("backends/gone/x.py", "data/a.json")''', r'''D = ("verity/gone/x.py", "data/a.json")'''),
+    ("tests/test_gate_paths.py", '"tools/verity/check/y.py:6: backends/gone/x.py (string)"',
+     '"tools/verity/check/y.py:6: verity/gone/x.py (string)"'),
+    # tools/move/ is never rewritten (its scripts and maps name the old paths)
+    ("tools/move/pyproject.toml", 'inputs = ["tools/lean"]', 'inputs = ["tools/verity/lean"]'),
+    ("tools/move/lean.py", 'sys.path.insert(0, str(HERE.parent / "lean"))', 'sys.path.insert(0, str(HERE.parent / "verity" / "lean"))'),
+    # the toy tree's directory beside its file (the rewrite took the directory, not the file)
+    ("tests/test_doc_paths.py", '"verity", "verity/ml", "archive", "archive/old"',
+     '"verity", "verity/primitives", "archive", "archive/old"'),
+    # backends/ is the Lean verifier's until lean.py moves it; benchmarks/ is a members' directory either way
+    ("tests/test_module_strings.py", '"circuit_check", "tools", "backends"} <= set(roots())',
+     '"circuit_check", "tools", "benchmarks"} <= set(roots())'),
+    # back under its cap after the move's longer paths
+    ("tools/research/src/research/store/README.md", "(a dict name -> dotted path; keep it tiny)",
+     "(name -> dotted path; keep it tiny)"),
+    ("tools/research/src/research/store/README.md", "the example above is\nillustrative, the files follow the scripts' real argparse)",
+     "the example above is\nillustrative, the files follow the scripts' argparse)"),
+    ("tools/research/src/research/store/README.md", "read-back).  One extra", "read-back). One extra"),
+    # the research console finds cluster's checkout copy under infra/
+    ("tools/research/console/verity_console.py", 'for p in (HERE, HERE.parents[1] / "cluster" / "src"):',
+     'for p in (HERE, HERE.parents[2] / "infra" / "cluster" / "src"):'),
+    # anchors in files the move doesn't rewrite, or whose depth it doesn't see
+    ("tools/verity/check/tests/test_move_check.py", "ROOT = Path(__file__).resolve().parents[3]\n",
+     "ROOT = Path(__file__).resolve().parents[4]\n"),
+    ("tools/verity/check/tests/test_move_check.py", 'ROOT / "tools" / "check" / "move_check.py")',
+     'ROOT / "tools" / "verity" / "check" / "move_check.py")'),
+    ("verity/experimental/protocols/pouw/tests/test_lean_package.py", "ROOT = HERE.parents[4]\n", "ROOT = HERE.parents[3]\n"),
+    # the catalog's silicon may import itself: the rewrite turned the import root into a dotted name
+    ("verity/ml/circuits/ops/tests/test_boundaries.py",
+     'and not (name.split(".")[0] == "verity.ml.circuits" and name.startswith("verity.ml.circuits.silicon"))',
+     'and not name.startswith("verity.ml.circuits.silicon")'),
+    # experimental's sampled-proofs modules joined the protocol; its __init__ was empty
+    ("verity/experimental/protocols/sampled_proofs/__init__.py",
+     "profile's consumers) and `two_stage` (the two-stage law and its draws from the verifier's own randomness).  `README.md`\n",
+     "profile's consumers), `two_stage` (the two-stage law and its draws from the verifier's own randomness), `plan`\n"
+     "(verification plans and obligations over IR programs, under the two-stage law) and `consumers` (what applications read off\n"
+     "the audit's integrity profile).  `README.md`\n"),
+    # vLLM: the catalog, the kernels and experimental are in `verity`, which the tree's PYTHONPATH already carries
+    ("integrations/vllm/verity_vllm/pipeline/research_tools.py",
+     "#: The code the integration imports besides its own: core, and the catalog, the kernels and experimental beside it.\n"
+     'CODE_DIRS = [*CORE_DIRS, "catalog", "kernels", "experimental"]\n',
+     "#: The code the integration imports besides its own: `verity`, with the catalog, the kernels and experimental in it.\n"
+     "CODE_DIRS = [*CORE_DIRS]\n"),
+    ("integrations/vllm/verity_vllm/ops/pod_bootstrap.sh",
+     'DISTS="catalog kernels experimental"   # the distributions under their groupings: verity.ml.circuits, verity.ml.kernels, '
+     'verity.experimental\nfor G in $DISTS; do [ -d "$CORE/$G" ] || { echo "BOOTSTRAP_FAIL_TREE: no $G beside $ROOT" >&2; exit 3; }; '
+     'done\n',
+     '[ -d "$CORE/verity/experimental" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/experimental beside $ROOT" >&2; exit 3; }\n'),
+    ("integrations/vllm/verity_vllm/ops/pod_bootstrap.sh",
+     "export PYTHONPATH=$ROOT:$CORE:$RESEARCH:$CORE/catalog:$CORE/kernels:$CORE/experimental${PYTHONPATH:+:$PYTHONPATH}\n",
+     "export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}\n"),
+    ("integrations/vllm/verity_vllm/ops/pod_bootstrap.sh",
+     "# scripts that set their own PYTHONPATH (gates, rows) still import the catalog, the kernels and experimental (the challenge's\n"
+     "# sampled-proofs law is experimental's): a .pth for each in the venv's site-packages\n"
+     'SITE=$VENV/lib/python3.12/site-packages; [ -d "$SITE" ] || fail PTH "no $SITE (the venv is Python 3.12)"\n'
+     "for G in $DISTS; do\n"
+     '  echo "$CORE/$G" > "$SITE/verity-$G.pth" || fail PTH "cannot write $SITE/verity-$G.pth"\n'
+     "done\n\n# ---- 2. vLLM",
+     "\n# ---- 2. vLLM"),
+    ("integrations/vllm/verity_vllm/ops/pod_bootstrap.sh",
+     "def experimental_without_pythonpath():\n"
+     "    # drop only verity/experimental/ from PYTHONPATH: its .pth must supply it; verity (its dependency) stays on the path\n"
+     '    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and os.path.realpath(p) != os.path.realpath(experimental)]\n'
+     '    env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, **({"PYTHONPATH": os.pathsep.join(keep)} if keep else {})}\n'
+     '    r = subprocess.run([sys.executable, "-c", "import verity.experimental.protocols.sampled_proofs.plan as m; print(m.__file__)"], capture_output=True, text=True, env=env, timeout=60)\n'
+     "    if r.returncode != 0 or not os.path.realpath(r.stdout.strip()).startswith(os.path.realpath(experimental) + os.sep):\n"
+     '        raise RuntimeError(f"without experimental on PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")\n'
+     "    return r.stdout.strip()\n"
+     'check("sampled_proofs_via_pth", experimental_without_pythonpath)   # the venv\'s verity-experimental.pth, for scripts whose PYTHONPATH omits it\n'
+     "def distributions_from_tree():\n"
+     '    return {d: under(f"verity_{d}", os.path.join(core, d)) for d in ("verity/ml/circuits", "verity/ml/kernels", "verity/experimental")}\n'
+     'check("distributions_from_tree", distributions_from_tree)   # each through its .pth: a row\'s stages set their own PYTHONPATH\n',
+     "def distributions_from_tree():\n"
+     "    # the catalog, the kernels and experimental, distributions of their own before the platform layout, now in verity\n"
+     '    mods = {"catalog": "verity.ml.circuits.ops", "kernels": "verity.ml.kernels", "experimental": "verity.experimental"}\n'
+     '    return {d: under(m, os.path.join(core, *m.split("."))) for d, m in mods.items()}\n'
+     'check("distributions_from_tree", distributions_from_tree)\n'),
+    ("integrations/vllm/tests/ops/test_pod_bootstrap.py",
+     '    experimental = TREE / "experimental"\n'
+     '    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research, TREE / "catalog", TREE / "kernels", experimental)),\n',
+     '    experimental = TREE / "verity" / "experimental"\n'
+     '    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research)),\n'),
+    ("integrations/vllm/tests/ops/test_pod_bootstrap.py", r'"\$MODE" "\$CORE/experimental" <<', r'"\$MODE" "\$CORE/verity/experimental" <<'),
+    ("integrations/vllm/tests/ops/test_pod_bootstrap.py",
+     '"research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "distributions_from_tree", "numpy_import",',
+     '"research_telemetry_from_tree", "sampled_proofs_from_tree", "distributions_from_tree", "numpy_import",'),
+    # the commitment vectors name the module that writes them (the vectors files are never rewritten: digests pin them)
+    *((f, GENERATOR + "verity.primitives.commitments.", GENERATOR + "verity.ml.commitments.") for f in VECTORS),
+]
+
+#: (path, first line, the line it stops before): the text from one to the other goes.
+CUTS = [
+    # the .pth tests: the catalog, the kernels and experimental have no .pth of their own any more
+    ("integrations/vllm/tests/ops/test_pod_bootstrap.py",
+     "def test_bootstrap_writes_the_experimental_pth_and_readiness_checks_it() -> None:\n",
+     "def test_gpu_mode_record_shape_is_unchanged() -> None:\n"),
+]
+
+
+def sha256(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def main(root: Path) -> int:
+    problems, changed = [], set()
+    texts: dict[str, str] = {}
+
+    def text(path: str) -> str | None:
+        if path not in texts:
+            p = root / path
+            texts[path] = p.read_text(encoding="utf-8") if p.is_file() else None
+        return texts[path]
+
+    for path, old, new in EDITS:
+        assert old not in new, (path, old)
+        t = text(path)
+        if t is None:
+            problems.append(f"{path}: missing")
+        elif old in t:
+            texts[path] = t.replace(old, new)
+            changed.add(path)
+        elif new not in t:
+            problems.append(f"{path}: neither the generated text nor its fix: {old.splitlines()[0][:100]!r}")
+    for path, start, stop in CUTS:
+        t = text(path)
+        if t is None:
+            problems.append(f"{path}: missing")
+        elif start in t and stop in t and t.index(start) < t.index(stop):
+            texts[path] = t[:t.index(start)] + t[t.index(stop):]
+            changed.add(path)
+        elif start in t or stop not in t:
+            problems.append(f"{path}: can't cut from {start.strip()!r} to {stop.strip()!r}")
+    whole = []
+    for path, (generated, source) in WHOLE.items():
+        p = root / path
+        if p.is_file() and p.read_bytes() == source.read_bytes():
+            continue
+        if not p.is_file() or sha256(p) != generated:
+            problems.append(f"{path}: not the generated file {generated[:12]} this replaces; merge {source.name} by hand")
+        else:
+            whole.append((p, source))
+    if problems:
+        print("\n".join(problems), file=sys.stderr)
+        return 1
+    for p, source in whole:
+        p.write_bytes(source.read_bytes())
+        print(f"wrote {p.relative_to(root)}")
+    for path in sorted(changed):
+        (root / path).write_text(texts[path], encoding="utf-8")
+        print(f"fixed {path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(Path.cwd()))

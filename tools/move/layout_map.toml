@@ -7,6 +7,7 @@
 # [modules] lists the renames at package level, and the script fails when what it derives disagrees with them. [aliases]
 # adds old names that no file in the tree carries any more. [retired] lists the old paths the move empties, and [drop] the
 # files it deletes (an `__init__.py` of a package level that goes, a pyproject whose distribution folds into `verity`).
+# The hand fixups that follow the generated move, as a commit of their own: `tools/move/fixups/platform.py`.
 
 [roots]
 # import name -> its package directory, before and after; a module outside every root is named by its path from the root
