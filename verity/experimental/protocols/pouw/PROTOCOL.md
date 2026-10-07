@@ -85,6 +85,9 @@ root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding ta
           owner -1, schema "verity/pouw/epoch-coins/v1"
 ~~~
 
+`tagged(tag, parts…)` is SHA-512(tag ‖ 0x00 ‖ frame(part)…), all 64 bytes (`protocol.tagged`, `frame` being core's
+`verity.ml.randomness.frame`); every binding and root the protocol hashes itself is one.
+
 An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
 opened live and once: the salt coin after the verifier recorded `weights_root`, the draw coin after it recorded what the
 draw keys (the transcript's root; Pearl-C's work law adds its records' root, `pearl_c_work.draw_after`). An opening is
@@ -477,9 +480,9 @@ useful    U/(α_A·α_B), glue
     (`audit.Hm96Domain`): x is a row's `sha512/row-seg/v1` digest (the same d_i) or the tile leaf, the salt the prover's
     ChaCha20 stream (`audit.hm96_salt`, nonce the unit index for A's tree, 2^62 + w for weight w's, 2^63 for the
     transcript's), and an opening's value carries its salt.
-  - SHA-256 stays where the protocol, not the scheme, hashes: each domain's binding (`tagged`, which core's frame takes as
-    32 bytes) and the records' root. The salt and the draw are the epoch coins, and the draw's `derive` is core's, on
-    SHA-512 (`prf/sha-512`).
+  - Where the protocol, not the scheme, hashes, it hashes with SHA-512 and keeps all 64 bytes: each domain's binding
+    (`tagged`, which every frame of core's takes at 64 bytes) and the records' root. The salt and the draw are the epoch
+    coins, and the draw's `derive` is core's, on SHA-512 (`prf/sha-512`).
   - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't

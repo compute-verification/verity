@@ -28,8 +28,8 @@ class DomainError(ValueError):
 
 
 def tagged(tag: str, *parts: Part) -> bytes:
-    """SHA-256 over ``tag \\0 || frame(part)...`` (`verity.ml.randomness.frame`)."""
-    return hashlib.sha256(tag.encode() + b"\0" + b"".join(frame(p) for p in parts)).digest()
+    """SHA-512 over ``tag \\0 || frame(part)...`` (`verity.ml.randomness.frame`), all 64 bytes."""
+    return hashlib.sha512(tag.encode() + b"\0" + b"".join(frame(p) for p in parts)).digest()
 
 
 @dataclass(frozen=True, slots=True)
