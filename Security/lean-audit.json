@@ -75472,38 +75472,6 @@
     "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record"
    ]
   },
-  "Proofs.Flock.Soundness.Randomness": {
-   "digest": "b36f7182e67def74fd1f8a9d38dc2428f5b89055bbcdcd6541a6d28f8e9e46d1",
-   "definitions": {
-    "FlockSoundness.Randomness.DERIVE": "4f1e35253525d49b40411ca19cbd61e33280a498804787949007731d40d67268",
-    "FlockSoundness.Randomness.Part": "18e687c41946840595dc8a78dbaa78d1f27a9fdc01ab76b5c2f2b96737cd9e7b",
-    "FlockSoundness.Randomness.Part.bytes": "28ad28b904e3969cf448161ab65cb52a729d2a0e3e2b34b8fc847d60314ccee8",
-    "FlockSoundness.Randomness.Part.int": "2428b9889c7ddb9b152767cef3b7071e53d48ec7f43917ef66afb59e0607393f",
-    "FlockSoundness.Randomness.Part.str": "bb888ea4f866c6ac87e909f5635bee5e81dd793c4c4781a8e96c8898c882fe0f",
-    "FlockSoundness.Randomness.STREAM": "76b5814e557ec2472934f6dfd20455336fa37ec2af4f46d4dcc157440f89ac5e",
-    "FlockSoundness.Randomness.be8": "981b5e5beea07a6b31289c792bb7b233b86fdb96cd4d651d6889d9447f08147f",
-    "FlockSoundness.Randomness.block": "48f31a9460e23746e5c5373a5370d49a53d371b982c961e716bb2899724c2014",
-    "FlockSoundness.Randomness.derive": "d1dbd683b4f535ea6da38d34f3f891c250e829be1316536d4e6051825ece3646",
-    "FlockSoundness.Randomness.frame": "7fd990c9fc04bf3896ebfe887722cd8daf04c2202e52c527e2ba7e9a0349edcd",
-    "FlockSoundness.Randomness.frames": "b4ce2e2a425222f5deda18719e652ae806cc16de6ab2ac3fc80b44c813e2c974",
-    "FlockSoundness.Randomness.natBytes": "4691b1d1c58f9ca54b7f69454736a0f7a1a8879a70a7b82d440dcc1993c34ae1",
-    "FlockSoundness.Randomness.stream": "c9341e65512faac26b25051db21161ea0cdc2c8ba8072aac2fd17a5dbe9f1ed9",
-    "FlockSoundness.Randomness.subset": "fab95226f79335b65b0d4c93962fb5aa62e4a4950bab9839a26f60dd0b6fe82c",
-    "FlockSoundness.Randomness.subsetOn": "9cf9164daa161e81fa6df095fd685e32e842477ee3b1ed362c1ebbb7a1ef4a9e",
-    "FlockSoundness.Randomness.swapIndex": "5d5dfa53e84c4908e88f617a2abbe4012f2e1306ff4f8ea316760ce446584394",
-    "FlockSoundness.Randomness.uniformOn": "09c3ba5034b098a1d8224e7ae371b320a67f5535af420faad0a40b6c13f231fa"
-   },
-   "guarantees": [
-    "FlockSoundness.Audit.Law.drawOn_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
-    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
-    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
-    "FlockSoundness.Audit.Law.subsetOn_escape_le"
-   ]
-  },
   "Proofs.Flock.Soundness.Refine.ArithK": {
    "digest": "a12a45959522d046815475e9e01d17fb6546fb3989a2d037d2dd64a5aecf9609",
    "definitions": {
@@ -78808,6 +78776,38 @@
     "Flock.Guarantees.ZeroKnowledgeHidden": "5667e937b4bae83d53892c9a028271505d4abd71c7077a7edd6319240cd6d453"
    },
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden"]
+  },
+  "Randomness": {
+   "digest": "b36f7182e67def74fd1f8a9d38dc2428f5b89055bbcdcd6541a6d28f8e9e46d1",
+   "definitions": {
+    "FlockSoundness.Randomness.DERIVE": "4f1e35253525d49b40411ca19cbd61e33280a498804787949007731d40d67268",
+    "FlockSoundness.Randomness.Part": "18e687c41946840595dc8a78dbaa78d1f27a9fdc01ab76b5c2f2b96737cd9e7b",
+    "FlockSoundness.Randomness.Part.bytes": "28ad28b904e3969cf448161ab65cb52a729d2a0e3e2b34b8fc847d60314ccee8",
+    "FlockSoundness.Randomness.Part.int": "2428b9889c7ddb9b152767cef3b7071e53d48ec7f43917ef66afb59e0607393f",
+    "FlockSoundness.Randomness.Part.str": "bb888ea4f866c6ac87e909f5635bee5e81dd793c4c4781a8e96c8898c882fe0f",
+    "FlockSoundness.Randomness.STREAM": "76b5814e557ec2472934f6dfd20455336fa37ec2af4f46d4dcc157440f89ac5e",
+    "FlockSoundness.Randomness.be8": "981b5e5beea07a6b31289c792bb7b233b86fdb96cd4d651d6889d9447f08147f",
+    "FlockSoundness.Randomness.block": "48f31a9460e23746e5c5373a5370d49a53d371b982c961e716bb2899724c2014",
+    "FlockSoundness.Randomness.derive": "d1dbd683b4f535ea6da38d34f3f891c250e829be1316536d4e6051825ece3646",
+    "FlockSoundness.Randomness.frame": "7fd990c9fc04bf3896ebfe887722cd8daf04c2202e52c527e2ba7e9a0349edcd",
+    "FlockSoundness.Randomness.frames": "b4ce2e2a425222f5deda18719e652ae806cc16de6ab2ac3fc80b44c813e2c974",
+    "FlockSoundness.Randomness.natBytes": "4691b1d1c58f9ca54b7f69454736a0f7a1a8879a70a7b82d440dcc1993c34ae1",
+    "FlockSoundness.Randomness.stream": "c9341e65512faac26b25051db21161ea0cdc2c8ba8072aac2fd17a5dbe9f1ed9",
+    "FlockSoundness.Randomness.subset": "fab95226f79335b65b0d4c93962fb5aa62e4a4950bab9839a26f60dd0b6fe82c",
+    "FlockSoundness.Randomness.subsetOn": "9cf9164daa161e81fa6df095fd685e32e842477ee3b1ed362c1ebbb7a1ef4a9e",
+    "FlockSoundness.Randomness.swapIndex": "5d5dfa53e84c4908e88f617a2abbe4012f2e1306ff4f8ea316760ce446584394",
+    "FlockSoundness.Randomness.uniformOn": "09c3ba5034b098a1d8224e7ae371b320a67f5535af420faad0a40b6c13f231fa"
+   },
+   "guarantees": [
+    "FlockSoundness.Audit.Law.drawOn_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_audit_of_record",
+    "FlockSoundness.Audit.Law.keyedWindow_escape_le",
+    "FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names",
+    "FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record",
+    "FlockSoundness.Audit.Law.subsetOn_escape_le"
+   ]
   }
  },
  "dependencies": {
