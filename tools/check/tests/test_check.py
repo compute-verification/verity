@@ -217,7 +217,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/", "backends/flock/verifier/lean/", "!README.md", "!PROTOCOL.md"]}
+    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/", "backends/flock/verifier/lean/", "!README.md",
+                                                       "!PROTOCOL.md"]}
     pin = __import__("json").loads((ROOT / "backends" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
