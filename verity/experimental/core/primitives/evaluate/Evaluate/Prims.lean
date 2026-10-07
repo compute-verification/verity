@@ -3,6 +3,7 @@ import Evaluate.Scalar
 import Evaluate.Casts
 import Evaluate.TC.Dots
 import Evaluate.Words
+import Evaluate.Libdevice
 
 /-!
 # The primitives the evaluator implements
@@ -213,6 +214,16 @@ def words : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :
    ("NcpDot16I7_v1", #[("acc", u32), ("a", .array 16 i7), ("b", .array 16 i7)], u32,
     fun xs => ncpDot16I7 xs[0]! (seg xs 1 16) (seg xs 17 16))]
 
+/-- The sampler's primitives by id (the vLLM integration's `sampling` and `topp_word_gates`), with the signatures the
+registry holds for them. -/
+def sampler : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
+  open Libdevice in
+  let lane := #[("key", f32), ("v", f32)]
+  [("NvLogf_v1", #[("a", f32)], f32, unary nvLogf), ("NvLogf_v2", #[("a", f32)], f32, unary nvLogfGpu),
+   ("GumbelStreamKey_v1", #[("seed", .value 64), ("pos", .value 64)], f32, binary streamKey),
+   ("GumbelNoiseLane_v1", lane, f32, binary noiseLane), ("GumbelNoiseLane_v2", lane, f32, binary noiseLaneGpu),
+   ("TopPNumkeep_v1", #[("numdup", f32), ("q", f32)], f32, binary toppNumkeep)]
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -221,7 +232,7 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   | none, none, some (w, b) => some (.gate fun _ => b, #[], .value w)
   | none, none, none =>
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
-    else ((scalars ++ floats ++ dots ++ words).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
+    else ((scalars ++ floats ++ dots ++ words ++ sampler).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2

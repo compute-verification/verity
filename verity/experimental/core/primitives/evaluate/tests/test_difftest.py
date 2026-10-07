@@ -61,6 +61,7 @@ from verity_vllm.program.registry import moe as MOE
 from verity_vllm.program.registry import pouw_rows as PR
 from verity_vllm.program.registry import prims as VP
 from verity_vllm.program.registry import ref_prims as RP
+from verity_vllm.program.registry import sampling as SPL
 from verity_vllm.program.registry import topp_word_gates as TW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -93,7 +94,9 @@ TCS = (P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16, P.HopperE4m3QgmmaDot32, P.Bl
 _TC_IDS = frozenset(p.id for p in TCS)
 #: E4's PoUW and NCP word primitives (`Evaluate.Words`)
 WORDS = tuple(getattr(W, n) for n in W.__all__ if n.startswith("Pouw")) + (PR.NcpAbsMax, PR.NcpRneClampI7, PR.NcpDot16I7)
-_E4_IDS = frozenset(p.id for p in WORDS)
+#: E4's sampler primitives (`Evaluate.Libdevice`)
+SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL.GumbelNoiseLaneV2, TW.TopPNumkeep)
+_E4_IDS = frozenset(p.id for p in WORDS + SAMPLER)
 
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
@@ -984,7 +987,7 @@ def _chain(fn: PrimitiveDefinition, steps: int) -> tuple[CompositeDefinition, tu
 
 @functools.cache
 def _chain_batch_text(fid: str, steps: int, n: int) -> str:
-    fn = next(p for p in TCS if p.id == fid)
+    fn = codec.lookup_primitive(REGISTRY, fid)
     chain, sig = _chain(fn, steps) if steps > 1 else (fn, fn.params)
     params = tuple((name, Array(n, t)) for name, t in sig)
     main = CompositeDefinition(f"DtCap{fn.name}{fn.version}s{steps}x{n}", 1, (), lambda S: (params, Array(n, fn.ret)),
@@ -1341,3 +1344,114 @@ def _refused_leaves(fns) -> list[dict]:
 def test_word_words_out_of_range_are_refused(server):
     cases = _refused_leaves(WORDS)
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 89)
+
+
+# ---- E4: the sampler: libdevice's logs, Philox and the Gumbel lane, top-p's keep count -----------------------------------
+
+#: the logs' words: the one-operand sweep, and the 4096 words on each side of one, of two, of 2^-1 and of their negations
+#: (where `__nv_logf`'s reduction changes binade and its result crosses zero), and the smallest normal and subnormal ones
+LOG_SWEEP = tuple(sorted({*F32_SWEEP, *(s | (c + d) & 0x7FFFFFFF for c in (0x3F800000, 0x40000000, 0x3F000000, 0x00800000)
+                                     for d in range(-4096, 4096) for s in (0, 1 << 31))}))
+#: the Gumbel lane's keys: zero, one, the extremes, a key the sampler tests use, and draws; and its vocabulary indices: the
+#: first 2048, the vocabulary sizes' ends and the i32 extremes
+GUMBEL_KEYS = (0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 942961759, *random.Random("gumbel").sample(range(1 << 32), 3))
+GUMBEL_V = (*range(2048), 32000, 128255, 128256, 151935, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFE, 0xFFFFFFFF)
+#: lanes whose Philox word is 0 or 0xFFFFFFFF, the only words `_rand_lane` lifts to its floor 2^-31' (found by a search of
+#: every counter under keys 0 to 3, which key 0 has none of)
+FLOOR_LANES = ((1, 91093890), (2, 1139270164), (2, 1450321319), (3, 355990253), (3, 1136270787))
+#: `TopPNumkeep`'s dup counts and its q: the sweep, and each small integer k with its neighbours (truncation's edges)
+NUMDUP = (0, 1, 2, 3, 7, 100, 128256, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFE, 0xFFFFFFFF)
+_INTS = tuple(struct.unpack("<I", struct.pack("<f", float(k)))[0] for k in (1, 2, 3, 7, 8, 100, 128256, 2 ** 31, 2 ** 32, 2 ** 33))
+Q_SWEEP = tuple(sorted({*F32_SWEEP, *(w + d for w in _INTS for d in (-1, 0, 1))}))
+
+
+def _sampler_grid(fn: PrimitiveDefinition) -> list[list[tuple]]:
+    if fn in (TW.NvLogf, TW.NvLogfV2):
+        return [[(a,) for a in LOG_SWEEP]]
+    if fn in (SPL.GumbelNoiseLane, SPL.GumbelNoiseLaneV2):
+        return [[(key, v) for v in GUMBEL_V] for key in GUMBEL_KEYS] + [list(FLOOR_LANES)]
+    if fn is SPL.GumbelStreamKey:
+        return [[(seed, pos) for seed in EDGES[64] for pos in (*EDGES[64], *range(1, 64))]]
+    return [[(nd, q) for q in Q_SWEEP] for nd in NUMDUP]
+
+
+def test_sampler_primitives_on_their_grids(server):
+    """The logs on every word of `LOG_SWEEP`, the Gumbel lane (both versions) on the first 2048 vocabulary indices and the
+    extremes under each key of `GUMBEL_KEYS` and on the lanes at the uniform's floor, the stream key on every pair of 64-bit edges and small positions, and the keep
+    count on every dup count of `NUMDUP` against every q of `Q_SWEEP`; each answer also the Python primitive's own
+    evaluator's."""
+    counts = {fn.id: _agree_on(server, fn, _sampler_grid(fn)) for fn in SAMPLER}
+    assert counts == {"NvLogf_v1": len(LOG_SWEEP), "NvLogf_v2": len(LOG_SWEEP), "GumbelStreamKey_v1": 11 * 74,
+                      "GumbelNoiseLane_v1": 9 * 2056 + 5, "GumbelNoiseLane_v2": 9 * 2056 + 5, "TopPNumkeep_v1": 11 * len(Q_SWEEP)}, counts
+
+
+@pytest.mark.slow
+def test_the_logs_on_drawn_words(server):
+    """`NvLogf_v1` and `_v2` on 2^18 seeded draws of the whole 32-bit range, in requests of 2^16."""
+    rng = random.Random("logs")
+    words = [rng.getrandbits(32) for _ in range(1 << 18)]
+    for fn in (TW.NvLogf, TW.NvLogfV2):
+        assert _agree_on(server, fn, [[(w,) for w in words[i:i + (1 << 16)]] for i in range(0, 1 << 18, 1 << 16)]) == 1 << 18
+
+
+STORE_IO = Path(__file__).resolve().parents[6] / "integrations/vllm/tests/regression/store_io.py"
+#: the L40S / H100 probe of `__nv_logf` / `__nv_log1pf` under every FTZ build (`test_sampling_rows`' `PROBE`)
+LOG_PROBE = "art:e5dd6ce9fa74e7ca4538b848943d8bb555f2adac528277848395dbf4cdff66a5"
+
+
+def _store_io():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_dt_store_io", STORE_IO)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_gpu_log_probe(server, tmp_path):
+    """Every input word of the L40S and H100 probe of `__nv_logf` (20,007: the edges, then random negatives and NaNs) under
+    each FTZ build: `NvLogf_v2` gives the GPU's word. Skipped where the evidence store is not reachable."""
+    import glob
+    import os
+
+    store = _store_io()
+    if os.environ.get("VERITY_SKIP_STORE") == "1" or not store.reachable():
+        pytest.skip("the evidence store is not reachable here")
+    root = store.fetch(LOG_PROBE, to=tmp_path / "probe")
+    runs = sorted(glob.glob(str(root / "*" / "out-*-ftz-true-*.json")))
+    assert len(runs) == 4
+    for path in runs:
+        d = json.loads(Path(path).read_text())["logf"]
+        rows, want = [(int(x, 16),) for x in d["in"]], [int(w, 16) for w in d["out"]]
+        assert len(rows) == 20_007 and _replay_capture(server, TW.NvLogfV2, rows, want) == len(rows)
+
+
+@st.composite
+def sampler_requests(draw) -> dict:
+    """A sampler primitive on eight rows of words drawn from its grid's words or the whole range; one request in ten has a
+    word out of its range, which both sides refuse."""
+    fn = draw(st.sampled_from(SAMPLER))
+    pools = {TW.NvLogf: (LOG_SWEEP,), TW.NvLogfV2: (LOG_SWEEP,), SPL.GumbelStreamKey: (EDGES[64], EDGES[64]),
+             SPL.GumbelNoiseLane: (GUMBEL_KEYS, GUMBEL_V), SPL.GumbelNoiseLaneV2: (GUMBEL_KEYS, GUMBEL_V),
+             TW.TopPNumkeep: (NUMDUP, Q_SWEEP)}[fn]
+    rows = [tuple(draw(st.one_of(st.sampled_from(pool), st.integers(0, (1 << t.w) - 1))) for pool, (_, t) in zip(pools, fn.params))
+            for _ in range(8)]
+    x = [list(col) for col in zip(*rows)]
+    if draw(st.integers(0, 9)) == 0:
+        i = draw(st.integers(0, len(x) - 1))
+        x[i][draw(st.integers(0, 7))] = draw(st.sampled_from([1 << fn.params[i][1].w, (1 << fn.params[i][1].w) + 1, -1]))
+    return request(json.loads(_batch_text(fn.id, 8)), x)
+
+
+SAMPLER_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=sampler_requests(), package=PKG)
+
+
+@pytest.mark.slow
+def test_sampler_primitives_drawn(server):
+    stats = DT.run(SAMPLER_PORT, examples=1000, seed=0, server=server)
+    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+
+
+def test_sampler_words_out_of_range_are_refused(server):
+    cases = _refused_leaves(SAMPLER)
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 10)
