@@ -551,6 +551,24 @@ def _fake_run(monkeypatch, groups, pre=()):
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
 
 
+def _gate(tmp_path, monkeypatch, writer: str = "slow") -> Path:
+    """A FIFO that ``writer`` writes once it runs, and that the test writes itself when ``writer``'s step ends, so a step
+    reading it is released even if ``writer`` died first: otherwise that read, and the run, would never end."""
+    import os
+
+    gate, fds, end = tmp_path / "gate", [], CHECK.Steps.end
+    os.mkfifo(gate)
+
+    def ended(self, rec):
+        if rec["step"] == writer:
+            fds.append(fd := os.open(gate, os.O_RDWR | os.O_NONBLOCK))
+            os.write(fd, b"x")
+        return end(self, rec)
+
+    monkeypatch.setattr(CHECK.Steps, "end", ended)
+    return gate
+
+
 def _py(src: str, *args) -> list[str]:
     import sys
 
@@ -561,12 +579,10 @@ def test_a_failed_step_stops_the_other_groups_and_each_status_is_written_as_it_e
     """`fails` exits only once `slow` has written to a FIFO, so `slow` is running when it fails: `slow` is interrupted (SIGINT),
     its group starts nothing more, and steps.jsonl has `fails` before `slow`, each line written as its step ended."""
     import json
-    import os
 
-    gate, marker = tmp_path / "gate", tmp_path / "never-ran"
-    os.mkfifo(gate)
+    gate, marker = _gate(tmp_path, monkeypatch), tmp_path / "never-ran"
     slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    fails = _py("import sys\nopen(sys.argv[1]).read()\nsys.exit(3)", gate)
+    fails = _py("import sys\nopen(sys.argv[1]).read(1)\nsys.exit(3)", gate)
     _fake_run(monkeypatch, [[("slow", slow, tmp_path), ("after-slow", _py("open(__import__('sys').argv[1], 'w')", marker), tmp_path)],
                             [("fails", fails, tmp_path)]])
     ok, done = CHECK.run(tmp_path, 2)
@@ -589,12 +605,9 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
 
 def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
     """`lean-changed` exits only once `slow` is running (the FIFO): under --keep-going its failure still stops `slow`."""
-    import os
-
-    gate = tmp_path / "gate"
-    os.mkfifo(gate)
+    gate = _gate(tmp_path, monkeypatch)
     slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    changed = _py("import sys\nopen(sys.argv[1]).read()\nsys.exit(1)", gate)
+    changed = _py("import sys\nopen(sys.argv[1]).read(1)\nsys.exit(1)", gate)
     _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("lean-changed", changed, tmp_path)]])
     passed, done = CHECK.run(tmp_path, 2, keep_going=True)
     by = {s["step"]: s for s in done}
@@ -604,12 +617,9 @@ def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going
 
 def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
     """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
-    import os
-
-    gate = tmp_path / "gate"
-    os.mkfifo(gate)
+    gate = _gate(tmp_path, monkeypatch)
     slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    build = _py("import sys\nopen(sys.argv[1]).read()\nprint('error: could not compile `flock-circuit` (lib)')\nsys.exit(101)", gate)
+    build = _py("import sys\nopen(sys.argv[1]).read(1)\nprint('error: could not compile `flock-circuit` (lib)')\nsys.exit(101)", gate)
     _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("flock-circuit-build", build, tmp_path)]])
     passed, done = CHECK.run(tmp_path, 2, keep_going=True)
     by = {s["step"]: s for s in done}
