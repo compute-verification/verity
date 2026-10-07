@@ -33,8 +33,8 @@ from verity_vllm.program.kernels import fp8_moe_rows as MR
 from verity_vllm.program.registry import boolean_fp8_moe as BM
 from verity_vllm.program.registry import fp8_moe as M
 from verity_vllm.program.registry import fp8_moe_experts as X
-from verity_vllm.program.registry import gemm_targets as GT
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import gemm_targets as GT
+from verity_vllm.program.frontend import targets as T
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_fp8_moe import ONE, _bf16, _ffma, _fmul, _operands, _twin_agrees, _wide
 

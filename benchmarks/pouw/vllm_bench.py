@@ -25,7 +25,7 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
   kernel's summed time (the GEMM, in ``ncp2-nohash``).
 
 Noise in the timed modes comes from torch's generator, not SHAKE256 or BLAKE3: the protocol's derivations and the
-transcript hashing are costed separately (NCP: 3k/16 words per output at the research store's measured SHAKE256 rate).
+transcript hashing are costed separately (NCP: 3k/16 words per output at a measured SHAKE256 rate).
 All modes run eagerly (the wrapper is not graph-capturable yet), at the same memory utilization.
 """
 

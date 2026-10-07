@@ -99,11 +99,14 @@ a `sys.path` entry another test file added: every suite runs alone.
   time: `tests/test_no_wall_clock.py` rejects sleeps, clock readings, timeouts and sleeping workloads in every suite. Wait on
   the event instead (a child's exit, a line of its output, a FIFO the test holds open: `tools/research/tests/waits.py`), and
   inject the clock or timer that the code under test measures time with (`monkeypatch.setattr(mod, "clock", ...)`).
+  Don't write a test whose result can depend on load, a shared machine or what holds it (GPU leases, check slots, pods),
+  ports and sockets, a race between processes, or an outside service. A test that flakes (it passed and failed under one
+  key, which `suites.py` reports as `nondeterministic`) is deleted, not fixed or rerun.
 - **Isolated:** write only under `tmp_path`; change the environment, `sys.path` or a module only through `monkeypatch`. The
   runner fails a run in which the tests changed a file of the repository, and names the files.
 - **Exact:** for bit-exact code, compare words, digests and pinned vectors, not approximations. A negative checks that the
   code rejects by name, not merely that it raises.
-- **Small fixtures** sit beside the tests (`tests/fixtures/`). Shared ones go under the root `fixtures/`, registered in
+- **Small fixtures** sit beside the tests, in a `fixtures/` directory of the suite's own. Shared ones go under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
   fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
   add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it

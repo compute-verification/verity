@@ -11,7 +11,7 @@ import json
 import pytest
 
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import targets as TG
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.pipeline import launch_context as LC
 
 def _prof(cc):

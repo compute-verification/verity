@@ -53,16 +53,18 @@ class Instance:
 PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("cr", "Collision resistance", "CR"),
     # success linear in the finder's expected time (Chiesa-Dall'Agnol-Guan-Spooner-Yogev, ePrint 2024/1434, Thm 2); the constant
-    # is the assumption's statement (A2 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md), not restated here
+    # is the assumption's statement (A2 in verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md), not restated here
     Property("ecr", "Expected-time collision resistance", "ECR"),
     Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
-    # A3 in backends/flock/verifier/lean/soundness/ASSUMPTIONS.md, for the unit draw's bytes
+    # A3 in verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit draw's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
-    # A4 there, for verity.primitives.randomness's keyed streams: SHA-256's compression function as a PRF keyed by its chaining value
-    # (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the secret bytes in its
-    # first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte secret)
+    # A4 there, for verity.primitives.randomness's keyed streams (prf/sha-512): SHA-512's compression function as a PRF keyed by
+    # its chaining value (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the
+    # secret bytes in its first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte key)
     Property("prf", "Pseudorandom function", "PRF"),
+    # of a signature scheme: no forgery on a new message after chosen-message queries, each one-time key used once
+    Property("euf-cma", "Existential unforgeability under chosen-message attack", "EUF-CMA"),
 )}
 
 INSTANCES: dict[str, Instance] = {i.id: i for i in (
@@ -82,6 +84,10 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("python-secrets", "Python's secrets"),
     # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), drawn after the prover's message
     Instance("flock-coin-server", "Flock's coin server"),
+    # verity.primitives.crypto.lms: LMS (RFC 8554) over SHA-512, its whole 64-byte output, the network certifier's and the
+    # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
+    # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
+    Instance("lms-sha512-n64", "LMS over SHA-512"),
 )}
 
 ENTRIES: dict[str, Entry] = {e.id: e for e in (
@@ -108,6 +114,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
+    # `Verity.Assumptions.TrustedNebiusHost` (verity/Security/Specs/Core/Assumptions.lean); no attestation hardware backs it
+    Entry("trusted-nebius-host", "assumption",
+          "An auditor-trusted device (a network certifier, the memory challenger) runs its stated code on its Nebius host",
+          "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
 )}
 

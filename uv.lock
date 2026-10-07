@@ -1421,6 +1421,7 @@ dev = [
     { name = "cluster" },
     { name = "editables" },
     { name = "jsonschema" },
+    { name = "numpy" },
     { name = "pytest" },
     { name = "pytest-xdist" },
     { name = "pyyaml" },
@@ -1447,6 +1448,7 @@ dev = [
     { name = "cluster", editable = "tools/cluster" },
     { name = "editables", specifier = ">=0.5" },
     { name = "jsonschema", specifier = ">=4.26" },
+    { name = "numpy" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "pyyaml", specifier = ">=6" },
@@ -1814,7 +1816,6 @@ name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "integrations/vllm" }
 dependencies = [
-    { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
@@ -1830,7 +1831,6 @@ torch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "blake3", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },

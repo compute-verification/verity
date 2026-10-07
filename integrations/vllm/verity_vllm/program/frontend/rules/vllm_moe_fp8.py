@@ -12,7 +12,7 @@
 (K/G, 1), B_scale's (cdiv(N, G) * K/G, 1, K/G) as (stride_bse, stride_bsk, stride_bsn), and `BLOCK_SIZE_K = min(BLOCK_SIZE_K, G)`.
 The pins are `vllm_moe.MOE_GEMM_PINS`' (the same kernel body, the batch-invariant default tile BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps,
 3 stages) with the FP8 numeric constexprs; SWAP_AB is False (`enable_swap_ab` holds on cc 9.0 only) and DOT is the target's e4m3 step
-(`registry.targets.moe_expert_fp8_dot`, the GEMM target's `fp8_moe_dot`; a target that records none refuses by name).  The schedule
+(`frontend.targets.moe_expert_fp8_dot`, the GEMM target's `fp8_moe_dot`; a target that records none refuses by name).  The schedule
 (sorted or naive) and the routed weights are `FusedMoeKernelRule`'s.
 """
 
@@ -66,8 +66,8 @@ def _fp8_launch_pins(node, meta, sc) -> str | None:
 
 def moe_expert_fp8_role(routed: bool) -> tuple[str, dict]:
     """(vocabulary role, its DOT) of a block-FP8 launch's per-pair Definition on the active target: the `_dot` roles' block-FP8 forms
-    (`vocab._moe_expert_dot` with `G`); raises `registry.targets.UnregisteredTarget` for a target without a registered e4m3 step."""
-    from verity_vllm.program.registry import targets as T
+    (`vocab._moe_expert_dot` with `G`); raises `frontend.targets.UnregisteredTarget` for a target without a registered e4m3 step."""
+    from verity_vllm.program.frontend import targets as T
     return ("moe_expert_gemm_w_dot" if routed else "moe_expert_gemm_dot"), {"DOT": T.moe_expert_fp8_dot(active_target_profile())}
 
 
@@ -96,7 +96,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         sc = meta.get("scalars", {})
         if (r := _fp8_launch_pins(node, meta, sc)):
             return r
-        from verity_vllm.program.registry import targets as T
+        from verity_vllm.program.frontend import targets as T
         try:
             T.moe_expert_fp8_dot(active_target_profile())
         except T.UnregisteredTarget as e:
