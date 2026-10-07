@@ -1,14 +1,78 @@
 {
- "roots": ["Properties.Pouw", "Properties.Proofs.Pouw"],
- "meaning": ["Properties.Pouw", "PouwWindow.Grid", "PouwWindow.Draw", "PouwWindow.Advice", "PouwWindow.Public"],
+ "roots": ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Proofs.Pouw", "Properties.Proofs.Pouw.Check"],
+ "meaning": [
+  "Properties.Pouw",
+  "PouwWindow.Grid",
+  "PouwWindow.Draw",
+  "PouwWindow.Advice",
+  "PouwWindow.Public",
+  "Properties.Pouw.Check",
+  "PouwWindow.Json",
+  "PouwCheck.Json",
+  "PouwCheck.Inputs",
+  "PouwCheck.Check",
+  "PouwCheck.Protocol"
+ ],
  "layers": {
   "Properties.Pouw": {
-   "imports": ["PouwWindow"],
+   "imports": ["PouwWindow", "PouwCheck"],
    "except": [],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   }
  },
+ "reads_exempt": {
+  "CoreProtocol": "the core protocol interface (`core_protocol`, #1482) declares no `layers` yet: its `Outcome`, `Integrity`, `Draw` and `Ratio` are the types every core protocol's check is stated over, and its README puts a protocol's properties here, stated against `P.check`",
+  "Flock": "C-Flock's verifier (`flock_verifier`) declares no `layers`: the check reads its canonical JSON (`canon`), hex (`hexOf`) and SHA-512 (`Sha512.hash`), the code the verifier of record runs, which core_protocol requires"
+ },
  "guarantees": {
+  "Properties.Pouw.Check.acceptMeans": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"],
+   "assumptions": [],
+   "type_hash": "545ca67099062d0dd1c98c4469e8dc936d2200557cb1cf253be4196afe8f360e"
+  },
+  "Properties.Pouw.Check.acceptedDraw": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.acceptedDraw : Properties.Pouw.Check.AcceptedDraw"],
+   "assumptions": [],
+   "type_hash": "5f9f29337f12c4f3ebedddade268afd4f5256e64f1177e1ee333437f0cefae9e"
+  },
+  "Properties.Pouw.Check.acceptedIsTheService's": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.acceptedIsTheService's : Properties.Pouw.Check.AcceptedIsTheService's"],
+   "assumptions": [],
+   "type_hash": "4bbb525fc1112475ad5ad614cb28e55a2d79ac80ab513db40f6e3e1da768db7f"
+  },
+  "Properties.Pouw.Check.commitmentKeepsBytes": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.commitmentKeepsBytes : Properties.Pouw.Check.CommitmentKeepsBytes"],
+   "assumptions": [],
+   "type_hash": "ac05a786e1a5c2a3c155575f091a80cf244aa534361f3b3133e47b7808a17090"
+  },
+  "Properties.Pouw.Check.digestIsOneStage's": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.digestIsOneStage's : Properties.Pouw.Check.DigestIsOneStage's"],
+   "assumptions": [],
+   "type_hash": "7f35fb22b84c04ee517a37f3a246486f5a3fc4dc0736958050ae088fdc45acd7"
+  },
+  "Properties.Pouw.Check.publishesPublic": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.publishesPublic : Properties.Pouw.Check.PublishesPublic"],
+   "assumptions": [],
+   "type_hash": "b22f72c2d2c45d769ab42ef353eba48b1591ce8e5176ec877a9fcfa0269a9056"
+  },
+  "Properties.Pouw.Check.serviceRejectRejects": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.serviceRejectRejects : Properties.Pouw.Check.ServiceRejectRejects"],
+   "assumptions": [],
+   "type_hash": "54d7c904edc0a25147226057321cfcfd82a73f4491233f9ab5d32b2e1be021ac"
+  },
+  "Properties.Pouw.Check.undecidedOnlyFromService": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Check.undecidedOnlyFromService : Properties.Pouw.Check.UndecidedOnlyFromService"],
+   "assumptions": [],
+   "type_hash": "bc2e50263838b4ba091dd8a089002f4fb04f5a55999dee3790fe39b0a015502e"
+  },
   "Properties.Pouw.Window.bucket8192": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"],
@@ -53,10 +117,173 @@
   }
  },
  "reads": {
+  "PouwCheck.Check": {
+   "digest": "874ed13433fe4ac3636ffaf64e84493e1c47293004b748684f032c33276e43d4",
+   "definitions": {
+    "PouwCheck.Ascending": "d2820e02cf932bae2fa660074d50955e998c0103c9d44cecc4f6434f4062a649",
+    "PouwCheck.Fixed": "fae80a497f2811eb30e81de8a6e395f427a58b3cb9c523285af150ebeab9feab",
+    "PouwCheck.Fixed.rootW": "d421261c51b43d285fee374e6f04bf4fff8ed5e2745faa979919ea8b8848e046",
+    "PouwCheck.Fixed.sampling": "f74d2d76c77a1ed04007729d97a078ea8b172f42ac9811676ed1c58f03cbdc0f",
+    "PouwCheck.Fixed.work": "c2353da100ecbbd5c7d2a6b55b5be85300b2185cc1cd6b1c51439d3f469cbe4a",
+    "PouwCheck.IsUnitLevel": "f95aaf43aab260a99175241c30da1fbffd45fd4b68274c69dd711ba98ffe2389",
+    "PouwCheck.Public": "8031d6310f1139882a84b4a201f292e85036fc700e5f81e53a33506fa345b14a",
+    "PouwCheck.Public.check": "79c2f4b4deef5309f001f478122e320e4ba652f072f85d875d8f83f481ea63b7",
+    "PouwCheck.Public.drawn": "7ca135d1f68fe2fa8b19a012ff0e6d04a7c395d020cd130969ab4c401c0ab908",
+    "PouwCheck.Public.entries": "72d786677f35b1a308f037b848f76df5bca2313df939e9b5d160b82257fc9dff",
+    "PouwCheck.Public.rootW": "aad6cdbd5132a1a34776f479ce733329bfbfb571e2d1472644ed5b4410211901",
+    "PouwCheck.Public.sampling": "db3f09cd21317c396acdfa8022ecf61a1abe351a0458fddb6c6eaf12b123d115",
+    "PouwCheck.Public.toJson": "efd35449511f701f5b4685464ccd243a86e4ec186ab98df7313eb3de5721a693",
+    "PouwCheck.Public.work": "b0cd6695aa01dd789cef623f10e00acaf022c281a40a4f1fa6a6cd2d38976648",
+    "PouwCheck.UnitsOk": "c6172338ca8b58f942a9340ee88124822d1339c12c13d0f196c29c021af75af6",
+    "PouwCheck.check": "94ac973007eeb56f054a375a8139269a16aed72c72399b8e5372640986f82530",
+    "PouwCheck.drawnJson": "fade66408d23b0b0eab5778a7f1ad5cf199e20c673111609fbefbf4ba450f5d5",
+    "PouwCheck.expected": "2eb99e27bfe0777853a566cf505b6217fef2e5531786341cef63c27a38698130",
+    "PouwCheck.instDecidableAscending": "46c5087c95395e4218b98a5650531f479f0a8dc6f800c8581cf88743db3afefe",
+    "PouwCheck.instDecidableIsUnitLevel": "da699c2abaad65ec709f8c059dd2db97d0da862e1f8d2a62dcd4af0613b53af3",
+    "PouwCheck.instDecidableUnitsOk": "2a8dbd2fbbb04ddf0b8880c9ae0eeae7403a09dc56765e94c57ad0038a3871a8",
+    "PouwCheck.levelOf": "48f5e3917b350202b7eac92f3d54572ce99d84524251aeb9ae909a94f33bfa4c",
+    "PouwCheck.oneStage": "7c719a8a358542840a7addee323c893bd08649baf8394bc21abdc81c1da2b026",
+    "PouwCheck.outcome": "c850799a4a27102f7af31103933ca8773edb3078712ef087f81f7fd75fe19665",
+    "PouwCheck.registered": "b7188a0c032df9f1dca518e1908f79f264f6c3eaf9205a06383d220f2024edc5",
+    "PouwCheck.registeredSorted": "f3f3a15aa0a16dd4cffc22b3339539e97103a4defb099402d8529770c8ee58f4",
+    "PouwCheck.rootWJson": "59a1924b50d1366c4da946502953c90fb8130f0ef9a79bb0e1d93705c7787fb6",
+    "PouwCheck.subsetLaw": "55ca9133ec253a0ade5266bff2c39d16213c5ab5821cf83854ad3ad9fdf492d0",
+    "PouwCheck.toRat": "00ebf143e79a844ab45084a02fceac137d3c32b877fdc89f1818a9e6f798330e",
+    "PouwCheck.unitLevel": "272be5cfa3f3dab555b8fed68212f5e76a99f4c15b67630baa22a4796ce0d3a6",
+    "PouwCheck.wrongItems": "b21fbbbd00797cffb6602f73c045f76d5a2f57badad60a041340556db20810c5",
+    "_private.PouwCheck.Check.0.PouwCheck.IsUnitLevel.match_1.splitter": "f2cfa08b3fbd37b1e7928788ca662cf76910199bda19293a4de7306de0c3342e"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
+  "PouwCheck.Inputs": {
+   "digest": "6329ac1d38292d413244413306272ca05ca025d037562c96daab302e45268547",
+   "definitions": {
+    "PouwCheck.CheckItem": "9384ef0ba0c61cdfc46e1ff5f90926b1aaca1e4c4edb074b5811f24947bf9360",
+    "PouwCheck.CheckItem.entries": "365e8e5800b4923474c9bba5cc3cf33f8f27451d35271fd7f0debb854fadb0e3",
+    "PouwCheck.CheckItem.scheme": "1eb7ea25d4d4416fd0b8dd8867017918f119c49361f2dc9fab9b7879c8dd4d59",
+    "PouwCheck.CheckItem.template": "cca198bd38b17050c5bfc84d9e64e9aa4bd5f129883bfb5d32d16967b3c63c2e",
+    "PouwCheck.CheckItem.tileWork": "be95d31b6d52b9e2f5fe9d4b38b6b60f81ede754dc76fa7189463df5dcfdbaf1",
+    "PouwCheck.CheckItem.toJson": "8d56e276eaa520279064728d848a9c06f1a82bf770054d58a60a835db0a46d48",
+    "PouwCheck.Evidence": "73eb17faa1f2036a4ae23e7a8ac9bba37556d137c8ffa2f08674401a8d7c6dd1",
+    "PouwCheck.Evidence.commitment": "919efcd508a9bc70f85aff602aecd2ed6851c4d4ac88cbe7e51c898d3e682778",
+    "PouwCheck.Evidence.protocol": "cef4d6c424ff77fa2fe72802035786e8cfbfb50be010572b473c1401b5ac144c",
+    "PouwCheck.Evidence.said": "120d9bbfb88192148b5a4f5fb7c669b4f1fb427d9154919eace620fce159e0d3",
+    "PouwCheck.Params": "4496227105d280ac5a22166612c498d282f3ba977ef4e9320fc725b55adc30ba",
+    "PouwCheck.Params.check": "4cad12ba9a459653bbb205ede041c453f1f9b9b86429e04a1ce37d898f7407c3",
+    "PouwCheck.Params.context": "720a412e36e9fe4d9289b34f29edc68ad6522602a216fb39ebcc8af3903c9c15",
+    "PouwCheck.Params.delta": "9bb405fc90f81942b54e6e8980d7d409a12635a5aaef14923ef11e4aaa01305a",
+    "PouwCheck.Params.eps": "9f8dfa4a0e899a4abbeb1f24c361979938fdac8b106cffcd78e54518f56deac5",
+    "PouwCheck.Params.gridBits": "7f54c735b1efba2394c1033adb0a9e82224a8c6a45dc6a53fb71bcc7a4430c60",
+    "PouwCheck.Params.hi": "4357f276b6ba115d0c5cb87107469f83d98e218c55ab29c0b00007f607823f1e",
+    "PouwCheck.Params.lo": "56d918d0f77567d0b0b0a1f309f802b6a24e4c7dc5be9e1896a7d2d41c80bed3",
+    "PouwCheck.Params.query": "6dce4e5cd974597d0bb7233fd0dd8aed2e9e0678277ee73c4266cb155e54b50f",
+    "PouwCheck.Registration": "033283f2919d0350646a0302eefb1f2bb975611831ca749028abef5181b2c3c6",
+    "PouwCheck.Registration.bytes": "baeff8fe91acf5297042e6c9221f1cfcbc8aa7d4af1b66929363679ccaa5e023",
+    "PouwCheck.Registration.digest": "e7bdab24b3c934c55af62291756caee362c454315e96cb431aba8ff33a6633a5",
+    "PouwCheck.Registration.format": "04247820bd84289e937d29fbb93bb2c6e21d5d65c776fa53ae3b7f2d46187264",
+    "PouwCheck.Registration.law": "b9af16fd4ebcb6780e3fdc403569181671ffd3b97541f723d573d8c75c5d88c6",
+    "PouwCheck.Registration.partition": "adab3c77b7021bd1ae4ca6c0eb0b704729075dc56ad2104364f35066402c9bcf",
+    "PouwCheck.Registration.population": "e55b17955db291d52ef55b74668a7b01175d501bcac964181af3057d44a55b89",
+    "PouwCheck.Registration.program": "bd3d679a9afd48c75fce4231a1288bd70d51e79a6b978e47f4aaf8ddfc5e5129",
+    "PouwCheck.Registration.query": "cea0c55c52410100ec28d74574558a0857196b7a4d734fae068b840fce799492",
+    "PouwCheck.Registration.roots": "0766f411c3c8d8a12d27889db3daca646c218ac11288a4f87f9d53e17ed0bceb",
+    "PouwCheck.Registration.scheme": "a7c8008e4dfe1c99d38a1c0140580292f7779a0788750f78786dc15e54dc7e86",
+    "PouwCheck.Registration.window": "6d5643873efb301049a06660062d770375023786c69fc944f1ac71afc048a912",
+    "PouwCheck.Root": "35bccbcd7104a542530a8ffc2a93e0c93bf41b6187e85011e650a5467959812f",
+    "PouwCheck.Root.port": "618bd1f5e78ab7861425e2405f7513d02c79e4117455b628247fa4f85c0830be",
+    "PouwCheck.Root.root": "4c4e8d6334d5c963547fb94bf4e94cc72fca5428af91383848f9c0c9bfc49019",
+    "PouwCheck.Said": "96282b9ab2db8c648abd3e5454d69ef2c917178d5670255e252a655b1a76290f",
+    "PouwCheck.Said.accept": "e4c094edbd1c01eb3efcfcea411ef2f9facea162c6d5bf182dfc35bd99476571",
+    "PouwCheck.Said.reject": "cd39fdf98549b9cc1e8c3bd455860489a186cb5caf457599ac8bf12a0ed65da7",
+    "PouwCheck.Said.undecided": "c9ed287c9367f4104372414bf81f9de15567924ba66bf891e2452ff1ff3087e3",
+    "PouwCheck.SubsetDraw": "f8f7ccc82078c518c2ecbb39d48c03d1fb562976d11321eab5c551febf606a00",
+    "PouwCheck.SubsetDraw.k": "6357b15cac96b9f6acf895ec7bfaf68818da49a237e4f40189d7b0b652f5191d",
+    "PouwCheck.SubsetDraw.population": "6e5126db2b5c58a222e80a88f22dffb1dc0bd3360b02c4cec31fca49020a3216",
+    "PouwCheck.SubsetDraw.units": "556ab1f0586b9d7558a1f912b18f94b06eac0e7d9b769eceb015310c53fae3ae",
+    "PouwCheck.Window": "aa38af5927a3f3ddcabbdb5df42db3217117303f5e0c1b42822e389eacd7606e",
+    "PouwCheck.Window.context": "7072687b5f02d7607afc41e56630f028850fe6999da38a69773cff22d15b0a19",
+    "PouwCheck.Window.items": "7595f9995e585f0f0c852d4874c50fe44f1da5eaf31c27bb3696f926e39cb7e1",
+    "PouwCheck.Window.kind": "b49fc25453ad2dd2f07e72d57454ad3b7cca051bca6a9cc882a37f859f3b77a4",
+    "PouwCheck.answerKeys": "283331a346f1f213bfce19f9f9c1518d4439407f1b3f8eb3f987086fb2568196",
+    "PouwCheck.checkKeys": "5e738912d6d9936bdc435a505ba74131bf4efbaab51c20f5ebd93fa970be10fa",
+    "PouwCheck.drawOf?": "1ceda4bc3165e58827953915663d4e981d9154908c61ebe62b12c308e0810a10",
+    "PouwCheck.evidenceOf": "ac6f390b6e13fb48647fe8ba232ad72712e1fbab46c811d49145141f244ba5ab",
+    "PouwCheck.formats": "705f37f4bc100320c7f567b00356229adf9276db4f2afe5a9f52e56557d94369",
+    "PouwCheck.integrityOf?": "8422563ace8f173d4769816f910a1cc154b5e1142a1839a4102fced6a0f521e4",
+    "PouwCheck.isHexDigest": "b27908bdfbf27941f0383ace88b27f7e6247432af5ed4e99f35a7176fa1e1ede",
+    "PouwCheck.levelOf?": "44b31b31298393572956216e419bf8cca73988dceed97b91d43f63eae0ea6d48",
+    "PouwCheck.paramsKeys": "73e3985c6f8c6abec7298fe9f5f8fc79bf182f93fb49f68c327e54a349eeb444",
+    "PouwCheck.paramsOf": "a9b84e79c4747ea1fd88fb117f5f8e6f9cf99f88d80abd5e26868216867078ca",
+    "PouwCheck.ratioField": "1b0c0d829b63129c62298d082dbfc7184aef33cd8cedab65655a31ff1d556844",
+    "PouwCheck.registrationOf": "282e5be1ad4cb8c1a29d46d8a0efb4c23e7e43b5fb500dc3ca103bdc8e26d0aa",
+    "PouwCheck.rootOf?": "7b0cddacb4a5f93ab1971d436fe5e52b097baeb015a1be59b5ef1fa782fb8c2a",
+    "PouwCheck.scheme": "c21179b23322516caea0dbb602dda5df958eee98fa9739db17e2961e11e0d4ab",
+    "PouwCheck.strings?": "b264c493d1e7b46e78c061bf7b83f3751cf792a6e79c71b59b6ce339f2a856bf",
+    "PouwCheck.subsetDrawOf?": "dea02cbe81a2cb3db83957ac60039b2e46c58491416923ddca4fd00e9ad36540"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
+  "PouwCheck.Json": {
+   "digest": "4343f651251bf38ae6e3ba207e0ff3216496aeda3e58e9bfd795586ff7035c9f",
+   "definitions": {
+    "PouwCheck.cs": "eb750acdf2624f6861a0fc78c7bd28003c22fa2ae10d40ea15e5b04e539c97fd",
+    "PouwCheck.get": "702b99cc434045e733b595732ca451d5529cd043ce91d6a7e897c7b51d4a8c8a",
+    "PouwCheck.keys": "b36430f9e75a85c9f7aade1e1015546632b370f4baa2b10ff3871cb3237f4092",
+    "PouwCheck.nat?": "2e5fdc9e485c4768409fea8c3dc492d8cc94f351f82b672743fb43ffd46ad66d",
+    "PouwCheck.str?": "da042297c121aa84100c9e331edee4906550fab402612ebd102b1975d3111986"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
+  "PouwCheck.Protocol": {
+   "digest": "7846a3105fd2f3e8741ab74d912727a749bcefbe4c4f9c4f1127260f7aced9c4",
+   "definitions": {
+    "PouwCheck.protocol": "961c984bdfe303e63ea917e4070736c65a07c1eb0988d939985c5745847cf547"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
   "PouwWindow.Draw": {
-   "digest": "398da41a7cd5c10e4cf2f56bf539050b67cd72c1627eaa0f34e02f2828def686",
+   "digest": "c2b6739b590ef057879ef5e995ae7fe17362bb2fe19708729bf3e90246ca1143",
    "definitions": {
     "PouwWindow.KPrimeDomain": "c4582abdc25a851e94e7fac6a2d7b1b5ab0ffd668e33d58019b1f8aa2a8e7c58",
+    "PouwWindow.Sampling": "591ade9d4036802bfcb4735be332bb109aea1a96f40268a10841b8b8aebf9ba5",
+    "PouwWindow.Sampling.delta": "65910a4289c98c94f4e133c6d4adec57a9c67690989b566800f31479b20b9d3b",
+    "PouwWindow.Sampling.eps": "857ae34a4ac74102a825ac61b9149866e25d5b71651ddbdf270c28a5db8634f1",
+    "PouwWindow.Sampling.gridBits": "2ffe69122631b3a78c36d1b9b56356c53bd41bef835fae90bbc2dd937984b635",
+    "PouwWindow.Sampling.k": "07d957958d4a1238af1f046066b54ad1199621323aa623955f863eb318f3b0c0",
     "PouwWindow.ceilDiv": "9c21b83b23ccaa271c280217bce6f4390ead5e081f8e5708c07f5a9d084e7beb",
     "PouwWindow.exactBits": "874847990decb3689333781f9e8be59f1d16f021dd7e62abf5a4573f9d251855",
     "PouwWindow.fixedPow": "3546bb63b7b220e9925285cbb9723bafb9f774cf8721bc0628ad0c81de98ea38",
@@ -68,21 +295,31 @@
     "PouwWindow.missAtMost": "87fc9b9968da8ebf89ad40afae49a1fe33e6a48395e026719bf3b8daf0aa6db2",
     "PouwWindow.missAtMostExact": "155d860d3dfd7e576b049ef6ee6198deb1fda1fc8c95ca55d2b1a6dad47c93c8",
     "PouwWindow.missAtMostGo": "01adeca9036206220ad6ea4fd34052ff1a104c869ce24ca859f2f9b30e659dc7",
-    "PouwWindow.missShare": "6e007f3d3a3bf81825460d2f17c550de6eae7ad21ae0e5d108aa8baed764ca0e"
+    "PouwWindow.missShare": "6e007f3d3a3bf81825460d2f17c550de6eae7ad21ae0e5d108aa8baed764ca0e",
+    "PouwWindow.sampling": "89386ffeda49657977d3575bdea94b69d6db731d239dc5ce0ac247f28ae8166f"
    },
    "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed"
    ]
   },
   "PouwWindow.Grid": {
-   "digest": "2ae276331bd05f1507e9db7706c85a2f4b1dc54f69353fd453c9e63c45263737",
+   "digest": "a142699529191329dc23cb7390b823d3dfbb505ba639f0e9ed8159ea5a4122c6",
    "definitions": {
     "PouwWindow.Work": "014faba291a8d0f91a9aadca67182f9fa692286852a3c25dd0efc27b2a0c2296",
     "PouwWindow.Work.at": "264642daa24c4fedf5a153258f9f6dce395364d0e19d3edb28e627dbaccbd73f",
     "PouwWindow.Work.at?": "ac884cb4651a8aac32f5ae2e41a96369bb28f36d144730f655d4e04b9db2c9ed",
     "PouwWindow.Work.credited": "b63ea61a5704f50cc6982817fa8823ed80cc19153b72c89e067271cbd9638a31",
+    "PouwWindow.Work.level": "6a8257d6e043abc439b73cfb3c1273cb917ec08ce3a11c24b6d583c1f24be926",
     "PouwWindow.Work.n": "685d3b27713be2cfed24f8c72e38af678287ec3f5b68eec444941dd8de077962",
     "PouwWindow.bitLength": "ac4c3703a38b122830f9dac46293b43fcc3ed991201304955d9a63dda4021014",
     "PouwWindow.bucket": "5dd9db56e6ced2a4b605d6109bda296e1202cdcea66f935f4ebc806323b0f28b",
@@ -103,12 +340,40 @@
     "PouwWindow.shift": "02023ba5d741609365f3d7bfc1c8ef4a9c97b2e5b9ab33f1524cf9174e8fefd0"
    },
    "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Window.bucket8192",
     "Properties.Pouw.Window.gridRefusals",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed",
     "Properties.Pouw.Window.levelsServed"
+   ]
+  },
+  "PouwWindow.Json": {
+   "digest": "75958de3f8a547761c1ae4c1e464ced53f5278672d4b69f8c205d1cf835aeb9d",
+   "definitions": {
+    "PouwWindow.Sampling.toJson": "ef89afb47afe210cca5c3968c16b7562025ffb1264c1b6a2afc586dc5df7532b",
+    "PouwWindow.Work.itemJson": "449d42c6b4a58111cb5410d64b83a3af8e280210bd96b1734a09f9a86542602f",
+    "PouwWindow.field?": "e07c8720f0cbe2e93a073760a631ac6636d4eba93c15ec9170d5e2d44007617c",
+    "PouwWindow.intOf?": "25e81f2dd86b59ec6dea3c9aaffcd435f2f00239666cba58d3836536b0012b7d",
+    "PouwWindow.natOf?": "aac6e072a42e1ec1123bb1d03d27b84050dd2c0923562dd7c95ed8837d68d67a"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
   "PouwWindow.Public": {
@@ -121,7 +386,17 @@
     "PouwWindow.publicItems": "090dd4c35195c3962815b165da93c2a95c39d4b0cc915c6906a58893acb9c9d7",
     "PouwWindow.registered": "ad7aa246bb486dc7a2a8c0d55eb07c65df3307b1cab0042e8a98da25421b55ba"
    },
-   "guarantees": ["Properties.Pouw.Window.publicItems_eq"]
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Window.publicItems_eq"
+   ]
   },
   "Properties.Pouw": {
    "digest": "9f2baf09514db245c5b593aab0f8cba2f43ab44a26b02ef06bd474f1f8bf41fa",
@@ -144,9 +419,34 @@
     "Properties.Pouw.Window.levelsServed",
     "Properties.Pouw.Window.publicItems_eq"
    ]
+  },
+  "Properties.Pouw.Check": {
+   "digest": "970d30570455b30d0f938639c359d4e29c123edffda921df23d0b853f4507592",
+   "definitions": {
+    "Properties.Pouw.Check.AcceptMeans": "b9e021003cf64aecbe5be09a52a08505862d8d6df7c2ad26c60de0e86ae570f8",
+    "Properties.Pouw.Check.AcceptedDraw": "5ac2c07d99f9cb69d7ce9d3bf887ed7b7b6411d527d6939f295d5f6b4fe0abeb",
+    "Properties.Pouw.Check.AcceptedIsTheService's": "52f7dc4e37dee4293005903e5d965d3576f6ff114a1044e91a8bfaa0ead97612",
+    "Properties.Pouw.Check.CommitmentKeepsBytes": "3c56a26763063bbf4b395ecbef781e4c6381a92eb8e7c9da3192e34a8ddf61a9",
+    "Properties.Pouw.Check.DigestIsOneStage's": "c4be20a809c980008db941198b45b0d6f204a5bb4f0223687e2848b50e0f5dbe",
+    "Properties.Pouw.Check.PublishesPublic": "6107e69cb7a5f60b2a42765dea6a9132389076fefd46c8be72b078077fd601a3",
+    "Properties.Pouw.Check.RegistrationKeeps": "a4672edf1af3375d6ae2c91c675edfb6adf6c7b161f0289788baa7a705328f5f",
+    "Properties.Pouw.Check.ServiceAccepted": "c7e8b63a9982144cba9fb0174211f455ab67ec5f50bbfab1c375825a130dd470",
+    "Properties.Pouw.Check.ServiceRejectRejects": "d9492c5900d209e0eb438b9799f894341bd6fc305174c497e794d0d758446c32",
+    "Properties.Pouw.Check.UndecidedOnlyFromService": "e047bfde57ad6a81c306573894df65fb73e1453ca4e6558868be2f27b089c050"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
   }
  },
  "dependencies": {
-  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+  "toolchain": "b5b9a408c7654696506015fe40f040fbe98c3793af80b4a74463b9d2317af501"
  }
 }

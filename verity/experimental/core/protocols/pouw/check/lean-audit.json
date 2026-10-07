@@ -15,6 +15,28 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
+ "layers": {
+  "PouwCheck.Json": {
+   "imports": ["Lean.Data.Json", "Flock.Canon", "PouwWindow.Json"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.Inputs": {
+   "imports": ["CoreProtocol.Protocol", "CoreProtocol.Profile", "Flock.Hash", "PouwCheck.Json"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.Check": {
+   "imports": ["CoreProtocol.Protocol", "PouwWindow.Grid", "PouwWindow.Draw", "PouwWindow.Public", "PouwCheck.Inputs"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.Protocol": {
+   "imports": ["CoreProtocol.Cli", "PouwCheck.Check"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
  "dependencies": {
   "toolchain": "b5b9a408c7654696506015fe40f040fbe98c3793af80b4a74463b9d2317af501"
  }
