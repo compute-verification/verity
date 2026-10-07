@@ -42,10 +42,10 @@ CheckAxioms.lean               one #print axioms line per statement and witness,
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
-python3 ../../../../tools/verity/lean/audit.py .                      # Verity's Lean audit
+python3 ../../../../tools/verity/lean/audit.py .                      # Verity's Lean check
 lake env lean CheckAxioms.lean                              # the axioms of the 35 statements, 16 witnesses and 3 lemmas
 # the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
-uv run python ../../../protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py ../../../experimental/protocols/accounting --out /tmp/dt
+uv run python ../../../protocols/accounting/communication/certifier/lean/scripts/difftest_vectors.py ../../../experimental/protocols/certifier --out /tmp/dt
 lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000
 ~~~
 

@@ -586,7 +586,8 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
 def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
     """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
     changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
-    one with a `/` against its path), so `["verity/ml/flock/", "!README.md"]` leaves out every README.md there."""
+    one with a `/` against its path), so `["verity/ml/flock/", "verity/core/service/flock/", "!README.md"]` leaves out every
+    README.md under either."""
     import fnmatch
 
     prefixes = [r for r in rule if not r.startswith("!")]
