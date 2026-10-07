@@ -21,7 +21,7 @@ constant 128-byte block, so the circuit starts each hash from its prefix's midst
 The row's body passes each segment its midstate as constant bits, so the segment's own constants (its zero fill, its padding)
 fold into the traced circuit and its chaining value does not. **Cost:** a full segment is nine compressions (its 1,024 bytes and
 a padding block), a short one ceil((ceil(m / 8) + 17) / 128), the outer hash s / 2 + 1 for even s and (s + 1) / 2 for odd s. A
-64 × 64 Pearl-C tile's 32 KiB (``-h3``'s tile digest, 262,144 bits) is 32 × 9 + 17 = 305; ``ANDS`` in the tests pins the gates.
+64 × 64 Pearl-C tile's 32 KiB (``-h3``'s tile digest, 262,144 bits) is 32 × 9 + 17 = 305; ``PARTS`` and ``WHOLE`` in the tests pin the gates.
 """
 from __future__ import annotations
 
