@@ -18,16 +18,20 @@ operands' edge words (also held to the Python primitive's own evaluator), on wor
 range; every constant of the registry, and renamings of a constant that the Python's id pattern reads or refuses. E2's FP32
 and BF16 primitives each run batched, many calls in one Program: on the grid of their operands' FP edge words (held to the
 Python primitive's evaluator too), on drawn words, on words out of range, and on the GPU's captured words where the fixtures
-hold them.
+hold them. E3's tensor-core dot steps run the same way, on structured families of edge codes and accumulators (a full grid
+of 33 to 137 operand words is out of reach), on drawn words, on words out of range, on every capture of them in the
+repository's fixtures (single steps, and chains of steps on one accumulator), and against their traced Boolean Definitions.
 """
 from __future__ import annotations
 
 import copy
 import functools
+import gzip
 import itertools
 import json
 import random
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -80,15 +84,20 @@ FLOATS = (FP.F32Add, FP.F32AddV2, RP.F32Sub, VP.F32SubV2, FP.F32Mul, FP.F32MulV2
           RP.F32MaxRef, RP.F32GtStrict, FP.GuardNegInfZero, MU.DivFullScaleA, VP.DivFullScaleAV2, FP.Bf16Add, FP.Bf16AddF2fp,
           FP.Bf16MulF32, FP.Bf16MulBf16, P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16, P.E4m3ToF32, P.F32ToE4m3Sat, P.F32ToE2m1Sat)
 _FLOAT_IDS = frozenset(p.id for p in FLOATS)
+#: E3's tensor-core dot steps (`Evaluate.TC.Dots`), by the Python primitive each transcribes
+TCS = (P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16, P.HopperE4m3QgmmaDot32, P.BlackwellE4m3QmmaDot32, P.BlackwellE5m2QmmaDot32,
+       P.BlackwellNvf4OmmaDot64, P.BlackwellMxf4OmmaDot64)
+_TC_IDS = frozenset(p.id for p in TCS)
 
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
     """The primitives the Lean evaluator implements: the Boolean profile's gates (E0), the constant family and the scalar
-    primitives (E1), the FP32 and BF16 arithmetic and casts (E2), and the run inputs of any width."""
+    primitives (E1), the FP32 and BF16 arithmetic and casts (E2), the tensor-core dot steps (E3), and the run inputs of any
+    width."""
     m = input_id(fn.id)
     if m:
         return m[0] == RUN
-    return BL.is_gate(fn) or getattr(fn, "family", None) == "Const" or fn.id in _SCALAR_IDS | _FLOAT_IDS
+    return BL.is_gate(fn) or getattr(fn, "family", None) == "Const" or fn.id in _SCALAR_IDS | _FLOAT_IDS | _TC_IDS
 
 
 def python_answer(desc: dict, inputs: list) -> dict:
@@ -612,14 +621,24 @@ def _batch_call(fn: PrimitiveDefinition, n: int) -> dict:
 
 @functools.cache
 def _batch_text(fid: str, n: int) -> str:
-    return json.dumps(_batch_call(next(p for p in FLOATS if p.id == fid), n))
+    return json.dumps(_batch_call(next(p for p in FLOATS + TCS if p.id == fid), n))
 
 
-def _batch_request(fn: PrimitiveDefinition, rows: list[tuple[int, ...]]) -> dict:
-    """`fn` on each row of operand words, one batched request, its answer held to the Python primitive's own evaluator."""
+def _flat(v) -> list[int]:
+    """An operand's words: an array operand is a tuple of its elements, in leaf order."""
+    return [w for e in v for w in _flat(e)] if isinstance(v, (list, tuple)) else [v]
+
+
+def _columns(rows: list[tuple]) -> list[list[int]]:
+    """The batched Program's inputs: per parameter, every row's words of that operand, row after row."""
+    return [[w for r in rows for w in _flat(r[i])] for i in range(len(rows[0]))]
+
+
+def _batch_request(fn: PrimitiveDefinition, rows: list[tuple]) -> dict:
+    """`fn` on each row of operands, one batched request, its answer held to the Python primitive's own evaluator."""
     desc = json.loads(_batch_text(fn.id, len(rows)))
-    x = [list(col) for col in zip(*rows)]
-    assert python_answer(desc, x) == {"output": [fn.evaluate(*r) for r in rows]}, fn.id
+    x = _columns(rows)
+    assert python_answer(desc, x) == {"output": [fn.evaluate(*(w for v in r for w in _flat(v))) for r in rows]}, fn.id
     return request(desc, x)
 
 
@@ -732,3 +751,383 @@ def test_the_cvt_captures(server):
         assert [P.F32ToBf16Rn.evaluate(*r) for r in finite] == [int(e["bf16"], 16) for e in words if not FP.f32_is_nan(int(e["x"], 16))]
         cases.append(_batch_request(P.F32ToBf16Rn, finite))
     assert len(CVT) == 2 and agree(server, cases) == (4, 0)
+
+
+# ---- E3: the tensor-core dot steps --------------------------------------------------------------------------------------
+
+#: the operand codes each format's grids take: the signed zeros, the least subnormals, the least normal, one and its
+#: neighbour, a large and the largest finite code of both signs, and every infinity and NaN class the format has
+E4M3_EDGES = (0x00, 0x80, 0x01, 0x81, 0x07, 0x08, 0x38, 0xB8, 0x39, 0x77, 0x7E, 0xFE, 0x7F, 0xFF)
+E5M2_EDGES = (0x00, 0x80, 0x01, 0x81, 0x03, 0x04, 0x3C, 0xBC, 0x3D, 0x7B, 0xFB, 0x7C, 0xFC, 0x7D, 0x7E, 0x7F, 0xFF)
+#: the block-scale bytes: UE4M3's zeros (bit 7 clear and set), least subnormal and normal, one (and with bit 7 set), the
+#: largest, and the NaNs `0x7F` / `0xFF`; UE8M0's 2^-127, 2^-126, 2^-1, 2^0, 2^1, 2^33, 2^126, 2^127 and the NaN `0xFF`
+UE4M3_EDGES = (0x00, 0x80, 0x01, 0x08, 0x38, 0xB8, 0x39, 0x77, 0x7E, 0xFE, 0x7F, 0xFF)
+UE8M0_EDGES = (0x00, 0x01, 0x7E, 0x7F, 0x80, 0xA0, 0xFD, 0xFE, 0xFF)
+
+
+@dataclass(frozen=True)
+class _Fmt:
+    """One dot step's operands: `k` element codes per operand, the grids' codes, the codes of one, of a large value and the
+    sign bit, the positions the grids put a special at (the ends, and each group boundary), and the block scales if any:
+    their count per operand, their edge bytes and the byte of one."""
+    k: int
+    w: int
+    edges: tuple[int, ...]
+    one: int
+    big: int
+    sign: int
+    at: tuple[int, ...]
+    finite: frozenset[int]
+    scales: tuple[int, tuple[int, ...], int] | None = None
+
+
+_BF16_FINITE = frozenset(c for c in range(1 << 16) if (c >> 7) & 0xFF != 0xFF)
+_E4M3_FINITE = frozenset(c for c in range(256) if c & 0x7F != 0x7F)
+_E5M2_FINITE = frozenset(c for c in range(256) if (c >> 2) & 0x1F != 0x1F)
+TC_FMT = {
+    P.AmpereBF16TcDot16: _Fmt(16, 16, BF16_EDGES, 0x3F80, 0x7F7F, 0x8000, (0, 8, 15), _BF16_FINITE),
+    P.HopperBF16WgmmaDot16: _Fmt(16, 16, BF16_EDGES, 0x3F80, 0x7F7F, 0x8000, (0, 15), _BF16_FINITE),
+    P.HopperE4m3QgmmaDot32: _Fmt(32, 8, E4M3_EDGES, 0x38, 0x7E, 0x80, (0, 31), _E4M3_FINITE),
+    P.BlackwellE4m3QmmaDot32: _Fmt(32, 8, E4M3_EDGES, 0x38, 0x7E, 0x80, (0, 31), _E4M3_FINITE),
+    P.BlackwellE5m2QmmaDot32: _Fmt(32, 8, E5M2_EDGES, 0x3C, 0x7B, 0x80, (0, 31), _E5M2_FINITE),
+    P.BlackwellNvf4OmmaDot64: _Fmt(64, 4, tuple(range(16)), 0x2, 0x7, 0x8, (0, 16, 63), frozenset(range(16)), (4, UE4M3_EDGES, 0x38)),
+    P.BlackwellMxf4OmmaDot64: _Fmt(64, 4, tuple(range(16)), 0x2, 0x7, 0x8, (0, 32, 63), frozenset(range(16)), (2, UE8M0_EDGES, 0x7F)),
+}
+
+
+def _put(v: tuple[int, ...], i: int, x: int) -> tuple[int, ...]:
+    return v[:i] + (x,) + v[i + 1:]
+
+
+def _tc_row(fn: PrimitiveDefinition, acc: int, a: tuple, b: tuple, sa: tuple | None = None, sb: tuple | None = None) -> tuple:
+    f = TC_FMT[fn]
+    if f.scales is None:
+        return (acc, a, b)
+    n, _, one = f.scales
+    return (acc, a, b, sa or (one,) * n, sb or (one,) * n)
+
+
+def _tc_backgrounds(fn: PrimitiveDefinition) -> list[tuple]:
+    """Operand vectors the accumulator sweep runs over: zeros, one times one (the sum k), the largest code times itself (an
+    overflow from a large accumulator), times its negation in every other lane (exact cancellation), one times minus one,
+    two fixed draws of finite codes, and for the block-scaled steps the largest products at large scales (UE8M0: past
+    binary32)."""
+    f = TC_FMT[fn]
+    rng = random.Random(f"bg{fn.id}")
+    finite = sorted(f.finite)
+    zeros, ones, big = (0,) * f.k, (f.one,) * f.k, (f.big,) * f.k
+    alt = tuple(f.big | (f.sign if i % 2 else 0) for i in range(f.k))
+    out = [_tc_row(fn, 0, zeros, zeros), _tc_row(fn, 0, ones, ones), _tc_row(fn, 0, big, big), _tc_row(fn, 0, big, alt),
+           _tc_row(fn, 0, ones, tuple(f.one | f.sign for _ in range(f.k)))]
+    out += [_tc_row(fn, 0, tuple(rng.choice(finite) for _ in range(f.k)), tuple(rng.choice(finite) for _ in range(f.k)))
+            for _ in range(2)]
+    if f.scales:
+        n, _, _ = f.scales
+        out.append(_tc_row(fn, 0, big, big, (0x7E if n == 4 else 0xFE,) * n, (0x7E if n == 4 else 0xFE,) * n))
+    return out
+
+
+def _tc_pairs(fn: PrimitiveDefinition) -> list[list[tuple]]:
+    """Every pair of edge codes as the product at position 0 over a zero background, under every FP32 edge accumulator (one
+    request per accumulator); and every pair of edge codes at two positions (across a group boundary where there is one) over
+    zeros times one, under +0 and -0."""
+    f = TC_FMT[fn]
+    zeros, ones = (0,) * f.k, (f.one,) * f.k
+    out = [[_tc_row(fn, acc, _put(zeros, 0, x), _put(zeros, 0, y)) for x in f.edges for y in f.edges] for acc in F32_EDGES]
+    for p, q in itertools.combinations(f.at, 2):
+        for acc in (0, 0x80000000):
+            out.append([_tc_row(fn, acc, _put(_put(zeros, p, x), q, y), ones) for x in f.edges for y in f.edges])
+    return out
+
+
+def _tc_scales(fn: PrimitiveDefinition) -> list[list[tuple]]:
+    """The block-scaled steps: every pair of edge scale bytes on the first and on the last block, the others one, over the
+    largest codes times one and over a draw of codes, under seven accumulators (zero, ±1, the least subnormal, the largest
+    normal, -inf, a NaN)."""
+    f = TC_FMT[fn]
+    if f.scales is None:
+        return []
+    n, edges, one = f.scales
+    rng = random.Random(f"sc{fn.id}")
+    bgs = [((f.big,) * f.k, (f.one,) * f.k), (tuple(rng.randrange(16) for _ in range(f.k)), tuple(rng.randrange(16) for _ in range(f.k)))]
+    out = []
+    for acc in (0, 0x3F800000, 0xBF800000, 0x00000001, 0x7F7FFFFF, 0xFF800000, 0x7FC00000):
+        for j in (0, n - 1):
+            out.append([_tc_row(fn, acc, a, b, _put((one,) * n, j, s), _put((one,) * n, j, t))
+                        for a, b in bgs for s in edges for t in edges])
+    return out
+
+
+def _tc_sweep(fn: PrimitiveDefinition) -> list[list[tuple]]:
+    """Every one-operand FP32 word of `F32_SWEEP` as the accumulator over each background (one request per background)."""
+    return [[(acc, *bg[1:]) for acc in F32_SWEEP] for bg in _tc_backgrounds(fn)]
+
+
+def _agree_on(server, fn: PrimitiveDefinition, grid: list[list[tuple]]) -> int:
+    """Each request of rows answered alike by both sides, and with the Python primitive's own evaluator's words."""
+    for rows in grid:
+        kind, out = DT.replay(PORT, request(json.loads(_batch_text(fn.id, len(rows))), _columns(rows)), server)
+        assert kind == "output" and json.loads(out) == [fn.evaluate(*_flat(r)) for r in rows], fn.id
+    return sum(map(len, grid))
+
+
+@pytest.mark.slow
+def test_tc_steps_on_their_edge_grids(server):
+    """Every dot step on every pair of its format's edge codes under every FP32 edge accumulator, on pairs of specials at two
+    positions, and (the block-scaled steps) on every pair of edge scale bytes; each answer also the Python primitive's own
+    evaluator's."""
+    counts = {fn.id: _agree_on(server, fn, _tc_pairs(fn) + _tc_scales(fn)) for fn in TCS}
+    assert counts == {"AmpereBF16TcDot16_v2": 35 * 27 ** 2 + 6 * 27 ** 2, "HopperBF16WgmmaDot16_v1": 37 * 27 ** 2,
+                      "HopperE4m3QgmmaDot32_v1": 37 * 14 ** 2, "BlackwellE4m3QmmaDot32_v1": 37 * 14 ** 2,
+                      "BlackwellE5m2QmmaDot32_v1": 37 * 17 ** 2, "BlackwellNvf4OmmaDot64_v1": 41 * 16 ** 2 + 28 * 12 ** 2,
+                      "BlackwellMxf4OmmaDot64_v1": 41 * 16 ** 2 + 28 * 9 ** 2}, counts
+
+
+@pytest.mark.slow
+def test_tc_steps_on_the_accumulator_sweep(server):
+    """Every dot step with each of the 3118 one-operand FP32 words as its accumulator over each background of
+    `_tc_backgrounds`: the accumulator's truncation onto the adder, its alignment against the products, saturation, and the
+    block-scaled steps' accumulator window and overflow."""
+    counts = {fn.id: _agree_on(server, fn, _tc_sweep(fn)) for fn in TCS}
+    assert counts == {fn.id: len(F32_SWEEP) * (8 if TC_FMT[fn].scales else 7) for fn in TCS}, counts
+
+
+@st.composite
+def tc_requests(draw) -> dict:
+    """A dot step on four rows, the accumulator and every code and scale byte drawn from its edges or its whole range; one
+    request in ten has a word out of its range, which both sides refuse."""
+    fn = draw(st.sampled_from(TCS))
+    f = TC_FMT[fn]
+
+    def word(edges, w):
+        return draw(st.one_of(st.sampled_from(edges), st.integers(0, (1 << w) - 1)))
+
+    rows = []
+    for _ in range(4):
+        row = [word(F32_EDGES, 32), tuple(word(f.edges, f.w) for _ in range(f.k)), tuple(word(f.edges, f.w) for _ in range(f.k))]
+        if f.scales:
+            n, edges, _ = f.scales
+            row += [tuple(word(edges, 8) for _ in range(n)) for _ in range(2)]
+        rows.append(tuple(row))
+    desc = json.loads(_batch_text(fn.id, len(rows)))
+    x = _columns(rows)
+    if draw(st.integers(0, 9)) == 0:
+        i = draw(st.integers(0, len(x) - 1))
+        t = fn.params[i][1]
+        w = t.w if not isinstance(t, Array) else t.elem.w
+        x[i][draw(st.integers(0, len(x[i]) - 1))] = draw(st.sampled_from([1 << w, (1 << w) + 1, -1]))
+    return request(desc, x)
+
+
+TC_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=tc_requests(), package=PKG)
+
+
+@pytest.mark.slow
+def test_tc_steps_drawn(server):
+    stats = DT.run(TC_PORT, examples=1000, seed=0, server=server)
+    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+
+
+def test_tc_words_out_of_range_are_refused(server):
+    """A word of 2^w, -1, or a boolean for the first leaf of each operand of each dot step, the others 0."""
+    cases = []
+    for fn in TCS:
+        desc = json.loads(_batch_text(fn.id, 1))
+        for i, (_, t) in enumerate(fn.params):
+            w = t.w if not isinstance(t, Array) else t.elem.w
+            for bad in (1 << w, -1, True):
+                x = [[0] * t2.leaves for _, t2 in fn.params]
+                x[i][0] = bad
+                cases.append(request(desc, x))
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 25)
+
+
+# ---- E3: the captures ---------------------------------------------------------------------------------------------------
+
+def _hexwords(s: str, digits: int) -> tuple[int, ...]:
+    return tuple(int(s[i:i + digits], 16) for i in range(0, len(s), digits))
+
+
+def _chain(fn: PrimitiveDefinition, steps: int) -> tuple[CompositeDefinition, tuple]:
+    """`steps` calls of `fn` on one accumulator in k order (one GEMM coordinate, as `models.tc_dot_chain` folds a step), and
+    its parameters."""
+    params = (fn.params[0], *((name, Array(steps, t)) for name, t in fn.params[1:]))
+
+    def body(B, S, acc, *xs):
+        for s in range(steps):
+            acc = B.call(fn, acc, *(x[s] for x in xs))
+        return acc
+
+    chain = CompositeDefinition(f"DtChain{fn.name}{fn.version}x{steps}", 1, (), lambda S: (params, fn.ret), body, register=False)
+    return chain, params
+
+
+@functools.cache
+def _chain_batch_text(fid: str, steps: int, n: int) -> str:
+    fn = next(p for p in TCS if p.id == fid)
+    chain, sig = _chain(fn, steps) if steps > 1 else (fn, fn.params)
+    params = tuple((name, Array(n, t)) for name, t in sig)
+    main = CompositeDefinition(f"DtCap{fn.name}{fn.version}s{steps}x{n}", 1, (), lambda S: (params, Array(n, fn.ret)),
+                               lambda B, S, *a: B.batch(chain, *a, axes=(0,) * len(a)), register=False)
+    return json.dumps(desc_of(Program(bind(main))))
+
+
+def _replay_capture(server, fn: PrimitiveDefinition, rows: list[tuple], want: list[int], steps: int = 1) -> int:
+    """The captured rows, `steps` chained calls each, in requests of at most 4096 rows: Lean's words are the Python oracle's
+    (`verity_difftest.replay`) and the captured ones."""
+    for i in range(0, len(rows), 4096):
+        chunk = rows[i:i + 4096]
+        kind, out = DT.replay(PORT, request(json.loads(_chain_batch_text(fn.id, steps, len(chunk))), _columns(chunk)), server)
+        assert kind == "output" and json.loads(out) == want[i:i + 4096], fn.id
+    return len(rows)
+
+
+def _bf16_rows(cases: list[dict]) -> tuple[list[tuple], list[int]]:
+    rows = [(int(c["acc"], 16), _hexwords(c["a"], 4), _hexwords(c["b"], 4)) for c in cases]
+    return rows, [int(c["d"] if isinstance(c["d"], str) else c["d"][0], 16) for c in cases]
+
+
+def test_the_rtx4090_golden_records(server):
+    """The RTX 4090's 360 `mma.sync.m16n8k16.bf16` records in 9 families (`fixtures/golden`): Ada's BF16 pipeline is Ampere's,
+    so `AmpereBF16TcDot16_v2` gives each recorded word."""
+    doc = json.loads((FIXTURES / "golden/ada_bf16_m16n8k16.json").read_text())
+    assert doc["pipeline"] == "ada_bf16_m16n8k16"
+    assert _replay_capture(server, P.AmpereBF16TcDot16, *_bf16_rows(doc["records"])) == 360
+
+
+MMA_SPECIAL = sorted(FIXTURES.glob("tc-total-2026-09-07/*/mma_special.reduced.json.gz"))
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not MMA_SPECIAL, reason="the A100 / RTX 4090 special-value campaign is a fetched fixture")
+def test_the_a100_and_rtx4090_special_value_captures(server):
+    """The A100 and RTX 4090 special-value campaign (`tc-total-2026-09-07`): 31,290 cases and 906 positional cases per
+    device, every NaN, infinity, signed zero and saturation rule of `AmpereBF16TcDot16_v2`."""
+    total = 0
+    for path in MMA_SPECIAL:
+        with gzip.open(path, "rt") as f:
+            doc = json.load(f)
+        total += _replay_capture(server, P.AmpereBF16TcDot16, *_bf16_rows(doc["cases"] + doc["pos"]))
+    assert len(MMA_SPECIAL) == 2 and total == 2 * (31_290 + 906)
+
+
+H100 = FIXTURES / "tc-hopper-2026-09-07/special.reduced.json.gz"
+H100_WGMMA = FIXTURES / "tc-hopper-wgmma-bf16-2026-09-26/records.json.gz"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (H100.exists() and H100_WGMMA.exists()), reason="the H100 captures are fetched fixtures")
+def test_the_h100_captures(server):
+    """The H100 `HGMMA.64x128x16.F32.BF16` record (`tc-hopper-2026-09-07`: 44,046 records in 14 families) and lane
+    wgmma-bf16's `wgmma m64n8k16` sample (20,880 one-step records and 840 four-step chains on one accumulator), through
+    `HopperBF16WgmmaDot16_v1`."""
+    with gzip.open(H100, "rt") as f:
+        doc = json.load(f)
+    total = _replay_capture(server, P.HopperBF16WgmmaDot16, *_bf16_rows([c for cs in doc["families"].values() for c in cs]))
+    with gzip.open(H100_WGMMA, "rt") as f:
+        records = json.load(f)["records"]
+    for steps in (1, 4):
+        rows, want = _bf16_rows([r for r in records if r["steps"] == steps])
+        if steps > 1:
+            rows = [(acc, tuple(a[16 * s:16 * s + 16] for s in range(steps)), tuple(b[16 * s:16 * s + 16] for s in range(steps)))
+                    for acc, a, b in rows]
+        total += _replay_capture(server, P.HopperBF16WgmmaDot16, rows, want, steps)
+    assert total == 44_046 + 20_880 + 840
+
+
+def _tiles(z, *scales: str) -> tuple[list[tuple], list[int]]:
+    """A capture's tiles as rows: element (i, j) of tile t is row i of `A` against row j of `Bt` (and their block scales),
+    from `C[t][i][j]` to `D[t][i][j]`."""
+    A, Bt, C, D = (z[k].tolist() for k in ("A", "Bt", "C", "D"))
+    S = [z[k].tolist() for k in scales]
+    rows, want = [], []
+    for t in range(len(A)):
+        for i in range(len(A[t])):
+            for j in range(len(Bt[t])):
+                rows.append((C[t][i][j] & 0xFFFFFFFF, tuple(A[t][i]), tuple(Bt[t][j]),
+                             *((tuple(S[0][t][i]), tuple(S[1][t][j])) if scales else ())))
+                want.append(D[t][i][j] & 0xFFFFFFFF)
+    return rows, want
+
+
+@pytest.mark.slow
+def test_the_sm120_captures(server):
+    """The RTX PRO 6000's E5M2 specials and signed-zero tiles (`tc-sm120-e5m2-2026-09-30`: 38,912 words, NaN and infinite
+    operands and accumulators included) through `BlackwellE5m2QmmaDot32_v1`, and its four MXFP4 edge families
+    (`tc-sm120-mxf4-2026-10-01`: 73,728 words, a 0xFF scale byte, overflowing and cancelling blocks, ±inf and NaN
+    accumulators) through `BlackwellMxf4OmmaDot64_v1`."""
+    import numpy as np
+
+    total = 0
+    for name in ("tiles_specials", "tiles_signed_zero"):
+        total += _replay_capture(server, P.BlackwellE5m2QmmaDot32, *_tiles(np.load(FIXTURES / f"tc-sm120-e5m2-2026-09-30/{name}.npz")))
+    for name in ("nan_scale", "overflow_cancel", "overflow_edge", "inf_acc_overflow"):
+        z = np.load(FIXTURES / f"tc-sm120-mxf4-2026-10-01/tiles_mxf4_{name}.npz")
+        total += _replay_capture(server, P.BlackwellMxf4OmmaDot64, *_tiles(z, "SFA", "SFB"))
+    assert total == 38_912 + 73_728
+
+
+AUTOPROOF = Path(__file__).resolve().parents[5] / "ml/circuits/silicon/captures/autoproof-probe-vectors.json"
+
+
+@pytest.mark.skipif(not AUTOPROOF.exists(), reason="autoproof's RTX 5090 vectors are a fetched fixture")
+def test_the_rtx5090_nvfp4_vectors(server):
+    """autoproof's 1,601 RTX 5090 `mma.sync kind::mxf4nvf4 ... ue4m3` vectors from a zero accumulator, K = 64, 128 and 256
+    (one to four chained steps), through `BlackwellNvf4OmmaDot64_v1`."""
+    doc = json.loads(AUTOPROOF.read_text())["nvfp4_m16n8k64"]
+    assert (doc["acc_init"], doc["scale"], doc["block"]) == ("0x00000000", "ue4m3", 16)
+    total = 0
+    for steps in (1, 2, 4):
+        cases = [c for c in doc["cases"] if len(c["a"]) == 64 * steps]
+        rows = []
+        for c in cases:
+            a, b, sa, sb = _hexwords(c["a"], 1), _hexwords(c["b"], 1), _hexwords(c["sa"], 2), _hexwords(c["sb"], 2)
+            cut = lambda v, n: tuple(v[n * s:n * s + n] for s in range(steps)) if steps > 1 else v  # noqa: E731
+            rows.append((0, cut(a, 64), cut(b, 64), cut(sa, 4), cut(sb, 4)))
+        total += _replay_capture(server, P.BlackwellNvf4OmmaDot64, rows, [int(c["d"], 16) for c in cases], steps)
+    assert total == 1601
+
+
+# ---- E3: the traced Boolean steps ---------------------------------------------------------------------------------------
+
+#: the traced Boolean Definition of each dot step (`verity.ml.circuits.ops.boolean.gemm`, 19,156 to 28,099 gates)
+TRACED = {P.AmpereBF16TcDot16: BG.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16: BG.HopperBF16WgmmaDot16,
+          P.HopperE4m3QgmmaDot32: BG.HopperE4m3QgmmaDot32, P.BlackwellE4m3QmmaDot32: BG.BlackwellE4m3QmmaDot32,
+          P.BlackwellE5m2QmmaDot32: BG.BlackwellE5m2QmmaDot32, P.BlackwellNvf4OmmaDot64: BG.BlackwellNvf4OmmaDot64,
+          P.BlackwellMxf4OmmaDot64: BG.BlackwellMxf4OmmaDot64}
+
+
+@functools.cache
+def _traced_batch_text(fid: str, n: int) -> str:
+    spec = bind(TRACED[next(p for p in TCS if p.id == fid)])
+    sig, ret = spec.signature()
+    params = tuple((name, Array(n, t)) for name, t in sig)
+    main = CompositeDefinition(f"DtTraced{fid}x{n}", 1, (), lambda S: (params, Array(n, ret)),
+                               lambda B, S, *a: B.batch(spec, *a, axes=(0,) * len(a)), register=False)
+    return json.dumps(desc_of(Program(bind(main))))
+
+
+def _bits_of(words: list[int], w: int) -> list[int]:
+    return [(x >> j) & 1 for x in words for j in range(w)]
+
+
+@pytest.mark.slow
+def test_the_traced_steps_are_the_lean_primitives(server):
+    """Each dot step's traced Boolean Definition, evaluated gate by gate by the Lean (its And, Xor and Not gates), gives the
+    words the Lean primitive gives and the Python primitive's evaluator, on 64 rows: specials at each grid position under
+    edge accumulators, and draws. The Lean's gate walk is held to the Python oracle on Boolean Programs by the random
+    composites and `test_traced_definitions` (the Ampere step among them); the oracle on these Programs would take about
+    45 s a step (448 rows, 11 million gates: 320 s), the Lean takes under a second a step."""
+    for fn in TCS:
+        f = TC_FMT[fn]
+        rng = random.Random(f"traced{fn.id}")
+        pairs = [r for rows in _tc_pairs(fn) + _tc_scales(fn) for r in rows]
+        sweep = [r for rows in _tc_sweep(fn) for r in rows]
+        rows = rng.sample(pairs, 40) + rng.sample(sweep, 24)
+        want = [fn.evaluate(*_flat(r)) for r in rows]
+        kind, out = server.call("evaluate", request(json.loads(_batch_text(fn.id, len(rows))), _columns(rows)))
+        assert kind == "output" and json.loads(out) == want, fn.id
+        widths = [32, f.w, f.w] + ([8, 8] if f.scales else [])
+        x = [_bits_of(col, w) for col, w in zip(_columns(rows), widths)]
+        kind, out = server.call("evaluate", request(json.loads(_traced_batch_text(fn.id, len(rows))), x))
+        assert kind == "output" and _words(json.loads(out), [32] * len(rows)) == want, fn.id
