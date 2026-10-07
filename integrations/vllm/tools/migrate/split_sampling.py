@@ -1,6 +1,6 @@
 """Split the sampling family of `verity_vllm.program.registry` into its Definitions, its twins and its vocabulary.
 
-The repository migration moves every Definition into `catalog/`, which imports only `verity`; before that, each registry module is
+The repository migration moves every Definition into `verity/ml/circuits/`, which imports only `verity`; before that, each registry module is
 split so that its Definition modules import only `verity` and other Definition modules. For the sampling family:
 
 * the Definition modules stay where they are: `sampling`, `sampling_boolean`, `gumbel_boolean`, `topp_word_gates`,
@@ -46,7 +46,7 @@ PKG = "verity_vllm.program.registry"
 REG = VLLM / "verity_vllm" / "program" / "registry"
 ALLOWLISTS = VLLM / "tests" / "lint" / "allowlists"
 DIGEST_TEST = VLLM / "tests" / "program" / "test_sampling_split.py"
-TASKS_TEST = ROOT / "tools" / "circuit_check" / "tests" / "test_sampling_split_tasks.py"
+TASKS_TEST = ROOT / "tools" / "verity" / "circuit_check" / "tests" / "test_sampling_split_tasks.py"
 WIDTH = 130
 
 
@@ -99,7 +99,7 @@ EXCEPTIONS = {
                                                     "div.full tables of `program.kernels`); the keep word is that model's output",
 }
 #: where a Value type re-exported as another module's own (`prims.F32`, equal to core's but a distinct object) is taken from
-CORE_TYPES = "verity_catalog.definitions.scalar"
+CORE_TYPES = "verity.ml.circuits.ops.scalar"
 
 #: rewrites no AST rule makes, each anchored on its exact text: (file, old, new, occurrences)
 PATCHES = (
@@ -483,7 +483,7 @@ def target_of(module: str, name: str) -> tuple[str, str]:
         if getattr(importlib.import_module(own), oname) is not obj:
             raise SplitError(f"{module}.{name} is not the object {own}.{oname}")
         return own, oname
-    from verity.primitives.circuits.types import Array, Tuple, Value
+    from verity.ml.circuits.types import Array, Tuple, Value
     if isinstance(obj, (Value, Array, Tuple)) and getattr(importlib.import_module(CORE_TYPES), name, None) == obj:
         return CORE_TYPES, name
     raise SplitError(f"{module}.{name} is {own}'s own; a Definition module may not import it from there")

@@ -1,6 +1,6 @@
 """Merkle commitment to the columns of the codeword matrix U (m x n): leaf c = H(column c as m little-endian uint32),
 internal = H(left || right).  Host hashing: Blake3 (``blake3`` package) when importable, else SHA-256 (hashlib) --
-both PLACEHOLDERS for the GPU Merkle of ``kernels/hash_gpu``; the hash is named in the proof header.
+both PLACEHOLDERS for the GPU Merkle of ``verity/ml/kernels/hash_gpu``; the hash is named in the proof header.
 """
 from __future__ import annotations
 
@@ -25,19 +25,19 @@ except ImportError:                                   # pragma: no cover
 
 __all__ = ["HASH_NAME", "commit", "commit_device", "gpu_available", "hash_bytes", "open_columns", "open_device", "verify_path"]
 
-# --- GPU Merkle (kernels/hash_gpu, the hash-gpu lane): Blake3 leaves and nodes on the device, bit-exact with
+# --- GPU Merkle (verity/ml/kernels/hash_gpu, the hash-gpu lane): Blake3 leaves and nodes on the device, bit-exact with
 # the host Blake3 above, so ``verify_path`` is unchanged. -----------------------------------------------------------
 try:
     import sys as _sys
     from pathlib import Path as _Path
 
-    _shared = str(_Path(__file__).resolve().parents[3] / "kernels")
+    _shared = str(_Path(__file__).resolve().parents[3] / "verity" / "ml" / "kernels")
     if _shared not in _sys.path:
         _sys.path.insert(0, _shared)
     import cupy as _cp  # noqa: F401
     from hash_gpu import merkle as _gpu_merkle
 
-    GPU_HASH_NAME = "blake3 (GPU, kernels/hash_gpu)"
+    GPU_HASH_NAME = "blake3 (GPU, verity/ml/kernels/hash_gpu)"
 except Exception as _e:  # noqa: BLE001 -- no cupy / no hash_gpu: the host path stays
     _gpu_merkle = None
     GPU_HASH_NAME = None
@@ -47,7 +47,7 @@ except Exception as _e:  # noqa: BLE001 -- no cupy / no hash_gpu: the host path 
     import warnings as _warnings
 
     try:
-        import cupy as _cp_probe  # noqa: F401  -- cupy present => a GPU host whose tree lacks kernels/hash_gpu
+        import cupy as _cp_probe  # noqa: F401  -- cupy present => a GPU host whose tree lacks verity/ml/kernels/hash_gpu
         _has_cupy = True
     except Exception:  # noqa: BLE001
         _has_cupy = False

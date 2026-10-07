@@ -1,6 +1,6 @@
 """The single lowering adapter (IR §F): legacy backend names appear only in `verity_sp1.proofs.lowering.lower_subcircuit` output."""
 
-from verity.primitives.circuits import query
+from verity.ml.circuits import query
 
 from verity_sp1.proofs.lowering import lower_subcircuit
 from tests.program.test_running_example import make_program

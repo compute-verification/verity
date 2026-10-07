@@ -73,7 +73,7 @@ def _sha256(data: bytes) -> str:
 def _bind(relation: dict):
     """The specialised IR definition a set's manifest names, its tables and the guest family (frontend imports stay here)."""
 
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_sp1.proofs.reduce_mufu import div_full_rcp_index, mufu_sqrt_index, rsqrt_approx_index
     from verity_sp1.ir_call import Table
     from verity_vllm.program.kernels import rms_relation
@@ -191,7 +191,7 @@ def prepare(a) -> int:
         "object_digest": object_digest(honest.obj),
         "statement_sha256": _sha256(honest.statement),
         "public_values": bound_public_values(honest.obj, statement_format=3).hex(),
-        "ir_oracle": f"verity.primitives.circuits.evaluation.reference evaluate_call of {spec.id} reproduces the recorded outputs of instances [{a.lo}, {hi})",
+        "ir_oracle": f"verity.ml.circuits.evaluation.reference evaluate_call of {spec.id} reproduces the recorded outputs of instances [{a.lo}, {hi})",
         "python_reference": {"honest": True, **{k: v for k, v in python_negatives.items()}},
         "negatives": {name: {"object_digest": object_digest(low.obj), "statement_sha256": _sha256(low.statement)} for name, low in negatives.items()},
         "source_sha": _git_sha(),

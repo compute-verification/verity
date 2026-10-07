@@ -13,7 +13,7 @@ tier-level `status` in {"pass", "fail", "skipped", "error"}; per-instance entrie
 A. `tier_a` — **body exactness**.  For every specialization present in the Program, up to `k` instances (seeded
    uniform sample over the snapshot steps) are evaluated exactly as `compare.compare_subcircuits` does: operands by
    provenance (`compare.Values`: prompt / checkpoint / the producer's output snapshot), expected outputs from the
-   instance's own event snapshot, `verity.primitives.circuits.evaluate.evaluate_call`, bit-exact compare.  An instance whose
+   instance's own event snapshot, `verity.ml.circuits.evaluate.evaluate_call`, bit-exact compare.  An instance whose
    argument leaves exceed `max_arg_leaves` (Embedding and the lm_head Gemm: 28M-leaf weight operands) is evaluated
    at a *child unit* found by descending with `FunctionCall`/`Scope.child` — one `GemmCoordinate`, one gather gate —
    whose argument gates are looked up in the parent's arguments by gate index (only the needed leaves are
@@ -66,11 +66,11 @@ from typing import Any, Iterable
 import numpy as np
 from dataclasses import dataclass
 
-from verity.primitives.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluate import evaluate_call
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.frontend.rules.family import _field_intervals
-from verity.primitives.circuits.layout import FunctionCall
-from verity.primitives.circuits.refs import runs
+from verity.ml.circuits.layout import FunctionCall
+from verity.ml.circuits.refs import runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _component_ranges, _jsonable, _max_rss_gb, fold_log, load_profile
 from verity_vllm.check.replay.tier_a_pool import _distinct_step_order, evaluate_strata
