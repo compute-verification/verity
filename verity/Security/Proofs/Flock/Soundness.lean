@@ -176,4 +176,5 @@ import Proofs.Flock.Soundness.Discharge.FailClosed
 import Proofs.Flock.Soundness.Discharge.Canonical.Headline
 import Proofs.Flock.Soundness.Discharge.Canonical.Statements
 import Proofs.Flock.Soundness.Discharge.Canonical.PubIn
+import Proofs.Flock.Soundness.Discharge.ZkPubIn
 import Proofs.Flock.Soundness.ZK.PadNonvanishing40
