@@ -1440,7 +1440,8 @@ def main(argv: list[str] | None = None) -> int:
                      "or give the test a stand-in for it" if files else ""))
         if r.nondeterministic:
             print(f"        NONDETERMINISTIC: {', '.join(r.nondeterministic[:5])}{' ...' if len(r.nondeterministic) > 5 else ''} both passed "
-                  "and failed under one key: their inputs were identical")
+                  "and failed under one key: their inputs were identical, so each is flaky; delete it, don't rerun or fix it "
+                  "(Daniel, 6 Oct)")
         if r.contradicts:
             print(f"        CONTRADICTS a cached pass: {', '.join(r.contradicts[:5])}{' ...' if len(r.contradicts) > 5 else ''}"
                   " -- a key misses an input, or a test's outcome isn't a function of its inputs")
