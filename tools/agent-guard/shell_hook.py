@@ -3,9 +3,11 @@
 
 Cursor runs every agent shell command through it, on any VM, so it holds where the redacting `env` (`install.sh`) was never
 installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, which is how a line
-of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refused, anywhere in the command (pipelines,
-`$(...)`, `bash -c`, `ssh HOST CMD`, `research pods ssh POD -- CMD`): `env` or `printenv` with nothing to run, `printenv` of a
-secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, and reading `/proc/*/environ`.
+of the Nebius key reached agents' transcripts at least five times by 6 Oct, and again on 7 Oct through a tmux pane. Refused,
+anywhere in the command (pipelines, `$(...)`, `bash -c` or `-lc`, `ssh HOST CMD`, `research pods ssh POD -- CMD`, the text
+`tmux send-keys` types, `tmux -c CMD`): `env` or `printenv` with nothing to run, `printenv` of a secret's name, a bare `set`,
+`export` or `export -p`, `declare`/`typeset` listing variables, `tmux show-environment` without names or of a secret's name,
+and reading `/proc/*/environ`.
 `compgen -e` lists names only and passes. Also refused: every process's full command line (`ps aux`, `ps -ef`, `ps -eo args`,
 `/proc/*/cmdline`), where a daemon's token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
@@ -23,6 +25,9 @@ WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"},
 KEYWORDS = {"{", "}", "!", "if", "then", "elif", "else", "do", "while", "until"}
 SHELLS = {"bash", "sh", "zsh", "dash"}
 SSH_ARG_OPTIONS = set("bcDEeFIiJLlmOopQRSWw")
+SHELL_ARG_OPTIONS = {"-o", "+o", "-O", "+O", "--rcfile", "--init-file"}
+TMUX_ARG_OPTIONS = {"-L", "-S", "-f", "-T", "-c", "-t", "-N"}
+NEWLINE_KEYS = re.compile(r"(Enter|KPEnter|[CM]-.+|\^.|Escape|Up|Down|Left|Right|Home|End|BSpace|DC|IC|NPage|PPage|F\d+)$")
 ENVIRON = re.compile(r"/proc/[^\s'\"]*environ|/proc/\*/cmdline")
 FILTERS = {"grep", "egrep", "fgrep", "rg"}
 FALLBACK = re.compile(r"(^|[\s|;&(`])(env|printenv|set|export|declare|typeset)(\s+-\S+)*\s*($|[|;&)>`])", re.M)
@@ -120,6 +125,39 @@ def every_argv(args: list[str]) -> bool:
     return everyone and (bool(set(short) & set("fF")) if fmt is None else shown)
 
 
+def shell_command(args: list[str]) -> str | None:
+    """The command string `bash ARGS` runs, when an option cluster holds `c` (`-c`, `-lc`, `--login -ec`)."""
+    if not any(re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", a) for a in args):
+        return None
+    i = 0
+    while i < len(args) and args[i].startswith(("-", "+")) and args[i] != "--":
+        i += 2 if args[i] in SHELL_ARG_OPTIONS else 1
+    i += i < len(args) and args[i] == "--"
+    return args[i] if i < len(args) else None
+
+
+def tmux_refused(name: str, args: list[str]) -> bool:
+    """Whether tmux's command `name ARGS` prints the environment (`show-environment`) or types a refused command into a pane
+    (`send-keys`, judged on the text its keys type). tmux takes any unambiguous prefix of a command's name."""
+    flags, i = [], 0
+    while i < len(args) and args[i].startswith("-") and args[i] != "--":
+        flags.append(args[i])
+        i += 2 if args[i] in TMUX_ARG_OPTIONS else 1
+    rest = args[i + (i < len(args) and args[i] == "--"):]
+    if name == "showenv" or (len(name) >= 6 and "show-environment".startswith(name)):
+        return not rest or any(secret(n) for n in rest)
+    if name == "send" or (len(name) >= 6 and "send-keys".startswith(name)):
+        return refused_text("".join(rest if "-l" in flags else map(typed, rest)))
+    return False
+
+
+def typed(key: str) -> str:
+    """The text `send-keys` types for `key`: a name like `Space` or `C-m` is one key, any other string its characters."""
+    if key in ("Space", "Tab"):
+        return " "
+    return "\n" if NEWLINE_KEYS.match(key) else key
+
+
 def refused(words: list[str], filtered: bool = False) -> bool:
     if any(refused_text(w.split("$(", 1)[1]) for w in words if "$(" in w):
         return True
@@ -144,8 +182,18 @@ def refused(words: list[str], filtered: bool = False) -> bool:
         if not names:
             return not opts or any(set(o.lstrip("-+")) - set("fF") for o in opts)
         return any("p" in o for o in opts) and any(secret(n) for n in names)
-    if name in SHELLS and "-c" in args[:-1]:
-        return refused_text(args[args.index("-c") + 1])
+    if name in SHELLS:
+        run = shell_command(args)
+        return run is not None and refused_text(run)
+    if name == "tmux":
+        i = 0
+        while i < len(args) and args[i].startswith("-"):
+            if args[i] == "-c" and i + 1 < len(args) and refused_text(args[i + 1]):
+                return True
+            i += 2 if args[i] in TMUX_ARG_OPTIONS else 1
+        return i < len(args) and tmux_refused(args[i], args[i + 1:])
+    if tmux_refused(name, args):
+        return True
     if name == "ssh":
         i = 0
         while i < len(args) and args[i].startswith("-"):
