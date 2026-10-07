@@ -6,6 +6,7 @@ import importlib.util
 import itertools
 import json
 import os
+import re
 import tomllib
 from pathlib import Path
 
@@ -30,7 +31,10 @@ def test_every_lake_package_is_audited():
 
 
 def test_one_toolchain():
+    """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
+    image = ROOT / "tools/research/src/research/pods/nebius/image/Dockerfile"
+    pins[str(image.relative_to(ROOT))] = re.search(r"^ARG LEAN_TOOLCHAIN=(\S+)", image.read_text(), re.MULTILINE).group(1)
     assert len(set(pins.values())) == 1, pins
 
 
@@ -53,46 +57,6 @@ def test_the_randomness_assumption_cites_this_toolchain():
     version = (proofs / "lean-toolchain").read_text().strip().rpartition(":")[2]
     for doc in ("ASSUMPTIONS.md", "Assumptions.lean"):
         assert f"Lean {version}'s runtime" in (proofs / "Flock/Soundness" / doc).read_text(), doc
-
-
-def _module_roots(pkg: Path):
-    """(source directory, root module) for each library and executable of `pkg`, as Lake resolves them."""
-    cfg = tomllib.loads((pkg / "lakefile.toml").read_text())
-    src = pkg / cfg.get("srcDir", ".")
-    for lib in cfg.get("lean_lib", []):
-        for r in lib.get("roots", [lib["name"]]) + [g.rstrip("+*").rstrip(".") for g in lib.get("globs", [])]:
-            yield (src / lib.get("srcDir", ".")).resolve(), r
-    for exe in cfg.get("lean_exe", []):
-        yield (src / exe.get("srcDir", ".")).resolve(), exe.get("root", exe["name"])
-
-
-def test_lean_module_roots_are_disjoint():
-    """No module name is claimed from two source directories, by two packages or by one. Lake resolves an import by name
-    across every library in the workspace and doesn't report a duplicate: a library whose roots overlap another's builds
-    the other's module from its own directory, without a warning. Within one package, roots in different source
-    directories may share a namespace but not nest (`Pouw.Protocol` and `Pouw.Guarantees` may; `Pouw` and
-    `Pouw.Guarantees` may not). Across packages they may not even share a first component: with `Pk.A` in one package
-    and `Pk.B` in another, `lake build` passes but `lake env lean` looks for every `Pk.*` under the first package's
-    build directory and fails to find `Pk.B`."""
-    claims = []
-    for pkg in lake_packages():
-        assert (pkg / "lakefile.toml").exists(), f"{pkg.relative_to(ROOT)}: only a lakefile.toml can be read here"
-        claims += [(pkg, src, root) for src, root in _module_roots(pkg)]
-
-    def nested(a: str, b: str) -> bool:
-        a, b = a.split("."), b.split(".")
-        return a[: len(b)] == b or b[: len(a)] == a
-
-    def clash(x, y) -> bool:
-        if x[0] != y[0]:
-            return x[2].split(".")[0] == y[2].split(".")[0]
-        return x[1] != y[1] and nested(x[2], y[2])
-
-    clashes = [f"{x[2]} ({x[0].relative_to(ROOT)}, {x[1].relative_to(ROOT)}) and "
-               f"{y[2]} ({y[0].relative_to(ROOT)}, {y[1].relative_to(ROOT)})"
-               for x, y in itertools.combinations(claims, 2) if clash(x, y)]
-    assert len(claims) >= 10
-    assert not clashes, clashes
 
 
 def _module_roots(pkg: Path):
@@ -174,7 +138,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (C-Flock's verifier, the PoUS grader, the warden's program) stays with its component and never imports
+    """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
     `verity/Security/`: the analysis reads the code, never the reverse (Daniel's layout ruling of Oct 5)."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside verity/Security"

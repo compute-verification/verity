@@ -97,7 +97,7 @@ def BitVal.get (v : BitVal W) (i : ℕ) : Bool := if h : i < W then v.2 ⟨i, h�
 /-- **A row's value**: a width of `16 w` bits (`w` u16 words), and no bit set past it. -/
 def RowShaped (v : BitVal W) : Prop := v.1.val % 16 = 0 ∧ ∀ i : Fin W, v.1.val ≤ i.val → v.2 i = false
 
-instance : DecidablePred (RowShaped (W := W)) := fun _ => inferInstanceAs (Decidable (_ ∧ _))
+instance instDecidablePredBitValRowShaped : DecidablePred (RowShaped (W := W)) := fun _ => inferInstanceAs (Decidable (_ ∧ _))
 
 /-- One byte per width and per bit: a code of fixed length `2 W + 1`. -/
 def bitCode (v : BitVal W) : List UInt8 :=

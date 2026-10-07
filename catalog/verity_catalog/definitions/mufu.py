@@ -18,7 +18,7 @@ Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered wit
 Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
 (`fa2_model.cpp`: `mufu_ex2_bits`, `mufu_rcp_bits`; `rms_triton_model.cpp`: `mufu_sqrt`, `mufu_rsq`, `div_full_parts`,
-`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`kernels/derived_rows.py`).
+`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`integrations/vllm/verity_vllm/program/kernels/derived_rows.py`).
 """
 from __future__ import annotations
 
@@ -268,8 +268,10 @@ def RsqrtApprox(x: int) -> int:
 # is not monotone (1081 adjacent inversions per 2^22 words, drops of up to 38 ulp at mantissa-segment boundaries), and no closed form
 # is known — so, like `MufuEx2Ftz` / `MufuRcpFtz`, it is a measured word table.  Unlike ex2/rcp it has no exponent reduction: the
 # table spans every f32 word between the small-|x| identity region and the saturation point, hence SHARDS of contiguous word ranges
-# (`verity_vllm/ops/measure_tanh.py`, format `verity/mufu-tanh-shard/xz-blocks/v1`: xz blocks of int8 first differences of
-# an injective ordered image of the output words, ~0.005 B/word).  The evaluator answers
+# (measured by `measure_tanh.py`, whose sha256 the manifest records; its last copy in this repository,
+# `integrations/vllm/verity_capture/bench/measure_tanh.py`, not that revision, was deleted in ca5d65e8e; format
+# `verity/mufu-tanh-shard/xz-blocks/v1`: xz blocks of int8 first differences of an injective ordered image of the output words,
+# ~0.005 B/word).  The evaluator answers
 #   (a) NaN inputs and the closed regions in `MUFU_TANH_RULES` (each established by an EXHAUSTIVE scan of the whole region),
 #   (b) every other word from the table: the in-tree `tables/mufu_tanh_sm89.{json,xzblocks}` (manifest with
 #       sha256, hardware/software, rules, evidence job ids, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
@@ -290,8 +292,9 @@ MUFU_TANH_TABLE_MANIFEST_SHA256 = "674b3663b5737e9d6b87a1a6a249e5a2a17cea279f89b
 _F32_SIGN = 0x80000000
 
 # Closed regions of the domain, each established ONLY by an exhaustive measurement of the whole region; None = not established, the
-# evaluator raises there.  Evidence (2026-09-17, RTX 4090 sm_89, driver 580.178.04, `measure_tanh.py`, summaries in
-# out/gen/lanes/gemma/ of lane/w-gemma; every job also ran the sign-flipped words and found 0 odd-symmetry violations):
+# evaluator raises there.  Evidence (2026-09-17, RTX 4090 sm_89, driver 580.178.04, `measure_tanh.py`; the job summaries were
+# lane w-gemma's local output, not kept, and the manifest records each job's id, range and word sha256; every job also ran the
+# sign-flipped words and found 0 odd-symmetry violations):
 #   identity_below 0x3B800001: job 0917T215010-79fd04 scanned [0x00000000, 0x31000000): 822,083,584 / 822,083,584 words hw(x) == x
 #                              (word sha 125078cf…); job 0917T214646-3b1c9a's shard [0x31000000, 0x41000000) has its first hw != x word
 #                              at 0x3B800001 (= 2^-8 + ulp) -> hw(x) == x for every |x| <= 2^-8, both signs (±0 included).
@@ -353,7 +356,7 @@ class _TanhShard:
             o[0] = hb["first_ordered"]
             np.cumsum(d, out=o[1:])
             o[1:] += hb["first_ordered"]
-            b = np.where(o < 0, (-(o + 1)) | _F32_SIGN, o).astype(np.uint32)  # inverse of measure_tanh.ordered_inj
+            b = np.where(o < 0, (-(o + 1)) | _F32_SIGN, o).astype(np.uint32)  # inverse of measure_tanh.ordered_inj (deleted; see above)
             if len(self._cache) >= 8:
                 self._cache.pop(next(iter(self._cache)))
             self._cache[k] = b

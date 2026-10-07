@@ -15,13 +15,17 @@ judgement; `audit.py` holds the policy.
 - `declared_axioms`: the `axiom` declarations among them.
 - `escapes`: the `opaque` ones (a `partial def` is one), and the `unsafe`, `@[implemented_by]` and `@[extern]` ones:
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
-- `pins`: for each name in `pins`, its kind, signature, axioms, `Prop` hypotheses, the hash of its type, and the
+- `pins`: for each name in `pins`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
+  axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
   `meaning`, with their source lines (`reads`), and the constants other than theorems outside `meaning` where that walk
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
   declaration range: what Lean generates for them has none), projections and internal names aside.
+- `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
+  starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
+  codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
@@ -284,6 +288,7 @@ def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
       ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
+    ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
@@ -350,6 +355,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut declared := #[]
   let mut escapes := #[]
   let mut specDefs := #[]
+  let mut instances := #[]
   for (m, data) in audited do
     let impl := (entriesOf Name data Compiler.implementedByAttr.ext.name).foldl (fun s (n, _) => s.insert n) NameSet.empty
     let ext := (entriesOf Unit data externAttr.ext.name).foldl (fun s (n, _) => s.insert n) NameSet.empty
@@ -359,6 +365,11 @@ unsafe def main (args : List String) : IO UInt32 := do
       if under spec m && specDefinition ci && ranges.contains n then
         specDefs := specDefs.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString),
           ("kind", toJson (kind ci))]
+      if let (some r, .str _ s) := (ranges[n]?, privateToUserName n) then
+        if s.startsWith "inst" then
+          instances := instances.push <| Json.mkObj [("name", toJson (privateToUserName n).toString),
+            ("id", toJson (Name.mkSimple s).toString), ("module", toJson m.toString),
+            ("at", toJson #[r.selectionRange.pos.line, r.selectionRange.pos.column])]
       if ci matches .axiomInfo _ then
         declared := declared.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString)]
       let axs := (axioms.getD n {}).toArray
@@ -428,7 +439,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
-    ("pins", Json.mkObj pinned.toList),
+    ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
     ("moved_conflicts", toJson conflicts)]
   IO.FS.writeFile out doc.compress
   return 0
