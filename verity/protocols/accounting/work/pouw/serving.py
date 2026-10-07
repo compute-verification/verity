@@ -178,7 +178,7 @@ MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v2", "ve
 
 @dataclass(frozen=True)
 class PassCommitment:
-    """``activation_roots`` is the SHA-256 over every call's A root in call order; ``kernel`` the kernel variant's id;
+    """``activation_roots`` is the SHA-512 over every call's A root in call order; ``kernel`` the kernel variant's id;
     ``controls`` every poisoning or negative control the pass ran with, empty for an honest pass."""
 
     scheme: str

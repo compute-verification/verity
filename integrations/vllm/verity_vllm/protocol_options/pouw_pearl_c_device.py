@@ -659,7 +659,7 @@ class PearlCDeviceRun(GraphCalls):
             roots_a = _bytes(self.roots_buf[:nb * len(cur.matmuls)])
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0).tolist() if cur.flag_rows else [0, 0]
             out.update(transcript_root=_bytes(tree[-nb:]).hex(),
-                       activation_roots=hashlib.sha256(roots_a).hexdigest(),
+                       activation_roots=hashlib.sha512(roots_a).hexdigest(),
                        screened_rows=cur.flag_rows, failing_rows=int(flags[0]), unsure_rows=int(flags[1]),
                        excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
             if cur.retain is not None:
