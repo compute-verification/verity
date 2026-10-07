@@ -1,0 +1,152 @@
+{
+ "roots": ["Properties.Pouw", "Properties.Proofs.Pouw"],
+ "meaning": ["Properties.Pouw", "PouwWindow.Grid", "PouwWindow.Draw", "PouwWindow.Advice", "PouwWindow.Public"],
+ "layers": {
+  "Properties.Pouw": {
+   "imports": ["PouwWindow"],
+   "except": [],
+   "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  }
+ },
+ "guarantees": {
+  "Properties.Pouw.Window.bucket8192": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"],
+   "assumptions": [],
+   "type_hash": "a971ebacf2a6b71e55ab2a526e26476b22f0308d3ca9236f97a374fc4e807c84"
+  },
+  "Properties.Pouw.Window.gridRefusals": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.gridRefusals : Properties.Pouw.Window.GridRefusals"],
+   "assumptions": [],
+   "type_hash": "29629fcf6b815b0f2fa6a3d22b2c018918a742db59c94e1a11a11113d8d40d6f"
+  },
+  "Properties.Pouw.Window.kPrimeExactAtEquality": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.kPrimeExactAtEquality : Properties.Pouw.Window.KPrimeExactAtEquality"],
+   "assumptions": [],
+   "type_hash": "56ee09302db5e8a3b601c900ae373a34da3dc327d9738d74c2664dd4ee304cdf"
+  },
+  "Properties.Pouw.Window.kPrimeRefuses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"],
+   "assumptions": [],
+   "type_hash": "39670eae87e2d8d90b32f391473aba88a7b1652ed97adb56987e0410d318ef78"
+  },
+  "Properties.Pouw.Window.kPrimeServed": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.kPrimeServed : Properties.Pouw.Window.KPrimeServed"],
+   "assumptions": [],
+   "type_hash": "f120ede9251754e80c0b6b3850b115c640e1c4877d13c9d0f59894818d41849a"
+  },
+  "Properties.Pouw.Window.levelsServed": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.levelsServed : Properties.Pouw.Window.LevelsServed"],
+   "assumptions": [],
+   "type_hash": "81826586ebf66577b8a53753af52918a2b7b66261cc3bb493d92787b40d2b915"
+  },
+  "Properties.Pouw.Window.publicItems_eq": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
+   "assumptions": [],
+   "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
+  }
+ },
+ "reads": {
+  "PouwWindow.Draw": {
+   "digest": "398da41a7cd5c10e4cf2f56bf539050b67cd72c1627eaa0f34e02f2828def686",
+   "definitions": {
+    "PouwWindow.KPrimeDomain": "c4582abdc25a851e94e7fac6a2d7b1b5ab0ffd668e33d58019b1f8aa2a8e7c58",
+    "PouwWindow.ceilDiv": "9c21b83b23ccaa271c280217bce6f4390ead5e081f8e5708c07f5a9d084e7beb",
+    "PouwWindow.exactBits": "874847990decb3689333781f9e8be59f1d16f021dd7e62abf5a4573f9d251855",
+    "PouwWindow.fixedPow": "3546bb63b7b220e9925285cbb9723bafb9f774cf8721bc0628ad0c81de98ea38",
+    "PouwWindow.fixedPowGo": "802ff08d4c965f0aa6a8f972477415b75fe658023ef17541b05113052a457a17",
+    "PouwWindow.instDecidableKPrimeDomain": "f8aa4dbdbfcf1f555b01e5cfa3b9ef55452f45cc569009228ae1922135753b6b",
+    "PouwWindow.kPrime": "5434381d4f761d917114a576879803dba7bd7bb1af70a3bcc3d878c76b42b464",
+    "PouwWindow.leastAbove": "4ff3159f3587141df55b5c15679f46f6d313f56f146e8556044e51c1bfaedd15",
+    "PouwWindow.leastUpTo": "1ae4d163520635adb766df9b87b041444ac401b45af380d3aa22d99eb9e11860",
+    "PouwWindow.missAtMost": "87fc9b9968da8ebf89ad40afae49a1fe33e6a48395e026719bf3b8daf0aa6db2",
+    "PouwWindow.missAtMostExact": "155d860d3dfd7e576b049ef6ee6198deb1fda1fc8c95ca55d2b1a6dad47c93c8",
+    "PouwWindow.missAtMostGo": "01adeca9036206220ad6ea4fd34052ff1a104c869ce24ca859f2f9b30e659dc7",
+    "PouwWindow.missShare": "6e007f3d3a3bf81825460d2f17c550de6eae7ad21ae0e5d108aa8baed764ca0e"
+   },
+   "guarantees": [
+    "Properties.Pouw.Window.kPrimeExactAtEquality",
+    "Properties.Pouw.Window.kPrimeRefuses",
+    "Properties.Pouw.Window.kPrimeServed"
+   ]
+  },
+  "PouwWindow.Grid": {
+   "digest": "2ae276331bd05f1507e9db7706c85a2f4b1dc54f69353fd453c9e63c45263737",
+   "definitions": {
+    "PouwWindow.Work": "014faba291a8d0f91a9aadca67182f9fa692286852a3c25dd0efc27b2a0c2296",
+    "PouwWindow.Work.at": "264642daa24c4fedf5a153258f9f6dce395364d0e19d3edb28e627dbaccbd73f",
+    "PouwWindow.Work.at?": "ac884cb4651a8aac32f5ae2e41a96369bb28f36d144730f655d4e04b9db2c9ed",
+    "PouwWindow.Work.credited": "b63ea61a5704f50cc6982817fa8823ed80cc19153b72c89e067271cbd9638a31",
+    "PouwWindow.Work.n": "685d3b27713be2cfed24f8c72e38af678287ec3f5b68eec444941dd8de077962",
+    "PouwWindow.bitLength": "ac4c3703a38b122830f9dac46293b43fcc3ed991201304955d9a63dda4021014",
+    "PouwWindow.bucket": "5dd9db56e6ced2a4b605d6109bda296e1202cdcea66f935f4ebc806323b0f28b",
+    "PouwWindow.bucket?": "7e39eaf10674448bddc8c9ec3a657fb64358925e5959711660895497e44d081f",
+    "PouwWindow.floorPoint": "a84e299da0f33151d6efbdd4a1a479390ab2f44f550af903d23cb72b0387b069",
+    "PouwWindow.floorPoint?": "a9824427cebc2456477c93c35643e098c3342c0537d471cdd1d7228ef0273d03",
+    "PouwWindow.gridBits": "ed35576219c9dfaca9f47106b8394957b734fe87f8307356bc9999c136d4d908",
+    "PouwWindow.level": "4016d49aa0368b5392818b9a0624536ed586c230cc70bdad19a9405827d0598c",
+    "PouwWindow.level?": "ac1c85f94704ece3aa7fa330944698bc91ec2310d88d5eb7c0a7a88ed85224ed",
+    "PouwWindow.levels": "126480ed53f73a366d16a0205afd1f030b4b9aec4cb56a73c90bbb54f2014ab6",
+    "PouwWindow.levels?": "df026a0a28cc16bf4b8c8222c408034728a6dc7660d69e6959cfef9b4899e4bb",
+    "PouwWindow.onGrid": "8d5d85df15499002bc43db93f5b72cefd588910a68bc7bb29be528edd68546b9",
+    "PouwWindow.onGridInt": "1650038e2ad202ec0bde15449f948dbc0e22e0c3d3ed008d6bbc2e03835d7ee1",
+    "PouwWindow.pad": "48ed9da86077513058d57202c3acf82947dc18525c419c1d0400bc4335e24e95",
+    "PouwWindow.pad?": "5bf6c4063d8219370221d82bd8925d4f03e6f3b17e59e018e559de801d55fb82",
+    "PouwWindow.point": "1a3d5777e02d714cdfc290948a8092f61fcd99ca3b454ec1fad2152717ab1d0d",
+    "PouwWindow.point?": "bfd2c827978c8528e80493fa405ebf48022c78d4f81ec47670c2ac876cf4a2c4",
+    "PouwWindow.shift": "02023ba5d741609365f3d7bfc1c8ef4a9c97b2e5b9ab33f1524cf9174e8fefd0"
+   },
+   "guarantees": [
+    "Properties.Pouw.Window.bucket8192",
+    "Properties.Pouw.Window.gridRefusals",
+    "Properties.Pouw.Window.kPrimeExactAtEquality",
+    "Properties.Pouw.Window.kPrimeRefuses",
+    "Properties.Pouw.Window.kPrimeServed",
+    "Properties.Pouw.Window.levelsServed"
+   ]
+  },
+  "PouwWindow.Public": {
+   "digest": "2825d5cdbe0ce31d630ee26fce7b54a23a0ffd7adf58553fe1bb193a4705f6d6",
+   "definitions": {
+    "PouwWindow.PublicItem": "69e07e7940f3c15848721f22dd6c73ec562657c37f8528bbd80fc0d80eb318a1",
+    "PouwWindow.PublicItem.item": "46dc234e6fc0f30b3cf4cafc12b26947ed8de5c0cf3440ae8a652441031c2e23",
+    "PouwWindow.PublicItem.kind": "8c89285f8e1e4767f57fa6b6b8c299712d5a31b34d06f6e657036fa04c924af6",
+    "PouwWindow.PublicItem.source": "f4d4ccf1e7df54b028aa9d10d7cadd796e6773be6bcf16aa8ae64862ad504e7f",
+    "PouwWindow.publicItems": "090dd4c35195c3962815b165da93c2a95c39d4b0cc915c6906a58893acb9c9d7",
+    "PouwWindow.registered": "ad7aa246bb486dc7a2a8c0d55eb07c65df3307b1cab0042e8a98da25421b55ba"
+   },
+   "guarantees": ["Properties.Pouw.Window.publicItems_eq"]
+  },
+  "Properties.Pouw": {
+   "digest": "9f2baf09514db245c5b593aab0f8cba2f43ab44a26b02ef06bd474f1f8bf41fa",
+   "definitions": {
+    "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
+    "Properties.Pouw.Window.GridRefusals": "89f6c58c824eb3b87ed21472f343ff23c23e87b18bb94caba9859fef6c08fb90",
+    "Properties.Pouw.Window.KPrimeExactAtEquality": "d8418512b1444e803757d81fd0a26b506448c8740b15c67cd023f377c2bc3215",
+    "Properties.Pouw.Window.KPrimeRefuses": "29c44c33dd261f2870fb75364e2ebcf2c0bfe70fdad24120647fa9cb651574b3",
+    "Properties.Pouw.Window.KPrimeServed": "e04552a46d5011cfc207a623075a274ffe4168fe4a8b619416f5de983f472110",
+    "Properties.Pouw.Window.LevelsServed": "8939fce20beabba6deb02af1e5c94d9a4827a24dd33231154253b5c6f54b5a3d",
+    "Properties.Pouw.Window.PublicItems": "7a96c28fb3a37d5199a61fc33c6cc8957d0f805afe05baf140b2882fa359b880",
+    "Properties.Pouw.Window.servedK": "f180a0127ece52b30dea9c01733b3421eabdba5e8805040f54e44e4eb43e1d1e"
+   },
+   "guarantees": [
+    "Properties.Pouw.Window.bucket8192",
+    "Properties.Pouw.Window.gridRefusals",
+    "Properties.Pouw.Window.kPrimeExactAtEquality",
+    "Properties.Pouw.Window.kPrimeRefuses",
+    "Properties.Pouw.Window.kPrimeServed",
+    "Properties.Pouw.Window.levelsServed",
+    "Properties.Pouw.Window.publicItems_eq"
+   ]
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

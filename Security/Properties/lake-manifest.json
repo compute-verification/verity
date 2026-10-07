@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "pouw_window",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../verity/experimental/core/protocols/pouw/window",
+   "configFile": "lakefile.toml"}],
+ "name": "security_properties",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}
