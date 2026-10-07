@@ -164,6 +164,22 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
 - Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's `template_instance_vectors.json`
   (16 of 16: the population, the ranges, every unit's node, member and gates, the refusals word for word, the malformed
   parameters).
+- The firewall's contract (`Flock.Firewall.Contract`, `flock-firewall contract`), the property every firewall's sessions
+  must have, beside the inner phase's program (`Flock.Firewall.run`, which `test_firewall_agreement.py` holds the proxy
+  to): `firewall_agree.py` runs the inner phase's firewall (`rec_live.Proxy`) and the contract on the same transcript
+  (`verity_flock.firewall_transcript`) over 22 cases: the honest sessions accepted by both, the red team's six on #1270
+  refused by both or sent as the schedule places them, and tamper controls the firewall passes and the contract refuses.
+  The contract holds each transcript to the verifier's public input (`flock-firewall contract --public FILE`,
+  `verity/firewall-public/v0`: the schedule, the relations, the statement's values and the names of the firewall's own
+  values), never to the transcript's own copy; without one it refuses whatever leans on it. `test_firewall_contract.py`
+  also cuts each of review r6's leaks on #1323 at its item (`firewall_agree.leaks`: the commitments' count and place, a
+  tape number naming another's value, the public input from the transcript, a name of the firewall's choosing), and runs
+  the contract on every session of `test_firewall_agreement.py`. `--sessions`
+  replays recorded sessions from their coins and salts. The K = 4096 sessions it replayed before (`r20261006-070620-e02d`'s,
+  4 of 4 accepted by both) are `rec/inner-transcript/v0`'s, from before rec-step3's tops and level0, and today's firewall
+  refuses their schedule. A v1 session at that size has been recorded since (`r20261006-021550-4e4b`, rec-reprice's
+  `85-rec-reprice.sh STEP=inner K=4096`), but its outputs keep no `private.json`, whose salts the replay needs. The outer
+  phase (`firewall.rs`) is not covered yet.
 - Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
   instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
   (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
