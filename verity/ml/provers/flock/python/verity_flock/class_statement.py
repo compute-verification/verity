@@ -1160,7 +1160,7 @@ def _source_digest() -> str:
             yield from (d / f for f in files if f.endswith(".py") and "." not in f[:-3])
 
     h = hashlib.sha256()
-    for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity_experimental", "verity_flock", "circuit_check",
+    for name in ("verity", "verity_experimental", "verity_flock", "circuit_check",
                  "verity_vllm"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []
