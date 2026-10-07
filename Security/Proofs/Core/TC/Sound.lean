@@ -1,6 +1,6 @@
 import Definitions.Core.TC.Spec
 import Definitions.Core.TC.Relation
-import Specs.Core.Assumptions
+import Models.Core.Assumptions
 import Proofs.Core.TC.Proofs.Step
 import Proofs.Core.TC.Proofs.Words
 import Proofs.Core.TC.Proofs.Complete
