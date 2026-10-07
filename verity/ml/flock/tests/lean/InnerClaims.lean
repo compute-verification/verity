@@ -8,7 +8,10 @@ the batched target `T` and the batching coins `γ`). It runs each rep's zerochec
 `verifyRep` does, Merkle openings included, and writes nothing unless every check passes. For
 `tests/fixtures/inner_claims.json` (`verity_flock.rec_algebra`'s tests); regenerate with `tests/lean/generate_inner_claims.sh`.
 
-    lean --run InnerClaims.lean STATEMENT CIRCUIT PUBLIC SESSION_DIR
+    lean --run InnerClaims.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC SESSION_DIR [os]
+
+`os`: a session on the verifier's live OS coins (`verify --coins os`, recursion's inner session), else seeded coins.
+`--partition`: the verifier's copy of the `verity/partition/v1` object a circuit binds (`verify --partition`).
 -/
 
 open Lean Flock Transcript
@@ -74,14 +77,25 @@ def dumpRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) 
   return out
 
 def main (args : List String) : IO UInt32 := do
+  let (args, partFile) := match args with
+    | "--partition" :: f :: rest => (rest, some f)
+    | _ => (args, none)
+  let (args, coins) := match args with
+    | [sid, circuit, pub, dir, "os"] => ([sid, circuit, pub, dir], Coins.os)
+    | _ => (args, Coins.seed)
   let [sid, circuit, pub, dir] := args
-    | IO.eprintln "usage: lean --run InnerClaims.lean STATEMENT CIRCUIT PUBLIC SESSION_DIR"; return 2
+    | IO.eprintln "usage: lean --run InnerClaims.lean [--partition FILE] STATEMENT CIRCUIT PUBLIC SESSION_DIR [os]"; return 2
   let some tags := Tags.find? sid | IO.eprintln s!"unknown statement {sid}"; return 2
-  let tags := tags.withCoins Coins.seed
+  let tags := tags.withCoins coins
   let circuitB ← IO.FS.readBinFile circuit
   let pubB ← IO.FS.readBinFile pub
   let record ← IO.FS.readFile (dir ++ "/session.json")
-  let (spec, sts) ← match Stmt.setupTables tags circuitB pubB Coins.seed 1 with
+  let partition ← match partFile with
+    | none => pure none
+    | some f => match Json.parse (← IO.FS.readFile f) with
+      | .ok j => pure (some j)
+      | .error e => IO.eprintln s!"--partition {f}: not JSON: {e}"; return 2
+  let (spec, sts) ← match Stmt.setupTables tags circuitB pubB coins 1 (partition := partition) with
     | .ok x => pure x
     | .error e => IO.eprintln s!"setup: {e}"; return 1
   let proofs ← spec.repStreams.mapM fun (_, _, w) => IO.FS.readBinFile s!"{dir}/{w.replace "/" "."}.bin"
