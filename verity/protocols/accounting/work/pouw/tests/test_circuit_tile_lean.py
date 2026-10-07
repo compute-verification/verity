@@ -18,16 +18,16 @@ pc4 = pytest.importorskip("verity.protocols.accounting.work.pouw.circuit.pc4", r
 
 #: `program_digest` of the templates the Lean table was checked against; a change to any needs the Lean re-read
 DIGESTS = {
-    ("sm120", 128, (1, 1)): "60e44c42fb163b9d86be70de09a94ac30ce0dcc8a1903ca1a3dcc1e268db3992",
-    ("h100", 128, (1, 1)): "16500d4572bdf76ad277cabe2ba5192e4a167871e501e9c575a590a1516b9a4e",
-    ("sm120", 128, (64, 64)): "72573caa5130511ee1dbe6634960e363b4f2fd75fd602070ce0360f2eee53e08",
-    ("h100", 128, (64, 64)): "dc0d069eb9864a5cd2506faef104b85b6c0d40c9dad86733632f2e94ab29f1fe",
+    ("sm120", 128, (1, 1)): "04f0809f2e0f72610890d2beb518badbc1c6f7b01ad3baf529ce5457ca563b23ee5ccacaa97e41bdc242bf93ffdee9f2bc68284f83824f853225b185f2da0e49",
+    ("h100", 128, (1, 1)): "3e526ab30132be923fa9808e278f8190e5b9a93384a100c71f5d1e07e886de0dfc866f29014f587d28705abd1976431445461c8590907ded2627710465d4d8fe",
+    ("sm120", 128, (64, 64)): "4481154ab194ae5e72d0b79bbfa93a6e54af9bf6dce303864fc9d6d9b39ff0f8e235b7601287063e14c30807717032577c1999cb94ad163aa7ca6d7232822fc4",
+    ("h100", 128, (64, 64)): "6f79801eb52aca36b9300d269e250e427e031d573e2dfb7f7e042ce517f7e737978395d1aa23c896dcd40b9a1630caed5053323f79ac0725323d9fe422a4d5a0",
 }
 
 #: the deployed tile (`pc8.TILE`) at sm_120's depth, each digest about a minute to compute
 DEPLOYED = {
-    ("sm120", 8192, (64, 64)): "2846d5e7eed7bfa51adad62015ff5889b98b06571e76e4231e33f0423a8132e6",
-    ("h100", 8192, (64, 64)): "14f7b954d979d302d75a89088c747b06b557fd65b2c661d9f264a864388e154f",
+    ("sm120", 8192, (64, 64)): "7ea9b0a3eed5537b2ab06d611b657ad059a0255187cb36ecd1db4f88fefbd946656bd0d7b5c4618097bec56a9a25eb77d07979160dfc3f3ac74fbb2cd459c0f7",
+    ("h100", 8192, (64, 64)): "7e96c81a8d91726ad068700e0fbfb92275df226ca691609010cec0916031756e0c14d5cc5dadcb996ec377120d40ecce25bbce003d444042ef3fd85b239116bb",
 }
 
 
@@ -103,12 +103,12 @@ def test_the_deployed_tile_is_pinned(dev, k, tile):
 
 #: `program_digest` of the `pc4` templates the Lean table was checked against
 DIGESTS4 = {
-    (128, (1, 1)): "f04828d5567a398e799ce9afd180e18537a049885c86e36b1ed1b1e14ddef5cd",
-    (128, (64, 64)): "3d60f4cd4d3554745c42bf1d1a08f53c194d53f6fa4da5a6cc812bb2f62313c7",
+    (128, (1, 1)): "7cc96f4aa6a2b68a676404f3be86c997cb6d5889d67b4336adcb2301bb2b42dbf59011ee318ce0af96bcf2135df08607339dce9c7128b64f64e865e064749476",
+    (128, (64, 64)): "81ac3d445c5518b223309462102f5a1a4381c91b2830d7a92937ecfb97e323b50ebf3fa186579bb5234075477c1a34f64616e4934173483f89bd780d8c8c9516",
 }
 
 #: the deployed tile (`pc4.TILE`) at K = 8192
-DEPLOYED4 = {(8192, (64, 64)): "36ea3001612e01cf8fea36de9c83a2af9617232a00e9d3a981bf7762b8327574"}
+DEPLOYED4 = {(8192, (64, 64)): "5d52d991c237f460928a26c00019c8ad906d0b50a95a9fa6ee5c74a95b8e0ac06d22d1e0315317b91dc87878e3f01796cd59d0d697cc3f641491a8c309dd9a19"}
 
 
 def lean_table4(k: int, tm: int, tn: int):

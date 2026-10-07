@@ -17,9 +17,9 @@ from test_circuit_whole_lean import check_whole, row_in  # noqa: E402
 
 #: `program_digest` of the `Pc4Check` Programs the Lean layout was checked against; a change to any needs the Lean re-read
 DIGESTS = {
-    (2, 64, 3, (1, 1)): "67b9eb94cc9446958e510d63acf958308d16dd974fd96af7014fab17f9ad0225",
-    (4, 128, 4, (2, 2)): "00c6ad144f8a2964c7a49bbb9530d6a6ec0a30bb0fb756c3d10f8db838452fb8",
-    (2, 128, 2, (1, 2)): "335cd3fea3c10e55f8de9a567bf2cbd7bbf92f7b6472d58586378bf905ac0f7b",
+    (2, 64, 3, (1, 1)): "0e4ecd8175f6ef252d105fcb5058ce4b47204ad424b7f8886644e6a7812db21e9fae17de76943643152742281b691d827091ed6d22beb28ec4558cab917ac594",
+    (4, 128, 4, (2, 2)): "4a301d7956afb808c42d13bb22fdc5113ca10d9023e7af14f150c19eb2ff64be4f4686f02e41028b25f5bb2a5fc2cda41b89b82ac86212412abef4a72bdd9349",
+    (2, 128, 2, (1, 2)): "c5d7e67421d147d96b3094a7ca3600bb5f78e23b0103a30987538aeb32339e221d62024778b5fa9acc664dc62947bba6988140090f2970d68bf395121d428c28",
 }
 
 
