@@ -1,0 +1,13 @@
+# The differential tests of the memory challenger's Lean port (this directory's Lake package) against
+# verity.experimental.protocols.pous.memory_challenger. Not a workspace member: uv's search for a member's workspace stops at
+# verity/experimental/pyproject.toml, so a member here can't name `verity` as a workspace source. The tests run in the
+# workspace's environment, against the editable `verity` and `verity_difftest`; `dependencies` is what the suite keys on.
+[project]
+name = "verity-memory-challenger-lean"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-difftest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
