@@ -158,7 +158,8 @@ def test_the_spec_rtt_cap_is_the_schemes():
     from verity.protocols.accounting.space.pous.schemes import p2
 
     R, _, _ = _p2()
-    assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (audit.DEADLINE_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
+    assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (p2.DELTA_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
+    assert p2.DELTA_NS == audit.DEADLINE_NS
     assert R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS + 1_000
 
 
