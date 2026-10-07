@@ -24,7 +24,7 @@ from test_repository import REGISTRY, ROOT, _tracked
 RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
-    ("catalog/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
+    ("verity/ml/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
 }
 

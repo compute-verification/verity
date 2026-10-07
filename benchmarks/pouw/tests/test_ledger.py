@@ -148,7 +148,7 @@ def test_a_variant_is_named_by_its_sources_digest_in_any_order_and_a_changed_sou
 def test_the_variant_and_the_groups_are_verity_pouw_serving_s_when_it_is_importable(tmp_path):
     S = L.serving()
     if S is None:
-        pytest.skip("verity.protocols.accounting.work.pouw.serving (#567) isn't on this tree yet")
+        pytest.skip("verity.experimental.protocols.pouw.serving (#567) isn't on this tree yet")
     v = variant(tmp_path)
     kv = S.KernelVariant(family="pearl-c", device="sm120", schemes=frozenset(v["schemes"]), schedules=frozenset(v["schedules"]),
                          shapes=S.ShapeRule(), source_sha256=v["source_sha256"], binary_sha256=v["binary_sha256"],
@@ -280,10 +280,10 @@ end Pouw.Guarantees.PearlC
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
     lean = tmp_path / "Security"
-    (lean / "Specs" / "Pouw" / "Guarantees").mkdir(parents=True)
-    (lean / "Specs" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    (lean / "Models" / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / "Models" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Specs.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "reads": {"Models.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
     return audit, lean
 
 

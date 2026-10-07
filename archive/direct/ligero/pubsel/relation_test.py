@@ -15,8 +15,8 @@ import os
 import numpy as np
 import pytest
 import torch
-from verity_catalog.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
-from verity_catalog.silicon.silicon import tc_dot
+from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
+from verity.ml.circuits.silicon.silicon import tc_dot
 
 from .. import protocol as protocol_mod
 from ..compile import P
@@ -231,7 +231,7 @@ def test_bf16_epilogue_rounds_to_nearest_even(rel):
     pattern in the dropped 16 bits -- ties both ways, just above / below the tie, all ones -- carried through by zero
     operands (the unit's output is the accumulator itself), plus random units; y16 equals ``f32_to_bf16_word`` of the model's
     FP32 word."""
-    from verity_catalog.silicon.cast import f32_to_bf16_word
+    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
     p = rel.params
     sys = rel.compile(p, True)
     tb = tables(sys, "cpu")
