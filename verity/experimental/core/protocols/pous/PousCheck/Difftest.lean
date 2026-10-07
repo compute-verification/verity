@@ -3,6 +3,7 @@ import PousCheck.Merkle
 import PousCheck.Challenge
 import PousCheck.Wire
 import PousCheck.Certificate
+import PousCheck.Audit
 
 /-!
 # The difftest: the PoUS check against the Python verifier, on generated instances
@@ -17,7 +18,7 @@ a test, not a proof.
   from its name and arguments), and the leaf of each sample block.
 * `randomness`: `Randomness.derive` of a random source, domain and context, its streams and uniforms over random indices,
   and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices (`PousCheck.Challenge`).
-* `audit`: `Wire.verifyAudit` on a session (frames, measured latencies, the verifier's secret, beacons and seen pairs): its
+* `audit`: `Audit.check` on a session (frames, measured latencies, the verifier's secret, beacons and seen pairs): its
   `FINAL` frame, or the fault's code when there is none.
   An accepted `FINAL` also gives the session's `Certificate.assess`: its verdict, coverage and StorageProfile.
 * `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
@@ -140,7 +141,8 @@ def optional {α : Type} (j : Json) (k : String) (f : Json → V α) : V (Option
   | .null => pure none
   | v => some <$> f v
 
-/-- An `audit` instance's answer: `Wire.verifyAudit`'s `FINAL` frame, or the code of the fault that leaves none. -/
+/-- An `audit` instance's answer: `Audit.check`'s `FINAL` frame and assessment, or the code of the fault that leaves no
+`FINAL`. -/
 def audit (inst : Json) : V Json := do
   let frames ← bytesArr (← J.get inst "frames" "audit") "frames"
   let elapsed ← (← J.arr inst "elapsed_ns" "audit").mapM (J.asNat · "elapsed_ns")
@@ -151,10 +153,8 @@ def audit (inst : Json) : V Json := do
   let seen ← optional inst "seen" fun j => do (← J.asArr j "seen").mapM fun p => do
     let #[e, a] := (← J.asArr p "pair") | throw "audit: a seen pair is [epoch, audit id]"
     pure (← bytesOf e "epoch", ← bytesOf a "audit id")
-  pure <| match Wire.verifyAudit frames elapsed ⟨source, beacons, seen⟩ with
-    | .ok final => Json.mkObj [("final", hex final), ("storage", match Wire.parseSetup frames with
-      | .ok (setup, _) => Certificate.assess setup.params final
-      | .error _ => Json.mkObj [("verdict", .bool false), ("accepted", .bool false)])]
+  pure <| match Audit.check frames elapsed ⟨source, beacons, seen⟩ with
+    | .ok (final, storage) => Json.mkObj [("final", hex final), ("storage", storage)]
     | .error e => Json.mkObj [("error", num e.code)]
 
 /-- A `storage` instance's answer: the certificate gate and the StorageProfile of an accepted audit of `k` challenges
