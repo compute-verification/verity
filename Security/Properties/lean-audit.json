@@ -1,0 +1,569 @@
+{
+ "roots": [
+  "Properties.Composition",
+  "Properties.Onsite",
+  "Properties.Remote",
+  "Properties.Proofs.Composition",
+  "Properties.Proofs.Onsite",
+  "Properties.Proofs.Remote"
+ ],
+ "meaning": [
+  "Properties.Composition",
+  "Properties.Onsite",
+  "Properties.Remote",
+  "CoreComposition.Product",
+  "CoreComposition.Stubs",
+  "CoreOnsite",
+  "CoreRemote",
+  "CoreProtocol.Protocol",
+  "CoreProtocol.Example",
+  "Flock"
+ ],
+ "layers": {
+  "Properties.Composition": {
+   "imports": ["CoreComposition.Product"],
+   "except": [],
+   "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Onsite": {
+   "imports": ["Properties.Composition", "CoreOnsite"],
+   "except": [],
+   "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Remote": {
+   "imports": ["Properties.Composition", "CoreRemote"],
+   "except": [],
+   "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  }
+ },
+ "reads_exempt": {
+  "CoreProtocol": "the core interface (#1482) declares no spec yet: the properties read its `Protocol.answer` and `canonicalJson`, and the stubs' `Core.Example`, recorded under `meaning`",
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+ },
+ "guarantees": {
+  "Properties.Composition.acceptsIff": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.acceptsIff : Properties.Composition.AcceptsIff"],
+   "assumptions": [],
+   "type_hash": "e8b563695831bd419f4dccbce35126531aecfeed00af149a084ec346893e29a7"
+  },
+  "Properties.Composition.answerIsCheck": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.answerIsCheck : Properties.Composition.AnswerIsCheck"],
+   "assumptions": [],
+   "type_hash": "10fac2580bb1b8d892f62faf13b92347bf89b0ef796097e7010cf00f770d09f8"
+  },
+  "Properties.Composition.covers": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.covers : Properties.Composition.Covers"],
+   "assumptions": [],
+   "type_hash": "ffe1d44c0eb47d3fa3421a2513abb7976c288afe06a8cfe29b891a05681b03d5"
+  },
+  "Properties.Composition.misfitRejects": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.misfitRejects : Properties.Composition.MisfitRejects"],
+   "assumptions": [],
+   "type_hash": "29b95ebe680f5ec89596c2baa2e0bdb314cbb69506cef0d7d325d1534be371a7"
+  },
+  "Properties.Composition.nothingPublicUnlessAccepted": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Composition.nothingPublicUnlessAccepted : Properties.Composition.NothingPublicUnlessAccepted"
+   ],
+   "assumptions": [],
+   "type_hash": "c5bde38f491cab6fa3a6294fb8bda14237fe2f99a099973f903d2a6f5cc5218e"
+  },
+  "Properties.Composition.publishesEach": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.publishesEach : Properties.Composition.PublishesEach"],
+   "assumptions": [],
+   "type_hash": "56a7c75d97cc021fb8282e2bd59633b7303f26e253908ccc8003f44daba63387"
+  },
+  "Properties.Composition.rejectDominates": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.rejectDominates : Properties.Composition.RejectDominates"],
+   "assumptions": [],
+   "type_hash": "55947666d1ed0a65589e6f33f4a80b024a829e8703029308176b8f8635f5b3a5"
+  },
+  "Properties.Composition.undecidedIff": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.undecidedIff : Properties.Composition.UndecidedIff"],
+   "assumptions": [],
+   "type_hash": "3a505605e30ec17c18e4c0c90fa89d2ace0c0657c8a5e0daa892b5d64b94a894"
+  },
+  "Properties.Onsite.acceptsIff": {
+   "owner": "@proofs",
+   "signature": ["Properties.Onsite.acceptsIff : Properties.Onsite.AcceptsIff"],
+   "assumptions": [],
+   "type_hash": "a532f81ebbb87017bc4800d18dcb9d732b5a0a57cc85dd6c811623d21a047072"
+  },
+  "Properties.Onsite.components": {
+   "owner": "@proofs",
+   "signature": ["Properties.Onsite.components : Properties.Onsite.Components"],
+   "assumptions": [],
+   "type_hash": "a7919388a76fb4270a3b3f2eb527772e77e971682de47e87e201f38d5753e762"
+  },
+  "Properties.Onsite.misfitRejects": {
+   "owner": "@proofs",
+   "signature": ["Properties.Onsite.misfitRejects : Properties.Onsite.MisfitRejects"],
+   "assumptions": [],
+   "type_hash": "e4c2ba639ee60f9f15078462ac42d49a3aceebd77958837cb50d49509c6a2701"
+  },
+  "Properties.Onsite.nothingPublicUnlessAccepted": {
+   "owner": "@proofs",
+   "signature": ["Properties.Onsite.nothingPublicUnlessAccepted : Properties.Onsite.NothingPublicUnlessAccepted"],
+   "assumptions": [],
+   "type_hash": "e02f26a36973fd1fcf09cfe0b4922b23f8ac0b1bf2620cc06ce3ee7f236295c5"
+  },
+  "Properties.Onsite.publishesEach": {
+   "owner": "@proofs",
+   "signature": ["Properties.Onsite.publishesEach : Properties.Onsite.PublishesEach"],
+   "assumptions": [],
+   "type_hash": "0ec6f5fbbc840f34e9a331aa5b122659169612a7d95f3dbeacce4a07a354616a"
+  },
+  "Properties.Onsite.rejectDominates": {
+   "owner": "@proofs",
+   "signature": ["Properties.Onsite.rejectDominates : Properties.Onsite.RejectDominates"],
+   "assumptions": [],
+   "type_hash": "6fe40b1c3cadad1e23f30fb3e291da56a51df6f7e06389176bdeea495521bfa6"
+  },
+  "Properties.Onsite.undecidedIff": {
+   "owner": "@proofs",
+   "signature": ["Properties.Onsite.undecidedIff : Properties.Onsite.UndecidedIff"],
+   "assumptions": [],
+   "type_hash": "933ebd82feb80d3d6377ce3fbbcc9ab4af56d106f665c8a29d3628ccff970afb"
+  },
+  "Properties.Remote.acceptsIff": {
+   "owner": "@proofs",
+   "signature": ["Properties.Remote.acceptsIff : Properties.Remote.AcceptsIff"],
+   "assumptions": [],
+   "type_hash": "239cbd50a66472d93b1b655c15056eea7153b5cb154ea6ac00c3bdfc64fe09e6"
+  },
+  "Properties.Remote.components": {
+   "owner": "@proofs",
+   "signature": ["Properties.Remote.components : Properties.Remote.Components"],
+   "assumptions": [],
+   "type_hash": "c56205ac4cfce6bafb666830278e86b0e9472ff7a7dd148d1a75ddfc830667a6"
+  },
+  "Properties.Remote.misfitRejects": {
+   "owner": "@proofs",
+   "signature": ["Properties.Remote.misfitRejects : Properties.Remote.MisfitRejects"],
+   "assumptions": [],
+   "type_hash": "5295f87105e7a680bad81d3eb6029500250bbd0a8341b248a51eb805c2fe10a1"
+  },
+  "Properties.Remote.nothingPublicUnlessAccepted": {
+   "owner": "@proofs",
+   "signature": ["Properties.Remote.nothingPublicUnlessAccepted : Properties.Remote.NothingPublicUnlessAccepted"],
+   "assumptions": [],
+   "type_hash": "d28a43cf53dd07e5b54b0b90b2d8600eda413eaf3430ee53de2157277756ed7f"
+  },
+  "Properties.Remote.publishesEach": {
+   "owner": "@proofs",
+   "signature": ["Properties.Remote.publishesEach : Properties.Remote.PublishesEach"],
+   "assumptions": [],
+   "type_hash": "e6f1f4f1c227bcca838585c066e73ef0d54061588db2e62d0d1550829c0969a4"
+  },
+  "Properties.Remote.rejectDominates": {
+   "owner": "@proofs",
+   "signature": ["Properties.Remote.rejectDominates : Properties.Remote.RejectDominates"],
+   "assumptions": [],
+   "type_hash": "09731ee14deea9c831b8f51636e0567f6072a77ab4ed91f8b66f32735f10383a"
+  },
+  "Properties.Remote.undecidedIff": {
+   "owner": "@proofs",
+   "signature": ["Properties.Remote.undecidedIff : Properties.Remote.UndecidedIff"],
+   "assumptions": [],
+   "type_hash": "f0e834148453680b1a012bb420b1a1d4b8cb53ef6449459b951b27760de72809"
+  }
+ },
+ "reads": {
+  "CoreComposition.Product": {
+   "digest": "63ec0ec8365040010edf356a7126d0c80f4504bf3aba014b68f8c7c3ccfdcf6f",
+   "definitions": {
+    "Core.Composition.Answers": "ce5e7efd960e3c1d869d6f029b14a2783af08a79f6dd8fcc1c6ac82947c0f4b8",
+    "Core.Composition.Case": "e1d6dca48094d8180e9a91af36d79453005187d32ae340134c6091b9652bbe5c",
+    "Core.Composition.Case.commitment": "c1ec24f2a1691724ad29ed3646ba1fa727798db2e86f70e46393b8f67ce6d672",
+    "Core.Composition.Case.evidence": "863f25abd49f71d64606bf49f495c9188878bd1757bb1cb5210fc1f168e286ea",
+    "Core.Composition.Case.id": "f1e6f8047ee36486a14e79bc6b04b43cfd6cc407a75b92693f405da459093901",
+    "Core.Composition.Case.params": "8ae581ddf4b510e3fbb2c7b630e62a2edb55351e040ddff61e64c8b53ddd7154",
+    "Core.Composition.Keyed": "580d2eb54845b895bae5675b6dc9c0e0ec46dc37d750a0564e7fef6846501fc6",
+    "Core.Composition.Named": "bdb899d2926eb56f1a3b37d9d4798f4ec2b336bcf047d1179fcce0df4f41d039",
+    "Core.Composition.Named.id": "7d3fd870a453280c1f1656517fe087f6d3216b68605c917b5adb8b181c8a6e8f",
+    "Core.Composition.Named.params": "fc9e220a72a04e0193b7304e7c8d184e0eebebcb0d8a51b6067f31b80ece24c6",
+    "Core.Composition.answersOf": "c6df0589223a1b4e09e95f8165b7429096243ce2781ab948890ca216b8dd7b79",
+    "Core.Composition.bind": "de2b1e7646572a32bb2663d8a6851b69578e72434ff84641ec3118c0bb41eb09",
+    "Core.Composition.binding": "cdcf259697abdbf9bcb047ecaca5a07a9f9a966a9fe205c914fe4246b814c13c",
+    "Core.Composition.check": "100081501fadd97248442f7ddbbfd8386801b99490923e570679e8aee6e7a508",
+    "Core.Composition.decodeCommitment": "048c421044d52734fe4b548827e01ddb86d1df524956b70692c00b8761398d46",
+    "Core.Composition.decodeEvidence": "395388617357c147c1b167d0433ca79a38e96a469788f90ade6e31a10502cec9",
+    "Core.Composition.decodeParams": "adced3be57a81fa3a47b6a427246fd7ae04ddcd6c085faeaca1de427c93f1cae",
+    "Core.Composition.judge": "c50acc616c7648ce89baf987748e5946d90450ddff9f9cb499549babd49060ee",
+    "Core.Composition.misfit": "2e55a22712fc8215456ed4e186a2dd1757d5cc9b6a3006e680d290683a8e07d0",
+    "Core.Composition.product": "6ec1fcd06aaf1d27cfca15810ce0b7d6e8c565702fb22dbce4fc577091eae79b",
+    "Core.Composition.run": "3d1e2602bd7db40ea261ffaf4152fa516be4606fd4d584b83a7502e1a77bf14f",
+    "_private.CoreComposition.Product.0.Core.Composition.entries": "b1dd139054d8417bd55be16a9dcfe25f6a311069fc1625c1283efc8af2767214",
+    "_private.CoreComposition.Product.0.Core.Composition.exactly": "6614eda1fe606916ab9a3afa2915a0e2f5a8dfabd58d363cb764978b58d251cd",
+    "_private.CoreComposition.Product.0.Core.Composition.keysOf": "14c283b93dee6cd2a0f0aea4bf61820bfc35d123813ea52dc2b8de8f2cf14a8b",
+    "_private.CoreComposition.Product.0.Core.Composition.reasons": "f19dd4d38993b4aec3bfb2e367bea0f8433abfc65851e0abbb8d3828495332ad"
+   },
+   "guarantees": [
+    "Properties.Composition.acceptsIff",
+    "Properties.Composition.covers",
+    "Properties.Composition.misfitRejects",
+    "Properties.Composition.publishesEach",
+    "Properties.Composition.rejectDominates",
+    "Properties.Composition.undecidedIff",
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "CoreComposition.Stubs": {
+   "digest": "1578032cfd65c9d786713731add17fadaebed8d461e3b1f98b116d32e9eb2da5",
+   "definitions": {
+    "Core.Composition.Stub.certifier": "49b35dced07a9176c69c8c8a6bfdf72b5c4d62995396e1eea3aa2109618a3707",
+    "Core.Composition.Stub.pous": "c6a130ffb479afb2e17ae1d987b98bffe94ae2abe25c64bb0e6f896d46010db4",
+    "Core.Composition.Stub.pouw": "abc1368cb2bc20e1f5e8650fd0558f1e2c93c7a4703e8690fc7f0a20fb0340e7",
+    "Core.Composition.Stub.sampledProofs": "a4c1e320cd46f8c69c967b328d4db7a173bc6f56473b867e3f2f8bc6c8457297",
+    "Core.Composition.Stub.stub": "390c83ebc12542e87b5f5ba89d1b7bed9fe0065781d7404fc958c0a7e745af93"
+   },
+   "guarantees": [
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "CoreOnsite": {
+   "digest": "8d0aa0735af5984baec122c50a5458d8936fb1b4b5596063a589df77caabb45a",
+   "definitions": {
+    "Core.Onsite.components": "df711fbc53db84f05f54b4c1cddce4dd191ab835e91dfc567a41a96b3edf7781",
+    "Core.Onsite.protocol": "f8f6f2c06e3b3324404115ac8351e15f73ba5ab7cb8c34f10c636b672e07cb17"
+   },
+   "guarantees": [
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff"
+   ]
+  },
+  "CoreProtocol.Example": {
+   "digest": "20ac858c83e6dc3cdd22c4066e95af1ccb1bb73ad1b4310c48982911233acc1b",
+   "definitions": {
+    "Core.Example.Evidence": "464ddffea9496f4c6772dae16d2b6b914d028d672aeab5eb63839e026eeac886",
+    "Core.Example.Evidence.drawn": "790c95b36dc94ee631c5c33786684a0397433331d3bef048356fe2b27801d7cd",
+    "Core.Example.Evidence.passed": "a128fa64035d04c0526e7aac1de51a7a9110e82a4dfc9f781d1cd04a68067142",
+    "Core.Example.check": "9e5339b050be8214f8d2e8d147e6104a99ed323d289b224e997a43c13c41cb3d",
+    "Core.Example.protocol": "d271a981875432cba5ba919c799f1d55a2473c50feeebe70436a90a5fd7fc314",
+    "_private.CoreProtocol.Example.0.Core.Example.field": "db19213a661064f4df65c21a0ac6127193c1c39be56ca5c6ac2a1509716b5161"
+   },
+   "guarantees": [
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "CoreProtocol.Protocol": {
+   "digest": "dd1183620cc6e920267ed4897f33d6d08dba48207403df8b47d7b5fdd01a3613",
+   "definitions": {
+    "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
+    "Core.Answer.digest": "d836aa67c9938f2a8b2b90aa9072dee781ea1e90129eca96845002ccbcb3e2b0",
+    "Core.Answer.profile": "17b8901d5bda1fd4a2ab0e7fc72b8b0b3e963fcfd182b7d94a50188cfb091361",
+    "Core.Answer.published": "65fbcdad2c96fc63cc29535358d627dc4d4302dceed38b517f69226bc403b651",
+    "Core.Answer.reason": "7610aff14f8586465b30e740322b13f818371f611bec29f43398aa7f0d3b0b1a",
+    "Core.Answer.verdict": "72ccc7783e24b9354dfcfa5d04d7cad1defa6c9bc3dde1698abb1ff6dfddaa8e",
+    "Core.Outcome": "2779d0bdefecaa108cb68149864742b4d101d5178390cf6acddc8cf375583a85",
+    "Core.Outcome.accept": "c7abb779538d29e9f792761a8db7ae69719dfc763a2da95599f7af28377e9763",
+    "Core.Outcome.reject": "8cf498f977979244f1b1a1a8224b94a3e8bb47643e847eff355c3f21607df392",
+    "Core.Outcome.undecided": "8359cac763fe5a40dbe821be9591d7cf56eac4cc956a368b18978f8b8e7b45d1",
+    "Core.Protocol": "2ea8c13cb206c09d0ff20922ee762db9d0bc3eb278f76dfbe8ba400b084a11dd",
+    "Core.Protocol.Accepts": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
+    "Core.Protocol.Commitment": "1779266dc5689084ea02a25a199cf52300deb941e7d50b8af8a3802067f25548",
+    "Core.Protocol.Evidence": "71caff6ec7dec3a6238123fae52547a15a169e03da8d2976d0ae4dbc41f687e8",
+    "Core.Protocol.Params": "d4495a529a3712b0ae55cdc4bab81ca7a96c0204c2d89e9370f5514551c0bc6a",
+    "Core.Protocol.Profile": "93c6424ab66c0606c3a4742f24e72dc44aa110749360473256dc7eca020a15d2",
+    "Core.Protocol.Public": "31795b800fbc90a092a881f6085261492fdf43a97347e35dce35717ea922da34",
+    "Core.Protocol.answer": "7abec06cbec5aa2fe92ba6fe438b94810afc8b7ba98a9698dc83808ecea95842",
+    "Core.Protocol.check": "3fd83c8e26ff8fb0f97bbaaa808a6a80b84577053625dd6d2a30609364e20422",
+    "Core.Protocol.commitment": "02d3e375a4b4e36f87a449063ee7daf6ed8e46b2f415eeb0beedf2c299990ee8",
+    "Core.Protocol.digest": "0d17988b66fd6086cb78a2fd832aceed63485388facaaad096938f13b575c3d2",
+    "Core.Protocol.evidence": "933a0afbb9ec3dfcbcfa3bf5f94cf4e2d342f093f8b11aff4c9fc8d32aee3b6b",
+    "Core.Protocol.id": "7cd4c4709c9b47f77f3afd8f50bb049ee161c7f195f1efcc23c1c4766b83ef1b",
+    "Core.Protocol.params": "4e25074e7c4e50cdd16023e1678f96a10e9dac4e1f2838c62aa4934e4d644542",
+    "Core.Protocol.profileJson": "199984f72573982fe8a9f5d922a14c5692ec8f87f6843d6f00735939c8150657",
+    "Core.Protocol.publicJson": "87fd7d040926056f5ec9f03b376506b0065ade709f0db5ad772c7d9a774be1c3",
+    "Core.Verdict": "9069d2aeafe05a06cfe9941541907c586aa391456849193f8cf8c69cc4ae31db",
+    "Core.Verdict.accept": "9f9a4017c4784ae8a12cd0921ca11b10c0daba0056b070b49206ab19b146bbe4",
+    "Core.Verdict.name": "d6c120499758fb236e33e46ef761d9ee2c38f65e374fdc9152d56388356e0e67",
+    "Core.Verdict.reject": "51a3f6946f282bd4c992323d0eddaa4101c87759f7eb96f348ef4195e69d3dd3",
+    "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
+    "Core.canonicalJson": "fc4daa943ca1c9ff34602507ea96024d86fe5ba98aae5cdf54528e3add3028c7",
+    "Core.instDecidableEqVerdict": "f46bce4ed5ce4155001bb005897480dc26f2267c50d3b4c2cf4c622a33d232db",
+    "Core.instReprVerdict.repr": "512a9ee16b4e82345f3343510c022654d75d82c2a8b0218985a2e4bf3cb23d3d"
+   },
+   "guarantees": [
+    "Properties.Composition.acceptsIff",
+    "Properties.Composition.answerIsCheck",
+    "Properties.Composition.covers",
+    "Properties.Composition.misfitRejects",
+    "Properties.Composition.nothingPublicUnlessAccepted",
+    "Properties.Composition.publishesEach",
+    "Properties.Composition.rejectDominates",
+    "Properties.Composition.undecidedIff",
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "CoreRemote": {
+   "digest": "de107d1a9f79227b6c3be524a95af7ffe53705c62ada3eba2d27f7fb31f29d79",
+   "definitions": {
+    "Core.Remote.components": "3c2d81e214f2ba666f649876f7b11bf7f8095ad4cca636dd2731737a19e841cc",
+    "Core.Remote.protocol": "04b2a8dac5e0af8163a683327a49c3095b972c95f119fade87ad57bb31206195"
+   },
+   "guarantees": [
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "Flock.Bytes": {
+   "digest": "6e6095eec3949aa0537b096bd01c636d1a56339b6b79c3650fd7829d0833610f",
+   "definitions": {
+    "Flock.V": "9a2fbe4642d5cc5cadfef0c823bb3b77ffe1f0a9ec677602dad8a142eeb4f4ee",
+    "Flock.hexOf": "af7629f7cce9d3332331bd5e6d2bb198d21f9fd3f90298c5a57c5e704a04fc61",
+    "Flock.unhex": "a0a0e6fc12acba945d0040b0472350264b198316683185f534afeec2fedac5e8",
+    "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
+   },
+   "guarantees": [
+    "Properties.Composition.acceptsIff",
+    "Properties.Composition.answerIsCheck",
+    "Properties.Composition.covers",
+    "Properties.Composition.misfitRejects",
+    "Properties.Composition.nothingPublicUnlessAccepted",
+    "Properties.Composition.publishesEach",
+    "Properties.Composition.rejectDominates",
+    "Properties.Composition.undecidedIff",
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "Flock.Canon": {
+   "digest": "5ffad45e15cc7396d59a1f36655a20240e71a81349184b4fa9b46115abda3fb5",
+   "definitions": {
+    "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
+    "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
+    "Flock.J.asStr": "791157c5ecc4f6a140378e575b030661c8cca532c1e232153200c3c3f238fc90",
+    "Flock.J.get": "b9713926f46759187e8644c994f413c55b938954c67e17c896bc28271d5b02ef",
+    "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
+    "Flock.canon": "93dbf8cf653d16c809b10196ae319b382c9029b69aef49a3395c51de57ae1519",
+    "Flock.canonStr": "004d0450163619de70153792b310392e674d6f8022604a84ab492ae059079804",
+    "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
+   },
+   "guarantees": [
+    "Properties.Composition.acceptsIff",
+    "Properties.Composition.answerIsCheck",
+    "Properties.Composition.covers",
+    "Properties.Composition.misfitRejects",
+    "Properties.Composition.nothingPublicUnlessAccepted",
+    "Properties.Composition.publishesEach",
+    "Properties.Composition.rejectDominates",
+    "Properties.Composition.undecidedIff",
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "Flock.Hash": {
+   "digest": "cb1439cd1bfd5c1ea74e6e395d1c9a2bccc42b7d32869ac54843ee560264d28d",
+   "definitions": {
+    "Flock.Digest": "8e3d2cc11be02a7c68cc7f2a3677ae2a30f05f73ee3a3a128f9bcd146cca6dd0",
+    "Flock.Sha512.compress": "c53190609fe40b87baa41bc0ec58a3bbfb1739fed5e5ef971ebab40175c25caa",
+    "Flock.Sha512.hash": "c959baa24d7d893d6bed62c24a7f8e3d846629617591c67ec1fe531b11e21b15",
+    "Flock.Sha512.iv": "9e0671a9779c397be19cd805b287f924bb4e71cb3b0fdc48b4362152165ee55e",
+    "Flock.Sha512.k": "da498b32594a0b1a4c2a2f530afba05bbe3d5cfb74500e02f338bb3f8ad29992",
+    "Flock.Sha512.rotr": "c2cd7489ff2877fb65640d82519ba0815a2815bf1dfd3106f95568aeed0b3ec1"
+   },
+   "guarantees": [
+    "Properties.Composition.acceptsIff",
+    "Properties.Composition.misfitRejects",
+    "Properties.Composition.publishesEach",
+    "Properties.Composition.rejectDominates",
+    "Properties.Composition.undecidedIff",
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "Properties.Composition": {
+   "digest": "36eff8df20e14d68fa46c32de17c4d1c3476c8f5a05a807f2a99017cb8b0970c",
+   "definitions": {
+    "Properties.Composition.AcceptsIff": "3f9e934a6561e6e828c1931140999798e81e42374428c9862a79d296f31c3b7c",
+    "Properties.Composition.AcceptsIffAt": "e74b382c491c6919ed34aa26482f09b2eaed09c6cc2b335d42303681a17e2f1b",
+    "Properties.Composition.AnswerIsCheck": "e5695f6cfd21d2d141767321415cfdbfb89c1f18a1dd00bee9f75ccdc9ee50c5",
+    "Properties.Composition.Covers": "38e21270f2c32dff669276fc412fb73c87cbc32028b01abab26f8f7d3d84accc",
+    "Properties.Composition.Fits": "faefab5d5f6daee79b5e8e0b222aa71c349424aa947788f98b8e5916111f8225",
+    "Properties.Composition.MisfitRejects": "6b7f61afe348b7bb6b91358c0c0e1a0bd704efe8b84c37e1ee9ea331a2de9a16",
+    "Properties.Composition.MisfitRejectsAt": "90b1e46826be7b907392fbffa12dd26eee88152bc52943d7311d6b0f38e240f5",
+    "Properties.Composition.NothingPublicUnlessAccepted": "79d560abd49af83a06db97c3be25c082d5e3fabf56e872eb8271a82127dc6b00",
+    "Properties.Composition.PublishesEach": "586105c5405b6964e17cac5d231c7fb19ed210b0c6086df80bc50d875e7c2b34",
+    "Properties.Composition.PublishesEachAt": "4392b9208daf48196461063a64abb56f034bfff9a2a103d378e3fbd42a963f4c",
+    "Properties.Composition.RejectDominates": "93d0992c934fce6f68565a5f3c6289223078eac97bf950858810d581b58c7f74",
+    "Properties.Composition.RejectDominatesAt": "1945d75fe9dd4fe35183a16cebc362ca69a61460aa4844f5b46a17e7deb948bc",
+    "Properties.Composition.UndecidedIff": "f73acbc28ca0cafcccdf7e8294f477ab85bf9488a37d49570ec9e93c01816406",
+    "Properties.Composition.UndecidedIffAt": "415545ae00a13b0ad68c82cddb9ddb9eecf2db5893e26c191ba1f2d2568340e2",
+    "Properties.Composition.answerOn": "dd2ccaef6940e4eaa582aa1ab8a7929178fbb8345c81a0d79efe475f4353226d",
+    "Properties.Composition.verdictOf": "521a43289b2870f1b3443600d88d8e960d45a536c2a84372b3925279e5833fd9"
+   },
+   "guarantees": [
+    "Properties.Composition.acceptsIff",
+    "Properties.Composition.answerIsCheck",
+    "Properties.Composition.covers",
+    "Properties.Composition.misfitRejects",
+    "Properties.Composition.nothingPublicUnlessAccepted",
+    "Properties.Composition.publishesEach",
+    "Properties.Composition.rejectDominates",
+    "Properties.Composition.undecidedIff",
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff",
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  },
+  "Properties.Onsite": {
+   "digest": "663b48fb1f9d5a2e1fc79d6c56799c57062023e32809c423d722a82c2f9940ec",
+   "definitions": {
+    "Properties.Onsite.AcceptsIff": "c15bd81cc69c20d37b23c462c13ed014df5705dc30612b8dfa4da8043801fdf6",
+    "Properties.Onsite.Components": "6ff2c61beb7067d2dd7814a7f6861884784185c071b17009f907782701cb38f6",
+    "Properties.Onsite.MisfitRejects": "6186f7b06a664c8ff5434be0f831e7b6275784c08dcc1c94fab4f25691693c0c",
+    "Properties.Onsite.NothingPublicUnlessAccepted": "07cec43b75ed763745bf5b2ffc0bc15aeab6f1b0594da37d7bff47150ebc9180",
+    "Properties.Onsite.PublishesEach": "ade9ad8ad848dde0695142c9034e2b0a47675f5cbc6fb1c4c65182e7b50dfb70",
+    "Properties.Onsite.RejectDominates": "10f687f1b30a166b5df9959f78c2e938ca26b5b02febbd23a15b93419c95d42b",
+    "Properties.Onsite.UndecidedIff": "7c9a51f495ce013a6cfa19844fd94c844cb4ff623078efdd8d710547916d7195"
+   },
+   "guarantees": [
+    "Properties.Onsite.acceptsIff",
+    "Properties.Onsite.components",
+    "Properties.Onsite.misfitRejects",
+    "Properties.Onsite.nothingPublicUnlessAccepted",
+    "Properties.Onsite.publishesEach",
+    "Properties.Onsite.rejectDominates",
+    "Properties.Onsite.undecidedIff"
+   ]
+  },
+  "Properties.Remote": {
+   "digest": "eebe7b83809e6946ae0a966464f1586c0df455d94ab95de1160b0132998795ee",
+   "definitions": {
+    "Properties.Remote.AcceptsIff": "40317a440b2f0544b5ef85132234af73831aa8e751d0811b048a8a5277a10b23",
+    "Properties.Remote.Components": "e52dea8a53a8b1f84fc457ec38a6b5ab3724033520147bcd5011aa661270eb0c",
+    "Properties.Remote.MisfitRejects": "7d53c6985df5f22cbe69632cabfeecacab77eb0975be7796de8c9ad9c0cfe634",
+    "Properties.Remote.NothingPublicUnlessAccepted": "dd28dd63a403b114af880fd9df24bacd72c0747d5407a88a0ccd0c93063da896",
+    "Properties.Remote.PublishesEach": "757e55ad527b88fca85586c2671c0221fe02582576325630736827b16de08108",
+    "Properties.Remote.RejectDominates": "47b3910ecb114b2fd4bf626cd0225d1ab0691d67cf62fdca26ad12b042cbf4d6",
+    "Properties.Remote.UndecidedIff": "9dd546a575840374182bc84457678d1e3a928f3a06c7e317d9c2a17da92fc263"
+   },
+   "guarantees": [
+    "Properties.Remote.acceptsIff",
+    "Properties.Remote.components",
+    "Properties.Remote.misfitRejects",
+    "Properties.Remote.nothingPublicUnlessAccepted",
+    "Properties.Remote.publishesEach",
+    "Properties.Remote.rejectDominates",
+    "Properties.Remote.undecidedIff"
+   ]
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

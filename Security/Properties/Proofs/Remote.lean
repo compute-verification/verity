@@ -1,0 +1,28 @@
+import Properties.Remote
+import Properties.Proofs.Composition
+
+/-!
+# Proofs of remote Verity's properties (`Properties.Remote`)
+
+`Components` by definition, and the rest as the composition's (`Properties.Proofs.Composition`) at remote's id and
+components.
+-/
+
+namespace Properties.Remote
+
+theorem components : Components := ⟨rfl, rfl⟩
+
+theorem rejectDominates : RejectDominates := Composition.rejectDominates _ _
+
+theorem misfitRejects : MisfitRejects := Composition.misfitRejects _ _
+
+theorem acceptsIff : AcceptsIff := Composition.acceptsIff _ _
+
+theorem undecidedIff : UndecidedIff := Composition.undecidedIff _ _
+
+theorem publishesEach : PublishesEach := Composition.publishesEach _ _
+
+theorem nothingPublicUnlessAccepted : NothingPublicUnlessAccepted :=
+  Composition.nothingPublicUnlessAccepted Core.Remote.protocol
+
+end Properties.Remote
