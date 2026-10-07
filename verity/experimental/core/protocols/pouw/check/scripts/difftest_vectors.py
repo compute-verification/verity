@@ -1,0 +1,286 @@
+"""The difftest's data: generated windows, each a `serve` case, and the Python reference's answer to each, for
+`PouwCheck.Difftest`.
+
+    python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
+
+Writes `DIR/difftest/cases.jsonl`, one `serve` case per line (``{"commitment": hex, "evidence": hex, "params": JSON}``),
+and `DIR/difftest/python.jsonl`, `verity.experimental.protocols.pouw.core_check`'s answer to the same line as its
+canonical JSON.  The Lean check runs `PouwCheck.DifftestMain` on both (`runs` in `lean-audit.json`, which pins their
+SHA-256), and `verity/experimental/protocols/pouw/tests/test_pouw_core_check.py` checks that this script still writes them.
+
+A case is an honest window (random grid bits, tile work, ε, δ, range and level; the registration one-stage's record of
+it, the service's answer an acceptance of that registration with its profile and draw), then one mutation (`MUTATIONS`)
+aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
+writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import random
+from fractions import Fraction
+from pathlib import Path
+
+import verity.experimental.protocols.pouw
+from verity.experimental.protocols.pouw import core_check as CC
+from verity.experimental.protocols.pouw import window as Wd
+
+COUNT = 4000
+EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
+DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
+TILE_WORK = [1, 7, 64, 4096]
+
+
+def _hex(rng: random.Random, n: int = 64) -> str:
+    return rng.randbytes(n).hex()
+
+
+def honest(rng: random.Random) -> dict:
+    """An honest window: the verifier's parameters, the registration, and the service's accepting answer."""
+    bits = rng.randrange(5)
+    tw = rng.choice(TILE_WORK)
+    params = {"check": {"entries": rng.randint(2, 32), "scheme": CC.SCHEME, "template": f"Pc8TileHidden{{{tw},1,1,sm120}}",
+                        "tile_work": tw},
+              "context": f"served-zk/run-{rng.randrange(1000)}/{_hex(rng, 8)}", "delta": rng.choice(DELTA),
+              "eps": rng.choice(EPS), "grid_bits": bits, "query": _hex(rng)}
+    top = rng.choice([4, 12, 24, 40])
+    hi = rng.randint(2, 1 << top)
+    ell_hi = Wd.level(Wd.floor_point(hi, bits), bits) - 1
+    ell = rng.randint(0, ell_hi) if ell_hi >= 0 else 0
+    lo = rng.randint(1, Wd.point(ell, bits))
+    params["range"] = [lo, max(hi, Wd.point(ell + 1, bits))]
+    w = Wd.Work.at(ell, bits)
+    k = Wd.k_prime(Fraction(params["eps"]), Fraction(params["delta"]), w.credited * tw, w.n, tw)
+    root_w = _hex(rng)
+    items = {"check": dict(params["check"]), "root_W": root_w, "work": w.to_json(tw),
+             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tw, bits)}
+    program, partition = _hex(rng), _hex(rng)
+    rec = {"format": CC.FORMATS[0] if rng.random() < 0.9 else CC.FORMATS[1], "protocol": CC.ONE_STAGE,
+           "program": program, "query": params["query"], "partition": partition, "population": w.n,
+           "law": {"law": "subset", "k": k}, "scheme": CC.SCHEME,
+           "roots": [{"port": "entries", "root": _hex(rng), "leaves": params["check"]["entries"], "domain": _hex(rng)},
+                     {"port": "W", "root": root_w, "leaves": rng.randint(1, 1 << 20), "domain": _hex(rng)}],
+           "leaf_layer": None, "anchors": [], "window": {"kind": "served", "context": params["context"], "public": items},
+           "previous": None}
+    if rng.random() < 0.3:
+        rec["roots"].reverse()
+    units = sorted(rng.sample(range(w.n), k))
+    answer = {"commitment": None, "protocol": CC.ONE_STAGE, "reason": None, "verdict": "accept",
+              "profile": {"covered": [], "delta": params["delta"], "drawn": {CC.LEVEL: k}, "linked": rng.random() < 0.5,
+                          "levels": [{"draw": {"subset": k}, "name": CC.LEVEL, "query": partition, "size": w.n}],
+                          "prescribed": sorted(rng.sample(["prompt", "weights", "noise"], rng.randrange(3))),
+                          "programs": [program]},
+              "public": {"draw": {"k": k, "law": "subset", "population": w.n, "units": units}}}
+    return {"params": params, "record": rec, "answer": answer}
+
+
+def _canon(x) -> str:
+    return CC._canon(x)
+
+
+def _set(obj, path: str, value) -> None:
+    *up, last = path.split(".")
+    for key in up:
+        obj = obj[int(key)] if isinstance(obj, list) else obj[key]
+    if isinstance(obj, list):
+        obj[int(last)] = value
+    elif value is _DROP:
+        del obj[last]
+    else:
+        obj[last] = value
+
+
+_DROP = object()
+
+#: (name, input, path, value): one field of one input set to `value` (`_DROP` removes it), or a named edit below
+MUTATIONS = [
+    ("params-keys", "params", "extra", 1), ("params-check-keys", "params", "check.extra", 1),
+    ("params-entries", "params", "check.entries", 1), ("params-scheme", "params", "check.scheme", "blake3"),
+    ("params-template", "params", "check.template", ""), ("params-tile-work", "params", "check.tile_work", 0),
+    ("params-context", "params", "context", ""), ("params-delta-type", "params", "delta", 1),
+    ("params-delta-form", "params", "delta", "01/2"), ("params-delta-den", "params", "delta", "1/1"),
+    ("params-delta-zero-den", "params", "delta", "3/0"), ("params-delta-lowest", "params", "delta", "2/4"),
+    ("params-delta-ratio", "params", "delta", "1/2/3"), ("params-delta-range", "params", "delta", "1"),
+    ("params-delta-zero", "params", "delta", "0"), ("params-eps-range", "params", "eps", "3/2"),
+    ("params-eps-zero", "params", "eps", "0"), ("params-eps-empty", "params", "eps", ""),
+    ("params-grid", "params", "grid_bits", "3"), ("params-query", "params", "query", "ab"),
+    ("params-range", "params", "range", [3, 2]), ("params-range-zero", "params", "range", [0, 5]),
+    ("params-eps-other", "params", "eps", "1/7"), ("params-delta-other", "params", "delta", "1/9"),
+    ("params-grid-other", "params", "grid_bits", 7), ("params-tile-other", "params", "check.tile_work", 3),
+    ("params-template-other", "params", "check.template", "Other{1}"), ("params-query-other", "params", "query", None),
+    ("params-range-low", "params", "range", None), ("params-range-high", "params", "range", None),
+    ("record-format", "record", "format", "verity/registration/v0"), ("record-program", "record", "program", 7),
+    ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
+    ("record-law-missing", "record", "law", _DROP), ("record-roots", "record", "roots", [{"port": "W"}]),
+    ("record-window-keys", "record", "window.extra", 1), ("record-window-public", "record", "window.public", []),
+    ("record-kind", "record", "window.kind", "stand-in"), ("record-context", "record", "window.context", "elsewhere"),
+    ("record-extra-item", "record", "window.public.verdict", True), ("record-missing-item", "record", "window.public.root_W", _DROP),
+    ("record-level-missing", "record", "window.public.work.level", _DROP),
+    ("record-level-type", "record", "window.public.work.level", "3"), ("record-level-high", "record", "window.public.work.level", None),
+    ("record-level-huge", "record", "window.public.work.level", 10 ** 30), ("record-level-step", "record", "window.public.work.level", None),
+    ("record-work", "record", "window.public.work.credited", None), ("record-check", "record", "window.public.check.entries", None),
+    ("record-sampling", "record", "window.public.sampling.law.k", None), ("record-root-w", "record", "window.public.root_W", None),
+    ("record-no-w-root", "record", "roots", None), ("record-population", "record", "population", None),
+    ("record-law", "record", "law.k", None), ("record-law-kind", "record", "law", {"law": "bernoulli", "p": "1/2"}),
+    ("record-query", "record", "query", None), ("record-scheme", "record", "scheme", "frame-v3/hm96"),
+    ("answer-keys", "answer", "extra", 1), ("answer-protocol-type", "answer", "protocol", 3),
+    ("answer-verdict", "answer", "verdict", "maybe"), ("answer-commitment-type", "answer", "commitment", 5),
+    ("answer-shape", "answer", "reason", "why"), ("answer-profile", "answer", "profile.levels", {}),
+    ("answer-profile-delta", "answer", "profile.delta", "2/4"), ("answer-profile-draw", "answer", "profile.levels.0.draw", {"all": 1}),
+    ("answer-public", "answer", "public", {"units": []}), ("answer-public-law", "answer", "public.draw.law", "bernoulli"),
+    ("answer-protocol", "answer", "protocol", "verity/pous/v1"), ("answer-other", "answer", "commitment", None),
+    ("answer-null", "answer", "commitment", _DROP), ("answer-reject", "answer", None, "reject"),
+    ("answer-undecided", "answer", None, "undecided"), ("answer-programs", "answer", "profile.programs", None),
+    ("answer-programs-two", "answer", "profile.programs", None), ("answer-level-query", "answer", "profile.levels.0.query", None),
+    ("answer-level-size", "answer", "profile.levels.0.size", None), ("answer-level-draw", "answer", "profile.levels.0.draw", None),
+    ("answer-level-bernoulli", "answer", "profile.levels.0.draw", {"bernoulli": "1/2"}),
+    ("answer-level-stratified", "answer", "profile.levels.0.draw",
+     {"law": "stratified", "strata": [{"k": 1, "name": "t", "size": 2}]}),
+    ("answer-level-name", "answer", "profile.levels.0.name", "tile"), ("answer-levels-two", "answer", "profile.levels", None),
+    ("answer-delta", "answer", "profile.delta", "1/3"), ("answer-drawn", "answer", "profile.drawn", None),
+    ("answer-draw-k", "answer", "public.draw.k", None), ("answer-draw-population", "answer", "public.draw.population", None),
+    ("answer-units-order", "answer", "public.draw.units", None), ("answer-units-range", "answer", "public.draw.units", None),
+    ("answer-units-count", "answer", "public.draw.units", None), ("answer-unsorted-lists", "answer", "profile.covered", ["z", "a"]),
+    ("noncanonical-record", None, None, None),
+    ("noncanonical-answer", None, None, None), ("float-answer", None, None, None), ("utf8-record", None, None, None),
+]
+NAMES = [m[0] for m in MUTATIONS]
+
+
+def _derived(name: str, case: dict, rng: random.Random):
+    """The value of a mutation whose value depends on the honest case."""
+    p, rec, ans = case["params"], case["record"], case["answer"]
+    items, bits, tw = rec["window"]["public"], p["grid_bits"], p["check"]["tile_work"]
+    ell = items["work"]["level"]
+    if name in ("params-query-other", "answer-other"):
+        return _hex(rng)
+    if name == "params-range-low":
+        return [Wd.point(ell, bits) + 1, max(p["range"][1], Wd.point(ell, bits) + 1)]
+    if name == "params-range-high":
+        return [1, max(1, Wd.point(ell + 1, bits) - 1)]
+    if name == "record-level-high":
+        return Wd.level(Wd.floor_point(p["range"][1], bits), bits) + rng.randrange(3)
+    if name == "record-level-step":
+        return ell + 1 if Wd.point(ell + 2, bits) <= p["range"][1] else ell - 1 if ell >= 1 and Wd.point(ell - 1, bits) >= p["range"][0] else ell + 7
+    if name == "record-work":
+        return items["work"]["credited"] + 1
+    if name == "record-check":
+        return items["check"]["entries"] + 1
+    if name == "record-sampling":
+        return items["sampling"]["law"]["k"] + 1
+    if name == "record-root-w":
+        return _hex(rng)
+    if name == "record-no-w-root":
+        return [r for r in rec["roots"] if r["port"] != "W"]
+    if name == "record-population":
+        return rec["population"] + rng.choice([-1, 1])
+    if name == "record-law":
+        return rec["law"]["k"] + 1
+    if name == "record-query":
+        return _hex(rng)
+    if name == "answer-programs":
+        return [_hex(rng)]
+    if name == "answer-programs-two":
+        return [rec["program"], rec["program"]]
+    if name == "answer-level-query":
+        return _hex(rng)
+    if name == "answer-level-size":
+        return rec["population"] + 1
+    if name == "answer-level-draw":
+        return {"subset": rec["law"]["k"] + 1}
+    if name == "answer-levels-two":
+        return [{"draw": None, "name": "window", "query": None, "size": 1}, *ans["profile"]["levels"]]
+    if name == "answer-drawn":
+        return {CC.LEVEL: rec["law"]["k"] + 1}
+    if name == "answer-draw-k":
+        return rec["law"]["k"] + 1
+    if name == "answer-draw-population":
+        return rec["population"] * 2
+    units = ans["public"]["draw"]["units"]
+    if name == "answer-units-order":
+        return list(reversed(units)) if len(units) > 1 else units + units
+    if name == "answer-units-range":
+        return units[:-1] + [rec["population"]]
+    if name == "answer-units-count":
+        return units[:-1]
+    raise AssertionError(name)
+
+
+def instance(seed: int) -> dict:
+    """Case `seed`: an honest window, then the mutation `seed` names (every tenth case is left honest)."""
+    rng = random.Random(seed)
+    case = honest(rng)
+    name = None if seed % 10 == 0 else NAMES[(seed // 10 * 9 + seed % 10 - 1) % len(NAMES)]
+    _, which, path, value = next(m for m in MUTATIONS if m[0] == name) if name else (None, None, None, None)
+
+    def mutate(part: str) -> None:
+        nonlocal value
+        if which != part:
+            return
+        if part == "answer" and path is None:
+            case["answer"].update({"verdict": value, "reason": f"the audit's {value} ({rng.randrange(100)})",
+                                   "profile": None, "public": None})
+            return
+        if value is None:
+            value = _derived(name, case, rng)
+        _set(case[part], path, value)
+
+    mutate("params")
+    mutate("record")
+    params, rec, ans = case["params"], case["record"], case["answer"]
+    rec_b = _canon(rec).encode()
+    if isinstance(rec.get("format"), str):
+        ans["commitment"] = hashlib.sha512(rec["format"].encode() + b"\0" + rec_b).hexdigest()
+    mutate("answer")
+    if name == "answer-null":
+        ans["commitment"] = None
+    ans_b = _canon(ans).encode()
+    if name == "noncanonical-record":
+        rec_b = json.dumps(rec, sort_keys=True).encode()
+    elif name == "noncanonical-answer":
+        ans_b = _canon(dict(reversed(list(ans.items())))).encode().replace(b'{"', b'{ "', 1)
+    elif name == "float-answer":
+        ans_b = ans_b.replace(b'"verdict":"accept"', b'"verdict":"accept","x":1.5')
+    elif name == "utf8-record":
+        rec_b = rec_b + b"\xff"
+    raw = {"commitment": rec_b.hex(), "evidence": ans_b.hex(), "params": params}
+    return {"name": name or "honest", "case": raw}
+
+
+def lean_case(inst: dict) -> str:
+    """The `serve` line: the parameters as JSON (`Protocol.case` re-encodes them canonically), the rest as hex."""
+    return _canon(inst["case"])
+
+
+def python_answer(inst: dict) -> str:
+    return CC.line(CC.case(lean_case(inst)))
+
+
+def write(out: Path, count: int = COUNT) -> dict[str, Path]:
+    """Both files for cases 0 … count − 1 under ``out/difftest``."""
+    d = out / "difftest"
+    d.mkdir(parents=True, exist_ok=True)
+    paths = {"difftest/cases.jsonl": d / "cases.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
+    with open(paths["difftest/cases.jsonl"], "w") as fc, open(paths["difftest/python.jsonl"], "w") as fp:
+        for seed in range(count):
+            inst = instance(seed)
+            fc.write(lean_case(inst) + "\n")
+            fp.write(python_answer(inst) + "\n")
+    return paths
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.experimental.protocols.pouw is the reference")
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--count", type=int, default=COUNT)
+    a = ap.parse_args()
+    here = Path(verity.experimental.protocols.pouw.__file__).resolve()
+    if not here.is_relative_to(a.verity.resolve()):
+        raise SystemExit(f"verity.experimental.protocols.pouw comes from {here}, not from the checkout {a.verity}")
+    write(a.out, a.count)
+
+
+if __name__ == "__main__":
+    main()
