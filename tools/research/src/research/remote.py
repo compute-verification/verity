@@ -1895,7 +1895,8 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
                 if x.get("kind") == "cancel_result" and (x.get("target") or {}).get("pgid") == pgid), None)
     if res is None:
         raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
-    return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
+    tgt = res.get("target") or {}
+    return {"pgid": pgid, "processes": tgt.get("members_total", len(tgt.get("members") or [])), "delivered": bool(res.get("delivered")),
             "why": res.get("reason")}
 
 
