@@ -221,7 +221,15 @@ def _params(m: dict) -> tuple[R.Params, int]:
 
 
 def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
+    """The setup, raising its failure in the spec's 1, 2, 3, 5 precedence whatever the frames' order: a malformed frame
+    (1) at once, a binding mismatch (2) once every setup frame is read, and a root or decode failure (3, 5) as
+    `Setup.authentication_failed` only when neither came first."""
     cursor = 0
+    mismatches: list[WireError] = []
+
+    def bind(ok: bool, message: str) -> None:
+        if not ok:
+            mismatches.append(WireError(FAIL_IDENTITY, message))
     _, body = parse_envelope(frames[cursor], SETUP_COMMIT)
     cursor += 1
     if len(body) < 4 + D:
@@ -241,8 +249,7 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
     cursor += 1
     if len(body) != D + S:
         raise WireError(FAIL_MALFORMED, "SETUP_SALT length mismatch")
-    if body[:D] != commitment:
-        raise WireError(FAIL_IDENTITY, "SETUP_SALT commitment mismatch")
+    bind(body[:D] == commitment, "SETUP_SALT commitment mismatch")
     salt = body[D:]
 
     blocks: list[bytes] = []
@@ -254,13 +261,11 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
         cursor += 1
         if len(body) < D + S + 8 + 4:
             raise WireError(FAIL_MALFORMED, "truncated SETUP_BLOCK")
-        if body[:D] != commitment or body[D:D + S] != salt:
-            raise WireError(FAIL_IDENTITY, "SETUP_BLOCK identity mismatch")
+        bind(body[:D] == commitment and body[D:D + S] == salt, "SETUP_BLOCK identity mismatch")
         index = int.from_bytes(body[D + S:D + S + 8], "big")
         length = int.from_bytes(body[D + S + 8:D + S + 12], "big")
         block = body[D + S + 12:]
-        if index != len(blocks):
-            raise WireError(FAIL_IDENTITY, "SETUP_BLOCK is missing, duplicated, or reordered")
+        bind(index == len(blocks), "SETUP_BLOCK is missing, duplicated, or reordered")
         if length != n or len(block) != length:
             raise WireError(FAIL_MALFORMED, "SETUP_BLOCK length mismatch")
         if int.from_bytes(block, "big") >= params.p:
@@ -268,23 +273,22 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
         blocks.append(block)
 
     if cursor >= len(frames):
-        raise WireError(FAIL_TRANSPORT, "missing SETUP_ROOT")
+        raise mismatches[0] if mismatches else WireError(FAIL_TRANSPORT, "missing SETUP_ROOT")
     _, body = parse_envelope(frames[cursor], SETUP_ROOT)
     cursor += 1
     if len(body) != SETUP_ROOT_BYTES:
         raise WireError(FAIL_MALFORMED, "SETUP_ROOT length mismatch")
-    if body[:D] != commitment or body[D:D + S] != salt:
-        raise WireError(FAIL_IDENTITY, "SETUP_ROOT identity mismatch")
+    bind(body[:D] == commitment and body[D:D + S] == salt, "SETUP_ROOT identity mismatch")
     declared_count = int.from_bytes(body[D + S:D + S + 8], "big")
     declared_root, mode = body[D + S + 8:D + S + 8 + D], body[-1]
     if mode not in (0, 1):
         raise WireError(FAIL_MALFORMED, "unknown setup mode")
-    if declared_count != params.blocks:
-        raise WireError(FAIL_IDENTITY, "setup block count disagrees with manifest")
-    if mode == 1 and len(blocks) != params.blocks:
-        raise WireError(FAIL_IDENTITY, "public setup has missing blocks")
     if mode == 0 and blocks and len(blocks) != params.blocks:
         raise WireError(FAIL_MALFORMED, "partial private setup blocks")
+    bind(declared_count == params.blocks, "setup block count disagrees with manifest")
+    bind(mode == 0 or len(blocks) == params.blocks, "public setup has missing blocks")
+    if mismatches:
+        raise mismatches[0]
     failed = False
     if blocks:
         bps = params.blocks_per_segment

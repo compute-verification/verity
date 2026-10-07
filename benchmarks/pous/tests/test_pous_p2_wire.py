@@ -124,3 +124,21 @@ def test_a_setup_salt_of_the_wrong_length_is_malformed():
     small, setup, audit = _small_session()
     for body in (setup[1][10:] + b"\x00", setup[1][10:-1]):
         assert _verify([setup[0], Wi.envelope(Wi.SETUP_SALT, body), *setup[2:], *audit], small) == (False, 1, 0)
+def test_several_setup_faults_report_the_first_in_1_2_3_5_precedence():
+    """Spec §4: "the same 1, 2, 3, 5 precedence applies if one setup transcript has multiple faults", whatever the frame
+    order: a binding mismatch (2) in SETUP_SALT or a SETUP_BLOCK before a malformed later frame (1) is code 1, and an
+    out-of-profile block (5) with a wrong root (3) is code 3."""
+    small, setup, audit = _small_session()
+    params = V.SMALL
+    salt_mismatch = Wi.envelope(Wi.SETUP_SALT, bytes([setup[1][10] ^ 1]) + setup[1][11:])
+    noncanonical = Wi.envelope(Wi.SETUP_BLOCK, setup[5][10:-params.width_bytes] + params.p.to_bytes(params.width_bytes, "big"))
+    bad_mode = setup[-1][:-1] + b"\x02"
+    assert _verify([setup[0], salt_mismatch, *setup[2:5], noncanonical, *setup[6:], *audit], small) == (False, 1, 0)
+    assert _verify([setup[0], salt_mismatch, *setup[2:-1], bad_mode, *audit], small) == (False, 1, 0)
+    assert _verify([*setup[:2], setup[3], setup[2], *setup[4:-1], bad_mode, *audit], small) == (False, 1, 0)
+    salt, commitment = bytes.fromhex(small["setup_salt"]), bytes.fromhex(small["w_commitment"])
+    k, t, _ = R.keys(salt, params, commitment, 0, 0)
+    wide = R.encode(params, (1 << 63) + 5, k, t).to_bytes(params.width_bytes, "big")
+    wrong_root = setup[-1][:114] + bytes([setup[-1][114] ^ 1]) + setup[-1][115:]
+    assert _verify([*setup[:2], Wi.envelope(Wi.SETUP_BLOCK, setup[2][10:-8] + wide), *setup[3:-1], wrong_root, *audit],
+                   small) == (False, 3, 0)
