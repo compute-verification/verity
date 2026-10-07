@@ -26,7 +26,7 @@ import random
 
 import pytest
 
-from verity_catalog.silicon import silicon as S
+from verity.ml.circuits.silicon import silicon as S
 from verity_numerical.reference import hawkeye_close as H
 from wp1_cases import canon, canon_term, realise as _pair, term_of
 

@@ -159,7 +159,7 @@ def _map(n):
 
 
 def _cmdline(n):
-    fake_proc(n.proc, 104, cmdline=f"python3 {n.src}/{n.a}/tools/check/check.py")
+    fake_proc(n.proc, 104, cmdline=f"python3 {n.src}/{n.a}/tools/verity/check/check.py")
 
 
 def _running(n):
@@ -515,7 +515,7 @@ def test_a_replace_ref_or_graft_in_the_nodes_repository_places_nothing(node):
 def test_a_process_naming_a_tree_however_it_spells_the_path_keeps_it(node, how):
     a = node.a
     if how == "relative-cmdline":
-        fake_proc(node.proc, 500, cwd=str(node.root), cmdline=f"python3 src/{a}/tools/check/check.py")
+        fake_proc(node.proc, 500, cwd=str(node.root), cmdline=f"python3 src/{a}/tools/verity/check/check.py")
     elif how == "double-slash-env":
         fake_proc(node.proc, 500, environ=f"PYTHONPATH={node.root}//src/{a}/tools/research/src\0")
     else:

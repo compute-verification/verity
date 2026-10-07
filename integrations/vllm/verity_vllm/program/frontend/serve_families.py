@@ -3,7 +3,7 @@ attention geometry a semantic profile declares and the `BN` static it binds, and
 
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.b1 import BN, Serve, ServeV4, fa2_kblock_n
 
