@@ -49,7 +49,7 @@ on the hash's output width `n`.
 **The route that avoids both the random oracle and the knowledge assumption** (adopted by Daniel, 2026-09-26):
 
 1. Build the in-proof Merkle trees with SHA-512, leaves and nodes.
-2. Make the round digests assumption-free by having the coin server keep each round's bytes (it already receives
+2. Make the round digests assumption-free by having the challenger keep each round's bytes (it already receives
    them).
 
 The compiled bound is then 2^-205 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
@@ -74,7 +74,7 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
 ## 2. The compiled theorem: its terms, its number, its proof
 
 The protocol is README.md §1.1's table (the `fast100` profile twice on one root, live `os` coins, a statement of
-§16) in the adopted variant: SHA-512 Merkle caps, and the coin server keeping each round's bytes.
+§16) in the adopted variant: SHA-512 Merkle caps, and the challenger keeping each round's bytes.
 
 **The committed values of an arbitrary prover.** Let `P*` be any classical prover. Without loss of generality it is
 deterministic, since a randomized prover is an average of deterministic ones. Its **committed table** is the plurality
@@ -299,9 +299,9 @@ strict time.
 
 The targets and expected assumptions are README.md §3.
 
-**The masked protocol** is lane `flock-netlist`'s M1/M2 (PR #83). It consists of VEIL-style masking of the sumchecks,
-Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*` is written
-so that these slot in without restructuring:
+**The masked protocol** is lane `flock-netlist`'s C-Flock ZK (PR #83). It consists of VEIL-style masking of the
+sumchecks, Reed–Solomon padding in Ligerito over GF(2^128), and Halevi–Micali leaf commitments. The model in `Model/*`
+is written so that these slot in without restructuring:
 
 - the prover's randomness becomes an extra input of the reference prover;
 - masks are extra messages or extra committed columns in the existing phases;
@@ -338,7 +338,7 @@ We follow the staging and vocabulary, and differ where the setting does.
 |---|---|---|---|
 | **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (#907; README.md §1.6). |
 | **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (README.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
-| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the coin server keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; a Fiat–Shamir variant is future work (§8). |
+| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the challenger keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; Fiat–Shamir is out (§8). |
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit (level 3, another lane). | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every component inside it verified. |
 | **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
@@ -369,35 +369,16 @@ target 2^-128, and state the number the way the stages suggest:
    - Stage 2: the compiler's correctness, mitigated by tests.
 
 **Performance stages** (proofs of at most 256 KB, verification in at most 16 ms) belong to the tables. `fast100` run
-twice (1–2 MB, 20–50 ms) exceeds them, which matters only for a SNARK variant.
+twice (1–2 MB, 20–50 ms) exceeds them, which would matter only for a non-interactive variant, and that is out (§8).
 
-## 8. A Fiat–Shamir or SNARK variant (future extension)
+## 8. Fiat–Shamir is out
 
-A non-interactive variant ("C-fs") derives each round's coins from a hash of the transcript so far. It would need:
-
-- **Round-by-round soundness of every component, and a Fiat–Shamir theorem** in the random-oracle model (a16z 1c).
-  a16z's caveat applies: whether Fiat–Shamir with a real hash is secure is open. Systems without recursion are on
-  firmer ground.
-- **A new parameter set.** A cheating prover can re-hash to re-sample a round's coins (state restoration). So the error
-  grows to roughly `t × (round-by-round error)`, and two reps no longer square against such a prover. flock-128 found
-  `fast100` run twice at best 2^-75.6 under Fiat–Shamir. A SNARK profile would need one of:
-  - the strict `Fast`/`Slim` profiles, with grinding credited in the random-oracle model;
-  - GF(2^256) at the PIOP coins (flock-128's `f256` option).
-- **Recursion,** if proofs must be small. That triggers a16z's recursion caveat: every component inside the recursion
-  must be verified too.
-
-**What we do now to keep the door open:**
-
-- **Round-by-round first.** Each phase of `rep_sound` is a per-coin lemma: from a doomed state, whatever the prover
-  sends, the next coin leaves it with probability at most ε. That is a round-by-round error; a Fiat–Shamir proof would
-  reuse these lemmas.
-- **One joint term, kept separately.** The two out-of-domain samples per level are charged jointly, `(μ/2^128)^2`,
-  which is valid with live coins. Their round-by-round error, `pairs·μ/2^128` (about 2^-104.5 at m = 33), stays its own
-  lemma.
-- **The model is ready for a compiler.** `coin` nodes are the only randomness, and the tree carries the transcript
-  prefix, so a Fiat–Shamir compiler would replace each `coin` by a random-oracle query on that prefix.
-- **Tools.** VCVio has Fiat–Shamir for Σ-protocols and the forking lemma. ArkLib's BCS compiler and its Fiat–Shamir for
-  IOPs (roadmap phase 6) are blocked, so a direct random-oracle proof is the alternative.
+Every proof is interactive, on live coins from the challenger; Fiat–Shamir is out (ruling of 5 Oct, "Live coins only;
+Fiat–Shamir is out", `.agents/skills/friction/SKILL.md`). A non-interactive variant would have needed round-by-round
+soundness and a Fiat–Shamir theorem in the random-oracle model, a new parameter set against state restoration (flock-128
+found `fast100` run twice at best 2^-75.6 under Fiat–Shamir), and, for small proofs, recursion with its caveat. None of
+that is planned. The per-coin lemmas of `rep_sound` and the separate round-by-round term of the out-of-domain samples
+stay as they are proved.
 
 **The `seed` coin mode is not Fiat–Shamir** (PR #83, spec §7.2). Coins come from a seed the verifier commits at step
 0, so soundness adds only seed hiding and SHA-256 as a PRF. It is the bridge to zero knowledge against a malicious
@@ -423,7 +404,7 @@ IOP with a collapse-position-binding vector commitment and openings at the end.
   the oracle-layer bound, and the kept round bytes fix every message before its coins.
 - So **if SHA-512 is collapsing, Flock is post-quantum sound with error `tableError + negl(λ)`.** This is a paper-level
   corollary, not yet written out.
-- SHA-512 is collapsing if its compression function is (Unruh 2016; Fehr 2018). Table 1 would need a new property,
+- SHA-512 is collapsing if its compression function is (Unruh 2016; Fehr 2018). Claiming it would need a new property,
   `collapsing/sha-512`.
 
 **No concrete bound follows at our parameters, for any prover size.**
@@ -444,7 +425,7 @@ IOP with a collapse-position-binding vector commitment and openings at the end.
   (§11.2) is straight-line.
 - A coin-seed commitment that must hold against quantum verifiers needs SHA-384 or SHA-512, not SHA-256.
 
-**Recommendation.** Keep the theorem classical, and claim no post-quantum number in Table 1. The statistical layer
+**Recommendation.** Keep the theorem classical, and claim no post-quantum number. The statistical layer
 holds against quantum provers. The compiled protocol is post-quantum sound asymptotically if SHA-512 is collapsing
 (CDDGS25), and no concrete bound is known at these parameters. A Lean statement would be a research program, because no
 proof assistant has quantum rewinding. The cheap intermediate is CDDGS25 as a named `Prop`, with Flock's application
@@ -502,7 +483,7 @@ are in `note:20260927T0015Z-finding-malicious-verifier-zk-options`.
 - VEIL proves exactly that for its compiler: a simulator whose output equals the real view "for any value of verifier
   randomness" (perfect; Lemma 4.3). Its footnote names the notion "semi-malicious", and Succinct has machine-checked
   the paper's statements in Lean.
-- Masked Flock (M1, VEIL-style) must keep that property on binary fields:
+- Masked Flock (C-Flock ZK, VEIL-style) must keep that property on binary fields:
   - every leaked GF(2^128) value needs 128 uniform mask bits whose weights span;
   - ring switching must be covered;
   - adversarial out-of-domain points or repeated query positions must not reveal more than the padding covers.
@@ -533,7 +514,7 @@ soundness:
    bytes are recorded. So the union bound gives `Σ tableError` over the session's tables, and there is no barrier
    across machines. Squaring the per-rep error into the table's needs independent coins per repetition.
 4. **Latency.** A session lasts one machine's proving work plus about 220 round trips, paced by the slowest stream.
-   - With tables spread across GPUs and a coin server co-located per datacenter, that is about 1–2 s.
+   - With tables spread across GPUs and a challenger co-located per datacenter, that is about 1–2 s.
    - Sessions run back to back, so a table waits at most one window plus one session: twice the session length.
    - Throughput scales with machines, until prover memory limits the tables a machine holds in lockstep.
 

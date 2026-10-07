@@ -9,7 +9,7 @@ is one: `g`, played with the prover's messages `ms` and the verifier's coins `cs
 
 * **Messages** are typed: each entry of `ms` is a type and a value of it, and a send node takes the next entry only when
   its type is the node's.
-* **Coins** are arrays of words, as a coin server records them. A coin node of type `Fin n → F` with `n ≠ 1` takes the
+* **Coins** are arrays of words, as a challenger records them. A coin node of type `Fin n → F` with `n ≠ 1` takes the
   next array when it has `n` words and reads word `i` through `ι` as the coin's `i`-th value; a node of type `F` takes
   an array of one word. So a run's coin step is determined by its array: one word is always the scalar. The refinement
   fixes `ι` to the executable's field embedding, so the coins are the record's.

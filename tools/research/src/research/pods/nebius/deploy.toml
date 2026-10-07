@@ -191,6 +191,13 @@ src = "tools/cluster"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
+# what the dispatcher's `cluster submit` places Jobs with ($VY_QUEUE_SRC); no `run`: each placement runs it afresh
+[[tree]]
+path = "/workspace/verity-guest/cluster-src"
+src = "tools/cluster"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
 [[file]]
 path = "/workspace/verity-guest/bin/pool_n1.py"
 src = "tools/research/src/research/pods/nebius/pool_n1.py"
@@ -593,18 +600,6 @@ path = "/workspace/pouw/infra/bin/restart_fill_after_window.sh"
 src = "tools/research/src/research/pods/nebius/restart_fill_after_window.sh"
 nodes = ["vy-nebius-2"]
 owner = "compute-accounting"
-
-[[file]]
-path = "/workspace/pouw/infra/bin/check_slot.sh"
-src = "tools/research/src/research/pods/nebius/check_slot.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
-[[file]]
-path = "/usr/local/bin/vy-check-slot-d"
-src = "tools/research/src/research/pods/nebius/check_slot_d.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
 
 [[file]]
 path = "/usr/local/bin/vy-provers"

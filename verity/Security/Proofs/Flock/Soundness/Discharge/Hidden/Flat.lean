@@ -123,7 +123,7 @@ theorem hm_ne_msg {g' p' off' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.port
   exact sha_ne_hm R.rowNets ((deltaMsgCol_at R hu hg hp hb ht).1.inj R.disj hn.1 hn.2.1 hm.1 hm.2.1
     (by rw [← h]; exact R.hmIn_at hg' hp' ho')).1
 
-/-- **Distinct message bits are distinct columns**: VU, row, byte and bit. -/
+/-- **Distinct message bits are distinct columns**: template instance, row, byte and bit. -/
 theorem deltaMsgCol_inj {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
     (hb : b < 128 * c.ports[p]!.chunks) (ht : t < 8) (hg' : g' < c.g) (hp' : p' < c.ports.size)
     (hb' : b' < 128 * c.ports[p']!.chunks) (ht' : t' < 8) (h : deltaMsgCol c g p b t = deltaMsgCol c g' p' b' t') :
@@ -405,7 +405,7 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (L0 : Layout (flatTwin st)) (
 include L L0 F0 hv1 hda hrows
 
 /-- **An output row's message bit holds its copy** in every block of a satisfying witness of the hidden statement: at
-VU `g`, output row `j`'s word `k`, bit `t`, what the witness holds at `outSrc`. -/
+template instance `g`, output row `j`'s word `k`, bit `t`, what the witness holds at `outSrc`. -/
 theorem msg_copy {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :

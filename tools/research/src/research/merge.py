@@ -768,8 +768,7 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     """Why each train ref whose change from ``base`` (from the last ref pinned before it that it stacks on, if any) needs a grant
     under the queue's rules (as ``base`` has them, every role;
     none when it has no rules file) can't go in: pull request N lacks the `grant` label on `pr:N@SHA` at its pinned head, or on
-    an earlier head it only restacks or merges ``base`` into (`research.queue.carry`, printed as it carries), and, for a
-    lean-audit.json change, a `lean_review` on either that printed it whole as the same statements (`research.queue.reviewed`);
+    an earlier head it only restacks or merges ``base`` into (`research.queue.carry`, printed as it carries);
     or the ref isn't a pinned pull request, which is all a grant can be on."""
     from .queue import QueueError, StoreGrants, grant_target
 
@@ -787,7 +786,6 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
     grants = StoreGrants(store, say, repo=repo, base=base)
     out = []
     try:
-        lean = {g.role for g in rules.grants if g.lean_audit}
         by = {g.role: g.by for g in rules.grants}
         below: list[str] = []
         for label, sha in pins:
@@ -796,20 +794,17 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
             onto = next((b for b in reversed(below) if _git(repo, "merge-base", "--is-ancestor", b, sha, check=False).returncode == 0),
                         base)
             below.append(sha)
-            need = sorted(rules.needs(repo, onto, sha, (lambda: grants.reviews(pr, sha)) if pr else list, log=say))
+            need = sorted(rules.needs(repo, onto, sha, log=say))
             if need and pr is None:
                 out.append(f"{label} needs the {', '.join(need)} grant ({path}), which only a pull request's pinned head can hold: "
                            f"name it as N@SHA")
                 continue
             lacking = set(need) - grants(pr, sha) if need else set()
-            if missing := sorted(lacking - grants.carried(pr, sha, lacking)):
+            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto)):
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: from {by.get(g) or 'its rule, which names no `by`'}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
-                        f"head just restacks it or merges main into it: `research.queue.carry`)" + (
-                            f". A change `audit.py --update` (`--moved MOVES.json` for a move) prints only as the same statements "
-                            f"needs none: `research data put --kind lean-review/v1 --file OUT/audit.json`, then `research data "
-                            f"label {target} lean_review ART --by LANE`" if g in lean else "") for g in missing]
+                        f"head just restacks it or merges main into it: `research.queue.carry`)" for g in missing]
     except QueueError as e:                             # a store or git that can't answer (STALE), not the rules
         raise Refused(str(e)) from e
     return out
@@ -898,9 +893,9 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
     try:
         rules = queue_rules(repo, "HEAD") if pins else None
         for n, sha, onto in pins:
-            need = rules.needs(repo, onto, sha, lambda n=n, sha=sha: grants.reviews(n, sha)) if rules else set()
+            need = rules.needs(repo, onto, sha) if rules else set()
             lacking = need - grants(n, sha)
-            if missing := lacking - grants.carried(n, sha, lacking):
+            if missing := lacking - grants.carried(n, sha, lacking, onto):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
         raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e

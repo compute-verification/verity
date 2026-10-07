@@ -19,7 +19,8 @@
   research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
   research notes claim | approach | approaches ...            # approaches.py: the approach registry (check, then claim)
 
-A lane's report is its newest `<root>/lanes/<lane>/<stamp>-report-<slug>.md` (`checkpoint` creates `<stamp>-report-<lane>.md`),
+A lane's report is its newest `<root>/lanes/<lane>/<stamp>-report-<lane>.md`, the one `checkpoint` creates, so a side report the
+lane writes later (`<stamp>-report-<slug>.md`) never takes its checkpoints; with none of those, its newest `<stamp>-report-<slug>.md`;
 never a report another agent sent the lane (`<stamp>-report-from-<x>-<slug>.md`) or a note of another kind whose slug says report
 (`<stamp>-handoff-from-<x>-report-for.md`).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -176,7 +177,8 @@ def report_for(root: Path, lane: str) -> Path | None:
     """The lane's report (the module docstring's rule)."""
     reports = sorted((p for p in (root / "lanes" / lane).glob("????????T????Z-report-*.md") if "-report-from-" not in p.name),
                      key=lambda p: file_time(root, p))
-    return reports[-1] if reports else None
+    main = [p for p in reports if re.fullmatch(rf"\d{{8}}T\d{{4}}Z-report-{re.escape(lane)}\.md", p.name)]
+    return (main or reports)[-1] if reports else None
 
 
 def _split_front_matter(text: str) -> tuple[str, str]:
