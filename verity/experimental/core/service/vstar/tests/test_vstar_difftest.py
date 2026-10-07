@@ -1,7 +1,9 @@
 """V*'s circuits in Lean (`VStar`, served by `vstar-difftest`) against `verity_flock`'s builders, part by part on drawn
-parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, each statement's unit
-(`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its whole `flock-circuit` file (`circuit.compose`)
-under drawn bindings. Big outputs are compared as digest and size; `test_*_file_is_byte_equal` compares whole files.
+parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, the algebra's structure and its
+parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's shape
+(`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
+whole `flock-circuit` file (`circuit.compose`) under drawn bindings. Big outputs are compared as digest and size;
+`test_*_file_is_byte_equal` compares whole files.
 
 The bindings (`partition`, `program`, `program_digests`) are core's descriptor codec's and are inputs here: the reference's
 subcircuit hands `compose` the drawn `program_digests` as they are (`_given`)."""
@@ -20,8 +22,10 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.ml.circuits.boolean.forms import Circuit
+from verity.ml.circuits.ops.boolean import gf2k as G
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
+from verity_flock import rec_algebra as A
 from verity_flock import rec_open as R
 from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
@@ -138,6 +142,61 @@ def residuals(v) -> dict:
     C = Circuit()
     w, vv = C.input("w", 128 * S["nw"]), C.input("v", 128 * S["nv"])
     return _part(C, ["w", "v"], RR.residual_forms(C, S, w, vv))
+
+
+def _sha256(x) -> str:
+    """A JSON value's SHA-256 as `json.dumps(sort_keys=True, separators=(",", ":"))` writes it (`VStar.DT.jsonSha256`)."""
+    return hashlib.sha256(json.dumps(x, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _gf_summary(S: dict) -> dict:
+    return {"sha256": _sha256(S), "nw": S["nw"], "nv": S["nv"], "ops": len(S["ops"]), "res": len(S["res"]),
+            "products": sum(len(r["mul"]) for r in S["res"])}
+
+
+def _shape(v) -> A.Shape:
+    o = _obj(v, ("m", "k_log", "claims"))
+    return A.Shape(_nat(o["m"]), _nat(o["k_log"]), _nat(o["claims"]))
+
+
+def _algebra(f, sh: A.Shape):
+    """``f(sh)``; below ``k_log = 6`` `rec_algebra.run` reads past the first claim's point (an IndexError), a refusal."""
+    try:
+        return f(sh)
+    except IndexError:
+        if sh.k_log < 6:
+            raise D.Reject("k_log below 6") from None
+        raise
+
+
+def structure(v) -> dict:
+    return _gf_summary(_algebra(lambda sh: A.structure(sh)[0], _shape(v)))
+
+
+def spec(v) -> dict:
+    S = _algebra(RR.spec, _shape(v))
+    return {"S": _sha256(S), "ports": S["ports"], **_gf_summary(S["gf"])}
+
+
+def parts(v) -> list:
+    """`rec_residuals.parts` on a checked S: it reads S's terms through their ports unchecked, so past `check_structure`
+    its lookups fail."""
+    o = _obj(v, ("S", "max_regions", "max_slots"))
+    S = _reps(o["S"])
+    G.check_structure(S["gf"])
+    return [{"S": p.S, "res": p.res, "v": p.v} for p in RR.parts(S, _nat(o["max_regions"]), _nat(o["max_slots"]))]
+
+
+def statements(v) -> list:
+    """`rec_vstage.stage`'s statements: per Ligerito level, `rec_outer.levels` of the session's openings (`rec_vstar.decode`
+    gives level l's rows ``2^lanes`` elements and ``d - cap`` siblings, each rep ``q`` openings), then the algebra's parts."""
+    sh = _shape(v)
+    ps = _algebra(lambda sh: RR.parts(RR.spec(sh)), sh)
+    out = [{"name": f"rec-open/l{1 << lv.lanes}-h{lv.d - lv.cap}", "dir": f"L{l}", "instances": 2 * lv.q, "level": l,
+            "LANES": 1 << lv.lanes, "H": lv.d - lv.cap} for l, lv in enumerate(A.fast100(sh.m).levels)]
+    return out + [{"name": f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", "dir": f"alg/p{j}", "instances": 2,
+                   "S": _sha256(p.S), "ports": len(p.S["ports"]), "res_of": p.res, "v_of": p.v, **_gf_summary(p.S["gf"])}
+                  for j, p in enumerate(ps)]
 
 
 def _lowering(low: IL.Lowering) -> dict:
@@ -266,9 +325,10 @@ NAME = st.text(max_size=4) | st.sampled_from(["rec-residuals/l0-p0", "row0"])
 
 
 @st.composite
-def rep_s(draw, valid: bool = True) -> dict:
-    """InnerRepCheck's S: a GfResiduals S with w split into named row ports (`valid`), or ports that refuse."""
-    gf = draw(gf_s(strict=valid))
+def rep_s(draw, valid: bool = True, big: bool = False) -> dict:
+    """InnerRepCheck's S: a GfResiduals S (`big`: with `wt` terms) with w split into named row ports (`valid`), or ports
+    that refuse."""
+    gf = draw(gf_s(strict=valid, big=big))
     if valid:
         cuts = sorted(draw(st.lists(st.integers(1, max(gf["nw"] - 1, 1)), max_size=2, unique=True)))
         sizes = [b - a for a, b in zip([0, *cuts], [*cuts, gf["nw"]]) if b > a]
@@ -277,6 +337,32 @@ def rep_s(draw, valid: bool = True) -> dict:
     return {"gf": gf, "ports": draw(st.lists(st.tuples(st.sampled_from(["a", "a", "v"]), st.integers(0, 4)).map(list),
                                              max_size=3))}
 
+
+
+def _one(*strategies):
+    """One branch of a `one_of` (which flattens nested ones and drops repeated ones), so valid inputs can outweigh it."""
+    return st.one_of(*strategies).map(lambda v: v)
+
+
+def _shapes(claims: int):
+    """Inner sessions' shapes, three times in four: fast100's m (each of three ranges a branch), k_log from 6, 2 to
+    ``claims`` claims; else m, k_log or claims just outside, or not a shape."""
+    valid = lambda lo, hi: st.fixed_dictionaries({"m": st.integers(lo, hi), "k_log": st.integers(6, 40),
+                                                  "claims": st.integers(2, claims)})
+    return st.one_of(valid(22, 26), valid(27, 30), valid(31, 35), _one(
+        st.fixed_dictionaries({"m": st.sampled_from([0, 21, 36, -1, True]), "k_log": st.just(20), "claims": st.just(2)}),
+        st.fixed_dictionaries({"m": st.just(22), "k_log": st.sampled_from([0, 5, -1]), "claims": st.just(2)}),
+        st.fixed_dictionaries({"m": st.just(22), "k_log": st.just(6), "claims": st.sampled_from([0, 1, claims + 1, -1])}),
+        st.dictionaries(st.sampled_from(["m", "k_log", "claims", "x"]), st.integers(20, 24), max_size=3), JSON))
+
+
+#: S cut under limits it fits (64 regions, 128 slots), limits few residuals fit (3 regions: one port a part; 1 or 2 slots),
+#: and S or limits that refuse
+PARTS = st.one_of(
+    st.fixed_dictionaries({"S": rep_s(), "max_regions": st.sampled_from([3, 4, 64]), "max_slots": st.sampled_from([1, 2, 128])}),
+    st.fixed_dictionaries({"S": rep_s(big=True), "max_regions": st.sampled_from([3, 64]), "max_slots": st.sampled_from([2, 128])}),
+    _one(st.fixed_dictionaries({"S": rep_s(valid=False) | rep_s(), "max_regions": _near(0, 3), "max_slots": _near(0, 3)}),
+         st.fixed_dictionaries({"S": rep_s(valid=False), "max_regions": st.just(64), "max_slots": st.just(128)}), JSON))
 
 REPS = st.one_of(rep_s(), rep_s(valid=False), JSON)
 DIGEST = st.text(HEX, min_size=128, max_size=128)
@@ -315,6 +401,39 @@ def test_rec_open_residuals_agree(server):
     """`RecOpen{LANES, ·}`'s running sums (`rec_open.cons_structure`), the structure the level units hold."""
     for L in (8, 16):
         assert D.replay(port("residuals", residuals, GF), R.cons_structure(L), server)[0] == "output"
+
+
+# --- the algebra's structure and V*'s statements ----------------------------------------------------------------------------------
+
+def test_statements_agree_at_the_smallest_shape(server):
+    assert D.replay(port("statements", statements, st.nothing()), {"m": 22, "k_log": 6, "claims": 2}, server)[0] == "output"
+
+
+@pytest.mark.slow
+def test_structure_agrees(server):
+    stats = D.run(port("structure", structure, _shapes(14)), examples=32, seed=SEED, server=server)
+    assert stats.outputs >= 8 and stats.rejects >= 4, stats
+
+
+@pytest.mark.slow
+def test_spec_agrees(server):
+    stats = D.run(port("spec", spec, _shapes(11)), examples=32, seed=SEED, server=server)
+    assert stats.outputs >= 8 and stats.rejects >= 4, stats
+
+
+@pytest.mark.slow
+def test_parts_agree(server):
+    stats = D.run(port("parts", parts, PARTS), examples=80, seed=SEED, server=server)
+    assert stats.outputs >= 20 and stats.rejects >= 10, stats
+
+
+@pytest.mark.slow
+def test_statements_agree(server):
+    """Drawn shapes, and the largest whose rep fits one statement's 16 residuals."""
+    p = port("statements", statements, _shapes(11))
+    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 11}, server)[0] == "output"
+    stats = D.run(p, examples=32, seed=SEED, server=server)
+    assert stats.outputs >= 8 and stats.rejects >= 4, stats
 
 
 # --- the units ------------------------------------------------------------------------------------------------------------------

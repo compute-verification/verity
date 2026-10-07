@@ -7,7 +7,8 @@ import VStar
 The functions `verity_flock`'s builders are held to (`tests/test_vstar_difftest.py`), each answering for one part of V*'s
 circuits on the parameters it is given: a part's rows as a laid-out netlist (`sha`, `climb`, `residuals`: the netlist's
 SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit file
-(`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes).
+(`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
+`spec`, `parts`), and V*'s statements over an inner session's shape (`statements`).
 -/
 
 namespace VStar.DT
@@ -72,13 +73,6 @@ def circuitJson (u : UnitC) (sub : Sub) (o : String → Json) : Except String Js
   let d := (e.run {}).2
   pure (Json.mkObj [("sha512", Flock.hexOf d.sha512.finish), ("bytes", (d.bytes : Json))])
 
-def recOpenSub (LANES H : Nat) : Sub :=
-  { id := s!"rec-open/l{LANES}-h{H}", template := "rec-open", inputs := ["row", "aux", "acc", "coef", "dirs"],
-    outputs := ["out", "acc_out"] }
-
-def innerSub (S : RepS) (name : String) : Sub :=
-  { id := name, template := "rec-residuals", inputs := S.ports.map (·.1) ++ ["v"], outputs := ["out"] }
-
 /-- `rec_outer.lowering(LANES, H).text`. -/
 def recOpenLowering (j : Json) : Except String Json := do
   let o ← input' j ["LANES", "H"]
@@ -103,9 +97,53 @@ def innerCircuit (j : Json) : Except String Json := do
   let name ← jStr (o "name") "name"
   circuitJson (← innerUnit S name) (innerSub S name) o
 
+/-- A JSON value's SHA-256 as `json.dumps(sort_keys=True, separators=(",", ":"))` writes it. -/
+def jsonSha256 (j : Json) : Except String String := do
+  pure (Flock.hexOf (((({} : Sha256S).update (← pyDumps j).toUTF8)).finish))
+
+def shapeOf (j : Json) : Except String Algebra.Shape := do
+  let o ← input' j ["m", "k_log", "claims"]
+  pure { m := ← jNat (o "m") "m", kLog := ← jNat (o "k_log") "k_log", claims := ← jNat (o "claims") "claims" }
+
+def gfSummary (S : GfS) : Except String (List (String × Json)) := do
+  let products : Nat := (S.res.map (·.mul.length)).foldl (· + ·) 0
+  pure [("sha256", ← jsonSha256 S.toJson), ("nw", (S.nw : Json)), ("nv", (S.nv : Json)), ("ops", (S.ops.length : Json)),
+    ("res", (S.res.length : Json)), ("products", (products : Json))]
+
+def natsJson (xs : List Nat) : Json := Json.arr (xs.toArray.map fun (i : Nat) => (i : Json))
+
+/-- `rec_algebra.structure(Shape(m, k_log, claims))[0]`: its SHA-256 and sizes. -/
+def structureFn (j : Json) : Except String Json := do
+  pure (Json.mkObj (← gfSummary (← Algebra.structure_ (← shapeOf j))))
+
+/-- `rec_residuals.spec(Shape(m, k_log, claims))`: the structure's summary, the ports, and the whole S's SHA-256. -/
+def specFn (j : Json) : Except String Json := do
+  let S ← Algebra.spec (← shapeOf j)
+  pure (Json.mkObj (("S", ← jsonSha256 S.toJson) :: ("ports", Json.arr (S.ports.toArray.map fun (nm, n) =>
+    Json.arr #[(nm : Json), (n : Json)])) :: (← gfSummary S.gf)))
+
+/-- `rec_residuals.parts(S, max_regions, max_slots)`, each part whole. -/
+def partsFn (j : Json) : Except String Json := do
+  let o ← input' j ["S", "max_regions", "max_slots"]
+  let ps ← parts (← RepS.ofJson (o "S")) (← jNat (o "max_regions") "max_regions") (← jNat (o "max_slots") "max_slots")
+  pure (Json.arr (ps.map fun p => Json.mkObj [("S", p.S.toJson), ("res", natsJson p.res), ("v", natsJson p.v)]))
+
+/-- `rec_vstage.stage`'s statements over an inner session of shape `(m, k_log, claims)`: each level's `RecOpen` and each
+algebra part's S (its SHA-256, sizes, residuals and v elements). -/
+def statementsFn (j : Json) : Except String Json := do
+  let st ← statements (← shapeOf j)
+  let out ← st.mapM fun s => match s with
+    | .recOpen level L H n => pure (Json.mkObj [("name", s.name), ("dir", s.dir), ("instances", (n : Json)),
+        ("level", (level : Json)), ("LANES", (L : Json)), ("H", (H : Json))])
+    | .inner _ _ p => do pure (Json.mkObj ([("name", (s.name : Json)), ("dir", (s.dir : Json)), ("instances", (s.instances : Json)),
+        ("S", ((← jsonSha256 p.S.toJson) : Json)), ("ports", (p.S.ports.length : Json)), ("res_of", natsJson p.res),
+        ("v_of", natsJson p.v)] ++ (← gfSummary p.S.gf)))
+  pure (Json.arr out)
+
 end VStar.DT
 
 open VStar.DT in
 def main : IO Unit := Difftest.serve (Difftest.table [
   ("sha", sha), ("climb", climb), ("residuals", residuals), ("rec_open_unit", recOpenLowering),
-  ("rec_open_circuit", recOpenCircuit), ("inner_unit", innerLowering), ("inner_circuit", innerCircuit)])
+  ("rec_open_circuit", recOpenCircuit), ("inner_unit", innerLowering), ("inner_circuit", innerCircuit),
+  ("structure", structureFn), ("spec", specFn), ("parts", partsFn), ("statements", statementsFn)])
