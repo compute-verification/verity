@@ -1,4 +1,4 @@
-"""The census (``catalog/census/``, data only): every file validates against its JSON Schema, the ids renders cite keep their values,
+"""The census (``benchmarks/census/``, data only): every file validates against its JSON Schema, the ids renders cite keep their values,
 and the directory holds nothing but data (nothing imports it; it can move to its own repository)."""
 
 from __future__ import annotations
@@ -8,8 +8,8 @@ import re
 
 import pytest
 
-from verity_catalog.silicon.instructions import INSTRUCTIONS
-from verity_catalog.targets.target import FP8_HOPPER_WGMMA, TARGETS
+from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+from verity.ml.circuits.targets.target import FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
@@ -52,7 +52,7 @@ def test_every_census_file_validates_against_its_schema_with_unique_ids(name: st
 
 def test_the_census_encodes_no_units() -> None:
     """The census holds workloads and subcircuits, never replay or proof units, which applications choose per run
-    (``catalog/census/README.md``)."""
+    (``benchmarks/census/README.md``)."""
     text = " ".join((census.ROOT / f"{n}.json").read_text(encoding="utf-8") for n in FILES)
     ids = [e["id"] for n in FILES for e in census.raw(n)]
     assert not [i for i in ids if re.search(r"(^|[-/])(vu|ru)([-/]|$)", i)] and "verification unit" not in text.lower()
@@ -109,7 +109,7 @@ def test_every_target_resolves_its_census_line_and_every_line_serves_a_target_or
         assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
     used = {h.id for h in lines.values()} | {w.serving.hardware for w in census.WORKLOADS.values()}
     # the L40S FP8 line serves no row yet; the RTX PRO 6000 lines serve the POUS bench's --hardware and the GemmCoordinate
-    # hillclimbs (backends/flock/pod/gemm_hill.py)
+    # hillclimbs (verity/ml/flock/pod/gemm_hill.py)
     rtx_pro = {f"rtx-pro-6000-server/{d}" for d in ("bf16", "e4m3", "e2m1")}
     assert used <= set(census.HARDWARE) and set(census.HARDWARE) - used <= {"l40s-48gb/e4m3"} | rtx_pro
     sets = [s.target for s in census.INPUT_SETS.values()]
@@ -280,7 +280,7 @@ def _ops(expr: str, env: dict) -> int:
 
 
 def test_every_template_carries_a_work_model_the_tables_n_agrees_with() -> None:
-    from verity_catalog.targets.target import FIRST
+    from verity.ml.circuits.targets.target import FIRST
     from verity_numerical.bench import views
 
     version = views.WORK_MODEL.split(":")[0]

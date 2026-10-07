@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 KIND = "quick-tier/v1"
-SUITES = "tools/check/suites.py"
+SUITES = "tools/verity/check/suites.py"
 #: variables that would point the tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 ROW_KEYS = ("name", "suite", "status", "failed_tests", "log")

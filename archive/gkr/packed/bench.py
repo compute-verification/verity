@@ -47,7 +47,7 @@ GPU_PEAKS = {
     "NVIDIA A100-SXM4-80GB": {"int8_dense_tops": 624.0, "hbm_bytes_per_s": 2.039e12, "fp32_tflops": 19.5, "bf16_dense_tflops": 312.0,
                               "source": "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB): INT8 624 TOPS dense, HBM2e 2,039 GB/s, FP32 19.5 TFLOPS"},
 }
-PROFILE = "first-campaign-target/2026-09-21"   # verity_catalog.targets.target.FIRST.name (copied: the pod has no workspace install)
+PROFILE = "first-campaign-target/2026-09-21"   # verity.ml.circuits.targets.target.FIRST.name (copied: the pod has no workspace install)
 DOMAIN = "finite"
 K_TARGET, B_TARGET = 1536, 4096
 UNITS = B_TARGET * K_TARGET // 16              # 393,216 transition units in the batch

@@ -659,7 +659,7 @@ def ligero_today_ops(rel: RelationShape, l: int | None = None, D: int = 6, t: in
 class GPU:
     """Throughput inputs for the time estimates (NOT measurements): base-field multiply-equivalents per second in a
     Montgomery SIMT kernel, NTT butterflies per second (enc-hopper measured ~0.65 T/s barrier-bound on the H100 at
-    n = 65536; a four-step 2^25 NTT is assumed no better), BLAKE3 bytes per second (kernels/hash_gpu), memory."""
+    n = 65536; a four-step 2^25 NTT is assumed no better), BLAKE3 bytes per second (verity/ml/kernels/hash_gpu), memory."""
     name: str
     base_mults_per_s: float
     butterflies_per_s: float

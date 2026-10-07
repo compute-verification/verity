@@ -1,4 +1,4 @@
-// Hashing format -h2 (frame-b3s, `verity.primitives.commitments.merkle`'s hash="blake3-s256"): -h1 with each tree leaf a Merkle tree
+// Hashing format -h2 (frame-b3s, `verity.ml.commitments.merkle`'s hash="blake3-s256"): -h1 with each tree leaf a Merkle tree
 // over its value's 256-byte segments.  Segment j of a value of L bytes is the standard keyed BLAKE3 of its exact bytes (the
 // last one short, the empty segment when L = 0) under keyed(domain id, 0x05 ‖ u64 rank ‖ u64 position ‖ u64 L ‖ u32 j ‖
 // u16 len(schema) ‖ schema); a segment-tree node at level l is one block under keyed(domain id, 0x06 ‖ u8 l); an odd last

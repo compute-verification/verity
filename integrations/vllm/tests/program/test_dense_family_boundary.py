@@ -1,5 +1,5 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity` and other Definition
-modules, so they can move to `catalog/` as they are. Their twins and vocabulary live in the integration package
+modules, so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package
 (`tools/migrate/split_dense.py`): `properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
 `program.kernels.rmsnorm_fused_sweep`, `program.frontend.gemm_targets`."""
 from __future__ import annotations
@@ -19,7 +19,7 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 READS = ("prims", "b1", "sampling")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity_catalog"
+CATALOG = "verity.ml.circuits"
 MOVED = {"rope_difftest": "verity_vllm.properties.difftests", "rope_gptj_difftest": "verity_vllm.properties.difftests",
          "rmsnorm_fused_sweep": "verity_vllm.program.kernels", "gemm_targets": "verity_vllm.program.frontend"}
 
@@ -67,4 +67,4 @@ def test_the_boundary_names_a_foreign_import():
     assert _foreign(REGISTRY, ("b1", "moe_difftest")) == [f"{REGISTRY}.moe_difftest"]
     assert _foreign(f"{REGISTRY}.gemm_targets", ("GemmTarget",)) == [f"{REGISTRY}.gemm_targets"]
     assert _foreign("torch", ()) == ["torch"]
-    assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.primitives.circuits.defs", ("bind",)) == []
+    assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.ml.circuits.defs", ("bind",)) == []
