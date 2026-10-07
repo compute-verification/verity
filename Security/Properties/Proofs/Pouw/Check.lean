@@ -16,6 +16,8 @@ open PouwCheck
 theorem publishesPublic : PublishesPublic := by
   intro pub; rfl
 
+theorem neverNull : NeverNull := fun _ _ => ⟨nofun, nofun⟩
+
 theorem digestIsOneStage's : DigestIsOneStage's := fun _ => rfl
 
 theorem check_eq (p : Params) (c : Registration) (e : Evidence) :
@@ -106,24 +108,6 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
       ite_eq_right (Classical.not_not.mpr hlaw),
       ite_eq_right (Classical.not_not.mpr hq), ite_eq_right (Classical.not_not.mpr hsch)]
 
-theorem unitLevels_iff (levels : Array Core.Level) (partition : String) (n k : Nat) :
-    (levels.size = 1 ∧ ∀ l ∈ levels.toList, IsUnitLevel l partition n k) ↔
-      ∃ l, levels.toList = [l] ∧ l.name = unitLevel ∧ l.query = some partition ∧ l.size = n ∧
-        l.draw = some (.subset k) := by
-  rw [← Array.length_toList]
-  constructor
-  · rintro ⟨h1, h2⟩
-    obtain ⟨l, hl⟩ := List.length_eq_one_iff.mp h1
-    obtain ⟨hn, hq, hs, hd⟩ := h2 l (by simp [hl])
-    refine ⟨l, hl, hn, hq, hs, ?_⟩
-    revert hd
-    rcases l.draw with _ | (_ | k' | _) <;> simp_all
-  · rintro ⟨l, hl, hn, hq, hs, hd⟩
-    refine ⟨by simp [hl], fun l' hl' => ?_⟩
-    rw [hl, List.mem_singleton] at hl'
-    subst hl'
-    exact ⟨hn, hq, hs, by rw [hd]⟩
-
 theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     outcome p c f e = .accept pub prof ↔
@@ -140,27 +124,28 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
   case reject => simp
   case undecided => simp
   simp only [Said.accept.injEq]
-  by_cases h3 : prof'.programs.toList = [c.program]
+  by_cases h3 : prof'.programs = #[c.program]
   case neg =>
     rw [ite_eq_left h3]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨rfl, -⟩, h, -⟩, -⟩; exact h3 h
   rw [ite_eq_right (Classical.not_not.mpr h3)]
-  by_cases h4 : prof'.levels.size = 1 ∧ ∀ l ∈ prof'.levels.toList, IsUnitLevel l c.partition f.work.n f.sampling.k
+  by_cases h4 : prof'.levels =
+      #[{ name := unitLevel, query := some c.partition, size := f.work.n, draw := some (.subset f.sampling.k) }]
   case neg =>
     rw [ite_eq_left h4]; simp only [reduceCtorEq, false_iff]
-    rintro ⟨d, ⟨-, -, ⟨rfl, -⟩, -, h, -⟩, -⟩; exact h4 ((unitLevels_iff _ _ _ _).mpr h)
+    rintro ⟨d, ⟨-, -, ⟨rfl, -⟩, -, h, -⟩, -⟩; exact h4 h
   rw [ite_eq_right (Classical.not_not.mpr h4)]
   by_cases h5 : prof'.delta = p.delta
   case neg =>
     rw [ite_eq_left h5]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨rfl, -⟩, -, -, h, -⟩, -⟩; exact h5 h
   rw [ite_eq_right (Classical.not_not.mpr h5)]
-  by_cases h6 : prof'.drawn.toList = [(unitLevel, f.sampling.k)]
+  by_cases h6 : prof'.drawn = #[(unitLevel, f.sampling.k)]
   case neg =>
     rw [ite_eq_left h6]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨rfl, -⟩, -, -, -, h, -⟩, -⟩; exact h6 h
   rw [ite_eq_right (Classical.not_not.mpr h6)]
-  by_cases h7 : draw.k ≠ f.sampling.k ∨ draw.population ≠ f.work.n
+  by_cases h7 : draw.law ≠ .subset f.sampling.k ∨ draw.population ≠ f.work.n
   case pos =>
     rw [ite_eq_left h7]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨-, rfl⟩, -, -, -, -, hk, hn, -⟩, -⟩; exact h7.elim (· hk) (· hn)
@@ -171,10 +156,11 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
     rintro ⟨d, ⟨-, -, ⟨-, rfl⟩, -, -, -, -, -, -, hu⟩, -⟩; exact h8 hu
   rw [ite_eq_right (Classical.not_not.mpr h8)]
   simp only [Core.Outcome.accept.injEq]
+  have hk : draw.law = .subset f.sampling.k := Classical.byContradiction fun h => h7 (.inl h)
+  have hn : draw.population = f.work.n := Classical.byContradiction fun h => h7 (.inr h)
   constructor
   · rintro ⟨rfl, rfl⟩
-    exact ⟨draw, ⟨h1, h2, ⟨rfl, rfl⟩, h3, (unitLevels_iff _ _ _ _).mp h4, h5, h6, by omega, by omega, h8⟩,
-      rfl⟩
+    exact ⟨draw, ⟨h1, h2, ⟨rfl, rfl⟩, h3, h4, h5, h6, hk, hn, h8⟩, rfl⟩
   · rintro ⟨d, ⟨_, _, ⟨rfl, rfl⟩, _⟩, rfl⟩
     exact ⟨rfl, rfl⟩
 

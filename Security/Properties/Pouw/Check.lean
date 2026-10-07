@@ -44,15 +44,14 @@ def RegistrationKeeps (p : Params) (c : Registration) (f : Fixed) : Prop :=
 
 /-- The service accepted this registration (`e` is one-stage's answer for its digest) with `prof` and `draw`: the profile
 of the registered Program over one level, the registered partition's `N` units drawn `subset:K′`, at the window's δ,
-with `K′` units drawn; and a draw of `K′` distinct units below `N`, ascending. -/
+with `K′` units drawn; and a draw `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
 def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
-    (draw : SubsetDraw) : Prop :=
+    (draw : UnitDraw) : Prop :=
   e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧ e.said = .accept prof draw ∧
-  prof.programs.toList = [c.program] ∧
-  (∃ l, prof.levels.toList = [l] ∧ l.name = unitLevel ∧ l.query = some c.partition ∧ l.size = f.work.n ∧
-    l.draw = some (.subset f.sampling.k)) ∧
-  prof.delta = p.delta ∧ prof.drawn.toList = [(unitLevel, f.sampling.k)] ∧
-  draw.k = f.sampling.k ∧ draw.population = f.work.n ∧
+  prof.programs = #[c.program] ∧
+  prof.levels = #[{ name := unitLevel, query := some c.partition, size := f.work.n, draw := some (.subset f.sampling.k) }] ∧
+  prof.delta = p.delta ∧ prof.drawn = #[(unitLevel, f.sampling.k)] ∧
+  draw.law = .subset f.sampling.k ∧ draw.population = f.work.n ∧
   draw.units.size = f.sampling.k ∧ Ascending draw.units.toList ∧ ∀ u ∈ draw.units.toList, u < f.work.n
 
 /-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes;
@@ -91,6 +90,10 @@ def AcceptedIsTheService's : Prop :=
 
 /-- What acceptance publishes is `window.PUBLIC`, item for item in its order. -/
 def PublishesPublic : Prop := ∀ pub : Public, pub.entries.map (·.1) = PouwWindow.publicItems.map (·.item)
+
+/-- The public outputs and the profile are never `null`, so `Core.Answer.ofJson` reads an accepted answer back. -/
+def NeverNull : Prop :=
+  ∀ (pub : Public) (prof : Core.Integrity), protocol.publicJson pub ≠ .null ∧ protocol.profileJson prof ≠ .null
 
 /-! ## The other verdicts -/
 
