@@ -4,9 +4,9 @@ the exact `FINAL` frame.
 
 A port of the P2 kit's `p2_audit_verifier.py` (`p2-audit-wire/v1`) onto `reference.py` and `verity.primitives.randomness`,
 with v4's hashes: every digest is SHA-512's whole 64 bytes, so the commitment, root, epoch id, sibling, transcript hash and
-the frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Like the
-kit's, it checks a public setup's blocks against the declared root but does not decode them back to `W`; that belongs to
-setup, not to the audit.
+the frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Unlike the
+kit's, it decodes a public setup's blocks back to the committed `W`, and checks a private setup's declared root against the
+root the verifier built from `W` itself (`private_root`), which it never trusts.
 """
 from __future__ import annotations
 
@@ -190,7 +190,7 @@ class Setup:
     blocks: tuple[bytes, ...]
     root: bytes
     epoch_id: bytes
-    authentication_failed: bool
+    failure: int
 
 
 @dataclass(frozen=True)
@@ -220,10 +220,10 @@ def _params(m: dict) -> tuple[R.Params, int]:
         raise WireError(FAIL_MALFORMED, f"no P2 prime: {error}") from error
 
 
-def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
+def _parse_setup(frames: Sequence[bytes], private_root: bytes | None) -> tuple[Setup, int]:
     """The setup, raising its failure in the spec's 1, 2, 3, 5 precedence whatever the frames' order: a malformed frame
     (1) at once, a binding mismatch (2) once every setup frame is read, and a root or decode failure (3, 5) as
-    `Setup.authentication_failed` only when neither came first."""
+    `Setup.failure` only when neither came first."""
     cursor = 0
     mismatches: list[WireError] = []
 
@@ -289,13 +289,31 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
     bind(mode == 0 or len(blocks) == params.blocks, "public setup has missing blocks")
     if mismatches:
         raise mismatches[0]
-    failed = False
-    if blocks:
-        bps = params.blocks_per_segment
-        failed = R.root([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]) != declared_root
+    if not blocks and private_root is None:
+        raise ValueError("a private setup sends no blocks: pass the root the verifier built from W (private_root)")
+    failure = FAIL_SUCCESS
+    if private_root is not None and private_root != declared_root:
+        failure = FAIL_AUTHENTICATION
+    elif blocks:
+        failure = _check_blocks(params, bits, commitment, salt, blocks, declared_root)
     epoch = hashlib.sha512(R.EPOCH_TAG + len(manifest).to_bytes(4, "big") + manifest + commitment + salt
                            + params.blocks.to_bytes(8, "big") + declared_root).digest()
-    return Setup(manifest, commitment, salt, params, bits, tuple(blocks), declared_root, epoch, failed), cursor
+    return Setup(manifest, commitment, salt, params, bits, tuple(blocks), declared_root, epoch, failure), cursor
+
+
+def _check_blocks(params: R.Params, bits: int, commitment: bytes, salt: bytes, blocks: Sequence[bytes], root: bytes) -> int:
+    """Setup blocks against the declared root (3), then decoded: outside the payload profile (5), or to a `W` other than
+    the committed one (3)."""
+    bps = params.blocks_per_segment
+    if R.root([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]) != root:
+        return FAIL_AUTHENTICATION
+    payloads = []
+    for i, block in enumerate(blocks):
+        k, t, _ = R.keys(salt, params, commitment, i // bps, i % bps)
+        payloads.append(R.decode(params, int.from_bytes(block, "big"), k, t))
+        if payloads[-1] >> bits:
+            return FAIL_DECODE
+    return FAIL_SUCCESS if R.w_commitment(params, R.pack_payloads(payloads, bits)) == commitment else FAIL_AUTHENTICATION
 
 
 def _open_fields(frame_bytes: bytes, body: bytes) -> AuditOpen:
@@ -372,16 +390,17 @@ def _parse_response(frame_bytes: bytes, block_bytes: int) -> tuple[bytes, bytes,
 
 def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier_source: bytes | None = None,
                  beacon_inputs: Mapping[int, bytes] | None = None,
-                 seen_audits: MutableSet[tuple[bytes, bytes]] | None = None) -> bytes:
+                 seen_audits: MutableSet[tuple[bytes, bytes]] | None = None, private_root: bytes | None = None) -> bytes:
     """Verify a setup and one audit transcript, returning the exact FINAL frame.
 
     `frames` is SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*, SETUP_ROOT, AUDIT_OPEN, then alternating CHALLENGE and RESPONSE.
     A missing final response is a transport failure. `elapsed_ns[j]` is the verifier's measured challenge-to-response time
-    for round j."""
+    for round j. `private_root` is the root the verifier built from `W` itself, which a private setup's declared root must
+    be."""
     if not frames:
         raise WireError(FAIL_TRANSPORT, "empty transcript has no audit identity")
     try:
-        setup, cursor = _parse_setup(frames)
+        setup, cursor = _parse_setup(frames, private_root)
     except WireError as error:
         opened = _recover_open(frames)
         if opened is None:
@@ -404,8 +423,8 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
     def stop(code: int) -> bytes:
         return _final(opened, code, transcript, records)
 
-    if setup.authentication_failed:
-        return stop(FAIL_AUTHENTICATION)
+    if setup.failure:
+        return stop(setup.failure)
     if opened.epoch_id != setup.epoch_id:
         return stop(FAIL_IDENTITY)
     pair = (opened.epoch_id, opened.audit_id)

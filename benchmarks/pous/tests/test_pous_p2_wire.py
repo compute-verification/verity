@@ -142,3 +142,26 @@ def test_several_setup_faults_report_the_first_in_1_2_3_5_precedence():
     wrong_root = setup[-1][:114] + bytes([setup[-1][114] ^ 1]) + setup[-1][115:]
     assert _verify([*setup[:2], Wi.envelope(Wi.SETUP_BLOCK, setup[2][10:-8] + wide), *setup[3:-1], wrong_root, *audit],
                    small) == (False, 3, 0)
+def test_a_public_setup_is_decoded_back_to_the_committed_w():
+    """Spec §4: the verifier decodes the stream and checks the reconstructed W commitment: a block that authenticates but
+    decodes outside the payload profile is code 5, and one that decodes to another payload is code 3."""
+    small, setup, audit = _small_session()
+    params = V.SMALL
+    salt, commitment = bytes.fromhex(small["setup_salt"]), bytes.fromhex(small["w_commitment"])
+    k, t, _ = R.keys(salt, params, commitment, 0, 0)
+    for m, code in (((1 << 63) + 5, 5), (2, 3)):
+        block = R.encode(params, m, k, t).to_bytes(params.width_bytes, "big")
+        assert _verify([*_setup_with_block(small, setup, 0, block), *audit], small) == (False, code, 0)
+
+
+def test_a_private_setup_checks_the_declared_root_against_the_verifier_s_own():
+    """Spec §4: in private setup the verifier constructs the root itself from W and accepts SETUP_ROOT only when it is
+    that root; a disagreeing root is code 3 before the epoch is checked.  The verifier never trusts the declared one."""
+    small, setup, audit = _small_session()
+    root = bytes.fromhex(small["verification_root"])
+    private = setup[-1][:-1] + b"\x00"
+    assert _verify([*setup[:2], private, *audit], small, private_root=root) == (True, 0, 2)
+    wrong = private[:114] + bytes([private[114] ^ 1]) + private[115:]
+    assert _verify([*setup[:2], wrong, *audit], small, private_root=root) == (False, 3, 0)
+    with pytest.raises(ValueError, match="private setup"):
+        _verify([*setup[:2], private, *audit], small)

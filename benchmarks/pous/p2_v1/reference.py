@@ -197,6 +197,18 @@ def w_commitment(params: Params, w: bytes) -> bytes:
     return h.digest()
 
 
+def pack_payloads(payloads: list[int], bits: int) -> bytes:
+    """`W` from its payloads (spec §4): packed continuously, the first payload and the most significant bit first,
+    zero-padded; at a whole number of bytes per payload, their concatenation."""
+    packed = 0
+    for value in payloads:
+        if not 0 <= value < 1 << bits:
+            raise ValueError("payload does not fit its profile width")
+        packed = packed << bits | value
+    pad = -len(payloads) * bits % 8
+    return (packed << pad).to_bytes((len(payloads) * bits + pad) // 8, "big")
+
+
 def row_digest(data: bytes) -> bytes:
     """A block's `sha512/row/v2` digest, `SHA512(P(8·len) ‖ block)`: the row a block's decode circuit hashes."""
     return hashlib.sha512(sha512_row_v2_prefix(8 * len(data)) + data).digest()
