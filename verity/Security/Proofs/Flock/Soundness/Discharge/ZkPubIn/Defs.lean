@@ -48,10 +48,11 @@ def AcceptsZKP (I : Inputs) (own : ByteArray) (t : Exec.Transcript) : Prop :=
     Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
 
 /-- **flock-verify `--zk --registered R --public-inputs F` accepts the transcript**: `AcceptsZKP` with every table's
-statement passing the registered check against `reg` (`checkRegistered`, as `Main.buildSession` runs it), as
+statement passing the registered check against `reg` (`ZkReg.checkRegistered`, as `Main.buildSession` runs it), as
 `ZkReg.AcceptsZKR`. -/
 def AcceptsZKRP (I : Inputs) (reg : Array Registered.Port) (own : ByteArray) (t : Exec.Transcript) : Prop :=
-  ∃ spec sts, setupOfP (zkInputs I) own t.record = .ok (spec, sts) ∧ sts.forM (checkRegistered · (some reg)) = .ok () ∧
+  ∃ spec sts, setupOfP (zkInputs I) own t.record = .ok (spec, sts) ∧
+    sts.forM (ZkReg.checkRegistered · (some reg)) = .ok () ∧
     sts.forM Flock.Zk.shapeOk = .ok () ∧ Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
 
 variable {n : ℕ} {Reg : Type}
