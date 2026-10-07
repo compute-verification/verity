@@ -10,7 +10,7 @@ import Definitions.Pouw.PearlC.Tile
 # Work between the salt and the deadline (trusted)
 
 A proof of compute utilization: acceptance means at least `W` of work after the salt and before a deadline. `EndToEnd`
-gives the work and its freshness (preprocessing never reads the salt); the deadline is `Pouw.Protocol.Game.Deadline`'s
+gives the work and its freshness (preprocessing never reads the salt); the deadline is `Definitions.Pouw.Game.Deadline`'s
 timed run and verifier's rule, and time meets the cost model through one named assumption, the honest clock
 (`Pouw.Assumptions.HonestClock`).
 

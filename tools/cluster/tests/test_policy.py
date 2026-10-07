@@ -37,14 +37,14 @@ VY_POOL_IDLE_S=30
 """
 FILES = {policy.LEAN_SLOTS: "# NAME CAP\ncheck 2\naudit 2\n",
          policy.CHECK_SLOTS: "c 8-31\na 32-63\nb 64-95\nd 128-159  # since 2 Oct\n",
-         "/etc/vy/direct-gpus": "none\n", "/etc/vy/direct-cpus": "# the non-benchmark CPUs\n0-95,128-159\n",
+         "/etc/vy/direct-gpus": "none\n", "/etc/vy/direct-cpus": "# the non-benchmark CPUs\n0-159\n",
          policy.USER_CPUSET: "# delegate cpuset\n[Service]\nDelegate=cpu cpuset memory pids\n",
          policy.DISPATCH_ENV: "VY_PROVER_CPUS=160-191\n"}
 STATUS = ("2026-10-03T19:39:59Z free GPUs 7/8, kept free -, waiters -, timed False, window waiting False, backfill False, "
           "queued 0 (gpu 0, cpu 0), done 1033, failed 30, held for an unknown exit 0")
 N2_FILES = {f"{policy.FILL}/windows": "# start UTC, minutes\n2026-10-03T18:25Z 10 # merge checks off\n",
             f"{policy.FILL}/cpu-sets": "bc-e6a46970-b6ef-5738-af64-182b143075d4 0-47 4 40  # verifies\n",
-            policy.CHECK_SLOTS: "d 0-47 windows=/workspace/pouw/fill/windows lead=30\n",
+            policy.CHECK_SLOTS: "d 0-47 windows=/workspace/pouw/fill/windows lead=30 only=trains\ne 48-79 windows=/workspace/pouw/fill/windows lead=30\n",
             "/etc/vy/direct-gpus": None, "/etc/vy/direct-cpus": None,
             policy.USER_CPUSET: "[Service]\nDelegate=cpu cpuset memory pids\n"}
 

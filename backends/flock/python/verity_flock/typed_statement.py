@@ -101,10 +101,11 @@ def _xor(forms, c=0):
 
 
 def instance_type(low: IL.Lowering, tail) -> Instance:
-    """The instance (one VU) of a template with a tail as a circuit type. Its inputs are the instance's input leaves and
-    its outputs its output leaves, in order. Items are emitted as they become ready, since a stage both feeds units and
-    reads them (GEMM's first stage makes the initial accumulator and finishes the last): a stage gate once its operands
-    are, a unit call once its cut words are, a read once its index is. Items no output reads are dropped."""
+    """The instance (one template instance) of a template with a tail as a circuit type. Its inputs are the instance's
+    input leaves and its outputs its output leaves, in order. Items are emitted as they become ready, since a stage both
+    feeds units and reads them (GEMM's first stage makes the initial accumulator and finishes the last): a stage gate
+    once its operands are, a unit call once its cut words are, a read once its index is. Items no output reads are
+    dropped."""
     from . import tail as TL
 
     U = low.units

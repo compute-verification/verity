@@ -120,9 +120,9 @@ theorem out_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
 variable {T : Model.Statement}
 
 /-- **The returned outputs at a drawn unit's site are the population's**: in a satisfying witness of an accepted drawn
-statement of an untyped circuit whose unit returns the outputs, at a site (`BcSite`: block `o`, VU `g`, proved unit `u`),
-the bit at column `16 j + t` of the returned-output group of the VU's copy `u'` is bit `t` of the population's output
-word `lo[j]` of `u`, for the copy's leaf's outputs `lo`, under `out_pinned`'s conditions. -/
+statement of an untyped circuit whose unit returns the outputs, at a site (`BcSite`: block `o`, template instance `g`, proved unit `u`),
+the bit at column `16 j + t` of the returned-output group of the template instance's copy `u'` is bit `t` of the
+population's output word `lo[j]` of `u`, for the copy's leaf's outputs `lo`, under `out_pinned`'s conditions. -/
 theorem out_site (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSite a pop o g u)
     (ho : a.st.c.outNet = a.st.c.unitNet) (hty : a.st.c.typed = none)
     {z : Witness T.m} (hz : T.Satisfies z) {u' j t : ℕ} (hu' : u' < a.st.c.upv)

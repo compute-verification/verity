@@ -19,7 +19,7 @@ One run, in order:
    Which decode ran (kernel, rows, calls) is recorded per phase (`implementation.decode_paths`).
 4. **The limit, fixed before any load.** With no load running, the verifier calibrates its loopback round trip and fixes the
    limit `Δ + allowance`; every audit below is judged against that one limit, so rounds under load are comparable. The allowance
-   is a loopback one (a remote verifier's round trip adds to it).
+   is a loopback one (a remote memory challenger's round trip adds to it).
 5. **Timed audits** against the responder serving `C` from device memory:
    - the honest audit, under POUS forwards as load (completed forwards counted);
    - the value control: one block in ten of `C` zeroed, which must reject on the value;
@@ -63,7 +63,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-LIVE = HERE / "live.py"
+MEMORY_CHALLENGER = HERE / "memory_challenger.py"
 SALT = bytes(range(24))
 VECTORS = ROOT / "verity" / "protocols" / "accounting" / "space" / "pous" / "tests" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
@@ -118,7 +118,7 @@ def busy_wait(ns: int) -> None:
 
 
 class ControlResponder:
-    """A responder speaking `pous_native.cu`'s wire (`live.py`), whose answer to each challenge the harness supplies through
+    """A responder speaking `pous_native.cu`'s wire (`memory_challenger.py`), whose answer to each challenge the harness supplies through
     `answer(i) -> (block, device_ns, server_ns, hold_ns)`.  With `real_delay`, an answer is held `hold_ns` before it is sent
     (`wait`, a busy-wait), so on the wall clock a late control's answer is really late; only the late control holds one: a
     recomputed answer has already spent its time when `answer` returns, so it is sent at once.  The CPU tests read the reported
@@ -419,7 +419,7 @@ def with_in_degree(base: Any, d: int) -> Any:
 
 
 def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
-    from .live import scheme_of
+    from .memory_challenger import scheme_of
 
     name, params, s, w_seg = job
     return s, b"".join(scheme_of(name, params).encode_segment(SALT, s, w_seg))
@@ -512,7 +512,7 @@ def decode_after_timing(backend: Backend, c: Any, tags: Any, w_digest: str) -> d
 
 # --- the audits -----------------------------------------------------------------------------------------------------------
 
-def _verifier_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any, limit_ns: int | None, extra: list[str]) -> list[str]:
+def _memory_challenger_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any, limit_ns: int | None, extra: list[str]) -> list[str]:
     cmd = [sys.executable, str(script), "--ready", str(ready), "--leaves", str(leaves), "--out", str(result),
            "--audits", str(a.audits), "--pings", str(a.pings), "--allowance", a.allowance, "--clock", a.clock]
     cmd += ["--k", str(a.k)] if a.k else []
@@ -522,9 +522,25 @@ def _verifier_cmd(script: Path, ready: Path, leaves: Path, result: Path, a: Any,
     return cmd + extra
 
 
-def _verifier_env() -> dict[str, str]:
+def _memory_challenger_env() -> dict[str, str]:
     paths = [str(ROOT), str(ROOT / "verity" / "protocols" / "accounting" / "space" / "pous"), os.environ.get("PYTHONPATH", "")]
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
+
+
+def leave_reserved(a: Any) -> None:
+    """Move every thread of this process (the load loop, CUDA's own threads) off the memory challenger's and responder's CPUs;
+    threads started later inherit the mask, and the responder and memory challenger pin themselves back.  Every thread, not
+    only the caller: on cores booted `isolcpus=domain` nothing is load-balanced, so a thread left on a reserved core stays there
+    and takes whole scheduler slices from the memory challenger."""
+    here = set(os.sched_getaffinity(0))
+    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
+    if not reserved or not here - reserved:
+        return
+    for tid in os.listdir("/proc/self/task"):
+        try:
+            os.sched_setaffinity(int(tid), here - reserved)
+        except ProcessLookupError:
+            pass
 
 
 def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any, leaves: Path | None = None,
@@ -534,9 +550,9 @@ def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Pa
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"{tag}.json"
-    cmd = _verifier_cmd(script, ready, leaves or out / "leaves.bin", result, a, None, ["--calibrate-only"])
+    cmd = _memory_challenger_cmd(script, ready, leaves or out / "leaves.bin", result, a, None, ["--calibrate-only"])
     with (out / f"{tag}.log").open("w") as log:
-        subprocess.Popen(cmd, env=_verifier_env(), stdout=log, stderr=subprocess.STDOUT).wait()
+        subprocess.Popen(cmd, env=_memory_challenger_env(), stdout=log, stderr=subprocess.STDOUT).wait()
     responder.stop()
     return json.loads(result.read_text()) if result.exists() else {}
 
@@ -550,10 +566,10 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
     result = out / f"audit-{tag}.json"
-    cmd = _verifier_cmd(script, ready, leaves, result, a, limit_ns, [])
+    cmd = _memory_challenger_cmd(script, ready, leaves, result, a, limit_ns, [])
     completed = 0
     with (out / f"audit-{tag}.log").open("w") as log:
-        proc = subprocess.Popen(cmd, env=_verifier_env(), stdout=log, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(cmd, env=_memory_challenger_env(), stdout=log, stderr=subprocess.STDOUT)
         if load is None:
             proc.wait()
         else:
@@ -766,7 +782,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     from verity.protocols.accounting.space.pous import schemes
     from verity.protocols.accounting.space.pous.verifier import leaf_hash
 
-    from .live import scheme_of
+    from .memory_challenger import scheme_of
 
     base = base or schemes.get(a.scheme).params
     if getattr(a, "band_d", 0):
@@ -858,21 +874,18 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     leaves = out / "leaves.bin"
     leaves.write_bytes(b"".join(leaf_hash(p, SALT, i, c_host[i * width:(i + 1) * width]) for i in range(p.blocks)))
-    here = set(os.sched_getaffinity(0))
-    reserved = {x for x in (a.verifier_cpu, a.responder_cpu) if x is not None} & here
-    if reserved and here - reserved:
-        os.sched_setaffinity(0, here - reserved)
+    leave_reserved(a)
     fields = {"salt": SALT.hex(), "scheme": scheme.name, "params": scheme.params.manifest()}
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
-    cal = calibrate_limit(native_start, fields, LIVE, out, a)     # P5: fix the limit with no load running
+    cal = calibrate_limit(native_start, fields, MEMORY_CHALLENGER, out, a)     # P5: fix the limit with no load running
     limit = int(cal.get("limit_ns") or 0)
-    honest = audit_round(native_start, fields, LIVE, leaves, out, "honest", a,
+    honest = audit_round(native_start, fields, MEMORY_CHALLENGER, leaves, out, "honest", a,
                          (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: ControlResponder(width, answer, real_delay=a.clock == "wall")  # noqa: E731
-        return audit_round(start, fields, LIVE, leaves, out, tag, a, None, limit)
+        return audit_round(start, fields, MEMORY_CHALLENGER, leaves, out, tag, a, None, limit)
 
     value = control("value", control_answers(c_host, width, zero=set(range(0, p.blocks, 10))))
     late = control("late", control_answers(c_host, width, late_every=10, late_ns=limit + LATE_EXTRA_NS))
