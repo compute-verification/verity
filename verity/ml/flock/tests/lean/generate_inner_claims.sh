@@ -7,7 +7,7 @@
 #   bash tests/lean/generate_inner_claims.sh [PACKAGE_DIR]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-pkg=$(cd "${1:-$here/../../verifier/lean}" && pwd)
+pkg=$(cd "${1:-$here/../../../../core/service/flock}" && pwd)
 set_dir="$here/../fixtures/hidden-outputs/flat/gemm-coordinate"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
