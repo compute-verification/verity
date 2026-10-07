@@ -463,8 +463,9 @@ def test_the_agreement_is_not_required_for_docs_alone():
     rule = tool.CHECK.merge_requires["lean-agreement"]
     docs = ["backends/flock/verifier/PROTOCOL.md", "backends/flock/verifier/README.md", "verity/ml/provers/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "backends/flock/verifier/ci.py"]) == ["verity/ml/provers/flock/"]
-    assert rule_touches(rule, ["backends/flock/verifier/DESIGN.md"]) == ["verity/ml/provers/flock/"]      # only the two names are left out
+    assert rule_touches(rule, [*docs, "backends/flock/verifier/ci.py"]) == ["backends/flock/"]
+    assert rule_touches(rule, ["backends/flock/verifier/DESIGN.md"]) == ["backends/flock/"]      # only the two names are left out
+    assert rule_touches(rule, ["verity/ml/provers/flock/live/src/lib.rs"]) == ["verity/ml/provers/flock/"]
     for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
         reads = [line for line in (ROOT / "backends" / "flock" / "verifier" / f).read_text().splitlines()
                  if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]

@@ -5,7 +5,7 @@
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
-                                                            inputs when the commit changes verity/ml/provers/flock/ against --base REF
+                                                            inputs when the commit changes verity/ml/provers/flock/ or backends/flock/ against --base REF
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles; with --on, in a free check slot of M
                                                             (`tools/check/slot.py`), the lock and cores the train checks take;
@@ -75,7 +75,7 @@ doesn't name:
     lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
                     `verity.primitives.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has
-                    it; skipped by name without it.  `research merge` requires it for a change under verity/ml/provers/flock/ (`tool.py`)
+                    it; skipped by name without it.  `research merge` requires it for a change under verity/ml/provers/flock/ or backends/flock/ (`tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -524,13 +524,13 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.primitives.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
-    is skipped by name.  `research merge` requires it for a change under `verity/ml/provers/flock/` (`tools/check/tool.py`), and
+    is skipped by name.  `research merge` requires it for a change under `verity/ml/provers/flock/` or `backends/flock/` (`tools/check/tool.py`), and
     `--record` sends it then."""
     lean = FLOCK_VERIFIER / "lean"
     if not (lean / "lakefile.toml").exists():
         return [("lean", "skipped: backends/flock/verifier/lean is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/provers/flock/ requires "
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/provers/flock/ or backends/flock/ requires "
                                   "this step: `check.py --record` sends it)")
     if UPSTREAM_PIN.exists():
         got = agreement_files(out)
