@@ -7,9 +7,11 @@ through C-Flock's verifier (`Flock.Program`, required by path from `verity/core/
 this package adds the primitives. It is code, so it requires nothing of `Security/`.
 
 - `Evaluate/Prims.lean`: the primitives implemented, each with the signature the registry holds for it. E0 is the Boolean
-  profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`) and `Input<w>_v1`; E1 the constant family `Const<w>[0x<hex>]_v1` and the
-  scalar primitives; E2 the FP32 and BF16 arithmetic and the casts that read no table; E3 the tensor-core dot steps. Every
-  other primitive (the MUFU tables, `F32ExpRn`, `F32ErfRn`, `NvLogf`, ...), and `RegisteredInput<w>_v1`, is refused by name.
+  profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`), `Input<w>_v1` and `RegisteredInput<w>_v1`; E1 the constant family
+  `Const<w>[0x<hex>]_v1` and the scalar primitives; E2 the FP32 and BF16 arithmetic and the casts that read no table; E3 the
+  tensor-core dot steps; E4 the rest of the registry's 172 gate primitives and the lazy families `TableRead{IB}x{EW}_v1`,
+  `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`. Any other primitive (the lifting families, `BitAtx`, `TopPMaskWordx`, ...)
+  is refused by name.
 - `Evaluate/Scalar.lean`: the scalar primitives (`verity.ml.circuits.ops.scalar`, and the vLLM integration's `I32Sub`,
   `I64ToI32`, `U32And`, `U32Xor`, `BitXor`, `SelectBit`), transcribed branch for branch from the Python. Each names the
   definition of `Security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
@@ -26,11 +28,23 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   `Pouw/PearlC/Sm120.lean` (`tc_dot_total_e4m3`), `Fp4.lean` of `Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2 step
   and the FP4 primitives' rules outside the block-scaled model (NaN scales, non-finite accumulators, MXFP4's overflow to
   `±inf`) are transcribed from the Python; Security has none yet.
+- `Evaluate/Words.lean`: PoUW's `Pouw*` word primitives and the three `Ncp*` (six copied from
+  `Security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
+  `NvLogf`, Gumbel and `TopPNumkeep`, libdevice's FTZ steps as the host's doubles compute them, and Philox.
+  `Evaluate/Mufu.lean` (with `MufuFits.lean`): the eight MUFU primitives, each a bit rule around its table held as the
+  unit's interpolant. `Evaluate/Decimal.lean`: `F32ExpRn`, `F32ErfRn` and `F32TanhRn`, decimal arithmetic at 100 digits half
+  to even. `Evaluate/Act.lean` (with `GeluErfTable.lean`, `act.py`'s stored `GeluErfBf16` region): SiLU, RoPE's outputs,
+  tanh, the GELUs, the registered tables `gelu_tanh_bf16` and `tanh_rn`, and the lazy families. SiLU and tanh call the host
+  C library's `exp` and `tanh` on doubles, as the Python's `math` does, so their words are the Python's on the same host and
+  may differ on another. Security defines none of these but six of `Words`.
 - `Evaluate/Walk.lean`: the gate walk (`Evaluate.evaluate`).
 - `Evaluate/Serve.lean`: `Evaluate.evaluateFn`, which `verity-evaluate` serves through the difftest harness's line protocol
   (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
-  [[word, ...], ...]}}` gives `{"output": [word, ...]}` or `{"reject": "<reason>"}`, with one list of words per parameter of the
-  program function, each in leaf order.
+  [arg, ...]}}` gives `{"output": [word, ...]}` or `{"reject": "<reason>"}`, with one argument per parameter of the program
+  function: its words in leaf order, or `{"table": "gelu_tanh_bf16" | "tanh_rn"}` for a registered table, which the evaluator
+  computes where a gate reads it (`tanh_rn`'s 2^28 words never enter the request). `library_table` and `registered_table`
+  (`{"name": ...}`) give a MUFU table's SHA-512 and a registered table's SHA-256 (over its entries as little-endian u32), which
+  the suite holds to the library's and to C-Flock's pins.
 
 ~~~sh
 cd verity/experimental/core/primitives/evaluate && lake build      # .lake/build/bin/verity-evaluate
@@ -50,6 +64,11 @@ groups, on every pair of edge scale bytes, on 3118 accumulators over structured 
 range, its traced Boolean Definition evaluated gate by gate against it, and the captures: the RTX 4090 golden records, the
 A100 and RTX 4090 special-value campaign, the H100 HGMMA and wgmma records, the RTX PRO 6000's E5M2 and MXFP4 tiles, and
 autoproof's RTX 5090 NVFP4 vectors (the large ones fetched, `research data fetch-fixtures`); every constant of the
-registry and the constant ids the Python reads; and explicit examples: the pinned
+registry and the constant ids the Python reads; E4's primitives each on the grid of their operands' edge words (every word
+for a one-operand bf16 primitive, and a sweep of every binade's edges for an FP32 one), on drawn words and on words out of
+range, and on their captures (the L40S SiLU and RoPE slices, the H100 and L40S log probe, test_mufu's fingerprints and the
+RTX 4090 tanh sample); the MUFU tables against the library's SHA-512 and the registered tables against C-Flock's SHA-256;
+`TanhF32Rn_v2` and `GeluTanhMulBf16_v3` reading a table named in the request; the lazy families on their index edges;
+a registered input bound like a run input; and explicit examples: the pinned
 2-bit adder of `boolean_vectors.json`, Boolean Definitions traced from the builders (up to the Ampere BF16 tensor-core
 step), and malformed programs and inputs.

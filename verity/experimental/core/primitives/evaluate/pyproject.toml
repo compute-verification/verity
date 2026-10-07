@@ -19,10 +19,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # `lake build` reads this package and C-Flock's verifier (verity/core/service/flock), which it requires by path; the Python
 # reference is verity.ml.circuits, with the word primitives the vLLM integration registers (its registry package, and the
-# package's own `__init__`s it imports through), the row primitives' vectors `Security` pins, and the vLLM integration's
-# `store_io`, through which the GPU captures held in the evidence store are fetched. The tests build
+# package's own `__init__`s it imports through), the row primitives' vectors `Security` pins, the vLLM integration's
+# `store_io`, through which the GPU captures held in the evidence store are fetched, and the L40S captures of SiLU and RoPE
+# the benchmarks hold. The tests build
 # `verity-evaluate` themselves, from those sources, and so declare no `artifacts`; `check` runs them after its Lean steps
 # (`AFTER_LEAN`), since that build writes into the verifier's `.lake`.
 inputs = ["verity", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/program/__init__.py",
           "integrations/vllm/verity_vllm/program/registry", "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
-          "integrations/vllm/tests/regression/store_io.py"]
+          "integrations/vllm/tests/regression/store_io.py",
+          "benchmarks/numerical/tests/bench/data/captured-101/slices/silumul-v1-i8192",
+          "benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64"]

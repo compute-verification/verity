@@ -2,11 +2,12 @@
 for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
 (`verity_difftest`: one server open per module, reject parity, Hypothesis drawing deterministically).
 
-The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over the whole circuit with the run
-inputs bound, the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those Programs
+The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over each of the root's nodes that
+is not an input node, with the inputs bound by runs (a registered table as `reference`'s `RegisteredTable`, read where a gate
+reads it), the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those Programs
 `reference.evaluate` itself is checked too. Two of the Lean evaluator's refusals are not the oracle's, so `python_answer`
-applies them by name: a primitive the Lean does not implement yet, and a registered input; and an input word of
-`Input<w>_v1` is below `2^w` (the oracle stores whatever it is given).
+applies them by name: a primitive the Lean does not implement (one outside the registry's 172 and the lazy families it
+reads), and an input word at or above `2^w` (the oracle stores whatever it is given).
 
 The Programs: seeded random Boolean composites built with the IR builder, which reach every node form (primitive, call,
 batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, drawn by a
@@ -21,6 +22,10 @@ Python primitive's evaluator too), on drawn words, on words out of range, and on
 hold them. E3's tensor-core dot steps run the same way, on structured families of edge codes and accumulators (a full grid
 of 33 to 137 operand words is out of reach), on drawn words, on words out of range, on every capture of them in the
 repository's fixtures (single steps, and chains of steps on one accumulator), and against their traced Boolean Definitions.
+E4's primitives (PoUW's and NCP's words, the sampler, MUFU, the reference kinds' transcendentals, the activations and RoPE)
+run batched the same way, on their captures where the fixtures hold them; the tables they read are held to their pins; the
+registered tables are bound by name and read by the composites that take them; the lazy families run on their one-call
+Programs.
 """
 from __future__ import annotations
 
@@ -30,6 +35,7 @@ import gzip
 import itertools
 import json
 import random
+import re
 import shutil
 import struct
 from dataclasses import dataclass
@@ -53,9 +59,11 @@ from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.ops.boolean import cast as BC
 from verity.ml.circuits.ops.boolean import elementwise as BE
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import RUN, Program, input_id
+from verity.ml.circuits.program import REGISTRATION, Program, input_id
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
+from verity_vllm.program.registry import act as ACT
+from verity_vllm.program.registry import dense as DENSE
 from verity_vllm.program.registry import dsa as DSA
 from verity_vllm.program.registry import hopper as HOP
 from verity_vllm.program.registry import moe as MOE
@@ -63,6 +71,7 @@ from verity_vllm.program.registry import pouw_rows as PR
 from verity_vllm.program.registry import prims as VP
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry import sampling as SPL
+from verity_vllm.program.registry import tables as TB
 from verity_vllm.program.registry import topp_word_gates as TW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -101,40 +110,83 @@ SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL
 MUFU = (MU.MufuEx2Ftz, MU.MufuRcpFtz, MU.Fa2InvSum, HOP.Fa3InvSum, MU.MufuSqrtFtz, MU.DivFullRcp, MU.RsqrtApprox, MU.MufuTanh)
 #: E4's correctly rounded transcendentals of the reference kinds (`Evaluate.Decimal`)
 DECIMALS = (RP.F32ExpRn, RP.F32ErfRn, RP.F32TanhRn)
-_E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU + DECIMALS)
+#: E4's activations and RoPE's outputs (`Evaluate.Act`)
+ACTS = (VP.SiluMulBf16, ACT.SiluMulBf16, VP.RopeOut, VP.RopeOutAdd, DENSE.TanhF32Rn, DENSE.GeluTanhMulBf16, ACT.GeluErfBf16)
+_E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU + DECIMALS + ACTS)
+
+
+#: the lazy families the Lean evaluator implements (`Evaluate.Prims.lazyFamily?`)
+LAZY_FAMILIES = re.compile(r"^(TableRead\d+x\d+|GatherBf16x\d+|GatherF32x\d+)_v1$")
 
 
 def _in_scope(fn: PrimitiveDefinition) -> bool:
     """The primitives the Lean evaluator implements: the Boolean profile's gates (E0), the constant family and the scalar
-    primitives (E1), the FP32 and BF16 arithmetic and casts (E2), the tensor-core dot steps (E3), and the run inputs of any
-    width."""
-    m = input_id(fn.id)
-    if m:
-        return m[0] == RUN
-    return (BL.is_gate(fn) or getattr(fn, "family", None) == "Const"
-            or fn.id in _SCALAR_IDS | _FLOAT_IDS | _TC_IDS | _E4_IDS)
+    primitives (E1), the FP32 and BF16 arithmetic and casts (E2), the tensor-core dot steps (E3), the rest of the registry's
+    primitives and the lazy families `TableRead`, `GatherBf16x` and `GatherF32x` (E4), and the inputs, run and registered, of
+    any width."""
+    return bool(input_id(fn.id) or BL.is_gate(fn) or getattr(fn, "family", None) == "Const"
+                or fn.id in _SCALAR_IDS | _FLOAT_IDS | _TC_IDS | _E4_IDS or LAZY_FAMILIES.match(fn.id))
+
+
+#: the registered tables a request may name instead of giving their words: (the primitive declaring it, its leaves, leaf j)
+REGISTERED_TABLES = {
+    "gelu_tanh_bf16": (DENSE.GeluTanhMulBf16, 1 << 16, lambda j: TB.gelu_tanh_bf16_words()[j]),
+    "tanh_rn": (DENSE.TanhF32Rn, 2 << 27, lambda j: (TB.tanh_rn_entry(j >> 1) >> (16 * (j & 1))) & 0xFFFF),
+}
+
+
+def _bind(D, inputs: list) -> reference._Transcript:
+    """The transcript of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
+    `{"table": name}` binding as many consecutive `RegisteredInput16_v1` gates as the table has leaves, read on demand."""
+    body = D.root.body
+    runs = [(body.offsets[k], n.gates, *input_id(n.fn.id)[::-1]) for k, n in enumerate(body.nodes)
+            if isinstance(n.fn, PrimitiveDefinition) and input_id(n.fn.id) and n.gates]
+    if not (isinstance(inputs, list) and all(isinstance(p, list) or isinstance(p, dict) for p in inputs)):
+        raise ValueError("inputs: not a list of arguments")
+    for p in inputs:
+        if isinstance(p, dict) and not (set(p) == {"table"} and p["table"] in REGISTERED_TABLES):
+            raise ValueError(f"inputs: {p!r} is not a registered table")
+    given = sum(len(p) if isinstance(p, list) else REGISTERED_TABLES[p["table"]][1] for p in inputs)
+    total = sum(n for _, n, _, _ in runs)
+    if given != total:
+        raise ValueError(f"expected {total} input words, got {given}")
+    t = reference._Transcript()
+    ri = ro = 0
+    for p in inputs:
+        if isinstance(p, list):
+            for v in p:
+                lo, n, w, _ = runs[ri]
+                if not (type(v) is int and 0 <= v < 1 << w):
+                    raise ValueError(f"input word {v!r} of Input gate {lo + ro} is not a Value<{w}> word")
+                t[lo + ro] = v
+                ri, ro = (ri + 1, 0) if ro + 1 == n else (ri, ro + 1)
+            continue
+        declared_by, leaves, word = REGISTERED_TABLES[p["table"]]
+        g0, left = runs[ri][0] + ro, leaves
+        while left:
+            lo, n, w, b = runs[ri]
+            if (w, b) != (16, REGISTRATION) or lo + ro != g0 + leaves - left:
+                raise ValueError(f"table {p['table']} binds Input gate {lo + ro}: not the next RegisteredInput16_v1 gate")
+            k = min(left, n - ro)
+            left, ro = left - k, ro + k
+            ri, ro = (ri + 1, 0) if ro == n else (ri, ro)
+        t.add_table(g0, reference.RegisteredTable(p["table"], word, leaves, declared_by))
+    return t
 
 
 def python_answer(desc: dict, inputs: list) -> dict:
-    """What the Lean evaluator must answer: the oracle's outputs, or a refusal."""
+    """What the Lean evaluator must answer: the oracle's outputs over the root's nodes that are not input nodes, or a
+    refusal."""
     try:
         D = codec.decode_program(copy.deepcopy(desc), REGISTRY)
         for f in D.defs.values():
             if isinstance(f, PrimitiveDefinition) and not _in_scope(f):
                 raise ValueError(f"primitive {f.id}: not implemented by the Lean evaluator")
+        t = _bind(D, inputs)
         body = D.root.body
-        gates = [(body.offsets[k] + m, input_id(n.fn.id)[1]) for k, n in enumerate(body.nodes)
-                 if isinstance(n.fn, PrimitiveDefinition) and input_id(n.fn.id) for m in range(n.gates)]
-        if not (isinstance(inputs, list) and all(isinstance(p, list) for p in inputs)):
-            raise ValueError("inputs: not a list of lists of words")
-        words = [w for p in inputs for w in p]
-        if len(words) != len(gates):
-            raise ValueError(f"expected {len(gates)} input words, got {len(words)}")
-        for (g, w), v in zip(gates, words):
-            if not (type(v) is int and 0 <= v < 1 << w):
-                raise ValueError(f"input word {v!r} of Input gate {g} is not a Value<{w}> word")
-        t = dict(zip((g for g, _ in gates), words))
-        evaluate_region(D.circuit, D.circuit[0:D.circuit.size], t)
+        for k, n in enumerate(body.nodes):
+            if not (isinstance(n.fn, PrimitiveDefinition) and input_id(n.fn.id)):
+                evaluate_region(D.circuit, D.circuit[body.offsets[k]:body.offsets[k] + n.gates], t)
         return {"output": [t[g] for g in D.circuit.root_outputs()]}
     except (ValueError, KeyError, TypeError, IndexError) as e:
         return {"reject": f"{type(e).__name__}: {e}"}
@@ -409,23 +461,30 @@ def test_refusals(server):
         d, x = _mutated(desc, [[0] * n for n in leaves], k)
         assert "reject" in python_answer(d, x), label
         cases.append(request(d, x))
-    _, main, leaves1 = _random_program(1)
-    cases.append(request(desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves1]))
-    assert agree(server, cases) == (0, len(cases)) == (0, 18)
+    assert agree(server, cases) == (0, len(cases)) == (0, 17)
+
+
+def test_a_registered_input_binds_like_a_run_input(server):
+    """A parameter bound at registration (`RegisteredInput<w>_v1`) takes its words from the request as a run input does."""
+    _, main, leaves = _random_program(1)
+    rng = random.Random("registered")
+    cases = [request(desc_of(Program(bind(main), registered=reg)), [_bits(rng, n) for n in leaves])
+             for reg in [("y",), ("x",), ("x", "y")] for _ in range(8)]
+    assert agree(server, cases) == (len(cases), 0)
+    assert all("RegisteredInput1_v1" in c["program"]["callees"] for c in cases)
 
 
 def test_refusals_name_what_is_refused(server):
-    """A primitive the Lean does not implement, and a registered input, are refused by name, never evaluated."""
-    ex2 = CompositeDefinition("DtRope", 1, (), lambda S: ((("x", VP.BF16),), VP.BF16), lambda B, S, x: B.call(VP.RopeOut, x, x, x, x),
-                              register=False)
-    _, main, leaves = _random_program(1)
-    s = DT.Server(PORT.argv())
-    with s:
-        got = [s.call("evaluate", request(desc_of(Program(bind(ex2))), [[1]])),
-               s.call("evaluate", request(desc_of(Program(bind(main), registered=("y",))), [[0] * n for n in leaves]))]
-    assert got[0][0] == "reject" and "RopeOut_v1" in got[0][1] and "not implemented" in got[0][1], got[0]
-    assert got[1][0] == "reject" and "RegisteredInput1_v1" in got[1][1], got[1]
-    assert "not implemented" in python_answer(desc_of(Program(bind(ex2))), [[1]])["reject"]
+    """An id no registry holds, and a member of a lazy family the Lean leaves out (`BitAtx<W>`), are refused by name, never
+    evaluated."""
+    desc, leaves = json.loads(_random_desc(0)[0]), _random_desc(0)[1]
+    x = [[0] * n for n in leaves]
+    for new in ("DtUnregistered_v1", "BitAtx8_v1"):
+        d = copy.deepcopy(desc)
+        _rename(d, _first_gate(d), new)
+        got = server.call("evaluate", request(d, x))
+        assert got[0] == "reject" and new in got[1] and "not implemented" in got[1], got
+        assert "reject" in python_answer(d, x)
 
 
 def test_a_malformed_input_is_rejected_and_the_next_request_answered(server):
@@ -1618,3 +1677,208 @@ def test_decimal_primitives_drawn(server):
 def test_decimal_words_out_of_range_are_refused(server):
     cases = _refused_leaves(DECIMALS)
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 3)
+
+
+# ---- E4: the activations and RoPE ---------------------------------------------------------------------------------------
+#: the ups every gate word meets: one, the signed zeros, minus one, a NaN, the infinities, the least subnormal, the largest
+_UPS = (0x3F80, 0x8000, 0x0000, 0xBF80, 0x7FC0, 0x7F80, 0xFF80, 0x0001, 0x7F7F)
+#: RoPE's cos / sin words: the signed zeros, ±1, ±sqrt(1/2), the least subnormal, 2^-7, +inf and a NaN
+ROPE_CS = (0x0000, 0x8000, 0x3F80, 0xBF80, 0x3F35, 0xBF35, 0x0001, 0x3C00, 0x7F80, 0x7FC0)
+#: `TanhF32Rn_v1`'s words: the one-operand sweep, every bf16-valued word (its uses), the words about `tanh_rn`'s region ends and
+#: 10, both signs, and 8192 seeded words of magnitude below 10
+TANH_SWEEP = tuple(sorted({*F32_SWEEP, *(x << 16 for x in range(1 << 16)),
+                           *(s | (b + d) for b in (TB.TANH_RN_LO, TB.TANH_RN_HI, 0x41200000) for d in range(-3, 4)
+                             for s in (0, 1 << 31)),
+                           *(_rng.getrandbits(1) << 31 | _rng.randrange(0x41200000) for _rng in [random.Random("tanh")]
+                             for _ in range(8192))}))
+
+
+def _act_grid(fn: PrimitiveDefinition) -> list[tuple]:
+    if fn in (VP.RopeOut, VP.RopeOutAdd):
+        return list(itertools.product(BF16_EDGES, BF16_EDGES, ROPE_CS, ROPE_CS))
+    if fn is DENSE.TanhF32Rn:
+        return [(a,) for a in TANH_SWEEP]
+    if fn is ACT.GeluErfBf16:
+        return [(a,) for a in range(1 << 16)]
+    return [(g, u) for u in _UPS for g in range(1 << 16)] + list(itertools.product(BF16_EDGES, BF16_EDGES))
+
+
+@pytest.mark.slow
+def test_activations_on_their_grids(server):
+    """SiLU-and-mul (both versions) and GeLU-tanh-and-mul on every gate word under each of `_UPS` and on every pair of bf16
+    edges, GeLU-erf on every word, `TanhF32Rn_v1` on `TANH_SWEEP`, and RoPE's two outputs on every pair of bf16 edges under
+    every pair of `ROPE_CS`; each answer also the Python primitive's own evaluator's."""
+    counts = {}
+    for fn in ACTS:
+        rows = _act_grid(fn)
+        counts[fn.id] = _agree_on(server, fn, [rows[i:i + 8192] for i in range(0, len(rows), 8192)])
+    gu = 9 * 65536 + 27 * 27
+    assert counts == {"SiluMulBf16_v1": gu, "SiluMulBf16_v2": gu, "RopeOut_v1": 72_900, "RopeOutAdd_v1": 72_900,
+                      "TanhF32Rn_v1": len(TANH_SWEEP), "GeluTanhMulBf16_v1": gu, "GeluErfBf16_v1": 65536}, counts
+
+
+CAPTURED = Path(__file__).resolve().parents[6] / "benchmarks/numerical/tests/bench/data/captured-101/slices"
+
+
+def _u16(path: Path) -> list[int]:
+    b = path.read_bytes()
+    return [b[i] | b[i + 1] << 8 for i in range(0, len(b), 2)]
+
+
+def test_the_l40s_silu_and_rope_captures(server):
+    """Llama-3.2-1B's first-decode SiLU-and-mul row (8192 gates and ups) and two RoPE heads (D = 64) as the L40S computed
+    them (`captured-101`): `SiluMulBf16_v1` on each gate and up, `RopeOut_v1` and `RopeOutAdd_v1` on each rotated pair."""
+    gu, out = _u16(CAPTURED / "silumul-v1-i8192/in0.u16"), _u16(CAPTURED / "silumul-v1-i8192/out.out.u16")
+    assert _replay_capture(server, VP.SiluMulBf16, list(zip(gu[:8192], gu[8192:])), out) == 8192
+    x, cs, out = (_u16(CAPTURED / f"rope-head-d64/{f}.u16") for f in ("x", "cs", "out"))
+    rows, want = {VP.RopeOut: [], VP.RopeOutAdd: []}, {VP.RopeOut: [], VP.RopeOutAdd: []}
+    for h in range(2):
+        for i in range(32):
+            xi, yi, c, s = x[64 * h + i], x[64 * h + 32 + i], cs[64 * h + i], cs[64 * h + 32 + i]
+            for fn, o in ((VP.RopeOut, out[64 * h + i]), (VP.RopeOutAdd, out[64 * h + 32 + i])):
+                rows[fn].append((xi, yi, c, s))
+                want[fn].append(o)
+    assert sum(_replay_capture(server, fn, rows[fn], want[fn]) for fn in rows) == 128
+
+
+@st.composite
+def act_requests(draw) -> dict:
+    """An activation or RoPE output on eight rows of words, each drawn from its grid's words or the whole range; one request
+    in ten has a word out of its range, which both sides refuse."""
+    fn = draw(st.sampled_from(ACTS))
+    pool = {VP.RopeOut: (BF16_EDGES, BF16_EDGES, ROPE_CS, ROPE_CS), VP.RopeOutAdd: (BF16_EDGES, BF16_EDGES, ROPE_CS, ROPE_CS),
+            DENSE.TanhF32Rn: (TANH_SWEEP,), ACT.GeluErfBf16: (BF16_EDGES,)}.get(fn, (BF16_EDGES, _UPS))
+    rows = [tuple(draw(st.one_of(st.sampled_from(p), st.integers(0, (1 << t.w) - 1))) for p, (_, t) in zip(pool, fn.params))
+            for _ in range(8)]
+    x = [list(col) for col in zip(*rows)]
+    if draw(st.integers(0, 9)) == 0:
+        i = draw(st.integers(0, len(x) - 1))
+        x[i][draw(st.integers(0, 7))] = draw(st.sampled_from([1 << fn.params[i][1].w, (1 << fn.params[i][1].w) + 1, -1]))
+    return request(json.loads(_batch_text(fn.id, 8)), x)
+
+
+ACT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, inputs=act_requests(), package=PKG)
+
+
+@pytest.mark.slow
+def test_activations_drawn(server):
+    stats = DT.run(ACT_PORT, examples=1000, seed=0, server=server)
+    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+
+
+def test_activation_words_out_of_range_are_refused(server):
+    cases = _refused_leaves(ACTS)
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 16)
+
+
+# ---- E4: the registered inputs' tables and the lazy families ------------------------------------------------------------
+
+def _registered_sha256(server, name: str) -> str:
+    kind, out = server.call("registered_table", {"name": name})
+    assert kind == "output", out
+    return json.loads(out)
+
+
+def test_the_gelu_table_is_the_pinned_one(server):
+    """The Lean evaluator's `gelu_tanh_bf16` (the activation word of every bf16 gate) has the SHA-256 C-Flock pins
+    (`tail_pieces.TABLE_SHA256`), and a table that is not a registered one is refused."""
+    from verity_flock.tail_pieces import TABLE_SHA256
+
+    assert _registered_sha256(server, "gelu_tanh_bf16") == TABLE_SHA256["gelu_tanh_bf16"]
+    assert server.call("registered_table", {"name": "tanh_mufu"})[0] == "reject"
+
+
+@pytest.mark.slow
+def test_the_tanh_rn_table_is_the_pinned_one(server):
+    """The Lean evaluator's `tanh_rn` (`TanhF32Rn_v1` on all 2^27 words of its region, by their low 27 bits) has the SHA-256
+    C-Flock pins: the host's `math.tanh` on 123 million words, which no grid reaches (about 30 s)."""
+    from verity_flock.tail_pieces import TABLE_SHA256
+
+    assert _registered_sha256(server, "tanh_rn") == TABLE_SHA256["tanh_rn"]
+
+
+def _with_table(fn, table: str, n: int) -> dict:
+    """The Program of `n` calls of the table-reading composite `fn` (`tables.TanhF32RnV2`, `GeluTanhMulBf16V3`), its first
+    parameters batched and its table shared, the table a registered input."""
+    params, ret = fn.signature()
+    head = tuple((name, Array(n, t)) for name, t in params[:-1])
+    main = CompositeDefinition(f"DtTable{fn.name}{fn.version}x{n}", 1, (), lambda S: ((*head, params[-1]), Array(n, ret)),
+                               lambda B, S, *a: B.batch(fn, *a, axes=(0,) * len(head) + (None,)), register=False)
+    return desc_of(Program(bind(main), registered=(table,)))
+
+
+@functools.cache
+def _with_table_text(fid: str, n: int) -> str:
+    fn = {"TanhF32Rn_v2": TB.TanhF32RnV2, "GeluTanhMulBf16_v3": TB.GeluTanhMulBf16V3}[fid]
+    return json.dumps(_with_table(bind(fn), {"TanhF32Rn_v2": "tanh_rn", "GeluTanhMulBf16_v3": "gelu_tanh_bf16"}[fid], n))
+
+
+@pytest.mark.slow
+def test_tanh_v2_reads_the_registered_table(server):
+    """`TanhF32Rn_v2` on `TANH_SWEEP`, its `tanh_rn` named in the request (`{"table": "tanh_rn"}`, 2^28 words neither side
+    holds) and read at the words its gates index: `TanhF32Rn_v1`'s words."""
+    for i in range(0, len(TANH_SWEEP), 8192):
+        xs = list(TANH_SWEEP[i:i + 8192])
+        kind, out = DT.replay(PORT, request(json.loads(_with_table_text("TanhF32Rn_v2", len(xs))), [xs, {"table": "tanh_rn"}]),
+                              server)
+        assert kind == "output" and json.loads(out) == [DENSE.tanh_f32_bits(x) for x in xs]
+
+
+@pytest.mark.slow
+def test_gelu_v3_reads_the_registered_table(server):
+    """`GeluTanhMulBf16_v3` on every gate word under each of `_UPS`, its `gelu_tanh_bf16` named in the request and, once,
+    given as its 65,536 words: `GeluTanhMulBf16_v1`'s words."""
+    rows = [(g, u) for u in _UPS for g in range(1 << 16)]
+    for i in range(0, len(rows), 8192):
+        chunk = rows[i:i + 8192]
+        x = [[g for g, _ in chunk] + [u for _, u in chunk], {"table": "gelu_tanh_bf16"}]
+        desc = json.loads(_with_table_text("GeluTanhMulBf16_v3", len(chunk)))
+        kind, out = DT.replay(PORT, request(desc, x), server)
+        assert kind == "output" and json.loads(out) == [DENSE.GeluTanhMulBf16.evaluate(*r) for r in chunk]
+        if i == 0:
+            assert DT.replay(PORT, request(desc, [x[0], list(TB.gelu_tanh_bf16_words())]), server) == (kind, out)
+
+
+def test_tables_bound_otherwise_are_refused(server):
+    """A table named for a run input, for a parameter of another size, by a name no table has, or in an object with another
+    key; and a table read too wide for a row (`TableRead5x1`), with too many index bits or an entry that splits a row."""
+    desc = json.loads(_with_table_text("TanhF32Rn_v2", 2))
+    run = copy.deepcopy(desc)
+    run["callees"] = ["Input16_v1" if c == "RegisteredInput16_v1" else c for c in run["callees"]]
+    run["definitions"]["Input16_v1"] = dict(run["definitions"].pop("RegisteredInput16_v1"), id="Input16_v1")
+    cases = [request(run, [[0, 0], {"table": "tanh_rn"}]),
+             request(desc, [[0, 0], {"table": "gelu_tanh_bf16"}]),
+             request(desc, [[0, 0], {"table": "tanh"}]),
+             request(desc, [[0, 0], {"table": "tanh_rn", "rows": 1}]),
+             request(desc, [[0, 0], {"name": "tanh_rn"}])]
+    for fid in ("TableRead5x1_v1", "TableRead33x1_v1", "TableRead0x64_v1", "TableRead6x3_v1"):
+        d = copy.deepcopy(json.loads(_batch_text("TableRead6x1_v1", 1)))
+        _rename(d, "TableRead6x1_v1", fid)
+        cases.append(request(d, [[0], [0] * 64]))
+    assert agree(server, cases) == (0, len(cases)) == (0, 9)
+
+
+#: the lazy families on their one-call Programs: table reads of each index width and entry size up to a row, and gathers of
+#: an empty, a short and a wide column (past `layout.WIDE_FAN_IN`, where the Python reads operands lazily too)
+LAZY = (TB.table_read(6, 1), TB.table_read(5, 2), TB.table_read(4, 4), TB.table_read(1, 32), TB.table_read(7, 1),
+        VP.gather_bf16(0), VP.gather_bf16(8), VP.gather_bf16(5000), RP.gather_f32(8), RP.gather_f32(5000))
+_TOKENS = (0, 1, 7, 8, 4999, 5000, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF8)
+
+
+def _lazy_rows(fn: PrimitiveDefinition, rng: random.Random) -> list[tuple]:
+    (_, ti), (_, tc) = fn.params
+    leaf = tc
+    while isinstance(leaf, Array):
+        leaf = leaf.elem
+    col = lambda: tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
+    idx = _TOKENS if fn.id.startswith("Gather") else (0, 1, 31, 32, 63, 64, 127, 0xFFFF, rng.getrandbits(ti.w))
+    return [(i, col()) for i in idx for _ in range(2)]
+
+
+def test_lazy_families_on_their_one_call_programs(server):
+    """Each lazy family member on its index and token edges (negative, past the column, the extremes) over seeded tables
+    and columns, read through `evaluate_lazy` on the Python side and `Prim.lazy` on the Lean's; each answer also the
+    primitive's own evaluator's."""
+    rng = random.Random("lazy")
+    counts = {fn.id: _agree_on(server, fn, [_lazy_rows(fn, rng)]) for fn in LAZY}
+    assert all(n >= 18 for n in counts.values()), counts

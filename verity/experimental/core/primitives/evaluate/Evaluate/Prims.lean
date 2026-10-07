@@ -6,6 +6,7 @@ import Evaluate.Words
 import Evaluate.Libdevice
 import Evaluate.Mufu
 import Evaluate.Decimal
+import Evaluate.Act
 
 /-!
 # The primitives the evaluator implements
@@ -13,30 +14,31 @@ import Evaluate.Decimal
 Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands taken unmasked as the Python takes them:
 
 - E0, the Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9, `verity.ml.circuits.boolean`): `And<n>_v1` and `Xor<n>_v1`
-  for every n ≥ 2, `Not_v1`; and the input primitives `Input<w>_v1` (§5.2), whose gates take the values bound per run.
+  for every n ≥ 2, `Not_v1`; and the input primitives `Input<w>_v1` and `RegisteredInput<w>_v1` (§5.2), whose gates take the
+  values bound per run (a registered table's are read where a gate reads them, `Evaluate.Walk`).
 - E1: the constant family `Const<w>[0x<hex>]_v1` (`verity.ml.circuits.ops.prims.const`, of which the constant bits are the
   1-bit members), and the scalar primitives of `Evaluate.Scalar`.
 - E2: the FP32 and BF16 arithmetic of `Evaluate.Fp32` and the casts of `Evaluate.Casts`.
 - E3: the tensor-core dot steps of `Evaluate.TC.Dots`, an array operand's words in leaf order.
+- E4: PoUW's and NCP's word primitives (`Evaluate.Words`), the sampler's (`Evaluate.Libdevice`), the MUFU primitives
+  (`Evaluate.Mufu`), the reference kinds' correctly rounded exp, erf and tanh (`Evaluate.Decimal`), the activations and
+  RoPE's outputs (`Evaluate.Act`), and the lazy families `TableRead{IB}x{EW}_v1`, `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`,
+  which read their operands by index.
 
 A primitive is recognized by its id and must declare the signature the registry holds for it, parameter names included
-(`codec.decode_program`'s check). Every other primitive is refused by name, never guessed: `RegisteredInput<w>_v1`
-(registered inputs and their tables are a later step) and every primitive not listed here.
+(`codec.decode_program`'s check). Every other primitive is refused by name, never guessed.
 -/
 
 namespace Evaluate
 
 open Flock.Program
 
-/-- A primitive the evaluator implements: an input of a width, or a gate's value on its operands in operand order. -/
+/-- A primitive the evaluator implements: an input of a width, a gate's value on its operands in operand order, or a gate's
+value from the operands it reads, by index, of an operand list too wide to gather (a lazy family, `evaluate_lazy`). -/
 inductive Prim where
   | input (w : Nat)
   | gate (apply : Array Nat → Nat)
-
-/-- The gate's value on its operands; an input gate has none (its value is bound, not computed). -/
-def Prim.apply : Prim → Array Nat → Nat
-  | .gate f, xs => f xs
-  | .input _, _ => 0
+  | lazy (apply : (Nat → Flock.V Nat) → Flock.V Nat)
 
 /-- `boolean._and`: `int(all(b & 1 for b in x))`. Must equal `Verity.Boolean.Op.apply` of `and` on bits, folded. -/
 def andBits (xs : Array Nat) : Nat := if xs.all (fun b => b &&& 1 == 1) then 1 else 0
@@ -242,6 +244,40 @@ def decimals : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)
   [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn),
    ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
 
+/-- The activations and RoPE's outputs by id (the vLLM integration's `prims`, `act` and `dense`), with the signatures the
+registry holds for them. -/
+def activations : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
+  open Act in
+  let gu := #[("g", bf16), ("u", bf16)]
+  let xycs := #[("x", bf16), ("y", bf16), ("c", bf16), ("s", bf16)]
+  [("SiluMulBf16_v1", gu, bf16, binary siluMulBf16), ("SiluMulBf16_v2", gu, bf16, binary siluMulBf16V2),
+   ("RopeOut_v1", xycs, bf16, quaternary ropeOut), ("RopeOutAdd_v1", xycs, bf16, quaternary ropeOutAdd),
+   ("TanhF32Rn_v1", #[("x", f32)], f32, unary tanhF32), ("GeluTanhMulBf16_v1", gu, bf16, binary geluTanhMulBf16),
+   ("GeluErfBf16_v1", #[("x", bf16)], bf16, unary geluErfBf16)]
+
+private def digits? (s : String) : Option Nat := if s.length > 0 && s.all Char.isDigit then s.toNat? else none
+
+/-- The lazy families by id, `^TableRead(\d+)x(\d+)_v1$` (`tables.table_read`, which refuses an index width and entry size
+that do not fill rows of 64 words), `^GatherBf16x(\d+)_v1$` (`prims.gather_bf16`) and `^GatherF32x(\d+)_v1$`
+(`ref_prims.gather_f32`), with the signatures their makers give them. -/
+def lazyFamily? (id : String) : Option (Prim × Array (String × Ty) × Ty) := do
+  guard (id.endsWith "_v1")
+  let s := (id.dropEnd 3).toString
+  if s.startsWith "TableRead" then
+    let [a, b] := (s.drop 9).toString.splitOn "x" | none
+    let ib ← digits? a
+    let ew ← digits? b
+    guard (0 < ib && ib ≤ 32 && ew ≥ 1 && 64 % ew == 0 && (ew <<< ib) % 64 == 0)
+    return (.lazy (Act.tableRead ib ew), #[("index", .value (if ib ≤ 16 then 16 else 32)),
+      ("table", .array ((ew <<< ib) / 64) (.array 64 bf16))], .value (16 * ew))
+  else if s.startsWith "GatherBf16x" then
+    let v ← digits? (s.drop 11).toString
+    return (.lazy (Act.gather v 0x7FFF), #[("token", f32), ("column", .array v bf16)], bf16)
+  else if s.startsWith "GatherF32x" then
+    let v ← digits? (s.drop 10).toString
+    return (.lazy (Act.gather v Fp32.F32_NAN), #[("token", f32), ("column", .array v f32)], f32)
+  else none
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -250,7 +286,9 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   | none, none, some (w, b) => some (.gate fun _ => b, #[], .value w)
   | none, none, none =>
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
-    else ((scalars ++ floats ++ dots ++ words ++ sampler ++ mufu ++ decimals).lookup id).map fun (params, ret, f) => (.gate f, params, ret)
+    else match ((scalars ++ floats ++ dots ++ words ++ sampler ++ mufu ++ decimals ++ activations).lookup id) with
+      | some (params, ret, f) => some (.gate f, params, ret)
+      | none => lazyFamily? id
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2
@@ -258,13 +296,10 @@ private def sameParams (a b : Array (String × Ty)) : Bool :=
 /-- The implementation of a primitive Definition of the program, or its refusal by name. -/
 def ofDefn (d : Defn) : Flock.V Prim := do
   match inputId? d.key with
-  | some (b, w) =>
-    if b == REGISTRATION then
-      throw s!"primitive {d.key}: a registered input, which this evaluator refuses (it binds run inputs only)"
-    return .input w
+  | some (_, w) => return .input w
   | none =>
     let some (p, params, ret) := byId? d.key
-      | throw s!"primitive {d.key}: not implemented by this evaluator (E0 to E3: the Boolean profile, the constants, the scalar primitives, the FP32 and BF16 arithmetic and casts that read no table, and the tensor-core dot steps)"
+      | throw s!"primitive {d.key}: not implemented by this evaluator (neither a primitive of the registry nor a member of a family it implements)"
     if !(sameParams d.params params && d.ret == ret) then throw s!"primitive {d.key} signature differs from the registry"
     return p
 
