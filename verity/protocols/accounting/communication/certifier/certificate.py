@@ -26,15 +26,16 @@ has the fixed depth D = ⌈log2(T·r)⌉: leaf k is frame k for k < N and E_0 af
 Opening one frame (`open_frame`, `verify_frame`) costs D siblings, the same at every occupancy.
 
 **The certificate** signs a 64-byte message that binds the record digest to the key and the link-window, so a
-certificate can't be replayed onto another window, link, direction or key:
+certificate can't be replayed onto another window, link, direction or key. It is LMS's network-certificate role digest
+(`verity.primitives.crypto.lms.certificate_message`), each field but I prefixed with its length as a u64be:
 
-    message = tagged_sha512("verity/network-certificate/v1",
-                            u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ record digest)
+    message = SHA-512( [tag] ‖ I ‖ [ [link] ‖ [direction] ‖ u64be window ] ‖ [record digest] ),
+              tag = "verity/network-certificate/v1", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
-The scheme is a stateful hash-based signature over SHA-512 (LMS-shaped, n = 64, h = 20: the whole SHA-512
-output, not truncated). The certifier's signing step
-(`Issuer`) is handed it as a `Signer`, and the audit as a `PublicKey`. A signer whose one-time-key state is missing or behind refuses
-(`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`.
+The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
+unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
+(`LmsSigner`), and the audit as a `PublicKey` (`LmsKey`). A signer whose leaf state is missing, behind or held by another
+signer refuses (`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`.
 """
 
 from __future__ import annotations
@@ -44,15 +45,16 @@ import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 from typing import Protocol
 
 from verity.primitives.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.primitives.crypto import lms
 from verity.protocols.accounting.communication.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
 from verity.protocols.accounting.communication.certifier.schedule import SyncSet
 
 RECORD_TAG = "verity-network-certifier/record/v2"
 PARAMETERS_TAG = "verity-network-certifier/parameters/v1"
-CERTIFICATE_TAG = "verity/network-certificate/v1"
 FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
@@ -241,12 +243,12 @@ def record_head(link: str, direction: Direction, window: int, grid: Grid, status
 def certificate_message(key_id: bytes, link: str, direction: Direction, window: int, digest: bytes) -> bytes:
     if len(digest) != DIGEST_BYTES:
         raise ValueError("a record digest is 64 bytes")
-    return tagged_sha512(CERTIFICATE_TAG, _u(len(key_id), 2, "len(I)") + key_id + _text(link, "link")
-                         + _u(direction.code, 1, "direction") + _u(window, 8, "window") + digest)
+    return lms.certificate_message(key_id, link, direction.value, window, digest)
 
 
 class SignerRefused(Exception):
-    """The signer's one-time-key state is missing or behind, so it signs nothing rather than risk reusing a key."""
+    """The signer's one-time-key state is missing, behind or held by another signer, so it signs nothing rather than risk
+    reusing a key."""
 
 
 class Signer(Protocol):
@@ -264,6 +266,60 @@ class PublicKey(Protocol):
     def key_id(self) -> bytes: ...
 
     def verify(self, message: bytes, signature: bytes) -> bool: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LmsKey:
+    """A certifier's LMS public key, ``I ‖ T[1]``, under one parameter set."""
+
+    params: lms.Params
+    public: bytes
+
+    @property
+    def key_id(self) -> bytes:
+        return self.public[:16]
+
+    def verify(self, message: bytes, signature: bytes) -> bool:
+        try:
+            sig = lms.Signature.decode(self.params, signature)
+        except ValueError:
+            return False
+        return lms.verify(self.params, self.public, message, sig)
+
+
+class LmsSigner:
+    """A certifier's LMS key and its leaf state (`lms.LeafState` at `state`), held from the first signature on, so a second
+    signer on the same state is refused. ``floor`` is the next leaf known unused, such as 1 + the last q published."""
+
+    def __init__(self, key: lms.PrivateKey, state: str | Path, *, floor: int = 0) -> None:
+        self.key, self.state, self.floor = key, Path(state), floor
+        self._leaves: lms.LeafState | None = None
+
+    @classmethod
+    def create(cls, key: lms.PrivateKey, state: str | Path) -> LmsSigner:
+        """A new key's signer, its leaf state created at leaf 0."""
+        lms.LeafState.create(state, lms.public_key(key), key.params.H)
+        return cls(key, state)
+
+    @property
+    def key_id(self) -> bytes:
+        return self.key.I
+
+    def public_key(self) -> LmsKey:
+        return LmsKey(self.key.params, lms.public_key(self.key))
+
+    def sign(self, message: bytes) -> bytes:
+        try:
+            if self._leaves is None:
+                self._leaves = lms.LeafState(self.state, lms.public_key(self.key), self.key.params.H, floor=self.floor)
+            return lms.sign(self.key, self._leaves, message).encode()
+        except lms.StateError as e:
+            raise SignerRefused(str(e)) from None
+
+    def close(self) -> None:
+        if self._leaves is not None:
+            self._leaves.close()
+            self._leaves = None
 
 
 @dataclass(frozen=True, slots=True)

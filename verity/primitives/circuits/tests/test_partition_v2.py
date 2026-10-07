@@ -1,7 +1,10 @@
 """`verity/partition/v2` (`verity.primitives.circuits.partition_v2`): the advice of a private partition, its rows, the statement, the
 global predicates G1-G7 and their refusals, the local predicates L1-L4 on each drawn unit (from the opened rows alone, against
 the advice root of `verity.primitives.commitments.advice`), v1's numbering in query mode, and the pinned vector
-`partition_v2_vectors.json`.  `python verity/primitives/circuits/tests/test_partition_v2.py --write` rewrites it."""
+`partition_v2_vectors.json`.  `python verity/primitives/circuits/tests/test_partition_v2.py --write` rewrites it.
+
+The program is v1's pinned program (`partition_vectors.json`) on 16-bit values: the same Calls on BF16 instead of I32 and F32,
+since the width limit of 16 bits out refuses every unit of v1's that returns a 32-bit value."""
 from __future__ import annotations
 
 import dataclasses
@@ -20,15 +23,55 @@ from verity.primitives.circuits import codec, cut, partition_object as PO, parti
 from verity.primitives.circuits.defs import REGISTRY
 from verity.primitives.circuits.evaluate import evaluate_region
 from verity.primitives.circuits.program import Program
+from verity.primitives.circuits.refs import tuple_of
+from verity.primitives.circuits.types import Array, Tuple, Value
 from verity.primitives.commitments import advice as A
 from verity.primitives.commitments.frame_v3.vectors import expand
+from verity_catalog.definitions.fp32 import Bf16Add
+from verity_catalog.definitions.prims import const
+from verity_catalog.definitions.scalar import Bf16GtStrict, SelectBf16
 
 PATH = Path(__file__).parent / "partition_v2_vectors.json"
 V1 = json.loads((Path(__file__).parent / "partition_vectors.json").read_text())
+BF16 = Value(16)
+
+
+def _max(B, a, b):
+    return B.call(SelectBf16, B.call(Bf16GtStrict, a, b), a, b)
+
+
+def _fan(B, S, x):
+    a = B.call(Bf16Add, x[0], x[1])
+    B.call(Bf16Add, x[0], x[2])                                        # dead: read by nothing, returned by nothing
+    return tuple_of(B.call(Bf16Add, a, x[2]), B.call(Bf16Add, a, x[3]))
+
+
+Max3 = T1._c("HMax3", (("x", Array(3, BF16)),), BF16, lambda B, S, x: _max(B, _max(B, x[0], x[1]), x[2]))
+CALLS = (
+    Max3,
+    T1._c("HPair", (("x", Array(2, BF16)),), Tuple(BF16, BF16),
+          lambda B, S, x: (lambda s: tuple_of(s, B.call(Bf16Add, s, x[0])))(B.call(Bf16Add, x[0], x[1]))),
+    T1._c("HTwice", (("x", Array(2, BF16)),), BF16,
+          lambda B, S, x: B.call(Bf16Add, B.call(Bf16Add, x[0], x[1]), B.call(Bf16Add, x[0], x[1]))),
+    T1._c("HRows", (("x", Array(2, Array(3, BF16))),), Array(2, BF16), lambda B, S, x: B.batch(Max3, x, axes=(0,))),
+    T1._c("HAddOne", (("x", Array(1, BF16)),), BF16,
+          lambda B, S, x: B.call(Bf16Add, x[0], B.call(Bf16Add, B.call(const(16, 0x3F80)), B.call(const(16, 0x4000))))),
+    T1._c("HFan", (("x", Array(4, BF16)),), Tuple(BF16, BF16), _fan),
+)
+Top = T1._c("HTop", tuple((n, fn.signature()[0][0][1]) for n, fn in zip("abcdef", CALLS)), Tuple(*[fn.signature()[1] for fn in CALLS]),
+            lambda B, S, *a: tuple_of(*(B.call(fn, v) for fn, v in zip(CALLS, a))))
 
 
 def _program() -> Program:
-    """v1's pinned program, from its descriptor bytes alone."""
+    return Program(Top)
+
+
+def _descriptor(P: Program) -> str:
+    return codec.canonical_json({k: v for k, v in codec.encode_program(P).items() if k != "annotations"}).decode()
+
+
+def _v1_program() -> Program:
+    """v1's pinned program, from its descriptor bytes alone: every value 32 bits."""
     return codec.decode_program(json.loads(V1["descriptor"]), REGISTRY)
 
 
@@ -75,7 +118,7 @@ def test_the_advice_round_trips(program):
     adv = V.build(program)
     assert adv.units == 11 and [c.node for c in adv.calls] == [6, 7, 8, 9, 10, 11]
     assert [(e.kind, e.units) for e in adv.entries] == [(V.FLAT, 1), (V.FLAT, 2), (V.FLAT, 1), (V.PARTS, 2), (V.FLAT, 1), (V.FLAT, 4)]
-    assert adv.entries[3].parts == ((0, 2),)                                   # VRows' members are VMax3, entry 0, cut once
+    assert adv.entries[3].parts == ((0, 2),)                                   # HRows' members are HMax3, entry 0, cut once
     rs = V.rows(adv)
     assert all(len(r) == V.ROW_BYTES for r in rs) and V.decode(rs) == adv == V.decode(V.pad(rs))
     for bad in (rs[:-1], [rs[0][:-1] + b"\1", *rs[1:]], [*rs, b"\1" + bytes(V.ROW_BYTES - 1)], [bytes(V.ROW_BYTES), *rs[1:]]):
@@ -167,14 +210,14 @@ REFUSALS = [
     ("a flat entry's gate count", lambda P, a: _mutate(a, entry=(2, {"gates": 2, "owner": (0, 0)})), None, "entry-gates"),
     ("a unit no gate is in", lambda P, a: _restart(_mutate(a, entry=(1, {"owner": (0, 2), "units": 3, "shape": (0, 1, 1),
                                                                            "classes": a.entries[1].classes}))), None, "owner-dense"),
-    ("VPair's two outputs in one unit", lambda P, a: _restart(_mutate(a, entry=(1, _classes(a, 1, P, [0, 0])))), None, "unit-too-wide"),
-    ("VFan's units recut and the shapes left", lambda P, a: _mutate(a, entry=(5, {"shape": (0, 0, 0, 0),
+    ("HPair's two outputs in one unit", lambda P, a: _restart(_mutate(a, entry=(1, _classes(a, 1, P, [0, 0])))), None, "unit-too-wide"),
+    ("HFan's units recut and the shapes left", lambda P, a: _mutate(a, entry=(5, {"shape": (0, 0, 0, 0),
                                                                                    "classes": a.entries[5].classes[:1]})), None, "shape"),
     ("more units than the canonical query's", lambda P, a: _restart(_mutate(a, entry=(2, _classes(a, 2, P, [0, 1, 2])))),
      {"width": None}, "units-canonical"),
     ("a unit over the gate cap", lambda P, a: a, {"max_gates": 2}, "unit-too-large"),
-    ("a unit over the input cap", lambda P, a: a, {"max_in_bits": 64}, "unit-too-large"),
-    ("VTwice's recompute across its units", lambda P, a: _restart(_mutate(a, entry=(2, _classes(a, 2, P, [0, 1, 0])))),
+    ("a unit over the input cap", lambda P, a: a, {"max_in_bits": 32}, "unit-too-large"),
+    ("HTwice's recompute across its units", lambda P, a: _restart(_mutate(a, entry=(2, _classes(a, 2, P, [0, 1, 0])))),
      {"canonical": None}, "cut"),
 ]
 
@@ -190,15 +233,21 @@ def test_each_global_predicate_refuses(program, label, edit, pedit, code):
     assert not v.ok and code in v.codes, (v.codes, v.detail)
 
 
-def test_outputs_of_at_most_16_bits_refuse_every_unit_returning_a_32_bit_value(program):
-    """The width rule (16, 16), outputs of at most 16 bits with no single-value exception, refuses every unit whose output is
-    one 32-bit value: here every unit with an output, all of this program's values being 32 bits wide."""
-    adv, rs, _reg, st = _registered(program, preds=V.predicates((16, 16)))
-    v = V.check(st, rs, program)
-    assert v.codes == ("unit-too-wide",)
-    wide = {g["definition"].split("_v")[0]: [u for u, _ob, _og in g["units"]] for g in v.detail["unit-too-wide"]["gates"]}
-    assert wide == {"VMax3": [0], "VPair": [0, 1], "VTwice": [0], "VAddOne": [0], "VFan": [0, 1, 2]}
-    assert all([ob, og] == [32, 1] for g in v.detail["unit-too-wide"]["gates"] for _u, ob, og in g["units"])
+def test_the_width_limit_refuses_every_unit_returning_a_32_bit_value():
+    """At most 16 bits out, with no exception for one wider value: on v1's program, whose values are all 32 bits, every unit
+    with an output is refused, though `Q_word{16, 32}` admits each as one value of at most W bits and v1 verifies it."""
+    P = _v1_program()
+    assert PO.verify(PO.build(P), P).ok
+    for preds in (V.predicates(), V.from_v1(PO.build(P))):
+        assert preds["width"] == V.WIDTH == 16
+        adv, rs, _reg, st = _registered(P, preds=preds)
+        v = V.check(st, rs, P)
+        assert v.codes == ("unit-too-wide",)
+        wide = {g["definition"].split("_v")[0]: [u for u, _ob, _og in g["units"]] for g in v.detail["unit-too-wide"]["gates"]}
+        assert wide == {"VMax3": [0], "VPair": [0, 1], "VTwice": [0], "VAddOne": [0], "VFan": [0, 1, 2]}
+        assert all([ob, og] == [32, 1] for g in v.detail["unit-too-wide"]["gates"] for _u, ob, og in g["units"])
+    _adv, rs, _reg, st = _registered(P, preds=V.predicates(32))
+    assert V.check(st, rs, P).ok
 
 
 def test_the_unit_count_is_on_the_grid(program):
@@ -213,7 +262,8 @@ def test_the_unit_count_is_on_the_grid(program):
     (lambda s: s.update(format="verity/partition/v1"), "format"),
     (lambda s: s.update(family=""), "family"),
     (lambda s: s["predicates"].pop("grid_bits"), "predicate-keys"),
-    (lambda s: s["predicates"].update(width=[16]), "predicates"),
+    (lambda s: s["predicates"].update(width=[16, 32]), "predicates"),
+    (lambda s: s["predicates"].update(width=0), "predicates"),
     (lambda s: s["predicates"].update(recompute="ignore"), "predicates"),
     (lambda s: s["predicates"].update(max_gates=0), "predicates"),
     (lambda s: s["predicates"].update(canonical={"name": "Q_word", "version": 9, "params": {"X": 16, "W": 32}}), "predicates"),
@@ -251,13 +301,13 @@ def test_a_wrong_value_fails_its_unit(program):
     _adv, rs, _reg, st = _registered(program)
     t = _transcript(program)
     v = V.check_unit(st, V.Reader(rs), 8, program, t)
-    assert v.detail["definition"] == "VFan_v1" and v.detail["outputs"] == [39] and v.detail["inputs"] == [36, 17]
+    assert v.detail["definition"] == "HFan_v1" and v.detail["outputs"] == [42] and v.detail["inputs"] == [39, 17]
     bad = dict(t)
-    bad[39] ^= 1
+    bad[42] ^= 1
     w = V.check_unit(st, V.Reader(rs), 8, program, bad)
-    assert w.codes == ("unit-incorrect",) and w.detail["unit-incorrect"]["gates"] == [39]
+    assert w.codes == ("unit-incorrect",) and w.detail["unit-incorrect"]["gates"] == [42]
     assert all(V.check_unit(st, V.Reader(rs), i, program, bad).ok for i in range(11) if i != 8)   # only the unit computing it
-    del bad[36]
+    del bad[39]
     assert V.check_unit(st, V.Reader(rs), 8, program, bad).codes == ("unit-incorrect",)
 
 
@@ -284,7 +334,7 @@ def test_a_filler_unit_is_empty(program):
 def test_a_value_two_members_compute_is_v1s_verdict():
     """A separable body's members are cut apart, so the recompute rule is checked on the whole body: refused under v1's rule,
     accepted under `Q_word` v2's, as `partition_object.verify` rules."""
-    P = Program(T1._c("VTop2", (("a", T1.Array(2, T1.I32)),), T1.Tuple(T1.I32, T1.I32), lambda B, S, a: B.call(_twice(), a)))
+    P = _twice_top()
     adv = V.build(P)
     rs = V.pad(V.rows(adv))
     for version, ok in ((1, False), (2, True)):
@@ -308,8 +358,7 @@ def test_the_one_pass_recompute_pairs_are_the_graphs():
     computing-gate count on every Definition of the pinned programs: wiring, structure, wide fan-in, scans, batches, recomputes."""
     import test_qword_vectors as TQ
     defs: dict = {}
-    for P in [*TQ.PROGRAMS.values(), *TT.PROGRAMS.values(), Program(T1.Top), Program(T1._c("VTop2", (("a", T1.Array(2, T1.I32)),),
-                                                                                              T1.Tuple(T1.I32, T1.I32), lambda B, S, a: B.call(_twice(), a)))]:
+    for P in [*TQ.PROGRAMS.values(), *TT.PROGRAMS.values(), Program(T1.Top), _program(), _twice_top()]:
         for _k, fn in PO.calls(P):
             _definitions(fn, defs)
     checked = 0
@@ -323,9 +372,10 @@ def test_the_one_pass_recompute_pairs_are_the_graphs():
     assert checked >= 30 and any(V._recomputed(fn)[0] for fn in defs.values())
 
 
-def _twice():
-    return T1._c("VTwiceSep", (("x", T1.Array(2, T1.I32)),), T1.Tuple(T1.I32, T1.I32),
-                 lambda B, S, x: T1.tuple_of(B.call(T1.I32Add, x[0], x[1]), B.call(T1.I32Add, x[0], x[1])))
+def _twice_top() -> Program:
+    twice = T1._c("HTwiceSep", (("x", Array(2, BF16)),), Tuple(BF16, BF16),
+                  lambda B, S, x: tuple_of(B.call(Bf16Add, x[0], x[1]), B.call(Bf16Add, x[0], x[1])))
+    return Program(T1._c("HTop2", (("a", Array(2, BF16)),), Tuple(BF16, BF16), lambda B, S, a: B.call(twice, a)))
 
 
 def test_owner_function_mode(program):
@@ -353,12 +403,14 @@ def build() -> dict:
         v = V.check_unit(st, V.Reader(rs), i, P, t)
         units.append([i, list(V.locate(st, V.Reader(rs), i)[:6]), V.openings(st, rs, i), v.detail["outputs"], v.detail["inputs"]])
     return {
-        "about": "verity/partition/v2 on the program of partition_vectors.json (its descriptor, decoded): the advice rows, their "
+        "about": "verity/partition/v2 on its descriptor, v1's pinned program (partition_vectors.json) on BF16 values, under "
+                 "the width limit of 16 bits out: the advice rows, their "
                  "hm96-sha512/row/v2 frame-v3-sha512 registration under partition_v2.BINDING with salt i = "
                  "expand('verity/partition/v2/vectors/vtop/salt/<i>', 72) (frame_v3.vectors.expand), the statement and its "
                  "digest, each unit's [index, [call, node, member, path, entry, unit], rows opened, output gates, input gates], "
                  "and the global refusals: [label, SHA-512 of the edited advice's padded rows, predicate edits, codes].  Written by "
                  "verity/primitives/circuits/tests/test_partition_v2.py --write.",
+        "descriptor": _descriptor(P),
         "program_sha512": PO.program_sha512(P),
         "rows": [r.hex() for r in rs],
         "leaves": [x.hex() for x in reg.leaves],
@@ -377,7 +429,8 @@ def test_the_pinned_vector():
         assert got[k] == want[k], k
     assert set(got) == set(want)
     rs = [bytes.fromhex(r) for r in want["rows"]]
-    P = _program()
+    P = codec.decode_program(json.loads(want["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
+    assert PO.program_sha512(P) == want["program_sha512"] == PO.program_sha512(_program())
     assert V.check(want["statement"], rs, P).ok and V.decode(rs) == V.build(P)
     assert A.register(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
 

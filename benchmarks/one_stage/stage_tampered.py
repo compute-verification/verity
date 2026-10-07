@@ -1,5 +1,6 @@
-"""Stage an input set for M0 with bit 0 of every instance's first output word flipped: the registered roots then commit
-wrong outputs, so the proof of any drawn unit must be refused. Run in M0's tree (its `verity_flock`).
+"""Stage an input set for the circuit prover with bit 0 of every instance's first output word flipped: the registered
+roots then commit wrong outputs, so the proof of any drawn unit must be refused. Run in the circuit prover's tree (its
+`verity_flock`).
 
     python stage_tampered.py --input-set DIR --n N --out DIR [--partition H --program H --unit-indices FILE]
 """

@@ -42,7 +42,7 @@ class Model:
 
 @dataclass
 class Executor:
-    name: str = "pouw:pearl-c-sm120-v1-h1"
+    name: str = "pouw:pearl-c-sm120-v1-h3"
     keeps_weight_state: bool = True
     accepts: frozenset = frozenset({"bf16"})
     controls: frozenset = frozenset()

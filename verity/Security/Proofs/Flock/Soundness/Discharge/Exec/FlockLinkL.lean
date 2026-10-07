@@ -12,7 +12,7 @@ named).
 * **The binding** (`ValueBinding`): each wire is held by a commit string (a leaf under the serving
   roots, `pos`). A satisfying witness of a drawn unit's table opens the commit string of each of the
   unit's wires, registered at `R`, to a value whose bit on the wire is the decoded one. Two openings
-  of one string with different values give a SHA-512 collision. M0's `hm96-sha512` leaf layout
+  of one string with different values give a SHA-512 collision. The circuit prover's `hm96-sha512` leaf layout
   discharges it.
 * **Readings** (`readsAtL`): after an extraction, the values drawn units open a commit string to.
 * **The trial** (`trialGL`) for a commit string `c`: a draw that reads `c`, uniform among such draws;

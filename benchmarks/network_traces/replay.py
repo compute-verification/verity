@@ -71,7 +71,7 @@ AUDITS = ("raw", "committed", "certified")
 class DigestSigner:
     """The replay's signer and public key at once: the signature is the message's SHA-512, so anyone can forge it."""
 
-    key_id = b"verity-network-traces/replay"
+    key_id = hashlib.sha512(b"verity-network-traces/replay").digest()[:16]
 
     def sign(self, message: bytes) -> bytes:
         return hashlib.sha512(message).digest()
