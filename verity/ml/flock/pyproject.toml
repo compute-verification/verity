@@ -28,4 +28,5 @@ inputs = ["Security", "archive/direct", "benchmarks/census", "verity/ml/randomne
 parallel = true
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
+             "verity/core/service/flock/.lake/build/bin/flock-firewall",
              "Security/.lake/packages/mathlib/.lake/build"]

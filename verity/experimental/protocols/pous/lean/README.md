@@ -127,7 +127,7 @@ syntactic comparison, so a near-miss statement cannot keep the kernel unfolding)
 `allowedAxioms` (Lean's three, compiled in). The compile and the grader run under a time limit and a memory limit
 (`POUS_GRADE_TIMEOUT`, `POUS_GRADE_MEMORY_MB`). `grade.sh` needs unprivileged user namespaces (`unshare --user`). A
 graded proof moves into `Pous/SecurityProofs/` as a module, with its theorem added to `Pous/SecurityProofs.lean` and
-listed as a guarantee in `lean-audit.json` (`audit.py --update`, then review the records' diff).
+listed as a guarantee in `lean-audit.json` (`check.py --update`, then review the records' diff).
 
 **Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` and regenerating it after review:
 
