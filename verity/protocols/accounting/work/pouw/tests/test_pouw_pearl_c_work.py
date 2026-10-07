@@ -177,14 +177,14 @@ def test_padding_stuffing_is_rejected():
     assert "A row 0 is not zero past the kept width" in W.check_opened(S, unit, tile, rows_a, rows_b, ops_for(rows_a, rows_b, k))
 
 
-def lifecycle(rows_a=None, real=20, scheme=S):
+def lifecycle(rows_a=None, real=20, scheme=S, salt_key=None):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails liveness; B passes."""
     if rows_a is None:
         rows_a = CV.rows_f32("work-life", "A", real, K) + [C.f32_row([0] * K)] * (32 - real)
         rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(scheme, {9: rows_b})
+    prover = Prover(scheme, {9: rows_b}, salt_key=salt_key)
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
@@ -273,10 +273,18 @@ def test_v_ex_is_a_no_op_on_pearl_c():
 
 
 def test_audit_under_hashing_h3():
-    """The work law's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots."""
+    """The work law's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots, once
+    the honest prover has given up (`volunteer`) the A row over its row cap.  Each row's seed reads the hiding roots, so
+    which rows pass the row cap changes with the salts; under this salt key row 7 is over it, and a drawn tile holding
+    it fails until it is given up."""
     h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
-    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3)
-    records = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3, salt_key=bytes(32))
+    declared = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    out = W.audit(h3, epoch, prover, tr, SPLITS, declared, E.challenger(), 4).audit
+    assert not out.accepted and any(v.reason.startswith("A row 7's replayed debit") for v in out.verdicts)
+    va, vb = W.volunteer(h3, epoch, tr, declared, {3: rows_a}, {9: rows_b})
+    assert (va, vb) == ({3: [7]}, {})
+    records = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, voluntary_a=va)
     assert W.audit(h3, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
     assert not W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 

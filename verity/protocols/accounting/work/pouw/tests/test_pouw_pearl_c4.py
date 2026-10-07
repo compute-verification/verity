@@ -981,13 +981,13 @@ def test_d_sb_rejects_a_non_finite_input_word(word):
     assert W.check_opened(s, record, tile, a, b, None) == "A row 5 is malformed: non-finite FP32 word"
 
 
-def lifecycle(s: F.PearlC4, real=20):
+def lifecycle(s: F.PearlC4, real=20, salt_key=None):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails D-NF; B passes."""
     rows_a = V.rows("work-life", "A", real, K) + [F.bf16_row([0] * K)] * (32 - real)
     rows_a[3] = spiked(rows_a[3], value=2.0 ** 16)
     rows_b = V.rows("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(s, {9: rows_b})
+    prover = Prover(s, {9: rows_b}, salt_key=salt_key)
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
@@ -1074,12 +1074,15 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
 
 def test_the_work_law_audits_pearl_c4_under_h3():
     """The work law on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
-    and h0's verifier refuses the transcript's openings (another tree hash)."""
+    and h0's verifier refuses the transcript's openings (another tree hash).  Each row's seed reads the hiding roots, so
+    whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest
+    prover gives up nothing (`volunteer`)."""
     s = V.scheme("nvfp4", True, "h3")
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=bytes(32))
     splits = {9: W.Split(K)}
     records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
+    assert W.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
     assert W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
     h0 = W.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, E.challenger(), 8)
     assert not h0.audit.accepted and {v.reason for v in h0.audit.verdicts if not v.ok} == {"activation opening"}
