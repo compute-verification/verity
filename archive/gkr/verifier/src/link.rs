@@ -1,5 +1,5 @@
 //! The bit link's prime side in sigma form (PROTOCOL.md §17, `gpu/link.py`; the red team's S1, NON_ZK_PROOF only),
-//! against the live Flock session of route (a) (flock-link, `backends/flock/live`): after the GKR segments,
+//! against the live Flock session of route (a) (flock-link, `verity/ml/flock/live`): after the GKR segments,
 //!
 //!   root_F               SHA-256(ROOT_F_TAG || transcript state || ctr): the prime proof's commitment (Ligero root and
 //!                        every GKR message) that the session's `Commit` carries; the record holds its SHA-256

@@ -1,11 +1,11 @@
-"""P2 v4 on the CPU, as `verity/protocols/accounting/space/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
+"""P2 v4 on the CPU, as `verity/experimental/protocols/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
 (`vectors.py`) are built on.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere (Daniel's ruling of 6 Oct 2026, 15:07Z): the
 W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
-`verity.primitives.randomness` is the spec's derivation (`frame`, `derive`) and
-`verity.primitives.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
+`verity.ml.randomness` is the spec's derivation (`frame`, `derive`) and
+`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
 `powmod` when it is installed). It is pinned by `vectors.json` beside it (`VECTORS_SHA512`, the hash in the spec's §7).
 
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
@@ -23,9 +23,9 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.primitives.commitments.identity import canonical_json_bytes
-from verity.primitives.commitments.rowleaf import sha512_row_v2_prefix
-from verity.primitives.randomness import Key, derive, frame
+from verity.ml.commitments.identity import canonical_json_bytes
+from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.ml.randomness import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
@@ -52,7 +52,7 @@ DELTA_NS = 500_000
 MAX_RTT_ALLOWANCE_NS = 354_000
 """Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, Daniel's ruling of 4 Oct
 2026, so that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
-(`verity.protocols.accounting.space.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
+(`verity.experimental.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:
     import gmpy2
@@ -191,7 +191,7 @@ def decode(params: Params, c: int, k: int, t: int) -> int:
 
 def w_commitment(params: Params, w: bytes) -> bytes:
     """The commitment to `W` (spec §4's `w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
-    (`verity.primitives.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
+    (`verity.ml.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
     manifest = canonical_json_bytes(params.manifest())
     h = hashlib.sha512(TAGGED_SHA512 + len(W_COMMITMENT_LABEL).to_bytes(4, "big") + W_COMMITMENT_LABEL)
     h.update((8 + len(manifest) + len(w)).to_bytes(8, "big") + len(manifest).to_bytes(8, "big") + manifest)

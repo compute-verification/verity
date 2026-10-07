@@ -18,10 +18,10 @@ from research.store.tool import Tool
 
 TREE = workspace_root(__file__)
 
-CLOSURE = ["benchmarks/pouw/**", "verity/protocols/accounting/work/pouw/**",
-           *package_paths(TREE, "verity.primitives.randomness", "**"), *package_paths(TREE, "verity.primitives.commitments", "**"),
+CLOSURE = ["benchmarks/pouw/**", "verity/experimental/protocols/pouw/**",
+           *package_paths(TREE, "verity.ml.randomness", "**"), *package_paths(TREE, "verity.ml.commitments", "**"),
            *package_paths(TREE, "verity", "errors.py"),
-           *package_paths(TREE, "verity_catalog", "silicon/**")]
+           *package_paths(TREE, "verity.ml.circuits", "silicon/**")]
 
 
 def _parser() -> argparse.ArgumentParser:
