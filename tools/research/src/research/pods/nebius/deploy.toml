@@ -881,7 +881,7 @@ nodes = ["vy-nebius-1", "vy-nebius-2"]
 run = ["systemd:vy-node-sweep.timer"]
 owner = "infra"
 
-# ---- both nodes: the lock-out (pods/nebius/lockout; tools/research/README.md "Locking the Nebius nodes down"). Install stages
+# ---- both nodes: the lock-out (pods/nebius/lockout, its README: the apply order and each step's rollback). Install stages
 # the tools, LIB's files and root.env, and starts nothing: sudoers.d and a unit's .d are vy-lockout's to write, as vy-admin, and
 # its steps enable the timers.
 
