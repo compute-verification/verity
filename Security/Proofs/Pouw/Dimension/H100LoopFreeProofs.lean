@@ -1,4 +1,4 @@
-import Specs.Pouw.Assumptions.Dimension.H100LoopFree
+import Models.Pouw.Assumptions.Dimension.H100LoopFree
 
 /-!
 # `MH100`'s loop-free table satisfies `H32`: proof
