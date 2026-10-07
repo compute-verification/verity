@@ -105,6 +105,8 @@ def _sha256(p: Path) -> str:
 #: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`--declared-output GLOB`).
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
                        "result.json", "launch.json", "remote.json", "refused.json"})
+#: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run).
+RUN_FILE_GLOBS = ("logs/stall-*.txt",)
 #: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never
 #: in the record the run's machine takes, so custody of the launcher's copy neither checks it nor lets eviction remove it.
 LAUNCHER_RECORD = "remote.json"
@@ -114,6 +116,10 @@ UNDECLARED_CAP_BYTES = 256 << 20
 #: `check` run lists thousands of files (r20261001-091202-7aa6: 3719 files, a 561 KB meta, so its passing attempt never published).
 TRIMMED_INLINE_BYTES = 64 << 10
 SKILL = ".agents/skills/writing-runs/SKILL.md"
+
+
+def is_run_file(rel: str) -> bool:
+    return rel in RUN_FILES or any(fnmatch.fnmatchcase(rel, g) for g in RUN_FILE_GLOBS)
 
 
 def declared_globs(run_dir: Path) -> list[str]:
@@ -130,7 +136,7 @@ def select(run_dir: Path, cap: int | None = None) -> tuple[list[str], list[dict[
     kept, trimmed, used = [], [], 0
     for rel in run_files(d):
         size = (d / rel).stat().st_size
-        if rel in RUN_FILES or any(fnmatch.fnmatchcase(rel, g) for g in globs):
+        if is_run_file(rel) or any(fnmatch.fnmatchcase(rel, g) for g in globs):
             kept.append(rel)
         elif used + size <= cap:
             used += size
