@@ -94,14 +94,13 @@ private theorem canonicalOk_spec {t : Tags} {zk : Bool} {c : Circuit} (hs : Prov
 theorem hidden : I.tags.hiddenOutputs = true := by
   rw [← zkTags_hiddenOutputs]; exact (canonicalOk_spec h.canonical).2.1
 
-theorem tagsOkZHJ : TagsOkZHJ I := ⟨h.hidden, h.retainRounds, h.merkleLeaf⟩
+theorem tagsOkZHJ : ZkHidden.TagsOkZHJ I := ⟨h.hidden, h.retainRounds, h.merkleLeaf⟩
 
 theorem parseH : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) := by
   obtain ⟨-, c, -, hc, -⟩ := check_okP h
   have hh : (zkTags I).hiddenOutputs = true := by rw [zkTags_hiddenOutputs]; exact h.hidden
   rw [circZ_eq hc]
-  unfold ProvedScope.circuitOf at hc
-  rwa [if_pos hh] at hc
+  simpa [ProvedScope.circuitOf, hh] using hc
 
 theorem built : Built (circZ I).unit := by
   have P := parse_facts (Hidden.parse_untyped (by rw [zkTags_typed]; exact h.typed) h.parseH).1
