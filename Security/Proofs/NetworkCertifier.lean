@@ -1,4 +1,4 @@
-import Specs.NetworkCertifier.Guarantees
+import Models.NetworkCertifier.Guarantees
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.Advice
