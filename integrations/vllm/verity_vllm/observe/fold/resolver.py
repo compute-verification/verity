@@ -142,7 +142,7 @@ class Compute:
     describes component k of its return (one entry for a non-tuple return).  Element order inside an operand
     view is the row-major leaf order of the parameter's type; the fold checks leaf counts."""
 
-    spec: Any                                  # verity.primitives.circuits.defs.SpecializedDefinition
+    spec: Any                                  # verity.ml.circuits.defs.SpecializedDefinition
     rows: int
     operands: tuple[Operand, ...]
     outputs: tuple[Operand, ...]

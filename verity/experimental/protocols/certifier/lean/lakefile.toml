@@ -1,0 +1,16 @@
+# The network certifier's program: the executable forms of the certifier's definitions that the difftest runs, and the
+# difftest against the Python audit. It imports only Lean. What it computes is `Security`'s trusted text
+# (`Definitions/NetworkCertifier/`), and `security_proofs` (`Proofs/NetworkCertifier/Code.lean`) proves the two agree.
+name = "certifier_program"
+defaultTargets = ["NetworkCertifier", "certifier-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "NetworkCertifier"
+
+[[lean_exe]]
+name = "certifier-difftest"
+root = "NetworkCertifier.DifftestMain"
