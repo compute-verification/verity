@@ -172,17 +172,23 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
 
 
 def derived_modules(layout: Layout) -> dict[str, str]:
-    """The module renames that [paths] and [roots] imply: one per path entry whose old and new names differ."""
-    out = {}
+    """The module renames that [paths] and [roots] imply: one per path entry whose old and new names differ, and one
+    keeping each path entry mapped to itself inside a renamed module."""
+    out, kept = {}, []
     for old, new in sorted(layout.data["paths"].items()):
         if not (old.endswith("/") or old.endswith(".py")):
             continue
         a, b = module_name(old, layout.old_roots), module_name(new, layout.new_roots)
         if a and b and a != b:
             out[a] = b
+        elif a and a == b:
+            kept.append(a)
         if old.endswith("/") and (r := next((n for n, d in layout.old_roots.items() if d == old.rstrip("/")), None)):
             if b and r != b:
                 out[r] = b
+    for a in kept:
+        if any(a.startswith(k + ".") for k in out):
+            out[a] = a
     return out
 
 

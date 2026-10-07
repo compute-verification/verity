@@ -92,6 +92,12 @@ def test_a_tracked_file_a_gitignore_matches_stays_tracked_where_it_moves(moved):
     assert "data/runs/r1/out/session.txt" in tracked and "runs/r1/out/session.txt" not in tracked
 
 
+def test_a_directory_kept_inside_a_moved_one_keeps_its_module_name():
+    layout = L.Layout({"roots": {"old": {}, "new": {}},
+                       "paths": {"backends/flock/": "ml/flock/", "backends/flock/verifier/": "backends/flock/verifier/"}})
+    assert L.derived_modules(layout) == {"backends.flock": "ml.flock", "backends.flock.verifier": "backends.flock.verifier"}
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
