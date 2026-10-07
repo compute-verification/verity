@@ -6,7 +6,7 @@
 #   bash tests/lean/generate.sh [PACKAGE_DIR]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../../../.." && pwd)
+root=$(cd "$here/../../../../.." && pwd)
 pkg=$(cd "${1:-$root/Security/Proofs}" && pwd)
 out=$(mktemp)
 (cd "$pkg" && lake build Proofs.Flock.Soundness.PlanDraw >&2 &&
