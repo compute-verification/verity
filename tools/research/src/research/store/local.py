@@ -344,7 +344,7 @@ class LocalStore:
             return self._read_manifest(p, hex_)
         r = self.remote
         if r is not None:
-            tmp = p.parent / f".tmp-{hex_}-{os.getpid()}"
+            tmp = p.parent / f".tmp-{hex_}-{os.getpid()}-{threading.get_ident()}"
             try:
                 r.get(manifest_key(hex_), tmp)
             except KeyError:
@@ -569,7 +569,7 @@ class LocalStore:
             r = self.remote
             if r is None:
                 return None
-            tmp = p.parent / f".tmp-{run_id}-{os.getpid()}"
+            tmp = p.parent / f".tmp-{run_id}-{os.getpid()}-{threading.get_ident()}"
             try:
                 r.get(attempt_key(run_id), tmp)
             except KeyError:

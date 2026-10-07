@@ -191,6 +191,13 @@ src = "tools/cluster"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
+# what the dispatcher's `cluster submit` places Jobs with ($VY_QUEUE_SRC); no `run`: each placement runs it afresh
+[[tree]]
+path = "/workspace/verity-guest/cluster-src"
+src = "tools/cluster"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
 [[file]]
 path = "/workspace/verity-guest/bin/pool_n1.py"
 src = "tools/research/src/research/pods/nebius/pool_n1.py"
@@ -460,9 +467,9 @@ by = "tools/research/src/research/pods/nebius/monitoring/host_up.sh"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
-# ---- node 1: the Lean build cache. Infra's sandbox and its user (`sudo -n vy-lean-build-setup` after installing), then console's
-# key (/etc/verity/lean-cache.env), then lean's publisher in place of run-daily's stub, then `systemctl enable --now` the timer by
-# hand. No `run`: the timer is started last, never by an install.
+# ---- node 1: the Lean build cache. Infra's sandbox and its user (`sudo -n vy-lean-build-setup` after installing), console's key
+# (/etc/verity/lean-cache.env), lean's publisher (run-daily, with the cache.py it runs beside it), then `systemctl enable --now`
+# the timer by hand. No `run`: the timer is started last, never by an install.
 
 [[file]]
 path = "/usr/local/sbin/vy-lean-build-setup"
@@ -478,7 +485,13 @@ owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-lean-cache/run-daily"
-src = "tools/research/src/research/pods/nebius/lean_cache_daily.sh"
+src = "tools/lean/run_daily.py"
+nodes = ["vy-nebius-1"]
+owner = "lean"
+
+[[file]]
+path = "/usr/local/lib/vy-lean-cache/cache.py"
+src = "tools/lean/cache.py"
 nodes = ["vy-nebius-1"]
 owner = "lean"
 
@@ -587,18 +600,6 @@ path = "/workspace/pouw/infra/bin/restart_fill_after_window.sh"
 src = "tools/research/src/research/pods/nebius/restart_fill_after_window.sh"
 nodes = ["vy-nebius-2"]
 owner = "compute-accounting"
-
-[[file]]
-path = "/workspace/pouw/infra/bin/check_slot.sh"
-src = "tools/research/src/research/pods/nebius/check_slot.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
-[[file]]
-path = "/usr/local/bin/vy-check-slot-d"
-src = "tools/research/src/research/pods/nebius/check_slot_d.sh"
-nodes = ["vy-nebius-2"]
-owner = "infra"
 
 [[file]]
 path = "/usr/local/bin/vy-provers"

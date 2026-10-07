@@ -1,4 +1,5 @@
 import Proofs.Core.Circuit
+import Proofs.Core.PrivatePartition
 import Proofs.Core.Boolean
 import Proofs.Core.Game
 import Proofs.Core.Game.Basic

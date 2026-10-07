@@ -27,9 +27,9 @@ opening's verification, which Lean doesn't check (`ASSUMPTIONS.md`).
 It bounds wrong units of the rows' circuit. That a correct unit computes a Definition additionally needs the unit's
 certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boolean semantics in Lean.
 
-Its proof coins are the model's: uniform, drawn each round after the prover's message. That the coin server's round
+Its proof coins are the model's: uniform, drawn each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
-states, and which covers only per-round OS coins: M0's seed-derived coins are outside the headline.
+states, and which covers only per-round OS coins: the circuit prover's seed-derived coins are outside the headline.
 -/
 
 namespace FlockSoundness.Audit

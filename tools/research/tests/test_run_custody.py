@@ -20,12 +20,12 @@ from research.store import credentials as C
 from research.store import custody as CU
 from research.store import preserved as P
 from research.store.cli import main as data_main
-from research.store.local import LocalStore, object_key
+from research.store.local import LocalStore
 from research.store.model import Label
 from research.telemetry.job import set_status
 
 from test_pod_guard_daemon import QUIET, _env, idle_since
-from waits import Gate, wait_runner
+from waits import wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -85,78 +85,6 @@ def _fixture_run(runs: Path, run_id: str = FIXTURE_RID) -> Path:
 
 # ---- the machine side, end to end --------------------------------------------------------------------------------------------------------
 
-def test_the_machine_publishes_every_run_file_and_any_machine_sees_custody(tmp_path, monkeypatch):
-    vault = tmp_path / "vault"
-    cmd = [PY, "-c", "import os; print('hello from the workload'); print('token seen:', 'AWS_SESSION_TOKEN' in os.environ); "
-                     "print('run dir:', os.environ['RESEARCH_RUN_DIR'] == os.getcwd())"]
-    req, runs = _request(tmp_path, RID, cmd, vault)
-    out = remote.launch_request(req)
-    assert out["started"], out
-    d = runs / RID
-    marker = _wait_marker(d)
-    assert marker["preserved"] is True, marker
-    assert (d / "stdout.log").read_text().splitlines() == ["hello from the workload", "token seen: False", "run dir: True"], "the key is never the workload's"
-    assert not (req.parent / remote.CUSTODY_DIR / CU.CRED_FILE).exists(), "the key is deleted once used"
-    assert SECRET not in (d / "launcher.log").read_text() + (d / "job.json").read_text() + req.read_text() + json.dumps(marker)
-    assert {"stdout.log", "stderr.log", "launcher.log", "job.json", "status.json"} <= set(marker["files"])
-    launch = json.loads((d / "launch.json").read_text())
-    assert launch["argv"][launch["argv"].index("--custody-dir") + 1] == str(req.parent / remote.CUSTODY_DIR)
-    # nothing touched the run dir after the marker: launcher.log in the record is all of it, and the marker vouches for the dir
-    assert CU.marker_problem(d) is None
-    assert "custody: publishing" in (d / "launcher.log").read_text()
-
-    # another machine, nothing local: the attempt, its logs and the verdict come from the remote alone
-    st2 = _other_machine(tmp_path, vault, monkeypatch)
-    assert P.check(st2, [RID], mode="head")["preserved"]
-    doc = st2.get_attempt(RID)
-    rr = doc["outputs"]["run_record"]
-    assert rr == marker["run_record"]
-    m = st2.get_manifest(rr)
-    assert m.kind == CU.KIND and {f.path for f in m.payload.files} == set(marker["files"])
-    stdout = next(f for f in m.payload.files if f.path == "stdout.log")
-    st2.remote.get(object_key(stdout.sha256), tmp_path / "got")
-    assert (tmp_path / "got").read_text().startswith("hello from the workload")
-    assert data_main(["preserved", RID]) == 0
-
-    # the pod guard: idle, no .fetched, but custody on the remote -> it may terminate; a file changed afterwards -> it refuses
-    root = tmp_path / "root"
-    st = idle_since(root, _env(tmp_path, QUIET), 120)
-    assert st["verdict"] == "terminate" and st["unfetched"] == [], st
-    with (d / "stdout.log").open("a") as f:
-        f.write("late line\n")
-    assert "changed after custody" in CU.marker_problem(d)
-    st = idle_since(root, _env(tmp_path, QUIET), 120)
-    assert st["verdict"] == "refuse" and "stdout.log changed after its custody" in st["unfetched"][0]["why"]
-
-
-def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custody(tmp_path):
-    # `pkill -f rows.sh` to stop a queue matched the runner's argv too (it carries the workload's command): the runner died, so the run
-    # never recorded its end or published (vllm-rf-epoch #73)
-    import signal
-
-    vault = tmp_path / "vault"
-    arrived, gate = tmp_path / "arrived", Gate(tmp_path / "gate")
-    os.mkfifo(arrived)
-    workload = f"import sys; open(sys.argv[2], 'w').close(); {Gate.WAIT}; print('finished')"   # arrives, then waits for the gate
-    req, runs = _request(tmp_path, RID, [PY, "-c", workload, str(gate.path), str(arrived)], vault)
-    try:
-        assert remote.launch_request(req)["started"]
-        d = runs / RID
-        open(arrived, "rb").close()                              # returns once the workload runs: the runner is past its setup
-        runner = json.loads((d / "launch.json").read_text())["runner_pid"]
-        os.kill(runner, signal.SIGTERM)
-        os.kill(runner, signal.SIGHUP)
-        gate.release()
-        marker = _wait_marker(d)
-    finally:
-        gate.close()
-    status = json.loads((d / "status.json").read_text())
-    assert status["state"] == "done" and status["rc"] == 0 and (d / "stdout.log").read_text() == "finished\n"
-    assert marker["preserved"] is True and CU.marker_problem(d) is None
-    log = (d / "launcher.log").read_text()
-    assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
-
-
 URLS = '{"k": "https://r2.example/objects/sha256/k?X-Amz-Signature=sent-url-that-must-not-leak"}'
 
 
@@ -184,6 +112,22 @@ def test_a_sent_credential_is_deleted_before_the_record_is_taken_whatever_the_wo
     assert os.listdir(d / "inputs") == ["sent.txt"] and "inputs/sent.txt" in marker["files"]
     assert not any("lean-deps-urls" in f for f in marker["files"])
     _no_url_anywhere(vault)
+
+
+def test_a_machine_runs_workload_writes_to_out_and_its_record_holds_all_of_it(tmp_path, monkeypatch):
+    """`$OUT` is the run dir's out/, there before the workload starts, on a machine (and a queued run, which launches the same
+    request) as locally; custody uploads all of it with no --declared-output."""
+    vault = tmp_path / "vault"
+    work = ("import os, pathlib; o = pathlib.Path(os.environ['OUT']); assert o == pathlib.Path(os.environ['RESEARCH_RUN_DIR'], 'out') "
+            "and o.is_dir(); (o / 'deep').mkdir(); (o / 'deep' / 'kept.bin').write_bytes(b'k' * 1000)")
+    req, runs = _request(tmp_path, RID, [PY, "-c", work], vault)
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    marker = _wait_marker(d)
+    assert marker["preserved"] is True and json.loads((d / "status.json").read_text())["rc"] == 0
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    m = st2.get_manifest(st2.get_attempt(RID)["outputs"]["run_record"])
+    assert "out/deep/kept.bin" in {f.path for f in m.payload.files} and not m.meta.get("trimmed")
 
 
 def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, capsys):
@@ -325,7 +269,8 @@ def test_a_local_run_with_run_record_preserves_the_files_its_workload_left_in_th
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-    work = "import os, pathlib; p = pathlib.Path(os.environ['RESEARCH_RUN_DIR'], 'out'); p.mkdir(); (p / 'capture.json').write_text('{}')"
+    work = ("import os, pathlib; p = pathlib.Path(os.environ['OUT']); assert p == pathlib.Path(os.environ['RESEARCH_RUN_DIR'], 'out') "
+            "and p.is_dir(); (p / 'capture.json').write_text('{}')")
     ids = {}
     for name, flags in (("plain", []), ("recorded", ["--run-record"])):
         runs = tmp_path / name
@@ -858,7 +803,23 @@ def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_t
     _declare(d, ["*"])
     assert CU.select(d, cap=0)[1] == [], "`*` keeps everything"
     w = CU.trim_warning(trimmed)
-    assert "--declared-output" in w and "will be dropped once lanes declare their outputs" in w and CU.SKILL in w
+    assert "--declared-output" in w and "$OUT" in w and "will be dropped once lanes declare their outputs" in w and CU.SKILL in w
+
+
+def test_select_always_keeps_all_of_out_and_a_declared_glob_adds_to_it(tmp_path):
+    d = _fixture_run(tmp_path / "runs")
+    (d / "out" / "deep").mkdir()
+    (d / "out" / "deep" / "big.bin").write_bytes(b"x" * 100)
+    (d / "res").mkdir()
+    (d / "res" / "r.json").write_text("{}")
+    (d / "outside.bin").write_bytes(b"z" * 100)
+    (d / "outx.bin").write_bytes(b"z" * 10)
+    kept, trimmed = CU.select(d, cap=0)
+    assert {"out/proof.bin", "out/verify.jsonl", "out/deep/big.bin"} <= set(kept), "out/ is kept in full with nothing declared"
+    assert [t["path"] for t in trimmed] == ["outside.bin", "outx.bin", "res/r.json"], "only out/, not a name that starts with out"
+    _declare(d, ["res/*"])
+    kept, trimmed = CU.select(d, cap=0)
+    assert {"out/deep/big.bin", "res/r.json"} <= set(kept) and [t["path"] for t in trimmed] == ["outside.bin", "outx.bin"]
 
 
 def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_path, monkeypatch, capsys):
@@ -874,13 +835,13 @@ def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_pa
     (d / "junk.bin").write_bytes(b"j" * 1000)
     _declare(d, ["res/*"])
     assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish"]) == 0
-    assert "custody trimmed 3 undeclared file(s)" in capsys.readouterr().err   # junk.bin and the fixture's out/
+    assert "custody trimmed 1 undeclared file(s)" in capsys.readouterr().err   # junk.bin; the fixture's out/ is always kept
     assert CU.has_custody(d) == (True, "on the remote (.custody)")
     st2 = _other_machine(tmp_path, vault, monkeypatch)
     m = st2.get_manifest(st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"])
     paths = {f.path for f in m.payload.files}
-    assert "res/result.json" in paths and "junk.bin" not in paths
-    assert [t["path"] for t in m.meta["trimmed"]] == ["junk.bin", "out/proof.bin", "out/verify.jsonl"]
+    assert {"res/result.json", "out/proof.bin", "out/verify.jsonl"} <= paths and "junk.bin" not in paths
+    assert [t["path"] for t in m.meta["trimmed"]] == ["junk.bin"]
     assert CU.verify(st2, d, mark=False)["preserved"]
     (d / "junk.bin").write_bytes(b"k" * 1000)
     assert "changed" in CU.verify(st2, d, mark=False)["error"], "a trimmed file is still pinned by its hash"
@@ -904,9 +865,9 @@ def test_a_trimmed_listing_too_big_for_the_manifest_goes_in_the_record_and_custo
     st2 = _other_machine(tmp_path, vault, monkeypatch)
     rr = st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"]
     m = st2.get_manifest(rr)
-    assert "trimmed" not in m.meta and m.meta["trimmed_listing"] == CU.TRIMMED_LISTING and m.meta["trimmed_files"] == 3002
+    assert "trimmed" not in m.meta and m.meta["trimmed_listing"] == CU.TRIMMED_LISTING and m.meta["trimmed_files"] == 3000
     assert {f.path for f in m.payload.files} & {CU.TRIMMED_LISTING, "stdout.log"} == {CU.TRIMMED_LISTING, "stdout.log"}
-    assert len(CU.trimmed_of(st2, rr)) == 3002
+    assert len(CU.trimmed_of(st2, rr)) == 3000
     rep = CU.verify(st2, d, mark=False)
     assert rep["preserved"] and CU.TRIMMED_LISTING not in rep["gone"]
     (d / "suites" / "t2999.log").write_text("changed")

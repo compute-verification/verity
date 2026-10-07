@@ -1,5 +1,6 @@
 import Specs.Core.Guarantees.Circuit
 import Specs.Core.Guarantees.Game
+import Specs.Core.Guarantees.PrivatePartition
 import Specs.Core.Guarantees.TC
 
 /-!

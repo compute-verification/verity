@@ -20,8 +20,9 @@ The executors, as they stand:
 - **vy-nebius-1, GPUs:** Kueue's, lent per process by `n1_lease.py` (infra/nebius): node 1's `gpu-lease` copy waits on
   `/run/gpu-lease`, the controller grows its pool of 1-GPU holder Jobs in `provers` for the waiter, and the lease takes a holder's
   GPU. Only with `gpu_executor = "n1-lease"` on the node in the description (the cutover's one-line switch); without it such
-  a job goes to node 2 or is refused. A timed job never runs there: node 1 has no window protocol. Only a job pinned there
-  (`--on vy-nebius-1`) is sent: the submit path sees neither node's live state, so the router, which prefers the owner's
+  a job goes to node 2 or is refused. A timed job never runs there: node 1 has no window protocol. A job that isn't
+  preemptible gets at most `provers`' own quota there, so a larger one is refused, not left waiting forever. Only a job
+  pinned there (`--on vy-nebius-1`) is sent: the submit path sees neither node's live state, so the router, which prefers the owner's
   node, would queue every Verity GPU job on node 1's pool (`provers`' unborrowed quota) while node 2 had GPUs free.
 
 A job asks for `max_s` of its own. A CPU job's allocation also covers `custody_s` (the runner's publish), so its `max_s` in the
@@ -43,6 +44,7 @@ GPU_LEASE = "/workspace/pouw/infra/bin/gpu-lease"
 GPU_LEASE_N1 = "/workspace/verity-guest/bin/gpu-lease"
 N1_LEASE_ENV = ["GPU_LEASE_DIR=/run/gpu-lease", "GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus"]
 NODE1, NODE2 = "vy-nebius-1", "vy-nebius-2"
+N1_POOL_QUEUE = "provers"
 UNSEEN_POOL = f"{NODE1} lends GPUs only to a job pinned there (--on {NODE1}): the submit path can't see its lease pool"
 CPUSET_CHECK = ('c=$(cut -d: -f3 /proc/self/cgroup); '
                 '[ "$(cat "/sys/fs/cgroup$c/cpuset.cpus" 2>/dev/null)" = "$1" ] && shift && exec "$@"; '
@@ -72,6 +74,10 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
         raise Refused(f"{node}'s GPUs are Kueue's, and its lease executor isn't switched on (gpu_executor = \"n1-lease\")")
     if j.gpus and node == NODE1 and j.quiet:
         raise Refused(f"{node} has no timed windows")
+    own = cluster.workstream(N1_POOL_QUEUE, node) if j.gpus and node == NODE1 and j.preempt != "requeue" else None
+    if own and j.gpus > own.gpus:
+        raise Refused(f"{node}'s lease pool grants a lease that isn't --preemptible at most {N1_POOL_QUEUE}' own quota, {own.gpus} "
+                      f"GPUs (n1_lease.py borrows beyond it only while every waiter is --preemptible), and this asks for {j.gpus}")
     guest = cluster.standing(j.project, node) != OWNER
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
@@ -145,4 +151,4 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     return out
 
 
-__all__ = ["CPUSET_CHECK", "GPU_LEASE", "GPU_LEASE_N1", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]
+__all__ = ["CPUSET_CHECK", "GPU_LEASE", "GPU_LEASE_N1", "N1_POOL_QUEUE", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]

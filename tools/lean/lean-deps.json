@@ -1,5 +1,11 @@
 {
  "deps": {
+  "0afbec3ab8cf77e6fff7b910bd31cbfa1c66ba3ad7cb7fd77105193b174c1b0a": {
+   "bytes": 1309786850,
+   "package": "verity/Security/Proofs",
+   "run": "r20261006-175210-ac32",
+   "sha256": "557ade352fdc854e251a53753887eda7da6586ef14575ebbd4b4c3c1c1bae0ae"
+  },
   "50ebab66d6fc25e75346c1cc62c5301e5932ae9e532c5a4321cdef5b239f892e": {
    "bytes": 1313926613,
    "package": "verity/Security/Proofs",
