@@ -2,6 +2,7 @@
 live from the lock files (never through a lock) or from the node's sampler log."""
 from __future__ import annotations
 
+import dataclasses
 import fcntl
 import hashlib
 import os
@@ -191,6 +192,8 @@ def test_live_mode_grants_through_gpu_lease_agent_mode_and_observes_the_lease_it
     """The agent-mode protocol end to end, against the gpu-lease held for deploy: the request's wait file is the planner's
     job (max= as max_s), the agent's grant is the lease gpu-lease takes, and its next reading is that allocation."""
     assert hashlib.sha256(AGENT_GPU_LEASE.read_bytes()).hexdigest().startswith("49238797233d96ec")
+    # the wait file's since= is gpu-lease's real clock, so the node must still admit then, whatever nebius.toml's stops_at says
+    c = dataclasses.replace(c, nodes={n: dataclasses.replace(nd, stops_at=None) for n, nd in c.nodes.items()})
     gl = tmp_path / "gl"
     gl.mkdir()
     lock = os.open(gl / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)

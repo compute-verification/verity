@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+REPO = HERE.parents[3]
 SCRIPT = HERE.parent / "migrate_bindings.py"
 
 
