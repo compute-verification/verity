@@ -225,7 +225,7 @@ def ligUp : List Level → ℚ
 columns. Every `fast100` level satisfies them (checked below). -/
 def Level.Ok (l : Level) : Prop := 1 ≤ l.logInvRate ∧ l.logInvRate ≤ 7 ∧ 1 ≤ l.logCols
 
-instance (l : Level) : Decidable l.Ok := by unfold Level.Ok; infer_instance
+instance instDecidableOk (l : Level) : Decidable l.Ok := by unfold Level.Ok; infer_instance
 
 theorem midLevelError_le (l l' : Level) (hl : l.Ok) :
     midLevelError l l' ≤ (midUp l l' : ℝ) := by

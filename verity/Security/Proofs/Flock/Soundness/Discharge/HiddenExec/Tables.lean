@@ -14,10 +14,10 @@ read off its layout (`Refine.stmtOf`, which reads `Δ` and the regions `setupHid
   points are `mPts` (`DrawSetup`'s fields, with `setupHidden` for `setupH`), and the statement is well formed (`wf`,
   which `setupHidden_wf` proves of every statement `setupHidden` returns).
 * `TableH I mPts S`: a table, the hidden-output statement it is `stmtOf` of (at a draw `d`, at regions `regs`), and
-  each drawn unit's VU and block.
-* `DrawSetupH.table`: the table at `regionsOf st`, each unit at its rank `r` among `D.proved`, block `r / c.g`, VU
-  `r % c.g`. `DrawSetupH.refused`: at a draw with no `DrawSetupH`, the reference setup's statement with Integrate's
-  `contra` regions, which no witness satisfies.
+  each drawn unit's template instance and block.
+* `DrawSetupH.table`: the table at `regionsOf st`, each unit at its rank `r` among `D.proved`, block `r / c.g`, template
+  instance `r % c.g`. `DrawSetupH.refused`: at a draw with no `DrawSetupH`, the reference setup's statement with
+  Integrate's `contra` regions, which no witness satisfies.
 * `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH`: the draw's table, the one-table plan and its tables, as
   `Prog.flock_headline_live_on` takes them.
 
@@ -55,7 +55,7 @@ structure DrawSetupH (S : Finset (Fin n)) (d : Lean.Json) where
   wf : StmtWF st ∧ RegionsWF st
 
 /-- **A hidden-output draw's table with its sites**: the table, the statement `setupHidden` accepted at a draw `d` on
-the session's inputs, the regions at which the table is that statement's `stmtOf`, and each drawn unit's VU and block. -/
+the session's inputs, the regions at which the table is that statement's `stmtOf`, and each drawn unit's template instance and block. -/
 structure TableH (S : Finset (Fin n)) where
   T : TabSpec mPts
   st : Stmt
@@ -120,7 +120,7 @@ theorem rank_div_lt {u : Fin n} (h : u ∈ S) : x.rank u / x.st.c.g < 2 ^ (x.st.
   exact lt_of_lt_of_le (x.rank_lt h) x.hblk
 
 /-- **The draw's table**: `stmtOf` of the hidden-output statement at its regions, and each drawn unit at its rank `r`:
-block `r / c.g`, VU `r % c.g`. -/
+block `r / c.g`, template instance `r % c.g`. -/
 noncomputable def table : TableH I mPts S where
   T := x.specAt (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
   st := x.st
@@ -151,7 +151,7 @@ theorem refused_wf : ∀ R ∈ regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x
   · exact DrawSetup.contra_wf R hR
 
 /-- **The table of a refused draw `S'`**: a reference setup `x`'s statement with `contra`'s regions, which no witness
-satisfies (`refused_unsat`), every unit at block 0, VU 0. -/
+satisfies (`refused_unsat`), every unit at block 0, template instance 0. -/
 noncomputable def refused (S' : Finset (Fin n)) : TableH I mPts S' where
   T := x.specAt (regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog)) x.refused_wf
   st := x.st

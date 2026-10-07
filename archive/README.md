@@ -18,6 +18,7 @@ C-Flock is the one active backend family. The others are frozen: kept, still in 
 | `numerical/` | none | frozen | `verity_numerical`: independent references, the WP2 checker, the soundness calculator, and the bench spine (`verity_numerical.bench`) that C-Flock and the table renderers still use |
 | `shared/` | none | frozen | GPU Merkle hashing (`../kernels/hash_gpu/`) and the A100 re-pricing (`shared/anchor_a100/`) for A-GKR and B-Ligero |
 | `redteam/` | none | frozen | red-team forgery harnesses against A-GKR and B-Ligero |
+| `pouw-blake3/` | none | frozen | Pearl-C's BLAKE3 hashing formats (-h1, -h2, the BLAKE3 -h3), their kernels, benches and vectors, kept after the 2026-10-06 ruling that standardized PoUW on SHA-512 (`pouw-blake3/README.md`); no tests |
 
 ## What `check` runs
 

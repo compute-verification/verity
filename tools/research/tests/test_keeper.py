@@ -384,8 +384,9 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", "-c"])
     monkeypatch.setattr(K, "NODE_KEEPER", str(KEEPER))
     monkeypatch.setattr(K, "clock", lambda: t("2098-12-31T12:00"))
-    for k, v in (("KEEPER_DIR", tmp_path / "keep"), ("KEEPER_ROOT", root), ("KEEPER_NODE", "vy-nebius-2"), ("KEEPER_MAX_AHEAD_H", 10**6)):
+    for k, v in (("KEEPER_DIR", tmp_path / "keep"), ("KEEPER_ROOT", root), ("KEEPER_MAX_AHEAD_H", 10**6)):
         monkeypatch.setenv(k, str(v))
+    monkeypatch.delenv("KEEPER_NODE", raising=False)      # as over ssh: only vy-keeper.service sets it
     on = ["--on", "vy-nebius-2"]
     assert cli.main(["keeper", "set", "sweep", *on, "--project", "verity", "--n", "2", "--until", "2099-01-01T00:00Z", "--owner", "@proofs",
                      "--max-min", "25", "--lane", "proofs", "--declared-output", "out/*", "--", "python3", "-m", "x", "--seed", "{seed}"]) == 0

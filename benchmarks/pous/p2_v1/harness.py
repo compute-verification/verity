@@ -15,8 +15,8 @@ the two compare side by side.
 3. **The synthetic loop.** As the band's: a POUS forward expands every block's keys, decodes all of `C`, takes the payload
    bytes as `W` and runs the weight set's GEMMs on them; plain reads `W`. Both are timed from a CUDA graph where the path is
    capturable, every rep kept. Decode overhead is POUS over plain, minus one.
-4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which the spec
-   caps at 1 ms); `p2_v1/live.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
+4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which spec v1.1
+   caps at 354 µs); `p2_v1/memory_challenger.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
    (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
    recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its
    decoded row `Dec(C_i)`, which the game gives the prover free: two roots, and the margin is the limit minus each
@@ -42,7 +42,7 @@ from band_gpu import harness as H
 from . import reference as R
 
 HERE = Path(__file__).resolve().parent
-LIVE = HERE / "live.py"
+MEMORY_CHALLENGER = HERE / "memory_challenger.py"
 SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 """The bench's setup source: in a deployment the verifier's secret or a beacon round drawn after the commitment to `W`."""
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
@@ -319,16 +319,17 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     leaves = out / "leaves-p2.bin"
     leaves.write_bytes(b"".join(R.leaf(salt, i // bps, i % bps, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
     fields = {"salt": salt.hex(), "model": model.hex(), "manifest": P.manifest(), "payload_bytes": payload}
+    H.leave_reserved(a)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
-    cal = H.calibrate_limit(native_start, fields, LIVE, out, a, leaves, "p2-calibrate")
+    cal = H.calibrate_limit(native_start, fields, MEMORY_CHALLENGER, out, a, leaves, "p2-calibrate")
     limit = int(cal.get("limit_ns") or 0)
-    honest = H.audit_round(native_start, fields, LIVE, leaves, out, "p2-honest", a,
+    honest = H.audit_round(native_start, fields, MEMORY_CHALLENGER, leaves, out, "p2-honest", a,
                            (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: H.ControlResponder(nb, answer, real_delay=a.clock == "wall")  # noqa: E731
-        return H.audit_round(start, fields, LIVE, leaves, out, tag, a, None, limit)
+        return H.audit_round(start, fields, MEMORY_CHALLENGER, leaves, out, tag, a, None, limit)
 
     value = control("p2-value", H.control_answers(c_host, nb, zero=set(range(0, blocks, 10))))
     late = control("p2-late", H.control_answers(c_host, nb, late_every=10, late_ns=limit + H.LATE_EXTRA_NS))

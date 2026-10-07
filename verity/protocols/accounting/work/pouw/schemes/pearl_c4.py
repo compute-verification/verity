@@ -2,10 +2,10 @@
 (``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain (Daniel, 15:34Z): same forming and
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
-The design is research store ``internal/pouw/rtx-pro/fp4-design.md`` (GPU 5's lane).  It is Pearl-C (`pearl_c`) with the
-FP8 product replaced by the E2M1 one: the noise enters inside one atom per element, one noisy cast forms the operand,
-Pearl's tickets are drawn on C̃, the BF16 clean-up U is checked, and every C̃ and U word is hashed into the tile's leaf
-(`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which the theory lane has stated and nobody has proved.
+The design is GPU 5's lane's.  It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
+inside one atom per element, one noisy cast forms the operand, Pearl's tickets are drawn on C̃, the BF16 clean-up U is
+checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which the
+theory lane has stated and nobody has proved.
 
 **Per row x** of either operand (k BF16 words, the model's activation and weight dtype):
 
@@ -15,6 +15,7 @@ stats     s = max|x|, ρ = pearl_c's every-8th RMS in its pinned order;  σ = ρ
           β_row = (σ·α)·f32(16/√2346.125);  a_E = ue4m3(β_row)                     (FP32 nearest even, in that order)
 lines     32 uniform E2M1 codes per line: TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = 0x24), 16 bytes, low nibble first.
           E_A (row i, seed_A), F_A and F_B (position t), E_B (row j) from seed_B
+          (-h3: row i's E_A is line 0 of its own seed, `row_seed` over the row's SHA-512 digest; the tickets keep seed_A)
 atom      D_t = NVF4.step(C = α·x_t, E ‖ 0^32 at scale a_E, F_t ‖ 0^32 at scale 2^-4)    (one k64 atom per element)
 block     nvfp4, 16 along k: s_b = max(ue4m3(amax_b|D| · f32(1/6)), 2^-9), r_b = 1/s_b (FP32 nearest even)
           mxfp4, 32 along k: s_b = 2^⌈log2(amax_b|D| · f32(1/6))⌉ as UE8M0, r_b = 1/s_b (exact)
@@ -43,15 +44,13 @@ off) is `clean`: the same α and block rule on α·x, no noise.
 **Why the chain's exactness matters.**  On the domain the chain is exact, so rounding does not tie a word to its order,
 as Pearl-C's H100 argument had it.  The design rests instead on every code and every block scale depending on the salt.
 
-**The domain and the debit** are the theory lane's (research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
-§1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β
-and a_E's E4M3 byte v in 0x08–0x7E, a normal UE4M3 with bit 7 clear and not NaN; one a_E per row).  A block is
-screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
-and its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only
-when its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  Items 3 and 4 charge the
-reference's witness alone, not every element of a screened block (server.md 11:32Z; the assessor's 17:25Z B for item 3
-per element): F1′ charges a screened block's near-certain codes at their own p_t.  A drawn tile's debit is replayed
-over its credited words (`tile_debit`):
+**The domain and the debit** are the theory lane's (TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row,
+salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β and a_E's E4M3 byte v in 0x08–0x7E, a normal UE4M3 with bit 7 clear and not
+NaN; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted and
+its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only when
+its tile's debit passes the cap (the theory lane's 10:50Z ruling).  Items 3 and 4 charge the reference's witness alone,
+not every element of a screened block (the assessor's 17:25Z B for item 3 per element): F1′ charges a screened block's
+near-certain codes at their own p_t.  A drawn tile's debit is replayed over its credited words (`tile_debit`):
 
 ~~~text
 1  F1′ split     per row and aligned 128 of k: 128·S_w, κ = min(c·M_w, 0.125) inside S_w's expectation, on every word
@@ -65,27 +64,27 @@ D-24 windows     per row and aligned 128 of k whose every 8-chunk has ≤ 2 of 4
 cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
 ~~~
 
-**F1′ and F2** (theory §6.2–6.3, the fix for the assessor's D on ``tt-out/fp4-sm120``, fp4-base-split-break.md; the
-assessor's FP4 conditions, ratings.md 15:18Z).  F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving
-under the exact noise law given this salt's E lines (`noise_law`): p_t = P(code ≠ modal code) at the block's modal scale
-byte (`change_probabilities`); per window, min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]) with R_24 one 2:4 pass
-plus a CUDA-core patch of the excess, R_skip a skip or patch per k64 atom, at the cheater's best layout inside each block,
-and κ inside the expectation, A0's scale corrections: one FFMA per word for each of the M_w blocks whose realised byte
-is not their modal byte (`split_saving`, `split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at
-one tile byte, per row, and per block-column class (`int8_saving`), with c_L the fast-matmul catalogue's minimum at its
-lower-bound add count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`; the assessor's 20:00Z ruling).
-They are the rows `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2
-charges the masked int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain
-claim `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
-and D-SK stays.  **R1** (theory §6.8): a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by
-the prover (`r1_rows`, through `pearl_c_work.declare`) and checked on drawn tiles (`row_over_debit`, through
+**F1′ and F2** (the fix for the assessor's D on ``tt-out/fp4-sm120``, under the assessor's FP4 conditions of 15:18Z).
+F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving under the exact noise law given this salt's E
+lines (`noise_law`): p_t = P(code ≠ modal code) at the block's modal scale byte (`change_probabilities`); per window,
+min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]) with R_24 one 2:4 pass plus a CUDA-core patch of the excess, R_skip
+a skip or patch per k64 atom, at the cheater's best layout inside each block, and κ inside the expectation, A0's scale
+corrections: one FFMA per word for each of the M_w blocks whose realised byte is not their modal byte (`split_saving`,
+`split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at one tile byte,
+per row, and per block-column class (`int8_saving`), with c_L the fast-matmul catalogue's minimum at its lower-bound add
+count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`; the assessor's 20:00Z ruling). They are the rows
+`base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2 charges the masked
+int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
+`scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
+and D-SK stays.  **R1**: a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by the prover
+(`r1_rows`, through `pearl_c_work.declare`) and checked on drawn tiles (`row_over_debit`, through
 `pearl_c_work.check_opened`); it is still formed, checked and hashed.
 
 A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
 codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
 gather any 16 such rows), and the literal spans are counted.  D-SS's spread bound (2^15.8, implied by D-NF) is counted, not
 enforced: items 2 and 5 charge what it would exclude.  D-SB is enforced on every formed side before hashing
-(`check_scale_bytes`, server.md 10:32Z): every block scale in 0x01–0x7E (UE8M0: short of 0xFF) and every a_E at most 0x7E,
+(`check_scale_bytes`): every block scale in 0x01–0x7E (UE8M0: short of 0xFF) and every a_E at most 0x7E,
 so no UE4M3 byte has bit 7 set, which sm_120 reads from its low 7 bits (a second encoding of the same C̃), none is 0x7F
 (NaN), and no block scale is zero, which would zero a noise block's products; every committed word is finite
 (`parse_row`).  An a_E of 0x00 is D-NF's exclusion, not a rejection: a zero row forms it.  The verifier forms every
@@ -140,12 +139,12 @@ UE4M3_ONE, UE8M0_ONE = 0x38, 127
 UE4M3_MIN = 0x01                   # 2^-9
 UE4M3_NORMAL = 0x08                # 2^-6
 UE4M3_TOP = 0x7E                   # 448; 0x7F is NaN
-DEAD_RHO_SQ = 90                   # screened block: (clean amax_b)² > 90·ρ², 9.5ρ (theory-pearl-c4-domain.md D-SS, §5)
+DEAD_RHO_SQ = 90                   # screened block: (clean amax_b)² > 90·ρ², 9.5ρ (D-SS)
 
 #: W1 in FP4 units (1 = one dense FP4 MAC on sm_120): a BF16 MAC 4, an FP32 instruction 16 (placeholders from public peak
 #: rates; the measured FADD is 16.9).
 BF16_MAC_UNITS, FP32_UNITS = 4, 16
-#: Forming per operand element (theory-pearl-c4-domain.md §2).  Credited, each step that reads the salt at its cheapest
+#: Forming per operand element.  Credited, each step that reads the salt at its cheapest
 #: bit-exact price: f_s = 98 (the noise atom 64, the dense k64's full shape; the block-scale operations about 1; the cast
 #: 32.8, FMUL and F2FP).  Uncredited, 19: the noisy amax (one FMNMX, 17) and ρ's every-8th accumulate (2), in W_ref alone.
 FORMING_CREDITED, FORMING_UNCREDITED = 98, 19
@@ -155,7 +154,7 @@ SPREAD_X5 = 79                     # D-SS: spread ≤ 2^15.8, as spread^5 ≤ 2^
 GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 products of 6 x 6
 #: F1′ and F2's prices in FP4 units: a CUDA-core FFMA 16.92 (the measured 8.46 FP8 units x 2), the dense correction of
 #: A0's block scales at least 0.125 per MAC (an FP8 GEMM over k/16), the int8 route's patch 4 slots per useful MAC per side,
-#: and its int8 leaf at W1's issue ratio, 2 slots per MAC (the assessor's FP4 conditions, ratings.md 15:18Z; the
+#: and its int8 leaf at W1's issue ratio, 2 slots per MAC (the assessor's FP4 conditions, 15:18Z; the
 #: wall-time window below it, 1.81, is `concurrent-budgets/sm120`'s, not the rule's).
 FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 2
 
@@ -185,6 +184,9 @@ NVFP4 = Fmt("nvfp4", BLACKWELL_SM120_NVF4, 16, UE4M3_ONE)
 MXFP4 = Fmt("mxfp4", BLACKWELL_SM120_MXF4, 32, UE8M0_ONE)
 FORMATS = {f.name: f for f in (NVFP4, MXFP4)}
 NAMES = {"nvfp4": "pearl-c-nvfp4-v0", "mxfp4": "pearl-c-mxfp4-v0"}
+#: the hashing formats Pearl-C4 implements (`serving.HASH_FORMATS`): h0, and h3 (`pearl_c`'s SHA-512 trees, leaf and tickets,
+#: E_A per row from a seed keyed on the row's SHA-512 digest)
+HASHINGS = ("h0", "h3")
 
 
 def _finite(word: int) -> int:
@@ -283,12 +285,25 @@ def line(seed: bytes, role: int, index: int) -> list[int]:
     return [b >> s & 0xF for b in raw for s in (0, 4)]
 
 
+def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
+    """A unit's seed_A: keyed BLAKE3 under blake3("pearl-c4/v0/seed-A") of salt ‖ root_A ‖ root_B ‖ index u64 LE."""
+    return keyed(blake3(LABELS["seed-A"]), salt + root_a + root_b + index.to_bytes(8, "little"))
+
+
+def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int) -> bytes:
+    """-h3's seed of row `row` of unit `unit`, `pearl_c.row_seed`'s layout under Pearl-C4's seed-A label: the one-row
+    unit's seed_A over the row's 64-byte SHA-512 digest `leaf` (`pearl_c.row_digest`), at index unit · 2^32 + row, the unit
+    and the row each below 2^32."""
+    if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
+        raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
+    return unit_seed_a(salt, leaf, root_b, unit << 32 | row)
+
+
 @lru_cache(maxsize=16)
 def seed_b(salt: bytes, root_b: bytes) -> bytes:
     """B̃'s noise seed, keyed by this job's salt and B's root.  So B̃ exists only once the salt does, and no program
     can precompute with it: the salt-free base split is two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater
-    paying both corrections), which is what ties it on the stride rows (TT_OUT-FP4's rule D-SK,
-    theory-pearl-c4-domain.md §2)."""
+    paying both corrections), which is what ties it on the stride rows (TT_OUT-FP4's rule D-SK)."""
     return keyed(blake3(LABELS["seed-B"]), salt + root_b)
 
 
@@ -359,11 +374,10 @@ def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
     """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (the
     assessor's run of all 256 bytes, ``r20260930-093120-b2f2``); UE8M0 bytes as written.  Every replayed step reads
     scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one.  It is the decode the Lean
-    `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows (research store
-    ``internal/pouw-fp8/pearl-c4-scale-decode/``, bc-5a715b19's review).  Four of them are NaN accumulators whose scale
-    bytes set bit 7: valid scales under this decode, which the pinned model (`verity_catalog.silicon.models._scale_dyadic`) now
-    shares after GPU 4 replayed all 17 bit-7 vectors on the card (r20260930-161935-83a8), and outside the model through
-    the accumulator (the card writes 0x7FFFFFFF)."""
+    `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows (bc-5a715b19's review).  Four of them are NaN
+    accumulators whose scale bytes set bit 7: valid scales under this decode, which the pinned model
+    (`verity_catalog.silicon.models._scale_dyadic`) now shares after GPU 4 replayed all 17 bit-7 vectors on the card
+    (r20260930-161935-83a8), and outside the model through the accumulator (the card writes 0x7FFFFFFF)."""
     return [s & 0x7F for s in scales] if fmt is NVFP4 else list(scales)
 
 
@@ -444,7 +458,7 @@ def peel(c_word: int, pa: Sequence[int], pb: Sequence[int]) -> int:
     return acc
 
 
-# ---- the domain rules and the debit (theory-pearl-c4-domain.md §1, §2) --------------------------------------------
+# ---- the domain rules and the debit -------------------------------------------------------------------------------
 
 def _exact_rho_sq(x: Sequence[int]) -> Fraction:
     positions = range(0, len(x), C.S5_STRIDE)
@@ -656,20 +670,19 @@ F1_EPS = 1e-12
 #: R1's tolerance band (the assessor's condition 3, 16:10Z): a row within this relative distance of its bound may be
 #: declared either way, and a tile's debit is compared with its cap at the same margin.  Soundness cost ≤ 10^-9·ρ.
 R1_TOLERANCE = 1e-9
-#: B̃'s overfit factor, measured, not derived (theory-pearl-c4-domain.md §6.12; research store
-#: cheap-binding/pearlc4-fix/btilde_mirror.py, btilde_honest.py): a layout chosen after the salt for B̃'s residual is
-#: shared by all n weight rows and re-lays no A′; its hill-climb needs 6.8× F1′'s expectation on the worst family.  B̃'s
+#: B̃'s overfit factor, measured, not derived: a layout chosen after the salt for B̃'s residual is shared by all n
+#: weight rows and re-lays no A′; its hill-climb needs 6.8× F1′'s expectation on the worst family.  B̃'s
 #: F1′ is charged at 10× that expectation, per window, capped at the window's MACs; A′'s at 1× (its layout must re-gather
 #: B̃, which doesn't pay at n ≤ 2^18).  A stronger search pays past 10× at n ≤ 1,024, which `B_OVF` covers.
 F1_B_OVERFIT = 10
-#: B-OVF, measured, not derived (theory-pearl-c4-domain.md §6.12b; the assessor's B, ratings.md 18:45Z): a unit's
-#: creditOf is discounted by β(n_b)·mnk, n_b the largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout
-#: annealed and block-optimised after the salt, over the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ,
-#: with a 1.5× margin on the measured gain and made non-increasing in n.  It is taken on each bucket's own R1 admission
-#: boundary at k = 1,024 (``k_min``), where the cap is largest, and just inside it (the worst family can sit there): the larger of
-#: that need, the assessor's boundary check and the earlier grid's cells under the same cap, never below the grid's
-#: table (condition 7; research store art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca,
-#: beta_final.py; the grid's beta_table.py on strong.jsonl, strong_ext.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
+#: B-OVF, measured, not derived (the assessor's B, 18:45Z): a unit's creditOf is discounted by β(n_b)·mnk, n_b the
+#: largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout annealed and block-optimised after the salt, over
+#: the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ, with a 1.5× margin on the measured gain and made
+#: non-increasing in n.  It is taken on each bucket's own R1 admission boundary at k = 1,024 (``k_min``), where the cap
+#: is largest, and just inside it (the worst family can sit there): the larger of that need, the assessor's boundary
+#: check and the earlier grid's cells under the same cap, never below the grid's table (condition 7;
+#: art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca, beta_final.py).  The fork
+#: (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
 B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
          (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
 #: The claimed domain's least n: n = 64 (an MQA unit of one 64-wide KV head) would need 5.7% and is not claimed.
@@ -682,15 +695,14 @@ def b_ovf(n: int) -> Fraction:
     return next((b for nb, b in reversed(B_OVF) if nb <= n), B_OVF[0][1])
 
 
-#: Registered weights' keyed transforms (`check_registration`; Daniel, 1:36 PM and 5:52 PM PDT on 30 Sep, research store
-#: internal/pouw/rtx-pro/server.md and internal/pouw/keyed-transforms/): the keyed 8-block rotation (rung 3) is the rule,
-#: and the keyed V/O rotation (each KV head's v_proj rows and o_proj columns) plus the keyed head interleave (o_proj's
-#: heads) are adopted inside it, after it.
+#: Registered weights' keyed transforms (`check_registration`; Daniel, 1:36 PM and 5:52 PM PDT on 30 Sep): the keyed
+#: 8-block rotation (rung 3) is the rule, and the keyed V/O rotation (each KV head's v_proj rows and o_proj columns)
+#: plus the keyed head interleave (o_proj's heads) are adopted inside it, after it.
 ROTATION_8 = "keyed-8-block-rotation"
 VO_ROTATION = "keyed-vo-rotation"
 HEAD_INTERLEAVE = "keyed-head-interleave"
-#: Every RMSNorm scale γ folded into the linears it feeds, with no rotation (the `fold` rung, research store
-#: docs/pouw/keyed-transforms.md §14).  The rotation folds γ itself (rung 3), so a rotated stack never declares it.
+#: Every RMSNorm scale γ folded into the linears it feeds, with no rotation (the `fold` rung).  The rotation folds γ
+#: itself (rung 3), so a rotated stack never declares it.
 GAMMA_FOLD = "gamma-fold"
 #: The transform stacks a registration may apply, in their order
 REGISTRATION_STACKS = ((ROTATION_8,), (ROTATION_8, VO_ROTATION, HEAD_INTERLEAVE))
@@ -702,7 +714,7 @@ def check_registration(transforms: Sequence[str], curated: bool = False, needs_g
     """Refuse a registration of a checkpoint's weights outside Pearl-C4's rules.  `transforms` are the transforms it
     applies, in order; `curated` says the checkpoint is on the curated list, the fallback for an unrotated one;
     `needs_gamma_fold` says it registers only with γ folded, as Llama-3.1-70B does: the cast moves its layer 0's update
-    by 158% unfolded, and by under 4% with γ folded (keyed-transforms.md §14).
+    by 158% unfolded, and by under 4% with γ folded.
 
     The keyed 8-block rotation is the registered-weights rule, alone or followed by the V/O rotation and the head
     interleave together (the stack measured and adopted).  V/O or the interleave on an unrotated checkpoint is refused,
@@ -733,11 +745,11 @@ def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
 
 
 def certified_modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], realised: int) -> int | None:
-    """A block's modal scale byte by a certified local search around its realised byte r (bc-f5bf55c8's C,
-    pearl-c4-fix.md §7.2; the assessor's B, ratings.md 16:10Z): from the product formula at the edges of bytes
-    r − w … r + w, the byte probabilities there and the mass outside them.  The largest certifies when it beats the
-    outside mass and the runner-up by more than `F1_EPS` (no other byte can then win, and no float near-tie decides).
-    w = 1, then 4, then 16; None if still uncertified (the caller charges the block on the safe side)."""
+    """A block's modal scale byte by a certified local search around its realised byte r (bc-f5bf55c8's C; the
+    assessor's B, 16:10Z): from the product formula at the edges of bytes r − w … r + w, the byte probabilities there
+    and the mass outside them.  The largest certifies when it beats the outside mass and the runner-up by more than
+    `F1_EPS` (no other byte can then win, and no float near-tie decides).  w = 1, then 4, then 16; None if still
+    uncertified (the caller charges the block on the safe side)."""
     top = UE4M3_TOP if fmt is NVFP4 else 254
     for w in (1, 4, 16):
         lo_b, hi_b = max(realised - w, UE4M3_MIN if fmt is NVFP4 else 0), min(realised + w, top)
@@ -914,10 +926,10 @@ def _labels(rows: Sequence[Sequence[int]]) -> list[int]:
 
 
 def int8_saving(fmt: Fmt, a_scales: Sequence[Sequence[int]], b_scales: Sequence[Sequence[int]], m: int, n: int) -> float:
-    """F2 per chain MAC (theory-pearl-c4-domain.md §6.3): the masked int8 route's saving max(0, 1 − c_L − 4·(2 − f_A −
-    f_B)) on the tile's realised scale bytes, at the largest of three readings of flatness: the tile's modal byte; each
-    row's own modal byte (row factors); and per block-column class (the class of a column is its modal byte offset from
-    each row's modal byte, on A′ and B̃ together), each class a sub-GEMM over its own k with row factors free."""
+    """F2 per chain MAC: the masked int8 route's saving max(0, 1 − c_L − 4·(2 − f_A − f_B)) on the tile's realised scale
+    bytes, at the largest of three readings of flatness: the tile's modal byte; each row's own modal byte (row factors);
+    and per block-column class (the class of a column is its modal byte offset from each row's modal byte, on A′ and B̃
+    together), each class a sub-GEMM over its own k with row factors free."""
     a = [hw_scales(fmt, s) for s in a_scales]
     b = [hw_scales(fmt, s) for s in b_scales]
     nb = len(a[0])
@@ -1095,23 +1107,27 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
 
 class PearlC4:
     """Pearl-C on sm_120's FP4: ``k_min`` = 1024, 64 x 64 tiles and ``n_min`` = 128 (`B_OVF_MIN_N`); smaller bounds make a
-    test instance."""
+    test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, SHA-512 trees, leaf and
+    tickets, and each row of A drawing its E_A line from its own seed (`row_seeds`); h0 is the default."""
 
     tickets = C.PearlC.tickets
     cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
-                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N):
+                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h0"):
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
-        self.fmt = FORMATS[fmt]
+        if hashing not in HASHINGS:
+            raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
+        self.fmt, self.hashing = FORMATS[fmt], hashing
+        self.commitment_hash = C.TREE_HASH[hashing]
         #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending the
         #: assessor's rating of its bounds)
         self.f1 = row_f1 if f1 is None else f1
-        self.name = NAMES[fmt]
+        self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
         #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
-        #: D on honest coverage and Pearl-C4 claims NVFP4 alone (ratings.md 15:12Z; Daniel, 15:34Z).
+        #: D on honest coverage and Pearl-C4 claims NVFP4 alone (the assessor, 15:12Z; Daniel, 15:34Z).
         self.contrast = self.fmt is MXFP4
         self.r1_tolerance = R1_TOLERANCE
         self.k_min, self.tile, self.n_min = k_min, tile, n_min
@@ -1122,8 +1138,8 @@ class PearlC4:
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
-                    "beacon-unpredictability"),
+            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", *(("cr/sha-512",) if hashing != "h0" else ()),
+                    "cr/sha-256", "device-reproducibility", "live-verifier"),
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
                 "this job's salt, seed-B = keyed(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
@@ -1145,7 +1161,7 @@ class PearlC4:
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
                         ("delta_inv", 4), ("dead_rho_sq", DEAD_RHO_SQ), ("n_min", n_min),
-                        ("b_ovf", tuple((nb, str(b)) for nb, b in B_OVF))),
+                        ("b_ovf", tuple((nb, str(b)) for nb, b in B_OVF)), *((("hashing", hashing),) if hashing != "h0" else ())),
         )
         if self.contrast:
             self.certificate = Certificate(
@@ -1193,9 +1209,17 @@ class PearlC4:
         """The unit's seeds: A's keyed by the job's salt, both roots and the unit, B̃'s by `seed_b`.  The verifier forms
         both sides itself from these seeds on every drawn tile, so a word derived from any other B̃ fails its checked
         values."""
-        unit = ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little")
-        seed_a = keyed(blake3(LABELS["seed-A"]), unit)
-        return C.Noise(seed_a, seed_b(ctx.salt, ctx.root_b))
+        return C.Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index), seed_b(ctx.salt, ctx.root_b))
+
+    def row_seeds(self, ctx: Context, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[bytes]:
+        """-h3's seeds of A's rows `idx` (values `a_rows`): `row_seed` over each row's SHA-512 digest (`pearl_c.row_digest`,
+        the inner digest of its hm96 leaf in A's tree)."""
+        u = ctx.matmul
+        return [row_seed(ctx.salt, C.row_digest(r), ctx.root_b, u.index, i) for i, r in zip(idx, a_rows, strict=True)]
+
+    def _lines_a(self, ctx: Context, noise: C.Noise, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[list[int]] | None:
+        """E_A's lines of A's rows `idx` under -h3 (line 0 of each row's seed); None under h0, which draws line i of seed_A."""
+        return [line(x, ROLE_EA, 0) for x in self.row_seeds(ctx, a_rows, idx)] if self.hashing == "h3" else None
 
     def parse_row(self, row: bytes, k: int) -> list[int]:
         return parse_row(row, k)
@@ -1223,7 +1247,7 @@ class PearlC4:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
 
     def row_debit_ratio(self, record, ops: C.Ops, side: str, pos: int) -> Fraction:
-        """R1's reading (theory-pearl-c4-domain.md §6.8; ratings.md 15:18Z condition 4): the F1′ per word of the row at
+        """R1's reading (the assessor's FP4 condition 4, 15:18Z): the F1′ per word of the row at
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `pearl_c_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
         still formed, checked and hashed; it earns nothing."""
@@ -1250,12 +1274,13 @@ class PearlC4:
         row, its index and the side's basis, so a prover may map it over the rows in any order and in any process."""
         noise, k = self.noise(ctx), ctx.matmul.shape.k
         role_e, role_f, seed_e = (ROLE_EA, ROLE_FA, noise.seed_a) if side == "A" else (ROLE_EB, ROLE_FB, noise.seed_b)
-        formed, e = self._side([row], [index], role_e, role_f, seed_e, noise.seed_b, k)
+        lines = self._lines_a(ctx, noise, [row], [index]) if side == "A" else None
+        formed, e = self._side([row], [index], role_e, role_f, seed_e, noise.seed_b, k, lines)
         return row_terms(self.fmt, {}, side, formed, e, 0, self.f1)[1] > self._r1_cap(k_kept, ctx.matmul.shape.n)
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
-              k: int) -> tuple[Formed, list[list[int]]]:
-        e = [line(seed_e, role_e, i) for i in idx]
+              k: int, e: list[list[int]] | None = None) -> tuple[Formed, list[list[int]]]:
+        e = [line(seed_e, role_e, i) for i in idx] if e is None else e
         side = form(self.fmt, [parse_row(r, k) for r in rows], e, basis(seed_b, role_f, k))
         check_scale_bytes(self.fmt, side)
         return side, e
@@ -1268,7 +1293,8 @@ class PearlC4:
             return self._encoded[1]
         k = ctx.matmul.shape.k
         try:
-            a, e_a = self._side(a_rows, tile.rows, ROLE_EA, ROLE_FA, noise.seed_a, noise.seed_b, k)
+            a, e_a = self._side(a_rows, tile.rows, ROLE_EA, ROLE_FA, noise.seed_a, noise.seed_b, k,
+                                self._lines_a(ctx, noise, a_rows, tile.rows))
             b, e_b = self._side(b_rows, tile.cols, ROLE_EB, ROLE_FB, noise.seed_b, noise.seed_b, k)
             ops = C.Ops(a, b, e_a, e_b, peel_factors_a(self.fmt, a, e_a, noise.seed_b, k),
                         peel_factors_b(self.fmt, b, e_b, noise.seed_b, k))
@@ -1289,7 +1315,7 @@ class PearlC4:
         return C.Checked(c, u)
 
     def digest(self, ctx: Context, noise: C.Noise, checked: C.Checked) -> bytes:
-        return C.leaf(checked)
+        return C.leaf(checked, self.hashing)
 
     def useful(self, ctx: Context, noise: C.Noise, ops: C.Ops, checked: C.Checked) -> list[list[float]]:
         """U/(α_A,i · α_B,j) in double, for measuring quality; the served y is the integration's pinned unscale."""
@@ -1297,5 +1323,6 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1", "form",
-           "hw_scales", "line", "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]
+__all__ = ["FORMATS", "HASHINGS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1",
+           "form", "hw_scales", "line", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
+           "unit_seed_a", "word_replay"]

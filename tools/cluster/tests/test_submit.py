@@ -42,6 +42,21 @@ def test_a_cpu_job_goes_home_in_a_capped_pinned_scope_with_cuda_hidden():
     assert guest["wrap"][-6:] == ["taskset", "-c", "96-127", "nice", "-n", "19"], "a guest's share narrows to the unpooled CPUs"
 
 
+def test_a_gpu_host_on_node_1_runs_at_a_gpu_jobs_weight_and_takes_no_gpus_from_the_queue():
+    """A job that takes gpu-lease itself around each GPU step (proofs' rec-step provers) is a GPU job's host: at CPUWeight=idle its
+    verifier and replays between leases wait on CPU time the other jobs leave, and its timings measure that wait."""
+    c, reg = model.load(NEBIUS), kinds.load(KINDS)
+    out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, cpus=4,
+                        node="vy-nebius-1", gpu_host=True)
+    assert "CPUWeight=idle" not in out["wrap"] and "AllowedCPUs=96-127" in out["wrap"] and out["workload_wrap"] == []
+    assert out["gpu_host"] is True
+    plain = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, cpus=4,
+                          node="vy-nebius-1")
+    assert "CPUWeight=idle" in plain["wrap"] and plain["gpu_host"] is False
+    with pytest.raises(submit.Refused, match="takes its GPUs with gpu-lease itself"):
+        submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, gpus=1, gpu_host=True)
+
+
 def test_the_cpuset_check_starts_the_job_only_in_a_scope_whose_cpuset_is_the_pin():
     def check(pin):
         return subprocess.run(["sh", "-c", submit.CPUSET_CHECK, "cpuset-check", pin, "printf", "%s|", "a b", "c"],
@@ -105,6 +120,18 @@ def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_
         submit.resolve(c, _job(gpus=1, quiet=True, node="vy-nebius-1"), "r1", T)
 
 
+def test_node_1_refuses_a_lease_that_isnt_preemptible_beyond_the_provers_own_quota():
+    """n1_lease.py borrows past `provers`' nominal quota only for preemptible waiters, so a larger non-preemptible lease would wait
+    in gpu-lease forever (circuits' 8-GPU load-time run, 7 Oct)."""
+    c = model.load(NEBIUS)
+    own = c.workstream(submit.N1_POOL_QUEUE, "vy-nebius-1").gpus
+    with pytest.raises(submit.Refused, match=f"isn't --preemptible at most provers' own quota, {own} GPUs"):
+        submit.resolve(c, _job(gpus=own + 1, memory_gib=64, preempt="never", node="vy-nebius-1"), "r1", T)
+    assert submit.resolve(c, _job(gpus=own, memory_gib=64, preempt="never", node="vy-nebius-1"), "r1", T)["node"] == "vy-nebius-1"
+    assert submit.resolve(c, _job(gpus=8, memory_gib=64, node="vy-nebius-1"), "r1", T)["node"] == "vy-nebius-1", \
+        "a preemptible lease may borrow the rest"
+
+
 def test_an_unpinned_gpu_job_skips_node_1s_pool_which_the_submit_path_cant_see():
     c = model.load(NEBIUS)
     out = submit.resolve(c, _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
@@ -126,6 +153,10 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     assert cli.main(["submit", NEBIUS, "--run-id", "r2", "--now", str(T), "--project", "verity", "--submitter", "w",
                      "--kind", "lean-audit"]) == 0
     assert json.loads(capsys.readouterr().out)["max_s"] == 1200
+    assert cli.main(["submit", NEBIUS, "--run-id", "r3", "--now", str(T), "--project", "verity", "--submitter", "w",
+                     "--kind", "lean-audit", "--node", "vy-nebius-1", "--gpu-host"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["gpu_host"] is True and "CPUWeight=idle" not in out["wrap"]
 
 
 KINDS = Path(__file__).parents[1] / "kinds"
