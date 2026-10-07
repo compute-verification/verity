@@ -1280,6 +1280,12 @@
     },
     {
       "paths": {
+        "verity/Security/Proofs/Warden/Difftest.lean": "verity/protocols/accounting/communication/warden/lean/Warden/Difftest.lean",
+        "verity/Security/Proofs/Warden/DifftestMain.lean": "verity/protocols/accounting/communication/warden/lean/Warden/DifftestMain.lean"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/pous/band_gpu/live.py": "benchmarks/pous/band_gpu/memory_challenger.py",
         "benchmarks/pous/p2_v1/live.py": "benchmarks/pous/p2_v1/memory_challenger.py",
         "verity/Security/Definitions/Warden.lean": "verity/Security/Definitions/NetworkCertifier.lean",
