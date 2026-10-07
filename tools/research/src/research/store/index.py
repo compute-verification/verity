@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -145,16 +146,36 @@ def _g(d: Any, *keys: str) -> Any:
 
 
 class Index:
+    """Usable from several threads: `db` is the calling thread's own connection (a sqlite3 connection must not be shared, and one
+    thread's BEGIN would take in another's writes), opened on first use and closed by `close()` with the rest."""
+
     def __init__(self, path: Path | str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(self.path, timeout=30, isolation_level=None)   # autocommit; explicit BEGIN where several writes must land together
-        _check_version(self.db, self.path)                                     # a catalog from the future is refused before anything is created
-        self.db.executescript(SCHEMA)
-        self.migration = _migrate(self.db, self.path)                          # what this open did to the schema version (see `info()`)
+        self._local = threading.local()
+        self._dbs: list[sqlite3.Connection] = []
+        self._dbs_lock = threading.Lock()
+        db = self.db
+        _check_version(db, self.path)                                          # a catalog from the future is refused before anything is created
+        db.executescript(SCHEMA)
+        self.migration = _migrate(db, self.path)                               # what this open did to the schema version (see `info()`)
+
+    @property
+    def db(self) -> sqlite3.Connection:
+        db = getattr(self._local, "db", None)
+        if db is None:
+            # autocommit; explicit BEGIN where several writes must land together.  check_same_thread off only so `close()` may close it.
+            db = self._local.db = sqlite3.connect(self.path, timeout=30, isolation_level=None, check_same_thread=False)
+            with self._dbs_lock:
+                self._dbs.append(db)
+        return db
 
     def close(self) -> None:
-        self.db.close()
+        with self._dbs_lock:
+            dbs, self._dbs = self._dbs, []
+        self._local = threading.local()
+        for db in dbs:
+            db.close()
 
     @property
     def version(self) -> int:

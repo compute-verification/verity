@@ -217,5 +217,5 @@ def tile(jb: Job, a_rows: np.ndarray, b_rows: np.ndarray, rows: np.ndarray, cols
         u = group_sum_total_batch(HOPPER_BF16_M16N8K16, u, pa[ti, s:s + 16], pb[tj, s:s + 16])[0]
     c, u = c.reshape(na, nb), u.reshape(na, nb)
     checked = C.Checked(c.tolist(), u.tolist())
-    tickets = F.PearlC4.tickets(None, C.Noise(jb.seed_a, jb.seed_b), checked)
+    tickets = C.PearlC(forming="v1").tickets(C.Noise(jb.seed_a, jb.seed_b), checked)
     return Tile(a, b, pa, pb, c, u, C.leaf(checked), tickets)
