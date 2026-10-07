@@ -81,9 +81,6 @@ EDITS = [
     ("tools/verity/check/tests/test_move_check.py", 'ROOT / "tools" / "check" / "move_check.py")',
      'ROOT / "tools" / "verity" / "check" / "move_check.py")'),
     ("verity/experimental/protocols/pouw/tests/test_lean_package.py", "ROOT = HERE.parents[4]\n", "ROOT = HERE.parents[3]\n"),
-    # the verifier's Lean package is no longer under its scripts' directory, and the agreement reads both
-    ("tools/verity/check/check.py", 'return [f for f in files if f.startswith(pre) and f != lean + "lean-audit.json"',
-     'return [f for f in files if f.startswith((pre, lean)) and f != lean + "lean-audit.json"'),
     # the crate's tests find the repository from the crate's directory, not from their source file (they skip when a vector is missing)
     *((f"verity/ml/flock/live/src/{f}.rs", '.join("../../../../../backends")', '.join("../../../..")')
       for f in ("circuit", "lookup", "sha512_native")),
@@ -199,7 +196,7 @@ def main(root: Path) -> int:
         return texts[path]
 
     def resolve(path: str) -> str:
-        """A glob names the one file it matches outside a Lake build directory (Lean files, wherever lean.py put them)."""
+        """A glob names the one file it matches outside a Lake build directory (Lean files, wherever the move put them)."""
         if "*" not in path:
             return path
         found = sorted(q.relative_to(root).as_posix() for q in root.glob(path) if ".lake" not in q.parts)
