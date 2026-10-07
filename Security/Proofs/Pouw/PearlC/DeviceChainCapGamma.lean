@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceCapGamma
 import Models.Pouw.Assumptions.PearlC.DeviceChainCap
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # The cap on the chain's share: what it admits, that it asserts less, and γ (the TT_OUT restatements lane's file)
@@ -253,3 +254,11 @@ theorem pearlCSampledUnpromotedChainCap1000_16384 {Q R S : Type} [Fintype Q] [De
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.ChainCapFlaggedLe : Pouw.Guarantees.PearlC.ChainCapFlaggedLe := @Pouw.PearlC.chainCap_flagged_le
+
+theorem Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192 : Pouw.Guarantees.PearlC.GammaUnpromotedChainCap1000_8192 := @Pouw.PearlC.pearlCGammaUnpromotedChainCap1000_8192
+
+theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevChainCapOfCap : Pouw.Guarantees.PearlC.TTOutPearlCDevChainCapOfCap := @Pouw.PearlC.ttOutPearlCDevChainCap_of_cap
+
+theorem Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap : Pouw.Guarantees.PearlC.TTOutTilePearlCDevChainCapOfCap := @Pouw.PearlC.ttOutTilePearlCDevChainCap_of_cap

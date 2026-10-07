@@ -1,4 +1,5 @@
 import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # The fragment argument: the counting theorem (staging, nothing pinned)
@@ -144,3 +145,5 @@ theorem fragSkip_saving_le (p : Pipeline) (G : ℕ) {m n k : ℕ} (A : Matrix (F
   nlinarith
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.FragSkipSavingLe : Pouw.Guarantees.PearlC.FragSkipSavingLe := @Pouw.PearlC.fragSkip_saving_le

@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Audit.Stratified
 import Mathlib.Analysis.MeanInequalities
+import Models.Flock.Guarantees.Audit
 
 /-!
 # The work law
@@ -598,3 +599,7 @@ theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK
 end Audits
 
 end FlockSoundness.Audit
+
+theorem FlockSoundness.Audit.SecurityProofs.Law.RecordSizing : FlockSoundness.Audit.Guarantees.Law.RecordSizing := @FlockSoundness.Audit.Law.record_sizing
+
+theorem FlockSoundness.Audit.SecurityProofs.Law.RecordSizingOneFewer : FlockSoundness.Audit.Guarantees.Law.RecordSizingOneFewer := @FlockSoundness.Audit.Law.record_sizing_one_fewer
