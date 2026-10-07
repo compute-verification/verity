@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # The first recursive session's inner side (rec_inner.py, verity_flock.rec_live): RoPE d64 staged as M0's statement, proved
 # on the CPU by the unmodified prover (FC_COINS=os, non-zk) against the rec proxy, whose coin server sees only caps, message
-# commitments and the schedule; then the recorded session replayed by upstream's verifier (flock-circuit replay) and by
-# Lean's flock-verify (--coins os), V*'s hashing over it (verity_flock.rec_vstar), and two forgeries (a changed challenge, a
-# changed query coin) that every verifier must reject. Run from the verity tree (research run --cwd source). Outputs under
-# out/: host.txt, stage.json, time-prove.txt, prove.txt/.err, proxy.log, inner/ (session/, public.json, private.json, stage/:
+# commitments and the schedule (the statement's public shape's); then the recorded session replayed by upstream's verifier
+# (flock-circuit replay) and by Lean's flock-verify (--coins os), V*'s hashing over it (verity_flock.rec_vstar), and two
+# forgeries (a changed challenge, a changed query coin) that every verifier must reject. Run from the verity tree (research run
+# --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, time-prove.txt, prove.txt/.err,
+# proxy.log, inner/ (session/, public.json, private.json, stage/:
 # the statement's circuit.txt and public file, claims.json: each rep's extra claims and circuit fold from Lean's
 # InnerClaims.lean, which V*'s algebra reads), replay.txt, vstar.json, lean.log, forged-*, summary.json.
 # env: N=64 (instances: RoPE heads, one VU each; 64 at G=2 is m=27)  CPUS=32  FLOCK_WORK (as 76-read-gadget.sh)
@@ -37,7 +38,10 @@ python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > 
 cat $O/stage.json
 TB=(); [ -d $D/tables ] && TB=(--tables $D/tables)
 
-python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner > $O/proxy.log 2>&1 &
+# the schedule the proxy holds the session to, from the statement's public shape before the session (rec_live --schedule-for)
+$B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
+python3 -m verity_flock.rec_live --schedule-for $O/statement.txt > $O/schedule.json || exit 1
+python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner --schedule $O/schedule.json > $O/proxy.log 2>&1 &
 PP=$!
 ADDR=
 for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $O/proxy.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done

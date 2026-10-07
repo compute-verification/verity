@@ -762,7 +762,7 @@ pub fn prove_circuit(
     salts: Option<&std::sync::Mutex<crate::zk_hooks::LeafSalts>>,
     reuse: Reuse,
     native_sha: bool,
-) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3], [f64; 3]) {
+) -> Result<(R1csProofLigerito, Commitment, [f64; 8], [f64; 3], [f64; 3]), String> {
     let t_setup = Instant::now();
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
@@ -989,14 +989,17 @@ pub fn prove_circuit(
         if rc == 0 {
             unsafe { flock_cuda_free(out) };
         }
-        panic!("{why}");
+        return Err(why);
     }
-    assert!(rc != 240, "PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128");
-    assert_eq!(rc, 0, "CUDA circuit prover returned error {rc} at m={m}");
+    match rc {
+        0 => {}
+        240 => return Err("PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128".into()),
+        _ => return Err(format!("CUDA circuit prover returned error {rc} at m={m}")),
+    }
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
     let (proof, commitment) = decode_with(&bytes, pcs, level0.is_some(), salts.is_some());
-    (proof, commitment, phase, wphase, [h_setup, h_stage, t_decode.elapsed().as_secs_f64()])
+    Ok((proof, commitment, phase, wphase, [h_setup, h_stage, t_decode.elapsed().as_secs_f64()]))
 }
 
 #[cfg(test)]

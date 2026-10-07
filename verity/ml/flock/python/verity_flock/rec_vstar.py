@@ -8,7 +8,7 @@ top. Its hashing part, which this module states over plain Python:
 * **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the coin server
   received each node's salted commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
   tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
-  commitments is refused (``GATE-REFUSED: tree top``).
+  commitments is refused (``FIREWALL-REFUSED: tree top``).
 * **Openings** (PROTOCOL.md §13.3, §13.5). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
   ``j``'s position is ``pos_j = (s_j << (d - c_j)) | (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins,
   its leaf ``SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE: the statement's
@@ -239,7 +239,7 @@ def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
     salts = [bytes.fromhex(x) for x in opening["salts"]]
     if (not nodes or len(nodes) != len(bcs) or len(salts) != len(nodes) or any(len(n) != HASH for n in nodes)
             or [b.hex() for b in RL.commit_top(b"".join(nodes), salts)] != bcs):
-        raise ValueError(f"GATE-REFUSED: tree top: {what} does not open its commitment")
+        raise ValueError(f"FIREWALL-REFUSED: tree top: {what} does not open its commitment")
     return Top(tuple(nodes), tuple(salts), tuple(bytes.fromhex(b) for b in bcs))
 
 
@@ -252,7 +252,7 @@ def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> li
     for r in _stream_rounds(public, stream):
         got = prv.get((stream, r["k"]), {}).get("tops", [])
         if len(got) != len(r["tops"]):
-            raise ValueError(f"GATE-REFUSED: tree top: {stream} round {r['k']} commits {len(r['tops'])} tops, the prover "
+            raise ValueError(f"FIREWALL-REFUSED: tree top: {stream} round {r['k']} commits {len(r['tops'])} tops, the prover "
                              f"opens {len(got)}")
         out += [opened_top(o, bcs, f"{stream} round {r['k']}'s top {i}") for i, (o, bcs) in enumerate(zip(got, r["tops"]))]
     return out
@@ -269,7 +269,7 @@ def queries(public: dict, private: dict, proofs: dict[int, bytes], table: str = 
     (`reps`) has its stream and its proof, and nothing else does."""
     want = reps(public)
     if not want or sorted(proofs) != want or any(f"{table}/rep{r}" not in public["streams"] for r in want):
-        raise ValueError(f"GATE-REFUSED: proofs: the session declares {table}'s reps {want}; it has streams "
+        raise ValueError(f"FIREWALL-REFUSED: proofs: the session declares {table}'s reps {want}; it has streams "
                          f"{sorted(public['streams'])} and proofs of reps {sorted(proofs)}")
     out = []
     for rep, b in sorted(proofs.items()):
@@ -335,7 +335,7 @@ def main(argv=None) -> int:
     try:
         res = check(*load(Path(a.inner)))
     except ValueError as e:
-        if not str(e).startswith("GATE-REFUSED"):
+        if not str(e).startswith("FIREWALL-REFUSED"):
             raise
         res = {"accepted": False, "refused": str(e)}
     json.dump(res, sys.stdout, sort_keys=True)

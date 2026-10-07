@@ -5,6 +5,9 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py stage --n N --sets DIR --out DIR      circuit.txt, inst-N.bin, pub-N.bin; prints the statement's shape
     python rec_inner.py forge --what challenge|query --inner DIR
                                                              flips one coin of rep 0 in DIR's session.json and public.json
+    python rec_inner.py forge --what top|unsalted --inner DIR
+                                                             top: flips one byte of rep 0's level-1 top in private.json;
+                                                             unsalted: public.json's tops as their clear nodes (no salts)
 """
 from __future__ import annotations
 
@@ -40,8 +43,23 @@ def stage(n: int, sets: Path, out: Path) -> dict:
 
 def forge(what: str, inner: Path, level: int = 0) -> dict:
     """Flip the low bit of one coin of rep 0, in the session record and in the coin server's public record alike: the first
-    coin after the binding round (``challenge``) or the first query coin of Ligerito level ``level`` (``query``)."""
-    pub, _, proofs = V.load(inner)
+    coin after the binding round (``challenge``) or the first query coin of Ligerito level ``level`` (``query``). ``top`` and
+    ``unsalted`` forge the tree tops instead (the module docstring)."""
+    pub, priv, proofs = V.load(inner)
+    if what == "top":
+        p = next(p for p in priv["rounds"] if p["stream"] == STREAM and p["k"] > 0 and p.get("tops"))
+        nodes = p["tops"][0]["nodes"]
+        nodes[0] = format(int(nodes[0][:2], 16) ^ 1, "02x") + nodes[0][2:]
+        (inner / "private.json").write_text(json.dumps(priv))
+        return {"forged": what, "stream": STREAM, "k": p["k"], "top": 0}
+    if what == "unsalted":
+        clear = {(p["stream"], p["k"]): [o["nodes"] for o in p.get("tops", [])] for p in priv["rounds"]}
+        for r in pub["rounds"]:
+            r["tops"] = clear.get((r["stream"], r["k"]), [])
+        pub["link"]["roots"] = {t: v["nodes"] for t, v in priv["roots"].items()}
+        del pub["tops"]
+        (inner / "public.json").write_text(json.dumps(pub))
+        return {"forged": what}
     if what == "challenge":
         k = next(r["k"] for r in V._stream_rounds(pub, STREAM) if r["k"] > 0 and r["n"])
     else:
@@ -64,7 +82,7 @@ def main(argv=None) -> int:
     st.add_argument("--sets", required=True)
     st.add_argument("--out", required=True)
     fg = sp.add_parser("forge")
-    fg.add_argument("--what", choices=("challenge", "query"), required=True)
+    fg.add_argument("--what", choices=("challenge", "query", "top", "unsalted"), required=True)
     fg.add_argument("--inner", required=True)
     fg.add_argument("--level", type=int, default=0)
     a = ap.parse_args(argv)

@@ -24,7 +24,7 @@ wait $LP
 
 ALL=$(python3 -c "
 import sys; from pathlib import Path; from verity_flock import rec_outer as O, rec_vstar as V
-pub, _, proofs = V.load(Path(sys.argv[1])); print(','.join(str(l['level']) for l in O.levels(V.queries(pub, proofs))))" $INNER)
+pub, priv, proofs = V.load(Path(sys.argv[1])); print(','.join(str(l['level']) for l in O.levels(V.queries(pub, priv, proofs))))" $INNER)
 LEVELS=${LEVELS:-$ALL}; NEG_LEVEL=${NEG_LEVEL:-${ALL##*,}}
 LINK_ROWS=; [ "${LINK:-0}" = 1 ] && LINK_ROWS=--link-rows
 
