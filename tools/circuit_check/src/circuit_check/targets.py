@@ -71,6 +71,7 @@ def load_registries() -> None:
     import verity_catalog.definitions.boolean.gf2k  # noqa: F401
     import verity.primitives.commitments.gates.lms  # noqa: F401
     import verity.primitives.commitments.gates.merkle  # noqa: F401
+    import verity.primitives.commitments.gates.rowleaf  # noqa: F401
     import verity_catalog.definitions.boolean.mufu  # noqa: F401
     import verity_catalog.definitions.boolean.scalar  # noqa: F401
     import verity_experimental.private_circuits.universal  # noqa: F401
