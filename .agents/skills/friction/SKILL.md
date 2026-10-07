@@ -213,7 +213,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
   for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
   guarantees. Its package clause is superseded by the Lean layout move (2026-10-06): every proof is in
-  `verity/Security/Proofs`, whose package requires C-Flock's verifier.
+  `Security/Proofs`, whose package requires C-Flock's verifier.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain

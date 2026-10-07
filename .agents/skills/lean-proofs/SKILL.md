@@ -7,8 +7,8 @@ description: >
   lean-audit.json, moving them without a DM to Daniel (--moved), watching ArkLib and other dependencies for proofs
   of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
-  them). Use when adding or changing Lean proofs, definitions or packages (backends/flock/verifier/lean, verity/Security
-  and its Proofs, the PoUS grader in verity/protocols/accounting/space/pous/lean), when a Lean build or proof is slow,
+  them). Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
+  and its Proofs, the PoUS grader in verity/experimental/protocols/pous/lean), when a Lean build or proof is slow,
   editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -19,16 +19,17 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 ## Where the work goes
 
 - **Code or analysis** (`AGENTS.md` "Lean"). Code the verifier runs, and anything the V[B] generator or a reference
-  prover runs: `backends/flock/verifier/lean/` (no dependencies); the PoUS grader stays with PoUS. Everything else is
-  security analysis, under `verity/Security/`: a definition or statement in `Definitions/<Area>/` or
-  `Specs/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
-  `security_proofs` in `verity/Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
+  prover runs: `verity/core/service/flock/` (no dependencies); the PoUS grader and the certifier program stay with their
+  protocols, each in its `lean/`. Everything else is
+  security analysis, under `Security/`: a definition or statement in `Definitions/<Area>/` or
+  `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
+  `security_proofs` in `Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
   `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. No new package: an area is a directory in each tree.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
-- **Definitions a guarantee reads go in `Definitions/` or `Specs/`**, not in a proof file. The Lean check lists where they are
-  (`reads` in `verity/Security/lean-audit.json`); keep that list short.
+- **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file. The Lean check lists where they are
+  (`reads` in `Security/lean-audit.json`); keep that list short.
 - **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
   `.olean` files, and a Lean check then reads what another agent's build left. A second Lean task on the same machine gets
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
@@ -40,14 +41,15 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 ## Build, iterate, check
 
 ~~~text
-bash tools/verity/lean/setup.sh PKG                  once per machine: elan, the toolchain, Mathlib's cache
-cd PKG && lake build                          once per checkout; incremental from then on
-lake env lean Pkg/Area/File.lean              each edit: elaborate one file against the built imports
-lake build Pkg.Area.File                      after editing a file others import, so they see the change
-python tools/verity/lean/audit.py PKG                once, before pushing (the kernel replay of verity/Security/Proofs is the slow part)
+bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Mathlib's cache
+cd PKG && lake build                   once per checkout; incremental from then on
+lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
+lake build Pkg.Area.File               after editing a file others import, so they see the change
+python tools/verity/lean/audit.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part);
+                                       `verity check lean PKG` runs the same
 ~~~
 
-Build on a CPU machine; `verity/Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
+Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
 update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
 proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job
 `--mem-gb 32`.
@@ -76,7 +78,7 @@ the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages
 
 While proving, check one file at a time, and leave the whole package and the Lean check for the end:
 
-- **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. Core's slowest file takes about 10 s
+- **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. The `Core` area's slowest file takes about 10 s
   this way. A file that imports what you changed sees the change only after `lake build` of the changed module.
 - **Ask Lean in a scratch file** outside the repository, run from the package directory with `lake env lean
   /tmp/scratch/Probe.lean`. It takes well under a second against built imports:
@@ -109,7 +111,7 @@ simp with that.
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in its area's `Specs/<Area>/Assumptions` (C-Flock's in
+- **An assumption is a named `Prop`** in its area's `Models/<Area>/Assumptions` (C-Flock's in
   `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`). Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.experimental.claims`) and gives its rationale. Lean is the source of truth for
@@ -132,7 +134,7 @@ simp with that.
   pinned dependency proves an unacknowledged theorem about them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/verity/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
   At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
-  (`verity/Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
+  (`Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
   new version.
   Cite the output in `ASSUMPTIONS.md`'s upstream status rather than writing one.
 - **A changed record is a changed claim.** If `--update` changes a record or `reads` for a guarantee you didn't mean to
@@ -177,7 +179,7 @@ These are Daniel's rulings, newest first.
   `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
   and the protocols `ALLOWED` in `tests/test_boundaries.py` lists (PoUW → sampled proofs, the ruling of
   2026-10-03 in `.agents/skills/friction/SKILL.md`). Its Lean half is superseded by the Lean layout move (2026-10-06):
-  there are no protocol packages, only areas of `verity/Security` and its Proofs.
+  there are no protocol packages, only areas of `Security/` and its Proofs.
 - 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
