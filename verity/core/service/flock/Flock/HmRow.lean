@@ -39,6 +39,8 @@ def ROW_SEG_BITS : Nat := 8192
 def PER_SLOT : Nat := 3
 /-- A bit row's compressions at most: one 1024-bit block per compression, within the largest block a proof covers (2^26). -/
 def MAX_COMPS : Nat := 2 ^ 16
+/-- A block's `k_log` at most: the largest a fast100 schedule covers (`setupH` refuses past it, after the layout). -/
+def MAX_K_LOG : Nat := 27
 /-- META's bindings (what the statement binds about the circuit): a class leaves them out. -/
 def BINDING_KEYS : List String := ["partition", "program_sha512", "program_digests"]
 def PARTITION_V1 : String := "verity/partition/v1"
@@ -248,6 +250,37 @@ private def ctx := "circuit META"
 
 private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
   (← J.arr j k ctx).mapM fun u => do (← J.asArr u s!"{ctx}.{k}").mapM fun x => J.asInt x s!"{ctx}.{k}"
+
+/-- META's `k_log`, refused past `MAX_K_LOG` where `parse` reads it: `check` computes `2 ^ k_log` and, once `slot_log ≤
+k_log`, `2 ^ slot_log`, so neither is computed for a block no schedule covers. -/
+def kLogOf (mj : Json) : V Nat := do
+  let k ← J.nat mj "k_log" ctx
+  if k > MAX_K_LOG then throw s!"META: k_log {k} is over {MAX_K_LOG}: no fast100 schedule"
+  return k
+
+/-- **`kLogOf` is META's `k_log` up to `MAX_K_LOG`:** it reads what `J.nat` reads and refuses only a larger one, which
+`setupH` refuses too. -/
+theorem kLogOf_ok {mj : Json} {k : Nat} : kLogOf mj = .ok k ↔ J.nat mj "k_log" ctx = .ok k ∧ k ≤ MAX_K_LOG := by
+  unfold kLogOf
+  cases h : J.nat mj "k_log" ctx with
+  | error e => simp [bind, Except.bind]
+  | ok k' =>
+    simp only [bind, Except.bind]
+    by_cases hk : k' > MAX_K_LOG
+    · simp only [hk, ↓reduceIte, throw, throwThe, MonadExceptOf.throw, Except.error.injEq, reduceCtorEq, false_iff,
+        not_and, Except.ok.injEq]
+      omega
+    · simp only [hk, ↓reduceIte, pure, Except.pure, Except.ok.injEq, true_and]
+      constructor
+      · rintro rfl; omega
+      · rintro ⟨rfl, -⟩; rfl
+
+/-- **`parse`'s lookup index test is `2 ^ in_bits = words` alone:** comparing `in_bits` with the table's `log2` first,
+so that no power past the table's is computed, refuses nothing more. -/
+theorem lookup_index_test (n size : Nat) : (n != Nat.log2 size || 2 ^ n != size) = (2 ^ n != size) := by
+  by_cases h : 2 ^ n = size
+  · subst h; simp [Nat.log2_two_pow]
+  · simp [h]
 
 /-- #273's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
@@ -566,7 +599,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
       throw s!"META: lookup {lname} is not the pinned table"
     let n ← J.nat spec "in_bits" ctx
     let lo ← J.nat spec "lo_bits" ctx
-    if 2 ^ n != size || !(2 ≤ lo && lo < n) then throw s!"META: lookup {lname}'s index is not its table's"
+    if n != Nat.log2 size || 2 ^ n != size || !(2 ≤ lo && lo < n) then throw s!"META: lookup {lname}'s index is not its table's"
     let some (_, words) := tables.find? (·.1 == lname) | throw s!"the circuit has a lookup of {lname}: its table is not given"
     if words.size != 4 * size || hexOf (Sha512.hash words) != pinned.sha512 then throw s!"MUFU table {lname}: not the pinned table"
     nets := nets.push (s!"lookup:{lname}", ← Lookup.build s!"lookup:{lname}" words n lo 31)
@@ -652,7 +685,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let leafScheme ← J.get mj "leaf_scheme" ctx
   let leafId ← J.str leafScheme "id" ctx
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
-  let c : Circuit := { name, sha, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
+  let c : Circuit := { name, sha, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
                        shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
