@@ -354,12 +354,44 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
         out = capsys.readouterr().out
         assert ("check: this commit can't land as is; the train's check is the merge check" in out) is said
         launched.clear()
+
+
+def test_record_sends_the_verdicts_it_gathers_unless_given_a_pack_or_no_cache(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    def gathered(d: Path) -> Path:
+        (d / "verdicts-gathered.tar.gz").write_bytes(b"")
+        return d / "verdicts-gathered.tar.gz"
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: [])
+    monkeypatch.setattr(CHECK, "gather_verdicts", gathered)
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x"]) == 0
+    [cmd] = launched
+    tail = cmd[cmd.index("--") + 1:]
+    assert tail[-2] == "--verdicts-in" and tail[-1].endswith("verdicts-gathered.tar.gz") and cmd[cmd.index("--send") + 1] == tail[-1]
+    for given in (["--verdicts-in", str(tmp_path / "mine.tar.gz")], ["--no-cache"]):
+        launched.clear()
+        assert CHECK.record(["--base", "HEAD", *given]) == 0
+        assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):

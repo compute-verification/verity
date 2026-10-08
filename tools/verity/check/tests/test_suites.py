@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -517,7 +519,8 @@ def _per_test_workspace(root: Path) -> None:
 def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"), RESEARCH_FIXTURES_URL="",
-               VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", **(extra or {}))
+               VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
+    env.update(extra or {})
     return subprocess.run([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs"), *args],
                           cwd=root, env=env, capture_output=True, text=True)
 
@@ -549,6 +552,28 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
     p = _run_suite(root, tmp_path, "--fresh", extra={"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(tmp_path / "run"),
                                                      "PYTHONPYCACHEPREFIX": str(tmp_path / "pycache"), "VERITY_SWITCH": "1"})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
+    """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
+    are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite
+    alone, and the other is listed as reused, citing the run that earned its pass."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"one": "def test_one():\n    pass\n", "two": "def test_two():\n    pass\n"})
+    shutil.copy(HERE / "verdicts.py", root / "tools" / "verity" / "check" / "verdicts.py")
+    a, b = {"VERITY_TEST_CACHE": str(tmp_path / "a")}, {"VERITY_TEST_CACHE": str(tmp_path / "b")}
+    p = _run_suite(root, tmp_path, "--run", "r-a", extra=a)
+    assert p.returncode == 0 and "passed  one" in p.stdout and "passed  two" in p.stdout, p.stdout + p.stderr
+    pack = tmp_path / "verdicts.tar.gz"
+    verdicts = [sys.executable, str(root / "tools" / "verity" / "check" / "verdicts.py")]
+    subprocess.run([*verdicts, "export", str(pack)], env={**os.environ, **a, "CHECK_CACHE": str(tmp_path / "a-check")}, check=True)
+    subprocess.run([*verdicts, "import", str(pack)], env={**os.environ, **b, "CHECK_CACHE": str(tmp_path / "b-check")}, check=True)
+
+    (root / "one" / "tests" / "test_it.py").write_text("def test_one():\n    assert 1\n")
+    p = _run_suite(root, tmp_path, "--run", "r-b", extra=b)
+    assert p.returncode == 0 and "passed  one" in p.stdout and "1 suites" not in p.stdout, p.stdout + p.stderr
+    assert re.search(r"cached  two +passed at \S+ \S+ \S+ in run r-a\n", p.stdout), p.stdout
+    assert "2 suites: 2 passed (1 cached)" in p.stdout, p.stdout
 
 
 def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp_path):
