@@ -9,7 +9,9 @@
   "Properties.Nci",
   "Properties.Proofs.Nci",
   "Properties.CertifierDevice",
-  "Properties.Proofs.CertifierDevice"
+  "Properties.Proofs.CertifierDevice",
+  "Properties.Pous",
+  "Properties.Proofs.Pous"
  ],
  "meaning": [
   "Properties.Pouw",
@@ -65,6 +67,11 @@
    "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
    "except": [],
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Pous": {
+   "imports": ["Mathlib", "Definitions.Pous", "PousCheck", "Properties.Pous"],
+   "except": [],
+   "why": "a property is stated over the definitions and the code it is about, never over a proof"
   }
  },
  "reads_exempt": {

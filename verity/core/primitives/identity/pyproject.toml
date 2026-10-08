@@ -5,6 +5,10 @@ description = "The differential test of core_identity, the identity hash in Lean
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
 
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

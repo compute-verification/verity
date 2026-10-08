@@ -1,12 +1,17 @@
-# P2 specification v1.1
+# P2 specification v4
 
-> v1.1 is frozen v1 (`art:a7a29e84eef9d2584482b7f3e9722af6b579e2984a9633352564c562ce9e2021`, relayed in
+> v4 is v1.1 with one hash: SHA-512, with its whole 64-byte output, everywhere (§13), as Daniel ruled on 2026-10-06 at
+> 15:07Z. v1.1 is frozen v1 (`art:a7a29e84eef9d2584482b7f3e9722af6b579e2984a9633352564c562ce9e2021`, relayed in
 > `note:20261004T1836Z-report-relay-p2-spec-v1-frozen` from `store:pous/docs/efficient-crypto/p2-spec-draft.md`,
 > sha256 `3f49c34bb065af9c11b92935d1460e6f3caf7b12caf6d89560d5c8a7e2725267`) with the RTT allowance capped at
 > 354 µs, as Daniel ruled on 2026-10-04 (§12). Relative and `/cursor/stores/…` links point into that store, which is
-> also in `art:8bd64630bc06c23d5095996d2f198ce4bd557413722ad94bd3ca3c1a949e42e9`.
+> also in `art:8bd64630bc06c23d5095996d2f198ce4bd557413722ad94bd3ca3c1a949e42e9`. v4 supersedes v1.1 and the package's
+> `p2-16448/v3`; nothing in it is optional, and no hash in it is a parameter.
 
-Status: frozen specification, 2026-09-29, amended to v1.1 on 2026-10-04 by Daniel's ruling (§12: the RTT allowance is capped at 354 µs, so `Δ + RTT ≤ 854 µs`), with errata of 2026-10-07 that clarify without changing meaning (§13). This is not deployment approval: P2 remains experimental because the P2–M1-SGI instantiation assumption is not accepted (default, Daniel deferred, 2026-09-29).
+Status: specification v4, 2026-10-06. It keeps v1.1's mathematics, sizes, k, Δ, RTT cap and framing, and changes only
+the hash (§13). This is not deployment approval: P2 remains experimental because the P2–M1-SGI instantiation assumption is
+not accepted (default, Daniel deferred, 2026-09-29). Its challenge derivation is `verity.ml.randomness` v2
+(Appendix A), and the vectors in §7 are generated under it. The errata of 2026-10-07 (§14) clarify v4 as they do v1.1, without changing meaning.
 
 ## 1. Parameter set
 
@@ -14,7 +19,7 @@ The frozen deployment parameter set is:
 
 | Item | Value |
 |---|---|
-| Protocol version | `p2/v1` |
+| Protocol version | `p2/v4` |
 | Width | w = 16,448 bits = 2,056 bytes |
 | Prime identifier | `p2-p16448-c21065` |
 | Modulus | p = 2^16448 − 21065 |
@@ -23,6 +28,7 @@ The frozen deployment parameter set is:
 | Payload profile | `p2-2054B`: 2,054 bytes = 16,432 bits |
 | Deployment store | B = 2^19 blocks, 8 segments of 65,536 blocks |
 | Exact-domain abstract family | 2^8 through 2^23 blocks; pinned in the store's `lean/pous` trusted layer |
+| Hash | SHA-512 (FIPS 180-4), its whole 64-byte output, for every digest; §4's table |
 
 The congruence certificate is direct integer arithmetic: 2^16448 is 0 mod 8 and 21065 is 1 mod 8, so p is 7 mod 8.
 
@@ -88,9 +94,39 @@ D_j(c) = (d(σ_Kj(d(c))) − t_j) mod p
 
 ## 4. Setup and key derivation
 
+### Hashes and domain tags
+
+Every digest in v4 is SHA-512 (FIPS 180-4) with its whole 64-byte output; nothing is truncated except a derived key,
+which `verity.ml.randomness` makes 32 bytes (Appendix A). `\0` is one zero byte. `frame` is
+`verity.ml.randomness.frame`: `tag || u64be(len(body)) || body`, with tag `b` and the bytes for a byte string, `s`
+and its UTF-8 for a string, and `i` and the minimal big-endian bytes (at least one) for a nonnegative integer.
+
+| Use | Bytes hashed (or derivation) | Output |
+|---|---|---:|
+| W commitment | `SHA-512("verity/tagged-sha512/v1\0" ‖ u32be(27) ‖ "verity-pous/w-commitment/v2" ‖ u64be(len(payload)) ‖ payload)` | 64 |
+| Setup salt | `derive(source, "verity/pous/p2-setup/v4", {model, prime, protocol}).value` | 32 |
+| Key chunk | `SHA-512(base ‖ P ‖ u32be(i))`, base starting `"verity/pous/p2/keys/v4\0"`, P ∈ {`K`, `t`} | 64 |
+| Row digest R | `SHA-512(P(8n) ‖ block)`, `P(b) = ("verity/sha512-row/v2\0" ‖ u64be(b))` zero-padded to 128 bytes | 64 |
+| Leaf | `SHA-512(0x00 ‖ setup_salt[32] ‖ u64be(s) ‖ u16be(v) ‖ R[64])` | 64 |
+| Node | `SHA-512(0x01 ‖ left[64] ‖ right[64])` | 64 |
+| Epoch id | `SHA-512("verity/pous/p2/epoch/v4\0" ‖ u32be(len(manifest)) ‖ manifest ‖ w_commitment ‖ setup_salt ‖ u64be(B) ‖ root)` | 64 |
+| Audit id | `derive(source, "verity/pous/p2-audit-id/v4", {counter, epoch}).stream("id", 32)` | 32 |
+| Challenge key (mode 0) | `derive(source, "verity/pous/p2-audit-challenge/v4", {audit, epoch, root, salt})` | key |
+| Round key (mode 1) | `derive(beacon_j, "verity/pous/p2-audit-round/v4", {audit, epoch, root, round})` | key |
+| Transcript hash | `SHA-512("verity/pous/p2/transcript/v4\0" ‖ frames)` | 64 |
+| Record frame hashes | `SHA-512(exact frame)` | 64 |
+| `derive`, `stream`, `uniform` | `verity.ml.randomness` v2 (Appendix A) | 32-byte key; 64-byte stream blocks |
+| Wire envelope | magic `"P2AU"`, version byte `0x04` (`p2-audit-wire/v4`) | — |
+| Vector entry hash (§7) | `SHA-512(canonical_json_bytes(entry without "sha512"))` | 64 |
+
+The four derivation domains name P2 (`p2-…`) so that they never collide with the generic protocol's
+`verity/pous/audit-challenge/v1`. §13 lists each v1 name and its v4 replacement.
+
+### Setup
+
 The normative setup assumption is **P2-EXP-IO** (default, Daniel deferred, 2026-09-29): after W is committed, setup supplies fresh XOF streams independently for every `(segment, block, purpose)`, independently of the complete pre-setup transcript. Purpose is K or t. Under this idealization, masks are mutually independent uniform w-bit strings and rejection-sampled tweaks are mutually independent uniform elements of `Z_p`; its expander error is zero by definition.
 
-Concrete SHAKE256 replacing P2-EXP-IO is a separate named assumption: **SHAKE256/P2-EXP-IO storage-game idealization**. A deterministic globally fixed SHAKE function does not become a fresh independent-output oracle merely because its input contains a post-commitment salt.
+Concrete counter-mode SHA-512 replacing P2-EXP-IO is a separate named assumption: **SHA-512-CTR/P2-EXP-IO**. A deterministic globally fixed SHA-512 function does not become a fresh independent-output oracle merely because its input contains a post-commitment salt.
 
 A standard secure PRG is provably insufficient here. Proposition 1 of `internal/efficient-crypto/attacks/p2-seed-expander.md` constructs an ordinary secure locally seekable PRG whose public seed describes every P2 ciphertext for W = 0. Ordinary PRG security therefore cannot replace P2-EXP-IO.
 
@@ -98,49 +134,52 @@ Setup order is load-bearing:
 
 1. Fix W and its exact model manifest. Commit to the bytes, payload bit length, model identifier, protocol version and prime identifier.
 2. Only after that commitment is immutable, obtain the first valid unpredictable and unbiasable verifier/beacon source. Bind it; neither party may grind alternatives.
-3. Draw one 256-bit setup salt through the pinned `verity.ml.randomness` v1 derivation. The formula below shows the deployment prime id; at any reduced width it is replaced by that parameter set's `p2-p{w}-c{c0}`:
+3. Draw one 256-bit setup salt through `verity.ml.randomness` v2 (Appendix A). The formula below shows the deployment prime id; at any reduced width it is replaced by that parameter set's `p2-p{w}-c{c0}`:
 
 ```text
-derive(
-  source,
-  "verity/pous/p2-setup/v1",
-  {
-    "model": model_commitment_bytes,
-    "prime": "p2-p16448-c21065",
-    "protocol": "p2/v1"
-  }
-).value
+setup_salt_256 =
+  derive(
+    source,
+    "verity/pous/p2-setup/v4",
+    {
+      "model": model_commitment_bytes,      64 bytes
+      "prime": "p2-p16448-c21065",
+      "protocol": "p2/v4"
+    }
+  ).value                                   32 bytes
 ```
 
-`source` is the verifier secret or beacon round selected after the W commitment, never a prover-selected commitment. `derive` and its typed framing are the existing `verity.ml.randomness` byte format.
+`source` is the verifier secret or beacon round selected after the W commitment, never a prover-selected commitment.
 
-4. For each block, form this injective base. `frame` is exactly the typed, length-delimited `verity.ml.randomness.frame`; both integers are unsigned 64-bit big-endian. If global index `i = s·blocks_per_segment + v`, `segment = s` and `local_block = v`: key derivation uses the local within-segment index, never global i.
+4. For each block, form the injective base below. Both integers are unsigned 64-bit big-endian. If global index `i = s·blocks_per_segment + v`, `segment = s` and `local_block = v`: key derivation uses the local within-segment index, never global i.
 
 ```text
-base =
-  frame("verity/pous/p2/expand/v1")
-  || frame("p2/v1")
-  || frame("p2-p16448-c21065")
-  || frame(model_commitment_bytes)
-  || frame(setup_salt_256)
-  || u64be(segment)
-  || u64be(local_block)
+prefix_body =
+     ASCII("verity/pous/p2/keys/v4\0")      23 bytes
+  || frame("p2/v4")                         14 bytes
+  || frame("p2-p16448-c21065")              25 bytes
+  || frame(model_commitment_bytes)          73 bytes  (a 64-byte digest)
+  || frame(setup_salt_256)                  41 bytes  (176 bytes in all at the deployment prime)
+prefix = prefix_body || 0x00 * (−len(prefix_body) mod 128)            256 bytes: whole 128-byte blocks
+base   = prefix || u64be(segment) || u64be(local_block)              272 bytes
 
-mask_stream  = SHAKE256(base || ASCII("K"))
-tweak_stream = SHAKE256(base || ASCII("t"))
+chunk(P, i) = SHA-512(base || ASCII(P) || u32be(i))                   P ∈ {"K", "t"}, i = 0, 1, 2, …
+stream_P    = chunk(P, 0) || chunk(P, 1) || chunk(P, 2) || …
 ```
 
-Let n = w/8. K is the first n mask-stream bytes, interpreted big-endian; n = 2,056 at deployment. For t, read consecutive n-byte tweak-stream candidates and accept the first integer below p. This is exact rejection sampling; modulo reduction and “subtract p once” are forbidden.
+Let n = w/8. K is the first n bytes of `stream_K`, interpreted big-endian; n = 2,056 at deployment, so K is the first 2,056 of the 33 chunks' 2,112 bytes. For t, read consecutive n-byte candidates of `stream_t` (candidate a is bytes `[a·n, (a+1)·n)`) and accept the first integer below p. This is exact rejection sampling; modulo reduction and “subtract p once” are forbidden. The derivation of t is v1's; only the stream under it changed.
+
+The base is injective in `(protocol, prime, model, salt, segment, block)`: the tag is fixed, each frame carries its own length, the zero padding is determined by the frames' total length, and the two integers have fixed width. The purpose byte and the counter follow at fixed offsets. Because the prefix is whole 128-byte blocks, SHA-512's chaining value after it is one midstate per setup, shared by every block and purpose. Each chunk's message is `272 + 1 + 4 = 277` bytes; past the prefix it is the 21 bytes `u64be(segment) ‖ u64be(local_block) ‖ P ‖ u32be(i)`, SHA-512's `0x80` byte, zero bytes and the 16-byte length: one 128-byte block. So each 64-byte chunk is exactly one compression after the midstate, and a deployment block's K and first t candidate cost 66 compressions. At a reduced width the prime id is shorter and the prefix is still padded to the next multiple of 128 bytes (256 at every width in §7).
 
 Every `(segment,block,purpose)` is distinct. Masks must be full-width uniform outputs. Sparse, repeated, truncated, density-conditioned, shared or linear-schedule masks are nonconforming. Setup salts cannot be reused across model commitments. Keys are public, but deployment must expand them where used rather than store a key-sized table that violates the space bound.
 
 5. Encode C and bind the audit verification root. Derive audit challenges only after that root is fixed.
 
-SHAKE256 with this v1 framing is the conforming realization of the separate **SHAKE256/P2-EXP-IO storage-game idealization** (default, Daniel deferred, 2026-09-29). The measured host SHAKE256 cost is about 9.1 µs per P2 block for 4,112 useful bytes, about 2.2× the campaign's 4.2 µs optimized two-squaring IFMA decode. This is a CPU primitive measurement, not an end-to-end deployment benchmark. ChaCha8 would add a weaker reduced-round assumption and is nonconforming.
+Counter-mode SHA-512 with this v4 framing is the conforming realization of the separate **SHA-512-CTR/P2-EXP-IO** assumption (F4 as amended by v4, §13). Its cost on the deployment device is measured in §11; v1's SHAKE256 measurement does not carry over. ChaCha8 would add a weaker reduced-round assumption and is nonconforming.
 
 ## Audit protocol and wire formats
 
-This section defines `p2-audit-wire/v1`. Multi-byte integers are unsigned big-endian. Byte strings have exactly the stated length. Receivers reject unknown versions, unknown types, reserved flag bits, noncanonical integers, length mismatches and trailing bytes.
+This section defines `p2-audit-wire/v4`. Multi-byte integers are unsigned big-endian. Byte strings have exactly the stated length. Receivers reject unknown versions, unknown types, reserved flag bits, noncanonical integers, length mismatches and trailing bytes. Every digest field is 64 bytes; the setup salt, the audit id and the round nonce are 32.
 
 ### Parties and transport
 
@@ -153,62 +192,74 @@ Every frame is:
 ```text
 offset  bytes  field
 0       4      ASCII "P2AU"
-4       1      wire version = 0x01
+4       1      wire version = 0x04
 5       1      message type
 6       4      body length, u32be
 10      n      body
 ```
 
-The body length excludes the 10-byte header. `p2-audit-wire/v1` accepts only named profiles with w ≤ 16,448, canonical manifests of at most 512 bytes, `blocks_per_segment ≤ 2^16`, `segments < 2^64`, and k ≤ 105. Deployment setup accepts only `p2-2054B`; reduced-width conformance vectors may use a named `p2-nb` or `p2-nB` test profile. A registered scheme's profile is `p2-{payload_bytes}B` at every width; `p2-nb` profiles exist only in reduced-width conformance vectors, and no registered scheme produces them. Let n = w/8, B be the manifest block count, h(i,B) be the exact RFC 9162 sibling count, and r be the number of FINAL records. Accepted body lengths are:
+The body length excludes the 10-byte header. `p2-audit-wire/v4` accepts only named profiles with w ≤ 16,448, canonical manifests of at most 512 bytes, `blocks_per_segment ≤ 2^16`, `segments < 2^64`, and k ≤ 105. Deployment setup accepts only `p2-2054B`; reduced-width conformance vectors may use a named `p2-nb` or `p2-nB` test profile. A registered scheme's profile is `p2-{payload_bytes}B` at every width; `p2-nb` profiles exist only in reduced-width conformance vectors, and no registered scheme produces them. Let n = w/8, B be the manifest block count, h(i,B) be the exact RFC 9162 sibling count, and r be the number of FINAL records. Accepted body lengths are:
 
-| Type | Accepted body length |
-|---|---:|
-| `SETUP_COMMIT` | exactly `36 + manifest_length`, with `manifest_length ≤ 512` |
-| `SETUP_SALT` | 64 |
-| `SETUP_BLOCK` | `76 + n` |
-| `SETUP_ROOT` | 105 |
-| `AUDIT_OPEN` | 92 |
-| `CHALLENGE` | 106 |
-| `RESPONSE` | exactly `80 + n + 32·h(i,B)` |
-| `FINAL` | exactly `118 + 83·r`, with `0 ≤ r ≤ k ≤ 105` |
+| Type | Code | Accepted body length |
+|---|---|---:|
+| `SETUP_COMMIT` | `0x01` | exactly `68 + manifest_length`, with `manifest_length ≤ 512` |
+| `SETUP_SALT` | `0x02` | 96 |
+| `SETUP_BLOCK` | `0x03` | `108 + n` |
+| `SETUP_ROOT` | `0x04` | 169 |
+| `AUDIT_OPEN` | `0x10` | 124 |
+| `CHALLENGE` | `0x11` | 138 |
+| `RESPONSE` | `0x12` | exactly `112 + n + 64·h(i,B)` |
+| `FINAL` | `0x13` | exactly `182 + 147·r`, with `0 ≤ r ≤ k ≤ 105` |
 
-Thus every accepted profile has an absolute body cap of 8,833 bytes, attained by a 105-record `FINAL`; for the deployment profile at B = 2^19, a RESPONSE is 2,744 bytes. A declared or delivered body outside its type-specific length is malformed code 1, even when below 8,833 bytes.
+Thus every accepted profile has an absolute body cap of 15,617 bytes, attained by a 105-record `FINAL` (a RESPONSE is at most `112 + 2,056 + 64·80 = 7,288` bytes, since B < 2^80). For the deployment profile at B = 2^19, a RESPONSE body is `112 + 2,056 + 19·64 = 3,384` bytes, 3,394 framed, of which the authentication path is 1,216. A declared or delivered body outside its type-specific length is malformed code 1, even when below 15,617 bytes.
+
+Fields at their frame offsets (body offset + 10):
+
+| Frame | Fields, `offset:length` |
+|---|---|
+| `SETUP_COMMIT` | `manifest_length 10:4`, `manifest 14:ml`, `w_commitment (14+ml):64` |
+| `SETUP_SALT` | `w_commitment 10:64`, `setup_salt 74:32` |
+| `SETUP_BLOCK` | `w_commitment 10:64`, `setup_salt 74:32`, `global_index 106:8`, `block_length 114:4`, `block 118:n` |
+| `SETUP_ROOT` | `w_commitment 10:64`, `setup_salt 74:32`, `block_count 106:8`, `verification_root 114:64`, `setup_mode 178:1` |
+| `AUDIT_OPEN` | `epoch_id 10:64`, `audit_id 74:32`, `challenge_mode 106:1`, `k 107:2`, `delta_ns 109:8`, `rtt_allowance_ns 117:8`, `verification_flags 125:1`, `audit_counter 126:8` |
+| `CHALLENGE` | `epoch_id 10:64`, `audit_id 74:32`, `round 106:2`, `index 108:8`, `round_nonce 116:32` |
+| `RESPONSE` | `epoch_id 10:64`, `audit_id 74:32`, `round 106:2`, `index 108:8`, `block_length 116:4`, `block 120:n`, `path_count (120+n):2`, `siblings (122+n):64·path_count` |
+| `FINAL` | `epoch_id 10:64`, `audit_id 74:32`, `verdict 106:1`, `failure_code 107:1`, `rounds_completed 108:2`, `delta_ns 110:8`, `rtt_allowance_ns 118:8`, `transcript_hash 126:64`, `record_count 190:2`, `records 192:147·r` |
 
 ### Setup commitment, salt and verification root
 
-The setup manifest is canonical UTF-8 JSON using `verity.ml.commitments.identity.canonical_json_bytes`: sorted object keys, no insignificant whitespace, direct Unicode, no floats. It contains exactly `scheme`, `w`, `c0`, `profile`, `blocks_per_segment` and `segments`; `scheme` is exactly the JSON string `"p2"`, `profile` is the case-sensitive profile string, and the other four values are JSON integers. The W commitment reuses the MVP's existing frame:
+The setup manifest is canonical UTF-8 JSON using `verity.ml.commitments.identity.canonical_json_bytes`: sorted object keys, no insignificant whitespace, direct Unicode, no floats. It contains exactly `scheme`, `w`, `c0`, `profile`, `blocks_per_segment` and `segments`; `scheme` is exactly the JSON string `"p2"`, `profile` is the case-sensitive profile string, and the other four values are JSON integers. The W commitment is `verity.ml.commitments.identity.tagged_sha512` under the tag `verity-pous/w-commitment/v2`:
 
 ```text
 manifest = canonical_json_bytes(params.manifest())
 payload  = u64be(len(manifest)) || manifest || W
 w_commitment =
-  SHA256(
-    ASCII("veritor/tagged-sha256/v1\0")
-    || u32be(len("verity-pous/w-commitment/v1"))
-    || ASCII("verity-pous/w-commitment/v1")
+  SHA-512(
+    ASCII("verity/tagged-sha512/v1\0")
+    || u32be(27) || ASCII("verity-pous/w-commitment/v2")
     || u64be(len(payload))
     || payload
-  )
+  )                                                    64 bytes
 ```
 
 W uses exactly the `p2-2054B` packing in §2: segment-major then local-block-major, with each payload in one 2,054-byte leading-zero-padded big-endian encoding. Reduced-width conformance profiles use continuous fixed-b-bit packing, most-significant bit first, with only zero right-padding in the final byte. `SETUP_COMMIT` (`type=0x01`, prover to verifier) has:
 
 ```text
-u32be(manifest_length) || manifest || w_commitment[32]
+u32be(manifest_length) || manifest || w_commitment[64]
 ```
 
 Only after accepting this frame does the verifier derive the 32-byte setup salt as specified in §4. `SETUP_SALT` (`0x02`, verifier to prover) is:
 
 ```text
-w_commitment[32] || setup_salt_256[32]
+w_commitment[64] || setup_salt_256[32]
 ```
 
-For `p2-audit-wire/v1`, `model_commitment_bytes` in §4 is exactly `w_commitment`.
+For `p2-audit-wire/v4`, `model_commitment_bytes` in §4 is exactly `w_commitment`.
 
 In public-encoder setup, the prover then sends every encoded block in strictly increasing global index using `SETUP_BLOCK` (`0x03`):
 
 ```text
-w_commitment[32] || setup_salt_256[32] || u64be(global_index)
+w_commitment[64] || setup_salt_256[32] || u64be(global_index)
 || u32be(block_length) || block[block_length]
 ```
 
@@ -219,21 +270,25 @@ For global block index `i`, let:
 ```text
 s = floor(i / blocks_per_segment)
 v = i mod blocks_per_segment
+P(b) = ASCII("verity/sha512-row/v2\0") || u64be(b), zero-padded to 128 bytes
+R(block_i) = SHA-512(P(8·n) || block_i[n])                                     64 bytes
 leaf(i) =
-  SHA256(
+  SHA-512(
     0x00 || setup_salt_256[32] || u64be(s) || u16be(v)
-    || block_i[2056]
-  )
-node(left,right) = SHA256(0x01 || left[32] || right[32])
+    || R(block_i)[64]
+  )                                                                           107 bytes hashed
+node(left,right) = SHA-512(0x01 || left[64] || right[64])
 ```
 
-The tree is the RFC 6962 shape: for n > 1 leaves, split at the largest power of two strictly below n; preserve global block order. One leaf's root is the leaf itself. The verification root is exactly 32 bytes.
+R is core's `sha512/row/v2` digest of the block as a row of 8n bits, `verity.ml.commitments.rowleaf.sha512_row_v2_digest(block, 8·n)`; at n = 2,056 it is 18 compressions, the first of them constant. The tree is the RFC 6962 shape: for n > 1 leaves, split at the largest power of two strictly below n; preserve global block order. One leaf's root is the leaf itself. The verification root is exactly 64 bytes.
+
+**Why this leaf.** The leaf hashes the block's row digest, inside a wrapper that binds the setup, the segment and the index. R is the digest of the block that core's row rule already defines and that `answer_circuit`'s `PousRowDigest` proves, so a circuit that opens or decodes a block, and a verifier that recomputes a leaf, hash each block once, as one row, and the leaf adds one compression to R's 18: the wrapper is 107 bytes. The wrapper keeps what a bare row digest would lose. Its `0x00`, against the nodes' `0x01`, keeps a leaf from ever being a node (RFC 6962 §2.1). The setup salt makes a leaf of one setup useless in another, even for equal blocks. `(s, v)` lets a verifier that keeps leaves check one without its path, although an RFC 9162 path already fixes the index. Binding needs only `cr/sha-512`: two blocks with one leaf give a SHA-512 collision, in the wrapper or in R.
 
 `SETUP_ROOT` (`0x04`, prover to verifier) is:
 
 ```text
-w_commitment[32] || setup_salt_256[32] || u64be(block_count)
-|| verification_root[32] || setup_mode[1]
+w_commitment[64] || setup_salt_256[32] || u64be(block_count)
+|| verification_root[64] || setup_mode[1]
 ```
 
 `setup_mode` is 0 for private encoder and 1 for public encoder. The verifier accepts the root only if it equals the root it constructed through the selected MVP setup path.
@@ -242,12 +297,12 @@ Both parties compute:
 
 ```text
 epoch_id =
-  SHA256(
-    ASCII("verity/pous/p2/epoch/v1\0")
+  SHA-512(
+    ASCII("verity/pous/p2/epoch/v4\0")
     || u32be(len(manifest)) || manifest
-    || w_commitment[32] || setup_salt_256[32]
-    || u64be(block_count) || verification_root[32]
-  )
+    || w_commitment[64] || setup_salt_256[32]
+    || u64be(block_count) || verification_root[64]
+  )                                                    64 bytes
 ```
 
 An epoch id is never reused with a different tuple.
@@ -260,14 +315,14 @@ Given a recoverable `AUDIT_OPEN`, a setup failure emits a zero-record `FINAL` wh
 - code 5 when a setup block decodes outside the selected payload profile;
 - code 6 only when the transport fails before delivering a required complete setup frame.
 
-The same 1, 2, 3, 5 precedence applies if one setup transcript has multiple faults. A setup transcript that ends before `SETUP_ROOT` is transport code 6 unless a frame already read gave code 1 or 2, which it reports instead. When a recorded transcript contains a valid fixed-size `AUDIT_OPEN`, setup transport failure code 6 is recorded as a zero-record `FINAL`: verdict 0, `rounds_completed = record_count = 0`, epoch id, audit id, Δ and RTT copied from `AUDIT_OPEN`, and `transcript_hash = SHA256("verity/pous/p2/transcript/v1\0" || exact AUDIT_OPEN frame)`. No partial setup bytes enter that hash. If no valid fixed-size `AUDIT_OPEN` is available, no interoperable `FINAL` identity exists and the session fails without a `FINAL`; the transport/evidence layer records the setup failure outside this wire format.
+The same 1, 2, 3, 5 precedence applies if one setup transcript has multiple faults. A setup transcript that ends before `SETUP_ROOT` is transport code 6 unless a frame already read gave code 1 or 2, which it reports instead. When a recorded transcript contains a valid fixed-size `AUDIT_OPEN`, setup transport failure code 6 is recorded as a zero-record `FINAL`: verdict 0, `rounds_completed = record_count = 0`, epoch id, audit id, Δ and RTT copied from `AUDIT_OPEN`, and `transcript_hash = SHA-512("verity/pous/p2/transcript/v4\0" || exact AUDIT_OPEN frame)`. No partial setup bytes enter that hash. If no valid fixed-size `AUDIT_OPEN` is available, no interoperable `FINAL` identity exists and the session fails without a `FINAL`; the transport/evidence layer records the setup failure outside this wire format.
 
 ### Audit and challenge derivation
 
 `AUDIT_OPEN` (`0x10`, verifier to prover) is:
 
 ```text
-epoch_id[32] || audit_id[32] || challenge_mode[1] || u16be(k)
+epoch_id[64] || audit_id[32] || challenge_mode[1] || u16be(k)
 || u64be(delta_ns) || u64be(rtt_allowance_ns)
 || verification_flags[1] || u64be(audit_counter)
 ```
@@ -278,12 +333,12 @@ For mode 0, `source` is a verifier secret never sent to the prover:
 
 ```text
 id_key = derive(
-  source, "verity/pous/audit-id/v1",
+  source, "verity/pous/p2-audit-id/v4",
   {"counter": audit_counter, "epoch": epoch_id}
 )
 audit_id = id_key.stream("id", 32)
 audit_key = derive(
-  source, "verity/pous/audit-challenge/v2",
+  source, "verity/pous/p2-audit-challenge/v4",
   {
     "audit": audit_id,
     "epoch": epoch_id,
@@ -297,27 +352,27 @@ round_nonce_j = audit_key.stream(("nonce", j), 32)
 
 Thus every index is uniform in `[0,B)`, with replacement; j is the integer round index passed to the pinned `verity.ml.randomness` sampler. A fresh audit counter gives a fresh audit id and challenge coordinate. The verifier persists used `(epoch_id,audit_id)` pairs across audits and process restarts and rejects reuse before releasing round 0.
 
-The `verity.ml.randomness` argument types are normative: `counter`, `round` and sampler index j are nonnegative integer parts, `"id"` is a string stream index, and `("nonce",j)` is a tuple containing a string then an integer. They are not pre-encoded `u64be` byte strings.
+The `verity.ml.randomness` argument types are normative: `counter`, `round` and sampler index j are nonnegative integer parts, `"id"` is a string stream index, and `("nonce",j)` is a tuple containing a string then an integer. They are not pre-encoded `u64be` byte strings. Appendix A gives every byte they become.
 
 Mode 1 is valid only with a beacon value `beacon_j` that was unavailable before round j. For each round:
 
 ```text
 round_key_j = derive(
-  beacon_j, "verity/pous/audit-round/v1",
+  beacon_j, "verity/pous/p2-audit-round/v4",
   {"audit": audit_id, "epoch": epoch_id, "root": verification_root, "round": j}
 )
 i_j = round_key_j.uniform(block_count, j)
 round_nonce_j = beacon_j
 ```
 
-Each `beacon_j` is exactly 32 bytes. In mode 1, the verifier derives `audit_id` with the same `verity/pous/audit-id/v1` formula from a separate verifier secret or opening beacon that is not reused as a round beacon. The verifier records every beacon identifier and verifies its authenticity outside this wire format. A round beacon known at audit opening is not sufficient for sequential unpredictability.
+Each `beacon_j` is exactly 32 bytes. In mode 1, the verifier derives `audit_id` with the same `verity/pous/p2-audit-id/v4` formula from a separate verifier secret or opening beacon that is not reused as a round beacon. The verifier records every beacon identifier and verifies its authenticity outside this wire format. A round beacon known at audit opening is not sufficient for sequential unpredictability.
 
 ### Challenge and response
 
 `CHALLENGE` (`0x11`, verifier to prover) is:
 
 ```text
-epoch_id[32] || audit_id[32] || u16be(round_j) || u64be(index_i)
+epoch_id[64] || audit_id[32] || u16be(round_j) || u64be(index_i)
 || round_nonce[32]
 ```
 
@@ -326,12 +381,12 @@ Deployment rounds are numbered 0 through 104. The receiver checks epoch, audit, 
 `RESPONSE` (`0x12`, prover to verifier) always carries the block and a root authentication path:
 
 ```text
-epoch_id[32] || audit_id[32] || u16be(round_j) || u64be(index_i)
+epoch_id[64] || audit_id[32] || u16be(round_j) || u64be(index_i)
 || u32be(block_length) || block[block_length]
-|| u16be(path_count) || sibling_0[32] || ... || sibling_(path_count-1)[32]
+|| u16be(path_count) || sibling_0[64] || ... || sibling_(path_count-1)[64]
 ```
 
-The block is the spec's fixed-width unsigned big-endian encoding; at the deployment point it is exactly 2,056 bytes and must be below p. Siblings are ordered from the leaf toward the root. Direction bits are omitted: RFC 9162 path verification derives left/right from `index_i` and `block_count`. `path_count` must be exactly the count consumed by that verification; for B = 2^19 it is 19. A one-block tree has `path_count=0`. Always carrying a path gives one interoperable root-only format; a verifier that also retains every leaf may still verify the path.
+The block is the spec's fixed-width unsigned big-endian encoding; at the deployment point it is exactly 2,056 bytes and must be below p. Siblings are ordered from the leaf toward the root. Direction bits are omitted: RFC 9162 path verification derives left/right from `index_i` and `block_count`. `path_count` must be exactly the count consumed by that verification; for B = 2^19 it is 19, 1,216 bytes of siblings. A one-block tree has `path_count=0`. Always carrying a path gives one interoperable root-only format; a verifier that also retains every leaf may still verify the path.
 
 ### Sequential reveal and deadlines
 
@@ -373,28 +428,30 @@ Define:
 
 ```text
 transcript_hash =
-  SHA256(
-    ASCII("verity/pous/p2/transcript/v1\0")
+  SHA-512(
+    ASCII("verity/pous/p2/transcript/v4\0")
     || exact AUDIT_OPEN frame
     || exact CHALLENGE_0 frame || exact RESPONSE_0 frame
     || ...
-  )
+  )                                                    64 bytes
 ```
 
 `FINAL` (`0x13`, verifier to prover and evidence record) is:
 
 ```text
-epoch_id[32] || audit_id[32] || verdict[1] || failure_code[1]
+epoch_id[64] || audit_id[32] || verdict[1] || failure_code[1]
 || u16be(rounds_completed) || u64be(delta_ns) || u64be(rtt_allowance_ns)
-|| transcript_hash[32] || u16be(record_count) || records
+|| transcript_hash[64] || u16be(record_count) || records
 ```
 
-Each record is:
+Each record is 147 bytes:
 
 ```text
 u16be(round_j) || u64be(index_i) || u64be(elapsed_ns) || flags[1]
-|| SHA256(exact challenge frame)[32] || SHA256(exact response frame)[32]
+|| SHA-512(exact challenge frame)[64] || SHA-512(exact response frame)[64]
 ```
+
+A zero response hash is 64 zero bytes.
 
 Record flags are bit 0 authenticated, bit 1 on time, bit 2 decode performed, bit 3 decode valid; other bits are zero. Bit 1 is evaluated and set only after authentication succeeds, so a complete on-time response that fails parsing, identity or authentication has flags zero. `rounds_completed` and `record_count` are both the number of emitted round records, including a final failed attempt; a failure before round 0 or in `AUDIT_OPEN` has zero. Verdict is 1 only when all k records authenticate and are on time and every requested optional check succeeds. Failure codes are 0 success, 1 malformed, 2 id/round/index/replay/domain, 3 authentication, 4 late, 5 decode or payload comparison and 6 transport. A complete but invalid response is hashed and included as the failing record. If transport fails before a complete response frame arrives, the failing record uses an all-zero response hash, the transcript ends after that round's challenge, and its flags are zero. Any frame delivered after the expected k exchanges changes the verdict to failure code 2 at stopping round k; `rounds_completed = record_count = k`, and the extra frame is not appended to the transcript hash.
 
@@ -460,7 +517,7 @@ The attested image and configuration must be frozen before preprocessing. Any se
 
 For each audit the verifier's evidence record must include the attested image and executable hashes; host, device and isolation identity; process/cgroup and device membership; mounted storage and allowed-file policy; network namespace/firewall policy and counters; memory and persistent-file measurements at preprocessing and every boundary; state byte/bit counts and hashes; cache/temporary-state wipe results; child exit status; and per-round timing already required above.
 
-Perfect isolation remains an assumption, not a property of `p2-audit-wire/v1`. The wire format cannot establish that native code did not use DMA, a covert channel, shared kernel/page cache, an unmeasured process, remote storage or false attestation. Production enforcement and independent attestation of those controls remain procedural.
+Perfect isolation remains an assumption, not a property of `p2-audit-wire/v4`. The wire format cannot establish that native code did not use DMA, a covert channel, shared kernel/page cache, an unmeasured process, remote storage or false attestation. Production enforcement and independent attestation of those controls remain procedural.
 
 #### MVP and reference harness
 
@@ -474,7 +531,8 @@ This harness makes the file/process boundary executable for the included toy Pyt
 
 ### Audit wire test vectors
 
-`internal/efficient-crypto/p2-bounty-kit/generate_audit_vectors.py` generates `audit-vectors.json`: a complete two-round w=64 setup/audit and one full-width 2,056-byte response. It includes W, setup sources, audit sources and counters, elapsed times and the intermediate values needed to recompute every field. Both small and full-width audit ids use the mode-0 `derive(source,"verity/pous/audit-id/v1",{"counter":counter,"epoch":epoch_id}).stream("id",32)` map above. `generate_audit_negative_vectors.py` generates and self-checks 31 complete negative transcripts in `audit-negative-vectors.json` against `p2_audit_verifier.py`; that file includes the setup source for each setup family. `expected_stop_round` is the failing round, k on success or on an extra post-k frame, and zero for a failure before round 0. The deployment value is k=105; k=2 exists only to keep the conformance vectors small. File and message hashes are listed in §7.
+`benchmarks/pous/p2_v1/vectors.py` generates every vector file of this specification in one command,
+`cd benchmarks/pous && uv run python -m p2_v1.vectors`, and rewrites each pin in §7 that changed. `audit-vectors.json` holds a complete two-round w=64 setup/audit and one full-width 2,056-byte response. It includes W, setup sources, audit sources and counters, elapsed times and the intermediate values needed to recompute every field. Both small and full-width audit ids use the mode-0 `derive(source,"verity/pous/p2-audit-id/v4",{"counter":counter,"epoch":epoch_id}).stream("id",32)` map above. `audit-negative-vectors.json` holds 31 complete negative and boundary transcripts, each self-checked against the reference verifier `benchmarks/pous/p2_v1/wire.py` when generated and checked again by `benchmarks/pous/tests/test_pous_p2_wire.py`; it includes the setup source for each setup family. The wrong-domain case derives its challenge under v1's `verity/pous/audit-challenge/v2`. `expected_stop_round` is the failing round, k on success or on an extra post-k frame, and zero for a failure before round 0. The deployment value is k=105; k=2 exists only to keep the conformance vectors small. File and message hashes are listed in §7.
 
 ## 5. Audit
 
@@ -502,7 +560,8 @@ The frozen F3 error allocation is (default, Daniel deferred, 2026-09-29):
 >   permutations in this storage game (P2–M1-SGI);
 > - (c) **the challenge-derivation term** ε_chal ≤ 2^-131, assumed: that `verity.ml.randomness` outputs are
 >   indistinguishable from uniform;
-> - (d) **the expander term** ε_exp = 0 under the setup assumption P2-EXP-IO (F4).
+> - (d) **the expander term** ε_exp = 0 under the setup assumption P2-EXP-IO (F4); its concrete realization by
+>   counter-mode SHA-512 is the separate named assumption SHA-512-CTR/P2-EXP-IO (§4).
 >
 > The terms combine additively by a reduction outside Lean, so the total is at most 2^-129 + 2^-130 + 2^-131 < 2^-128.
 
@@ -520,57 +579,57 @@ SeqRoot evidence is artifact `art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc8914
 
 ## 7. Test vectors
 
-Canonical vectors are in `internal/efficient-crypto/p2-bounty-kit/vectors.json`, generated by `generate_vectors.py` and checked by `test_reference.py`.
+Canonical vectors are `benchmarks/pous/p2_v1/vectors.json` (schema `p2-test-vectors/v4`), checked by
+`reference.conformance()` (`benchmarks/pous/tests/test_pous_p2v1.py`), and the two audit files beside it. Every file
+records the `verity.ml.randomness` derivation it was generated under (`"randomness"`), here
+**`verity/randomness/derive/v2`** (Appendix A). `cd benchmarks/pous && uv run python -m p2_v1.vectors` regenerates all of
+them, and the package's copy of the keys (`verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json`), and
+rewrites these pins; a change to the derivation moves every setup salt, and with it every K, t and c of `vectors.json`,
+every audit id, index and nonce, and so every frame and FINAL of both audit files, while m, the primes and the σ
+rejection cases do not move.
 
-For every map entry, its `sha256` is `SHA256(canonical_json_bytes(entry_without_sha256))`, where `canonical_json_bytes` is the function named in the setup section.
+Each vector's source is `SHA-512("p2-vector-source/{w}/0")` (64 bytes), its model commitment
+`SHA-512("p2-vector-model/{w}")`, its segment 2 and local block 7, and its m the first n bytes of
+`SHA-512("p2-vector-m/{w}/0" ‖ u32be(0)) ‖ SHA-512(… ‖ u32be(1)) ‖ …` reduced mod `2^b`, b the payload bits
+(`8·(n − 1)` at a reduced width, 16,432 at deployment). For every map entry, its `sha512` is
+`SHA-512(canonical_json_bytes(entry_without_sha512))`.
 
-- File SHA-256: `781fec77f4fcadb45f10673457ecd9b63d26cf826a2ebaed5da795539d8a5fab`
-- w=64 entry: `79897cffa9bdd17db3725d930291df7a85a89c28255e70c0d8c7de529d4458a0`
-- w=96 entry: `b1ee454aecc169b1fe8ba80bec1c143f03b9161913abe8b01a0615584317e48f`
-- w=128 entry: `7023a475b0c96775bb502cfaaad497cc6ff10c3c50371ae204487b1a537b9f44`
-- w=16,448 entry: `9aa7e3893c762763f12f8ada129d03410b3b7a0733cec0174baa6db570f3f3e7`
+- `vectors.json` SHA-512: `959911fd371111fe20c4cee6fc532ff205bbf377962c73ac539a4d2de9b22121287e6e996d9ae4bfbef9f26fcd67ac78620873702c8b2899bc41a21bdd76e853`
+- w=64 entry: `c34350fa0e0b8ae7c521cd7df833c160df1498adc938a99feb6166c2f37b3e6a2ca07239b9ab71fdd979b02efc8c8951d68f32d108abbde5cc44bac3137241e1`
+- w=96 entry: `df8941e52d73848baa7862cd3f20ea6f7adc1da79149db154b0be9e0d28be8905b95aac079cd98e14b56f8077ba6cfb173e0472df7e83b40138c6f16a871ff1f`
+- w=128 entry: `adf7cd300e2d4ea93643e94d563b02c80e29d88d65a34a55269f9e37da6b71bde6dce1c9e4c04c561dd103a8dc4c3955ee83ecabef20ad717de4672e8014fcae`
+- w=16,448 entry: `2a227a512683d67624bca51ba087ec05a4dda85c5e93b67c50c03349a7823f50f84b98f4f2f9e92d9c87ddc41ab0e5fd8d2211472709a05093e7c0121a86811c`
 
-The file includes explicit sigma rejection-branch cases at w=64 and w=16,448.
+The file includes explicit sigma rejection-branch cases at w=64 and w=16,448, and carries v1's GMP primality screen of
+each point's p (BPSW plus 64 Miller–Rabin repetitions), which v4 does not change.
 
 Audit wire vectors:
 
-- `audit-vectors.json` SHA-256: `e0e97ddb8b5defaff9cf2e2afd34f543082a3e109b9bae1005e4a1ab74577ac0`
-- `audit-negative-vectors.json` SHA-256: `4866941c0f3f866eb39cad1edfbb664569616942c655ba857c66a3e505fceec3`
-- w=64 audit-open frame: `77051201e591c140cbefcebd06e797a61807b67783370d67a2525e1f2157a759`
-- w=64 round-0 challenge: `d00834ba06ead70dfe74d81ac79905043a275dbb4eaca858e3acbd65459c094d`
-- w=64 round-0 response: `490a09e1b8914070199105d63426406659028a6f0de1f93332b827bf28ac0324`
-- w=64 final frame: `0196df55c207fa6d29f2642fab8511b2567d3f292a6e8eeb68f6ec4bcabafcf1`
-- w=16,448 response frame: `d9cb4f51957a0a458327d8f89dfabd898bcb7b487c6e64881f6bb9a307c3240d`
+- `audit-vectors.json` SHA-512: `5f8ed7f279ccd2f2d5bb60607fb5d7bec82bf982ac85da268f76cb8fbb16d36424e7b99eaa386508840aa2bd3c3b501512bde86b930871a769cd470a14ab176e`
+- `audit-negative-vectors.json` SHA-512: `f57340a0965628051bd0c938c4c7e2db5a7133982ae1a523a1221a3fbb273bfbcb1ebc1d29680b61b47f86d45e7c98aa4a5ac6311545c19c78728d857596a687`
+- w=64 audit-open frame: `190450d36926cd0c6c66ec0161d9815cc3f1f3bd3d9c864cdfe87aa1ece95a06e8f63ce3261d258ff22425ef852e4434df50c141c265e79ca0493ac3f0c81887`
+- w=64 round-0 challenge: `227ee32fbec8715102a4e6585af430ab88a22bfca2ed65d8ef372c408439e4fdcf07a6747e22f6501f0e005eab499ad4b82c167fadbc1ddac8bd9827e8b271c7`
+- w=64 round-0 response: `36ac81b1ef2d7499e96563c4c53e7ac8b7b08c8d2c2907217d43196c12f82268851db7f5ce59bc73c56babb0ca20a38e071db002febf8b4fc84c7741471f073d`
+- w=64 final frame: `30f813852726925a93d3a1a90985a434d3bcd98377acd54d36cef43c2f78ab5f28b6c07338b827b80c3e888682e74cb8d97527978882c2d838dbd407c3d83adf`
+- w=16,448 response frame: `48f7b363b38b914f157567d6ce3398e5d40a2b25c0db73e811e4b0a7a62154a04cd71dee111ab852a5ae228a7f6593224a4eefcb0415d795469677e75103579c`
 
-## 8. Conformance against the fetched MVP branch
+## 8. Conformance of the repository
 
-Compared with `origin/cursor/pous-mvp-interface-c934` at fetched revision `13b308fc6f9511788918be45ec92770b2307514f`:
+`benchmarks/pous/p2_v1/reference.py` is this specification (§§3–4 and the derivations), `wire.py` is
+`p2-audit-wire/v4` and its reference verifier, and `memory_challenger.py` audits with v4's leaves and mode-0 derivation
+over the harness's own responder wire, not these frames. The registered scheme `p2-16448/v4`
+(`verity.core.protocols.pous.schemes.p2`) follows the maps, the values, the profile, the tweak rejection, k and
+the hash, and its keys are §4's streams, but it runs the generic protocol's setup, so four things differ:
 
-| Topic | Frozen v1 | MVP branch | Result |
-|---|---|---|---|
-| Payload width | `p2-2054B`, 2,054 bytes = 16,432 bits | 2,054 bytes = 16,432 bits | Conforms |
-| W packing | concatenated 2,054-byte big-endian payloads | concatenated 2,054-byte payloads | Conforms |
-| Integer wire order | fixed-width big-endian | P2 v2 is fixed-width big-endian | Conforms |
-| Expander | P2-EXP-IO; concrete SHAKE256 with v1 framing | SHAKE256 segment seed, then ChaCha8 stream | Deviation |
-| Tweak sampling | rejection below p | rejection below p | Conforms |
-| Derivation context | version, prime, model, setup salt, segment, block, purpose | P2 seed domain plus `salt || u64(segment)`; block is ChaCha nonce | Deviation |
-| Mask | fresh full-width per block | fresh full-width per block | Conforms in shape |
-| Rejection branch | return r when `r XOR K ≥ p` | same | Conforms |
-| Maps | parity-signed square; one exponentiation per ρ | same outputs; MVP fallback performs a second exponentiation for nonresidues | Output conforms; implementation cost deviates |
-| Setup order | W commitment, salt/source, encoding, vk, audit key | generic protocol commits W before `draw_salt`; audit key follows vk | Conforms |
-| Exact domain | canonical `[0,p)` with b = 16,432; exact-domain pins are trusted in the store | code rejects `c ≥ p`; metadata says the `m1p` pin is proposed | Code conforms; MVP metadata awaits the PR #162/#183 repository sync |
-| Certificate size | B=2^19 and pinned 2^8–2^23 family | P2 v2 exposes 8 × 2^16 = 2^19 and cites `P2MeetsM1pB19Uncond` as proposed | Geometry conforms; theorem status is stale |
-| Challenge count | k = 105, with 128-bit-per-block structural-leakage margin | certificate and verifier use k = 88 | Deviation; migrate to `P2SlackFamilyUncond`/k = 105 |
-| W commitment | tagged SHA-256 over canonical manifest and W | same `verity-pous/w-commitment/v1` | Conforms |
-| Verification tree | RFC 6962 shape, SHA-256 0x00 leaves/0x01 nodes | same shape and hash tags | Structure conforms |
-| Leaf framing | 32-byte P2 setup salt; u64be segment; u16be local index | 24-byte generic salt; concatenated tag uses little-endian; u16le local index | Deviation |
-| Challenge derivation | audit/epoch-bound v2; audit counter; nonce; optional roundwise beacon | `verity/pous/audit-challenge/v1`, bound only to root and 24-byte salt; `uniform(B,j)` | Sampler conforms; replay/domain binding extended |
-| Audit messages | canonical framed network messages; response always includes path | in-process Python calls; block alone by default, optional path for root-only memory challenger | New wire format; MVP has no serialization |
-| Negative wire behavior | 31 byte-exact cases pin setup failures, parsing, k bounds, flag dependencies, sibling counts, replay, post-k frames, authentication, deadlines and transport failures | no serialized negative corpus or `FINAL` failure-code implementation | New executable conformance layer |
-| Sequential timing | first challenge byte sent through last response byte received | in-process `challenge()` through `respond()` | Same strict sequencing; clock boundary is newly frozen |
-| Hardware and deadline | Δ = 0.5 ms, RTT allowance ≤ 354 µs (v1.1), cooperation within one chiplet allowed, same-chiplet pinning | Δ = 0.5 ms, `ROOT_CALL_NS=2.9 ms`, cooperating cores excluded | Deviation; migrate calibration and topology policy |
+| Topic | v4 | `p2-16448/v4` |
+|---|---|---|
+| Setup salt | 32 bytes, `verity/pous/p2-setup/v4` over the model commitment | 24 bytes, the generic `setup.draw_salt` |
+| Key prefix | frames the model commitment and the 32-byte salt (176 bytes, padded to 256) | frames the 24-byte salt (95 bytes, padded to 128), so its base is 144 bytes; the chunks are the same function |
+| Leaf | `0x00 ‖ salt[32] ‖ u64be(s) ‖ u16be(v) ‖ R` | `0x00 ‖ tag_s[32] ‖ u16le(v) ‖ R`, `tag_s` the generic protocol's per-segment tag |
+| Challenges | `verity/pous/p2-audit-challenge/v4`, bound to audit, epoch, root and salt | the generic `verity/pous/audit-challenge/v1`, bound to the root and salt |
 
-The branch names `p2-16448/v2`, uses `p2-2054B`, big-endian P2 values, exact tweak rejection and B = 2^19. It still uses ChaCha8, k = 88, stale pin status, the generic 24-byte salt/Merkle framing, an unnecessary second exponentiation in ρ's nonresidue branch, the old hardware calibration and in-process audit objects rather than the v1 network wire format.
+Both commit W with tagged SHA-512 under `verity-pous/w-commitment/v2`, build the RFC 6962 tree with SHA-512 nodes, and
+hash the same R. `p2-16448/v2` (ChaCha8 keys) is nonconforming to F4.
 
 ## 9. Freeze checklist
 
@@ -580,36 +639,40 @@ Every item below is normative. A policy choice is not a substitute for the corre
 - [x] Freeze payload profile `p2-2054B` and the corresponding exact-domain `m1p` pins.
 - [x] Freeze B, k, Q, Δ, round-trip accounting and the allowed hardware/cooperation class together; the SeqRoot run and margin pins are cited in §§5–6.
 - [x] Allocate ideal-model, expander and concrete-instantiation errors with the normative `1% + 2^-128` total in §5.
-- [x] Freeze P2-EXP-IO, the concrete SHAKE256/P2-EXP-IO assumption, v1 expander framing and vectors.
-- [x] Specify challenge derivation after vk through `verity.ml.randomness`, including versioned domains, audit/epoch binding, round indices and sequential beacon requirements (`p2-audit-wire/v1`).
-- [x] Specify root authentication and RFC 9162 inclusion paths, reusing the MVP's tree structure with P2's canonical framing.
+- [x] Freeze P2-EXP-IO, the concrete SHA-512-CTR/P2-EXP-IO assumption, v4 expander framing and vectors.
+- [x] Specify challenge derivation after vk through `verity.ml.randomness`, including versioned domains, audit/epoch binding, round indices and sequential beacon requirements (`p2-audit-wire/v4`).
+- [x] Specify root authentication and RFC 9162 inclusion paths, with SHA-512 nodes over 0x00-tagged leaves of each block's row digest.
 - [x] Specify complete setup, audit-open, challenge, response and final-record frames, including failure behavior.
 - [x] Specify replay prevention and domain separation across models, epochs, audits, segments, blocks and rounds.
 - [x] Specify and test state isolation: the normative subsection above maps the Lean state and boundaries to deployment, and `internal/efficient-crypto/p2-bounty-kit/isolation_harness.py` with `test_isolation_harness.py` passes its full-C, 18/19 raw-storage, over-cap, side-file, environment and network controls. Native-code/OS isolation, GPU/DMA and cache wiping, aggregate resource measurement, attestation and verifier evidence collection remain procedural deployment controls.
 - [x] Specify deadline clock boundaries, strict failure behavior, RTT allowance input and transcript evidence, including the frozen numerical Δ/RTT/hardware choice and SeqRoot evidence.
-- [x] Obtain byte-for-byte interoperability results from two independent implementations of `p2-audit-wire/v1`: `internal/efficient-crypto/p2-audit-wire-interop.md` reports zero mismatches for `vectors.json` SHA-256 `c40af08a1f125ee7acbef128230b4d0e073556d306bba45261b8fac07d74b297`, `audit-vectors.json` SHA-256 `2b74b1f19ffd875562ed39f08009150631f94d0dd1fdba660fbb411a01871c49`, and `audit-negative-vectors.json` SHA-256 `257c5666129ace01fd0fa1cc7ec286d130bee0d90897c13c6185c5fe1f5709dd`.
-- [x] Add negative conformance cases for malformed encodings, setup failures, replayed challenges, wrong domains, failed authentication paths and late answers: 31 complete transcripts are generated and self-checked in `internal/efficient-crypto/p2-bounty-kit/audit-negative-vectors.json`; its hash is listed in §7.
-- [ ] Migrate the MVP implementation and evidence path to every frozen-v1 requirement in the conformance table.
+- [x] Generate §7's vectors under `verity.ml.randomness` v2 (one command, §7).
+- [x] Obtain byte-for-byte interoperability results from two independent implementations of `p2-audit-wire/v4`: the reference verifier `benchmarks/pous/p2_v1/wire.py` and the Lean `pous_check` (`verity/core/protocols/pous/check`, `PousCheck.Wire` and `PousCheck.Audit.check`) agree byte for byte on every vector of §7, `uv run python verity/core/protocols/pous/check/interop.py --all`: 40 transcripts (the 31 of `audit-negative-vectors.json`, `audit-vectors.json`'s end-to-end audit and its full-width response under a public and a private setup, and `vectors.json`'s 4 vectors and 2 σ cases), 0 mismatches in each setup's outputs, `FINAL` frame, verdict, code, record count and transcript hash, or fault code and message (run `r20261008-150018-fa5d`, `art:51a3f45b75d288eb60846cd956a2e6a7b3c94bf4ecf38dce3bbc9aadbe7f2990`). The Lean is a verifier only: the setup and response frames both read are the vectors', which Python's prover wrote. v1's results (`internal/efficient-crypto/p2-audit-wire-interop.md`) do not carry over.
+- [x] Add negative conformance cases for malformed encodings, setup failures, replayed challenges, wrong domains, failed authentication paths and late answers: 31 complete transcripts in `audit-negative-vectors.json`; its hash is listed in §7.
+- [ ] Migrate the MVP implementation and evidence path to every requirement in §8's table.
 
 ## 10. Decisions (frozen)
 
 1. F1: `p2-2054B` is the sole deployment payload profile (default, Daniel deferred, 2026-09-29).
 2. F2: B = 2^19, Q = 2^20, w = 16,448, Δ = 0.5 ms, RTT allowance at most 354 µs, and same-chiplet cooperation and pinning as §6 (default, Daniel deferred, 2026-09-29; the RTT cap, at most 1 ms in v1, is v1.1's, Daniel's ruling of 2026-10-04, §12).
 3. F3: the normative error total and allocation in §5 (default, Daniel deferred, 2026-09-29).
-4. F4: accept P2-EXP-IO, realized by SHAKE256 with v1 framing; ChaCha8 is nonconforming (default, Daniel deferred, 2026-09-29).
+4. F4: accept P2-EXP-IO, realized by counter-mode SHA-512 with v4 framing; ChaCha8 is nonconforming (default, Daniel deferred, 2026-09-29; SHA-512 in place of SHAKE256 by Daniel's ruling of 2026-10-06, §13).
 5. F5: pin `P2SlackB19Uncond`, `P2SlackFamilyUncond` and `P2ErrorSplitB19Uncond` (default, Daniel deferred, 2026-09-29).
 6. F6: k = 105, absorbing 128 bits per block of structural leakage over B = 2^8 through 2^23 (default, Daniel deferred, 2026-09-29).
 7. Keep p = 2^16448 − 21065 under its ECPP certificate, without requiring a Lean-checked primality proof (default, Daniel deferred, 2026-09-29).
 8. Do not accept P2–M1-SGI; P2 remains experimental despite this frozen specification (default, Daniel deferred, 2026-09-29).
+9. One hash: SHA-512 with its whole output for every digest, and SHA-256 retired from P2 (Daniel's ruling of 2026-10-06, 15:07Z, §13).
 
 ## 11. Remaining before deployment
 
-- Migrate the MVP to frozen v1 as listed in the conformance table.
-- Measure SHAKE256 key derivation on the deployment device.
+- Migrate the MVP to v4 as listed in §8.
+- Counter-mode SHA-512 key derivation on the deployment device, measured: on an NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120, vy-nebius-1 GPU 3), `p2-2054B` (n = 2,056) at B = 2^19, with `p2keys4.cuh` (`-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA`), every block's `K` and `t` are derived at 1.136 × 10^8 blocks/s (4.62 ms per store, the median of 10), and the setup's first derivation for the whole store takes 5.39 ms of wall time. All 2^19 blocks' `K` and `t` equal hashlib's, as do the 59 reference blocks and the pinned `p2-v4-keys.json` entry (`p2-v4/w16448/0`). Run r20261008-152508-ff34, art:07d65cea4534caaa8f92e364455fd4b998632b4e020302ce6f38525a50617dfa (`decode_bench.py --keys-all`).
 - Accept P2–M1-SGI.
 - Synchronize the trusted-layer pins into the repository after PRs #162/#183.
 
 ## 12. Amendment v1.1 (2026-10-04)
+
+*As written for v1.1. v4 (§13) changed the hashes, the byte formats and the vectors; it kept the cap.*
 
 **v1.1 is Daniel's ruling of 4 Oct 2026, 2:21 PM PDT (21:21Z),** relayed as ruling 3 of the migration-kickoff
 announcement (Slack thread 1791150333.889129): "*P2:* cap the RTT allowance near 0.35 ms (Δ + RTT ≤ about 0.85 ms) and
@@ -688,11 +751,74 @@ grounds (`art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`,
 - The review: `art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c`.
 - Frozen v1: `art:a7a29e84eef9d2584482b7f3e9722af6b579e2984a9633352564c562ce9e2021`.
 
-## 13. Errata v1.1 (2026-10-07)
+## 13. Amendment v4 (2026-10-06)
 
-Daniel accepted four clarifications on 7 Oct 2026 (21:39Z). They change no rule, value, vector or pin; the reference verifier already behaved this way. They came from the Lean port of the timed-audit check, which found the prose silent where the code had to choose.
+**v4 is Daniel's ruling of 6 Oct 2026, 15:07Z,** relayed by memory-accounting: one hash, SHA-512, with its whole output,
+everywhere; SHA-256 retires.
+
+**What changed.** Only the hash, and what its output size moves:
+
+- Every SHA-256 is SHA-512 with all 64 bytes: the W commitment, the verification tree's leaves and nodes, the epoch id,
+  the transcript hash and the frame hashes in a record. Every digest field on the wire grows from 32 to 64 bytes, and
+  every frame size and offset with it (§4's two tables). The setup salt, the audit id and the nonce stay 32 bytes.
+- The leaf hashes the block's `sha512/row/v2` digest R, not the block (§4, "Why this leaf").
+- The keys are counter-mode SHA-512 over a prefix padded to whole 128-byte blocks, where v1 read two SHAKE256 streams;
+  t's rejection sampling is unchanged. The assumption that names the concrete expander is now SHA-512-CTR/P2-EXP-IO,
+  where v1's was "SHAKE256/P2-EXP-IO storage-game idealization".
+- The challenge derivation is `verity.ml.randomness` v2 (Appendix A), SHA-512 where v1 was SHA-256.
+- The claims P2 cites name `cr/sha-512` where they named `cr/sha-256`.
+- Every name with a version moved:
+
+| v1 | v4 |
+|---|---|
+| protocol `p2/v1` | `p2/v4` |
+| `p2-audit-wire/v1`, version byte `0x01` | `p2-audit-wire/v4`, version byte `0x04` |
+| `veritor/tagged-sha256/v1\0`, tag `verity-pous/w-commitment/v1` | `verity/tagged-sha512/v1\0`, tag `verity-pous/w-commitment/v2` |
+| `verity/pous/p2-setup/v1` | `verity/pous/p2-setup/v4` |
+| `frame("verity/pous/p2/expand/v1")` opening the SHAKE256 base | `"verity/pous/p2/keys/v4\0"` opening the key prefix |
+| `verity/pous/p2/epoch/v1\0` | `verity/pous/p2/epoch/v4\0` |
+| `verity/pous/p2/transcript/v1\0` | `verity/pous/p2/transcript/v4\0` |
+| `verity/pous/audit-id/v1` | `verity/pous/p2-audit-id/v4` |
+| `verity/pous/audit-challenge/v2` | `verity/pous/p2-audit-challenge/v4` |
+| `verity/pous/audit-round/v1` | `verity/pous/p2-audit-round/v4` |
+| `p2-test-vectors/v1`, `p2-audit-wire-v1/…` | `p2-test-vectors/v4`, `p2-audit-wire-v4/…` |
+
+**What did not change.** w, p, the profile, B, Q, k, Δ, the RTT cap, the hardware class, the maps, the error allocation,
+the frame types and their field order, the failure codes and their precedence, and the state-isolation rules.
+
+**What v4 assumes in place of v1.** `cr/sha-512` (collision resistance of SHA-512) for the commitment and the tree, and
+SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM runs on Nebius, which offers no attesting
+hardware, so the deployment cites core's `trusted-nebius-host` assumption (`verity.core.claims`; Lean
+`Verity.Assumptions.TrustedNebiusHost`, Daniel's answer of 2026-10-06). Perfect isolation (§4) is about the prover; this
+is about the verifier's host.
+
+## 14. Errata (2026-10-07)
+
+Daniel accepted four clarifications on 7 Oct 2026 (21:39Z). They change no rule, value, vector or pin; the reference verifier already behaved this way. They hold for v1.1 and v4 alike. They came from the Lean port of the timed-audit check, which found the prose silent where the code had to choose.
 
 1. Δ and the RTT allowance in `AUDIT_OPEN` are the verifier's own, and no failure code covers them (§ Sequential reveal and deadlines).
 2. A setup transcript that ends early is transport code 6 unless a frame already read gave code 1 or 2 (§ Setup commitment, salt and verification root).
 3. A registered scheme's profile is `p2-{payload_bytes}B`; `p2-nb` exists only in reduced-width conformance vectors (§ Parties and transport).
 4. An `elapsed_ns` outside u64 is the verifier's fault, and the session ends without a `FINAL` (§ Sequential reveal and deadlines).
+
+## Appendix A. `verity.ml.randomness` v2
+
+The derivation the challenges use, byte for byte. `frames(index)` is `frame(p_1) || … || frame(p_m)` for the parts of
+an index (one part when the index is not a tuple).
+
+```text
+derive(source, domain, ctx) =
+  Key(first 32 bytes of SHA-512(
+    ASCII("verity/randomness/derive/v2\0")
+    || frame(source) || frame(domain)
+    || frame(frame(k_1) || frame(ctx[k_1]) || … || frame(k_m) || frame(ctx[k_m]))   keys k_1 < … < k_m, sorted
+  ))
+key.stream(index, N) = the first N bytes of block_0 || block_1 || …,
+  block_c = SHA-512(ASCII("verity/randomness/stream/v2\0") || key[32] || frame(frames(index)) || u64be(c))
+key.uniform(n, j): width = ⌈(bitlen(n) + 64) / 8⌉ bytes; read consecutive width-byte big-endian words from
+  key.stream(("u", j), …) and return the first word x below 2^(8·width) − (2^(8·width) mod n), as x mod n
+```
+
+`source` is nonempty bytes; `domain` matches `verity/[a-z0-9-]+/[a-z0-9-]+/v[0-9]+`; context keys are strings and values
+bytes, strings or nonnegative integers. v1 is the same with `…/v1\0` tags and SHA-256 (all 32 bytes as the key, 32-byte
+stream blocks).
