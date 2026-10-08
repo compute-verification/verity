@@ -527,12 +527,25 @@ def lean_slot(cmd: list[str]) -> list[str]:
     return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd, only) else cmd
 
 
+def requires_outside(lean: Path) -> list[str]:
+    """The packages the Lean package ``lean`` requires from outside its directory, by its manifest or its lakefile: the
+    agreement's pass is kept under that directory's files only, so it would outlive a change to one of them."""
+    import tomllib
+
+    m, lf = lean / "lake-manifest.json", lean / "lakefile.toml"
+    entries = [*(json.loads(m.read_text()).get("packages", []) if m.exists() else []),
+               *(tomllib.loads(lf.read_text()).get("require", []) if lf.exists() else [])]
+    return sorted({e.get("name", "?") for e in entries
+                   if (p := e.get("dir") or e.get("path")) is None or not (lean / p).resolve().is_relative_to(lean.resolve())})
+
+
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
-    `--record` sends it then."""
+    `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
+    directory (`requires_outside`)."""
     lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
         if FLOCK_VERIFIER.is_dir():
@@ -547,6 +560,9 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             agreement = [sys.executable, str(Path(__file__).resolve()), "--lean-agreement", str(out), str(got["upstream"]), str(got["inputs"])]
         elif got:
             agreement = f"only {', '.join(got)} of the pinned upstream build and inputs was sent"
+    if outside := requires_outside(lean):
+        agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
+                     f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
