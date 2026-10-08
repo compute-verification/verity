@@ -857,7 +857,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
+    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:

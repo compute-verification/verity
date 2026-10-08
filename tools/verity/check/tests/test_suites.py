@@ -552,6 +552,30 @@ def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_
     assert not stat.exists() or stat.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"), stat.read_text()
 
 
+def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
+    """45fe's test_suites.py waited 82 min on a FIFO nobody wrote until it was killed by hand (7 Oct). Here the test blocks the
+    same way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
+    kept."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.5\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts", "--json", str(tmp_path / "out.json"))
+    assert p.returncode == 1 and "TIMED OUT: still running after 0.5 s, so its process group was killed" in p.stdout, p.stdout
+    import json
+
+    [r] = json.loads((tmp_path / "out.json").read_text())
+    assert r["status"] == "failed" and r["timed_out"] == 0.5
+    assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
+
+
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
     S = _suites(monkeypatch, tmp_path)
     n = S.oom_kills()
