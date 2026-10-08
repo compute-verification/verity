@@ -627,16 +627,18 @@ def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_
     mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
     cases = {"name": "P.Enc.casesOn", "module": "P.Defs", "kind": "def", "hash": "3" * 32, "own": []}
     g = {"name": "P.g", "module": "P.Defs", "kind": "def", "hash": "4" * 32, "own": []}
+    hyp = {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "6" * 32, "own": []}
     pol = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}}}
-    now = facts(pins={"P.t": fact(reads=[enc, mk, cases, g])})
+    now = facts(pins={"P.t": fact(reads=[enc, mk, cases, g, hyp])})
     sha_ = lambda *rs: A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
     by_parent = {"P.Enc": sha_(enc, mk, cases), "P.g": sha_(g)}
-    old = A.judge(pol, now, FILES, update=True)[1] | {"reads": {"P.Defs": {"digest": A.module_digest(by_parent),
-                                                                         "definitions": by_parent, "guarantees": ["P.t"]}}}
+    first = A.judge(pol, now, FILES, update=True)[1]
+    old = first | {"reads": first["reads"] | {"P.Defs": {"digest": A.module_digest(by_parent), "definitions": by_parent,
+                                                          "guarantees": ["P.t"]}}}
     new = A.judge(old, now, FILES, update=True)[1]
     notes = A.review(old, new, now, {})
     assert notes == [f"reads: 2 {A.REGROUPED_OWN}"] and A.statement_changes(notes) == []
-    now2 = facts(pins={"P.t": fact(reads=[enc, mk, cases, {**g, "hash": "5" * 32}])})
+    now2 = facts(pins={"P.t": fact(reads=[enc, mk, cases, {**g, "hash": "5" * 32}, hyp])})
     notes = A.review(old, A.judge(old, now2, FILES, update=True)[1], now2, {})
     assert [n.split(":")[0] for n in A.statement_changes(notes)] == ["definition P.g (P.Defs), read by P.t"]
 
