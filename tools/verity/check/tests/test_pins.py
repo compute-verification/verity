@@ -96,3 +96,133 @@ def test_a_readme_without_the_command_is_refused(repo):
     (repo / "pkg" / "README.md").write_text("no command here\n")
     with pytest.raises(SystemExit, match="no `sha256sum ... > TRUSTED.sha256` command"):
         P.PINS[0].shell(repo)
+
+
+#: `lake update` as far as a manifest goes: every package the lakefile requires, those its path requirements require after it
+#: (their `dir` joined from here, as Lake writes it), unnormalized and in that order
+FAKE_LAKE = r'''#!/usr/bin/env python3
+import json, os, sys, tomllib
+assert sys.argv[1:] == ["update"], sys.argv
+def entries(d, rel, inherited):
+    out = []
+    for r in tomllib.load(open(os.path.join(d, "lakefile.toml"), "rb")).get("require", []):
+        if "path" in r:
+            out.append({"type": "path", "name": r["name"], "dir": os.path.join(rel, r["path"]), "inherited": inherited})
+            out += entries(os.path.join(d, r["path"]), os.path.join(rel, r["path"]), True)
+        else:
+            out.append({"type": "git", "name": r["name"], "url": r["git"], "rev": r["rev"], "inherited": inherited})
+    return out
+seen, pkgs = set(), []
+for e in entries(".", "", False):
+    if e["name"] not in seen:
+        seen.add(e["name"])
+        pkgs.append(e)
+open("lake-manifest.json", "w").write(json.dumps({"version": "1.1.0", "packagesDir": ".lake/packages", "packages": pkgs}, indent=1) + "\n")
+'''
+ID = {**ENV, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+GIT = '[[require]]\nname = "mathlib"\ngit = "https://example.invalid/mathlib"\nrev = "' + "a" * 40 + '"\n'
+
+
+def _commit(root: Path, msg: str) -> str:
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, env=ENV)
+    subprocess.run(["git", "commit", "-qm", msg], cwd=root, check=True, env=ID)
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, env=ENV, capture_output=True, text=True).stdout.strip()
+
+
+def _lake(root: Path, *pkgs: str) -> None:
+    for p in pkgs:
+        subprocess.run(["lake", "update"], cwd=root / p, check=True)
+
+
+@pytest.fixture
+def lake_repo(tmp_path, monkeypatch):
+    """`top` requires `base` by path, `base` requires Mathlib by git; a pin records top's manifest."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text(FAKE_LAKE)
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    root = tmp_path / "repo"
+    for d, lakefile in (("base", f'name = "base"\n\n{GIT}\n# the rest of base\n\n\n\n\n'),
+                        ("top", 'name = "top"\n\n[[require]]\nname = "base"\npath = "../base"\n')):
+        (root / d).mkdir(parents=True)
+        (root / d / "lakefile.toml").write_text(lakefile)
+        (root / d / "lean-toolchain").write_text("leanprover/lean4:v4\n")
+    (root / "gen.py").write_text(GEN.replace("pkg/A.lean", "top/lake-manifest.json"))
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True, env=ENV)
+    _lake(root, "base", "top")
+    subprocess.run(["python3", "gen.py"], cwd=root, check=True)
+    base = _commit(root, "base")
+    monkeypatch.setattr(P, "PINS", (P.Pin("vec.json", "inputs", "", "python3 gen.py"),))
+    return root, base
+
+
+def _side(root: Path, base: str, name: str, before: bool, top: bool = True) -> str:
+    """A branch off ``base`` whose `base` package requires a new package ``name`` by path (first in its lakefile, or last), with
+    base's manifest regenerated there, and top's and the pin unless not ``top`` (as #1524 and #1497 left Security/Proofs')."""
+    subprocess.run(["git", "checkout", "-q", "-b", name, base], cwd=root, check=True, env=ENV)
+    (root / name).mkdir()
+    (root / name / "lakefile.toml").write_text(f'name = "{name}"\n')
+    req = f'[[require]]\nname = "{name}"\npath = "../{name}"\n'
+    lf = (root / "base" / "lakefile.toml").read_text()
+    head, _, rest = lf.partition("\n\n")
+    (root / "base" / "lakefile.toml").write_text(f"{head}\n\n{req}\n{rest}" if before else lf + req)
+    _lake(root, "base", *(["top"] if top else []))
+    subprocess.run(["python3", "gen.py"], cwd=root, check=True)
+    return _commit(root, name)
+
+
+def test_a_merge_of_two_branches_each_adding_a_lake_dependency_gets_the_manifests_lake_writes_and_fresh_pins(lake_repo):
+    """0fcc (top, 8 Oct): #1524 and #1497 each added a path dependency to `security_properties`, git merged the manifests' text,
+    and `security_proofs`' manifest held neither. The merge reruns `lake update` in both packages, `base` first, takes OURS for
+    the conflicted manifests before it, and the pin of top's manifest is rewritten by its command, not found stale later."""
+    root, base = lake_repo
+    x, y = _side(root, base, "x", True), _side(root, base, "y", False, top=False)
+    subprocess.run(["git", "checkout", "-q", x], cwd=root, check=True, env=ENV)
+    m = subprocess.run(["git", "merge", "--no-commit", "--no-ff", y], cwd=root, env=ID, capture_output=True, text=True)
+    conflicted = subprocess.run(["git", "diff", "--name-only", "--diff-filter=U"], cwd=root, env=ENV, capture_output=True,
+                                text=True).stdout.split()
+    assert m.returncode == 0 and conflicted == [], m.stdout
+    names = [e["name"] for e in json.loads((root / "top" / "lake-manifest.json").read_text())["packages"]]
+    assert "y" not in names, "git's merge alone leaves top's manifest without y"
+    assert P.lake_affected(root, x, y) == ["base", "top"]
+    rc, doc = P.merged(root, x, y, conflicted)
+    assert rc == 0, doc
+    names = [e["name"] for e in json.loads((root / "top" / "lake-manifest.json").read_text())["packages"]]
+    assert names == ["base", "x", "mathlib", "y"]
+    fresh = (root / "top" / "lake-manifest.json").read_bytes()
+    _lake(root, "base", "top")
+    assert (root / "top" / "lake-manifest.json").read_bytes() == fresh, "what `lake update` writes"
+    assert P.stale(root) == [] and {"top/lake-manifest.json", "vec.json", *conflicted} <= set(doc["regenerated"])
+
+
+def test_a_conflict_in_a_file_merged_doesn_t_generate_exits_3(lake_repo):
+    root, base = lake_repo
+    rc, doc = P.merged(root, base, base, ["base/lakefile.toml"])
+    assert rc == 3 and "base/lakefile.toml" in doc["notes"][0]
+
+
+def test_a_manifest_that_fetches_the_same_packages_in_another_order_keeps_its_bundle_under_its_new_key(lake_repo, monkeypatch):
+    """Security/Proofs on 0fcc's fix: `lake update` reordered the fetched entries, so the dependency key moved and the bundle,
+    the same packages at the same revisions, was pinned under it. A manifest that fetches anything else is only named."""
+    root, base = lake_repo
+    git_entry = {"type": "git", "name": "m2", "url": "u", "rev": "b" * 40}
+    doc = json.loads((root / "top" / "lake-manifest.json").read_text())
+    doc["packages"].append(git_entry)
+    (root / "top" / "lake-manifest.json").write_text(json.dumps(doc) + "\n")
+    tc = (root / "top" / "lean-toolchain").read_bytes()
+    old = P.deps_key((root / "top" / "lake-manifest.json").read_text(), tc)
+    (root / P.LEAN_DEPS).parent.mkdir(parents=True)
+    pin = {"package": "top", "sha256": "s", "bytes": 1, "run": "r"}
+    (root / P.LEAN_DEPS).write_text(json.dumps({"deps": {old: pin}, "schema": "x"}))
+    side = _commit(root, "two fetched packages")
+    doc["packages"] = [doc["packages"][-1], *doc["packages"][:-1]]
+    (root / "top" / "lake-manifest.json").write_text(json.dumps(doc) + "\n")
+    new = P.deps_key((root / "top" / "lake-manifest.json").read_text(), tc)
+    notes: list[str] = []
+    assert new != old and P.repoint(root, "top", [side], notes)
+    assert json.loads((root / P.LEAN_DEPS).read_text())["deps"] == {new: pin} and "pinned as" in notes[0]
+    doc["packages"][0] = {**git_entry, "rev": "c" * 40}
+    (root / "top" / "lake-manifest.json").write_text(json.dumps(doc) + "\n")
+    notes.clear()
+    assert not P.repoint(root, "top", [side], notes) and "fetches its dependencies cold" in notes[0]
