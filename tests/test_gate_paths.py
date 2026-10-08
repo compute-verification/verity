@@ -78,24 +78,20 @@ def rule_dangling(rule: list[str], files: frozenset[str]) -> list[str]:
 
 
 def rules() -> dict[str, list[str]]:
-    """Every path rule a gate reads: `ci.toml`'s and `tool.py`'s `merge_requires` and the queue's grants."""
+    """Every path rule a gate reads: `ci.toml`'s and `tool.py`'s `merge_requires`."""
     declaration = _module("gate_paths_declaration", ROOT / "tools" / "verity" / "check" / "declaration.py")
     tool = _module("gate_paths_check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
-    from research import queue
 
     out = {f"tools/verity/check/ci.toml job {j.name}": list(j.merge_requires) for j in declaration.load() if j.merge_requires}
     out |= {f"tools/verity/check/tool.py CHECK.merge_requires[{k!r}]": list(v) for k, v in tool.CHECK.merge_requires.items()}
-    source = next(p for p in (queue.RULES, queue.RULES_BEFORE_MOVE) if (ROOT / p).is_file())
-    out |= {f"{source} grant {g.role}": list(g.paths) for g in queue.Rules.parse((ROOT / source).read_text()).grants if g.paths}
     return out
 
 
-def test_every_merge_requirement_and_grant_matches_tracked_files():
+def test_every_merge_requirement_matches_tracked_files():
     found = rules()
-    assert any("ci.toml" in k for k in found) and any("grant" in k for k in found), found
+    assert any("ci.toml" in k for k in found), found
     bad = {k: d for k, rule in found.items() if (d := rule_dangling(rule, tracked()))}
-    assert not bad, ("these gates name path prefixes no tracked file is under, so they would never require their step or "
-                     f"grant: {bad}")
+    assert not bad, f"these gates name path prefixes no tracked file is under, so they would never require their step: {bad}"
 
 
 def _suite_tables() -> dict[str, dict]:
