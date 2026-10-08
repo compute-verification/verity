@@ -35,7 +35,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import active_replay as ar
-from verity.experimental.protocols.certifier.active import DATA, HEADER, LAST, PAD, EVENT_END
+from verity.core.protocols.certifier.active import DATA, HEADER, LAST, PAD, EVENT_END
 
 CROSSING_CHOICE = ("text", "finish_reason", "stop_reason")
 UNEXPLAINED_TOP = ("id", "created")

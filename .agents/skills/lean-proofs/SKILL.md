@@ -8,7 +8,7 @@ description: >
   of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
   them). Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
-  and its Proofs, the PoUS grader in verity/experimental/protocols/pous/lean), when a Lean build or proof is slow,
+  and its Proofs, the PoUS grader in verity/core/protocols/pous/lean), when a Lean build or proof is slow,
   editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -24,7 +24,9 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   security analysis, under `Security/`: a definition or statement in `Definitions/<Area>/` or
   `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
   `security_proofs` in `Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
-  `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. No new package: an area is a directory in each tree.
+  `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
+  `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
+  `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
@@ -114,7 +116,7 @@ simp with that.
   `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`), and listed by name in the lock's
   `assumptions` with its owner (`check.py --update` writes its record). Its docstring opens with its
-  claim id (`uniform/io-getrandombytes`, from `verity.experimental.claims`) and gives its rationale. Lean is the source of truth for
+  claim id (`uniform/io-getrandombytes`, from `verity.core.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
   `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an
   assumption, or a theorem in a lane branch, not on `main`.
@@ -167,8 +169,7 @@ simp with that.
 These are Daniel's rulings, newest first.
 
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
-  Daniel gets a DM showing it. Approval may come back for chosen packages (a grant in `tools/verity/check/queue.toml`). "Pin" is
-  retired: say guarantee.
+  Daniel gets a DM showing it. "Pin" is retired: say guarantee. (Since 8 Oct no change waits on a per-head grant at all.)
 - 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
   conclusion, where an assumption is a named `Prop` (README "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer

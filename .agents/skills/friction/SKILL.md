@@ -101,6 +101,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
+  or a statement reviewer's: `research merge` and `research queue` read none. This retires the grant rulings of 6 and 7
+  Oct below.
 - 2026-10-07 (3:54 PM PDT; 3:25 PM PDT: "skip check more", revert what breaks): `main` always passes the whole `check`,
   kept fast by reusing each part's verdict while its declared inputs, the base image and the check's code are unchanged;
   the merge queue runs it on the queued group, and a nightly uncached check must agree (the CI page in Notion). Until
@@ -124,7 +127,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   unclear (it changes agreed semantics, deletes what another owner may use, or crosses owners) goes to Daniel with a
   recommendation.
 - 2026-10-06 (9:45 AM PDT): the benchmark comparison tables (`verity_numerical.bench`'s `views`, `tables`, `drilldown`
-  and `store_tables`, spec `kb/TABLES.md`) and `verity.experimental.claims`, their label registry, go to `archive/`; the docs site is
+  and `store_tables`, spec `kb/TABLES.md`) and `verity.core.claims`, their label registry, go to `archive/`; the docs site is
   Daniel's to settle later. A certificate cites the Lean assumptions it rests on by name. The circuit templates, input
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:

@@ -1,7 +1,8 @@
 # The security analysis's properties of the Lean code: what each component's executable Lean does, stated against its
-# functions (`Pouw`: PoUW's window; `Pouw.Check`: its check as a core protocol). Its modules sit beside the trusted
-# text's (`srcDir = ".."`) under a root of their own, `Properties`, and it requires the code it states properties of,
-# never `security`, so its statements read no Mathlib.
+# functions (`Pouw`: PoUW's window; `Pouw.Check`: its check as a core protocol; `Nci`: the NCI check; `CertifierDevice`:
+# the network certifier device's `step` over traces and its issuer). It may require `security` (Definitions, Models) and
+# the code it states properties of, never `security_proofs`. Its modules sit beside the trusted text's (`srcDir = ".."`)
+# under a root of their own, `Properties`: `Properties.<Protocol>` states, `Properties.Proofs.<Protocol>` proves.
 name = "security_properties"
 srcDir = ".."
 defaultTargets = ["Properties"]
@@ -11,13 +12,26 @@ autoImplicit = false
 relaxedAutoImplicit = false
 
 [[require]]
+name = "security"
+path = ".."
+
+[[require]]
 name = "pouw_window"
-path = "../../verity/experimental/core/protocols/pouw/window"
+path = "../../verity/core/protocols/pouw/lean/window"
 
 [[require]]
 name = "pouw_check"
-path = "../../verity/experimental/core/protocols/pouw/check"
+path = "../../verity/core/protocols/pouw/lean/check"
+
+[[require]]
+name = "nci_check"
+path = "../../verity/core/protocols/network/nci/lean"
+
+[[require]]
+name = "certifier_device"
+path = "../../verity/core/devices/certifier/lean"
 
 [[lean_lib]]
 name = "Properties"
-roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Proofs.Pouw", "Properties.Proofs.Pouw.Check"]
+roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Proofs.Pouw", "Properties.Proofs.Pouw.Check",
+  "Properties.Nci", "Properties.Proofs.Nci", "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice"]

@@ -18,24 +18,13 @@ from pathlib import Path
 import pytest
 
 from research.cli import _custody_ttl_problem, main as research_main
-from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, grant_target
+from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
 from test_merge_gate import CHECK_FILES, CHECKED
 
-RULES = """\
-hold_label = "hold"
-
-[[grant]]
-role = "vllm-coordinator"
-paths = ["integrations/vllm/"]
-by = "the vLLM coordinator"
-
-[[grant]]
-role = "red-team"
-paths = ["pkg/", "pké/"]
-"""
+RULES = 'hold_label = "hold"\n'
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
 
 
@@ -80,7 +69,7 @@ class World:
         _git(self.dev, "commit", "-q", "-m", "init")
         _git(self.dev, "remote", "add", "origin", str(self.origin))
         _git(self.dev, "push", "-q", "origin", "main")
-        self.gh, self.grants, self.logs = FakeGitHub(self.origin), {}, []
+        self.gh, self.logs = FakeGitHub(self.origin), []
         self.store = LocalStore(tmp / "store")
 
     def change(self, files: dict[str, str], base: str = "origin/main") -> str:
@@ -97,12 +86,12 @@ class World:
         return sha
 
     def with_store_remote(self) -> None:
-        """Give `store` a remote (a directory): `StoreGrants` answers only from labels it pulled from one."""
+        """Give `store` a remote (a directory): `StoreLabels` answers only from labels it pulled from one."""
         (self.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{self.tmp / "vault"}"\n')
         self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
     def queue(self, **kw) -> Queue:
-        return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh, grants=lambda n, h: self.grants.get((n, h), set()),
+        return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
                      ready=lambda n, h: (n, h) in self.gh.ready,
                      store=self.store, notes=self.tmp / "notes", log=self.logs.append, **kw)
 
@@ -166,81 +155,16 @@ def test_a_conflicting_pr_is_left_out_and_its_owner_told_which_queued_pr_touched
 
 
 def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world):
-    parent = world.change({"integrations/vllm/x.py": "x = 1\n"})
-    world.gh.put(5, parent)
+    parent = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, parent, ready=False)
     world.gh.put(4, world.change({"c.txt": "stacked\n"}, base=parent))
     q = world.queue()
     members, entries = q.sync()
-    assert members == [] and entries[5].why == (
-        f"waiting for the vllm-coordinator grant at {parent[:8]}: vllm-coordinator from the vLLM coordinator; granted with "
-        f"`research data label pr:5@{parent} grant ROLE --by LANE` (ci/queue.toml)"), "who gives it, and the label that does"
-    assert entries[4].state == "waiting" and entries[4].after == (5,)      # it carries #5's change, grant included
-    world.grants[(5, parent)] = {"vllm-coordinator"}
-    world.grants[(4, world.gh.prs[4].head)] = {"vllm-coordinator"}     # #4 carries #5's change, so it needs the grant too
+    assert members == [] and entries[5].why.startswith(f"not marked ready at {parent[:8]}")
+    assert entries[4].state == "waiting" and entries[4].after == (5,)
+    world.gh.ready.add((5, parent))
     members, _ = q.sync()
     assert [m.pr for m in members] == [5, 4]
-
-
-def test_grants_follow_paths_at_the_exact_head(world):
-    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 1\n"}))
-    world.gh.put(2, world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
-    world.gh.put(3, world.change({"other/x.txt": "x\n"}))
-    q = world.queue()
-    _, entries = q.sync()
-    assert entries[1].why.startswith("waiting for the vllm-coordinator grant")
-    assert entries[2].why.startswith("waiting for the red-team grant")
-    assert "red-team (no `by` in ci/queue.toml)" in entries[2].why
-    assert entries[3].state == "queued"
-    world.grants[(1, world.gh.prs[1].head)] = {"vllm-coordinator"}
-    assert 1 in [m.pr for m in q.sync()[0]]
-    world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 2\n"}))
-    members, entries = q.sync()
-    assert 1 not in [m.pr for m in members] and entries[1].state == "waiting"     # a new head needs a new grant
-
-
-def test_a_file_renamed_out_of_a_grants_paths_needs_the_grant(tmp_path):
-    """git reports a rename by its destination alone unless asked not to, which would leave out the grant the file's old path
-    needs."""
-    (tmp_path / "integrations" / "vllm").mkdir(parents=True)
-    (tmp_path / "integrations" / "vllm" / "x.py").write_text("x = 1\n")
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-q", "-m", "base")
-    base = _git(tmp_path, "rev-parse", "HEAD")
-    _git(tmp_path, "mv", "integrations/vllm/x.py", "x.py")
-    _git(tmp_path, "commit", "-q", "-m", "move")
-    assert Rules.parse(RULES).needs(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
-
-
-def test_a_head_with_two_merge_bases_needs_only_what_merging_it_onto_main_changes(tmp_path):
-    """A head that merged two PRs main merged separately has both as merge bases with main, and the diff from either carries the
-    other's change: here a vLLM file the head never touched (#1169, #1171)."""
-    def commit(files: dict[str, str], msg: str) -> str:
-        for p, text in files.items():
-            (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
-            (tmp_path / p).write_text(text)
-        _git(tmp_path, "add", "-A")
-        _git(tmp_path, "commit", "-q", "-m", msg)
-        return _git(tmp_path, "rev-parse", "HEAD")
-
-    _git(tmp_path, "init", "-q", "-b", "main")
-    base = commit({"a.txt": "a\n"}, "base")
-    _git(tmp_path, "checkout", "-q", "-b", "x", base)
-    x = commit({"integrations/vllm/x.py": "x = 1\n"}, "x")
-    _git(tmp_path, "checkout", "-q", "-b", "y", base)
-    y = commit({"integrations/vllm/y.py": "y = 1\n"}, "y")
-    _git(tmp_path, "checkout", "-q", "main")
-    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "x lands", x)
-    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "y lands", y)
-    main = _git(tmp_path, "rev-parse", "HEAD")
-    _git(tmp_path, "checkout", "-q", "-b", "pr", y)
-    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "the PR takes x", x)
-    head = commit({"a.txt": "b\n"}, "the PR's own change")
-    assert len(_git(tmp_path, "merge-base", "--all", main, head).split()) == 2
-    rules = Rules.parse(RULES)
-    assert rules.needs(tmp_path, main, head) == set()
-    assert rules.needs(tmp_path, main, commit({"integrations/vllm/x.py": "x = 2\n"}, "and a vLLM change")) == {"vllm-coordinator"}
 
 
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
@@ -349,7 +273,7 @@ def test_the_clone_authenticates_as_the_callers_checkout_does_and_fails_rather_t
     _git(world.dev, "config", f"credential.{served}.useHttpPath", "true")
 
     def queue(auth: tuple[str, ...]) -> Queue:
-        return Queue(world.tmp / "q" / "verity", remote=served, github=world.gh, grants=lambda n, h: set(), ready=lambda n, h: True,
+        return Queue(world.tmp / "q" / "verity", remote=served, github=world.gh, ready=lambda n, h: True,
                      notes=world.tmp / "notes", log=world.logs.append, auth=auth)
 
     with pytest.raises(QueueError, match=r"git clone .*terminal prompts disabled; no credential helper applies to the remote"):
@@ -419,21 +343,19 @@ def test_land_fast_forwards_main_to_the_newest_commit_with_a_passing_check_and_s
     assert world.on_next(q) == [3]
 
 
-def test_pr_label_targets_and_grants(tmp_path, monkeypatch):
+def test_pr_label_targets(tmp_path, monkeypatch):
     head = "0123456789abcdef0123456789abcdef01234567"
-    assert ids.is_pr(grant_target(12, head)) and ids.kind_of_id(f"pr:12@{head}") == "pr"
+    assert ids.is_pr(label_target(12, head)) and ids.kind_of_id(f"pr:12@{head}") == "pr"
     assert not any(ids.is_pr(x) for x in (f"pr:0@{head}", f"pr:12@{head[:12]}", f"pr:x@{head}", f"12@{head}"))
-    assert vocab.check(vocab.GRANT, "red-team") is None and vocab.check(vocab.GRANT, "anyone") is not None
-    assert Label(target=f"pr:12@{head[:8]}", key="grant", value="review", by="t", ts="2026-09-29T05:30:00Z").errors()
+    assert Label(target=f"pr:12@{head[:8]}", key="ready", value=True, by="t", ts="2026-09-29T05:30:00Z").errors()
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-    reviewer, queue_host = LocalStore(tmp_path / "reviewer"), LocalStore(tmp_path / "queue")
-    reviewer.add_label(grant_target(12, head), vocab.GRANT, "red-team", "red-team-flock-3", ts="2026-09-29T05:30:00Z")
-    assert labels_sync.push_targets(reviewer, [grant_target(12, head)])["failed"] == []
-    assert len(labels_sync.pull_targets(queue_host, [grant_target(12, head)])["pulled"]) == 1
-    assert [lab.value for lab in queue_host.labels(grant_target(12, head), key=vocab.GRANT)] == ["red-team"]
-
+    lane, queue_host = LocalStore(tmp_path / "lane"), LocalStore(tmp_path / "queue")
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-09-29T05:30:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
+    assert len(labels_sync.pull_targets(queue_host, [label_target(12, head)])["pulled"]) == 1
+    assert [lab.value for lab in queue_host.labels(label_target(12, head), key=vocab.READY)] == [True]
 
 
 class _Unreachable:
@@ -448,75 +370,70 @@ class _Unreachable:
         return fail
 
 
-def test_grants_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
+def test_ready_marks_read_through_to_the_remote_and_without_that_pull_the_queue_refuses_to_answer(tmp_path, monkeypatch):
     """A failed pull, an unusable remote, or none at all (a cloud VM's shell that lost its store secrets) used to leave the queue
     answering from this machine's labels, with a warning at most, so its ready marks could be stale.  Each is `STALE` now."""
-    from research.queue import StoreGrants
+    from research.queue import StoreLabels
 
     head = "0123456789abcdef0123456789abcdef01234567"
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-    reviewer, queue_host = LocalStore(tmp_path / "reviewer"), LocalStore(tmp_path / "queue")
-    reviewer.add_label(grant_target(12, head), vocab.GRANT, "red-team", "red-team-flock-3", ts="2026-09-29T05:30:00Z")
-    reviewer.add_label(grant_target(12, head), vocab.READY, True, "lane-12", ts="2026-09-29T05:31:00Z")
-    assert labels_sync.push_targets(reviewer, [grant_target(12, head)])["failed"] == []
+    lane, queue_host = LocalStore(tmp_path / "lane"), LocalStore(tmp_path / "queue")
+    lane.add_label(label_target(12, head), vocab.READY, True, "lane-12", ts="2026-09-29T05:31:00Z")
+    assert labels_sync.push_targets(lane, [label_target(12, head)])["failed"] == []
     logs: list[str] = []
-    grants = StoreGrants(queue_host, log=logs.append)
+    labels = StoreLabels(queue_host, log=logs.append)
     real = LocalStore.remote.fget
     monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
-    for read in (grants, grants.ready):
-        with pytest.raises(QueueError, match=rf"^STALE: the labels of pr:12@{head} weren't pulled from the store's remote "
-                                             r"\(pulling from fs:/unreachable failed \(OSError: injected"):
-            read(12, head)
+    with pytest.raises(QueueError, match=rf"^STALE: the labels of pr:12@{head} weren't pulled from the store's remote "
+                                         r"\(pulling from fs:/unreachable failed \(OSError: injected"):
+        labels.ready(12, head)
     monkeypatch.setattr(LocalStore, "remote", property(real))
-    assert grants(12, head) == {"red-team"} and grants.ready(12, head) is True and logs == []
+    assert labels.ready(12, head) is True and logs == []
     # the labels are on this machine now, and still don't answer without a pull
     absent, unusable = tmp_path / "absent.toml", tmp_path / "s3.toml"
     unusable.write_text('[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "https://acct.r2.cloudflarestorage.com"\n'
                         'access_key_id_env = "Q_AK_ABSENT"\nsecret_access_key_env = "Q_SK_ABSENT"\n')
     with pytest.raises(QueueError, match=r"^STALE: .*\(no remote configured"):
-        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
+        StoreLabels(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
     with pytest.raises(QueueError, match=r"^STALE: .*Q_AK_ABSENT"):
-        StoreGrants(LocalStore(tmp_path / "queue", config_path=unusable)).ready(12, head)
+        StoreLabels(LocalStore(tmp_path / "queue", config_path=unusable)).ready(12, head)
     monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", "R2_ENDPOINT,R2_BUCKET")
     with pytest.raises(QueueError, match=r"^STALE: .*R2_ENDPOINT, R2_BUCKET not in this shell .*fresh tmux login shell"):
-        StoreGrants(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
+        StoreLabels(LocalStore(tmp_path / "queue", config_path=absent)).ready(12, head)
 
 
-def test_rules_refuse_what_they_cannot_place():
-    assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator", "red-team"]
-    for bad in ('[[grant]]\nrole = "whoever"\npaths = ["x/"]\n', '[[grant]]\nrole = "review"\n', 'colour = "red"\n',
-                '[[grant]]\nrole = "red-team"\nlean_audit = ["guarantees"]\n',
-                '[[grant]]\nrole = "review"\npaths = ["x/"]\nwhen = "always"\n'):
+def test_rules_name_the_hold_label_and_refuse_anything_else():
+    assert Rules.parse(RULES).hold_label == "hold" and Rules.parse("").hold_label == "hold"
+    for bad in ('[[grant]]\nrole = "red-team"\npaths = ["x/"]\n', 'colour = "red"\n'):
         with pytest.raises(QueueError):
             Rules.parse(bad)
 
 
 def test_until_the_move_the_rules_are_read_from_tools_check(world):
-    moved = world.change({"tools/verity/check/queue.toml": RULES.replace('paths = ["integrations/vllm/"]', 'paths = ["integrations/vllm/", "!README.md"]')})
+    world.change({"tools/verity/check/queue.toml": 'hold_label = "parked"\n'})
     _git(world.dev, "rm", "-q", "ci/queue.toml")
     _git(world.dev, "commit", "-q", "-m", "rules where they are before the move")
     _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
-    assert moved
-    world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 1\n", "integrations/vllm/README.md": "r\n"}))
-    world.gh.put(2, world.change({"integrations/vllm/README.md": "docs only\n"}))
+    world.gh.put(1, world.change({"x.txt": "x\n"}), labels=("parked",))
+    world.gh.put(2, world.change({"y.txt": "y\n"}), labels=("hold",))
     _, entries = world.queue().sync()
-    assert entries[1].why.startswith("waiting for the vllm-coordinator grant") and entries[2].state == "queued"
+    assert entries[1].why == "held (`parked` label)" and entries[2].state == "queued"
 
 
 def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(world, capsys):
-    from research.queue import StoreGrants, ready
+    from research.queue import StoreLabels, ready
 
     world.with_store_remote()
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
-    labels = StoreGrants(world.store, log=world.logs.append)
+    labels = StoreLabels(world.store, log=world.logs.append)
     assert labels.ready(1, h1) is False
     assert ready(world.gh, world.store, 1, "lane-1", PASS) == 0
     assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
     assert labels.ready(1, h1) is True
-    q = Queue(world.tmp / "q" / "verity", remote=str(world.origin), github=world.gh, grants=labels, ready=labels.ready,
+    q = Queue(world.tmp / "q" / "verity", remote=str(world.origin), github=world.gh, ready=labels.ready,
               store=world.store, notes=world.tmp / "notes", log=world.logs.append)
     members, _ = q.sync()
     assert [m.pr for m in members] == [1]
@@ -555,7 +472,7 @@ def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_t
     elsewhere = LocalStore(world.tmp / "elsewhere", config_path=world.tmp / "store.toml")   # h1's mark only on the remote
     assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1]
     assert f"#1's head {h2[:12]} has the tree of {h1[:12]}" in capsys.readouterr().out
-    assert Q.StoreGrants(elsewhere).ready(1, h2) is True
+    assert Q.StoreLabels(elsewhere).ready(1, h2) is True
 
     world.gh.put(1, h3 := world.change({"c.txt": "c3\n"}, base=h2), ready=False)
     assert Q.ready(world.gh, elsewhere, 1, "lane-1", tier) == 0 and tier.ran == [h1, h3]
@@ -622,13 +539,13 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     assert {"stray.txt", ".venv"} & set(json.loads(seen.read_text())["files"]) == {".venv"}     # cleaned, its environment kept
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
     assert "the quick tier failed: pkg: tests/test_a.py::test_a" in capsys.readouterr().err
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False             # no label without a pass
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False             # no label without a pass
 
     monkeypatch.delenv("FAKE_FAIL")
     h2 = world.change({"b.txt": "b2\n"})
     world.gh.put(1, h2, ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and _git(wt, "rev-parse", "HEAD") == h2
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is True
     h3 = world.change({"tools/verity/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
     world.gh.put(1, h3, ready=False)
     assert tier(world.gh.prs[1]) is None
@@ -668,9 +585,6 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
 
 
-RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["verity/ml/flock/", "!README.md"]\n'
-
-
 def _move_main(world: World, files: dict[str, str]) -> str:
     moved = world.change(files)
     _git(world.dev, "push", "-q", "origin", f"{moved}:refs/heads/main")
@@ -685,275 +599,6 @@ def _merge_main(world: World, head: str) -> str:
     sha = _git(world.dev, "rev-parse", "HEAD")
     _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
     return sha
-
-
-def _carrying(world: World, rules: str | None = None) -> Queue:
-    """A queue whose grants come from `world.store`'s remote, carried from a PR's other heads (`StoreGrants.carried`)."""
-    from research.queue import StoreGrants
-
-    world.with_store_remote()
-    workdir = world.tmp / "q" / "verity"
-    labels = StoreGrants(world.store, log=world.logs.append, repo=workdir)
-    return Queue(workdir, remote=str(world.origin), github=world.gh, grants=labels, ready=lambda n, h: (n, h) in world.gh.ready,
-                 store=world.store, notes=world.tmp / "notes", log=world.logs.append, carry=labels.carried,
-                 rules=Rules.parse(rules) if rules else None)
-
-
-def _grant(world: World, pr: int, head: str, role: str) -> None:
-    """``role``'s grant on `pr:{pr}@{head}`, written in a reviewer's own store and pushed to the remote."""
-    reviewer = LocalStore(world.tmp / "reviewer", config_path=world.tmp / "store.toml")
-    reviewer.add_label(grant_target(pr, head), vocab.GRANT, role, "red-team-x", ts="2026-10-03T16:00:00Z")
-    assert labels_sync.push_targets(reviewer, [grant_target(pr, head)])["failed"] == []
-
-
-def test_a_grant_carries_to_a_restack_with_a_byte_identical_lean_audit_change_and_the_queue_names_the_head_it_came_from(world):
-    """Daniel's ruling (2 Oct): a grant carries across a restack when the new head's `lean-audit.json` change is
-    byte-identical to the one granted.  The clone holds the old head from the sync that admitted it; the grant was written on
-    another machine and comes through the store's remote, pulled for every head of the PR at once."""
-    q = _carrying(world)
-    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    pin = {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}
-    world.gh.put(1, old := world.change(pin))
-    _grant(world, 1, old, "red-team")
-    assert [m.pr for m in q.sync()[0]] == [1]
-    _move_main(world, {"d.txt": "landed meanwhile\n"})
-    world.gh.put(1, new := world.change(pin))                   # the same change on the new `main`
-    members, _ = q.sync()
-    assert [(m.pr, m.head) for m in members] == [(1, new)]
-    assert (f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} "
-            f"(restack; lean-audit.json change identical)") in world.logs
-
-
-def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_change(world):
-    """A merge of `main` carries; a restated pin doesn't, and neither does the same pin change restacked onto a `main` that changed
-    the same line of `lean-audit.json` meanwhile (fail closed: a new grant)."""
-    q = _carrying(world)
-    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    world.gh.put(1, old := world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
-    _grant(world, 1, old, "red-team")
-    q.sync()
-    _move_main(world, {"d.txt": "landed meanwhile\n"})
-    world.gh.put(1, merged := _merge_main(world, old))
-    assert [m.head for m in q.sync()[0]] == [merged]
-    assert (f"research queue: grant red-team carried from pr:1@{old} to {merged[:12]} "
-            f"(merge of main; lean-audit.json change identical)") in world.logs
-
-    def refused(h: str) -> None:
-        world.gh.put(1, h)
-        members, entries = q.sync()
-        assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
-        assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json patch "
-                f"isn't byte-identical (pkg/lean-audit.json)") in world.logs
-
-    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "3"}})}))
-    _move_main(world, {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "1", "U": "1"}})})
-    refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2", "U": "1"}})}))
-
-
-def test_a_grant_carries_the_prs_lean_audit_patch_onto_a_main_that_changed_other_lines_of_that_file(world):
-    """Daniel's ruling (6 Oct, 8:03 AM PDT): the PR's own patch must be byte-identical, not the file, so a lock that `main`
-    changed elsewhere since the grant carries it.  The patch is its lines in place: one whose lines `main` changed, or the same
-    edit made to another occurrence of a repeated line, needs a new grant."""
-    from research.queue import carry
-
-    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    keys = "ABCDEFGH"
-
-    def lock(**pins: str) -> dict[str, str]:
-        return {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {k: pins.get(k, "1") for k in keys}}, indent=1) + "\n"}
-
-    _move_main(world, lock())
-    old = world.change(lock(A="2"))
-    _move_main(world, lock(H="5"))
-    same = "lean-audit.json change identical"
-    assert carry(world.dev, "origin/main", old, world.change(lock(A="2", H="5"))) == (True, f"restack; {same}")
-    assert carry(world.dev, "origin/main", old, _merge_main(world, old)) == (True, f"merge of main; {same}")
-    patch = "its lean-audit.json patch isn't byte-identical (pkg/lean-audit.json)"
-    assert carry(world.dev, "origin/main", old, world.change(lock(A="3", H="5"))) == (False, patch)
-    _move_main(world, lock(A="4", H="5"))
-    assert carry(world.dev, "origin/main", old, world.change(lock(A="2", H="5"))) == (False, patch)    # main changed the PR's line
-
-    repeated = {"pkg/notes.txt": "x\n" + "same\n" * 6 + "y\n"}
-    _move_main(world, repeated)
-    edited = world.change({"pkg/notes.txt": "x\nsame\nedit\n" + "same\n" * 4 + "y\n"})
-    _move_main(world, {"pkg/notes.txt": "x2\n" + "same\n" * 6 + "y\n"})
-    moved = world.change({"pkg/notes.txt": "x2\n" + "same\n" * 4 + "edit\nsame\ny\n"})
-    assert carry(world.dev, "origin/main", edited, moved) == (False, "its change against origin/main differs (pkg/notes.txt)")
-    assert carry(world.dev, "origin/main", edited, world.change({"pkg/notes.txt": "x2\nsame\nedit\n" + "same\n" * 4 + "y\n"}))[0]
-
-
-def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
-    """A path grant carries the same way: to a restack of the change it saw, never to one that changes another file too, a
-    `lean-audit.json` the granted head didn't change included."""
-    q = _carrying(world, RULES + RED_TEAM)
-    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    flock = {"verity/ml/flock/x.py": "x = 1\n"}
-    world.gh.put(1, old := world.change(flock))
-    _grant(world, 1, old, "red-team")
-    assert [m.pr for m in q.sync()[0]] == [1]
-    _move_main(world, {"d.txt": "landed meanwhile\n"})
-    world.gh.put(1, new := world.change(flock))
-    assert [m.head for m in q.sync()[0]] == [new]
-    assert f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} (restack; no lean-audit.json change)" in world.logs
-    for extra, why in (({"verity/ml/flock/y.py": "y = 1\n"}, "its change against origin/main differs (verity/ml/flock/y.py)"),
-                       ({"verity/ml/flock/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
-                        "its lean-audit.json patch isn't byte-identical (verity/ml/flock/lean-audit.json)")):
-        world.gh.put(1, h := world.change({**flock, **extra}))
-        members, entries = q.sync()
-        assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
-        assert f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: {why}" in world.logs
-
-
-def test_a_grant_carries_across_a_change_its_rule_leaves_out(world):
-    """Friction from proofs (7 Oct): a tests-only fix after a red-team grant voided it, though the rule leaves tests out and the
-    fix alone would need no grant.  Only the paths the grant's rule covers are compared; one it covers still voids it."""
-    q = _carrying(world, RULES + '\n[[grant]]\nrole = "red-team"\npaths = ["verity/ml/flock/", "!README.md", "!*/tests/*"]\n')
-    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    flock = {"verity/ml/flock/x.py": "x = 1\n"}
-    world.gh.put(1, old := world.change(flock))
-    _grant(world, 1, old, "red-team")
-    assert [m.pr for m in q.sync()[0]] == [1]
-    for extra in ({"verity/ml/flock/tests/test_x.py": "assert True\n"}, {"verity/ml/flock/README.md": "x\n", "other.txt": "o\n"},
-                  {"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})}):
-        world.gh.put(1, h := world.change({**flock, **extra}))
-        assert [m.head for m in q.sync()[0]] == [h]
-        n = len(extra)
-        assert (f"research queue: grant red-team carried from pr:1@{old} to {h[:12]} (restack; "
-                f"no lean-audit.json change; {n} changed path{'s' * (n != 1)} its rule leaves out not compared)") in world.logs
-    world.gh.put(1, h := world.change({**flock, "verity/ml/flock/tests/test_x.py": "assert True\n", "verity/ml/flock/y.py": "y\n"}))
-    members, entries = q.sync()
-    assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
-    assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its change against origin/main differs "
-            f"(verity/ml/flock/y.py)") in world.logs
-
-
-def test_a_grant_on_a_head_git_cannot_compare_carries_nothing(world):
-    """Fail closed: a head the clone never fetched, one that exists nowhere, and one with no history in common with `main` (same
-    tree, so only the missing merge base refuses it) give the new head nothing."""
-    from research.queue import carry
-
-    q = _carrying(world, RULES + RED_TEAM)
-    q.sync()                                                    # the clone first: a local clone hardlinks every object there is
-    flock = {"verity/ml/flock/x.py": "x = 1\n"}
-    unseen = world.change(flock)                                # on the origin, but never a PR head the queue fetched
-    ghost = "0123456789abcdef" * 2 + "01234567"
-    for h in (unseen, ghost):
-        _grant(world, 1, h, "red-team")
-    _move_main(world, {"d.txt": "landed meanwhile\n"})
-    world.gh.put(1, new := world.change(flock))
-    members, entries = q.sync()
-    assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {new[:8]}")
-    for h in (unseen, ghost):
-        assert (f"research queue: grant red-team on pr:1@{h} doesn't carry to {new[:12]}: {h[:12]} isn't in {q.workdir}, so its "
-                f"change can't be compared (fetch it)") in world.logs
-    orphan = _git(world.dev, "commit-tree", f"{new}^{{tree}}", "-m", "the same files, no history")
-    assert carry(world.dev, "origin/main", orphan, new) == (False, f"{orphan[:12]} shares no history with origin/main")
-    assert carry(world.dev, "origin/main", unseen, new) == (True, "restack; no lean-audit.json change")   # where git can compare
-
-
-def test_without_a_pull_of_every_head_of_the_pr_nothing_carries_and_the_queue_says_stale(tmp_path, monkeypatch):
-    from research.queue import StoreGrants
-
-    head = "0123456789abcdef0123456789abcdef01234567"
-    cfg = tmp_path / "store.toml"
-    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
-    grants = StoreGrants(LocalStore(tmp_path / "queue", config_path=cfg), repo=tmp_path)
-    monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
-    assert grants.carried(12, head, set()) == set()             # nothing to carry, nothing pulled
-    with pytest.raises(QueueError, match=r"^STALE: the labels of pr:12@\* weren't pulled from the store's remote \(OSError: injected.*"
-                                         r"not carrying any$"):
-        grants.carried(12, head, {"red-team"})
-
-
-def _gitlink(world: World, path: str, commit: str) -> str:
-    """A commit on origin/main pinning ``commit`` as a submodule at ``path``, made with git's plumbing: `add` drops a gitlink with
-    no checkout behind it."""
-    _git(world.dev, "fetch", "-q", "origin")
-    _git(world.dev, "read-tree", "origin/main")
-    _git(world.dev, "update-index", "--add", "--cacheinfo", f"160000,{commit},{path}")
-    sha = _git(world.dev, "commit-tree", _git(world.dev, "write-tree"), "-p", "origin/main", "-m", f"pin {path} at {commit[:8]}")
-    _git(world.dev, "read-tree", "HEAD")
-    return sha
-
-
-def test_a_submodule_pinned_elsewhere_is_another_change_whatever_git_is_told_to_ignore(world):
-    """Red team of #955: under `diff.ignoreSubmodules = all` (or a `.gitmodules` entry saying `ignore = all`), `git diff` leaves
-    gitlinks out, so two heads pinning a submodule at different commits compared equal and a grant carried from one to the other,
-    and a gitlink under a gated path needed no grant."""
-    from research.queue import carry
-
-    _git(world.dev, "config", "diff.ignoreSubmodules", "all")
-    a, b = (_git(world.dev, "commit-tree", "origin/main^{tree}", "-m", m) for m in ("a", "b"))
-    old = _gitlink(world, "verity/ml/flock/vendored", a)
-    _move_main(world, {"d.txt": "landed meanwhile\n"})
-    new, restacked = _gitlink(world, "verity/ml/flock/vendored", b), _gitlink(world, "verity/ml/flock/vendored", a)
-    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (verity/ml/flock/vendored)")
-    assert carry(world.dev, "origin/main", old, restacked) == (True, "restack; no lean-audit.json change")
-    assert Rules.parse(RULES + RED_TEAM).needs(world.dev, "origin/main", new) == {"red-team"}
-
-
-def test_a_file_name_that_isnt_utf8_compares_byte_for_byte_and_prints_escaped(world):
-    """Red team of #955: decoding git's `-z` output as strict UTF-8 raised on such a name, which stopped the whole queue."""
-    from research.queue import carry
-
-    bad = os.fsdecode(b"pkg/caf\xe9.txt")                       # Latin-1, not UTF-8
-    old = world.change({bad: "x\n"})
-    _move_main(world, {"d.txt": "landed meanwhile\n"})
-    assert carry(world.dev, "origin/main", old, world.change({bad: "x\n"})) == (True, "restack; no lean-audit.json change")
-    ok, why = carry(world.dev, "origin/main", old, world.change({bad: "y\n"}))
-    assert (ok, why) == (False, "its change against origin/main differs (pkg/caf\\xe9.txt)") and why.encode("utf-8")
-
-
-def test_a_change_under_a_name_git_would_quote_needs_its_grants(world):
-    """Red team of #955: `git diff --name-only` quotes a name with bytes outside ASCII (`"pk\\303\\251/lean-audit.json"`), which
-    matched neither a rule's path nor `lean-audit.json`, so such a pin change or file needed no grant."""
-    audit = {"guarantees": {"T": "1"}, "reads": {}}
-    _move_main(world, {"pké/lean-audit.json": json.dumps(audit)})
-    rules = Rules.parse(RULES)
-    pin = world.change({"pké/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})})
-    assert rules.needs(world.dev, "origin/main", pin) == {"red-team"}
-    assert rules.needs(world.dev, "origin/main", world.change({"integrations/vllm/café.py": "x\n"})) == {"vllm-coordinator"}
-
-
-def test_the_rules_read_what_merging_a_head_with_two_merge_bases_lands(world):
-    """#1041 and #1062: a head stacked on a PR that `main` merged after the head had merged `main` has two merge bases with it;
-    a diff from either counts `main`'s own `integrations/vllm/` changes, so the queue asked for a vllm-coordinator grant the
-    change didn't need.  A head that conflicts with `main` still needs every grant."""
-    rules = Rules.parse(RULES)
-    side = world.change({"s.txt": "stacked on\n"})
-    _move_main(world, {"integrations/vllm/v.py": "main's\n"})
-    head = _merge_main(world, world.change({"x.txt": "x\n"}, base=side))
-    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
-    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", side)
-    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
-    _move_main(world, {"integrations/vllm/w.py": "main's later\n"})
-    assert len(_git(world.dev, "merge-base", "--all", "origin/main", head).split()) == 2
-    assert rules.needs(world.dev, "origin/main", head) == set()
-    assert rules.needs(world.dev, "origin/main", _merge_main(world, world.change({"integrations/vllm/v.py": "x\n"}, base=head))) \
-        == {"vllm-coordinator"}
-    _move_main(world, {"a.txt": "main's a\n"})
-    said = []
-    assert rules.needs(world.dev, "origin/main", world.change({"a.txt": "its a\n"}, base=head), log=said.append) == \
-        {g.role for g in rules.grants}
-    assert said and "conflicts with it" in said[0]
-
-
-def test_the_carry_says_what_the_new_head_merged(world):
-    """`main`'s tip, an earlier `main` (no longer called a merge of `main`), or commits that cancel out."""
-    from research.queue import carry
-
-    old = world.change({"x.txt": "x\n"})
-    earlier = _move_main(world, {"d.txt": "landed meanwhile\n"})
-    _move_main(world, {"e.txt": "landed after it\n"})
-    merged = _merge_main(world, old)
-    _git(world.dev, "checkout", "-q", "--detach", old)
-    _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", earlier)
-    merged_earlier = _git(world.dev, "rev-parse", "HEAD")
-    _git(world.dev, "commit", "-q", "--allow-empty", "-m", "nothing")
-    on_top = _git(world.dev, "rev-parse", "HEAD")
-    for head, how in ((merged, "merge of main"), (merged_earlier, "merge of an ancestor of main"),
-                      (on_top, "commits on top of it that cancel out")):
-        assert carry(world.dev, "origin/main", old, head) == (True, f"{how}; no lean-audit.json change")
 
 
 #: a check slot's `slot.py` as the machine runs it: says how it was asked, then runs CMD
@@ -1079,14 +724,14 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert Path(s["argv"][s["argv"].index("--json") + 1]) == machine.root / "runs" / rid / "out" / "suites.json"
     assert free_while_waiting == [rid] and sleeps == [Q.REMOTE_POLL_S]
     assert f"the quick tier runs as {rid} on vy-test, in a check slot" in capsys.readouterr().out
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
     monkeypatch.setenv("FAKE_FAIL", "tests/test_a.py::test_a")
     h2 = world.change({"b.txt": "b2\n"})
     world.gh.put(1, h2, ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
     assert "the quick tier failed: pkg: tests/test_a.py::test_a." in capsys.readouterr().err
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
 
 
 def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_repository(world, monkeypatch):
@@ -1120,7 +765,7 @@ def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_reposito
     with open(ready / f"{hashlib.sha256(common.encode()).hexdigest()[:12]}.lock", "w") as local:
         fcntl.flock(local, fcntl.LOCK_EX)
         assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 
 def _reports(status: dict | None = None, result=lambda doc: doc, raw: str | None = None):
@@ -1164,7 +809,7 @@ def test_a_remote_quick_tier_passes_only_on_a_readable_report_of_a_pass_at_the_h
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports(**kw)))
     world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == (0 if refusal is None else 1)
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is (refusal is None)
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is (refusal is None)
     if refusal is not None:
         assert re.search(r"the quick tier failed: .*" + refusal, capsys.readouterr().err)
 
@@ -1184,7 +829,7 @@ def _orphaned(world, monkeypatch, **reports):
     tier.fetch = died
     with pytest.raises(KeyboardInterrupt):
         Q.ready(world.gh, world.store, 1, "lane-1", tier)
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     flags = machine.launched[-1]
     return machine, flags[flags.index("--id") + 1], h1
 
@@ -1198,9 +843,9 @@ def test_judge_marks_a_pr_ready_from_its_quick_tiers_run_once_it_ended_without_i
     capsys.readouterr()
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 0
     assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
-    [label] = world.store.labels(grant_target(1, h1), key=vocab.READY)
+    [label] = world.store.labels(label_target(1, h1), key=vocab.READY)
     assert label.value is True and label.by == "lane-1"
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is True
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 
 def test_judge_marks_a_pr_whose_head_moved_to_the_same_tree_and_no_other(world, monkeypatch, capsys):
@@ -1216,7 +861,7 @@ def test_judge_marks_a_pr_whose_head_moved_to_the_same_tree_and_no_other(world, 
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1           # no clone to compare trees in
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, repo=world.dev, url=str(world.origin)) == 0
     assert f"#1's head {h2[:12]} has the tree of {h1[:12]}, where run {rid} ran the quick tier" in capsys.readouterr().out
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is True
     h3 = _git(world.dev, "commit-tree", f"{h2}^{{tree}}", "-p", h2, "-m", "the same tree")
     _git(world.dev, "push", "-q", "origin", f"{h3}:refs/dev/{h3}")
     world.gh.put(3, h3, ready=False)
@@ -1249,7 +894,7 @@ def test_judge_refuses_a_run_that_has_not_ended_is_not_a_quick_tier_failed_or_wh
                    repo=world.dev, url=str(world.origin)) == 1
     err = capsys.readouterr().err
     assert err.startswith("research queue judge: ") and err.count("\n") == 1 and re.search(refusal, err)
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
 
 
 def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_after_a_bounded_wait(world, monkeypatch):
@@ -1271,7 +916,7 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     assert re.fullmatch(r"run r\S+'s runner on vy-test exited before the run ended \(Traceback: boom\)", tier(pr)) and len(sleeps) == 1
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
     assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
 
 
 def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_not_fail(world, monkeypatch, capsys):
@@ -1286,7 +931,7 @@ def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_n
     err = capsys.readouterr().err
     assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
                      r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
     assert "never ran the tier" in capsys.readouterr().err
@@ -1309,7 +954,7 @@ def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_
     world.gh.put(1, h2 := world.change({"a.txt": "a2\n"}), ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.READY_NOT_STARTED and len(machine.launched) == 1
     assert "the quick tier never started: --on vy-a,vy-b: no machine's slots could be read" in capsys.readouterr().err
-    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
 
 
 def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_takes(tmp_path):

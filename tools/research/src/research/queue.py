@@ -16,9 +16,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
-Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, is marked ready at its head, and
-has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
-writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
+Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
+no change waits on a per-head grant (Daniel, 8 Oct).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
+`research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
 head: `suites.py --quick` on the suites the PR changes, from a clean checkout, either as a `research run` on a machine (`--on`,
 `RemoteQuickTier`: in one of its check slots, so several PRs' tiers run at once and the caller only waits) or here (`--local`,
@@ -27,15 +27,8 @@ failure.  Once the queue lands trains it replaces the
 merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs, read from what merging
-it into `main` would land (`main`'s tree against the one `git merge-tree` writes; a head that conflicts needs every grant): a role for changed files
-under listed paths (`merge_requires`' syntax, `!` patterns included), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
-store label `grant = {role}` on the target `pr:{number}@{head sha}`.  It carries to a new head of the PR that only restacks it or
-merges `main` into it: one whose change against `main` is the granted head's, every file from the same bytes to the same bytes, its
-`lean-audit.json` change included (`carry`, Daniel's ruling of 2 Oct); the queue prints the head each grant carried from, or why one
-didn't.  Any other push needs new grants, and so does a head whose history git can't compare (no merge base with `main`, or
-several: no one diff against one says what it changes).  Grants and ready are read after
-pulling the target's labels (for a carry, every head's) from the store's remote; when that pull can't happen (no remote here, one
+`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label.  Ready marks are read after
+pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
 that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
@@ -184,254 +177,55 @@ class GitHub:
         return [PR.from_api(d) for page in _json_values(r.stdout) for d in (page if isinstance(page, list) else [page])]
 
 
-# ---- rules and grants ---------------------------------------------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class Rule:
-    role: str
-    paths: tuple[str, ...] = ()        # `merge_requires`' syntax: a changed file under a prefix and matching no `!` pattern needs the role
-    by: str = ""                       # who gives the grant, as `queue status` tells a waiting owner
-
+# ---- rules and labels ---------------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Rules:
-    grants: tuple[Rule, ...] = ()
     hold_label: str = "hold"
     source: str = RULES
 
     @classmethod
     def parse(cls, text: str, source: str = RULES) -> "Rules":
         doc = tomllib.loads(text)
-        unknown = set(doc) - {"hold_label", "grant"}
+        unknown = set(doc) - {"hold_label"}
         if unknown:
             raise QueueError(f"{source}: unknown keys {sorted(unknown)}")
-        rules = []
-        for i, g in enumerate(doc.get("grant", [])):
-            if set(g) - {"role", "paths", "by"}:
-                raise QueueError(f"{source}: grant {i}: unknown keys {sorted(set(g) - {'role', 'paths', 'by'})}")
-            if (why := vocab.check(vocab.GRANT, g.get("role"))) is not None:
-                raise QueueError(f"{source}: grant {i}: {why}")
-            if not g.get("paths"):
-                raise QueueError(f"{source}: grant {i} ({g['role']}) names no paths")
-            rules.append(Rule(g["role"], tuple(g["paths"]), str(g.get("by", ""))))
-        return cls(tuple(rules), doc.get("hold_label", "hold"), source)
-
-    def asks(self, pr: int, head: str, roles: set[str]) -> str:
-        """Who gives each of ``roles`` (its rule's `by`) and the label that grants it, for a PR waiting on them."""
-        by = {r.role: r.by for r in self.grants}
-        who = ", ".join(f"{r} from {by[r]}" if by.get(r) else f"{r} (no `by` in {self.source})" for r in sorted(roles))
-        return f"{who}; granted with `research data label {grant_target(pr, head)} grant ROLE --by LANE` ({self.source})"
-
-    def needs(self, repo: Path, base: str, head: str, log: Callable[[str], None] = lambda s: None) -> set[str]:
-        """The roles whose grants merging `head` into `base` needs: judged on what would land, `base`'s tree against the tree `git
-        merge-tree` writes for the merge, so `base`'s own changes since `head` forked never count, whatever merge bases they share
-        (several, after a criss-cross, merge as a virtual base, as `git merge` does).  A head
-        that doesn't merge cleanly needs every role, with a line saying why: no tree says what merging it changes, and a wait (the
-        queue) or a refusal of that ref (a train) is how both callers hold a PR back."""
-        from .merge import rule_touches
-
-        r = _git(repo, "merge-tree", "--write-tree", "--no-messages", base, head, check=False)
-        if r.returncode:
-            why = "conflicts with it" if r.returncode == 1 else f"can't be merged into it ({(r.stderr or r.stdout).strip()[-200:]})"
-            log(f"research queue: {head[:12]} {why}, so no tree says what merging it into {_named(base)} changes: it needs every "
-                f"grant the rules name until it merges cleanly")
-            return {r.role for r in self.grants}
-        merged = r.stdout.split("\n", 1)[0]
-        changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", "--ignore-submodules=none", base, merged).stdout.split("\0") if p]   # a rename's source too
-        return {r.role for r in self.grants if rule_touches(list(r.paths), changed)}
+        return cls(doc.get("hold_label", "hold"), source)
 
 
-def grant_target(pr: int, head: str) -> str:
+def label_target(pr: int, head: str) -> str:
     return f"pr:{pr}@{head}"
 
 
-def _is_audit(path: str) -> bool:
-    return path == "lean-audit.json" or path.endswith("/lean-audit.json")
+class StoreLabels:
+    """Ready marks from the evidence store: `ready` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it
+    raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
 
-
-def merge_bases(repo: Path, base: str, head: str) -> list[str]:
-    """Every best common ancestor of ``base`` and ``head`` (`git merge-base --all`); none when they share no history or git can't
-    say.  Several when ``head`` merged a commit that ``base`` merged too since (a criss-cross): `git merge` then diffs against a
-    virtual base built from them all, so no one diff against one of them says what merging ``head`` changes."""
-    r = _git(repo, "merge-base", "--all", base, head, check=False)
-    return [] if r.returncode else r.stdout.split()
-
-
-def _named(base: str) -> str:
-    return base[:12] if re.fullmatch(r"[0-9a-f]{40}", base) else base
-
-
-def _shown(path: str) -> str:
-    """``path`` as text that prints: the bytes of a name that isn't UTF-8 (kept as surrogates by `_git`) as backslash escapes."""
-    return path.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace")
-
-
-def own_change(repo: Path, base: str, head: str) -> dict[str, tuple[str, ...]] | None:
-    """What ``head`` changes against its merge base with ``base``: {path: (old mode, new mode, old blob, new blob)}, a rename as a
-    deletion and an addition, a submodule as the commit it pins (whatever `diff.ignoreSubmodules` or a `.gitmodules` says to
-    ignore).  None when git can't say (``head`` isn't in ``repo``, or hasn't exactly one merge base with ``base``: `merge_bases`)."""
-    mbs = merge_bases(repo, base, head)
-    if len(mbs) != 1:
-        return None
-    r = _git(repo, "diff", "--raw", "--no-renames", "--no-abbrev", "--ignore-submodules=none", "-z", mbs[0], head, check=False)
-    if r.returncode:
-        return None
-    fields = r.stdout.split("\0")
-    return {path: tuple(meta.lstrip(":").split()[:4]) for meta, path in zip(fields[0::2], fields[1::2])}
-
-
-ZERO_BLOB = "0" * 40
-
-
-def rebased(repo: Path, was: tuple[str, ...], now: tuple[str, ...]) -> bool:
-    """Whether one path's change ``now`` is the change ``was`` replayed onto another base (`own_change` entries: modes and blobs,
-    before and after): ``was``'s edit, merged into ``now``'s base the way `git merge-file` merges three versions, applies cleanly
-    and gives ``now``'s bytes exactly.  So the same hunks carry onto a base that changed elsewhere in the file, and hunks that land
-    on other lines, or that the base changed under, don't.  The same modes are required, and a file added, deleted or pinned as a
-    submodule (no three versions to merge) is ``was == now`` alone."""
-    if was == now:
-        return True
-    if was[:2] != now[:2] or "160000" in was[:2] or ZERO_BLOB in (*was[2:], *now[2:]):
-        return False
-    with tempfile.TemporaryDirectory() as tmp:
-        files = []
-        for name, blob in (("ours", now[2]), ("base", was[2]), ("theirs", was[3])):
-            r = subprocess.run(["git", "cat-file", "blob", blob], cwd=repo, capture_output=True, env=git_env())
-            if r.returncode:
-                return False
-            (f := Path(tmp) / name).write_bytes(r.stdout)
-            files.append(str(f))
-        merged = subprocess.run(["git", "merge-file", "-p", "-q", *files], cwd=repo, capture_output=True, env=git_env())
-        want = subprocess.run(["git", "cat-file", "blob", now[3]], cwd=repo, capture_output=True, env=git_env())
-    return merged.returncode == 0 and want.returncode == 0 and merged.stdout == want.stdout
-
-
-def carry(repo: Path, base: str, old: str, new: str, rule: Iterable[str] | None = None) -> tuple[bool, str]:
-    """Whether a grant on ``old``, another head of a PR, counts at its head ``new``, and why (Daniel's
-    rulings: 2 Oct, one carries across a restack or a merge of `main` when the new head's `lean-audit.json` change is identical to
-    the one granted; 6 Oct, 8:03 AM PDT, it carries when the PR's own patch is byte-identical at both heads, even if `main` moved
-    under it, `lean-audit.json` included).
-
-    The rule: against its merge base with ``base`` (the `main` the gate compares with now, so a parent that landed counts as
-    `main`; for a PR stacked on another in a train, the ref below it there, so a parent that moved underneath it by adding
-    commits or merging `main` doesn't count as its change), ``new`` changes exactly the paths ``old`` changes, and each the same way (`rebased`: its edit, replayed onto
-    ``new``'s base by a three-way merge, gives ``new``'s bytes).  A `lean-audit.json` that `main` changed elsewhere meanwhile
-    still carries; one where `main` changed the lines the PR edits doesn't, since replaying the edit then conflicts or gives other
-    bytes.  That is what a rebase onto `main`, a restack
-    after a parent landed, or a merge of `main` leaves, so it carries only to a head whose patch is the one that was granted,
-    whatever its history: with one merge base, a merge commit can hold edits of its own and a rebase rewrites every commit, but
-    neither can make two different patches compare equal.  Nothing else carries: a head that changes any file more, less or
-    differently, or one git can't compare (``old`` isn't in ``repo``, no merge base, or several, where a merge can drop a change
-    `main` merged without any diff against one of them showing it), needs new grants.
-
-    Given the grant's ``rule`` (its `Rule.paths`), only the paths that rule covers are compared: a change it leaves out (a test,
-    a README) needs no grant of that role, so it doesn't void one either."""
-    for h in (old, new):
-        if _git(repo, "cat-file", "-e", f"{h}^{{commit}}", check=False).returncode:
-            return False, f"{h[:12]} isn't in {repo}, so its change can't be compared (fetch it)"
-    name = _named(base)
-    for h in (old, new):
-        if not (mbs := merge_bases(repo, base, h)):
-            return False, f"{h[:12]} shares no history with {name}"
-        if len(mbs) > 1:
-            return False, (f"{h[:12]} has {len(mbs)} merge bases with {name} ({', '.join(m[:12] for m in mbs)}), so no one diff says "
-                           f"what merging it changes; merging {name} into it again gives it one")
-    was, now = own_change(repo, base, old), own_change(repo, base, new)
-    if was is None or now is None:
-        return False, f"git can't diff {(old if was is None else new)[:12]} against its merge base with {name}"
-    left_out = ""
-    if rule is not None:
-        from .merge import rule_touches
-
-        rule = list(rule)
-        skip = {p for p in was.keys() | now.keys() if not rule_touches(rule, [p])}
-        was, now = ({p: v for p, v in d.items() if p not in skip} for d in (was, now))
-        left_out = f"; {len(skip)} changed path{'s' * (len(skip) != 1)} its rule leaves out not compared" if skip else ""
-    if differ := sorted(p for p in was.keys() | now.keys() if p not in was or p not in now or not rebased(repo, was[p], now[p])):
-        if audits := [p for p in differ if _is_audit(p)]:
-            return False, f"its lean-audit.json patch isn't byte-identical ({', '.join(map(_shown, audits))})"
-        more = f" and {len(differ) - 3} more" if len(differ) > 3 else ""
-        return False, f"its change against {name} differs ({', '.join(map(_shown, differ[:3]))}{more})"
-    def below(a: str, b: str) -> bool:
-        return _git(repo, "merge-base", "--is-ancestor", a, b, check=False).returncode == 0
-
-    if not below(old, new):
-        how = "restack"
-    elif below(base, new):
-        how = "merge of main"
-    elif (r := _git(repo, "rev-list", "--no-merges", "-n1", new, f"^{old}", f"^{base}", check=False)).returncode == 0 and \
-            not r.stdout.strip():
-        how = "merge of an ancestor of main"
-    else:
-        how = "commits on top of it that cancel out"
-    audit = "lean-audit.json change identical" if any(map(_is_audit, now)) else "no lean-audit.json change"
-    return True, f"{how}; {audit}{left_out}"
-
-
-class StoreGrants:
-    """Grants from the evidence store: `grant` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it raises:
-    a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled.  Given the
-    clone ``repo`` and the ``base`` its PRs merge onto, a grant on another head of the PR counts where `carry`
-    says it does (`carried`), with a line naming the head it carried from."""
-
-    def __init__(self, store, log: Callable[[str], None] = print, repo: Path | None = None, base: str = "origin/main"):
-        self.store, self.log, self.repo, self.base = store, log, repo, base
+    def __init__(self, store, log: Callable[[str], None] = print):
+        self.store, self.log = store, log
         self._pulled: set[int] = set()
-
-    def __call__(self, pr: int, head: str) -> set[str]:
-        return {str(lab.value) for lab in self._labels(pr, head, vocab.GRANT)}
 
     def ready(self, pr: int, head: str) -> bool:
         """Whether someone asserted `ready = true` on `pr:{n}@{head}`."""
         return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
-
-    def carried(self, pr: int, head: str, roles: set[str], onto: str | None = None, rules: Rules | None = None) -> set[str]:
-        """Which of ``roles`` a `grant` on another head of pull request ``pr`` gives ``head`` (`carry`), each head's change taken
-        against ``onto`` (default the ``base`` it merges onto; for a PR stacked on another in a train, the ref below it there).
-        Given ``rules``, a role with a rule there compares only the paths its rule covers."""
-        paths = {r.role: r.paths for r in rules.grants} if rules else {}
-        return {str(lab.value) for _, lab in self._carried(pr, head, vocab.GRANT, roles, onto, paths)} if roles else set()
-
-    def _carried(self, pr: int, head: str, key: str, values: set[str] | None, onto: str | None = None,
-                 rules: dict[str, tuple[str, ...]] | None = None) -> list[tuple]:
-        """(the head it's on, the label) for each ``key`` label (whose value is in ``values``, unless None) on another head of pull
-        request ``pr`` from which `carry` onto ``onto`` (default ``base``) says it counts at ``head``, comparing only the paths of
-        ``rules[value]`` when there is one; a line for each head and rule with such labels, carried or not."""
-        if self.repo is None:
-            return []
-        out = []
-        for old, labs in self._other_heads(pr, head, key).items():
-            by_rule: dict[tuple[str, ...] | None, list] = {}
-            for lab in labs:
-                if values is None or str(lab.value) in values:
-                    by_rule.setdefault((rules or {}).get(str(lab.value)), []).append(lab)
-            for rule, group in by_rule.items():
-                what = ", ".join(sorted({f"{key} {lab.value}" for lab in group}))
-                ok, why = carry(self.repo, onto or self.base, old, head, rule)
-                if ok:
-                    self.log(f"research queue: {what} carried from {grant_target(pr, old)} to {head[:12]} ({why})")
-                    out += [(old, lab) for lab in group]
-                else:
-                    self.log(f"research queue: {what} on {grant_target(pr, old)} doesn't carry to {head[:12]}: {why}")
-        return out
 
     def _other_heads(self, pr: int, head: str, key: str) -> dict[str, list]:
         """{head: its ``key`` labels} for each head of pull request ``pr`` but ``head`` that has some, after pulling every head's
         labels from the store's remote (once per PR); without that pull it raises, as `_labels` does."""
         from .store import labels_sync
 
-        prefix = grant_target(pr, "")
+        prefix = label_target(pr, "")
         if pr not in self._pulled:
             try:
                 labels_sync.pull_prefix(self.store, prefix)
-            except Exception as e:  # noqa: BLE001  (no pull, no carry: local labels alone may be stale)
+            except Exception as e:  # noqa: BLE001  (no pull: local labels alone may be stale)
                 raise QueueError(f"STALE: the labels of {prefix}* weren't pulled from the store's remote ({type(e).__name__}: {e}), "
-                                 f"so grants on #{pr}'s other heads here may be old; not carrying any") from None
+                                 f"so ready marks on #{pr}'s other heads here may be old") from None
             self._pulled.add(pr)
         out = {}
         for d in sorted((Path(self.store.root) / "labels").glob(f"{ids.target_dirname(prefix)}*")):
             old = d.name.rpartition("@")[2]
-            if old != head and ids.is_pr(grant_target(pr, old)) and (labs := self.store.labels(grant_target(pr, old), key=key)):
+            if old != head and ids.is_pr(label_target(pr, old)) and (labs := self.store.labels(label_target(pr, old), key=key)):
                 out[old] = labs
         return out
 
@@ -439,12 +233,12 @@ class StoreGrants:
         from .store import labels_sync
         from .store.local import StoreError
 
-        target = grant_target(pr, head)
+        target = label_target(pr, head)
         try:
             labels_sync.read_through(self.store, [target], lambda s: self.log(f"research queue: {s}"), strict=True)
         except StoreError as e:
-            raise QueueError(f"STALE: the labels of {target} weren't pulled from the store's remote ({e}), so ready marks and grants "
-                             f"here may be old; not answering from them") from None
+            raise QueueError(f"STALE: the labels of {target} weren't pulled from the store's remote ({e}), so ready marks here may "
+                             f"be old; not answering from them") from None
         return self.store.labels(target, key=key)
 
 
@@ -475,12 +269,10 @@ def _message(pr: PR) -> str:
 
 
 class Queue:
-    def __init__(self, workdir: Path, *, remote: str, github, grants: Callable[[int, str], set[str]], ready: Callable[[int, str], bool],
+    def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
-                 auth: tuple[str, ...] = (),
-                 carry: Callable[..., set[str]] = lambda n, h, roles, **kw: set()):
-        self.workdir, self.remote, self.github, self.grants, self.ready, self.store = Path(workdir), remote, github, grants, ready, store
-        self.carry = carry
+                 auth: tuple[str, ...] = ()):
+        self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.notes = Path(notes or os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes")
@@ -574,9 +366,6 @@ class Queue:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
             elif not self.ready(p.number, p.head):
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local)"
-            elif missing := self.missing(rules, p):
-                e.state, e.why = "waiting", (f"waiting for the {', '.join(sorted(missing))} grant at {p.head[:8]}: "
-                                             f"{rules.asks(p.number, p.head, missing)}")
             below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
             e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
         changed = True
@@ -586,12 +375,6 @@ class Queue:
                 if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
                     e.state, e.why, changed = "waiting", f"contains #{blocking[0]}, which isn't admitted", True
         return out
-
-    def missing(self, rules: Rules, p: PR) -> set[str]:
-        """The roles ``p``'s change needs that no grant gives at its head, on it or carried to it from another (`carry`)."""
-        need = rules.needs(self.workdir, "origin/main", p.head, log=self.log)
-        missing = need - self.grants(p.number, p.head)
-        return missing - self.carry(p.number, p.head, missing, rules=rules) if missing else missing
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
         """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains."""
@@ -1035,7 +818,7 @@ def same_tree_mark(store, repo: Path, remote: str, pr: PR) -> str | None:
     _fetch_heads(repo, remote, [pr])
     if not (want := _tree(repo, pr.head)):
         return None
-    marked = StoreGrants(store, repo=repo)._other_heads(pr.number, pr.head, vocab.READY)
+    marked = StoreLabels(store)._other_heads(pr.number, pr.head, vocab.READY)
     return next((old for old, labs in sorted(marked.items()) if any(str(lab.value).lower() == "true" for lab in labs)
                  and _tree(repo, old) == want), None)
 
@@ -1132,7 +915,7 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
         print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier failed: {failed}. Push a "
               f"fix, or run it again: passes are cached by input, so a re-run on the same cache runs only what failed", file=sys.stderr)
         return 1
-    target = grant_target(pr.number, pr.head)
+    target = label_target(pr.number, pr.head)
     store.add_label(target, vocab.READY, True, by)
     said, lost = _label_write_through(store, target)
     print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {said}")
@@ -1188,10 +971,10 @@ def main(argv: list[str]) -> int:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             return ready(GitHub(repo), store, a.pr, a.by, tier)
-        labels = StoreGrants(store, log=lambda s: print(s, file=sys.stderr), repo=a.workdir)
-        q = Queue(a.workdir, remote=remote, github=GitHub(repo), grants=labels, ready=labels.ready, store=store, shadow=a.shadow,
+        labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr))
+        q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
-                  auth=credential_args(Path.cwd(), remote), carry=labels.carried)
+                  auth=credential_args(Path.cwd(), remote))
         lock = _lock(a.workdir)  # noqa: F841
         if a.command == "status":
             entries = q.status()

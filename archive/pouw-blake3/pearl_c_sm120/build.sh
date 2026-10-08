@@ -27,6 +27,6 @@ rm "$OUT/pearl_c_sm120.sass"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm120/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$OUT/"
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$OUT/toolchain.txt"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c verity/experimental/protocols/pouw verity; } > "$OUT/source.txt"
+{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c verity/core/protocols/pouw verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"

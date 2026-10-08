@@ -134,7 +134,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
-  a test of the package's own (PoUW's `verity/experimental/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
+  a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
   closed hypothesis, or reads in its statement. `--update` writes each one's `digest`, the one its `reads` record holds, so
@@ -190,8 +190,7 @@ When the change lands on `main` (`research merge --push`, `research queue land`)
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
-read from another module with the same content is counted on one line. A grant in `tools/verity/check/queue.toml`
-(`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
+read from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
 `def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `check.py --update`
