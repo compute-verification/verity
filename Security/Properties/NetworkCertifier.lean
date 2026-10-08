@@ -1,5 +1,4 @@
 import NetworkCheck.Check
-import Models.Core.Assumptions
 import Definitions.NetworkCertifier
 import Mathlib.Data.Set.Card
 
@@ -8,8 +7,9 @@ import Mathlib.Data.Set.Card
 
 The properties of `NetworkCheck.protocol` (`verity/network-certificate/v2`, the port of `audit.py`'s `Audit`), stated
 against its functions as they run: what `answer` and the check refuse, what an acceptance establishes about each
-link-window and what an undecided outcome means, that the honest transcript is accepted, and what an accepted run is,
-under SHA-512's collision resistance and LMS's unforgeability: a run of the certifier program under the declared advice.
+link-window and what an undecided outcome means, that the honest transcript is accepted, and what an accepted run is:
+a run of the certifier program under the declared advice, or a run from whose own data a function finds a SHA-512
+collision or an LMS forgery.
 Each is a `Prop`; `Properties.Proofs.NetworkCertifier` proves the ones about the code, and
 `Proofs.NetworkCertifier.Accepted` (in `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) the
 last two, `AcceptedRunsAreProgramRuns` and the count it gives, `EncardAcceptedObservationsLe`.
@@ -192,11 +192,10 @@ honest (`Honest`, which the deployment's `trusted-nebius-host` is about): an egr
 its recorded rows under its status, an ingress head carries its status, every head names its own link-window, and every
 frame it records is `8·B` bits (W3). It signs, with the key, the `certificateMessage` of each head it issues (`Signed`).
 
-The assumptions are for the run: `LmsEufCma` (`euf-cma/lms-sha512-n64`), that every signature of the commitment's
-certificates the verifier accepts under the key is over a message the device signed, and `Sha512CollisionFreeOn` (`cr/sha-512`) over `RunStrings`,
-the strings the check and the device hash: each record's head and certificate message, the head and frame tree the
-check recomputes for each egress link-window, and each issued head, its message and the device's frame tree of each
-egress link-window. -/
+Nothing is assumed of SHA-512 or LMS. Each claim about an accepted run holds, or a function of the run finds a break in
+the run's own data: `findCollision` searches `runStrings`, the strings the check and the device hash, for two distinct
+strings with one SHA-512 digest (`cr/sha-512`), and `findForgery` searches the commitment's certificates for a message
+the device never signed whose signature verifies under the key (`euf-cma/lms-sha512-n64`). -/
 
 /-- One head the device issues, for link-window `(direction, link, window)`. -/
 structure Issue where
@@ -236,13 +235,46 @@ def lmsAccepts (p : Params) (m sig : ByteArray) : Bool :=
   | .ok s => (Lms.verify p.lms p.key m s).toOption == some true
   | .error _ => false
 
-/-- The LMS verifier on the run's own signatures, those of the commitment's certificates: what `LmsEufCma` is assumed
-of, so that it says no certificate of the run is a forgery. -/
-def runAccepts (p : Params) (c : Commitment) (m sig : ByteArray) : Bool :=
-  lmsAccepts p m sig && c.records.any (·.certificate.signature == sig)
+/-- The messages the device signs (`Signed`), as a list. -/
+def signedMessages {p : Params} (dev : Device p) : List ByteArray :=
+  dev.issued.filterMap fun i =>
+    i.head.digest.toOption.bind fun dg =>
+      (certificateMessage (p.key.extract 0 16) i.link i.direction i.window dg).toOption
+
+/-- The message a record's certificate signs, `certificateMessage` of its own fields. -/
+def certMessage (r : Certified) : Option ByteArray :=
+  (certificateMessage r.certificate.keyId r.certificate.link r.certificate.direction r.certificate.window
+    r.certificate.digest).toOption
+
+/-- The first certificate of the commitment that is a forgery: its message and signature, where the signature verifies
+under the key over a message the device never signed. -/
+def findForgery {p : Params} (c : Commitment) (dev : Device p) : Option (ByteArray × ByteArray) :=
+  c.records.toList.findSome? fun r => (certMessage r).bind fun m =>
+    if lmsAccepts p m r.certificate.signature && !(signedMessages dev).any (· == m) then
+      some (m, r.certificate.signature)
+    else none
+
+/-- A message and a signature are an LMS forgery under the key: the signature verifies over a message the device never
+signed. -/
+def IsForgery {p : Params} (dev : Device p) : Option (ByteArray × ByteArray) → Prop
+  | some (m, σ) => LmsVerifies p m σ ∧ ¬ Signed dev m
+  | none => False
+
+/-- The first pair of distinct strings of `xs` with one SHA-512 digest. -/
+def findCollision : List ByteArray → Option (ByteArray × ByteArray)
+  | [] => none
+  | x :: xs =>
+    match xs.find? fun y => !(x == y) && Flock.Sha512.hash x == Flock.Sha512.hash y with
+    | some y => some (x, y)
+    | none => findCollision xs
+
+/-- `xy` is a SHA-512 collision: two distinct strings with one digest. -/
+def IsCollision : Option (ByteArray × ByteArray) → Prop
+  | some (x, y) => x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
+  | none => False
 
 /-- What SHA-512 hashes for a record head: `tagged_sha512(RECORD_TAG, encode(h))`'s input. -/
-def HeadString (h : RecordHead) (x : ByteArray) : Prop := ∃ enc, h.encode = .ok enc ∧ x = taggedInput recordTag enc
+def headStrings (h : RecordHead) : List ByteArray := (h.encode.toOption.map (taggedInput recordTag)).toList
 
 /-- The node inputs `pairs lv` hashes on one level. -/
 def pairInputs (lv : Nat) : List ByteArray → List ByteArray
@@ -255,60 +287,69 @@ def levelAt : Nat → List ByteArray → List ByteArray
   | 0, level => level
   | k + 1, level => pairs k (levelAt k level)
 
-/-- What SHA-512 hashes for the tree of `frames` under grid parameters `g`: each frame's leaf, each node of each level
-below the root, and every empty subtree up to the depth. -/
-def FramesString (g : Grid) (frames : Array ByteArray) (x : ByteArray) : Prop :=
-  (∃ f ∈ frames.toList, leafInput f g.frameBytes = .ok x) ∨ x = emptyInput ∨
-    (∃ l < depth g, x = nodeInput (empty l) (empty l)) ∨
-    ∃ ls, leaves frames g = .ok ls ∧ ∃ lv < depth g, x ∈ pairInputs lv (levelAt lv ls.toList)
+/-- What SHA-512 hashes for the tree of `frames` under grid parameters `g`: each frame's leaf, every empty subtree up
+to the depth, and each node of each level below the root. -/
+def framesStrings (g : Grid) (frames : Array ByteArray) : List ByteArray :=
+  frames.toList.filterMap (fun f => (leafInput f g.frameBytes).toOption) ++ [emptyInput] ++
+    (List.range (depth g)).map (fun l => nodeInput (empty l) (empty l)) ++
+    match leaves frames g with
+    | .ok ls => (List.range (depth g)).flatMap fun lv => pairInputs lv (levelAt lv ls.toList)
+    | .error _ => []
 
-/-- What SHA-512 hashes for the frame tree of a grid: `FramesString` of its real frames. -/
-def TreeString (g : Grid) (grid : Array (Array (Option ByteArray))) (x : ByteArray) : Prop :=
-  ∃ frames, realFrames grid g = .ok frames ∧ FramesString g frames x
+/-- What SHA-512 hashes for the frame tree of a grid: `framesStrings` of its real frames. -/
+def treeStrings (g : Grid) (grid : Array (Array (Option ByteArray))) : List ByteArray :=
+  match realFrames grid g with
+  | .ok frames => framesStrings g frames
+  | .error _ => []
 
-/-- The strings the run hashes: the check's (each record's head and certificate message; the head and frame tree it
+/-- The syncs `link` declares, one per window, as the check reads them. -/
+def declared (W : Nat) (link : Link) : Fin W → ClockSync := fun v => link.syncs.getD v.1 noSync
+
+/-- The strings the run hashes: the check's (each record's head and certificate message; the frame tree and head it
 recomputes of each egress link-window) and the device's (each issued head and its message; the frame tree of each
 egress link-window). -/
-def RunStrings (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg : ByteArray) (x : ByteArray) : Prop :=
-  (∃ r ∈ c.records.toList, HeadString r.head x ∨
-    messageInput r.certificate.keyId r.certificate.link r.certificate.direction r.certificate.window
-      r.certificate.digest = .ok x) ∨
-  (∃ l link, (l, link) ∈ p.egress.toList.zip e.links.toList ∧ ∃ w < p.windows,
-    ∃ syncs : Fin p.windows → ClockSync, Declares link syncs ∧ (TreeString p.grid (programGrid p syncs link.frames w) x ∨
-      ∃ h, recordHead l .egress w (programGrid p syncs link.frames w) none p.grid eg true = .ok h ∧ HeadString h x)) ∨
-  (∃ i ∈ dev.issued, HeadString i.head x ∨ ∃ dg, i.head.digest = .ok dg ∧
-    messageInput (p.key.extract 0 16) i.link i.direction i.window dg = .ok x) ∨
-  ∃ ℓ : Fin p.egress.size, ∃ w < p.windows, TreeString p.grid (deviceGrid dev ℓ w) x
+def runStrings (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg : ByteArray) : List ByteArray :=
+  c.records.toList.flatMap (fun r => headStrings r.head ++
+    (messageInput r.certificate.keyId r.certificate.link r.certificate.direction r.certificate.window
+      r.certificate.digest).toOption.toList) ++
+  (p.egress.toList.zip e.links.toList).flatMap (fun q => (List.range p.windows).flatMap fun w =>
+    treeStrings p.grid (programGrid p (declared p.windows q.2) q.2.frames w) ++
+      (recordHead q.1 .egress w (programGrid p (declared p.windows q.2) q.2.frames w) none p.grid eg
+        true).toOption.toList.flatMap headStrings) ++
+  dev.issued.flatMap (fun i => headStrings i.head ++
+    (i.head.digest.toOption.bind fun dg =>
+      (messageInput (p.key.extract 0 16) i.link i.direction i.window dg).toOption).toList) ++
+  (List.finRange p.egress.size).flatMap fun ℓ =>
+    (List.range p.windows).flatMap fun w => treeStrings p.grid (deviceGrid dev ℓ w)
 
-/-- **An accepted run's rows are the Program's (5a).** If the check accepts, the device is honest, no one forged an LMS
-signature under the key and SHA-512 has no collision among the run's strings, then on every egress link the device
-recorded, at every bucket of the `W` windows, exactly the row `expectedRow` gives of the link's frames under its
-declared syncs, and it gave every link-window of the unit a complete status. -/
+/-- **An accepted run's rows are the Program's (5a).** If the check accepts and the device is honest, then on every
+egress link the device recorded, at every bucket of the `W` windows, exactly the row `expectedRow` gives of the link's
+frames under its declared syncs, and it gave every link-window of the unit a complete status; or the run's strings hold
+a SHA-512 collision, which `findCollision` finds, or one of its certificates is an LMS forgery, which `findForgery`
+finds. -/
 def AcceptedRowsAreProgramRows : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg ig : ByteArray),
     protocol.Accepts p c e → ParamsDigests p eg ig → Honest p dev eg →
-    Verity.Assumptions.Sha512CollisionFreeOn Flock.Sha512.hash (RunStrings p c e dev eg) →
-    Verity.Assumptions.LmsEufCma (runAccepts p c) (Signed dev) →
-    (∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link → ∀ syncs : Fin p.windows → ClockSync,
+    ((∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link → ∀ syncs : Fin p.windows → ClockSync,
       Declares link syncs → ∀ t < p.windows * p.grid.buckets,
         dev.rows ℓ t = expectedRow p.grid.allocation p.grid.buckets p.windows syncs link.frames t) ∧
-    ∀ d, ∀ l ∈ linkNames p d, ∀ w < p.windows, dev.status d l w = none
+      ∀ d, ∀ l ∈ linkNames p d, ∀ w < p.windows, dev.status d l w = none) ∨
+    IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev)
 
 /-- **An accepted run is a run of the certifier program under the declared advice (5b).** Take an accepted unit, an
-honest device, the run's assumptions as in `AcceptedRowsAreProgramRows`, a reference sync set `ss` with Σ_sync's
-values, and a reference observation sequence `o` of the `W·T` buckets whose rows are the device's and whose statuses
-are complete exactly where the device's link-window statuses are (each boundary link `linkOf κ` one of the unit's).
-If the opened frames are the reference Program's (`frames` of the operator's ingress and content advice `a`, on each
-egress link), then the reference `Accepted` holds of `o` for the constant-rate Program with advice `(a, σ)`, `σ` the
-declared syncs: Theorems 1(b) and 3 (`EncardAccSeqsLeConstantRate` and the rest) count `o`. -/
+honest device, a reference sync set `ss` with Σ_sync's values, and a reference observation sequence `o` of the `W·T`
+buckets whose rows are the device's and whose statuses are complete exactly where the device's link-window statuses are
+(each boundary link `linkOf κ` one of the unit's). If the opened frames are the reference Program's (`frames` of the
+operator's ingress and content advice `a`, on each egress link), then the reference `Accepted` holds of `o` for the
+constant-rate Program with advice `(a, σ)`, `σ` the declared syncs, so Theorems 1(b) and 3
+(`EncardAccSeqsLeConstantRate` and the rest) count `o`; or, as in `AcceptedRowsAreProgramRows`, `findCollision` finds a
+SHA-512 collision among the run's strings or `findForgery` an LMS forgery among its certificates. -/
 def AcceptedRunsAreProgramRuns : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg ig : ByteArray) {K : Nat} {In Ac : Type}
     (ss : NetTiming.SyncSet) (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame) (a : Ac)
     (op : Nat → List (NetTiming.Obs p.egress.size K p.grid.allocation) → In)
     (o : List (NetTiming.Obs p.egress.size K p.grid.allocation)) (linkOf : Fin K → Direction × String),
     protocol.Accepts p c e → ParamsDigests p eg ig → Honest p dev eg →
-    Verity.Assumptions.Sha512CollisionFreeOn Flock.Sha512.hash (RunStrings p c e dev eg) →
-    Verity.Assumptions.LmsEufCma (runAccepts p c) (Signed dev) →
     (∀ δ, δ ∈ p.syncSet.deltas ↔ δ ∈ ss.deltas) → (∀ ρ, ρ ∈ p.syncSet.rhos ↔ ρ ∈ ss.rhos) →
     o.length = p.windows * p.grid.buckets →
     (∀ t (ht : t < o.length), o[t].rows = fun ℓ => dev.rows ℓ t) →
@@ -318,35 +359,44 @@ def AcceptedRunsAreProgramRuns : Prop :=
     (∀ t < p.windows * p.grid.buckets, ∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link →
       (frames (NetTiming.ingressUpTo op o t) a ℓ).map (fun f => (f.payload, f.anchor, f.index)) =
         link.frames.map (fun f => (f.payload, f.anchor, f.index))) →
-    ∃ σ : Fin p.windows → ss.Elem,
+    (∃ σ : Fin p.windows → ss.Elem,
       (∀ (w : Fin p.windows) (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link →
         ∃ s, link.syncs[w.1]? = some s ∧ (σ w).1.1 = s.delta ∧ (σ w).2.1 = s.rho) ∧
       NetTiming.Accepted (NetTiming.constantRate (S := p.grid.allocation) p.grid.buckets p.windows ss frames) op
-        (p.windows * p.grid.buckets) o (a, σ)
+        (p.windows * p.grid.buckets) o (a, σ)) ∨
+    IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev)
 
-/-- The observation sequences of accepted runs, with jitter classes below `D`: each is the `W·T` buckets' rows and
-statuses of an honest device whose unit the check accepted under the run's assumptions, read through `linkOf` as in
-`AcceptedRunsAreProgramRuns`, whose opened frames are `frames` of the operator's ingress and some advice `a`. -/
+/-- `o` is the observation sequence of an accepted run `(c, e, dev, eg, ig)` with advice `a`: the check accepts the
+unit, the device is honest, and `o`'s rows and statuses are the device's, read through `linkOf` as in
+`AcceptedRunsAreProgramRuns`, with the opened frames `frames` of the operator's ingress and `a`. -/
+def AcceptedRun (p : Params) {K : Nat} {In Ac : Type}
+    (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame)
+    (op : Nat → List (NetTiming.Obs p.egress.size K p.grid.allocation) → In) (linkOf : Fin K → Direction × String)
+    (o : List (NetTiming.Obs p.egress.size K p.grid.allocation)) (c : Commitment) (e : Evidence) (dev : Device p)
+    (eg ig : ByteArray) (a : Ac) : Prop :=
+  protocol.Accepts p c e ∧ ParamsDigests p eg ig ∧ Honest p dev eg ∧
+    (∀ t (ht : t < o.length), o[t].rows = fun ℓ => dev.rows ℓ t) ∧
+    (∀ t (ht : t < o.length) κ,
+      o[t].status κ = .complete ↔ dev.status (linkOf κ).1 (linkOf κ).2 (t / p.grid.buckets) = none) ∧
+    ∀ t < p.windows * p.grid.buckets, ∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link →
+      (frames (NetTiming.ingressUpTo op o t) a ℓ).map (fun f => (f.payload, f.anchor, f.index)) =
+        link.frames.map (fun f => (f.payload, f.anchor, f.index))
+
+/-- The observation sequences of accepted runs, of the `W·T` buckets with jitter classes below `D`. -/
 def AcceptedObservations (p : Params) {K : Nat} {In Ac : Type}
     (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame)
     (op : Nat → List (NetTiming.Obs p.egress.size K p.grid.allocation) → In) (linkOf : Fin K → Direction × String)
     (D : Nat) : Set (List (NetTiming.Obs p.egress.size K p.grid.allocation)) :=
   {o | o.length = p.windows * p.grid.buckets ∧ (∀ x ∈ o, x.jitter < D) ∧
     ∃ (c : Commitment) (e : Evidence) (dev : Device p) (eg ig : ByteArray) (a : Ac),
-      protocol.Accepts p c e ∧ ParamsDigests p eg ig ∧ Honest p dev eg ∧
-      Verity.Assumptions.Sha512CollisionFreeOn Flock.Sha512.hash (RunStrings p c e dev eg) ∧
-      Verity.Assumptions.LmsEufCma (runAccepts p c) (Signed dev) ∧
-      (∀ t (ht : t < o.length), o[t].rows = fun ℓ => dev.rows ℓ t) ∧
-      (∀ t (ht : t < o.length) κ,
-        o[t].status κ = .complete ↔ dev.status (linkOf κ).1 (linkOf κ).2 (t / p.grid.buckets) = none) ∧
-      (∀ t < p.windows * p.grid.buckets, ∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link →
-        (frames (NetTiming.ingressUpTo op o t) a ℓ).map (fun f => (f.payload, f.anchor, f.index)) =
-          link.frames.map (fun f => (f.payload, f.anchor, f.index)))}
+      AcceptedRun p frames op linkOf o c e dev eg ig a}
 
 /-- **What accepted runs can carry (Theorem 3 for the check).** Over every accepted run under the hypotheses of
 `AcceptedRunsAreProgramRuns`, the device's content is a function of the frames and the per-window sync advice
 `Fin W → Σ_sync`, so the accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`
-(`ss.size = |Σ_sync|`): `NetTiming.Guarantees.EncardAccSeqsLeConstantRate` with `n = W·T`. -/
+(`ss.size = |Σ_sync|`): `NetTiming.Guarantees.EncardAccSeqsLeConstantRate` with `n = W·T`. Or some accepted run yields
+a break: `findCollision` finds a SHA-512 collision among its strings, or `findForgery` an LMS forgery among its
+certificates. -/
 def EncardAcceptedObservationsLe : Prop :=
   ∀ (p : Params) {K : Nat} {In Ac : Type} [Fintype Ac] (ss : NetTiming.SyncSet)
     (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame)
@@ -355,6 +405,8 @@ def EncardAcceptedObservationsLe : Prop :=
     (∀ δ, δ ∈ p.syncSet.deltas ↔ δ ∈ ss.deltas) → (∀ ρ, ρ ∈ p.syncSet.rhos ↔ ρ ∈ ss.rhos) →
     (∀ κ, (linkOf κ).2 ∈ linkNames p (linkOf κ).1) →
     (AcceptedObservations p frames op linkOf D).encard ≤
-      ((Fintype.card Ac * ss.size ^ p.windows * D ^ (p.windows * p.grid.buckets) : ℕ) : ℕ∞)
+      ((Fintype.card Ac * ss.size ^ p.windows * D ^ (p.windows * p.grid.buckets) : ℕ) : ℕ∞) ∨
+    ∃ o c e dev eg ig a, AcceptedRun p frames op linkOf o c e dev eg ig a ∧
+      (IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev))
 
 end Properties.NetworkCertifier

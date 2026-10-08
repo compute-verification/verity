@@ -6,13 +6,15 @@ import Proofs.NetworkCertifier.Schedule
 # An accepted run is a run of the certifier program (5b)
 
 `Properties.NetworkCertifier.AcceptedRunsAreProgramRuns`, proved from what an accepted run's rows are
-(`Properties.NetworkCertifier.acceptedRowsAreProgramRows`, under `cr/sha-512` and `euf-cma/lms-sha512-n64`) and the
-program's `expectedRow` being the reference's (`CodeExpectedRow`). The declared syncs are one value of Σ_sync per window,
-the same on every link (the check's `advice` and one-clock tests, through `acceptsIff`), so they are advice of the
-reference's constant-rate Program, and the device's rows and statuses are what its `Accepted` asks.
+(`Properties.NetworkCertifier.acceptedRowsAreProgramRows`, which holds unless the run yields a SHA-512 collision or an
+LMS forgery, as this does) and the program's `expectedRow` being the reference's (`CodeExpectedRow`). The declared syncs
+are one value of Σ_sync per window, the same on every link (the check's `advice` and one-clock tests, through
+`acceptsIff`), so they are advice of the reference's constant-rate Program, and the device's rows and statuses are what
+its `Accepted` asks.
 
 `EncardAcceptedObservationsLe` follows: accepted runs' observation sequences are among Theorem 3's `AccSeqs` of that
-Program, so they number at most `#Ac · |Σ_sync|^W · D^(W·T)` (`NetTiming.encard_accSeqs_le_constantRate`).
+Program, so they number at most `#Ac · |Σ_sync|^W · D^(W·T)` (`NetTiming.encard_accSeqs_le_constantRate`), unless some
+accepted run yields a collision or a forgery.
 -/
 
 open NetworkCheck hiding Params
@@ -23,8 +25,10 @@ open Properties.NetworkCertifier
 namespace Proofs.NetworkCertifier
 
 theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
-  intro p c e dev eg ig K In Ac ss frames a op o linkOf hacc hpd hhon hcr hlms hdel hrho hlen hrows hstat hlink hfr
-  obtain ⟨hrow, hst⟩ := acceptedRowsAreProgramRows p c e dev eg ig hacc hpd hhon hcr hlms
+  intro p c e dev eg ig K In Ac ss frames a op o linkOf hacc hpd hhon hdel hrho hlen hrows hstat hlink hfr
+  rcases acceptedRowsAreProgramRows p c e dev eg ig hacc hpd hhon with ⟨hrow, hst⟩ | hb
+  case inr => exact Or.inr hb
+  refine Or.inl ?_
   obtain ⟨hfit, eg', ig', -, he, -⟩ := (acceptsIff p c e).mp hacc
   have adm : ∀ (ℓ : Fin p.egress.size) link, e.links[ℓ.1]? = some link → ∀ w < p.windows,
       SyncAdmitted p e link w := by
@@ -61,18 +65,23 @@ theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
     refine NetTiming.SecurityProofs.CodeExpectedRow _ _ _ _ (fun w => ss.sync (σ w)) (fun w => ?_) _
       (frames (NetTiming.ingressUpTo op o t) a ℓ) (hfr t ht ℓ _ hl).symm t
     obtain ⟨s, hs, hd, hr⟩ := hσ w ℓ _ hl
-    have es : CheckProofs.declared p.windows e.links[ℓ.1] w = s := Option.some.inj ((hdecl w).symm.trans hs)
+    have es : declared p.windows e.links[ℓ.1] w = s := Option.some.inj ((hdecl w).symm.trans hs)
     rw [es]
     exact ⟨hd.symm, hr.symm⟩
   · exact Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact ht)
 
 theorem encardAcceptedObservationsLe : EncardAcceptedObservationsLe := by
   intro p K In Ac _ ss frames op linkOf D hdel hrho hlink
-  refine le_trans (Set.encard_le_encard ?_)
-    (NetTiming.encard_accSeqs_le_constantRate (S := p.grid.allocation) p.grid.buckets p.windows ss frames op _ D)
-  rintro o ⟨hlen, hjit, c, e, dev, eg, ig, a, hacc, hpd, hhon, hcr, hlms, hrows, hstat, hfr⟩
-  obtain ⟨σ, -, hA⟩ := acceptedRunsAreProgramRuns p c e dev eg ig ss frames a op o linkOf hacc hpd hhon hcr hlms
-    hdel hrho hlen hrows hstat hlink hfr
-  exact ⟨hlen, hjit, (a, σ), hA⟩
+  by_cases hb : ∃ o c e dev eg ig a, AcceptedRun p frames op linkOf o c e dev eg ig a ∧
+      (IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev))
+  · exact Or.inr hb
+  refine Or.inl (le_trans (Set.encard_le_encard ?_)
+    (NetTiming.encard_accSeqs_le_constantRate (S := p.grid.allocation) p.grid.buckets p.windows ss frames op _ D))
+  rintro o ⟨hlen, hjit, c, e, dev, eg, ig, a, hrun⟩
+  obtain ⟨hacc, hpd, hhon, hrows, hstat, hfr⟩ := hrun
+  rcases acceptedRunsAreProgramRuns p c e dev eg ig ss frames a op o linkOf hacc hpd hhon hdel hrho hlen hrows hstat
+    hlink hfr with ⟨σ, -, hA⟩ | hbr
+  · exact ⟨hlen, hjit, (a, σ), hA⟩
+  · exact (hb ⟨o, c, e, dev, eg, ig, a, ⟨hacc, hpd, hhon, hrows, hstat, hfr⟩, hbr⟩).elim
 
 end Proofs.NetworkCertifier

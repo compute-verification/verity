@@ -157,9 +157,6 @@ theorem screen_noVerdict {p : Params} {c : Commitment} {d : Direction} {l : Stri
 
 /-! ## A link-window's verdict -/
 
-/-- The syncs `link` declares, as `expectedGrid` reads them. -/
-def declared (W : Nat) (link : Link) : Fin W → ClockSync := fun v => link.syncs.getD v.1 noSync
-
 theorem declares_declared {W : Nat} {link : Link} (h : link.syncs.size = W) : Declares link (declared W link) := by
   intro v
   simp only [declared, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (h ▸ v.2 : v.1 < link.syncs.size),

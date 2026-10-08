@@ -1,4 +1,5 @@
 import Properties.Proofs.NetworkCertifier.Bytes
+import Properties.Proofs.NetworkCertifier.Strings
 
 /-!
 # The frame tree binds its frames
@@ -16,8 +17,9 @@ namespace Properties.NetworkCertifier.Tree
 
 open Properties.NetworkCertifier Properties.NetworkCertifier.Bytes
 
-/-- SHA-512 has no collision on `X`. -/
-abbrev CF (X : ByteArray → Prop) : Prop := Verity.Assumptions.Sha512CollisionFreeOn Sha512.hash X
+/-- SHA-512 has no collision on `X`: a hypothesis of these lemmas only. The claims discharge it on the run's strings
+with `findCollision`, which returns a collision wherever it fails (`Extract`). -/
+abbrev CF (X : ByteArray → Prop) : Prop := ∀ x y, X x → X y → Sha512.hash x = Sha512.hash y → x = y
 
 variable {X : ByteArray → Prop}
 

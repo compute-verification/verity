@@ -1,13 +1,14 @@
 import Properties.Proofs.NetworkCertifier.Outcomes
+import Properties.Proofs.NetworkCertifier.Extract
 
 /-!
 # An accepted run's rows are the Program's (5a)
 
-Under LMS's unforgeability every accepted certificate's message is one the device signed, and under SHA-512's collision
-resistance on the run's strings that message names the same link-window and digest (`messageInput_inj`), and the digest
-the same head (`head_inj`). On egress that head is both the one `record_head` makes of the Program's grid and the one
-the device made of its recorded grid, so the grids are one (`recordHead_grid_inj`), and so are their rows
-(`bytesGrid_inj`).
+Unless `findForgery` finds an LMS forgery, every accepted certificate's message is one the device signed
+(`signed_of_not`); unless `findCollision` finds a SHA-512 collision among the run's strings (`cf_run`), that message
+names the same link-window and digest (`messageInput_inj`), and the digest the same head (`head_inj`). On egress that
+head is both the one `record_head` makes of the Program's grid and the one the device made of its recorded grid, so the
+grids are one (`recordHead_grid_inj`), and so are their rows (`bytesGrid_inj`).
 -/
 
 open NetworkCheck hiding Params
@@ -45,10 +46,6 @@ theorem head_inj {X : ByteArray → Prop} (hX : CF X) {h h' : RecordHead} {dg : 
   subst this
   exact encode_inj he he'
 
-theorem lmsAccepts_of {p : Params} {m sig : ByteArray} (h : LmsVerifies p m sig) : lmsAccepts p m sig = true := by
-  obtain ⟨s, hs, hv⟩ := h
-  simp [lmsAccepts, hs, hv, Except.toOption]
-
 theorem link_short {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) : h.link.toUTF8.size < 2 ^ 16 := by
   obtain ⟨enc, he, -⟩ := digest_ok e
   exact encode_link he
@@ -64,7 +61,14 @@ theorem zip_index {p : Params} {e : Evidence} (hfit : EvidenceFits p e) (ℓ : F
   simpa [← hl] using this
 
 theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
-  intro p c e dev eg ig hacc hpd hhon hcr hlms
+  intro p c e dev eg ig hacc hpd hhon
+  by_cases hc : IsCollision (findCollision (runStrings p c e dev eg))
+  · exact Or.inr (Or.inl hc)
+  by_cases hf : IsForgery dev (findForgery c dev)
+  · exact Or.inr (Or.inr hf)
+  refine Or.inl ?_
+  have hcr := cf_run hc
+  have hlms := signed_of_not hf
   obtain ⟨hfit, eg', ig', hpd', he, hi⟩ := (acceptsIff p c e).mp hacc
   have heg : eg' = eg := Except.ok.inj (hpd'.1.symm.trans hpd.1)
   subst eg'
@@ -75,9 +79,8 @@ theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
     intro d l w r dg ⟨hrec, hdig, hcdg, hk, hcl, hcd, hcw, m, hm, hσ⟩
     have hmem : r ∈ recordsOf c d l w := by rw [hrec]; exact List.mem_singleton_self r
     have hr : r ∈ c.records.toList := (List.mem_filter.mp hmem).1
-    obtain ⟨i, hi, dg', hdg', hm'⟩ := hlms m r.certificate.signature (by
-      simp only [runAccepts, lmsAccepts_of hσ, Bool.true_and, ← Array.any_toList, List.any_eq_true]
-      exact ⟨r, hr, ba_beq.mpr rfl⟩)
+    obtain ⟨i, hi, dg', hdg', hm'⟩ := hlms r hr m
+      (by rw [certMessage, hk, hcl, hcd, hcw, hcdg, hm]; rfl) hσ
     obtain ⟨x, hx, rfl⟩ := certificateMessage_ok hm
     obtain ⟨x', hx', hxx⟩ := certificateMessage_ok hm'
     have hX : RunStrings p c e dev eg x := Or.inl ⟨r, hr, Or.inr (by rw [hk, hcl, hcd, hcw, hcdg]; exact hx)⟩

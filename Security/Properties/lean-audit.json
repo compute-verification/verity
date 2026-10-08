@@ -12,16 +12,6 @@
   "Properties.Proofs.NetworkCertifier"
  ],
  "proved_in": ["../Proofs"],
- "assumptions": {
-  "Verity.Assumptions.LmsEufCma": {
-   "owner": "@network-accounting",
-   "digest": "136b80bd2f2e7ba09973125e577667347b973e0e93eb149e33319e4f071396d3"
-  },
-  "Verity.Assumptions.Sha512CollisionFreeOn": {
-   "owner": "@network-accounting",
-   "digest": "41074f4ca418472a345656e8b78d637f6dde1f3814c3d62d7a9e0e49fb36f3a1"
-  }
- },
  "meaning": [
   "Properties.Pouw",
   "PouwWindow.Grid",
@@ -47,8 +37,7 @@
   "NetworkCheck",
   "Lms",
   "Properties.NetworkCertifier",
-  "Definitions.NetworkCertifier",
-  "Models.Core.Assumptions"
+  "Definitions.NetworkCertifier"
  ],
  "layers": {
   "Properties.Pouw": {

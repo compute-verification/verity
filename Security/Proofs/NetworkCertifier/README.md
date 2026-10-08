@@ -34,7 +34,8 @@ Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`),
                                definitions above: four theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
                                (`security_properties`' `AcceptedRunsAreProgramRuns`, through Code.lean), and
-                               Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`)
+                               Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
+                               each unless the run yields a SHA-512 collision or an LMS forgery
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
 CheckAxioms.lean               one #print axioms line per statement and witness, then three more lemmas
 ~~~
