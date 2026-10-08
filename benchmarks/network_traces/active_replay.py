@@ -1,4 +1,4 @@
-"""The active certifier on recorded traces, in real time: `verity.experimental.protocols.certifier.active` serving a replay of honest traces'
+"""The active certifier on recorded traces, in real time: `verity.core.protocols.certifier.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
@@ -83,8 +83,8 @@ from pathlib import Path
 
 import covert
 import replay
-from verity.experimental.protocols.certifier import online
-from verity.experimental.protocols.certifier.active import (
+from verity.core.protocols.certifier import online
+from verity.core.protocols.certifier.active import (
     DATA,
     HEADER,
     LAST,
@@ -96,10 +96,10 @@ from verity.experimental.protocols.certifier.active import (
     encode_frame,
     worker,
 )
-from verity.experimental.protocols.certifier.audit import Audit
-from verity.experimental.protocols.certifier.calibration import choose_syncs
-from verity.experimental.protocols.certifier.commitment import CommittedRecord, commit
-from verity.experimental.protocols.certifier.grid import (
+from verity.core.protocols.certifier.audit import Audit
+from verity.core.protocols.certifier.calibration import choose_syncs
+from verity.core.protocols.certifier.commitment import CommittedRecord, commit
+from verity.core.protocols.certifier.grid import (
     COMPLETE,
     GridParams,
     Reason,
@@ -108,7 +108,7 @@ from verity.experimental.protocols.certifier.grid import (
     Certifier,
     row_count,
 )
-from verity.experimental.protocols.certifier.schedule import (
+from verity.core.protocols.certifier.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,

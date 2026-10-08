@@ -19,8 +19,8 @@ from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDoma
 from verity.ml.commitments.merkle import b3s_level_key
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "verity" / "experimental" / "protocols" / "pouw"))
-from verity.experimental.protocols.pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
+sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "pouw"))
+from verity.core.protocols.pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
 
 ROW, TILE, M, N = "verity/pouw/row/v1", "verity/pouw/tile/v1", 32, 8192
 BINDING = bytes(range(32))

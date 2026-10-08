@@ -10,31 +10,34 @@ be older than `main` (a cloud VM boots from a snapshot), so when they differ, `g
 
 Top-level directories (a grouping, not an import name, except `verity/`):
 
-- `verity/`: the distribution `verity` (the root `pyproject.toml`), in three parts. The module list is `verity/README.md`.
+- `verity/`: the distribution `verity` (the root `pyproject.toml`), in two parts. The module list is `verity/README.md`.
   Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
   tests sit beside it as their own suite.
-  - `verity/core/`: trusted code, all Lean, every part with proven properties. It holds only `service/flock/`, C-Flock's
-    executable verifier of record (no dependencies). Its planned parts, `primitives`, `protocols`, `service` and
-    `devices`, each grow one verifier at a time.
-  - `verity/ml/` (`verity.ml`): Python and CUDA, none of which can affect soundness.
+  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
+    proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
+    - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
+      its plans and consumers), PoUW (`pouw`), PoUS (`pous`) and the network certifier (`certifier`), each a Python
+      verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
+      (`verity/core/protocols/network/nci/`).
+    - `claims`: the ids of security claims.
+    - The Lean ports in `primitives`, `devices`, `service` and `protocols`. A port is held to the Python it replaces by
+      `difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
+    - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
+  - `verity/ml/` (`verity.ml`): Python and CUDA. These units are on the soundness path, because core's verifiers read
+    them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
+    `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
+    `ALLOWED` lets core reach). The rest, C-Flock's prover and the private circuits, can't affect soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
     - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
-    - `commitments`, shared hash code (`crypto`), and the one challenge derivation (`randomness`).
+    - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
+      (`randomness`).
+    - `private_circuits`: the universal unit, one public Definition that runs any hidden netlist of a size class.
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
-      C-Flock, the proof system. Its patches on
-      upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`, `flock-circuit --zk`), and `verifier/`: the
-      verifier's specification and the scripts that run it, with upstream's Rust verifier as a cross-check.
-  - `verity/experimental/` (`verity.experimental`): work in progress, including today's Python verifiers until their Lean
-    versions land in `verity/core/`.
-    - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
-      its plans and consumers), PoUW (`pouw`), PoUS (`pous`) and the network certifier (`certifier`). A protocol's Lean
-      code is its `lean/`. NCI is Lean only (`core/protocols/network/nci/`).
-    - `claims`: the ids of security claims.
-    - `private_circuits`, and multiproofs (`commitments`).
-    - `core/`: core's Lean ports. A port is held to the Python it replaces by `core/difftest` (`verity_difftest`, with
-      its Lake package `verity_difftest`).
+      C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
+      `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
+      Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
@@ -68,15 +71,15 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
-- `verity.experimental` may import `verity.ml`. `verity.ml` never imports `verity.experimental`, apart from the files
-  `ML_IMPORTS_EXPERIMENTAL` names (C-Flock's tests, and V*'s builders `rec_*.py`). `verity/core/` never imports
-  `verity/experimental/`.
+- `verity.core` may import the units of `verity.ml` that `ALLOWED` lists for it, which puts them on the soundness path
+  (`SOUNDNESS_PATH`). `verity.ml` never imports `verity.core`, apart from the files `ML_IMPORTS_CORE` names (C-Flock's
+  tests and V*'s builders, and hm96's test of its claims).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
-  `experimental.claims` import no other unit.
-- A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols Daniel has allowed it
-  (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits' Definitions and silicon
-  semantics (`ml.circuits.ops`, `silicon`, `targets`).
+  `core.claims` import no other unit.
+- A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols `ALLOWED` lists for it
+  (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
+  Definitions and silicon semantics (`ml.circuits.ops`, `silicon`, `targets`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the check a merge
@@ -199,9 +202,9 @@ Until reuse and the merge queue exist:
   and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
-    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/experimental/protocols/pous/lean/`) and
-    the certifier program (`verity/experimental/protocols/certifier/lean/`, `NetworkCertifier`, with its
-    difftest) and the NCI check (`verity/experimental/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
+    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
+    the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
+    difftest) and the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
