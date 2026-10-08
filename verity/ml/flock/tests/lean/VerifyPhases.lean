@@ -7,7 +7,7 @@ timed: reading the session's files, decoding its record, the proofs' digests, an
 decoding, the masked zerocheck and lincheck rounds, the lincheck's circuit fold, the ring switch, Ligerito, level 0's lane
 phase, the inner proof and the caps. The verdict must be `verify --zk`'s on the same session.
 
-    verify-phases --statement ID --circuit F --public F [--partition F] [--program F] [--registered F] --session DIR...
+    verify-phases --statement ID --circuit F --public F [--partition F] [--program F] [--registered F] [--public-inputs F] --session DIR...
 
 `FlockVerifyLib` is `FlockVerify.lean` with its `main` renamed, built beside this file (`85-rec-reprice.sh STEP=lean PHASES=1`).
 One `PHASES` line per session: `total_s` from reading its files to its verdict, as `verify`'s per-session time less setup, and
@@ -214,9 +214,9 @@ def sessionPhases (clk : IO.Ref Clock) (spec : SessionSpec) (tabs : Array Setup)
 def secs (ns : Nat) : Json := (Lean.JsonNumber.fromFloat? (ns.toFloat / 1e9)).elim (fun _ => .null) (.num ·)
 
 def main (args : List String) : IO UInt32 := do
-  let usage := "usage: verify-phases --statement ID --circuit F --public F [--partition F] [--program F] [--registered F] --session DIR..."
+  let usage := "usage: verify-phases --statement ID --circuit F --public F [--partition F] [--program F] [--registered F] [--public-inputs F] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
-  for f in ["--comp", "--archive", "--work", "--work-table", "--stratified", "--closure", "--public-inputs", "--identifier",
+  for f in ["--comp", "--archive", "--work", "--work-table", "--stratified", "--closure", "--identifier",
       "--session-tables", "--coins"] do
     if args.contains f then IO.eprintln s!"verify-phases: {f} is not taken (a --zk session of one table)"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
@@ -233,8 +233,9 @@ def main (args : List String) : IO UInt32 := do
   let partition ← match ← partitionInput args with | .ok p => pure p | .error e => IO.eprintln e; return 2
   let program ← match ← programInput args with | .ok p => pure p | .error e => IO.eprintln e; return 2
   let registered ← match ← registeredInput args with | .ok r => pure r | .error e => IO.eprintln e; return 2
+  let publicInputs ← match ← publicInputsInput args with | .ok p => pure p | .error e => IO.eprintln e; return 2
   let t1 ← IO.monoNanosNow
-  let setup := buildSession tags circuitB pubB compB coins tables 1 none partition program none none none registered none none
+  let setup := buildSession tags circuitB pubB compB coins tables 1 none partition program none none none registered publicInputs none
   let (spec, tabs) ← match (do let (spec, sts) ← setup; sts.forM shapeOk; pure (spec, sts.map Setup.ofCircuit)) with
     | .ok r => pure r
     | .error e => IO.eprintln s!"setup: {e}"; return 2

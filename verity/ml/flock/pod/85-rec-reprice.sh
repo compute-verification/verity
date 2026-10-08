@@ -653,7 +653,9 @@ lean)
   mkdir -p $O/lean
   for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
     want $l || continue
-    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
+    # a statement staged before #1347 (rec-step3's) has public input ports, and its verifier's own words beside it
+    PI=; [ -f $C/public-inputs.bin ] && PI="--public-inputs $C/public-inputs.bin"
+    echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $PI --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   # PHASES=1: verify --zk's steps timed one by one on the same sessions (VerifyPhases.lean, cached by its sources as STEP=vstage
   # caches inner-fold), against FlockVerify.lean with its main renamed
@@ -674,7 +676,8 @@ lean)
     ) > $O/build-phases.log 2>&1 || { tail -30 $O/build-phases.log; exit 1; }
     for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
       want $l || continue
-      echo "/usr/bin/time -v -o $O/lean/time-phases-$l.txt $PH_BIN --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/phases-$l.log 2> $O/lean/phases-$l.err; echo $l phases exit \$?"
+      PI=; [ -f $C/public-inputs.bin ] && PI="--public-inputs $C/public-inputs.bin"
+      echo "/usr/bin/time -v -o $O/lean/time-phases-$l.txt $PH_BIN --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json $PI --session $S > $O/lean/phases-$l.log 2> $O/lean/phases-$l.err; echo $l phases exit \$?"
     done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
   fi
   if [ "${INNER_LEAN:-0}" = 1 ]; then
