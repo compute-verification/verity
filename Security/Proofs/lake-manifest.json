@@ -32,6 +32,15 @@
   {
    "type": "path",
    "scope": "",
+   "name": "core_randomness",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../verity/experimental/core/primitives/randomness",
+   "configFile": "lakefile.toml"
+  },
+  {
+   "type": "path",
+   "scope": "",
    "name": "core_vstar",
    "manifestFile": "lake-manifest.json",
    "inherited": false,

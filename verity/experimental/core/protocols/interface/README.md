@@ -72,5 +72,5 @@ the port. All protocols share one Lake package for them, `security_properties` (
   (`Proofs/Flock/Soundness/Audit/OneStage.lean`) is one such result.
 - Each protocol adds its root and its `[[require]]` to that one lakefile.
 
-`CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`; `core-protocol-example`
-runs it.
+`CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'
+round trips and refusals; `core-protocol-example` runs it.

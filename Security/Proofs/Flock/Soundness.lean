@@ -103,7 +103,7 @@ import Proofs.Flock.Soundness.Audit.Stratified
 import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Soundness.ExecStratified
 import Proofs.Flock.Soundness.ExecDrawOS
-import Proofs.Flock.Soundness.Randomness
+import Randomness
 import Proofs.Flock.Soundness.PlanDraw
 import Proofs.Flock.Soundness.KeyedDraw
 import Proofs.Flock.Soundness.Audit.RegDraw
