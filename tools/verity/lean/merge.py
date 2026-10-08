@@ -14,7 +14,7 @@ definition in a module the other side changed: the record does not say which gua
 written before guarantees were called that (`pins`) is read under today's names (`audit.as_guarantees`).
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
-regenerate the record on the merged tree (`audit.py --update`), as without the driver. A merged record is a candidate, never
+regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
 a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record.
 """
 from __future__ import annotations
@@ -28,13 +28,13 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("lean_audit_for_merge", HERE / "audit.py")
+_spec = importlib.util.spec_from_file_location("lean_audit_for_merge", HERE / "check.py")
 A = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(A)
 
 #: the driver's name in `.gitattributes` and git's config
 NAME = "lean-audit"
-#: the sections `audit.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
+#: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
 SORTED = {"guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`)
 NESTED = {"upstream"}

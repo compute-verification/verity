@@ -66,7 +66,7 @@ def test_a_dropped_root_keeps_its_imports_reachable(tmp_path):
 
 
 def test_the_merged_locks_are_laid_out_as_the_audit_writes_them(tmp_path):
-    import audit as A
+    import check as A
     toy = {**TOY, "packages": {**TOY["packages"], "verifier": {"dir": "v/lean", "code": ["Flock"]},
                                "pous": {"dir": "p/lean", "code": ["Grader"]}}}
     m = M.Map(toy, tmp_path)

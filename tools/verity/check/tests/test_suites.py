@@ -317,8 +317,8 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == ["a", "b"]
     _lock(tmp_path, numpy="2.0", pytest="8.0")
     assert touched() == []
-    (tmp_path / "tools" / "check").mkdir(parents=True)
-    (tmp_path / "tools" / "check" / "suites.py").write_text("# the runner\n")
+    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "verity" / "check" / "suites.py").write_text("# the runner\n")
     assert touched() == ["a", "b"]
 
 
@@ -421,9 +421,9 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
     import json
     import shutil
 
-    (root / "tools" / "check").mkdir(parents=True)
-    shutil.copy(HERE / "suites.py", root / "tools" / "check" / "suites.py")
-    shutil.copytree(HERE / "guard", root / "tools" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests" / "fixtures").mkdir(parents=True)
     (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
@@ -452,7 +452,7 @@ def _run_shipped(root: Path, tmp_path: Path) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"),
                RESEARCH_PUBLIC_URL="", VERITY_TEST_CACHE=str(tmp_path / "cache"), VERITY_SKIP_STORE="1")
-    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--fresh", "--jobs", "1"], cwd=root, env=env,
+    return subprocess.run([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--fresh", "--jobs", "1"], cwd=root, env=env,
                           capture_output=True, text=True)
 
 
@@ -496,9 +496,9 @@ def _per_test_workspace(root: Path) -> None:
     `test_uses` (importing `test_shared`), and `test_shared`."""
     import shutil
 
-    (root / "tools" / "check").mkdir(parents=True)
-    shutil.copy(HERE / "suites.py", root / "tools" / "check" / "suites.py")
-    shutil.copytree(HERE / "guard", root / "tools" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests").mkdir(parents=True)
     (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
@@ -518,7 +518,7 @@ def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"), RESEARCH_FIXTURES_URL="",
                VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", **(extra or {}))
-    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs"), *args],
+    return subprocess.run([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs"), *args],
                           cwd=root, env=env, capture_output=True, text=True)
 
 
@@ -550,6 +550,30 @@ def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_
     assert "killed 1 processes its tests left in the suite's process group" in p.stdout, p.stdout
     stat = Path("/proc") / left.read_text() / "stat"
     assert not stat.exists() or stat.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"), stat.read_text()
+
+
+def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
+    """45fe's test_suites.py waited 82 min on a FIFO nobody wrote until it was killed by hand (7 Oct). Here the test blocks the
+    same way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
+    kept."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.5\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts", "--json", str(tmp_path / "out.json"))
+    assert p.returncode == 1 and "TIMED OUT: still running after 0.5 s, so its process group was killed" in p.stdout, p.stdout
+    import json
+
+    [r] = json.loads((tmp_path / "out.json").read_text())
+    assert r["status"] == "failed" and r["timed_out"] == 0.5
+    assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
 
 
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
@@ -697,7 +721,7 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path):
                                            "        f.write('x')\n    signal.pause()\n")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
-    p = subprocess.Popen([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
+    p = subprocess.Popen([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
                          cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
     with open(gate) as f:                                  # test_heavy's two tests have passed; test_block is running
         f.read()
@@ -845,9 +869,9 @@ def _traced_workspace(root: Path) -> None:
     `test_b` imports nothing, `test_spawn` starts a program that isn't Python, and `test_probe` tries to open `lib/maybe.txt`."""
     import shutil
 
-    (root / "tools" / "check").mkdir(parents=True)
-    shutil.copy(HERE / "suites.py", root / "tools" / "check" / "suites.py")
-    shutil.copytree(HERE / "guard", root / "tools" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
     (root / "lib").mkdir()

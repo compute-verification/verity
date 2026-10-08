@@ -26,7 +26,7 @@ local notation "𝕂" => FlockLevel3.GF256
 /-- The shape `verifyRep` decodes a proof with (§8.3), `nExtra` the statement's extra claims. -/
 def shapeOf (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) : Shape :=
   { m := st.m, kLog := st.kLog, claims := 2 + nExtra, sched := sch, hashLen := st.merkle.digestLen,
-    saltLen := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes }
+    saltLen := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes }
 
 /-- The statement's extra claims at the link points `points` are the model's `extra`, claim by claim. -/
 def ExtraRealizes (st : Setup) (S : Model.Statement) (points : Array (Array F128))

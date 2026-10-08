@@ -1,8 +1,9 @@
 #!/bin/bash
 # sudo vy-device-cores: keep everything but vy-device's scopes off vy-nebius-2's device cores 120-127 (see device.sh), as far as a
 # running kernel allows. Idempotent; settings are runtime only, so run it again after a boot. What stays on those cores is the
-# per-CPU kernel work only a boot with nohz_full=120-127 isolcpus=managed_irq,domain,120-127 moves: bound kworkers, timers,
-# vmstat_update (here run every 10 s instead of every second).
+# per-CPU kernel work only a boot with nohz_full=120-127 isolcpus=managed_irq,domain,120-127 rcu_nocbs=120-127 irqaffinity=0-119
+# moves: bound kworkers, timers, vmstat_update (here run every 10 s instead of every second).
+# /etc/sysctl.d/90-vy-device-cores.conf keeps this script's sysctls from boot.
 set -euo pipefail
 systemctl set-property --runtime user.slice AllowedCPUs=0-119
 systemctl set-property --runtime system.slice AllowedCPUs=0-119
@@ -13,7 +14,7 @@ systemctl set-property --runtime pous.slice AllowedCPUs=124-127
 for s in devices.slice pous.slice/pous-quiet.slice; do
   if [ -w "/sys/fs/cgroup/$s/cgroup.pressure" ]; then echo 0 > "/sys/fs/cgroup/$s/cgroup.pressure"; fi
 done
-sysctl -q -w vm.stat_interval=10
+sysctl -q -w vm.stat_interval=10 kernel.numa_balancing=0
 # unbound workqueues, IRQs and the kernel threads free to move each keep what they had less 120-127; one with nothing left stays
 python3 - <<'EOF'
 import glob, os, subprocess
