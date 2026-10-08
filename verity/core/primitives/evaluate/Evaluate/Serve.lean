@@ -5,7 +5,7 @@ import Difftest
 # The difftest function
 
 `verity-evaluate` serves `evaluate` through the difftest harness's line protocol (`Difftest.serve`,
-`verity/experimental/core/difftest`): a request `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs": [[word,
+`verity/core/difftest`): a request `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs": [[word,
 ...], ...]}}` is answered `{"output": [word, ...]}` or `{"reject": "<reason>"}`. `program` is the descriptor as a JSON object,
 or its bytes as a JSON string; `inputs` holds one argument per parameter of the program function, a list of non-negative
 integer words in leaf order or `{"table": <name>}` for a registered table the evaluator computes (`Evaluate.Arg`), which keeps

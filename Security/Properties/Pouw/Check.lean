@@ -3,8 +3,8 @@ import PouwCheck
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
 
-The properties of the executable check (`verity/experimental/core/protocols/pouw/check/`, the port of
-`verity/experimental/protocols/pouw/core_check.py`), stated against `protocol.check` as it runs, for every input of
+The properties of the executable check (`verity/core/protocols/pouw/lean/check/`, the port of
+`verity/core/protocols/pouw/core_check.py`), stated against `protocol.check` as it runs, for every input of
 the types its decoders produce. Each is a `Prop`, and `Properties.Proofs.Pouw.Check` proves every one.
 
 `AcceptMeans` is the check's whole meaning: it accepts exactly when the registration keeps PoUW's rule

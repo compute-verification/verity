@@ -1,5 +1,5 @@
 /-
-The integrity profile: what an accepted check established, as `verity.experimental.protocols.profile.IntegrityProfile`
+The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
 records it. These are the facts checked exhaustively, the verifier's law over named levels of a partition hierarchy
 (coarse to fine; the finest level is the checked one), the members drawn at each level, and δ. The JSON is
 `IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.

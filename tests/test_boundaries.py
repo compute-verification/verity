@@ -1,9 +1,10 @@
 """The dependency rules (README "Development") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
-    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and experimental.claims import no unit;  the
+    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits;
-    ml.circuits <- experimental.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
-    ``ALLOWED``, and no third-party package;  experimental may import ml, and ml never imports experimental;  no unit imports
+    ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
+    ``ALLOWED``, and no third-party package;  core may import ml, and what of ml it may reach is ``SOUNDNESS_PATH``;  ml
+    never imports core;  no unit imports
     another distribution of the workspace (C-Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``.
 
@@ -11,7 +12,7 @@ An import is an import statement (a relative one resolved against its package), 
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
 time: a module named as data is still a dependency.  Tests (``tests/``) are suites of their own and declare what they read;
 a ``lean/`` directory holds a Lean package and the scripts that write its vectors, run by path.  The trees in ``SEPARATE``
-have import roots of their own, and only the rule that ml never imports experimental reads them; it reads ml's tests too.
+have import roots of their own, and only the rule that ml never imports core reads them; it reads ml's tests too.
 
 numpy is a core dependency (architecture decision: `verity.ml.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
@@ -45,23 +46,21 @@ ALLOWED = {
     "ml.circuits.targets": {"ml.circuits", "ml.circuits.silicon"},
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
-    "experimental.claims": set(),
-    "experimental.commitments": {"ml.commitments"},
-    "experimental.private_circuits": {"ml.circuits"},
-    "experimental.protocols.profile": {"ml.circuits"},
+    "ml.private_circuits": {"ml.circuits"},
+    "core.claims": set(),
+    "core.protocols.profile": {"ml.circuits"},
     # The two-stage law samples the verifier's own bytes as the Lean verifier does (`two_stage`), and the proof
     # service's challenger draws with it (`service.Stream.select`).
-    "experimental.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "experimental.protocols.profile"},
-    "experimental.protocols.pous": {"experimental.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
+    "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "core.protocols.profile"},
+    "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
-    "experimental.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets",
-                                    "ml.commitments", "ml.crypto", "ml.randomness", "experimental.protocols.profile",
-                                    "experimental.protocols.sampled_proofs"},
+    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets", "ml.commitments",
+                            "ml.crypto", "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
-    "experimental.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "experimental.protocols.sampled_proofs"},
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
@@ -74,20 +73,26 @@ DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
 #: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), and the Lean ports' differential test
 #: (``verity_difftest``, which their tests import, on Hypothesis).
-SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "experimental/core/difftest")
+SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "core/difftest")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("ml/circuits", "ml/randomness", "experimental/claims")
+NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
-#: ml can't affect soundness and builds on nothing in progress: experimental may import ml, never the reverse.  The files of
-#: ``verity/ml/`` that import experimental anyway (globs from ``verity/``), each with why.
-ML_IMPORTS_EXPERIMENTAL = {
-    "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against experimental's Python verifiers",
+#: ml builds on no verifier: core may import ml, never the reverse.  The files of ``verity/ml/`` that import core anyway
+#: (globs from ``verity/``), each with why.
+ML_IMPORTS_CORE = {
+    "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against core's Python verifiers",
+    "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.core.claims`",
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
-                                             "experimental imports them from there, and this entry goes",
+                                             "core imports them from there, and this entry goes",
 }
+#: The units of ``verity.ml`` core's verifiers read, directly or through one another (what ``ALLOWED`` lets core reach): a
+#: verifier's verdict rests on them, so they are on the soundness path, and AGENTS.md names each.  The rest of ml (C-Flock's
+#: prover, the private circuits) is not.
+SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets", "ml.commitments", "ml.crypto",
+                  "ml.kernels", "ml.randomness"}
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
@@ -162,7 +167,7 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
         for name, line, imported in _imports(path):
             parts = name.split(".")
             target = _unit(".".join(parts[1:])) if parts[0] == "verity" and len(parts) > 1 else None
-            third_party = set() if unit.startswith("experimental.protocols.") else DEPENDENCIES
+            third_party = set() if unit.startswith("core.protocols.") else DEPENDENCIES
             if (_external(name, imported, third_party)
                     or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
@@ -171,7 +176,7 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
 
 def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
     """A new package under ``verity`` is a new unit, listed in ``ALLOWED``; what is outside every unit is a grouping's
-    ``__init__.py`` (``ml``, ``experimental.protocols``) or a file directly under ``verity/``, and imports the standard
+    ``__init__.py`` (``ml``, ``core``, ``core.protocols``) or a file directly under ``verity/``, and imports the standard
     library and nothing else: ``verity/__init__.py`` re-exports nothing and ``verity/errors.py`` is shared by every unit, the
     stdlib-only references included."""
     offenders = []
@@ -203,27 +208,40 @@ def test_scalar_references_are_stdlib_only(subtree: str) -> None:
     assert not offenders, "\n".join(offenders)
 
 
-def _ml_importers_of_experimental() -> dict[str, list[str]]:
-    """Each file under ``verity/ml/`` (its tests and ``SEPARATE`` trees included) that names a module of
-    ``verity.experimental``, with where."""
+def _ml_importers_of_core() -> dict[str, list[str]]:
+    """Each file under ``verity/ml/`` (its tests and ``SEPARATE`` trees included) that names a module of ``verity.core``,
+    with where."""
     out: dict[str, list[str]] = {}
     for path in sorted((SRC / "ml").rglob("*.py")):
         rel = path.relative_to(SRC)
         if {".lake", "__pycache__"} & set(rel.parts):
             continue
-        hits = [f"{line}: {name}" for name, line, _ in _imports(path) if name.split(".")[:2] == ["verity", "experimental"]]
+        hits = [f"{line}: {name}" for name, line, _ in _imports(path) if name.split(".")[:2] == ["verity", "core"]]
         if hits:
             out[rel.as_posix()] = hits
     return out
 
 
-def test_ml_never_imports_experimental() -> None:
-    found = _ml_importers_of_experimental()
-    offenders = [f"{f}:{hit}" for f, hits in found.items() if not any(fnmatch.fnmatch(f, g) for g in ML_IMPORTS_EXPERIMENTAL)
+def test_ml_never_imports_core() -> None:
+    found = _ml_importers_of_core()
+    offenders = [f"{f}:{hit}" for f, hits in found.items() if not any(fnmatch.fnmatch(f, g) for g in ML_IMPORTS_CORE)
                  for hit in hits]
     assert not offenders, "\n".join(offenders)
-    stale = [g for g in ML_IMPORTS_EXPERIMENTAL if not any(fnmatch.fnmatch(f, g) for f in found)]
-    assert not stale, f"ML_IMPORTS_EXPERIMENTAL entries that match no importer; remove them: {stale}"
+    stale = [g for g in ML_IMPORTS_CORE if not any(fnmatch.fnmatch(f, g) for f in found)]
+    assert not stale, f"ML_IMPORTS_CORE entries that match no importer; remove them: {stale}"
+
+
+def test_the_soundness_path_is_what_core_may_reach_in_ml() -> None:
+    reached, todo = set(), [u for u in ALLOWED if u.startswith("core.")]
+    while todo:
+        for v in ALLOWED[todo.pop()] - reached:
+            reached.add(v)
+            todo.append(v)
+    ml = {u for u in reached if u.startswith("ml.")}
+    assert ml == SOUNDNESS_PATH, f"ALLOWED lets core reach {sorted(ml)} in ml: SOUNDNESS_PATH and AGENTS.md say so"
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    missing = [u for u in sorted(SOUNDNESS_PATH) if f"`{u}`" not in agents]
+    assert not missing, f"AGENTS.md doesn't name {missing}, which core's verifiers read"
 
 
 def _infra_packages() -> set[str]:
