@@ -38,15 +38,16 @@ Say what you fixed in the PR description. It needs no note.
 ## 2. Ask, when you can't tell
 
 A change is near the line when it changes what other agents must do or what a gate accepts, touches another lane's
-in-flight files, spends money past its `budgets.toml` line, deletes others' work, or changes agreed semantics or acceptance
-criteria. Read the rulings
-below first, and follow one if it covers the case. Otherwise ask:
+in-flight files, or deletes others' work. Read the rulings below first, and follow one if it covers the case. Otherwise
+ask:
 
-- one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
-  reply to the coordinator that launched it). The coordinator answers from the rulings when one applies, and
-  otherwise puts the question to Daniel as written;
+- one stand-alone question to the owner of what the change touches, or to your coordinator when owners disagree or you
+  can't tell who owns it (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or reply to
+  the coordinator that launched it). The coordinator decides, and says what it decided. Only money (spend past a
+  `budgets.toml` line), keys (access, a credential, a node's root) and claims (what a guarantee says or rests on) go on to
+  Daniel, as written;
 - the case, the change, and your recommendation, in a few lines;
-- meanwhile, prepare the change on your branch, and land it only after the ruling.
+- meanwhile, prepare the change on your branch, and mark it ready only after the answer.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`, and put the
 proposal in the question.
@@ -94,8 +95,8 @@ writes it under the Project store's `internal/lanes/<lane>/`, which the mirror f
 private (lane contract §5b).
 
 **The coordinator's pass.** The root coordinator reads new friction notes once a day in its existing loop
-(`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to someone, or
-into a question for Daniel.
+(`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
+Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
 
 ## Rulings so far
 
@@ -210,10 +211,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
   and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
   `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
-- 2026-10-05 (8:53 AM PDT): the Lean audit is the Lean check. `tools/verity/lean/check.py` becomes `lean_check.py` (the CI
-  step `lean-check`), and each package's `lean-audit.json` becomes `lean-lock.json`, its lock. The alert that DMs
-  Daniel treats the renamed lock as a move, so the rename sends no DM. Until lean's rename lands, docs say "the Lean
-  check" and "the lock" and keep the current paths.
+- 2026-10-05 (8:53 AM PDT), superseded: `main` kept `tools/verity/lean/check.py` and each package's `lean-audit.json`
+  under their names (`f507299a4`), so no rename is pending. What stands: the Lean audit is the Lean check.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
