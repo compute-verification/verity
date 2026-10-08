@@ -6,7 +6,7 @@ instead of spreading over every core the checks share (vy-nebius-1, 1 Oct: two u
 
 A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS overrides), one per line:
 
-    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains]   # e.g. `a 32-63`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
+    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
 
 The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's `flock` takes) is free and no window blocks is
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
@@ -14,7 +14,10 @@ taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
 minutes: a check there would run into a whole-node timed measurement. A slot with only=trains is taken only by a `--priority` waiter
 (the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
-reads the key as unknown and the slot as any other).  With every slot busy it retries every POLL_S, reading
+reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
+(`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM), so a
+check starts only when its measured peak fits and queues instead of being killed with the others under the slice (node 1,
+8 Oct 02:00Z: two OOM kills at 1,605 of 1,716 GB across ~8 runs).  With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
@@ -78,8 +81,28 @@ def parse(text: str) -> list[dict]:
             continue
         opts = dict(x.split("=", 1) for x in f[2:])
         slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30)),
-                      "trains": opts.get("only") == "trains"})
+                      "trains": opts.get("only") == "trains", "mem": int(opts["mem"]) if "mem" in opts else None})
     return slots
+
+
+def memory_gb(root: Path = Path("/")) -> int:
+    """The memory this process may use, in GiB: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's
+    session scope and the user slice on a VM; a pod's /proc/meminfo is the host's)."""
+    def read(p: Path) -> str:
+        try:
+            return p.read_text().strip()
+        except OSError:
+            return ""
+
+    left = [int(ln.split()[1]) << 10 for ln in read(root / "proc/meminfo").splitlines() if ln.startswith("MemAvailable:")]
+    top = root / "sys/fs/cgroup"
+    for line in read(root / "proc/self/cgroup").splitlines():
+        if line.startswith("0::"):
+            d = top / line[3:].strip("/")
+            for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
+                if (m := read(c / "memory.max")).isdigit():
+                    left.append(int(m) - int(read(c / "memory.current") or 0))
+    return max(0, min(left)) >> 30 if left else 0
 
 
 def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
@@ -94,10 +117,12 @@ def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
 
 
 def blocked(slot: dict, now: datetime) -> str | None:
-    """Why `slot` can't start a check at `now` (a window open or within its lead), or None."""
+    """Why `slot` can't start a check at `now` (a window open or within its lead, or less memory free than its mem=), or None."""
     for raw, start, minutes, _note in _windows(slot):
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
+    if slot.get("mem") and (free := memory_gb()) < slot["mem"]:
+        return f"{free} GB of memory free, under the {slot['mem']} GB a check here may peak at"
     return None
 
 
@@ -228,7 +253,7 @@ def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Pat
     """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`) and its `upcoming`
     windows."""
     return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"], "trains": s.get("trains", False),
-             "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
+             "mem": s.get("mem"), "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
              "blocked": blocked(s, now), "upcoming": upcoming(s, now)} for s in slots]
 
 
@@ -237,8 +262,8 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     that came before it."""
     out = []
     for s in slot_docs(slots, lock_dir, now, proc):
-        out.append(f"{s['name']}  cores {s['cpus']}" + ("  trains only" if s["trains"] else "") + f"  {held_text(s['holder'])}"
-                   + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
+        out.append(f"{s['name']}  cores {s['cpus']}" + ("  trains only" if s["trains"] else "")
+                   + (f"  mem {s['mem']} GB" if s["mem"] else "") + f"  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
         out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
     return out + waiters(lock_dir / LINE, now, before)
 
