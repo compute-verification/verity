@@ -69,6 +69,8 @@ def load_registries() -> None:
     import verity.ml.circuits.ops.boolean.elementwise  # noqa: F401
     import verity.ml.circuits.ops.boolean.gemm  # noqa: F401
     import verity.ml.circuits.ops.boolean.gf2k  # noqa: F401
+    import verity.ml.commitments.gates.frame_v3  # noqa: F401
+    import verity.ml.commitments.gates.hm96  # noqa: F401
     import verity.ml.commitments.gates.lms  # noqa: F401
     import verity.ml.commitments.gates.merkle  # noqa: F401
     import verity.ml.commitments.gates.rowleaf  # noqa: F401
