@@ -14,12 +14,14 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: the harness (`verity_difftest`); the reference, `core_check.py`, and what it imports (`window.py`, stdlib
-# only) with the packages above them; what `lake` reads through the path requires: the core protocol interface, the
-# window's Lean, and C-Flock's verifier modules they import (`Flock.Canon`, `Flock.Hash` and theirs) with its configuration.
+# Test-only: the harness (`verity_difftest`); the reference, `core_check.py`, and what it imports (`window.py`, and the
+# core window.py imports: `verity.ml`'s circuits codec, commitments and crypto, and `verity.errors`) with the packages
+# above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean, and C-Flock's
+# verifier modules they import (`Flock.Canon`, `Flock.Hash` and theirs) with its configuration.
 inputs = ["verity/experimental/core/difftest", "verity/__init__.py", "verity/experimental/__init__.py",
           "verity/experimental/protocols/__init__.py", "verity/experimental/protocols/pouw/__init__.py",
           "verity/experimental/protocols/pouw/window.py", "verity/experimental/protocols/pouw/core_check.py",
+          "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/experimental/core/protocols/interface", "verity/experimental/core/protocols/pouw/window",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
           "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
