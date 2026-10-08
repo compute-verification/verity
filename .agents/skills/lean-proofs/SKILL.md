@@ -168,6 +168,16 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-08 (4:30 PM PDT): for a commit-then-coin step, the break tied to the run is the fork form: two runs of the
+  prover's own strategy that share a commitment and hash `x ≠ y` to one SHA-512 digest along their paths to it. A single
+  run never holds the collision, since a cheater opens one table per run. The `∃` ranges over the strategy's
+  continuations, visibly in the statement, never over arbitrary strings. `RecursiveSound` takes this form. Its bound is
+  exact for a strategy that never collides on a fork and says nothing about one that collides on a single pair, so it
+  is never called tighter than a bound under `cr/sha-512`. The quantitative forking version comes next: a strategy that
+  beats the bound by δ yields, from two runs off one commitment, a collision with probability about δ².
+- 2026-10-08 (4:30 PM PDT): a property's hypotheses come only from the named premises in `Security/Definitions/`
+  (physical premises, and VBridge until it's proved). The Lean check refuses any other, and adding a premise messages
+  Daniel like any `Definitions/` change. A theorem whose hypotheses can't all hold for the real system says nothing.
 - 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. Its conclusion is the property or a break
   tied to the run: for SHA-512, `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`, over the
   inputs the run itself hashed; for LMS, a signature in the run that verifies on a message missing from the device's

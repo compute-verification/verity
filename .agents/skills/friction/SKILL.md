@@ -102,6 +102,11 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (4:30 PM PDT, relayed by top): a property's hypotheses come only from a short list of named premises kept
+  in `Security/Definitions/`: physical premises, such as a device being intact or every uplink being certified, and
+  VBridge until it's proved. The Lean check refuses any other hypothesis in `Properties/`, and adding a premise is a
+  `Definitions/` change, so it messages Daniel. The same day, `RecursiveSound` took the fork form of the hash break
+  (`.agents/skills/lean-proofs/SKILL.md`).
 - 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
   or a statement reviewer's: `research merge` and `research queue` read none. This retires the grant rulings of 6 and 7
   Oct below.
