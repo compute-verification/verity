@@ -268,6 +268,35 @@ def test_former_modules_map_a_module_back_through_each_move():
     assert tools_registry.former_modules("archive.gkr.gpu.tool") == ["backends.gkr.gpu.tool"]
 
 
+def test_former_paths_and_resolve_find_a_file_an_older_tree_holds_under_its_old_name():
+    moves = [{"tools/check/": "tools/verity/check/"}, {"tools/verity/check/ci.toml": "ci/jobs.toml"}]
+    assert tools_registry.former_paths("ci/jobs.toml", moves) == ["tools/verity/check/ci.toml", "tools/check/ci.toml"]
+    assert tools_registry.former_paths("tools/verity/check", moves) == ["tools/check"]
+    assert tools_registry.former_paths("tools/verity/checks/x", moves) == []
+    held = {"tools/check/ci.toml"}
+    assert tools_registry.resolve("ci/jobs.toml", held.__contains__, moves) == "tools/check/ci.toml"
+    assert tools_registry.resolve("tools/check/ci.toml", held.__contains__, moves) == "tools/check/ci.toml"
+    assert tools_registry.resolve("ci/other.toml", held.__contains__, moves) is None
+
+
+def test_declared_jobs_reads_a_commit_from_before_the_move_that_renamed_ci_toml(tmp_path, monkeypatch):
+    from research import merge
+
+    moves = tmp_path / "moves.json"
+    moves.write_text(json.dumps({"moves": [{"paths": {"old/check/": "tools/check/"}}]}))
+    monkeypatch.setattr(tools_registry, "MOVES", moves)
+    repo = tmp_path / "repo"
+    (repo / "old/check").mkdir(parents=True)
+    (repo / "old/check/ci.toml").write_text('[[job]]\nname = "pytest"\n')
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
+    git("init", "-q")
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "before the move")
+    assert merge.declared_jobs(repo, "HEAD") == ["pytest"]
+    moves.write_text(json.dumps({"moves": []}))
+    assert "can't be read" in merge.declared_jobs(repo, "HEAD")
+
+
 def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_path, monkeypatch):
     """Red-team 1171: `locate` read `moves.json` before looking at the current path, so a corrupt one made `merge.declaration`
     none and `merge.required_steps` require nothing (a train sent no lean-agreement inputs)."""

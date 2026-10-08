@@ -28,7 +28,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `catalog/census/`: data only. Core never reads it; it takes such numbers as parameters.
 - `kernels/` (`verity_kernels`): fast code, each kernel checked against its Definition.
 - `experimental/` (`verity_experimental`): what is under development or kept for study (private circuits, multiproofs,
-  sampled proofs' two-stage law, plans and consumers). `verity` never imports it.
+  sampled proofs' plans and consumers). `verity` never imports it.
 - `backends/flock/` (`verity_flock`): C-Flock, the proof system.
   - Its patches on upstream Flock, the CUDA prover, and the zero-knowledge prover (`live/`, `flock-circuit --zk`).
   - `verifier/`: the verifier of record, written in Lean, with upstream's Rust verifier as a cross-check.
@@ -160,7 +160,9 @@ Landing:
   new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `verity/Security/`: C-Flock's executable verifier
-    (`backends/flock/verifier/lean/`, no dependencies) and the PoUS grader (`verity/protocols/accounting/space/pous/lean/`).
+    (`backends/flock/verifier/lean/`, no dependencies), the PoUS grader (`verity/protocols/accounting/space/pous/lean/`) and
+    the certifier program (`verity/protocols/accounting/communication/certifier/lean/`, `NetworkCertifier`, with its
+    difftest).
   - The analysis is `verity/Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Specs/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
