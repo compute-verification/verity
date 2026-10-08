@@ -1187,12 +1187,12 @@ def test_replay_accepts_the_device_transcript(tmp_path):
     s = V.scheme("nvfp4", True)
     device_dump(tmp_path, s)
     (tmp_path / "scales_b.bin").write_bytes(bytes([0x38, 0x01, 0x7E]))
-    t = json.loads(json.dumps(R.prove(tmp_path, "r-test", 12, scheme=s)))
+    t = json.loads(json.dumps(R.prove(tmp_path, "r-test", 16, scheme=s)))
     assert list(t["device_scales"]) == ["b"] and t["device_scales"]["b"]["outside_range"] == 0
     assert t["records"] == [{"real_rows": 20, "k_kept": K, "excluded_a": [3], "excluded_b": []}]
     assert t["host_roots_match"] == {"a": True, "b": True} and [o["tile"] for o in t["openings"]] == [0, 1]
     rep = R.verify(t, scheme=s)
-    assert rep["accepted"] and rep["opened"] == 13 and rep["reason"] == ""
+    assert rep["accepted"] and rep["opened"] == 17 and rep["reason"] == ""
     first = rep["tiles"][0]
     assert first["credited"] in ([15, 16], [4, 16]) and Fraction(first["debit"]["total"]) <= Fraction(first["cap"])
     assert pickle.loads(pickle.dumps(s)).fmt is s.fmt and R.verify(t, workers=2, scheme=s)["tiles"] == rep["tiles"]
