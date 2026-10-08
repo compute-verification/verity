@@ -135,46 +135,6 @@ def KPrimeServed : Prop :=
 3; a binary64 `log δ / log(1 − p)` lands just above 3 and gives 4. -/
 def KPrimeExactAtEquality : Prop := (kPrime 1 (1 / 512) 7 8 1).toOption = some 3
 
-/-! ## The advice and the window statement (L2, L4) -/
-
-/-- One call or filler entry as the window statement accepts it, with its range `[lo, hi)`: both sides present with
-their kept rows ascending rows of the side, a non-empty range, which is exactly its kept tiles for a call and at most
-them for the filler. -/
-def EntryOK (e : Raw) (lo hi : Nat) (call : Bool) : Prop :=
-  (∃ a b, e.a = some a ∧ e.b = some b ∧ a.ok = true ∧ b.ok = true) ∧ e.lo = some lo ∧ e.hi = some hi ∧ lo < hi ∧
-    if call then hi - lo = e.tiles else hi - lo ≤ e.tiles
-
-/-- The window statement, declared: `bound` entries, `calls ≥ 1` calls, then one filler, then empty entries; the calls'
-and the filler's ranges tile `[0, work.n)` in order; and the level is the bucket of where the filler starts, which is
-the calls' tile count. -/
-def WindowOK (es : List Raw) (work : Work) (bound : Int) (bits : Nat) : Prop :=
-  (es.length : Int) = bound ∧
-    ∃ calls, 1 ≤ calls ∧ calls < es.length ∧
-      (∀ i x, es[i]? = some x →
-        x.kind = some (if i < calls then .call else if i = calls then .filler else .none)) ∧
-      ∃ cut : Nat → Nat, cut 0 = 0 ∧ cut (calls + 1) = work.n ∧ bucket bits (cut calls) = work ∧
-        ∀ i x, i ≤ calls → es[i]? = some x → EntryOK x (cut i) (cut (i + 1)) (decide (i < calls))
-
-/-- `windowProblem` refuses exactly what `WindowOK` does not hold of. -/
-def WindowAccepts : Prop := ∀ es work bound bits, windowProblem es work bound bits = none ↔ WindowOK es work bound bits
-
-/-- An accepted window is credited the bucket of its calls' kept tiles, and nothing of the filler's. -/
-def WindowCreditsTheCalls : Prop :=
-  ∀ es work bound bits, windowProblem es work bound bits = none →
-    ∃ calls, (es.take calls).all (·.kind == some .call) = true ∧ (es[calls]?.bind (·.kind)) = some .filler ∧
-      work = bucket bits ((es.take calls).map Raw.tiles).sum
-
-/-- On an accepted window, `tileAt` maps `[0, work.n)` one to one into the entries' kept tiles (`none` from `work.n`
-up), and onto each call's: every tile a call keeps is drawable. -/
-def TileAtCovers : Prop :=
-  ∀ es work bound bits, windowProblem es work bound bits = none →
-    (∀ t, (tileAt es t).isSome = decide (t < work.n)) ∧
-    (∀ t t', (tileAt es t).isSome → tileAt es t = tileAt es t' → t = t') ∧
-    (∀ t e i j, tileAt es t = some (e, i, j) →
-      ∃ x a b, es[e]? = some x ∧ x.kind ≠ some .none ∧ x.a = some a ∧ x.b = some b ∧ i ∈ a.keep ∧ j ∈ b.keep) ∧
-    ∀ e x a b, es[e]? = some x → x.kind = some .call → x.a = some a → x.b = some b →
-      ∀ i ∈ a.keep, ∀ j ∈ b.keep, ∃ t, tileAt es t = some (e, i, j)
-
 /-! ## What is public -/
 
 /-- `PUBLIC` is the draft's six items, each of one of the four kinds a protocol may make public, and a registration
