@@ -80,7 +80,7 @@ def main() -> int:
 
     results, base_m = [], None
     for lib_dir in a.lib:
-        kern = Kernels(lib_dir, a.build_dir, P, SALT, MODEL)
+        kern = Kernels(lib_dir, a.build_dir, P, R.expand_prefix(SALT, P, MODEL))
         lib = kern.lib
         fused = hasattr(lib, "p2v1_decode_fused")
         k, t = kern.keys(0, n)

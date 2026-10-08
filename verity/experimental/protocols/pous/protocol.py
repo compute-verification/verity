@@ -10,7 +10,7 @@ honest answer is more than the stored block.  Everything else is written once, h
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
 4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
-5. **Audit.** `MemoryChallenger` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
+5. **Audit.** `TimedAudit` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
    The verifier refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit gives a
    `StorageProfile`: what the certificate says about the server, and what that rests on.
 
@@ -160,7 +160,7 @@ class Scheme(ABC):
     name: ClassVar[str] = ""
     experimental: ClassVar[str | None] = None
     """Why the scheme is experimental, or None.  An experimental scheme is never the default; the verifier audits it
-    only when asked to (`MemoryChallenger(..., experimental=True)`), and its profile states the reason."""
+    only when asked to (`TimedAudit(..., experimental=True)`), and its profile states the reason."""
     backend: ClassVar[Callable[[Any], Primitives]]
 
     def __init__(self, params: Geometry, prims: Primitives | None = None) -> None:
@@ -328,8 +328,8 @@ class StorageProfile:
                 "gaps": list(self.gaps), "certified": self.certified, "experimental": self.experimental}
 
 
-class MemoryChallenger:
-    """The timed audit of a scheme: `audit.MemoryChallenger` at the certificate's `k`, with sequential reveal and a strict
+class TimedAudit:
+    """The timed audit of a scheme: `audit.UnsignedRounds` at the certificate's `k`, with sequential reveal and a strict
     deadline per answer.
 
     It audits under the first of the scheme's `certificates` that covers `k` and the deadline (with `k` unset, each at
@@ -365,7 +365,7 @@ class MemoryChallenger:
             raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)}{others} "
                              "(research=True runs it anyway)")
         self.scheme, self.certificate, self.gaps = scheme, cert, refused + uncovered
-        self.timed = audit.MemoryChallenger(vk, key, k, deadline_ns, rtt_allowance_ns, clock, root_only=root_only)
+        self.timed = audit.UnsignedRounds(vk, key, k, deadline_ns, rtt_allowance_ns, clock, root_only=root_only)
 
     @property
     def k(self) -> int:
@@ -406,5 +406,5 @@ class MemoryChallenger:
                               self.gaps, self.scheme.experimental)
 
 
-__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "MemoryChallenger", "challenge_key",
+__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
            "claim", "commit", "decode", "decode_tensor", "draw_salt", "encode", "responder", "verifier_key"]

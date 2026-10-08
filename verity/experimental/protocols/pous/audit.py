@@ -7,13 +7,13 @@ The deadline is `Δ = deadline_ns` (0.5 ms: `docs/p3-gpu-measurements.md` found 
 132-answer audits on the host clock) plus `rtt_allowance_ns`, the verifier's network round trip and its jitter, which
 the verifier cannot tell apart from the responder's time and so also grants the adversary.
 
-Two clocks.  `MemoryChallenger` is the memory challenger: it measures each answer's wall-clock latency from the reveal and
-rejects any over the deadline.  `simulate` is the model's: the responder answers each index with a `Prog` (Lean
-`SeqResponder.step`, state kept inside the responder), `oracle.run` counts the answer's rounds, and any answer over the
-round budget or `work` queries is late.  The budget is the deadline over `call_ns`, the fastest whole oracle call,
-unless `deadline_rounds` gives it directly.  `on_answer` is the timing hook for both.  The conversion of wall-clock
-time into calls holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover answers
-without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026,
+Two clocks.  `UnsignedRounds` is the memory challenger's timed rounds, unsigned (`memory_challenger` signs them): it measures
+each answer's wall-clock latency from the reveal and rejects any over the deadline.  `simulate` is the model's: the responder
+answers each index with a `Prog` (Lean `SeqResponder.step`, state kept inside the responder), `oracle.run` counts the
+answer's rounds, and any answer over the round budget or `work` queries is late.  The budget is the deadline over `call_ns`,
+the fastest whole oracle call, unless `deadline_rounds` gives it directly.  `on_answer` is the timing hook for both.  The
+conversion of wall-clock time into calls holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a
+prover answers without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f (red team, 4 Oct 2026,
 art:7617c8017e80; `primitives.pi2_keccak_f`).
 """
 
@@ -112,7 +112,7 @@ class HonestResponder:
 
 @dataclass(frozen=True, slots=True)
 class Answer:
-    """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`MemoryChallenger`), with
+    """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`UnsignedRounds`), with
     the responder's own `report` (for example its device and server nanoseconds) beside it.  `rejected` is an answer
     past the hard deadline, or none by then: its block is never checked, and it is neither correct nor on time."""
 
@@ -184,8 +184,8 @@ def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key,
     return AuditResult(tuple(answers))
 
 
-class MemoryChallenger:
-    """Verifier-driven sequential reveal with a strict wall-clock deadline per answer.
+class UnsignedRounds:
+    """Verifier-driven sequential reveal with a strict wall-clock deadline per answer, its rounds unsigned.
 
     For the band codec it refuses a deadline past the cliff (`band.check_deployment`: the effective `D` must not
     exceed `d`).  `challenge()` reveals the next index and starts its clock; `respond(block)` stops it, is on time within
@@ -341,7 +341,7 @@ class MemoryChallenger:
         return AuditResult(tuple(self.answers), self.aborted)
 
 
-def run_timed(verifier: MemoryChallenger, respond: Callable[[int], bytes | tuple[bytes, object]],
+def run_timed(verifier: UnsignedRounds, respond: Callable[[int], bytes | tuple[bytes, object]],
               path: Callable[[int], tuple[bytes, ...]] | None = None) -> AuditResult:
     """Drive `verifier` against `respond(index)` until all `k` are answered.  `respond` returns the block, or
     `(block, report)` to keep the responder's own record in the `Answer`; `path(index)` serves a root-only memory challenger."""
