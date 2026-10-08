@@ -649,6 +649,7 @@ def test_lake_restores_a_git_dependencys_build_with_the_package(s3, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(LAKE is None, reason="no lake")
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only `.lake/packages` anyway")
 def test_a_build_works_on_its_own_copy_of_dependencies_bound_read_only(tmp_path):
     """With the artifact cache on, Lake writes beside a dependency's built artifacts, so a read-only `.lake/packages`
     fails the build; the same dependencies bound at `.lake/deps` build, from a copy deleted after."""
