@@ -29,9 +29,9 @@ import random
 import numpy as np
 import pytest
 import torch
-from verity.experimental.protocols.pouw.circuit import plan as CPL
-from verity.experimental.protocols.pouw.circuit import reference as CR
-from verity.experimental.protocols.pouw.coins import Challenger
+from verity.core.protocols.pouw.circuit import plan as CPL
+from verity.core.protocols.pouw.circuit import reference as CR
+from verity.core.protocols.pouw.coins import Challenger
 
 from verity_vllm import protocol_options as PO
 from verity_vllm.check.replay import driver as SR
