@@ -107,9 +107,11 @@ EDITS = [
      "        for v in ALLOWED[todo.pop()] - reached:\n"
      "            reached.add(v)\n"
      "            todo.append(v)\n"
-     "    assert {u for u in reached if u.startswith(\"ml.\")} == SOUNDNESS_PATH\n"
+     "    ml = {u for u in reached if u.startswith(\"ml.\")}\n"
+     "    assert ml == SOUNDNESS_PATH, f\"ALLOWED lets core reach {sorted(ml)} in ml: SOUNDNESS_PATH and AGENTS.md say so\"\n"
      "    agents = (ROOT / \"AGENTS.md\").read_text(encoding=\"utf-8\")\n"
-     "    assert not [u for u in sorted(SOUNDNESS_PATH) if f\"`{u}`\" not in agents], \"AGENTS.md names every unit on the soundness path\"\n"),
+     "    missing = [u for u in sorted(SOUNDNESS_PATH) if f\"`{u}`\" not in agents]\n"
+     "    assert not missing, f\"AGENTS.md doesn't name {missing}, which core's verifiers read\"\n"),
     # the package lists that walk or key the verifiers' code by import name
     ("verity/ml/flock/tool.py",
      '#: core and the catalog, the kernels and experimental beside it, wherever the tree keeps them\n'
