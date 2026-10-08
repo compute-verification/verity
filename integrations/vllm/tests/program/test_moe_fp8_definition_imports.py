@@ -15,7 +15,8 @@ import pytest
 
 REGISTRY = "verity_vllm.program.registry"
 DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
-FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boolean_fp8_moe", "nvfp4", "boolean_gather")
+FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
+          "boolean_gather")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1
 #: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`) and the Boolean bit views
 #: (`boolean_attention._Bits`)

@@ -103,8 +103,9 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/targets.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
-                         # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
-                         "verity_vllm/program/frontend/rules/vllm_sampling.py",
+                         # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
+                         "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
+                         "verity_vllm/program/frontend/rules/vllm_moe_fp8.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
@@ -486,9 +487,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # READ BACK what vLLM saw during instantiation (never a literal); declared != applied -> refuse
             applied = read_back_applied()
             applied["attention_backend"] = res["target"]["consulted"].get("attention_backend_knob")
-            # [R15 fp8] the block-scaled FP8 GEMM kernel vLLM selected for the model's FP8 linears (declared by `fp8_block_gemm`)
-            from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
-            applied["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the kernels vLLM selected: the FP8 linears' (declared by `fp8_block_gemm`), the fused-MoE experts' (by `moe_backend`)
+            from verity_vllm.program.frontend.target_profile import applied_kernels
+            applied.update(applied_kernels(target, model))
             # derived (observed) selection fields: the instantiated layers' attention impl; the fused-norm dispatch (after export)
             res["attention_impls_observed"] = vm.attention_impls(model)
             # [R13 hopper] READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
@@ -526,8 +527,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied_export["attention_backend"] = applied["attention_backend"]
             if "flash_attn_version" in applied:                  # absent when no layer is a FlashAttention impl (judged by the attention rule)
                 applied_export["flash_attn_version"] = applied["flash_attn_version"]
-            # [R15 fp8] the layers' FP8 kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
-            applied_export["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the layers' kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
+            applied_export.update(applied_kernels(target, model))
             res["target"]["applied_after_export"] = applied_export
             bad = profile_mismatches(target, applied_export)
             if bad:
