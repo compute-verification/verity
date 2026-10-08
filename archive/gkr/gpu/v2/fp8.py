@@ -39,9 +39,9 @@ PACK_DROP = 10                 # low FP32 fraction bits every 14-bit-adder word 
 
 
 def adder_params(model) -> Params:
-    """The adder-side checker ``Params`` of an E4M3 :class:`verity_catalog.silicon.models.GroupSum` with a 14-bit adder."""
-    from verity_catalog.silicon.models import GroupSum
-    from verity_catalog.silicon.term import FORMATS
+    """The adder-side checker ``Params`` of an E4M3 :class:`verity.ml.circuits.silicon.models.GroupSum` with a 14-bit adder."""
+    from verity.ml.circuits.silicon.models import GroupSum
+    from verity.ml.circuits.silicon.term import FORMATS
 
     if not isinstance(model, GroupSum):
         raise ValueError(f"{getattr(model, 'name', model)!r} is not a GroupSum")
@@ -62,7 +62,7 @@ def relation_params(rel) -> tuple[Params, str]:
     """``(checker Params, epilogue)`` A-GKR proves a ``archive/direct/ligero/relations.py`` relation at: the adder-side
     view and the ``fp8`` epilogue for an E4M3 relation (whose ``rel.params`` is B-Ligero's own ``FP8Params``, a different
     reading of the same fields), else the relation's ``Params`` and the limb epilogue."""
-    from verity_catalog.silicon.term import FORMATS
+    from verity.ml.circuits.silicon.term import FORMATS
 
     if FORMATS[rel.model.dtype].nan_rule == "e4m3":
         return adder_params(rel.model), "fp8"

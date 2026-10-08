@@ -41,9 +41,9 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 
     import numpy as np
 
-    from verity.primitives.circuits.evaluation.reference import standalone_call
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation.reference import standalone_call
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluate import evaluate_call
 
     K, N, G = 256, 320, 128
     nb, kb = SP.blocks({"K": K, "N": N, "G": G})
