@@ -221,7 +221,7 @@ def main (args : List String) : IO UInt32 := do
     if args.contains f then IO.eprintln s!"verify-phases: {f} is not taken (a --zk session of one table)"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
-  if tags.plainLeaves then IO.eprintln s!"verify-phases: refused: {tags.name}"; return 2
+  if tags.name.endsWith "+plain-leaves" then IO.eprintln s!"verify-phases: refused: {tags.name}, as verify refuses it"; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := Coins.tree (coinSpec (tags.tableNames 1))
   let tags := tags.withCoins coins

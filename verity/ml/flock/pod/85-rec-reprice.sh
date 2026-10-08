@@ -42,6 +42,8 @@
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)
+#      LEAN_SRC=verity/core/service/flock (the Lean verifier's sources every Lean step builds, cached by their contents: another
+#               tree's, to verify sessions only that verifier takes)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|oprove|oreplay|lean}
@@ -97,7 +99,8 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
 KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g1-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
-LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LEAN_SRC=$(cd ${LEAN_SRC:-verity/core/service/flock} && pwd) || exit 1
+LSHA=$(cd $LEAN_SRC && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
@@ -371,7 +374,7 @@ lean_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ]; then
-      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
+      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r $LEAN_SRC/. $L/lean-src/ \
         && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
     fi
   )
@@ -543,7 +546,7 @@ vstage)
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/fold.lock; flock 9
     if [ ! -x $FOLD_BIN ]; then
-      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
+      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r $LEAN_SRC/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
         && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
         && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
     fi
@@ -662,7 +665,7 @@ lean)
       command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
       exec 9>$L/phases.lock; flock 9
       if [ ! -x $PH_BIN ]; then
-        C=$L/phases-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/VerifyPhases.lean $C/ \
+        C=$L/phases-src; rm -rf $C && mkdir -p $C && cp -r $LEAN_SRC/. $C/ && cp verity/ml/flock/tests/lean/VerifyPhases.lean $C/ \
           && sed 's/^def main (args : List String) : IO UInt32 := do$/def flockVerifyMain (args : List String) : IO UInt32 := do/' \
             $C/FlockVerify.lean > $C/FlockVerifyLib.lean && grep -q '^def flockVerifyMain' $C/FlockVerifyLib.lean \
           && printf '\n[[lean_lib]]\nname = "FlockVerifyLib"\n\n[[lean_exe]]\nname = "verify-phases"\nroot = "VerifyPhases"\n' >> $C/lakefile.toml \
