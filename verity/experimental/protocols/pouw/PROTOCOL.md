@@ -578,13 +578,14 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     `Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192` and
     `Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384`, from TT_OUT at 1/1,000.
   - The per-unit γ doesn't need TT_OUT(1/1,000): the same γ for the cap-1/1,000 protocol follows from rev1 at 1/400 alone
-    (`Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400` and
-    `Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384_of_cap400`, from `TTOutPearlCDevRev1` at 1/400).
-  - At the issue-bound FP32 add (8.00), γ is pinned under its own names, not lifted into Pouw's `Guarantees`:
-    `Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192` and `Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_16384`,
-    with the sampled `Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1Cap1000_8192` and
-    `Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1Cap1000_16384`. The ledger publishes the larger of the two prices, the
-    in-loop add's.
+    (`Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400` and
+    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1` at 1/400).
+  - At the issue-bound FP32 add (8.00), the pinned guarantees are
+    `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192` and
+    `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384`, with the sampled
+    `Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192` and
+    `Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384`. The ledger publishes the larger of the two prices,
+    the in-loop add's.
   - The verifier's credit, cap and debit are rev1's, the rule these γ are proved for: `credit_of` is `creditDevRev1`,
     `wref` is `wrefDevRev1` (`wrefDevRev1K` at the cast's offset), and the tile rule is `tileDebitRev1` against
     ρ·`creditDevRev1`·`tileShare`. Python's γ, credit and tile cap equal the Lean's exactly on every pinned price twin

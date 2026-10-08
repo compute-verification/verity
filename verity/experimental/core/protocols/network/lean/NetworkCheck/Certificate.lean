@@ -1,0 +1,241 @@
+import Flock.Hash
+import Flock.Bytes
+import Flock.Canon
+
+/-!
+# The network certificate's encodings (record v2)
+
+Executable forms of `verity/experimental/protocols/certifier/certificate.py`, whose module docstring is the spec: the
+frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
+(`realFrames`), the parameters digest (`parametersDigest`, canonical JSON through `Flock.canon`), the record head's
+encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), and the message a certificate signs
+(`certificateMessage`, `verity.ml.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
+SHA-512 is `Flock.Sha512.hash`. `NetworkCheck.Difftest` holds these to the Python on generated inputs.
+-/
+
+namespace NetworkCheck
+
+open Flock
+
+abbrev E := Except String
+
+/-- `x` as `width` big-endian bytes, refused unless `0 ≤ x < 2^(8·width)` (Python's `_u`). -/
+def uBE (width : Nat) (x : Int) (name : String) : E ByteArray :=
+  if 0 ≤ x ∧ x < 2 ^ (8 * width) then
+    pure ⟨(List.range width).toArray.map fun i => (x.toNat >>> (8 * (width - 1 - i))).toUInt8⟩
+  else throw s!"{name} is an unsigned {8 * width}-bit integer, not {x}"
+
+/-- `u16be len(s) ‖ s` of `s`'s UTF-8 (Python's `_text`). -/
+def text (s : String) (name : String) : E ByteArray := do
+  let b := s.toUTF8
+  pure ((← uBE 2 b.size s!"len({name})") ++ b)
+
+def frameTag : ByteArray := "verity-network-certifier/frame/v2\x00".toUTF8
+def emptyTag : ByteArray := "verity-network-certifier/empty/v2\x00".toUTF8
+def nodeTag : ByteArray := "verity-network-certifier/node/v2\x00".toUTF8
+def recordTag : String := "verity-network-certifier/record/v2"
+def parametersTag : String := "verity-network-certifier/parameters/v1"
+def digestBytes : Nat := 64
+
+/-- `block(x)`: x zero-padded to one 128-byte SHA-512 block, refused past 128 bytes. -/
+def block (x : ByteArray) : E ByteArray :=
+  if x.size ≤ 128 then pure (x ++ ⟨Array.replicate (128 - x.size) 0⟩)
+  else throw "a tag block is one 128-byte SHA-512 block"
+
+/-- `tagged_sha512` (`verity/ml/commitments/identity.py`): SHA-512 of
+`"verity/tagged-sha512/v1\0" ‖ u32be len(tag) ‖ tag ‖ u64be len(payload) ‖ payload`. -/
+def taggedSha512 (tag : String) (payload : ByteArray) : ByteArray :=
+  let t := tag.toUTF8
+  Sha512.hash ("verity/tagged-sha512/v1\x00".toUTF8 ++ be32 t.size.toUInt32 ++ t ++ be64 payload.size.toUInt64 ++ payload)
+
+/-- The grid parameters a record reads (`grid.GridParams`): T, r, B, τ_b and Q. -/
+structure Params where
+  buckets : Nat
+  allocation : Nat
+  frameBytes : Nat
+  bucketMs : Nat
+  queueCapacity : Nat
+
+/-- `leaf(f) = SHA-512(block(FRAME_TAG ‖ u32be B) ‖ f)`, refused unless `f` has B bytes. -/
+def frameLeaf (frame : ByteArray) (frameBytes : Nat) : E ByteArray := do
+  if frame.size ≠ frameBytes then throw s!"frames are {frameBytes} bytes, not {frame.size}"
+  pure (Sha512.hash ((← block (frameTag ++ (← uBE 4 frameBytes "B"))) ++ frame))
+
+def nodeBlock : ByteArray := nodeTag ++ ⟨Array.replicate (128 - nodeTag.size) 0⟩
+
+/-- `node(a, b) = SHA-512(block(NODE_TAG) ‖ a ‖ b)`. -/
+def node (left right : ByteArray) : ByteArray := Sha512.hash (nodeBlock ++ left ++ right)
+
+/-- `E_level`: `E_0 = SHA-512(block(EMPTY_TAG))`, `E_{l+1} = node(E_l, E_l)`. -/
+def empty : Nat → ByteArray
+  | 0 => Sha512.hash (emptyTag ++ ⟨Array.replicate (128 - emptyTag.size) 0⟩)
+  | l + 1 => let e := empty l; node e e
+
+/-- Python's `int.bit_length` on a natural number. -/
+def bitLength (n : Nat) : Nat := if n = 0 then 0 else Nat.log2 n + 1
+
+/-- `D = ⌈log2(T·r)⌉`, computed as Python does: `(T·r − 1).bit_length()`. -/
+def depth (p : Params) : Nat := bitLength (p.buckets * p.allocation - 1)
+
+/-- The window's real frames in `grid.fill`'s order, refused unless the grid has T rows of r slots, each left-packed. -/
+def realFrames (grid : Array (Array (Option ByteArray))) (p : Params) : E (Array ByteArray) := do
+  if grid.size ≠ p.buckets then throw s!"a grid has {p.buckets} rows, not {grid.size}"
+  let mut out := #[]
+  for row in grid do
+    if row.size ≠ p.allocation then throw s!"a row has {p.allocation} slots, not {row.size}"
+    let n := (row.filter Option.isSome).size
+    unless (row.extract 0 n).all Option.isSome do throw "a row that isn't left-packed has no encoding (W4)"
+    out := out ++ row.filterMap id
+  pure out
+
+/-- The tree's non-empty prefix at each level, leaves first; every node to its right is the level's `E`. -/
+def levels (frames : Array ByteArray) (p : Params) : E (Array (Array ByteArray)) := do
+  if frames.size > p.buckets * p.allocation then throw "more frames than the window has slots"
+  let mut level ← frames.mapM (frameLeaf · p.frameBytes)
+  let mut out := #[level]
+  for lv in [0:depth p] do
+    if level.size % 2 = 1 then level := level.push (empty lv)
+    level := (List.range (level.size / 2)).toArray.map fun i => node level[2 * i]! level[2 * i + 1]!
+    out := out.push level
+  pure out
+
+def framesRoot (frames : Array ByteArray) (p : Params) : E ByteArray := do
+  let top := (← levels frames p).back!
+  pure (if h : 0 < top.size then top[0] else empty (depth p))
+
+/-- Frame k's authentication path: D siblings, leaf level first. -/
+def openFrame (frames : Array ByteArray) (p : Params) (k : Int) : E (Array ByteArray) := do
+  if ¬(0 ≤ k ∧ k < frames.size) then throw s!"frame {k} is not among the window's {frames.size}"
+  let ls ← levels frames p
+  let mut k := k.toNat
+  let mut path := #[]
+  for lv in [0:ls.size - 1] do
+    let level := ls[lv]!
+    let sibling := k ^^^ 1
+    path := path.push (if h : sibling < level.size then level[sibling] else empty lv)
+    k := k >>> 1
+  pure path
+
+/-- Whether `frame` is leaf k under `root`. -/
+def verifyFrame (root : ByteArray) (p : Params) (k : Int) (frame : ByteArray) (path : Array ByteArray) : Bool :=
+  if path.size ≠ depth p ∨ ¬(0 ≤ k ∧ k < 2 ^ path.size) ∨ frame.size ≠ p.frameBytes then false
+  else match frameLeaf frame p.frameBytes with
+    | .error _ => false
+    | .ok leaf => Id.run do
+      let mut d := leaf
+      let mut k := k.toNat
+      for sibling in path do
+        d := if k % 2 = 0 then node d sibling else node sibling d
+        k := k >>> 1
+      return d == root
+
+/-- Σ_sync as the manifest reads it: its deltas, and its ρ as (numerator, denominator) in lowest terms. -/
+structure SyncSet where
+  deltas : Array Int
+  rhos : Array (Int × Nat)
+
+/-- `str(Fraction)`: `n` when the denominator is 1, else `n/d`. -/
+def rhoText (r : Int × Nat) : String := if r.2 = 1 then toString r.1 else s!"{r.1}/{r.2}"
+
+/-- The manifest `parameters_digest` hashes. -/
+def parametersManifest (p : Params) (ss : Option SyncSet) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("buckets", Lean.toJson p.buckets), ("allocation", Lean.toJson p.allocation),
+    ("frame_bytes", Lean.toJson p.frameBytes), ("bucket_ms", Lean.toJson p.bucketMs),
+    ("queue_capacity", Lean.toJson p.queueCapacity),
+    ("sync_set", match ss with
+      | none => .null
+      | some s => Lean.Json.mkObj [
+          ("deltas", .arr (s.deltas.map Lean.toJson)),
+          ("rhos", .arr (s.rhos.map fun r => .str (rhoText r)))])]
+
+/-- `parameters_digest`: `tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(manifest))`. -/
+def parametersDigest (p : Params) (ss : Option SyncSet) : E ByteArray := do
+  pure (taggedSha512 parametersTag (← canon (parametersManifest p ss)).toUTF8)
+
+/-- `Direction`, by its value; its code is 0 for egress and 1 for ingress. -/
+inductive Direction where
+  | egress
+  | ingress
+  deriving BEq, Inhabited
+
+def Direction.value : Direction → String
+  | .egress => "egress"
+  | .ingress => "ingress"
+
+def Direction.code : Direction → Nat
+  | .egress => 0
+  | .ingress => 1
+
+def Direction.ofValue : String → E Direction
+  | "egress" => pure .egress
+  | "ingress" => pure .ingress
+  | s => throw s!"not a direction: {s}"
+
+/-- `STATUS_CODES`: complete (`none`) is 0, then each `Reason` by its value. -/
+def statusCode : Option String → E Nat
+  | none => pure 0
+  | some "monitor-unavailable" => pure 1
+  | some "overflow" => pure 2
+  | some "malformed" => pure 3
+  | some "dropped" => pure 4
+  | some "delivery-refused" => pure 5
+  | some "coverage-never-established" => pure 6
+  | some s => throw s!"not a reason: {s}"
+
+/-- `RecordHead`: a v2 record with its frames replaced by their root. Integers are `Int` so that a field Python would
+refuse as out of range is refused here too. -/
+structure RecordHead where
+  link : String
+  direction : Direction
+  window : Int
+  buckets : Int
+  allocation : Int
+  frameBytes : Int
+  bucketMs : Int
+  status : Option String
+  deadline : Bool
+  parameters : ByteArray
+  counts : Array Int
+  root : ByteArray
+
+/-- `RecordHead.__post_init__`'s checks, then `encode`'s fields in order. -/
+def RecordHead.encode (h : RecordHead) : E ByteArray := do
+  if h.counts.size ≠ h.buckets ∨ h.counts.any (fun n => ¬(0 ≤ n ∧ n ≤ h.allocation)) then
+    throw s!"a record has {h.buckets} counts of 0 … {h.allocation}"
+  if h.parameters.size ≠ digestBytes ∨ h.root.size ≠ digestBytes then
+    throw "the parameters digest and the root are 64 bytes"
+  let mut out := (← text h.link "link") ++ (← uBE 1 h.direction.code "direction") ++ (← uBE 8 h.window "window")
+    ++ (← uBE 4 h.buckets "T") ++ (← uBE 4 h.allocation "r") ++ (← uBE 4 h.frameBytes "B")
+    ++ (← uBE 4 h.bucketMs "τ_b") ++ (← uBE 1 (← statusCode h.status) "status")
+    ++ (← uBE 1 (if h.deadline then 1 else 0) "deadline") ++ h.parameters
+  for n in h.counts do out := out ++ (← uBE 4 n "count")
+  pure (out ++ h.root)
+
+/-- The record digest, `tagged_sha512(RECORD_TAG, R)`. -/
+def RecordHead.digest (h : RecordHead) : E ByteArray := do pure (taggedSha512 recordTag (← h.encode))
+
+/-- `record_head`: the head of a window's grid, its counts the occupancy and its root over the real frames. -/
+def recordHead (link : String) (direction : Direction) (window : Int) (grid : Array (Array (Option ByteArray)))
+    (status : Option String) (p : Params) (parameters : ByteArray) (deadline : Bool) : E RecordHead := do
+  let frames ← realFrames grid p
+  pure { link, direction, window, buckets := p.buckets, allocation := p.allocation, frameBytes := p.frameBytes,
+         bucketMs := p.bucketMs, status, deadline, parameters,
+         counts := grid.map fun row => ((row.filter Option.isSome).size : Int),
+         root := ← framesRoot frames p }
+
+/-- `[x] = u64be len(x) ‖ x` (`lms._field`). -/
+def field (b : ByteArray) : ByteArray := be64 b.size.toUInt64 ++ b
+
+/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of
+`[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `verity/network-certificate/v1`; refused
+unless the digest is 64 bytes, I is 16 and the window a u64. -/
+def certificateMessage (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
+    E ByteArray := do
+  if digest.size ≠ digestBytes then throw "a record digest is 64 bytes"
+  let w ← uBE 8 window "window"
+  if keyId.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {keyId.size}"
+  let context := field link.toUTF8 ++ field direction.value.toUTF8 ++ w
+  pure (Sha512.hash (field "verity/network-certificate/v1".toUTF8 ++ keyId ++ field context ++ field digest))
+
+end NetworkCheck
