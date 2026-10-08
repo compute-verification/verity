@@ -1,17 +1,37 @@
 """The failures `main` already has, each with its cause: `circuit-check --all` and the suite pass on them and fail on anything
-else, and on an entry that no longer fails (a fixed one is dropped here)."""
+else, and on an entry that no longer fails (a fixed one is dropped here).
+
+Each is a file of its own (`entries`) under ``known/``, with its ``key`` and ``reason``: ``known/failures/`` holds a failure by
+``"<check>/<code> <Definition family>"`` (`key`), ``known/pieces/`` a piece of the C-Flock lowering that differs from its IR
+primitive, by its id (a Definition lowered through one inherits it).  An entry's file is ``entries.name(key) + ".toml"``.
+"""
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
 from typing import Iterable
 
+from . import entries as E
+
+DIR = Path(__file__).with_name("known")
+
+
+def load(directory: Path) -> dict[str, str]:
+    """{key: reason} of every entry file in ``directory``; one with other fields, or not named by its key, is an error."""
+    out: dict[str, str] = {}
+    for p in E.files(directory, ".toml"):
+        d = tomllib.loads(p.read_text())
+        if set(d) != {"key", "reason"} or not all(isinstance(v, str) for v in d.values()):
+            raise ValueError(f"{p}: a known entry is a key and a reason, both strings")
+        E.check(p, d["key"])
+        out[d["key"]] = d["reason"]
+    return dict(sorted(out.items()))
+
+
 #: pieces of the C-Flock lowering that differ from their IR primitive, and why; a Definition lowered through one inherits it
-KNOWN_PIECES: dict[str, str] = {}
+KNOWN_PIECES: dict[str, str] = load(DIR / "pieces")
 #: other failures main has, by "<check>/<code> <Definition family>", and why
-KNOWN: dict[str, str] = {
-    "partition/gate-recomputed ScaledMmFp8Block_v1": "every coordinate of a 128-column weight block recomputes the block's scale "
-        "product F32Mul(sx[kb], sw[kb]) (fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; "
-        "word.unit_rule partitions the batch's members one by one and does not see it",
-}
+KNOWN: dict[str, str] = load(DIR / "failures")
 
 
 def key(f: dict) -> str:
@@ -37,4 +57,4 @@ def stale(failures: Iterable[dict]) -> list[str]:
     return sorted(set(KNOWN) - keys) + sorted(set(KNOWN_PIECES) - pieces)
 
 
-__all__ = ["KNOWN", "KNOWN_PIECES", "key", "known", "stale"]
+__all__ = ["DIR", "KNOWN", "KNOWN_PIECES", "key", "known", "load", "stale"]
