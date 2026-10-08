@@ -26,8 +26,8 @@ theorem toOption_eq_some {ε α : Type} {x : Except ε α} {a : α} : x.toOption
 /-! ## The run's strings -/
 
 theorem mem_headStrings {h : RecordHead} {x : ByteArray} (hx : HeadString h x) : x ∈ headStrings h := by
-  obtain ⟨enc, he, rfl⟩ := hx
-  simp [headStrings, he, Except.toOption]
+  obtain ⟨enc, he, hx⟩ := hx
+  simp [headStrings, he, hx, Except.toOption]
 
 theorem mem_framesStrings {g : Grid} {fr : Array ByteArray} {x : ByteArray} (hx : FramesString g fr x) :
     x ∈ framesStrings g fr := by

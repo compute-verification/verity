@@ -15,7 +15,9 @@
   "Properties.NetworkCertifier",
   "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork",
-  "Properties.Proofs.CertifierNetwork"
+  "Properties.Proofs.CertifierNetwork",
+  "Properties.Identity",
+  "Properties.Proofs.Identity"
  ],
  "proved_in": ["../Proofs"],
  "meaning": [
@@ -51,6 +53,7 @@
   "NetworkCertifier",
   "NetworkCheck",
   "Lms",
+  "Properties.Identity",
   "Properties.NetworkCertifier",
   "Definitions.NetworkCertifier",
   "Properties.CertifierNetwork"
@@ -81,8 +84,13 @@
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
+  "Properties.Identity": {
+   "imports": ["Identity.Tagged"],
+   "except": [],
+   "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
+  },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "Models.Core.Assumptions", "Definitions.NetworkCertifier", "Mathlib.Data.Set.Card"],
+   "imports": ["NetworkCheck.Check", "Properties.Identity", "Models.Core.Assumptions", "Definitions.NetworkCertifier", "Mathlib.Data.Set.Card"],
    "except": [],
    "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
   },
@@ -154,6 +162,12 @@
    ],
    "assumptions": [],
    "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd"
+  },
+  "Properties.Identity.streamIsFlock": {
+   "owner": "@network-accounting"
+  },
+  "Properties.Identity.taggedIsFlock": {
+   "owner": "@network-accounting"
   },
   "Properties.CertifierDevice.completeRows": {
    "owner": "@network-accounting",
