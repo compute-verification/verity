@@ -49,6 +49,7 @@
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0C5APDSYF9",
+      "linear": "INF",
       "owns": [
         "infra/",
         "infra/cluster/",
@@ -63,6 +64,7 @@
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0C5Q6KJZTQ",
+      "linear": "PRF",
       "owns": [
         "verity/",
         "verity/core/protocols/sampled_proofs/",
@@ -80,6 +82,7 @@
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0C5U3LHMFT",
+      "linear": "CIR",
       "owns": [
         "integrations/",
         "tools/verity/circuit_check/",
@@ -95,6 +98,7 @@
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD",
+      "linear": "CMP",
       "owns": [
         "verity/core/protocols/pouw/",
         "Security/Definitions/Pouw/",
@@ -113,6 +117,7 @@
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE",
+      "linear": "MEM",
       "owns": [
         "verity/core/protocols/pous/",
         "Security/Definitions/Pous/",
@@ -127,6 +132,7 @@
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
+      "linear": "NET",
       "owns": [
         "verity/core/protocols/certifier/",
         "Security/Definitions/NetworkCertifier/",
@@ -141,6 +147,7 @@
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
       "usergroup": "S0C5LSDENA1",
+      "linear": "CON",
       "owns": [
         "benchmarks/census/"
       ]
@@ -151,6 +158,7 @@
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": null,
+      "linear": "CI",
       "owns": [
         "tools/verity/check/",
         "tools/research/src/research/queue.py",
@@ -164,6 +172,7 @@
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": null,
+      "linear": "LEAN",
       "owns": [
         "tools/verity/lean/",
         ".agents/skills/lean-proofs/",
@@ -176,6 +185,7 @@
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
       "usergroup": null,
+      "linear": "COMM",
       "owns": [
         ".agents/skills/using-slack/",
         "tools/research/src/research/slack.py",
@@ -189,6 +199,7 @@
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
       "usergroup": null,
+      "linear": "TOP",
       "owns": [
         "AGENTS.md",
         "README.md",
@@ -213,7 +224,8 @@
       "holder": "the lander: the research coordinator (bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628), which runs the merge trains",
       "remit": "The lander: runs the merge trains, and advises @circuits and @proofs, its successors.",
       "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-circuits, note:20260930T1955Z-handoff-from-infra-slack-advisor-proofs",
-      "usergroup": "S0C5MCG1A2Z"
+      "usergroup": "S0C5MCG1A2Z",
+      "linear": "LAND"
     }
   ]
 }
