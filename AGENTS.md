@@ -185,16 +185,10 @@ Until reuse and the merge queue exist:
 - After landings, the lander runs a full `check` of the newest `main` on vy-nebius-1, one at a time. When it fails, the lander finds
   the landing that broke it and reverts it at once (`git revert -m 1`), and its owner relands with the fix.
 - PRs land in trains: ci stacks the tips, and the lander lands the merged tree once every part its members touch passes.
-<<<<<<< HEAD
-- A train member needs its owner's `ready` label at its head, written by hand if need be:
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass.
-- No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
-=======
 - ci takes a PR into a train once its owner marks it ready at its head, by hand if need be:
   `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass. `research merge` itself reads no ready
-  mark, only grants: the train's own check is the gate.
-- A grant carries to a head whose own patch is byte-identical.
->>>>>>> origin/cursor/agents-md-claims-b252
+  mark: the train's own check is the gate.
+- No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
 - A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
   the tip; a push to the PR would refuse every tip that pins its old head.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies goes first, alone in
@@ -317,14 +311,9 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 - **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
   lead proposed and Daniel approved.
 - **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a tip being checked
-<<<<<<< HEAD
-  (Checking and merging). Only the lander moves `main`, through
-  `research merge`.
+  (Checking and merging). Only the lander moves `main`.
 - **Landing is the lander's.** Push your PR, mark it ready and go back to research. Only the lander lands, restacks and
   reruns, and you hear back only if your PR fails. A lane holds at most two open PRs.
-=======
-  (Checking and merging). Only the lander moves `main`.
->>>>>>> origin/cursor/agents-md-claims-b252
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`.
