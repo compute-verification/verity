@@ -147,7 +147,9 @@ def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_it
         assert [[argv[i + 1] for i, x in enumerate(argv) if x == "--package"] for argv in audit] == ([want] if want else [])
 
 
-def test_a_shard_without_the_other_half_gets_every_core(tmp_path):
+def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+
     def jobs(n, k):
         gs = CHECK.groups(tmp_path, 16, only=_resolved(n)[k - 1])
         return {name: argv[argv.index("--jobs") + 1] for g in gs for name, argv, _ in g if name in ("pytest", "circuit-check")}

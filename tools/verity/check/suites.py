@@ -133,7 +133,8 @@ UNKEYED_PREFIX = "VERITY_SUITE_"
 RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
-AFTER_LEAN = ("verity-flock", "verity-lean-audit")
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-core-evaluate", "verity-core-firewall",
+              "verity/experimental/core/service/vstar", "verity-core-sampled-proofs")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -484,7 +485,7 @@ def lean_build(log: Path) -> str | None:
     lean = flock_lean()
     if not (lean / "lakefile.toml").exists():
         return None
-    print(f"suites: `lake build` in {lean.relative_to(ROOT)} (check's lean-build step) before {' and '.join(AFTER_LEAN)}")
+    print(f"suites: `lake build` in {lean.relative_to(ROOT)} (check's lean-build step) before {', '.join(AFTER_LEAN)}")
     with log.open("w") as out:
         rc = subprocess.run(["bash", "-c", ELAN + "lake build"], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
     return None if rc == 0 else f"`lake build` in {lean.relative_to(ROOT)} exited {rc}"
@@ -1358,7 +1359,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--explain", metavar="SUITE", help="say why SUITE would run: its key against the nearest pass kept here, and its "
                     "per-test reuse; runs nothing")
     ap.add_argument("--lean-built", action="store_true", help=f"the Lean verifier is built and `lake` is on the PATH (check's "
-                    f"lean-suites step): don't run `lake build` before {' and '.join(AFTER_LEAN)}")
+                    f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
     if not in_git():
