@@ -21,7 +21,7 @@
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
-                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
+                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (`ops keeper`, verity_ops/keeper.py)
   research compare <original>... <replay> [--expect E] [--json]
                                                  # the replay's verdict from the store (same | within-band | differs | expected-change);
                                                  # --dirs: two run dirs' differences and ratios, which the workload contract judges
@@ -57,7 +57,7 @@
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
-                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
@@ -1029,6 +1029,8 @@ def cmd_fetch(argv: list[str]) -> int:
     if ex := rec.get("launcher_exited"):
         print(f"research fetch: {s['run_id']}: the machine's runner (pid {ex['runner_pid']}) exited without writing status.json; "
               f"launcher.log ends: {ex['last_line'] or '(empty)'}", file=sys.stderr)
+    if gone := rec.get("runner_gone"):
+        print(f"research fetch: {s['run_id']}: it ended without recording it: {gone['why']}", file=sys.stderr)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
     marker = rec.get("fetched_marker") if ns.all else None
@@ -1393,6 +1395,21 @@ def cmd_usage(argv: list[str]) -> int:
     return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
 
 
+OPS_COMMANDS = ("keeper", "deploy")
+OPS_SRC = Path(__file__).resolve().parents[4] / "infra" / "ops"
+
+
+def hand_to_ops(cmd: str, rest: list[str]) -> int:
+    """`research keeper|deploy ...` is `ops ...` (infra/ops), exec'd in this interpreter with this tree's
+    infra/ops first on its path, so a venv synced before verity-ops existed still runs it. research never imports it."""
+    env = dict(os.environ)
+    if (OPS_SRC / "verity_ops" / "cli.py").is_file():
+        env["PYTHONPATH"] = str(OPS_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execve(sys.executable, [sys.executable, "-m", "verity_ops", cmd, *rest], env)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
@@ -1407,6 +1424,8 @@ def main(argv: list[str] | None = None) -> int:
 
     recover()
     cmd, rest = argv[0], argv[1:]
+    if cmd in OPS_COMMANDS:
+        return hand_to_ops(cmd, rest)
     if cmd == "run":
         return cmd_run(rest)
     if cmd == "status":
@@ -1455,18 +1474,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(rest)
-    if cmd == "keeper":
-        from .keeper import main as keeper_main
-
-        return keeper_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
         return pods_main(rest)
-    if cmd == "deploy":
-        from .deploy import main as deploy_main
-
-        return deploy_main(rest)
     if cmd == "monitors":
         from .monitors import main as monitors_main
 
