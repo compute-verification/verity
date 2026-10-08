@@ -533,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--audits", type=int, default=20,
                     help="timed audits per round; 0 (band-gpu, p2-v1-gpu): an untimed placement, which runs the gates, encode, "
                          "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
-    ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the verifier's round-trip allowance")
+    ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory challenger's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
     ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu, p2-gpu: only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
@@ -552,7 +552,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="band-gpu, p2-v1-gpu: the calibration quantile added to the 0.5 ms deadline")
     ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v1-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
-                    help="band-gpu, p2-v1-gpu: time answers on the verifier's clock (wall) or by the responder's reported time (logical)")
+                    help="band-gpu, p2-v1-gpu: time answers on the memory challenger's clock (wall) or by the responder's reported time (logical)")
     ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the memory challenger process's core")
     ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the responder thread's core")
     ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v1-gpu: T of the POUS forwards run during the audit (0: none)")
