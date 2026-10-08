@@ -27,8 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+from verity.experimental.protocols.pouw.protocol import Matmul, Shape
+from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW
 
 from .pouw_pearl_c_host import _bytes, _write, _zeros, torch_uint8
 from .pouw_pearl_c_screen import excluded, scatter_into
@@ -36,9 +36,9 @@ from .pouw_pearl_c_screen import excluded, scatter_into
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
 GRAPH_ROWS = 256
-#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (136 bytes, padded), and the byte
-#: offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
-SLOT_BYTES = 144
+#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (168 bytes, padded), and
+#: the byte offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
+SLOT_BYTES = 176
 
 
 def _capturing() -> bool:
@@ -83,8 +83,8 @@ class _Slots:
 
 
 class GraphCalls:
-    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``key_slots``, ``offs``,
-    ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
+    """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``order``, ``nb`` (its trees' node bytes),
+    ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and ``_graphs``, its `_call_steps` and `_call_cuts`, and
     its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose lengths bound it)."""
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
@@ -223,7 +223,7 @@ class GraphCalls:
         staged = s is not None and s.calls is calls and s.at == at
         if not staged:
             s = self._slots(calls, at)
-        if s.after[1] > self.capacity or 32 * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
+        if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
         if self._slots_copied is not None:
             self._slots_copied.synchronize()
@@ -261,7 +261,7 @@ class GraphCalls:
 
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""
-        return 32 * tiles_at, 2 * flags_at, 32 * index
+        return self.nb * tiles_at, 2 * flags_at, self.nb * index
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every
@@ -278,7 +278,8 @@ class GraphCalls:
             keys, offs = self._host_keys.numpy(), self._host_offs.numpy()
             tiles_at, flags_at = cur.tiles, cur.flag_rows
             for v, i in sorted(self.order.items(), key=lambda kv: kv[1]):
-                keys[i, :136] = np.frombuffer(self.keys(self.roots[v], index + i, m16), np.uint8)
+                kv = self.keys(self.roots[v], index + i, m16)
+                keys[i, :len(kv)] = np.frombuffer(kv, np.uint8)
                 offs[i] = self._offsets(index + i, tiles_at, flags_at)
                 self._predicted[v] = (index + i, m16, tiles_at, flags_at)
                 tiles_at += R.cdiv(m16, R.TILE) * (self.weights[v].n // R.TILE)
@@ -303,7 +304,7 @@ class GraphCalls:
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None:
-            g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(32 * tiles, self.device))
+            g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(self.nb * tiles, self.device))
             if self.cur.poison is not None:
                 g.y.view(torch.uint8).fill_(self.cur.poison)
                 g.leaves.fill_(self.cur.poison)
@@ -405,7 +406,7 @@ class GraphCalls:
         else none), into the pass's flags, and the call's leaves and A root into the pass's buffers, at the offsets in its
         weight's slot."""
         size, offs = pipe.size["tree_a"], self.offs[self.order[w]]
-        root, flags, leaves = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), g.leaves[:32 * tiles]
+        root, flags, leaves = sh.b["tree_a"][size - self.nb:size], self.flag_buf.view(-1), g.leaves[:self.nb * tiles]
 
         def scatter():
             scatter_into(sh.xa, sh.b["alpha_a"], sh.b["aux_a"], flag_rows, flags, leaves, self.leaves, root, self.roots_buf, offs)

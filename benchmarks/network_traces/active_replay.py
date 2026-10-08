@@ -1,4 +1,4 @@
-"""The active certifier on recorded traces, in real time: `verity.protocols.accounting.communication.certifier.active` serving a replay of honest traces'
+"""The active certifier on recorded traces, in real time: `verity.experimental.protocols.certifier.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
@@ -35,12 +35,19 @@ position in write order, and logs every event it wrote; it writes nothing from 1
 audit's Program is that log. A live prover can't choose syncs on frames it hasn't seen, so by default it declares one
 value for every window (`--syncs envelope`): the largest δ and the smallest ρ the calibration's honest prover declared,
 met by every window any declared value meets. Under an online rule (`--syncs cover-K-M`, `online`) the proxy's own
-prover declares each window's sync at its first tick from the frames it has read, the audit checks the syncs the
-proxy logged, and `declared_are_planned` says whether they are what the rule declares on the model's run. The sender's
+prover declares each window's sync at its first tick: the rule on the frames it had read by `--prover-lag` buckets
+before, chosen in a worker process off the proxy's tick, or the envelope if that choice isn't ready by then (the
+proxy log's `prover.unready`). The audit checks the syncs the proxy logged, and `declared_are_planned` says whether
+they are what the rule declares, with every choice ready, on the model's run. The sender's
 write times then move the declarations, so an adversarial strategy's wire differs from honest's from the second window
-on, within the log2 #Σ_sync bits per window the bound charges. The audit also counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
-have met. Under `--strategies honest,covert` the covert run's shim delays each stream's first event as
-`covert.LiveSender` says: the covert sender on a live server, which can only delay what the model writes.
+on, within the log2 #Σ_sync bits per window the bound charges. Live, `--strategies` makes the shim the adversary: it
+holds each event until its planned bucket, never before vLLM sent it, and `windows_whose_declared_differs` counts the
+windows whose declared sync is not the honest run's; under `covert` the shim delays each stream's first event as
+`covert.LiveSender` says: the covert sender on a live server, which can only delay what the model writes. The audit also
+counts the windows the trace's model syncs and a hindsight prover (`choose_syncs` on the frames as read) would
+have met, and `mismatches_from_late_frames`: the mismatched egress windows whose record is the shaper's rule on the
+frames as read: a frame read after its hand time under the declared sync, which an online rule's honest miss and a
+sender's held frames both give.
 
     python active_replay.py --calibration REPORT.json --out DIR [--windows 60] [--config-windows 4:10] TRACE.json ...
     python active_replay.py --vllm MODEL --calibration REPORT.json --out DIR --config NAME ... TRACE.json ...
@@ -76,21 +83,23 @@ from pathlib import Path
 
 import covert
 import replay
-from verity.protocols.accounting.communication.certifier import online
-from verity.protocols.accounting.communication.certifier.active import (
+from verity.experimental.protocols.certifier import online
+from verity.experimental.protocols.certifier.active import (
     DATA,
     HEADER,
     LAST,
     Events,
+    InlineExecutor,
     Proxy,
     VirtualClock,
     decode_frame,
     encode_frame,
+    worker,
 )
-from verity.protocols.accounting.communication.certifier.audit import Audit
-from verity.protocols.accounting.communication.certifier.calibration import choose_syncs
-from verity.protocols.accounting.communication.certifier.commitment import CommittedRecord, commit
-from verity.protocols.accounting.communication.certifier.grid import (
+from verity.experimental.protocols.certifier.audit import Audit
+from verity.experimental.protocols.certifier.calibration import choose_syncs
+from verity.experimental.protocols.certifier.commitment import CommittedRecord, commit
+from verity.experimental.protocols.certifier.grid import (
     COMPLETE,
     GridParams,
     Reason,
@@ -99,7 +108,7 @@ from verity.protocols.accounting.communication.certifier.grid import (
     Certifier,
     row_count,
 )
-from verity.protocols.accounting.communication.certifier.schedule import (
+from verity.experimental.protocols.certifier.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,
@@ -264,7 +273,7 @@ def committed_line(record: CommittedRecord) -> str:
 
 
 def read_committed(path: Path) -> list[CommittedRecord]:
-    from verity.primitives.commitments.identity import Digest
+    from verity.ml.commitments.identity import Digest
 
     out = []
     for line in path.read_text().splitlines() if path.exists() else []:
@@ -296,16 +305,19 @@ def parse_sync_policy(name: str) -> str:
     return name
 
 
-def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, syncs: str = "model") -> dict:
+def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, syncs: str = "model",
+                       lag: int = 1) -> dict:
     """The run of one configuration: its sessions (rank = list order, stream id, d_k per frame), its requests (stream,
     session, frames, the trace's send time and the peer's), the model's release of each request and the prover's
     syncs: `model`, chosen over the model's run; `envelope`, the calibration's envelope in every window; or an online
-    rule, which the proxy declares at each window's first tick from what it has read (`sync_rule`), and `syncs` holds
-    what it declares on the model's run. With `live_model`, a request takes the frames of its live body when they are
-    more than the trace's."""
+    rule (`sync_rule`), which the proxy declares at each window's first tick from the frames it read by `lag` buckets
+    before (`prover_lag`, 1 … T − 1), and `syncs` holds what it declares on the model's run with every choice ready.
+    With `live_model`, a request takes the frames of its live body when they are more than the trace's."""
     parse_sync_policy(syncs)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, replay.config_windows(cfg, e.buckets)
+    if syncs not in ("model", "envelope") and not 0 < lag < T:
+        raise ValueError(f"the proxy's online prover chooses off its tick: a lag of 1 … {T - 1} buckets, not {lag}")
     if len(cfg["egress"]) != 1 or len(cfg["ingress"]) != 1:
         raise ValueError("a configuration with one egress and one ingress link")
     first, ds = {}, defaultdict(list)
@@ -365,14 +377,15 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     elif syncs == "envelope":
         declared = [setup.envelope] * windows
     else:
-        declared, _ = online.declare([(frames, ready)], sync_set, T, online.rule(syncs), windows, setup.envelope)
+        declared, _, _ = online.declare([(frames, ready)], sync_set, T, online.rule(syncs), windows, setup.envelope,
+                                        lag=lag)
     out = {"name": cfg.get("name"), "windows": windows, "sessions": sessions, "requests": peer,
            "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
            "unmatched_sessions": unmatched, "ingress_only_requests": len(extra),
            "syncs": [[s.delta, str(s.rho)] for s in declared], "sync_policy": syncs,
            "model_syncs": [[s.delta, str(s.rho)] for s in chosen]}
     if syncs not in ("model", "envelope"):
-        out["sync_rule"] = syncs
+        out["sync_rule"], out["prover_lag"] = syncs, lag
     if live_model is not None:
         out["live_model"] = live_model
     return out
@@ -623,17 +636,20 @@ class LiveServer:
     server-sent event of the response with `id:` its position in write order, the HTTP head with the first. Every event
     written is logged as (position, session, k, the bucket it was written in, its bytes). From 1.5 buckets before the
     horizon on it writes nothing more, and closes the stream, so that every event logged is read before the last bucket.
-    Under the `covert` strategy, `covert.LiveSender` holds each stream's first event until the bucket its symbol names.
-    `open` counts the streams whose response hasn't ended, and `held` those of them waiting on the clock, for a driver on
-    a virtual clock."""
+    An adversary's shim (`plan["writes"]`) holds event k of a session until the middle of its planned bucket, never
+    writing an event before the endpoint has sent it; an event past the plan waits for the last planned bucket. Under
+    the `covert` strategy, `covert.LiveSender` holds each stream's first event until the bucket its symbol names.
+    `open` counts the streams whose response hasn't ended and aren't held, and `held` the deadlines of the held ones,
+    for a driver on a virtual clock."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
         self.upstream = tuple(params["upstream"])
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
+        self.writes = plan.get("writes")
+        self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
-        self.dues: list[float] = []
         self.sender = None
         if (c := plan.get("covert")) is not None:
             rule = online.rule(plan["sync_rule"]) if "sync_rule" in plan else None
@@ -681,18 +697,16 @@ class LiveServer:
                 self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
                 return
             cutter, k, cutoff = Events(), 0, self.origin + (self.horizon - 1.5) * self.tau
+            planned = None if self.writes is None else [b for b, _ in self.writes.get(name, [])]
+            hold = -1
             anchor = math.floor(received / self.tau)
             async for data in _http_body(up_reader, up_head):
                 for event in cutter.feed(data):
+                    if planned is not None:
+                        hold = max(hold, planned[k] if k < len(planned) else hold)
+                        await self._hold(self.origin + hold * self.tau + self.tau / 2)
                     if k == 0 and self.sender is not None:
-                        due = min(self.origin + self.sender.hold(anchor) * self.tau + self.tau / 2, cutoff)
-                        if (delay := due - self.clock()) > 0:
-                            self.dues.append(due)
-                            self.notify()
-                            try:
-                                await self.sleep(delay)
-                            finally:
-                                self.dues.remove(due)
+                        await self._hold(min(self.origin + self.sender.hold(anchor) * self.tau + self.tau / 2, cutoff))
                     now = self.clock()
                     if now >= cutoff:
                         self.log["cut_at_horizon"] += 1
@@ -711,11 +725,19 @@ class LiveServer:
         finally:
             up_writer.close()
 
-    @property
-    def held(self) -> int:
-        """The streams waiting on the clock: held, and not yet due."""
-        now = self.clock()
-        return sum(d > now for d in self.dues)
+    async def _hold(self, deadline: float) -> None:
+        if (delay := deadline - self.clock()) <= 0:
+            return
+        self.held[deadline] += 1
+        self.open -= 1
+        self.notify()
+        try:
+            await self.sleep(delay)
+        finally:
+            self.open += 1
+            self.held[deadline] -= 1
+            if not self.held[deadline]:
+                del self.held[deadline]
 
     async def serve(self, origin: float) -> None:
         self.origin = origin
@@ -822,7 +844,10 @@ def proxy_log(proxy: Proxy) -> dict:
     return {"lateness_ms": {k: [round(x * 1000, 3) for x in v] for k, v in proxy.lateness.items()},
             "syncs": [[s.delta, str(s.rho)] for s in proxy.shaper.syncs],
             "frames": proxy.frames, "hands": proxy.shaper.hands, "link_frames_read": proxy.link_frames_read,
-            "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000} | _usage()
+            "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000,
+            "forwards": [[st.window, None if st.delivered is None else round((st.delivered - st.deadline) * 1000, 3)]
+                         for st in proxy.streams.values() if st.deadline is not None],
+            "prover": None if proxy.choices is None else proxy.choices.log} | _usage()
 
 
 def write_logs(out: Path, proxy: Proxy | None = None, server: Server | None = None, peer: Peer | None = None) -> None:
@@ -854,12 +879,16 @@ async def _server(plan: dict, params: dict, conn, out: Path) -> None:
     write_logs(out, server=server)
 
 
-def prover_args(plan: dict, setup: Setup) -> dict:
-    """The proxy's advice: the plan's syncs, or, under an online rule, its own prover's over the plan's windows."""
+def prover_args(plan: dict, setup: Setup, background: bool = True) -> dict:
+    """The proxy's advice: the plan's syncs, or, under an online rule, its own prover's over the plan's windows at
+    `plan["prover_lag"]`, choosing in a worker process (`active.worker`, started here, before the run), or at once
+    with `background=False`, for a driver on a virtual clock."""
     if "sync_rule" not in plan:
         return {"syncs": [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]}
-    prover = online.Prover(setup.sync_set, setup.egress_params.buckets, online.rule(plan["sync_rule"]), setup.envelope)
-    return {"syncs": [], "prover": prover, "windows": plan["windows"]}
+    prover = online.Prover(setup.sync_set, setup.egress_params.buckets, online.rule(plan["sync_rule"]), setup.envelope,
+                           lag=plan["prover_lag"])
+    return {"syncs": [], "prover": prover, "windows": plan["windows"],
+            "executor": worker() if background else InlineExecutor()}
 
 
 class Stalls(asyncio.Event):
@@ -1058,7 +1087,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     peer = Peer(plan, params, clock, clock.sleep, notify)
     listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     publish = Publisher(out, setup, threaded=False)
-    advice = prover_args(plan, setup)
+    advice = prover_args(plan, setup, background=False)
     proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),
                                     origin=0.0, clock=clock, sleep=clock.sleep, publish=publish,
                                     egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
@@ -1083,8 +1112,8 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
         ticks_i = min(plan["windows"] * i.buckets, math.floor(x / tau_i + 1e-9) + 1) if x >= 0 else 0
         batches = min(horizon - 1, math.floor((x - tau_e / 2) / tau_e + 1e-9) + 1) if x >= tau_e / 2 else 0
         return (len(proxy.lateness["egress"]) >= ticks_e and len(proxy.lateness["ingress"]) >= ticks_i
-                and getattr(server, "processed", horizon) + 1 >= batches
-                and getattr(server, "open", 0) == getattr(server, "held", 0)
+                and getattr(server, "processed", horizon) + 1 >= batches and getattr(server, "open", 0) == 0
+                and not any(d <= x + 1e-9 for d in getattr(server, "held", ()))
                 and peer.instants_sent >= bisect.bisect_right(sends, x + 1e-9)
                 and proxy.link_frames_read >= peer.frames_sent and server.log["requests"] >= proxy.requests_released
                 and len(proxy.frames) >= server.log["events"]
@@ -1218,6 +1247,11 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
         "model_misses": plan["model_misses"],
         "declared_are_planned": declared == plan["syncs"],
     }
+    shaped = {r.window: r.grid for r in ref}
+    by_window = {r.window: r.grid for r in out_records}
+    mismatched = [r["window"] for r in rows if r["direction"] == "egress" and r["raw"] == "mismatch"]
+    comparisons["mismatches"] = len(mismatched)
+    comparisons["mismatches_from_late_frames"] = sum(w in by_window and by_window[w] == shaped.get(w) for w in mismatched)
     symbols, margin = covert_symbols(plan, T)
     if "covert" in plan:
         comparisons["covert_declared_are_predicted"] = declared == plan["covert"]["predicted"]
@@ -1359,7 +1393,7 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
                            for k in ("hands_max_diff_from_rule", "hands_max_diff_from_model")}
     out["comparisons"] |= {k: sum(r["comparisons"][k] for r in results)
                            for k in ("ready_off_meant", "releases_off_model", "model_misses",
-                                     "released_not_the_programs")}
+                                     "released_not_the_programs", "mismatches", "mismatches_from_late_frames")}
     out["comparisons"]["declared_are_planned"] = all(r["comparisons"].get("declared_are_planned", True)
                                                      for r in results)
     if any("hindsight" in r["comparisons"] for r in results):
@@ -1388,15 +1422,22 @@ def summarize(results: Sequence[dict], models: Sequence[dict]) -> dict:
 
 
 def against_honest(run: Path, honest: Path) -> dict:
-    """Whether a run's wire, as the peer read it, and its committed records are the honest run's."""
+    """Whether a run's wire, as the peer read it, and its committed records are the honest run's, and the windows whose
+    sync the proxy declared differently from honest's (under an online rule; else none)."""
     def wire(p: Path) -> list[str]:
         return json.loads((p / "peer.json").read_text())["window_sha256"]
 
     def committed(p: Path) -> list[str]:
         return sorted((p / "committed.jsonl").read_text().splitlines())
 
+    def declared(p: Path) -> list:
+        with gzip.open(p / "proxy.json.gz", "rt") as fh:
+            return json.load(fh).get("syncs") or []
+
     return {"wire_is_honests": wire(run) == wire(honest), "committed_is_honests": committed(run) == committed(honest),
-            "windows_whose_wire_differs": [w for w, (a, b) in enumerate(zip(wire(run), wire(honest))) if a != b]}
+            "windows_whose_wire_differs": [w for w, (a, b) in enumerate(zip(wire(run), wire(honest))) if a != b],
+            "windows_whose_declared_differs": [w for w, (a, b) in enumerate(zip(declared(run), declared(honest)))
+                                               if a != b]}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1425,6 +1466,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--served-model", default="served", help="the live endpoint's model name")
     ap.add_argument("--syncs", type=parse_sync_policy,
                     help=f"the prover's syncs: {', '.join(SYNC_POLICIES)} (default: envelope live, else model)")
+    ap.add_argument("--prover-lag", type=int, default=1, metavar="BUCKETS",
+                    help="under an online rule: window w's sync is the rule's on the frames ready by w·T − BUCKETS, "
+                         "chosen off the proxy's tick, 1 … T − 1 (the envelope if not ready at w·T)")
     ap.add_argument("--stall", dest="stalls", action="append", default=[], metavar="BUCKET:MS",
                     type=lambda s: (int(s.split(":")[0]), float(s.split(":")[1]) / 1000),
                     help="test-only: stop the proxy for MS right after the first ingress tick at or after BUCKET that "
@@ -1437,11 +1481,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if strategies[0] != "honest" or any(s not in STRATEGIES for s in strategies):
         raise SystemExit(f"--strategies starts with honest and names some of {STRATEGIES}")
     live = bool(args.server_url or args.vllm)
-    if live and (any(s not in ("honest", "covert") for s in strategies) or args.clock != "real"):
-        raise SystemExit("a live server runs honest and covert, on the real clock")
+    if live and args.clock != "real":
+        raise SystemExit("a live server runs on the real clock")
     sync_policy = args.syncs or ("envelope" if live else "model")
     report = json.loads(args.calibration.read_text())
     setup = Setup(report)
+    if sync_policy not in ("model", "envelope") and not 0 < args.prover_lag < setup.egress_params.buckets:
+        raise SystemExit(f"--prover-lag is 1 … {setup.egress_params.buckets - 1} buckets under an online rule")
     lo, hi = (int(x) for x in args.config_windows.split(":"))
     traces = sorted(args.traces)
     if args.configs:
@@ -1529,14 +1575,15 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
             del doc
             if args.truncate:
                 cfg = truncate(cfg, args.truncate, setup.egress_params)
-            plan = plan_configuration(cfg, setup, args.served_model if live else None, sync_policy)
+            plan = plan_configuration(cfg, setup, args.served_model if live else None, sync_policy, args.prover_lag)
             span_s = plan["windows"] * setup.egress_params.buckets * setup.egress_params.bucket_ms / 1000 + STARTUP_S
             if (not args.reaudit and args.max_minutes
                     and time.monotonic() - started + span_s + 10 > 60 * args.max_minutes):
                 stopped = f"{name}: would end after --max-minutes"
                 print(stopped, flush=True)
                 break
-            mrows, mtally, _ = replay.replay_configuration(cfg, replay.Setup(report), plan.get("sync_rule", "hindsight"))
+            mrows, mtally, _ = replay.replay_configuration(cfg, replay.Setup(report), plan.get("sync_rule", "hindsight"),
+                                                           lag=plan.get("prover_lag", 0))
             del cfg
             for strategy in strategies:
                 run = runs / slug(name) / strategy
@@ -1580,6 +1627,8 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
             print(f"{res['config']} {res['strategy']}: accepted {acc} of {len(res['rows'])}; {res['comparisons']}; "
                   f"{res.get('against_honest', '')}", flush=True)
             results.append(res)
+        pool.close()  # the workers ignore SIGTERM, so the `with`'s terminate would wait on a fresh one forever
+        pool.join()
     honest = [r for r in results if r["strategy"] == "honest"]
     summary = summarize(honest, models) | {"calibration": str(args.calibration),
                                            "clock": sorted({p["clock"] for p in processes}),
@@ -1587,6 +1636,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
                                            "cpus": sorted({str(p.get("cpus")) for p in processes}),
                                            "selection": [[str(p), n] for p, n in picked],
                                            "server": "live" if live else "fake", "sync_policy": sync_policy,
+                                           "prover_lag": args.prover_lag,
                                            "stopped": stopped}
     summary["adversarial"] = {}
     for s in strategies[1:]:
@@ -1598,6 +1648,7 @@ def _main(args, report, setup, picked, runs, strategies, live, sync_policy, upst
             "wire_is_honests": [r["against_honest"]["wire_is_honests"] for r in mine],
             "committed_is_honests": [r["against_honest"]["committed_is_honests"] for r in mine],
             "windows_whose_wire_differs": [r["against_honest"]["windows_whose_wire_differs"] for r in mine],
+            "windows_whose_declared_differs": [r["against_honest"]["windows_whose_declared_differs"] for r in mine],
             "records_are_run_shapers": all(r["comparisons"]["records_are_run_shapers"] for r in mine),
             "ready_off_honest": sum(r["comparisons"]["ready_off_meant"] for r in mine),
             "tick_late_ms": [r["timing"]["tick_late_ms"] for r in mine]}

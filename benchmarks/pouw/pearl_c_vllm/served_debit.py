@@ -13,7 +13,9 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.chain_debit`, rev1's
-  `laterZeroPromos`), whose adds the debit already holds.
+  `laterZeroPromos`), whose adds the debit already holds.  Under a format with the row cap (-h3) the rule also caps each
+  credited A row (`pearl_c_work.row_cap`), and ``row_ratio_max`` is the largest row's debit over its cap (the tile rule
+  checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
 
@@ -75,14 +77,14 @@ sys.path.insert(0, str(HERE.parent))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
-from verity.primitives.commitments import Commitment  # noqa: E402
-from verity.primitives.commitments import verify_opening  # noqa: E402
-from verity.primitives.randomness import derive  # noqa: E402
-from verity.protocols.accounting.work.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
-                               rows_domain, weight_binding)
-from verity.protocols.accounting.work.pouw.coins import CoinCommitment  # noqa: E402
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity.ml.commitments import Commitment  # noqa: E402
+from verity.ml.commitments import verify_opening  # noqa: E402
+from verity.ml.randomness import derive  # noqa: E402
+from verity.experimental.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
+                               opened_value, rows_domain, weight_binding)
+from verity.experimental.protocols.pouw.coins import CoinCommitment  # noqa: E402
+from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
+from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
@@ -108,7 +110,7 @@ _DEBIT_CAP = PW._debit_cap
 
 def _recorded(*args, **kwargs):
     out = _DEBIT_CAP(*args, **kwargs)
-    _SEEN.append(out)
+    _SEEN.append((out, len(_CHAINS)))
     return out
 
 
@@ -266,8 +268,8 @@ def _measure(item) -> dict:
     out = {"tile": tid, "matmul": ref.matmul, "m": s.m, "k": s.k, "n": s.n, "row0": ref.tile.rows[0], "rows": len(ref.tile.rows),
            "col0": ref.tile.cols[0], "cols": len(ref.tile.cols), "manifest_sha256": j["sha256"],
            "replay": "scalar" if j.get("undo") is None or _IMPL["chain_debit"] is _CHAIN_DEBIT else "batch"}
-    opened = j["prover"].open(epoch, tid)
-    a, b = [o.value for o in opened.a], [o.value for o in opened.b]
+    opened, h = j["prover"].open(epoch, tid), commitment_hash(scheme)
+    a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
     if fresh is not None:
         _, draw, salt = fresh
         out.update(draw=draw, salt=salt.hex(), openings_ok=_openings_ok(j, opened))
@@ -295,9 +297,13 @@ def _measure(item) -> dict:
     rows, cols = rec.credited(ref.tile)
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
-        out.update(tile_numbers(scheme, *(_SEEN[-1] if _SEEN else _DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols))))
-        if _CHAINS:
-            out["atoms"], out["later_zero_promotions"] = _CHAINS[-1]
+        # the tile rule's first (debit, cap) is the tile's; under the row cap (-h3) one per credited A row follows it
+        tile, chains = _SEEN[0] if _SEEN else (_DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
+        out.update(tile_numbers(scheme, *tile))
+        if chains:
+            out["atoms"], out["later_zero_promotions"] = _CHAINS[chains - 1]
+        if len(_SEEN) > 1:
+            out["row_ratio_max"] = max(float(d / c) for (d, c), _ in _SEEN[1:])
     out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
 
@@ -595,7 +601,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                            "points of its own)", "inputs": rows}
     if fresh:
         doc |= fresh | {"independence": "each trial is a work-weighted draw of the input's tiles under a salt of its own, both "
-                                        "derived from fresh_source after the pass (verity.primitives.randomness.derive, " + FRESH + "): "
+                                        "derived from fresh_source after the pass (verity.ml.randomness.derive, " + FRESH + "): "
                                         "independent Bernoulli trials of the input's rate, the activations fixed"}
     path = out_dir / "inputs.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")

@@ -12,7 +12,9 @@
 - **The draws' source** is `os.urandom(32)`, the verifier's own, drawn here after the transcript is fixed: a
   `pearl_c_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
-  B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.
+  B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
+  (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
+  ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
 - **The tiles** are `pearl_c_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
@@ -36,11 +38,21 @@ import multiprocessing
 from pathlib import Path
 
 import numpy as np
-from verity.primitives.commitments import Commitment, Opening
-from verity.protocols.accounting.work.pouw.audit import Epoch, TileOpening, Transcript, Verifier
-from verity.protocols.accounting.work.pouw.coins import CoinCommitment
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as PW
+from verity.ml.commitments import Commitment, Opening
+from verity.experimental.protocols.pouw.audit import (
+    HM96,
+    HM96_TRANSCRIPT,
+    HM96_WEIGHTS,
+    Epoch,
+    TileOpening,
+    Transcript,
+    Verifier,
+    hm96_salt,
+    opened_value,
+)
+from verity.experimental.protocols.pouw.coins import CoinCommitment
+from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -53,13 +65,13 @@ def pow2(n: int) -> int:
     return 1 << max(n - 1, 0).bit_length()
 
 
-def opening(tree: bytes, count: int, pos: int, value: bytes) -> Opening:
+def opening(tree: bytes, count: int, pos: int, value: bytes, nb: int = 32) -> Opening:
     """Position `pos`'s path in a tree laid out as the device writes it: level 0 padded to a power of two, then each level
-    above it, 32 bytes a node."""
+    above it, `nb` bytes a node (64 under hm96-sha512)."""
     path, off, width, cur = [], 0, pow2(count), pos
     while width > 1:
         s = off + (cur ^ 1)
-        path.append(bytes(tree[32 * s:32 * s + 32]))
+        path.append(bytes(tree[nb * s:nb * s + nb]))
         off, width, cur = off + width, width // 2, cur >> 1
     return Opening(pos, value, tuple(path))
 
@@ -90,22 +102,31 @@ def f32_row(data, k: int, i: int) -> bytes:
 
 
 class Opened:
-    """The prover's side of the audit from the pass's files: `open`, as `verity.protocols.accounting.work.pouw.audit.Prover` has it."""
+    """The prover's side of the audit from the pass's files: `open`, as `verity.experimental.protocols.pouw.audit.Prover` has it."""
 
     def __init__(self, man: dict, files: Files, refs):
         self.man, self.files, self.refs = man, files, refs
+        hash = PD.scheme_of(man["scheme"]).commitment_hash
+        self.key = bytes.fromhex(man["hm96_salt_key"]) if hash == HM96 else None
+        self.nb = 64 if hash == HM96 else 32
+
+    def _salted(self, value: bytes, nonce: int, i: int) -> bytes:
+        return value if self.key is None else value + hm96_salt(self.key, nonce, i)
 
     def open(self, epoch: Epoch, tile_id: int) -> TileOpening:
-        ref = self.refs[tile_id]
+        ref, nb, sv = self.refs[tile_id], self.nb, self._salted
         u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
         wt = self.man["weights"][str(u.weight)]
         a_rows, a_tree = self.files(rec["rows"]), self.files(rec["tree"])
         b_rows, b_tree = self.files(wt["rows"]), self.files(wt["tree"])
         c = self.man["commitment"]
         leaves = self.files(self.man["leaves"])
-        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, f32_row(a_rows, u.shape.k, i)) for i in ref.tile.rows),
-                           tuple(opening(b_tree, u.shape.n, j, f32_row(b_rows, u.shape.k, j)) for j in ref.tile.cols),
-                           opening(self.files(self.man["tree_t"]), c["count"], tile_id, bytes(leaves[32 * tile_id:32 * tile_id + 32])))
+        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), u.index, i), nb)
+                                      for i in ref.tile.rows),
+                           tuple(opening(b_tree, u.shape.n, j, sv(f32_row(b_rows, u.shape.k, j), HM96_WEIGHTS + u.weight, j), nb)
+                                 for j in ref.tile.cols),
+                           opening(self.files(self.man["tree_t"]), c["count"], tile_id,
+                                   sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), HM96_TRANSCRIPT, tile_id), nb))
 
 
 _JOB: dict = {}
@@ -139,7 +160,8 @@ def _check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
         return tid, False, v.reason
     u = epoch.workload.matmuls[pos]
     ctx = Context(epoch.salt, u, transcript.activation_roots[pos], epoch.weight_roots[u.weight])
-    a, b = [o.value for o in opened.a], [o.value for o in opened.b]
+    h = scheme.commitment_hash
+    a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
     reason = PW.check_opened(scheme, records[pos], ref.tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile))
     return tid, reason is None, reason
 

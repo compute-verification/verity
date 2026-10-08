@@ -15,16 +15,16 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.work.pouw import window as Wd
-from verity.protocols.accounting.work.pouw.audit import Epoch, Workload, weights_root
-from verity.protocols.accounting.work.pouw.circuit import leaves as L
-from verity.protocols.accounting.work.pouw.coins import Challenger as Coins
-from verity.protocols.accounting.work.pouw.coins import CoinOpening, coin_reason
-from verity.protocols.accounting.work.pouw.protocol import Context, Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import DEVICES
-from verity.protocols.verification.sampled_proofs import service as S
-from verity.protocols.verification.sampled_proofs.one_stage import registration as R
+from verity.experimental.protocols.pouw import window as Wd
+from verity.experimental.protocols.pouw.audit import Epoch, Workload, weights_root
+from verity.experimental.protocols.pouw.circuit import leaves as L
+from verity.experimental.protocols.pouw.coins import Challenger as Coins
+from verity.experimental.protocols.pouw.coins import CoinOpening, coin_reason
+from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.experimental.protocols.pouw.schemes import pearl_c as C
+from verity.experimental.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.experimental.protocols.sampled_proofs import service as S
+from verity.experimental.protocols.sampled_proofs.one_stage import registration as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
@@ -74,13 +74,13 @@ PASSES: dict[str, tuple[Coins, bytes, dict]] = {}
 
 @pytest.fixture(scope="module")
 def served():
-    scheme = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h2")
+    scheme = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
     tag = lambda s: hashlib.sha256(s).digest()  # noqa: E731
     ctx = Context(tag(b"salt"), Matmul(5, Shape(16, K, N), 2), tag(b"root_a"), tag(b"root_b"))
     noise = scheme.noise(ctx)
     a = _rows(1, M) + [bytes(4 * K)]                 # a zero row, which forming refuses
-    words = {"a": SC.form(scheme, noise, K, "a", a, list(range(M + 1))),
-             "b": SC.form(scheme, noise, K, "b", _rows(2, N), list(range(N)))}
+    words = {"a": SC.form(scheme, ctx, noise, K, "a", a, list(range(M + 1))),
+             "b": SC.form(scheme, ctx, noise, K, "b", _rows(2, N), list(range(N)))}
     return scheme, ctx, noise, words
 
 
@@ -131,7 +131,7 @@ def test_rows_are_the_schemes_operands(served):
     none of the call's kept rows."""
     scheme, ctx, noise, words = served
     assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
-    from verity.protocols.accounting.work.pouw.protocol import Tile
+    from verity.experimental.protocols.pouw.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
     assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
     assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])

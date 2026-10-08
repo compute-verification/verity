@@ -26,19 +26,18 @@ members = [
     "cluster",
     "research",
     "verity",
-    "verity-catalog",
     "verity-check",
     "verity-circuit-check",
+    "verity-cli",
     "verity-commitments-benchmarks",
     "verity-direct",
-    "verity-experimental",
     "verity-flock",
     "verity-gkr",
-    "verity-kernels",
     "verity-lean-audit",
     "verity-native-peak",
     "verity-network-traces",
     "verity-numerical",
+    "verity-ops",
     "verity-pouw-benchmarks",
     "verity-sp1",
     "verity-tc-probe",
@@ -118,7 +117,7 @@ wheels = [
 [[package]]
 name = "cluster"
 version = "0.1.0"
-source = { editable = "tools/cluster" }
+source = { editable = "infra/cluster" }
 
 [[package]]
 name = "colorama"
@@ -1426,12 +1425,12 @@ dev = [
     { name = "pytest-xdist" },
     { name = "pyyaml" },
     { name = "research" },
-    { name = "verity-catalog" },
+    { name = "verity" },
     { name = "verity-circuit-check" },
-    { name = "verity-experimental" },
+    { name = "verity-cli" },
     { name = "verity-flock" },
-    { name = "verity-kernels" },
     { name = "verity-numerical" },
+    { name = "verity-ops" },
     { name = "verity-sp1" },
     { name = "verity-vllm" },
 ]
@@ -1445,7 +1444,7 @@ provides-extras = ["torch-cpu"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "cluster", editable = "tools/cluster" },
+    { name = "cluster", editable = "infra/cluster" },
     { name = "editables", specifier = ">=0.5" },
     { name = "jsonschema", specifier = ">=4.26" },
     { name = "numpy" },
@@ -1453,35 +1452,20 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "research", editable = "tools/research" },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-circuit-check", editable = "tools/circuit_check" },
-    { name = "verity-experimental", editable = "experimental" },
-    { name = "verity-flock", editable = "backends/flock" },
-    { name = "verity-kernels", editable = "kernels" },
+    { name = "verity", editable = "." },
+    { name = "verity-circuit-check", editable = "tools/verity/circuit_check" },
+    { name = "verity-cli", editable = "tools/verity/cli" },
+    { name = "verity-flock", editable = "verity/ml/flock" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
+    { name = "verity-ops", editable = "infra/ops" },
     { name = "verity-sp1", editable = "archive/sp1" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
-name = "verity-catalog"
-version = "0.0.0"
-source = { editable = "catalog" }
-dependencies = [
-    { name = "numpy" },
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "verity", editable = "." },
-]
-
-[[package]]
 name = "verity-check"
 version = "0.0.0"
-source = { virtual = "tools/check" }
+source = { virtual = "tools/verity/check" }
 dependencies = [
     { name = "research" },
 ]
@@ -1492,14 +1476,11 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-circuit-check"
 version = "0.1.0"
-source = { editable = "tools/circuit_check" }
+source = { editable = "tools/verity/circuit_check" }
 dependencies = [
     { name = "numpy" },
     { name = "verity" },
-    { name = "verity-catalog" },
-    { name = "verity-experimental" },
     { name = "verity-flock" },
-    { name = "verity-kernels" },
     { name = "verity-numerical" },
     { name = "verity-vllm" },
 ]
@@ -1508,13 +1489,15 @@ dependencies = [
 requires-dist = [
     { name = "numpy" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-experimental", editable = "experimental" },
-    { name = "verity-flock", editable = "backends/flock" },
-    { name = "verity-kernels", editable = "kernels" },
+    { name = "verity-flock", editable = "verity/ml/flock" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-cli"
+version = "0.0.0"
+source = { editable = "tools/verity/cli" }
 
 [[package]]
 name = "verity-commitments-benchmarks"
@@ -1548,9 +1531,6 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-catalog" },
-    { name = "verity-experimental" },
-    { name = "verity-kernels" },
     { name = "verity-numerical" },
 ]
 
@@ -1566,35 +1546,18 @@ requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-experimental", editable = "experimental" },
-    { name = "verity-kernels", editable = "kernels" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 provides-extras = ["torch"]
 
 [[package]]
-name = "verity-experimental"
-version = "0.0.0"
-source = { editable = "experimental" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "." }]
-
-[[package]]
 name = "verity-flock"
 version = "0.1.0"
-source = { editable = "backends/flock" }
+source = { editable = "verity/ml/flock" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
     { name = "verity" },
-    { name = "verity-catalog" },
-    { name = "verity-experimental" },
-    { name = "verity-kernels" },
     { name = "verity-numerical" },
     { name = "verity-vllm" },
 ]
@@ -1604,9 +1567,6 @@ requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-experimental", editable = "experimental" },
-    { name = "verity-kernels", editable = "kernels" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
@@ -1620,7 +1580,6 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-catalog" },
     { name = "verity-numerical" },
 ]
 
@@ -1636,32 +1595,14 @@ requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 provides-extras = ["torch"]
 
 [[package]]
-name = "verity-kernels"
-version = "0.0.0"
-source = { editable = "kernels" }
-dependencies = [
-    { name = "numpy" },
-    { name = "verity" },
-    { name = "verity-catalog" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-]
-
-[[package]]
 name = "verity-lean-audit"
 version = "0.0.0"
-source = { virtual = "tools/lean" }
+source = { virtual = "tools/verity/lean" }
 dependencies = [
     { name = "research" },
 ]
@@ -1672,7 +1613,7 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-native-peak"
 version = "0.0.0"
-source = { virtual = "tools/native_peak" }
+source = { virtual = "benchmarks/native_peak" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -1710,8 +1651,6 @@ dependencies = [
     { name = "matplotlib" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-catalog" },
-    { name = "verity-kernels" },
     { name = "verity-vllm" },
     { name = "z3-solver" },
 ]
@@ -1721,11 +1660,20 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-kernels", editable = "kernels" },
     { name = "verity-vllm", editable = "integrations/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },
 ]
+
+[[package]]
+name = "verity-ops"
+version = "0.1.0"
+source = { editable = "infra/ops" }
+dependencies = [
+    { name = "research" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "research", editable = "tools/research" }]
 
 [[package]]
 name = "verity-pouw-benchmarks"
@@ -1736,8 +1684,6 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-catalog" },
-    { name = "verity-kernels" },
     { name = "verity-vllm" },
 ]
 
@@ -1747,8 +1693,6 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-kernels", editable = "kernels" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
@@ -1758,28 +1702,23 @@ version = "0.1.0"
 source = { editable = "archive/sp1" }
 dependencies = [
     { name = "verity" },
-    { name = "verity-catalog" },
-    { name = "verity-experimental" },
     { name = "verity-vllm" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-experimental", editable = "experimental" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
 [[package]]
 name = "verity-tc-probe"
 version = "0.0.0"
-source = { virtual = "tools/tc_probe" }
+source = { virtual = "benchmarks/tc_probe" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-catalog" },
     { name = "verity-numerical" },
 ]
 
@@ -1788,19 +1727,17 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 
 [[package]]
 name = "verity-tc-probe-fp4"
 version = "0.0.0"
-source = { virtual = "tools/tc_probe_fp4" }
+source = { virtual = "benchmarks/tc_probe_fp4" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-catalog" },
 ]
 
 [package.metadata]
@@ -1808,7 +1745,6 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
 ]
 
 [[package]]
@@ -1816,13 +1752,9 @@ name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "integrations/vllm" }
 dependencies = [
-    { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
-    { name = "verity-catalog" },
-    { name = "verity-experimental" },
-    { name = "verity-kernels" },
 ]
 
 [package.optional-dependencies]
@@ -1832,14 +1764,10 @@ torch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "blake3", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
-    { name = "verity-catalog", editable = "catalog" },
-    { name = "verity-experimental", editable = "experimental" },
-    { name = "verity-kernels", editable = "kernels" },
 ]
 provides-extras = ["torch"]
 

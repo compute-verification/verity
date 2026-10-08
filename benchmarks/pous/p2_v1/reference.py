@@ -1,10 +1,11 @@
 """P2 v1 on the CPU, as the frozen specification states it (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, v1,
 29 Sep 2026): the reference the harness's GPU kernels are gated against.
 
-A port of the P2 lane's `internal/efficient-crypto/p2-bounty-kit/p2_ref.py` onto core: `verity.primitives.randomness.frame` and
-`derive` are the spec's framing and derivation, and `verity.primitives.commitments.identity.canonical_json_bytes` its manifest
-encoding. Big integers are Python's (gmpy2's `powmod` when it is installed). It is pinned by `vectors.json` beside it, the
-kit's `p2-test-vectors/v1` (SHA-256 `781fec77…`, the file hash in the spec's §7).
+A port of the P2 lane's `internal/efficient-crypto/p2-bounty-kit/p2_ref.py`: `randomness_v1.frame` and `derive` beside it are
+the spec's framing and derivation (`verity.ml.randomness` v1, SHA-256, which core has since moved to SHA-512), and
+`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
+`powmod` when it is installed). It is pinned by `vectors.json` beside it, the kit's `p2-test-vectors/v1` (SHA-256
+`781fec77…`, the file hash in the spec's §7).
 
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
   and the store's shape (blocks per segment, segments).
@@ -20,8 +21,9 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.primitives.commitments.identity import canonical_json_bytes
-from verity.primitives.randomness import Key, derive, frame
+from verity.ml.commitments.identity import canonical_json_bytes
+
+from .randomness_v1 import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
@@ -36,7 +38,7 @@ DELTA_NS = 500_000
 MAX_RTT_ALLOWANCE_NS = 354_000
 """Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, Daniel's ruling of 4 Oct
 2026, so that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
-(`verity.protocols.accounting.space.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
+(`verity.experimental.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:
     import gmpy2

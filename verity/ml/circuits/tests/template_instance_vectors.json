@@ -1,0 +1,727 @@
+{
+ "about": "Pinned vectors of Q_template_instance v0 and Q_template_instances v0 (verity.primitives.circuits.partition_object), checked by verity/primitives/circuits/tests/test_template_instance.py; written by it with --write.  Programs are descriptor bytes; units are [unit, root node, member, first gate, end gate, inputs, outputs].",
+ "descriptors": {
+  "population": "{\"callees\":[\"TMul32_v1\",\"Input32_v1\",\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TemplateInstances_v0{N=3}]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":3},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,6]},\"type\":4},{\"refs\":{\"affine\":[\"n\",1,0,3]},\"type\":3}],\"axes\":[0,0],\"fn\":2,\"form\":\"batch\",\"n\":3,\"out\":4}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,6]},\"ret_type\":[\"Array\",3,[\"Array\",2,[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[TemplateInstances_v0{N=3}]_v1\"},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\":{\"bindings\":{\"C\":{\"f64\":\"0x1.8000000000000p+0\"},\"N\":2},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1}],\"axes\":[0,null],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]],[\"k\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,2]},\"ret_type\":[\"Array\",2,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"TScale_v1\"}},\"program_fn\":\"TemplateInstances_v0{N=3}\",\"root\":\"Root[TemplateInstances_v0{N=3}]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",32]],[\"Value\",32],[\"Array\",6,[\"Value\",32]],[\"Array\",3,[\"Value\",32]],[\"Array\",3,[\"Array\",2,[\"Value\",32]]]]}",
+  "mixed": "{\"callees\":[\"TMul32_v1\",\"TAdd32_v1\",\"Input32_v1\",\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\",\"TDot_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TMix_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":1,\"out\":3},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":6,\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,6]},\"type\":4},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":1}],\"axes\":[0,null],\"fn\":3,\"form\":\"batch\",\"n\":3,\"out\":4},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",3,0,2]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,2,4]},\"type\":5},{\"refs\":{\"affine\":[\"n\",3,2,4]},\"type\":5}],\"axes\":[0,0],\"fn\":4,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",4,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",3,0,2]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":1}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",4,0,6]},{\"affine\":[\"n\",5,0,1]},{\"affine\":[\"n\",6,0,2]},{\"affine\":[\"n\",7,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Array\",3,[\"Array\",2,[\"Value\",32]]],[\"Value\",32],[\"Array\",2,[\"Value\",32]],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[TMix_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TDot_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":1},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":1}],\"fn\":0,\"form\":\"primitive\",\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":1}],\"fn\":1,\"form\":\"primitive\",\"out\":1}],\"params\":[[\"a\",[\"Array\",2,[\"Value\",32]]],[\"b\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TDot_v1\"},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TScale_v1{N=2,C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"}}\":{\"bindings\":{\"C\":{\"f64\":\"0x1.8000000000000p+0\"},\"N\":2},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":1}],\"axes\":[0,null],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0}],\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]],[\"k\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",0,0,2]},\"ret_type\":[\"Array\",2,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"TScale_v1\"}},\"program_fn\":\"TMix_v0\",\"root\":\"Root[TMix_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",32]],[\"Value\",32],[\"Array\",6,[\"Value\",32]],[\"Array\",1,[\"Value\",32]],[\"Array\",3,[\"Array\",2,[\"Value\",32]]],[\"Array\",2,[\"Array\",2,[\"Value\",32]]]]}",
+  "scan": "{\"callees\":[\"TAdd32_v1\",\"Input32_v1\",\"TStep_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TScanProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":1,\"out\":2},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",0,0,3]},\"type\":1}],\"fn\":2,\"form\":\"scan\",\"n\":3,\"n_xs\":1,\"out\":3}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,4]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]]},\"form\":\"composite\",\"id\":\"Root[TScanProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TStep_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Value\",32]],[\"x\",[\"Value\",32]]],\"ret\":{\"strided\":[\"n\",0,0,1,0,0,2]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"TStep_v1\"}},\"program_fn\":\"TScanProg_v0\",\"root\":\"Root[TScanProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",3,[\"Value\",32]],[\"Array\",1,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",3,[\"Value\",32]]]]]}",
+  "primitive": "{\"callees\":[\"Input32_v1\",\"TAdd32_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TPrimProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":1},{\"refs\":{\"affine\":[\"n\",0,1,1]},\"type\":1}],\"fn\":1,\"form\":\"primitive\",\"out\":1}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TPrimProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TPrimProg_v0\",\"root\":\"Root[TPrimProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",32]],[\"Value\",32]]}",
+  "empty": "{\"callees\":[\"TMul32_v1\",\"TAdd32_v1\",\"TDot_v1\"],\"definitions\":{\"Root[TEmptyProg_v0]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"explicit\":[]},\"type\":1},{\"refs\":{\"explicit\":[]},\"type\":1}],\"axes\":[0,0],\"fn\":2,\"form\":\"batch\",\"n\":0,\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",0,0,0]},\"ret_type\":[\"Array\",0,[\"Value\",32]]},\"form\":\"composite\",\"id\":\"Root[TEmptyProg_v0]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TDot_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a\",[\"Array\",2,[\"Value\",32]]],[\"b\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TDot_v1\"},\"TMul32_v1\":{\"form\":\"primitive\",\"id\":\"TMul32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TEmptyProg_v0\",\"root\":\"Root[TEmptyProg_v0]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",0,[\"Array\",2,[\"Value\",32]]],[\"Array\",0,[\"Value\",32]]]}"
+ },
+ "template_ids": {
+  "TScale descriptor id": "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
+  "TScale readable id": "TScale_v1{N=2,C=1.5}",
+  "TDot": "TDot_v1"
+ },
+ "cases": [
+  [
+   "Q_template_instance over a population program",
+   "population",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}"
+    }
+   },
+   {
+    "object": {
+     "format": "verity/partition/v1",
+     "program": "543f0b5c4cdc441c066dbb56e1669c99107062b24bab8fcd569bd4e4b5075b603290eb33bed0baa286a1675aae48a2b89dcb9d4319ec783e59d7ce5f849a596e",
+     "query": {
+      "name": "Q_template_instance",
+      "version": 0,
+      "params": {
+       "template": "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}"
+      }
+     }
+    },
+    "digest": "b5cef403e523823d57e2ffc22a2f0c9470c420bbb1d63fd4af6f958a30c64dbe09ef988f8f455c5ef82c7c254bf899f387c128ddc228f686a7538e0bc7b375d5",
+    "population": 3,
+    "ranges": [
+     [
+      2,
+      "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
+      0,
+      3
+     ]
+    ],
+    "ranges_digest": "fdaf99592a31befbfc19e09c1fb5d37f5c2d0d1bda948ee60a73deb27904af098589d46a71bebc3ddafeb974d1727867a372bae4b15247620cd37520efe1eb95",
+    "committed": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14
+    ],
+    "verify": true,
+    "units": [
+     [
+      0,
+      2,
+      0,
+      9,
+      11,
+      [
+       0,
+       1,
+       6
+      ],
+      [
+       9,
+       10
+      ]
+     ],
+     [
+      1,
+      2,
+      1,
+      11,
+      13,
+      [
+       2,
+       3,
+       7
+      ],
+      [
+       11,
+       12
+      ]
+     ],
+     [
+      2,
+      2,
+      2,
+      13,
+      15,
+      [
+       4,
+       5,
+       8
+      ],
+      [
+       13,
+       14
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "Q_template_instances over two templates",
+   "mixed",
+   {
+    "name": "Q_template_instances",
+    "version": 0,
+    "params": {
+     "templates": [
+      "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
+      "TDot_v1"
+     ]
+    }
+   },
+   {
+    "object": {
+     "format": "verity/partition/v1",
+     "program": "3f9985e28b6a4b771aae8617c1ce6c8e00924bd2f860a95ee560956af9e68c22e818a0b4f726176cc37ec0de050002234d6a7fe9c14e9e2b1f198937182a9ed9",
+     "query": {
+      "name": "Q_template_instances",
+      "version": 0,
+      "params": {
+       "templates": [
+        "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
+        "TDot_v1"
+       ]
+      }
+     }
+    },
+    "digest": "1a87580047175d17d5ee0288ef8fd8b3012f8f0e5a9ddc92a545f3fd9bfbcba1ed2b25f68a7ca9ddf2edef6eaeae02ede4ec02ae050f364cb7e10bc55f821f74",
+    "population": 7,
+    "ranges": [
+     [
+      4,
+      "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
+      0,
+      3
+     ],
+     [
+      5,
+      "TDot_v1",
+      3,
+      1
+     ],
+     [
+      6,
+      "TDot_v1",
+      4,
+      2
+     ],
+     [
+      7,
+      "TDot_v1",
+      6,
+      1
+     ]
+    ],
+    "ranges_digest": "631c5f54f5bdc43d1cddf2a2b7847f28269edec3f79b9396fbf20a7bca0beddaafce3d1e132ab5c745de53e78ba5e04b6c0e8b1add28c3f1157072158ff2055a",
+    "committed": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23,
+     24,
+     27,
+     30,
+     33,
+     36
+    ],
+    "verify": true,
+    "units": [
+     [
+      0,
+      4,
+      0,
+      19,
+      21,
+      [
+       0,
+       1,
+       6
+      ],
+      [
+       19,
+       20
+      ]
+     ],
+     [
+      1,
+      4,
+      1,
+      21,
+      23,
+      [
+       2,
+       3,
+       6
+      ],
+      [
+       21,
+       22
+      ]
+     ],
+     [
+      2,
+      4,
+      2,
+      23,
+      25,
+      [
+       4,
+       5,
+       6
+      ],
+      [
+       23,
+       24
+      ]
+     ],
+     [
+      3,
+      5,
+      0,
+      25,
+      28,
+      [
+       7,
+       8,
+       13,
+       14
+      ],
+      [
+       27
+      ]
+     ],
+     [
+      4,
+      6,
+      0,
+      28,
+      31,
+      [
+       9,
+       10,
+       15,
+       16
+      ],
+      [
+       30
+      ]
+     ],
+     [
+      5,
+      6,
+      1,
+      31,
+      34,
+      [
+       11,
+       12,
+       17,
+       18
+      ],
+      [
+       33
+      ]
+     ],
+     [
+      6,
+      7,
+      0,
+      34,
+      37,
+      [
+       19,
+       20,
+       13,
+       14
+      ],
+      [
+       36
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "the list order is kept: the same units, another digest",
+   "mixed",
+   {
+    "name": "Q_template_instances",
+    "version": 0,
+    "params": {
+     "templates": [
+      "TDot_v1",
+      "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}"
+     ]
+    }
+   },
+   {
+    "object": {
+     "format": "verity/partition/v1",
+     "program": "3f9985e28b6a4b771aae8617c1ce6c8e00924bd2f860a95ee560956af9e68c22e818a0b4f726176cc37ec0de050002234d6a7fe9c14e9e2b1f198937182a9ed9",
+     "query": {
+      "name": "Q_template_instances",
+      "version": 0,
+      "params": {
+       "templates": [
+        "TDot_v1",
+        "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}"
+       ]
+      }
+     }
+    },
+    "digest": "a6e87e71af6b3b80c04a67a1438dc207751c725cfb0394417176ccd52ca88b45f8d248463774bde28183d920b71d937b159e8b621d2b20dc6e3b4be782ff49f4",
+    "population": 7,
+    "ranges": [
+     [
+      4,
+      "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
+      0,
+      3
+     ],
+     [
+      5,
+      "TDot_v1",
+      3,
+      1
+     ],
+     [
+      6,
+      "TDot_v1",
+      4,
+      2
+     ],
+     [
+      7,
+      "TDot_v1",
+      6,
+      1
+     ]
+    ],
+    "ranges_digest": "631c5f54f5bdc43d1cddf2a2b7847f28269edec3f79b9396fbf20a7bca0beddaafce3d1e132ab5c745de53e78ba5e04b6c0e8b1add28c3f1157072158ff2055a",
+    "committed": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23,
+     24,
+     27,
+     30,
+     33,
+     36
+    ],
+    "verify": true,
+    "units": [
+     [
+      0,
+      4,
+      0,
+      19,
+      21,
+      [
+       0,
+       1,
+       6
+      ],
+      [
+       19,
+       20
+      ]
+     ],
+     [
+      1,
+      4,
+      1,
+      21,
+      23,
+      [
+       2,
+       3,
+       6
+      ],
+      [
+       21,
+       22
+      ]
+     ],
+     [
+      2,
+      4,
+      2,
+      23,
+      25,
+      [
+       4,
+       5,
+       6
+      ],
+      [
+       23,
+       24
+      ]
+     ],
+     [
+      3,
+      5,
+      0,
+      25,
+      28,
+      [
+       7,
+       8,
+       13,
+       14
+      ],
+      [
+       27
+      ]
+     ],
+     [
+      4,
+      6,
+      0,
+      28,
+      31,
+      [
+       9,
+       10,
+       15,
+       16
+      ],
+      [
+       30
+      ]
+     ],
+     [
+      5,
+      6,
+      1,
+      31,
+      34,
+      [
+       11,
+       12,
+       17,
+       18
+      ],
+      [
+       33
+      ]
+     ],
+     [
+      6,
+      7,
+      0,
+      34,
+      37,
+      [
+       19,
+       20,
+       13,
+       14
+      ],
+      [
+       36
+      ]
+     ]
+    ]
+   }
+  ]
+ ],
+ "refused": [
+  [
+   "the readable id is not the descriptor id",
+   "population",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TScale_v1{N=2,C=1.5}"
+    }
+   },
+   "('query-inapplicable',) root node 2 is a batch of 'TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}': an instance is a call or batch of one of ['TScale_v1{N=2,C=1.5}']"
+  ],
+  [
+   "a node of another function",
+   "mixed",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}"
+    }
+   },
+   "('query-inapplicable',) root node 5 is a call of 'TDot_v1': an instance is a call or batch of one of ['TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}']"
+  ],
+  [
+   "a listed template without an instance",
+   "mixed",
+   {
+    "name": "Q_template_instances",
+    "version": 0,
+    "params": {
+     "templates": [
+      "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}",
+      "TDot_v1",
+      "TOther_v1"
+     ]
+    }
+   },
+   "('query-inapplicable',) the program has no instance of ['TOther_v1']"
+  ],
+  [
+   "a scan at the root",
+   "scan",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TStep_v1"
+    }
+   },
+   "('query-inapplicable',) root node 2 is a scan of 'TStep_v1': an instance is a call or batch of one of ['TStep_v1']"
+  ],
+  [
+   "a primitive at the root",
+   "primitive",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TAdd32_v1"
+    }
+   },
+   "('query-inapplicable',) root node 1 is a primitive of 'TAdd32_v1': an instance is a call or batch of one of ['TAdd32_v1']"
+  ],
+  [
+   "a batch of 0 members is no instance",
+   "empty",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TDot_v1"
+    }
+   },
+   "('query-inapplicable',) the program has no instance of ['TDot_v1']"
+  ]
+ ],
+ "order_refused": [
+  [
+   "query-inapplicable"
+  ],
+  [
+   {
+    "definition": "Root[TemplateInstances_v0{N=3}]_v1",
+    "node": 2,
+    "arg": 0,
+    "reference": [
+     "n",
+     2
+    ],
+    "why": "not topological"
+   }
+  ]
+ ],
+ "served_unsupported": [
+  "served-unsupported"
+ ],
+ "malformed": [
+  [
+   "a template that is not a string",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": 7
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "templates for Q_template_instance",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "templates": [
+      "TDot_v1"
+     ]
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "an empty list",
+   {
+    "name": "Q_template_instances",
+    "version": 0,
+    "params": {
+     "templates": []
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "a template listed twice",
+   {
+    "name": "Q_template_instances",
+    "version": 0,
+    "params": {
+     "templates": [
+      "TDot_v1",
+      "TDot_v1"
+     ]
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "a string for the list",
+   {
+    "name": "Q_template_instances",
+    "version": 0,
+    "params": {
+     "templates": "TDot_v1"
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "an extra parameter",
+   {
+    "name": "Q_template_instance",
+    "version": 0,
+    "params": {
+     "template": "TDot_v1",
+     "X": 16
+    }
+   },
+   [
+    "query-params"
+   ]
+  ],
+  [
+   "a version not registered",
+   {
+    "name": "Q_template_instance",
+    "version": 1,
+    "params": {
+     "template": "TDot_v1"
+    }
+   },
+   [
+    "query-unknown"
+   ]
+  ]
+ ]
+}

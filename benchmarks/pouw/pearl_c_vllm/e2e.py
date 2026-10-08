@@ -1,4 +1,4 @@
-"""PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h1`) commits every linear call of a vLLM model
+"""PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h3`) commits every linear call of a vLLM model
 on the device, timed against stock vLLM on the same card at the panel's two shapes, rep by rep.
 
   python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
@@ -30,7 +30,7 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
   a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule of 11:50Z).
-- **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
+- **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
 size only), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
@@ -43,12 +43,9 @@ check compares Pearl-C's graphed calls with its eager ones both under vLLM's eag
 
 ``--statement CUBIN`` (with ``--whole-step``; hm96_rows.cu built for sm_120a) adds the mode ``pearlc-zk``: ``pearlc`` with
 each decode forward replayed whole also committing its calls' A rows and its tile rows in the ZK statement's format,
-hm96-sha512 row leaves of frame-v3-sha512 trees, once after the forward (served_zk/statement.py), beside -h2's, which still
-seeds forming.  Its gate (`Statement.check`) holds the device's roots to Python's over the rows a whole replay staged, and
+hm96-sha512 row leaves of frame-v3-sha512 trees, once after the forward (served_zk/statement.py), beside the scheme's own
+-h3 trees.  Its gate (`Statement.check`) holds the device's roots to Python's over the rows a whole replay staged, and
 the no-write control's not; prefill's rows are not committed in it.
-
-``--rows-form s`` (-h2 only) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
-(`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
 
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
@@ -74,7 +71,7 @@ os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-SCHEME = "pearl-c-sm120-v1-h1"
+SCHEME = "pearl-c-sm120-v1-h3"
 MODES = ("bf16", "fp8", "pearlc-nohash", "pearlc")
 PEARLC = ("pearlc-nohash", "pearlc", "pearlc-zk")
 GROUP = {"fp8": "base", "fp8-graphs": "base-graphs", "bf16": "arm", "pearlc-nohash": "arm", "pearlc": "arm", "pearlc-zk": "arm"}
@@ -94,18 +91,18 @@ BLOCKS = 4
 #: the decode batch and its prompts' length are ``--batch`` and ``--prompt`` (`configure`); these are their defaults, the panel's
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 BATCH_DEFAULT, PROMPT_DEFAULT = BATCH, PROMPT
-#: the served y's bound against the float product (the scheme's tested bound, verity/protocols/accounting/work/pouw's sm120 useful-output test)
+#: the served y's bound against the float product (the scheme's tested bound, verity/experimental/protocols/pouw's sm120 useful-output test)
 ERR = 0.08
-#: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
-CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
+#: the negative control's omitted steps: every write of the commitment (A's row digests and row tree, the tile leaves)
+CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_leaf"})
 #: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
-CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_msg", "hash_leaf"})}
+CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
 #: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control
 SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
-QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h1", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h1"}
+QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's windows: BOS and 2,047 tokens each, non-overlapping; its batch budget, one window a step
@@ -180,7 +177,7 @@ def install(model, args, coins):
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The epoch's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
-    from verity.protocols.accounting.work.pouw.audit import weights_root
+    from verity.experimental.protocols.pouw.audit import weights_root
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.linear import vllm_site
     from verity_vllm.linear.api import Stack
@@ -193,13 +190,13 @@ def install(model, args, coins):
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    roots = PPD.weight_roots(kernel, weights, scheme)
+    salt_key = PPD.new_salt_key(scheme)
+    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     opening = coins.open("salt", weights_root(roots))
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              rows_form=getattr(args, "rows_form", "w"), whole_defer=getattr(args, "whole_defer", False),
-                              capacity=tiles, flag_rows=rows)
+                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key)
     if getattr(args, "statement", None):
         import importlib.util
         spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
@@ -378,7 +375,7 @@ def whole_retained_check(run, forward, side) -> bool:
 
 
 def schedule_check(run, weights: dict) -> dict:
-    """The run's schedule on the card: the same calls (m = 32 on the unfused 64 x 64 path, m = 128 on the fused one), each
+    """The run's schedule on the card: the same calls (m = 32 on the 64 x 64 path, m = 128 on the 128 x 128 one), each
     from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must commit the same A roots and
     tile roots.  The run's schedule is its own again after."""
     import torch
@@ -633,12 +630,12 @@ class Coins:
     record gets the one opening again, and after any other record a refusal, so nothing redraws."""
 
     def __init__(self, epoch: int):
-        from verity.protocols.accounting.work.pouw.coins import Challenger
+        from verity.experimental.protocols.pouw.coins import Challenger
         self.challenger, self.opened = Challenger(epoch), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
-        from verity.protocols.accounting.work.pouw.protocol import DomainError
+        from verity.experimental.protocols.pouw.protocol import DomainError
         if label in self.opened:
             if self.opened[label].after != after:
                 raise DomainError(f"epoch {self.commitment.epoch}'s {label!r} coin is already open, after another record")
@@ -651,12 +648,12 @@ class PipeCoins:
     """The engine's side: the epoch's commitment, and each coin asked of the controller's `Coins` over the pipe."""
 
     def __init__(self, conn, commitment: dict):
-        from verity.protocols.accounting.work.pouw.coins import CoinCommitment
+        from verity.experimental.protocols.pouw.coins import CoinCommitment
         self.conn, self.commitment = conn, CoinCommitment.from_json(commitment)
 
     def open(self, label: str, after: bytes):
-        from verity.protocols.accounting.work.pouw.coins import CoinOpening
-        from verity.protocols.accounting.work.pouw.protocol import DomainError
+        from verity.experimental.protocols.pouw.coins import CoinOpening
+        from verity.experimental.protocols.pouw.protocol import DomainError
         self.conn.send({"coin": label, "after": after.hex()})
         msg = self.conn.recv()
         if "refused" in msg:
@@ -689,7 +686,7 @@ class Worker:
 
     def recv(self, timeout: float = 1200) -> dict:
         """The engine's answer; a coin it asks for on the way is answered from the epoch's `Coins`."""
-        from verity.protocols.accounting.work.pouw.protocol import DomainError
+        from verity.experimental.protocols.pouw.protocol import DomainError
         while True:
             if not self.conn.poll(timeout):
                 raise RuntimeError(f"{self.group}: no answer in {timeout:.0f} s")
@@ -826,7 +823,7 @@ def smoke(args) -> None:
     ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name."""
     ctx, coins = mp.get_context("spawn"), epoch_coins(args, 0)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "coins": coins.commitment.to_json(), "scheme": getattr(args, "scheme", SCHEME),
-                 "schedule": getattr(args, "schedule", "serial"), "rows_form": getattr(args, "rows_form", "w"),
+                 "schedule": getattr(args, "schedule", "serial"),
                  "whole_step": getattr(args, "whole_step", False), "whole_defer": getattr(args, "whole_defer", False),
                  "statement": getattr(args, "statement", None), "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
 
@@ -920,7 +917,7 @@ def perplexity(args) -> int:
             return 99
         ran = True
         a = copy.copy(args)
-        a.scheme, a.batch_tokens, a.rows_form = scheme, PPL_BATCH, "w"
+        a.scheme, a.batch_tokens = scheme, PPL_BATCH
         w = Worker(ctx, a, group, Coins(epoch))
         try:
             res = {"gate": w.ready.get("gate"), "committer": w.ready.get("committer"), "modes": {}}
@@ -952,7 +949,7 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
-    from verity.protocols.accounting.work.pouw.serving import SCHEDULES
+    from verity.experimental.protocols.pouw.serving import SCHEDULES
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
@@ -982,8 +979,6 @@ def main() -> None:
     ap.add_argument("--statement", metavar="CUBIN",
                     help="(with --whole-step) hm96_rows.cu's cubin: adds pearlc-zk, each decode forward's rows committed in the "
                          "ZK statement's format too, once after the forward (served_zk/statement.py)")
-    ap.add_argument("--rows-form", choices=("w", "s"), default="w",
-                    help="A's rows form: s takes forming's statistics from -h2's row-leaf pass over A (-h2 schemes only)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
@@ -1000,8 +995,6 @@ def main() -> None:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
     if args.statement and not args.whole_step:
         ap.error("--statement commits the forwards vLLM replays whole: it needs --whole-step")
-    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing != "h2":
-        ap.error(f"--rows-form s is -h2's, and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
         smoke(args)
         return
@@ -1011,7 +1004,7 @@ def main() -> None:
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
                  "decode": {"batch": BATCH, "prompt": PROMPT, "steps": STEPS, "key": decode_key()},
-                 "rows_form": args.rows_form, "whole_step": args.whole_step, "whole_defer": args.whole_defer,
+                 "whole_step": args.whole_step, "whole_defer": args.whole_defer,
                  "statement": args.statement, "run": os.environ.get("RESEARCH_RUN_ID"),
                  "coins": coins.commitment.to_json(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}
