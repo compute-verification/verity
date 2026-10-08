@@ -35,7 +35,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake
       package `verity_difftest`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
-  (Lean below). `Properties/` starts empty.
+  (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit, commits its values while serving, and proves.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
