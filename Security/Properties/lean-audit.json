@@ -8,12 +8,18 @@
   "Properties.Proofs.NetworkCertifier"
  ],
  "proved_in": ["../Proofs"],
- "assumptions": ["Models.Core.Assumptions"],
+ "assumptions": {
+  "Verity.Assumptions.LmsEufCma": {
+   "owner": "@network-accounting"
+  },
+  "Verity.Assumptions.Sha512CollisionFreeOn": {
+   "owner": "@network-accounting"
+  }
+ },
  "meaning": [
   "Properties.Pouw",
   "PouwWindow.Grid",
   "PouwWindow.Draw",
-  "PouwWindow.Advice",
   "PouwWindow.Public",
   "Properties.Nci",
   "Definitions.Core",
@@ -46,8 +52,8 @@
   }
  },
  "reads_exempt": {
-  "CoreProtocol": "the core protocol interface (`Core.Answer`, `Core.Outcome`, `Core.canonicalJson`) is code with no spec of its own: the network check's properties are about the executable that `answer` runs",
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON"
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON",
+  "CoreProtocol": "the core protocol interface (`Core.Answer`, `Core.Outcome`, `Core.canonicalJson`) is code with no spec of its own: the network check's properties are about the executable that `answer` runs"
  },
  "guarantees": {
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
@@ -269,24 +275,6 @@
    "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
    "assumptions": [],
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
-  },
-  "Properties.Pouw.Window.tileAtCovers": {
-   "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.tileAtCovers : Properties.Pouw.Window.TileAtCovers"],
-   "assumptions": [],
-   "type_hash": "d4a229e53fcd57f65b339310daaa0030d32f8a815328381c673811bb3acf6540"
-  },
-  "Properties.Pouw.Window.windowAccepts": {
-   "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.windowAccepts : Properties.Pouw.Window.WindowAccepts"],
-   "assumptions": [],
-   "type_hash": "16bfb799d6d04bdf17bb1a4ffdf35b9bdd3b2f22db1abcc8a875ec6cb174607d"
-  },
-  "Properties.Pouw.Window.windowCreditsTheCalls": {
-   "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.windowCreditsTheCalls : Properties.Pouw.Window.WindowCreditsTheCalls"],
-   "assumptions": [],
-   "type_hash": "52fab289d105e851e1d4ccdee06d7c06029873beb28f59d7a8b84e754a4df0d0"
   }
  },
  "reads": {
@@ -412,7 +400,7 @@
    ]
   },
   "Flock.Bytes": {
-   "digest": "b8d3b691648eb0419acdf93d48901cd1dc8a49e356f1f129608e338ec8d1033d",
+   "digest": "9cfc659feb4888137dab094b4704667ddc5d12d8eacc8ac87f4c54c2e7f3df02",
    "definitions": {
     "Flock.Reader": "142f35b54fe69b55679f16638948d896389ff3941c3138e9919737ee271632b6",
     "Flock.Reader.M": "886955667f2c71471a290310539e053a122285f1ba3d9be4bdad51afb1c83376",
@@ -447,7 +435,7 @@
    ]
   },
   "Flock.Canon": {
-   "digest": "6f5ba24a5aa7ebfbc29dada9fa55c376b3ae6a5dd166d93a9ccbc8e42f0d6283",
+   "digest": "cbdc90b26c9c38b69b6535f142edb4e9cb11e575372582a2cb2d10af8027c6f5",
    "definitions": {
     "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
     "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
@@ -1013,9 +1001,9 @@
    ]
   },
   "PouwWindow.Grid": {
-   "digest": "15d67a31a0268ef8eb7dc60f819860294a418d5dc8a910926f85749282376aa4",
+   "digest": "a142699529191329dc23cb7390b823d3dfbb505ba639f0e9ed8159ea5a4122c6",
    "definitions": {
-    "PouwWindow.Work": "450eb2338e94ea3dfda07ccdded7413c2e722cedd2f5dc584911e5d37d896f5a",
+    "PouwWindow.Work": "014faba291a8d0f91a9aadca67182f9fa692286852a3c25dd0efc27b2a0c2296",
     "PouwWindow.Work.at": "264642daa24c4fedf5a153258f9f6dce395364d0e19d3edb28e627dbaccbd73f",
     "PouwWindow.Work.at?": "ac884cb4651a8aac32f5ae2e41a96369bb28f36d144730f655d4e04b9db2c9ed",
     "PouwWindow.Work.credited": "b63ea61a5704f50cc6982817fa8823ed80cc19153b72c89e067271cbd9638a31",
@@ -1057,10 +1045,7 @@
     "Properties.Pouw.Window.levelsServed",
     "Properties.Pouw.Window.onGridMeans",
     "Properties.Pouw.Window.padLeast",
-    "Properties.Pouw.Window.pointEnumerates",
-    "Properties.Pouw.Window.tileAtCovers",
-    "Properties.Pouw.Window.windowAccepts",
-    "Properties.Pouw.Window.windowCreditsTheCalls"
+    "Properties.Pouw.Window.pointEnumerates"
    ]
   },
   "PouwWindow.Public": {
@@ -1181,7 +1166,7 @@
    ]
   },
   "Properties.Pouw": {
-   "digest": "9b87d55ab7b9b16975d21280dcd0d6ec786e90d6fdbf34dcf216da4d0adabef8",
+   "digest": "78400b67637ffb4a7bd2362e8b5508328f3b4de9979bedb3fa2959ea22791d78",
    "definitions": {
     "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
     "Properties.Pouw.Window.BucketCost": "322d0e98c3877937089f11c6a8ea1133785e984ca67b7a1e2a1ca1bc2cd24c0d",
@@ -1226,10 +1211,7 @@
     "Properties.Pouw.Window.onGridMeans",
     "Properties.Pouw.Window.padLeast",
     "Properties.Pouw.Window.pointEnumerates",
-    "Properties.Pouw.Window.publicItems_eq",
-    "Properties.Pouw.Window.tileAtCovers",
-    "Properties.Pouw.Window.windowAccepts",
-    "Properties.Pouw.Window.windowCreditsTheCalls"
+    "Properties.Pouw.Window.publicItems_eq"
    ]
   }
  },

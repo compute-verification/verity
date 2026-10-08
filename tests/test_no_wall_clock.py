@@ -143,7 +143,6 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
         if os.path.basename(p) == "pyproject.toml":
             data = tomllib.loads((ROOT / p).read_text())
             if "pytest" in data.get("tool", {}):
-                # a suite is named by its distribution, or by its path when it has none (`suites.py`)
                 name = re.sub(r"[-_.]+", "-", data["project"]["name"]).lower() if "project" in data else os.path.dirname(p)
                 names[name] = (os.path.dirname(p), data)
     after = [names[s][0] + "/" for s in check.AFTER_LEAN]

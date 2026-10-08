@@ -122,6 +122,173 @@ W           {"matmuls": [{"index": "i", "m": m, "k": k, "n": n, "weight": "w"}, 
 - **Vectors:** `tests/vectors/identifier_v1.json` (`tests/identifier_vectors.py`) holds one case or more per named scheme:
   its inputs, W, both canonical byte strings as hex, and their SHA-512. A 64-bit case pins the decimal strings past 2^53.
 
+## The served audit window (`window`)
+
+A served window is audited by drawing tiles of one fixed template from the window's committed calls (the grid, the work
+level and K′ are in `window`'s docstring). This section is the window's layout for gates: what its commitment holds, so
+that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
+window this way.
+
+**The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
+registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
+`hm96-sha512/row/v2` row at index e: the leaf is hm96-sha512's tree leaf of `commit_string(key, x, salt_e)`, where x is
+the entry row's `sha512/row/v2` digest over its 2,688 bits, salt_e is 192 fresh bytes and key is the pinned default
+(`Entry`, `entry_bc`, `entry_leaf`).
+
+**An entry row** is 336 bytes (168 u16 words, 21 128-bit words). Each integer is a u64, little-endian, and each digest
+starts on a 128-bit word. The call's place in its pass (tile0, cols, m) follows root_h3, so the fields before it keep their
+offsets and only the record moves, and the -h3 root and what a unit computes from it sit together:
+
+~~~text
+bytes     0..8    kind      0 none, 1 call, 2 filler
+          8..16   lo        the range's first tile index, < 2^40
+         16..24   hi        one past its last, < 2^40
+         24..32   n_a       A's rows: 1..2^D_A for a call or the filler, 0 for none
+         32..40   n_b       B's rows: 1..2^D_B, 0 for none
+         40..48   zero      so the digests start on a 128-bit word
+         48..112  root_a    A's side root (64 bytes)
+        112..176  root_b    B's side root
+        176..240  root_h3   a call's pass's -h3 tile-tree root; zero for the filler and for none
+        240..248  tile0     the call's first tile in its pass; zero for the filler and for none
+        248..256  cols      the call's tile columns ⌈n/64⌉: 1..2^(D_B − 6), 64·cols >= n_b; zero for the filler and none
+        256..264  m         the call's rows: a multiple of 16 in n_a..2^D_A, tile0 + ⌈m/64⌉·cols <= 2^40; zero likewise
+        264..272  zero      so the record starts on a 128-bit word
+        272..336  record    a call's record: SHA-512 of its RFC 8785 canonical JSON; zero for the filler and for none
+~~~
+
+An empty entry is the zero row. A call's record is the committer's own description of the call: its `shape` [m, k, n],
+its `tile0`, and `keep`, for each side the places in the call of the rows the side tree holds, strictly increasing. The
+entry binds the record only by its SHA-512, so no tile reads it; tile0, cols and m are the record's, in the row, so a tile
+reads them.
+
+**A side tree** is dense: it holds only the rows its call keeps (a row the scheme refused is no tile's), in order. So the
+call's n_a·n_b tiles are the products of A's rows and B's, row-major, and index u of the range [lo, hi) is A row
+u div n_b and B row u mod n_b (`tile_in`). The filler's sides are zero rows (index field included): n_b = min(2^D_B, max(⌈√fill⌉, ⌈fill/2^D_A⌉))
+and n_a = ⌈fill/n_b⌉. Its range covers N − N_real ≤ n_a·n_b tiles. Every side tree has 2^D leaves, with D_A = 13 (the
+served batch is at most 8,192 tokens) and D_B = 17. Leaf i < n is row i's frame-v3 leaf under the row's own schema. Every
+leaf from n on is frame-v3's pad leaf of the side domain at its rank: frame-v3 pads any tree to a power of two this way,
+so a side root is `tree_levels` over the n row leaves followed by 2^D − n pad leaves (`side_levels`, `side_path`).
+
+**A side row** is the call's operand row, then its place in the call (`side_row`): I for an A row (< 2^13), J for a B row
+(< 2^17), a u32 in one 128-bit word. The operand words keep their offsets, and the row's schema is its role's, as before:
+
+~~~text
+words     0..k/2          the k E4M3 codes, two a word, low first
+          k/2..k/2+64     P's 64 BF16 words
+          k/2+64..+66     the index I or J, a u32, low word first
+          k/2+66..+72     zero
+~~~
+
+That is k/2 + 72 words, 2,120 at k = 4,096 (33,920 bits). A's rows are `hm96-sha512/row-seg/v1` (role X), B's
+`hm96-sha512/row/v2` (role W).
+
+**The side domains** are one per window and side, with no entry index and no row count:
+
+~~~text
+side_domain(w, s) = frame-v3-sha512 domain, binding identity_digest_sha512("verity/pouw/window/side-domain/v1",
+                    {"window": hex(w), "side": s, "depth": D_s}), owner −1, positions [0, 2^D_s)
+~~~
+
+Here w is the window root's domain id, which is one-stage's served domain of the window's program, partition and
+context. So the side domains, like the window's, are a function of the context and ℓ alone.
+
+**The -h3 tile tree** is the pass's own tile commitment, the one its manifest publishes (`commitment`: root and count),
+not a tree the window's committer builds. Under `pearl-c-sm120-v1-h3` (SHA-512 since `b91ebf369`) it is one tree per
+pass, over every call's tiles:
+
+~~~text
+domain    hm96-sha512 (frame-v3-sha512, hm96-sha512 leaves over 64-byte digests), binding
+          `audit.transcript_binding(epoch)` (its salt and weights' root), owner −1, positions [0, count)
+          (`audit.transcript_domain`): one per pass, not per window or call
+depth     D_H3 = ⌈log2 count⌉, count the pass's tile count, which the domain id binds
+leaf p    the pass's tile p, in workload order then each call's 64 x 64 tiles row-major (`audit.tile_refs`); its value
+          x ‖ y, x the tile's -h3 leaf (`pearl_c.leaf(·, "h3")`: `sha512/row-seg/v1` over the tile's messages, per tile row
+          and 32-column chunk le32 C̃ ‖ le32 U, 256 bytes each) and y its 192-byte salt (the prover's ChaCha20 stream,
+          nonce 2^63, blocks 3p to 3p + 2); the frame leaf is frame-v3's at rank and position p, under
+          `hm96-sha512/row-seg/v1`, of hm96-sha512's tree leaf of commit_string(key, x, y)
+~~~
+
+So a window holds calls of one pass, each call's entry names that pass's root, and the window statement holds every
+call's root_h3 to the root the pass published.
+
+**The verdict asserts the served result.** A drawn tile's unit (TileRead, not yet a Program) reads three committed
+rows: its A row and its B row through its entry's side roots, and its pass's -h3 leaf through root_h3. It compares, in
+gates, the leaf's x with the -h3 leaf its own tile's words give, so the tile it proves is the tile the pass served. The
+read is not at position t. Window tile t is one word, (I, J) = (keep_a[i], keep_b[j]) of its call for
+(i, j) = `tile_in(entry, t)`. The unit reads I from its A row's index field and J from its B row's, and tile0, cols and m
+from its entry row, and the pass's leaf holding the word is (`tile_read`)
+
+~~~text
+p     tile0 + (I div 64)·cols + (J div 64)
+at    (I mod 64) | (J mod 64) << 6 | (rows/16 − 1) << 12
+rows  min(64, m − 64·(I div 64)), the tile's height: 64, or the call's short last tile row (16 | m)
+~~~
+
+with I < m and J < 64·cols. The pass's tiles are in workload order, then each call's 64 x 64 tiles row-major, so this
+is `audit.tile_refs`'s tile holding (I, J). Up to 4,096 window tiles read one leaf, and the leaf a unit computes is its
+word's 64 x 64 tile's (the output of `Pc8TileLeafH3`, not on main yet, from the word and the tile's other messages as
+advice), not `Pc8TileHidden`'s 1 x 1 digest; `served_zk/stage_tile.py` refuses a window of indexed side rows, which
+`Pc8TileHidden` does not read.
+
+The side rows' indices are bound to the record in the window's reference only: the window statement in gates reads the P
+entry rows, not the up to 2^13 + 2^17 side rows under each entry or the record's preimage. `window_problem`, given the
+records and the side rows' indices, holds each call's indices to its record's keep, strictly increasing, and its tile0,
+cols and m to its shape, so i -> I and j -> J are injective and no two window tiles read one word.
+
+**The window statement** (L4, `window_problem`) holds on the P entry rows and the pass's published tile root when all of
+the following hold:
+
+- each row is an entry row: 336 bytes, a known kind, and zero words at 40..48 and 264..272;
+- each entry satisfies the layout (`layout_problem`): its range is 40-bit, an empty entry is the zero row, a call's or
+  the filler's sides hold 1..2^D rows, the filler's root_h3, record, tile0, cols and m are zero, and a call's m, cols
+  and pass tiles are in the table's bounds;
+- the kinds are the calls (at least one), then one filler, then empty entries;
+- the calls' and the filler's ranges are nonempty and contiguous from 0;
+- a call's range is exactly its n_a·n_b tiles, and the filler's is at most its n_a·n_b;
+- every call's root_h3 is the pass's tile root;
+- the calls' pass tiles [tile0, tile0 + ⌈m/64⌉·cols) are in order and disjoint;
+- the ranges end at N, and the registered level is `bucket` of the calls' tiles N_real.
+
+**The tile instances' public inputs.** The K′ drawn tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each
+(`sessions`). Session σ's instance s takes the tile t = drawn[σ·cap + s] while σ·cap + s < K′, and otherwise t = N − 1,
+the window's last tile, which is always a filler tile (`instance_ts`). The verifier writes its own `--public-inputs` file
+F_σ (C-Flock's `verity/flock-public-inputs/v1`, read by Lean's `HmIn.checkOwn`) from the one-stage registration (its
+population N, its law subset:K′, and its window root and domain at port `entries`), its own draw, σ, the cap and the
+pass's tile domain (`public_inputs`). F_σ is a key-sorted JSON header line `{"format", "instances": cap, "ports"}`, then
+each instance's words, u16 little-endian, instance-major, in port order:
+
+~~~text
+port       words   seed           derivation                               value
+t          8       drawn          verity/pouw/window/t/v1                  t as a u128
+root       32      registration   verity/pouw/window/root/v1               the window root
+domain     32      registration   verity/pouw/window/domain/v1             its domain id w
+domain_a   32      registration   verity/pouw/window/side-domain-a/v1      side_domain(w, "a")'s id
+domain_b   32      registration   verity/pouw/window/side-domain-b/v1      side_domain(w, "b")'s id
+domain_h3  32      pass           verity/pouw/window/domain-h3/v1          the pass's tile domain id (its D_H3)
+~~~
+
+Each port is a whole number of 128-bit words, so no row leaf shares a word with a public input; an instance is 336
+bytes. The window statement is proved as its own direct statement per window, separate from the tiles' sessions.
+
+**Sizing.** Served windows register levels 87 to 143 (N from 9,216 to 1,179,648). A C-Flock session is at most
+m = k_log + max(3, ⌈log2 blocks⌉) ≤ 35, so a session of a unit of 2^k_log bits per instance holds at most 2^(35 − k_log)
+instances (`session_cap`). The drawn tile's unit in the served runs, `Pc8TileLeafH3{K=4096, sm120}`, is 3,492,322 ANDs
+at k_log 24; TileRead's three reads add to it.
+
+~~~text
+ε, δ               K′ over levels 87..143                  cap at k_log 24   S     cap at k_log 25   S
+0.1%, 2^-40        N up to level 100, at most 31,178        2,048             16    1,024             31
+1%, 2^-128         N at level 87, at most 9,937             2,048             5     1,024             10
+~~~
+
+The largest K′ is at level 143: 27,713 tiles unpadded, times g_(ℓ+1)/g_ℓ = 9/8 at levels whose point is 8·2^e.
+
+**Vectors:** `tests/vectors/window.json` (`tests/window_vectors.py`) pins a toy window of P = 4 entries over a toy window
+domain. Call 0 keeps A rows 0, 1 and 3 of four, so its refused row 2 is no leaf. Both calls name one toy pass's tile
+root. The vectors hold each entry's JSON, its row, digest, salt, b ‖ c and leaf; one side tree's leaves, its pad leaf, its
+root and a path; the window root; and F_σ, with a toy pass tile domain, for the draw (1, 4, 6) in sessions of 2, where
+the second session pads with N − 1 = 8.
+
 ## `ncp-v1`: noise-cancelling polarization under TTNCP_U(0.5%), route U at β = 128
 
 For int7 A and B (entries in [−64, 63], one two's-complement byte each):
@@ -578,13 +745,14 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     `Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192` and
     `Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384`, from TT_OUT at 1/1,000.
   - The per-unit γ doesn't need TT_OUT(1/1,000): the same γ for the cap-1/1,000 protocol follows from rev1 at 1/400 alone
-    (`Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400` and
-    `Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384_of_cap400`, from `TTOutPearlCDevRev1` at 1/400).
-  - At the issue-bound FP32 add (8.00), γ is pinned under its own names, not lifted into Pouw's `Guarantees`:
-    `Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192` and `Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_16384`,
-    with the sampled `Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1Cap1000_8192` and
-    `Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1Cap1000_16384`. The ledger publishes the larger of the two prices, the
-    in-loop add's.
+    (`Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400` and
+    `Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400`, from `TTOutPearlCDevRev1` at 1/400).
+  - At the issue-bound FP32 add (8.00), the pinned guarantees are
+    `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192` and
+    `Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384`, with the sampled
+    `Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192` and
+    `Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384`. The ledger publishes the larger of the two prices,
+    the in-loop add's.
   - The verifier's credit, cap and debit are rev1's, the rule these γ are proved for: `credit_of` is `creditDevRev1`,
     `wref` is `wrefDevRev1` (`wrefDevRev1K` at the cast's offset), and the tile rule is `tileDebitRev1` against
     ρ·`creditDevRev1`·`tileShare`. Python's γ, credit and tile cap equal the Lean's exactly on every pinned price twin
@@ -693,13 +861,15 @@ the certificate names no γ_0. The module's docstring states every step and roun
 rows      k BF16 words per row of either operand
 stats     s, ρ as pearl-c-h100-v1; σ = ρ/4; α = 2688/max(s + 4σ, 2^−32) (mxfp4: floored to a power of two);
           β_row = (σ·α)·f32(16/√2346.125), a_E = ue4m3(β_row)
-lines     32 uniform E2M1 codes: TurboSHAKE128(seed ‖ role ‖ index u32, D = 0x24), 16 bytes; seed labels pearl-c4/v0/seed-*
+seeds     seed_A = H_"seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE);  seed_B = H_"seed-B"(salt ‖ root_B);
+          H_ℓ = SHA-512 of pearl-c4/v1/ℓ ‖ \0 (zero-padded to one 128-byte block) ‖ x, its first 32 bytes (`labelled`)
+lines     32 uniform E2M1 codes: TurboSHAKE128(seed ‖ role ‖ index u32, D = 0x24), 16 bytes
 forming   D_t = NVF4.step(C = α·x_t, E ‖ 0 at a_E, F_t ‖ 0 at 2^−4); per scale block s_b from amax|D|/6 (nvfp4: UE4M3
           nearest even, at least 2^−9; mxfp4: UE8M0 rounded up); code = e2m1(D·(1/s_b))
 chain     C̃ = the scheme's atom chained from +0 over k/64 steps, no promotion
 peel      Ẽ = E·a_E·2^−4 (exact in BF16); P_A = [Ẽ_A ‖ bf16(A′·F_B)], P_B = [bf16(Ẽ_B·G − B̃·F_A) ‖ −Ẽ_B], G = F_Bᵀ·F_A;
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_M16N8K16 steps (sm_120 mma.sync) into C̃'s word
-leaf      pearl-c-h100's; tickets: Pearl's lottery over C̃
+leaf      pearl-c-h100's; tickets: Pearl's lottery over C̃, -h3's SHA-512 H_jackpot(seed_A ‖ fold) at every hashing
 useful    U/(α_A·α_B), glue
 ~~~
 
@@ -707,24 +877,26 @@ useful    U/(α_A·α_B), glue
   test), so rounding binds no word to its order. D₄ doesn't guarantee it (`Fp4Freeze.noLoss_gap`, an in-domain step
   that drops a bit), so no claim rests on exactness: the debit's terms are replayed per run. The design's defense
   against a salt-free precomputation is that every code and every block scale depends on the salt.
-- **B̃ is keyed by this job's salt (D-SK):** seed_B = H(salt ‖ root_B) (`seed_b`), and the verifier forms B̃ itself from
-  it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its checked
-  values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
-  (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
-  stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
+- **B̃ is keyed by this job's salt (D-SK):** seed_B = H_"seed-B"(salt ‖ root_B) (`seed_b`), and the verifier forms B̃
+  itself from it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its
+  checked values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is
+  two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on
+  crafted stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack applies here too.** `noise` keys every row's E_A by the
   unit's seed_A alone, so the prover knows each row's noise before it chooses the row and can fold every row onto one A′
   row, whose C̃ it computes once per weight row, while every row passes every rule
   (`art:afb6390197a14ef8fd8e969258b5dfea408bd26ef8cbd855981ee095524d2583`). The fix is Pearl-C's -h3 (above):
   - `PearlC4(hashing="h3")` (`pearl-c-nvfp4-v0-h3`, not registered) draws row i's E_A as line 0 (role E_A) of its own
-    seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, keyed BLAKE3 under
-    blake3("pearl-c4/v0/seed-A") of salt ‖ d_i ‖ root_B ‖ u·2^32 + i, over the row's SHA-512 digest d_i
-    (`pearl_c.row_digest`). The seed is still Pearl-C4's BLAKE3 seed-A derivation, as at h0.
+    seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, H_"seed-A"(salt ‖ d_i ‖ root_B ‖
+    u·2^32 + i u64 LE) over the row's SHA-512 digest d_i (`pearl_c.row_digest`), the same SHA-512 seed-A derivation as
+    the unit's.
   - seed_B and what it keys (E_B, F_A, F_B) are unchanged, and the tickets keep the unit's seed_A over root_A. A's and
-    B's trees are `audit.HM96`, the tile leaf and the tickets are Pearl-C's -h3 (SHA-512); the work law checks the row cap
-    as well as the tile cap.
-  - The `test-16-nvfp4-h3` vector pins a call end to end, its roots 64 bytes. -h0's names, vectors, certificate, circuit
-    (`circuit.pc4`) and kernels are unchanged, and no device path forms -h3 yet.
+    B's trees are `audit.HM96`, the tile leaf is Pearl-C's -h3 (SHA-512); the work law checks the row cap as well as the
+    tile cap.
+  - The `test-16-nvfp4-h3` vector pins a call end to end, its roots 64 bytes. -h0 keeps its names, circuit
+    (`circuit.pc4`) and kernels, and no device path forms -h3 yet.
+  - At every hashing the seeds are SHA-512 (`pearl-c4/v1`) and the tickets -h3's, so Pearl-C4 claims `cr/sha-512` and
+    reaches no BLAKE3. The device's seeds (`pearl_c4.cu`'s `commit_rows`) hash with `pearl_c/sha512.cuh`.
 - **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at

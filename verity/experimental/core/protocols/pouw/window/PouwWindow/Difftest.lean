@@ -4,7 +4,7 @@ import PouwWindow.Json
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
 
-One function per function of `window.py`, each on a JSON object of its arguments, for the shared harness
+One function per ported function of `window.py`, each on a JSON object of its arguments, for the shared harness
 (`verity/experimental/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
 suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
 
@@ -12,8 +12,6 @@ suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
   `lo`, `hi`);
 * `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
   `bits`); `work_to_json` (`work`, `tile_work`);
-* `window_problem` (`entries`, `work`, `bound`, `bits`): the reason, or null when the window statement holds, so the test
-  holds which check refused; `tile_at` (`entries`, `t`) and `tile_in` (`entry`, `t`);
 * `constants`: `PUBLIC`, `REGISTERED`, `KINDS` and `GRID_BITS`.
 -/
 
@@ -49,8 +47,6 @@ def arr (j : Json) (k : String) : Except String (Array Json) := do
 def ofN {α : Type} [ToJson α] (f : Nat → Int → Except String α) : _root_.Difftest.Fn := fun j => do
   pure (toJson (← f (← nat j "bits") (← int j "n")))
 
-def entries (j : Json) : Except String (List Raw) := do pure ((← arr j "entries").toList.map rawOf)
-
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("on_grid", fun j => do pure (toJson (onGridInt (← nat j "bits") (← int j "n")))),
   ("floor_point", ofN floorPoint?),
@@ -65,16 +61,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("sampling", fun j => do
     pure (← sampling (← rat j "eps") (← rat j "delta") (← work j) (← int j "tile_work") (← nat j "bits")).toJson),
   ("work_to_json", fun j => do pure ((← work j).itemJson (← int j "tile_work"))),
-  ("window_problem", fun j => do
-    let p := windowProblem (← entries j) (← work j) (← int j "bound") (← nat j "bits")
-    pure (match p with | some q => toJson q.text | none => Json.null)),
-  ("tile_at", fun j => do
-    let (e, i, k) ← tileAt? (← entries j) (← nat j "t")
-    pure (Json.arr #[toJson e, toJson i, toJson k])),
-  ("tile_in", fun j => do
-    let (i, k) ← tileIn? (rawOf (← get j "entry")) (← nat j "t")
-    pure (Json.arr #[toJson i, toJson k])),
   ("constants", fun _ => pure <| Json.mkObj [("PUBLIC", Json.arr (publicItems.map PublicItem.toJson).toArray),
-    ("REGISTERED", toJson registered), ("KINDS", toJson (kinds.map Kind.name)), ("GRID_BITS", toJson gridBits)])]
+    ("REGISTERED", toJson registered), ("KINDS", toJson kinds), ("GRID_BITS", toJson gridBits)])]
 
 end PouwWindow.Difftest

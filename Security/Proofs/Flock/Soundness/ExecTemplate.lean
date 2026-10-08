@@ -172,6 +172,7 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   have hnetOf : ∀ nm i, netOf nm = .ok i → i < nets2.size := by

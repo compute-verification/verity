@@ -32,8 +32,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       code is its `lean/`. NCI is Lean only.
     - `claims`: the ids of security claims.
     - `private_circuits`, and multiproofs (`commitments`).
-    - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake package
-      `verity_difftest`).
+    - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake
+      package `verity_difftest`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
@@ -155,16 +155,32 @@ multi-core CPU pod. It covers:
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
-Landing:
+Landing (Daniel, 7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check stays fast because a
+part's verdict is reused whenever its inputs haven't changed. Each verdict is keyed on a hash of the part's declared inputs
+(the read guard enforces them), the base image and the check's own code. So a docs-only change reruns nothing, a deleted
+test reruns its suite, and a layout move or a change to the check's own code reruns everything. The merge queue runs the
+check on the queued group. A nightly uncached check must agree; a disagreement means some part reads something it doesn't
+declare, and it is fixed in the check, not by reverting anyone's change.
 
-- `main` moves only through `research merge --push`. It refuses without a passing `check` of that exact commit, or when
-  `main` has moved past it, and then pushes and sweeps.
-- A plain `git push` would skip the spec DM, node 1's mirror and the post-train regression.
-- PRs land in trains: ci stacks the tips, and the lander runs `research merge --train A B C --on POD --project verity`
-  over one `check` of the merged tree.
+Until reuse and the merge queue exist:
+
+- The lander lands a change by hand once every part whose declared inputs it touches passes: its test suites
+  (`tools/verity/check/suites.py`, minutes on the CPU machines), circuit-check on the circuits it changes (cold workers
+  reach 128-157 GB each, so `--jobs 4` at most on vy-nebius-cpu-1 and 2 on vy-nebius-cpu-2, or run it on vy-nebius-1),
+  the Lean check of every Lake package whose pass misses (`tools/verity/lean/lean_audit.py --out DIR`, which includes each
+  package requiring a changed one by path; `--explain PKG` says why one misses), and `lean-agreement` when it touches
+  C-Flock or its Lean verifier (on its own: `lake build` in `verity/core/service/flock`, then
+  `verity/ml/flock/verifier/ci.py` against the upstream build `upstream.json` pins, under `research run`).
+- The landing is a merge commit with trailers naming those runs (`Checked:`) and the skipped full check
+  (`Skipped-check:`), pushed with `--no-verify`. Then `research merge --sweep` runs what a plain push skips: the spec DM,
+  node 1's mirror and the post-train regression.
+- A layout move and a change to the check or merge tooling (`tools/verity/check/`, `research merge` and its queue, the
+  Lean check) get a full `check` first and land through `research merge --push`.
+- After landings, a full `check` of the newest `main` runs on vy-nebius-1, one at a time. When it fails, the lander finds
+  the landing that broke it and reverts it at once (`git revert -m 1`), and its owner relands with the fix.
+- PRs land in trains: ci stacks the tips, and the lander lands the merged tree once every part its members touch passes.
 - A train member needs its owner's `ready` label at its head, written by hand if need be:
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, since the train's full `check` is the
-  gate.
+  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass.
 - A grant carries to a head whose own patch is byte-identical.
 - A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
   the tip; a push to the PR would refuse every tip that pins its old head.
@@ -198,7 +214,8 @@ Landing:
   (`tools/verity/lean/check.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
-  - an assumption is a named `Prop`, taken as a hypothesis;
+  - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
+    lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
 - **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
