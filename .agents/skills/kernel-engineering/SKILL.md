@@ -70,7 +70,7 @@ If it was tried and dropped, your hypothesis says what's different this time, or
 - **The scheme and its verifier:** `verity/experimental/protocols/pouw` (`verity.experimental.protocols.pouw`, stdlib only; its `PROTOCOL.md`).
 - **The kernel:** a directory under `benchmarks/pouw/`, like GPU 1's `pearl_c_sm120/` on #540: `run.py` (`Dev`,
   `Pipeline`), `fixture.py`, `build.sh`, its sources, and its harness arm against `arm.py`'s contract. Where serving
-  kernels finally live is Daniel's call; the loader keys on digests, so a later move is cheap.
+  kernels finally live is compute-accounting's call; the loader keys on digests, so a later move is cheap.
 - **The vLLM executor:** `integrations/vllm` (`verity_vllm/linear/impl/` once #567's migration reaches step 4).
 - **A new circuit** (a Definition, a subcircuit template) passes `circuit-check` (`AGENTS.md` "Circuits").
 
