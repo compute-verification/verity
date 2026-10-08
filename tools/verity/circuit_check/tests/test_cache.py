@@ -545,7 +545,7 @@ def test_a_sidecar_under_two_packages_roots_is_named_once_from_the_deeper(tmp_pa
     SC.discover.cache_clear()
     try:
         assert list(SC.discover()) == ["syninner.rec"]
-        assert SC.pin_files()[1:] == [(tmp_path / "synouter/src/syninner/rec.circuit-check.json").resolve()]
+        assert SC.pin_files()[len(SC._shared_files()):] == [(tmp_path / "synouter/src/syninner/rec.circuit-check.json").resolve()]
     finally:
         SC.discover.cache_clear()
 
