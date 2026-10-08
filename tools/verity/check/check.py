@@ -72,7 +72,8 @@ doesn't name:
     circuit-check   first flock-circuit-build, `verity/ml/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
-                    `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/verity/circuit_check`),
+                    `circuit-check --all --jobs` the other half, at most one per 128 GB of memory (`circuit_check_jobs`):
+                    every registered Definition and template (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
@@ -556,20 +557,43 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             ("lean-agreement", agreement, ROOT)]
 
 
-def memory_gb() -> int:
-    """The memory this process may use: the cgroup limit when there is one, v2 or v1 (a pod's /proc/meminfo is the host's),
-    else MemAvailable."""
-    for f in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):     # cgroup v2, then v1
+def memory_gb(root: Path = Path("/")) -> int:
+    """The memory this process may use: the least of MemAvailable and what each cgroup limit over it leaves, v2 or v1 (a pod's
+    /proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope)."""
+    def read(p: Path) -> str | None:
         try:
-            m = Path(f).read_text().strip()
-            if m != "max" and int(m) < 1 << 60:        # v1 writes "no limit" as a number near 2^63
-                return int(m) >> 30
-        except (OSError, ValueError):
-            pass
-    for line in open("/proc/meminfo"):
+            return p.read_text().strip()
+        except OSError:
+            return None
+
+    left: list[int] = []
+    for line in (read(root / "proc/self/cgroup") or "").splitlines():
+        if line.startswith("0::"):                     # cgroup v2: this process's cgroup, then each ancestor
+            top = root / "sys/fs/cgroup"
+            d = top / line[3:].strip("/")
+            for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
+                m, used = read(c / "memory.max"), read(c / "memory.current")
+                if m and m.isdigit():
+                    left.append(int(m) - int(used if used and used.isdigit() else 0))
+    v1 = root / "sys/fs/cgroup/memory"
+    m, used = read(v1 / "memory.limit_in_bytes"), read(v1 / "memory.usage_in_bytes")
+    if m and m.isdigit() and int(m) < 1 << 60:         # v1 writes "no limit" as a number near 2^63
+        left.append(int(m) - int(used if used and used.isdigit() else 0))
+    for line in (read(root / "proc/meminfo") or "").splitlines():
         if line.startswith("MemAvailable:"):
-            return int(line.split()[1]) >> 20
-    return 0
+            left.append(int(line.split()[1]) << 10)
+    return max(0, min(left)) >> 30 if left else 0
+
+
+#: the memory circuit-check counts on per worker: a cold `--all` on vy-nebius-cpu-1 (755 GB) at 23 workers grew six of them to
+#: 136, 84, 80, 54, 51 and 40 GiB and took the node down twice (7 Oct,
+#: note:core-firewall/20261007T2327Z-finding-circuit-check-all-exhausts-cpu-1)
+CIRCUIT_CHECK_GB_PER_JOB = 128
+
+
+def circuit_check_jobs(b: int) -> int:
+    """circuit-check's `--jobs`: its share ``b`` of the cores, at most one per `CIRCUIT_CHECK_GB_PER_JOB` of this process's memory."""
+    return max(1, min(b, memory_gb() // CIRCUIT_CHECK_GB_PER_JOB))
 
 
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
@@ -817,7 +841,8 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 #: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
 #: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
-AFTER_LEAN = ("verity-flock", "verity-lean-audit")
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-core-evaluate", "verity-core-firewall", "verity/experimental/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/experimental/core/protocols/network")
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
@@ -832,7 +857,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
+    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:
@@ -840,7 +865,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         lean_suites = [*suites, *AFTER_LEAN, "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
-    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
+    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(circuit_check_jobs(b)), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]

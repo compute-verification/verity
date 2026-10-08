@@ -10,46 +10,54 @@ be older than `main` (a cloud VM boots from a snapshot), so when they differ, `g
 
 Top-level directories (a grouping, not an import name, except `verity/`):
 
-- `verity/`: the core library, the distribution `verity` (the root `pyproject.toml`).
-  - `verity.ml`: circuits and their evaluator (`circuits`, format in `circuits/PROTOCOL.md`), commitments
-    (`commitments`), shared hash code (`crypto`), and the one challenge derivation (`randomness`).
-  - `verity.experimental.protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs
-    (`verification.sampled_proofs`), PoUW (`accounting.work.pouw`), PoUS (`accounting.space.pous`) and the network
-    certifier (`accounting.communication.certifier`). NCI is Lean only.
-  - `verity.experimental.claims`: the ids of security claims.
-  - `Security/`: the Lean every protocol states its guarantees in.
-
-  The module list is `verity/README.md`. Import from the owning module (`from verity.ml.circuits import
-  Program`); `verity` re-exports nothing. Each directory's tests sit beside it as their own suite.
-- `verity/ml/circuits/` (`verity.ml.circuits`): what the trusted base reads by digest.
-  - `silicon`: the exact hardware semantics.
-  - `definitions`: the primitive circuits' Definitions.
-  - `targets`.
-  - `benchmarks/census/`: data only. Core never reads it; it takes such numbers as parameters.
-- `verity/ml/kernels/` (`verity.ml.kernels`): fast code, each kernel checked against its Definition.
-- `verity/experimental/` (`verity.experimental`): what is under development or kept for study (private circuits, multiproofs,
-  sampled proofs' plans and consumers). `verity` never imports it.
-- `verity/ml/flock/` (`verity_flock`): C-Flock, the proof system.
-  - Its patches on upstream Flock, the CUDA prover, and the zero-knowledge prover (`live/`, `flock-circuit --zk`).
-  - `verifier/`: the verifier of record, written in Lean, with upstream's Rust verifier as a cross-check.
-- `integrations/vllm/` (`verity_vllm`): the vLLM integration. It builds each served workload's circuit, commits its
-  values while serving, and proves.
-- `benchmarks/`: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit end to end.
-  `benchmarks/numerical` is the table tooling of the archived proof systems.
+- `verity/`: the distribution `verity` (the root `pyproject.toml`), in three parts. The module list is `verity/README.md`.
+  Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
+  tests sit beside it as their own suite.
+  - `verity/core/`: trusted code, all Lean, every part with proven properties. It holds only `service/flock/`, C-Flock's
+    executable verifier of record (no dependencies). Its planned parts, `primitives`, `protocols`, `service` and
+    `devices`, each grow one verifier at a time.
+  - `verity/ml/` (`verity.ml`): Python and CUDA, none of which can affect soundness.
+    - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
+      (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
+      (`silicon`, the exact hardware semantics) and `targets`.
+    - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
+    - `commitments`, shared hash code (`crypto`), and the one challenge derivation (`randomness`).
+    - `flock/` (`verity_flock`, a distribution of its own at `flock/python/`): C-Flock, the proof system. Its patches on
+      upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`, `flock-circuit --zk`), and `verifier/`: the
+      verifier's specification and the scripts that run it, with upstream's Rust verifier as a cross-check.
+  - `verity/experimental/` (`verity.experimental`): work in progress, including today's Python verifiers until their Lean
+    versions land in `verity/core/`.
+    - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
+      its plans and consumers), PoUW (`pouw`), PoUS (`pous`) and the network certifier (`certifier`). A protocol's Lean
+      code is its `lean/`. NCI is Lean only.
+    - `claims`: the ids of security claims.
+    - `private_circuits`, and multiproofs (`commitments`).
+    - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake
+      package `verity_difftest`).
+- `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
+  (Lean below). `Properties/` starts empty.
+- `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
+  builds each served workload's circuit, commits its values while serving, and proves.
+- `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
+  end to end, and the benchmark tools.
+  - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
+  - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes.
+  - `benchmarks/numerical/`: the table tooling of the archived proof systems.
 - `tools/`:
-  - `research`: runs, the evidence store, Slack, pods and deploys. It imports nothing from Verity.
-  - `check`: the one check a merge requires.
-  - `circuit_check`: the property checks every circuit passes.
-  - `lean`: the Lean check (`audit.py` until lean renames it `lean_check.py`).
-  - `cluster`: the shared machines' policy, planner and ledger. Stdlib only.
+  - `verity/`: the `verity` command (`cli/`) and the tools it runs: `check/` (the one check a merge requires),
+    `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
+  - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
+    nothing from Verity.
   - `agent-guard`: the VM's secret guard.
   - `move`: layout moves.
-  - `tc_probe`, `tc_probe_fp4`, `native_peak`: GPU probes.
+- `infra/`: our machines.
+  - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
+  - `control/`: the control pod's boot script and loops.
+  - `nebius/`: the console's units.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
   the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.
 - `fixtures/`: `artifacts.json`, every replicated fixture by `art:` id, and the archived proof systems' fixtures.
-- `tests/`: invariants of the whole tree.
-- `infra/nebius/`: the console's units.
+- `tests/`: invariants of the whole tree, the import rules among them.
 
 Code reaches the Nebius nodes only through `research deploy install` from a pushed commit, listed in
 `tools/research/src/research/pods/nebius/deploy.toml`. Delete data you don't own on a node only with
@@ -57,17 +65,25 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
-- Everything outside `verity/` may import the core. The core imports no other distribution, except that PoUW reads the
-  catalog.
-- Inside the core, each unit imports only what `ALLOWED` lists. `primitives.circuits`, `randomness`, `crypto` and
-  `claims` import no other core module; no primitive imports a protocol.
-- A protocol imports the primitives it's allowed, itself, and the protocols Daniel has allowed it (PoUW imports sampled
-  proofs).
+- `verity.experimental` may import `verity.ml`. `verity.ml` never imports `verity.experimental`, apart from the files
+  `ML_IMPORTS_EXPERIMENTAL` names (C-Flock's tests). `verity/core/` never imports
+  `verity/experimental/`.
+- Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
+- Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
+  `experimental.claims` import no other unit.
+- A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols Daniel has allowed it
+  (PoUW imports sampled proofs). PoUW is the one protocol that reads the primitive circuits' Definitions and silicon
+  semantics (`ml.circuits.ops`, `silicon`, `targets`).
+- Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
+
+`verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the check a merge
+requires, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
+`verity --help` lists the rest.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run tools/verity/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu python tools/verity/check/check.py  # the check a merge requires; --record publishes it as an Attempt
+uv run tools/verity/check/suites.py       # every test suite whose inputs changed since it last passed; --quick skips slow tests
+uv run --extra torch-cpu verity check     # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
 ## Design rules
@@ -124,7 +140,8 @@ which the suite enforces.
 
 ## Checking and merging
 
-There is no GitHub Actions CI. `check` (`tools/verity/check/check.py`) is the one check, run on a multi-core CPU pod. It covers:
+There is no GitHub Actions CI. `check` (`verity check`, which runs `tools/verity/check/check.py`) is the one check, run on a
+multi-core CPU pod. It covers:
 
 - every test suite;
 - `circuit-check --all`;
@@ -132,25 +149,43 @@ There is no GitHub Actions CI. `check` (`tools/verity/check/check.py`) is the on
 - the Lean verifier's build and its partition check;
 - the Lean check;
 - `merge_requires` (`tools/verity/check/tool.py`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
-  against upstream's Rust verifier, for `verity/ml/flock/` (`check.py --record` sends what it needs).
+  against upstream's Rust verifier, for C-Flock (`verity/ml/flock/`, and its Lean verifier in `verity/core/service/flock/`;
+  `check.py --record` sends what it needs).
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
-Landing:
+Landing (Daniel, 7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check stays fast because a
+part's verdict is reused whenever its inputs haven't changed. Each verdict is keyed on a hash of the part's declared inputs
+(the read guard enforces them), the base image and the check's own code. So a docs-only change reruns nothing, a deleted
+test reruns its suite, and a layout move or a change to the check's own code reruns everything. The merge queue runs the
+check on the queued group. A nightly uncached check must agree; a disagreement means some part reads something it doesn't
+declare, and it is fixed in the check, not by reverting anyone's change.
 
-- `main` moves only through `research merge --push`. It refuses without a passing `check` of that exact commit, or when
-  `main` has moved past it, and then pushes and sweeps.
-- A plain `git push` would skip the spec DM, node 1's mirror and the post-train regression.
-- PRs land in trains: ci stacks the tips, and the lander runs `research merge --train A B C --on POD --project verity`
-  over one `check` of the merged tree.
+Until reuse and the merge queue exist:
+
+- The lander lands a change by hand once every part whose declared inputs it touches passes: its test suites
+  (`tools/verity/check/suites.py`, minutes on the CPU machines), circuit-check on the circuits it changes (cold workers
+  reach 128-157 GB each, so `--jobs 4` at most on vy-nebius-cpu-1 and 2 on vy-nebius-cpu-2, or run it on vy-nebius-1),
+  the Lean check of every Lake package whose pass misses (`tools/verity/lean/lean_audit.py --out DIR`, which includes each
+  package requiring a changed one by path; `--explain PKG` says why one misses), and `lean-agreement` when it touches
+  C-Flock or its Lean verifier (on its own: `lake build` in `verity/core/service/flock`, then
+  `verity/ml/flock/verifier/ci.py` against the upstream build `upstream.json` pins, under `research run`).
+- The landing is a merge commit with trailers naming those runs (`Checked:`) and the skipped full check
+  (`Skipped-check:`), pushed with `--no-verify`. Then `research merge --sweep` runs what a plain push skips: the spec DM,
+  node 1's mirror and the post-train regression.
+- A layout move and a change to the check or merge tooling (`tools/verity/check/`, `research merge` and its queue, the
+  Lean check) get a full `check` first and land through `research merge --push`.
+- After landings, a full `check` of the newest `main` runs on vy-nebius-1, one at a time. When it fails, the lander finds
+  the landing that broke it and reverts it at once (`git revert -m 1`), and its owner relands with the fix.
+- PRs land in trains: ci stacks the tips, and the lander lands the merged tree once every part its members touch passes.
 - A train member needs its owner's `ready` label at its head, written by hand if need be:
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, since the train's full `check` is the
-  gate.
+  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass.
 - A grant carries to a head whose own patch is byte-identical.
 - A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
   the tip; a push to the PR would refuse every tip that pins its old head.
-- A pure move that `tools/verity/check/move_check.py BASE HEAD` certifies goes first, alone in its train.
+- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies goes first, alone in
+  its train.
 
 ## Lean
 
@@ -178,7 +213,7 @@ Landing:
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
   - an assumption is a named `Prop`, taken as a hypothesis;
   - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `audit.py --update` records its
+- **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it, and a statement reviewer is optional.
