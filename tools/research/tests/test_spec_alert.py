@@ -89,6 +89,50 @@ def _commit(repo: Path, rel: str, doc: dict, msg: str) -> str:
     return subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
 
 
+def _source(repo: Path, rel: str, text: str = "def x := 1\n") -> None:
+    """A Lean input the next `_commit` takes along, so its definitions' changed hashes say something changed."""
+    (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+    (repo / rel).write_text(text + str(len(list(repo.rglob("*.lean")))))
+
+
+def test_a_definition_rehashed_or_regrouped_with_no_lean_input_changed_is_tallied_and_not_listed(tmp_path):
+    """The audit regrouping its reads records (#1544) changed 116 definitions' hashes with no Lean source behind them, and
+    the DM would have listed every one; a Lean input changed in the push, or one outside the audit's own directory, lists
+    them as before."""
+    repo = _repo(tmp_path)
+    old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1, "P.E": H2}), "base")
+    (repo / "tools/verity/lean").mkdir(parents=True)
+    (repo / "tools/verity/lean/Facts.lean").write_text("-- the audit's own extractor\n")
+    regrouped = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H3, "P.E": H2}), "m")
+    assert spec.message(repo, old, regrouped) is None
+    with_guarantee = _doc({"P.t": _g("P.t : A", H1), "P.n": _g("P.n : N", H2)}, {"P.D": H3, "P.E": H2})
+    tallied = _commit(repo, "pkg/lean-audit.json", with_guarantee, "m")
+    text = spec.message(repo, old, tallied)
+    assert "• `pkg`: guarantees: 1 new; definitions: 1 rehashed" in text and "P.D" not in text
+    prev, h = regrouped, H3
+    for source in ("pkg/P.lean", "pkg/lean-toolchain", "other/lake-manifest.json", "other/lakefile.toml"):
+        _source(repo, source)
+        h = H1 if h == H3 else H3
+        cur = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": h, "P.E": H2}), "m")
+        assert spec.message(repo, prev, cur).endswith("*pkg*\n• definition `P.D` changed; read by `P.t`"), source
+        prev = cur
+
+
+def test_a_newly_pinned_dependency_bundle_is_a_lean_input_and_a_rekeyed_or_dropped_one_is_not(tmp_path):
+    """Every definition that reads Mathlib or ArkLib is built against the bundle `lean-deps.json` pins (top, 06:06Z): pinning
+    another one with no manifest change would otherwise show only as `rehashed`. #1544 re-keys two bundles and drops a pin."""
+    repo = _repo(tmp_path)
+    pins = lambda **deps: {"deps": {k: {"package": "pkg", "sha256": s} for k, s in deps.items()}}
+    _commit(repo, spec.DEPS_PINS, pins(k1=H1, k2=H2), "pins")
+    old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1}), "base")
+    _commit(repo, spec.DEPS_PINS, pins(k3=H1), "re-key one bundle, drop the other")
+    rekeyed = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H3}), "m")
+    assert spec.message(repo, old, rekeyed) is None
+    _commit(repo, spec.DEPS_PINS, pins(k3=H1, k4=H3), "a new bundle")
+    pinned = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H2}), "m")
+    assert spec.message(repo, rekeyed, pinned).endswith("*pkg*\n• definition `P.D` changed; read by `P.t`")
+
+
 def test_the_dm_names_the_package_the_pull_requests_and_the_compare_link(tmp_path):
     repo = _repo(tmp_path)
     old = _commit(repo, "pkg/lean/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}), "base")
@@ -124,6 +168,7 @@ def test_records_that_moved_between_lock_files_are_matched_by_name_and_tallied_a
     assert spec.message(repo, old, moved) is None
     both["guarantees"]["Q.v"] = _g("Q.v : D", H1)
     both["reads"]["P.Defs"]["definitions"]["Q.E"] = H3
+    _source(repo, "c/Q.lean")
     edited = _commit(repo, "c/lean-audit.json", both, "m")
     text = spec.message(repo, old, edited)
     assert "• `c`: guarantees: 1 changed, 2 moved here; definitions: 1 changed" in text
@@ -145,6 +190,7 @@ def test_the_dm_opens_with_a_tally_and_a_cut_loses_new_guarantees_first(tmp_path
     monkeypatch.setattr(spec, "LIMIT", 600)
     many = {f"P.n{i}": _g(f"P.n{i} : " + "x" * 60, f"{i:064d}") for i in range(20)}
     old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1}), "base")
+    _source(repo, "pkg/P.lean")
     new = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : B", H2), **many}, {"P.D": H3}), "m")
     text = spec.message(repo, old, new, None)
     assert text.split("\n")[1] == "• `pkg`: guarantees: 1 changed, 20 new; definitions: 1 changed"
