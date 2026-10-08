@@ -1,38 +1,352 @@
 {
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
- "assumptions": [
-  "Models.Core.Assumptions",
-  "Models.Nci.Assumptions",
-  "Models.Pouw.Assumptions.Game",
-  "Models.Pouw.Assumptions.NCP.Assumptions",
-  "Models.Pouw.Assumptions.Dimension.Assumptions",
-  "Models.Pouw.Assumptions.Dimension.PipeAssumptions",
-  "Models.Pouw.Assumptions.NCP.RouteUAssumptions",
-  "Models.Pouw.Assumptions.Dimension.RouteUPipeAssumptions",
-  "Models.Pouw.Assumptions.Dimension.EmbedAssumptions",
-  "Models.Pouw.Assumptions.Dimension.H100Assumptions",
-  "Models.Pouw.Assumptions.Fp8Atom.H1TAssumptions",
-  "Models.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions",
-  "Models.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions",
-  "Models.Pouw.Assumptions.PearlC.TTOut",
-  "Models.Pouw.Assumptions.PearlC.TTOutRev1",
-  "Models.Pouw.Assumptions.PearlC.TTOutUOnly",
-  "Models.Pouw.Assumptions.PearlC.TTOutTileUOnly",
-  "Models.Pouw.Assumptions.PearlC.DeviceChainCap",
-  "Models.Pouw.Assumptions.PearlC.TTOutChainOnly",
-  "Models.Pouw.Assumptions.PearlC.RowSeedAssumptions",
-  "Models.Pouw.Assumptions.PearlC.TTOutFp4",
-  "Models.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly",
-  "Models.Pouw.Assumptions.PearlC.HiddenTile",
-  "Models.Pouw.Assumptions.PearlC.HonestCap",
-  "Models.Pouw.Assumptions.Deadline",
-  "Models.Pouw.Assumptions.PearlC.Deadline",
-  "Models.Pous.Assumptions",
-  "Models.Pous.Assumptions.P2",
-  "Models.NetworkCertifier.Assumptions",
-  "Proofs.Flock.Soundness.Assumptions"
- ],
+ "assumptions": {
+  "Flock.Assumptions.VBridge": {
+   "owner": "@proofs",
+   "digest": "c7133abbebba54516366c3f9ab4d930cc5e54a9475ff39fe6663208492377d2c"
+  },
+  "FlockSoundness.Assumptions.HashDerivedKey": {
+   "owner": "@proofs",
+   "digest": "10b377712f6ad0a85f088a3d07b4c2a5f2ef4e1622cf7b1e4413c1feded5a5c0"
+  },
+  "FlockSoundness.Assumptions.Hm96Hiding": {
+   "owner": "@proofs",
+   "digest": "f5897a66b00fd47ffb0e33815f8dbfc8bb1b5a85b643491e8b7466e8a33765b9"
+  },
+  "FlockSoundness.Assumptions.HmRowComputes": {
+   "owner": "@proofs",
+   "digest": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae"
+  },
+  "FlockSoundness.Assumptions.SHA512CRExpected": {
+   "owner": "@proofs",
+   "digest": "cc74806f2a9d7c607d51ff5d06ac12d9f6b7c02c115f3393ef78c692014dbd64"
+  },
+  "FlockSoundness.Assumptions.SHA512CRStrict": {
+   "owner": "@proofs",
+   "digest": "23148408aa91625eb6d49ddd90e118326fcdee28e72e5a719a34c28cc9114562"
+  },
+  "FlockSoundness.Assumptions.UniformRandomBytes": {
+   "owner": "@proofs",
+   "digest": "f1093a52c3a1f70ccfd20362bda6eca853c1be02ab43b7260f78ef5df8720b39"
+  },
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": {
+   "owner": "@proofs",
+   "digest": "ff4f8f0ffda4d6bbc622adca36f997c60f66dbe90c654a3f9441bb22c98739c4"
+  },
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ": {
+   "owner": "@proofs",
+   "digest": "167287a3a7f1c1def8a44226e55431613ce209de3d6f812bd506108d9fd257e4"
+  },
+  "Nci.Assumptions.ActivationsIncompressible": {
+   "owner": "@lean",
+   "digest": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a"
+  },
+  "Nci.Assumptions.PartialSumsIncompressible": {
+   "owner": "@lean",
+   "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
+  },
+  "NetTiming.Allocated": {
+   "owner": "@network-accounting",
+   "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
+  },
+  "NetTiming.JitterBounded": {
+   "owner": "@network-accounting",
+   "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
+  },
+  "NetTiming.Packed": {
+   "owner": "@network-accounting",
+   "digest": "07208a21923ece8f743252f10d99fd592646fa16e1b476a784300c62cc134570"
+  },
+  "NetTiming.Regenerates": {
+   "owner": "@network-accounting",
+   "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
+  },
+  "Pouw.Assumptions.TT": {
+   "owner": "@compute-accounting",
+   "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
+  },
+  "Pouw.Dimension.A1_cost_quad": {
+   "owner": "@compute-accounting",
+   "digest": "19aefba814f8fe843dbdeb153368cc4d1d62188e43e4fe37fdb05ee2bca8aee2"
+  },
+  "Pouw.Dimension.Assumptions.A2_algebraicSufficiency": {
+   "owner": "@compute-accounting",
+   "digest": "77cb4679685587ebd6af4727445ca9120b0bf16352ea0bb5d5f150d118d1012b"
+  },
+  "Pouw.Dimension.Assumptions.Machine": {
+   "owner": "@compute-accounting",
+   "digest": "1040c472bb55b25a013332576c079e958494a3b43c36090622c0ba80dfedb489"
+  },
+  "Pouw.Dimension.Assumptions.Machine.Prog": {
+   "owner": "@compute-accounting",
+   "digest": "cd526932525f4d43cae007defaaedc6129020884ddfb1cf7c9adc98b7240dab7"
+  },
+  "Pouw.Dimension.Assumptions.Machine.cost": {
+   "owner": "@compute-accounting",
+   "digest": "6fae264b81e491d108ef52e3b6ba63a77c5959827b98d6d1891a756d260f5114"
+  },
+  "Pouw.Dimension.Assumptions.Machine.outputs": {
+   "owner": "@compute-accounting",
+   "digest": "f8154b0bddff0450052b35cdad21fe57868946e7b7254dcdae9ef7ee8a9d761e"
+  },
+  "Pouw.Dimension.Assumptions.wordSet": {
+   "owner": "@compute-accounting",
+   "digest": "eb91440586d6aa9ea8e63cd68c85bd3a2b323e91e039bca6aa8ecaaa710e53fc"
+  },
+  "Pouw.Dimension.Embed.A1fpOn": {
+   "owner": "@compute-accounting",
+   "digest": "5eac9076811537dec9e01566f1657a342a9263693dcfa258421ed78101c38aa8"
+  },
+  "Pouw.Dimension.Embed.CanonicalNaN": {
+   "owner": "@compute-accounting",
+   "digest": "69bef3783dbc54bb79a23c7afd1562b81e28f0df91b3312e43e6c87da8f0af40"
+  },
+  "Pouw.Dimension.Embed.FpOK": {
+   "owner": "@compute-accounting",
+   "digest": "8e11ee11ea64c2ebf77459683d37a974f3f475446ab1b5c328921c66977b3fb6"
+  },
+  "Pouw.Dimension.Embed.FpOpnd": {
+   "owner": "@compute-accounting",
+   "digest": "e48b377cbf92ac011c88196b273df6bf29ad62523ca6cb5c61c69e19fc467a92"
+  },
+  "Pouw.Dimension.Embed.FpPipe": {
+   "owner": "@compute-accounting",
+   "digest": "b08c3839b6fe4e2cb71f83762118bd4cd435c1f15c577904c44e28d5f93973f7"
+  },
+  "Pouw.Dimension.Embed.FpStep": {
+   "owner": "@compute-accounting",
+   "digest": "44fbc672e57e3e3b866bf532ef002f6e9bb29ee286c3d41bef9972834295e294"
+  },
+  "Pouw.Dimension.Embed.NaNGap": {
+   "owner": "@compute-accounting",
+   "digest": "0619e7f882f3533aff501a309d487dc7f7e92765b7f41afeab01be1c5d6dc96b"
+  },
+  "Pouw.Dimension.H100.Floor": {
+   "owner": "@compute-accounting",
+   "digest": "779a343c115e76cc39a4b1831f5a2b17c3bb6ef6f059acd29ab10065873e414c"
+  },
+  "Pouw.Dimension.H100.H32": {
+   "owner": "@compute-accounting",
+   "digest": "c2b063f5d0a4f801815e77964f44ec4871e50a6cf6ac5a43b5425829af301801"
+  },
+  "Pouw.Dimension.H100.Prices100": {
+   "owner": "@compute-accounting",
+   "digest": "94878351c1125b48801a9fc4e3913641ce51d29ea406f804d6128838f9fc28bd"
+  },
+  "Pouw.Dimension.H100.Prices100.ffma": {
+   "owner": "@compute-accounting",
+   "digest": "7b6f7de7fd0910975560d68cc162189c884e62d6dcad67e0d6c9b960635358c0"
+  },
+  "Pouw.Dimension.H100.Prices100.fp64": {
+   "owner": "@compute-accounting",
+   "digest": "3edc127168679ebf9f3d64c4f429eccd28913aad3dd50ab02c54562d6041de7a"
+  },
+  "Pouw.Dimension.H100.Prices100.int32": {
+   "owner": "@compute-accounting",
+   "digest": "7b83ee8bbb4fa0b367f2581b8884e98832038790c2abcaa542ecd4aae4e546e1"
+  },
+  "Pouw.Dimension.H100.Prices100.mac": {
+   "owner": "@compute-accounting",
+   "digest": "7a1f237b36197b33b2a8d2cd63b22083e92383efa4d0edfd98c30c8e0ea51c51"
+  },
+  "Pouw.Dimension.H100.Prices100.other": {
+   "owner": "@compute-accounting",
+   "digest": "b4173eaf9a1c0ee01ea3b0fa6b851c06bf6b0e10e830bbb8d4dad2d7cb9f874d"
+  },
+  "Pouw.Dimension.H100.Prices100.tc": {
+   "owner": "@compute-accounting",
+   "digest": "18475e855be590bfbac8063ea1da9450bec00dc9fa6d7c6748c893dfbebd9aab"
+  },
+  "Pouw.Dimension.H100.Shape100": {
+   "owner": "@compute-accounting",
+   "digest": "f8160581d1806f256d83d1f170e77aef5da4325f33acc5c9d0187d60c94b3f0e"
+  },
+  "Pouw.Dimension.H100.Shape100.bf16F32": {
+   "owner": "@compute-accounting",
+   "digest": "07ba58b5580c98ce586710c3f975690bf8794e80bff9982455658a5d34a26470"
+  },
+  "Pouw.Dimension.H100.Shape100.e4m3F16": {
+   "owner": "@compute-accounting",
+   "digest": "839ff4a2ec17e024020945004a0d921b02237291381f7ce683cf15b265dc34e9"
+  },
+  "Pouw.Dimension.H100.Shape100.e4m3F32": {
+   "owner": "@compute-accounting",
+   "digest": "a0f24fe7a0fa641bc154de369d1e521655c587234636f6f61ba148e8a979f72a"
+  },
+  "Pouw.Dimension.H100.Shape100.e5m2F16": {
+   "owner": "@compute-accounting",
+   "digest": "44dbcf58c9d3d4a18842dcf590d1bbaccf1c7ec2a69f0b0c360c23bc2a6222a7"
+  },
+  "Pouw.Dimension.H100.Shape100.e5m2F32": {
+   "owner": "@compute-accounting",
+   "digest": "8dc3f41355ec260b1200e0753764e1f77e0f81dec5165de006b01a3c62b439ea"
+  },
+  "Pouw.Dimension.H100.Shape100.elems": {
+   "owner": "@compute-accounting",
+   "digest": "96b66a4b135dde32444443ad4bc9866a5a8b9ed018b9abde3809d925e261d026"
+  },
+  "Pouw.Dimension.H100.Shape100.f16F16": {
+   "owner": "@compute-accounting",
+   "digest": "584f4496bf91de815375187475468fac613ffe594a9384823f22a9d44f5755b1"
+  },
+  "Pouw.Dimension.H100.Shape100.f16F32": {
+   "owner": "@compute-accounting",
+   "digest": "c61773b009d9790f819d9ce59298d3c77fe7d7e398c0f4d358b4331918c92827"
+  },
+  "Pouw.Dimension.H100.Shape100.k": {
+   "owner": "@compute-accounting",
+   "digest": "666163e4a07fed2f41a68b93e5aaa5a00a98f39f04772497883ad56d64ec0ac3"
+  },
+  "Pouw.Dimension.H100.Shape100.regPrice": {
+   "owner": "@compute-accounting",
+   "digest": "79bfca032692c212a4adfad8ae9ec9243b19969a43d8ea311aee47fdec672a18"
+  },
+  "Pouw.Dimension.H100.Shape100.s8": {
+   "owner": "@compute-accounting",
+   "digest": "857c848cfcf3d79aa250471866372aac5b0e8faf039f728f055de7990a189e63"
+  },
+  "Pouw.Dimension.H100.Shape100.tf32": {
+   "owner": "@compute-accounting",
+   "digest": "9547cbb0091bc626bc7c9b32c7296888f5669a20e966f1eedf3e04b0a44599f2"
+  },
+  "Pouw.Dimension.H100.nominalMac": {
+   "owner": "@compute-accounting",
+   "digest": "ff0014d94244d94d379487b71d43cce7fb17cc4f341402b2d2b8c32d1843eb46"
+  },
+  "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
+   "owner": "@compute-accounting",
+   "digest": "ef3e5acc5423c8a6eab3ad67be8ddc3fa6c5ae38afe8f5784630ea198756c785"
+  },
+  "Pouw.Fp8Atom.H1T.H1TRunningWords": {
+   "owner": "@compute-accounting",
+   "digest": "eafb0e80c67ef3aa501104844165034cbfa916d13ac5b3361cae5e15fbe989ff"
+  },
+  "Pouw.NCP.Assumptions.TTNCP": {
+   "owner": "@compute-accounting",
+   "digest": "f57ea45f32f4773a7572663c546adeb5c05461712de223326efd3afb73a813fb"
+  },
+  "Pouw.NCP.Assumptions.TTNCP_U": {
+   "owner": "@compute-accounting",
+   "digest": "8a747ab5b169a0aebbead909c55f11867690c76654bffe5a2a0125164a2a1305"
+  },
+  "Pouw.PearlC.Assumptions.FragDraw": {
+   "owner": "@compute-accounting",
+   "digest": "1e7679106dac7fcb7fa8b2cd5b55a82cbb02eb71faed86f18b4880a535d49c00"
+  },
+  "Pouw.PearlC.Assumptions.TTOut": {
+   "owner": "@compute-accounting",
+   "digest": "fef0ec214c341b8aa3468e439242705188f1284696deb430b5c6510b498cb48a"
+  },
+  "Pouw.PearlC.Assumptions.TTOutFp4": {
+   "owner": "@compute-accounting",
+   "digest": "f90848879d325c0e59d9256d8bdf59d1720a8b90ce09808665c25b3c97402e44"
+  },
+  "Pouw.PearlC.Assumptions.TTOutFp4Sm120": {
+   "owner": "@compute-accounting",
+   "digest": "96dea3f6b5f0cc46e55936c6af3a6229d890637b0889102ba08a484c41dad081"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlC": {
+   "owner": "@compute-accounting",
+   "digest": "b631641af566bca1bac82b4ef24702b24ed6a7276e013b35872d8ab89afbaa24"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDev": {
+   "owner": "@compute-accounting",
+   "digest": "d4aca48a31e0ae534c5d272aa18a85a7e7c9af6aeaba490f01546d6059ee5a93"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "b55a88e3f3be9a980861d2a1244b219f3b72854f49272ee148c7efd169ce636d"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "96cbcffa2dd79ef186ad3b81562d208b86e8c02e0ca3621312f964d61e6044f2"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1": {
+   "owner": "@compute-accounting",
+   "digest": "55403e10d07aa1c93855ae008a8d009efe16daa715b460bfe7504ca04158c295"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnly": {
+   "owner": "@compute-accounting",
+   "digest": "c0403faf7a90ffd6979dd16c4ff4d6d676e6e40daa6f43e63929936de3067657"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnly": {
+   "owner": "@compute-accounting",
+   "digest": "1ee654da67496d20a07fd1cb1e56995d9cc84d373d2081b1cf4e0d393c985409"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1": {
+   "owner": "@compute-accounting",
+   "digest": "d843abac1c6f318b8184d1ee0181f39bd8690261b6e59b8d683fe2a42093a244"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTile": {
+   "owner": "@compute-accounting",
+   "digest": "953f75b038ef12f1ca8e035102cd694d2a82f97ea079f1ebbd54fa365fefab88"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileFp4": {
+   "owner": "@compute-accounting",
+   "digest": "3f01d35b25c96efdd63d869ad744d72cc5d76ed13172b7e1122171ff50bc1832"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120": {
+   "owner": "@compute-accounting",
+   "digest": "410262a867ac04e096d90bdb8406bdc13624af07dbdd3214940169548662e033"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDev": {
+   "owner": "@compute-accounting",
+   "digest": "6b1bff5df662d00b6d187db3143e77905fa46edcd5773bc5535eda66ff500ce2"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "20cfd44bf0a2df63d67e2390dba4ca9352eddedc0e7da56e716fcd352f2ba5be"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": {
+   "owner": "@compute-accounting",
+   "digest": "986751020ed75289c24caeb2cd903f4ecba561c9c00de96fd5d500df1d945046"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": {
+   "owner": "@compute-accounting",
+   "digest": "3c0b6df708354f428a46f68dd5d38dfa7d4a22ddb5e35a3047fe915fd1d56103"
+  },
+  "Pouw.PearlC.Assumptions.TTOutU": {
+   "owner": "@compute-accounting",
+   "digest": "7a543d8cfb0ef693a1c889f901a9946bceaa170cab43447d4897ed7e92da385f"
+  },
+  "Pouw.PearlC.Assumptions.TileProofSound": {
+   "owner": "@compute-accounting",
+   "digest": "639f98447f6c6c587e14a0d6086e06a990570d57a3bd22beac2ff989bf2f0040"
+  },
+  "Pouw.PearlC.Assumptions.TileProofSoundAll": {
+   "owner": "@compute-accounting",
+   "digest": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5"
+  },
+  "Pouw.PearlC.CorrectU": {
+   "owner": "@compute-accounting",
+   "digest": "d3ce7dce232fed50bc654fb85ceaee5f1f56045d7b1afc7bcd56b2c2f2b3978f"
+  },
+  "Pouw.PearlC.GγU": {
+   "owner": "@compute-accounting",
+   "digest": "1deb508aa34e8e69400b9c7081082f29536f378222faaa3808787383dd6c7d59"
+  },
+  "Pouw.PearlC.WinsU": {
+   "owner": "@compute-accounting",
+   "digest": "2d6a53fb682ba4e3aae06aa2223195b8414c5864167c317a09b9d6931436462c"
+  },
+  "Pouw.PearlC.chainCreditDev": {
+   "owner": "@compute-accounting",
+   "digest": "6e4d7c50189df577e5e4a060c20f50516332d4dda5d497288e0d52b91a58e362"
+  },
+  "Pouw.PearlC.correctSetU": {
+   "owner": "@compute-accounting",
+   "digest": "19ce334a79474ff6821aff36d3e0ee5d39495fad9f2f73827aea74cfc2e3ecb8"
+  },
+  "Pouw.PearlC.pearlCProtocolDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "693866e02c5d1ba3a3156bdd97c55c599ccc7e22210d39e9eaef0ec3b9b49083"
+  },
+  "Pouw.PearlC.pearlCTilesDevChainCap": {
+   "owner": "@compute-accounting",
+   "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  }
+ },
  "meaning": [
   "Definitions.Core",
   "Models.Core.Assumptions",
@@ -61,7 +375,8 @@
   "Proofs.Flock.EndToEndDrawn",
   "Proofs.Flock.EndToEndHidden",
   "Proofs.Flock.EndToEndRegistered",
-  "Proofs.Flock.ZeroKnowledgeHidden"
+  "Proofs.Flock.ZeroKnowledgeHidden",
+  "Proofs.Pouw.PearlC.FlockTile"
  ],
  "layers": {
   "Definitions.Core": {
@@ -247,7 +562,8 @@
   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
  },
  "four_names": ["Nci", "NetTiming"],
  "guarantees": {
@@ -2760,6 +3076,15 @@
    "assumptions": [],
    "type_hash": "1a027afed91c693ac0472747652164f6ba358033527e2b304db3643e44ece33c"
   },
+  "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 :",
+    "  Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"
+   ],
+   "assumptions": [],
+   "type_hash": "1e54f1c04ee114ed2c890933ced37f2e30c19cd92e5e38f76578dc52ab5daa1c"
+  },
   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384 : Pouw.Guarantees.PearlC.SampledFp4Sm120_16384"],
@@ -3216,10 +3541,16 @@
    ]
   },
   "Definitions.Core.Game": {
-   "digest": "177b3dec5b19ad628674d5e9ef72121843e86b1bbb75aa1a51350b3073974b21",
+   "digest": "09a256999948812ecdffa78c6035e74c97809cf3cf35d005156abd0fd09fca4b",
    "definitions": {
     "Verity.Game": "34c713229a1259c2d5972e7184a6879ce0f3e67dbb8dc0fe4219cf7aad78bf16",
+    "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
+    "Verity.Game.InducedL": "2e988db571b2eca62bf3bc9f21d1946a714a461777ff82353bf47d90ea0d8375",
+    "Verity.Game.InducedR": "c2243672779ceb6e2c4a3275bd22bf9b9a1003f2d01d3efe2c98f097d61ad3e4",
+    "Verity.Game.InducedWithL": "1617ed74f91a304eeb40c85829416d3a2f77e738a4395f95e1f8b14062485ccc",
+    "Verity.Game.InducedWithR": "8c9816d39502ef1f763da132e2211aa59ae1de4a5042e579bea165391dc4a16c",
     "Verity.Game.Strategy": "adbb9d9cc6b114fa6a9ebfb3c8d43406b9c2272e136d74953736875e7054817b",
+    "Verity.Game.Strategy.ofMap": "6ea46533e626d971f430730846cec8e1f8c38af21feab3a98d39f5184155ee22",
     "Verity.Game.batch": "ab402840c5a36246c2bab7a131339b316ed204cbed98d862272ade83db9139cd",
     "Verity.Game.bind": "57f9bfd5a89f6841f4aa91aa534c194d08183e997fc3cf6e41d2459a37c717ce",
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
@@ -3235,7 +3566,8 @@
     "Pouw.PearlC.gammaHidden_of_sampled_all",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
-    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192"
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"
    ]
   },
   "Definitions.Core.Partition": {
@@ -3782,6 +4114,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -3884,6 +4217,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -4061,6 +4395,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -4160,6 +4495,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -4256,6 +4592,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -4432,6 +4769,7 @@
     "Pouw.SecurityProofs.NCP.TTNCPUIff",
     "Pouw.SecurityProofs.NCP.TTNCPUWitness",
     "Pouw.SecurityProofs.NCP.YUChecked",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -4705,6 +5043,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
@@ -4831,6 +5170,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -4938,6 +5278,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -5159,6 +5500,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
@@ -5234,6 +5576,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384",
@@ -5286,6 +5629,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -5349,6 +5693,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
@@ -5575,6 +5920,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -5624,8 +5970,16 @@
     "Pouw.PearlC.gammaHidden_of_sampled_all",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
-    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192"
+    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"
    ]
+  },
+  "Definitions.Pouw.PearlC.HiddenTileGame": {
+   "digest": "c593713bf3219eb6b137f4a06eb99e5d9eec573f4180aee436ecf4a640f10688",
+   "definitions": {
+    "Pouw.PearlC.BoundedByInduced": "acc65a495421e4974619395d20f727dede5be53d4a22a4358b07b221aa17e270"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
   "Definitions.Pouw.PearlC.Instance": {
    "digest": "b7fabed7448f5d299d77909e9999b127b72309cbe36bd98e8bc2e1faa1663b43",
@@ -5699,6 +6053,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -5808,6 +6163,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -5874,6 +6230,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
@@ -5941,6 +6298,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -6027,6 +6385,7 @@
     "Pouw.SecurityProofs.PearlC.GammaUOnlyUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -6110,6 +6469,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
@@ -6171,6 +6531,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384",
@@ -6222,6 +6583,7 @@
     "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192",
     "Pouw.PearlC.ttOutRowSeedCode_of_ttOut",
     "Pouw.PearlC.ttOutRowSeed_code",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -9990,6 +10352,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedCap1000_8192",
     "Pouw.SecurityProofs.PearlC.GammaUnpromotedChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
@@ -10082,6 +10445,7 @@
     "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_16384",
     "Pouw.SecurityProofs.PearlC.GammaSm120v1Rev1_8192",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384",
     "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384",
@@ -14354,7 +14718,8 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35"
+    "FlockSoundness.table_sound_fast100_34_35",
+    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"
    ]
   },
   "Proofs.Flock.Soundness.Game.Batch": {
@@ -15724,6 +16089,42 @@
     "Flock.Guarantees.ZeroKnowledgeHidden": "5667e937b4bae83d53892c9a028271505d4abd71c7077a7edd6319240cd6d453"
    },
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden"]
+  },
+  "Proofs.Pouw.PearlC.FlockTile.Audit": {
+   "digest": "6e9e754d4baaf728ba7ce3359422cc1a760a7664c4f297201cbb055ef1801c12",
+   "definitions": {
+    "Pouw.PearlC.FlockTile.TileReadBinds": "a7b2e2e657e18ad621a78896024942ffb3fb63c9da3a8f017ba28d3a3fbd4a9c",
+    "Pouw.PearlC.FlockTile.TileReadSession": "596084b52f1b2adb8f1b71d395f6bded1958f764f9878fb9cef837ebcec57862",
+    "Pouw.PearlC.FlockTile.TileReadSession.Bad": "35f54adb51bc322577fa9e4a14e26cd330786a507f85771effb29ad8971d5f92",
+    "Pouw.PearlC.FlockTile.TileReadSession.Cls": "b0fc9130b6fe99db5d537dccb4c98e40c5c3139b8681e09fc7b3f812740e04bb",
+    "Pouw.PearlC.FlockTile.TileReadSession.Opening": "9f063602942fc6400184de0e0167bb4e98ab28803d95eacff8a3e01e7d737c88",
+    "Pouw.PearlC.FlockTile.TileReadSession.Out": "f6c706a62b67f10819dec6ed800a3cd5dae1b6f0f201e331de48d64cf8df05da",
+    "Pouw.PearlC.FlockTile.TileReadSession.Root": "ad2af8cf0e288fbdb057aa7af4c9079b0a684635c7db307f0ef1936d087d4bb9",
+    "Pouw.PearlC.FlockTile.TileReadSession.audit": "46c7662dddb9cc2a61fa356e393e0dfd3433b44c500618399121428b39be1f0f",
+    "Pouw.PearlC.FlockTile.TileReadSession.cls": "9b2dea0e11c7120be18407d8f48d6d4879e5331214a27088ee58f0ab5053ce87",
+    "Pouw.PearlC.FlockTile.TileReadSession.game": "d50a43581fc6132f85a5914bb978ed0b0f8ce1e60cf52ca61d9c53edabf2ba36",
+    "Pouw.PearlC.FlockTile.TileReadSession.proofGame": "4e1a13aa3d26c94437e074f0c159b930b089f977dcf88dbb062e5fac27895c2e",
+    "Pouw.PearlC.FlockTile.TileReadSession.root": "70a7514fe1bafa582fb699efd60b91d0da6ad6554d302f4475abb6b8a0f2d628",
+    "Pouw.PearlC.FlockTile.TileReadSession.stratOf": "cf7f5d27ad1b46977528379e2727e85ea2998c7e6b777d565408e4c94a03a840",
+    "Pouw.PearlC.FlockTile.TileReadSession.verdict": "df77b12a1559204c0313d434a44435376545abdc9ed4b4842ba05fe62c4e022c",
+    "Pouw.PearlC.FlockTile.TileReadSound": "1af3ce33570d3fe952d8f6efb3b91b5b9eb96a578c05cd2fec7a86e4dbbddbe9"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
+  },
+  "Proofs.Pouw.PearlC.FlockTile.Bridge": {
+   "digest": "d0344d6b5e85d2b01ed9d4238a3d69fd7fc2b3381c5bdfce76500e3b32b891f1",
+   "definitions": {
+    "Pouw.PearlC.FlockTile.stratOfVerity": "6a391e9477ff29b36ae07e6ff1ce37296c0e9264b90cacd12583f6d996a815ab",
+    "Pouw.PearlC.FlockTile.toVerity": "197b76f7384bd0ef06f1c257c88b47368636089c37774cd5c355e2ee6dd7cd85"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
+  },
+  "Proofs.Pouw.PearlC.FlockTile.Statement": {
+   "digest": "c8fc0fe9b0f428303c8efd9f8209f8fa1247988af5fe66202a038f1647f0015b",
+   "definitions": {
+    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "facd7a05e330da424281c2d025ee7c9c42998148e2e4e0f115231b36279d1c02"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   }
  },
  "dependencies": {
