@@ -372,6 +372,28 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
 
 
+def test_every_switched_unit_is_one_deploy_installs_on_its_node():
+    """The lock-out switches each tmux loop to its unit: every unit it starts, and every file of its own, is one deploy.toml installs."""
+    import importlib.util
+
+    from research.pods import registry
+
+    lockout = Path(registry.__file__).resolve().parent / "nebius" / "lockout"
+    spec = importlib.util.spec_from_file_location("vy_lockout", lockout / "lockout.py")
+    LO = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("vy_lockout", LO)
+    spec.loader.exec_module(LO)
+    nodes = deploy.load()
+    for node, loops in LO.SWITCH.items():
+        paths = {e.path for e in nodes[node].entries}
+        for lp in loops:
+            for u in {lp.unit, LO.service_of(lp.unit)}:
+                assert f"/etc/systemd/system/{LO.unit_file(u)}" in paths, (node, u)
+    srcs = {e.src for n in nodes.values() for e in n.entries if e.src}
+    files = [p for p in lockout.rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.name != "README.md"]
+    assert files and not [p for p in files if p.relative_to(deploy.REPO).as_posix() not in srcs], "deploy.toml installs every file"
+
+
 def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():
     """A tmux session is restarted by hand, typed into, and gone after a reboot: what deploy.toml installs runs under a unit."""
     m = tomllib.loads(deploy.MANIFEST.read_text())

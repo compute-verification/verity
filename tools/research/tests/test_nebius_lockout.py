@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from research import deploy
 from research import retention as R
 from research.pods import registry
 from research.store import attempt as AT
@@ -519,18 +518,6 @@ def test_kubeconfigs_and_the_tmux_command_a_switch_back_runs():
     assert "vy-n1-lease@provers.env" in cmd and "%i" not in cmd and "$$" not in cmd and "cd /home/research &&" in cmd
     assert cmd.endswith(">> /workspace/verity-guest/n1-lease-provers.log 2>&1")
     assert (LO.unit_file("vy-n1-lease@provers.service"), LO.service_of("vy-custody.timer")) == ("vy-n1-lease@.service", "vy-custody.service")
-
-
-def test_every_switched_unit_is_one_deploy_installs_on_its_node():
-    nodes = deploy.load()
-    for node, loops in LO.SWITCH.items():
-        paths = {e.path for e in nodes[node].entries}
-        for lp in loops:
-            for u in {lp.unit, LO.service_of(lp.unit)}:
-                assert f"/etc/systemd/system/{LO.unit_file(u)}" in paths, (node, u)
-    srcs = {e.src for n in nodes.values() for e in n.entries if e.src}
-    files = [p for p in LOCKOUT.rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.name != "README.md"]
-    assert files and not [p for p in files if p.relative_to(deploy.REPO).as_posix() not in srcs], "deploy.toml installs every file"
 
 
 def test_a_switch_stops_the_tmux_loop_before_its_unit_starts_and_a_dry_run_only_says_so(tmp_path, monkeypatch):
