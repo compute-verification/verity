@@ -280,6 +280,51 @@
   }
  },
  "reads": {
+  "CoreProtocol.Protocol": {
+   "digest": "275b5e9f420c6e37f6dc2fb3c59ffa633524f5397d5f3f0989b4c9c1f1060296",
+   "definitions": {
+    "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
+    "Core.Answer.verdict": "72ccc7783e24b9354dfcfa5d04d7cad1defa6c9bc3dde1698abb1ff6dfddaa8e",
+    "Core.Outcome": "2779d0bdefecaa108cb68149864742b4d101d5178390cf6acddc8cf375583a85",
+    "Core.Outcome.accept": "c7abb779538d29e9f792761a8db7ae69719dfc763a2da95599f7af28377e9763",
+    "Core.Outcome.reject": "8cf498f977979244f1b1a1a8224b94a3e8bb47643e847eff355c3f21607df392",
+    "Core.Outcome.undecided": "8359cac763fe5a40dbe821be9591d7cf56eac4cc956a368b18978f8b8e7b45d1",
+    "Core.Protocol": "2ea8c13cb206c09d0ff20922ee762db9d0bc3eb278f76dfbe8ba400b084a11dd",
+    "Core.Protocol.Accepts": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
+    "Core.Protocol.Commitment": "1779266dc5689084ea02a25a199cf52300deb941e7d50b8af8a3802067f25548",
+    "Core.Protocol.Evidence": "71caff6ec7dec3a6238123fae52547a15a169e03da8d2976d0ae4dbc41f687e8",
+    "Core.Protocol.Params": "d4495a529a3712b0ae55cdc4bab81ca7a96c0204c2d89e9370f5514551c0bc6a",
+    "Core.Protocol.Profile": "93c6424ab66c0606c3a4742f24e72dc44aa110749360473256dc7eca020a15d2",
+    "Core.Protocol.Public": "31795b800fbc90a092a881f6085261492fdf43a97347e35dce35717ea922da34",
+    "Core.Protocol.answer": "7abec06cbec5aa2fe92ba6fe438b94810afc8b7ba98a9698dc83808ecea95842",
+    "Core.Protocol.check": "3fd83c8e26ff8fb0f97bbaaa808a6a80b84577053625dd6d2a30609364e20422",
+    "Core.Protocol.commitment": "02d3e375a4b4e36f87a449063ee7daf6ed8e46b2f415eeb0beedf2c299990ee8",
+    "Core.Protocol.digest": "0d17988b66fd6086cb78a2fd832aceed63485388facaaad096938f13b575c3d2",
+    "Core.Protocol.evidence": "933a0afbb9ec3dfcbcfa3bf5f94cf4e2d342f093f8b11aff4c9fc8d32aee3b6b",
+    "Core.Protocol.id": "7cd4c4709c9b47f77f3afd8f50bb049ee161c7f195f1efcc23c1c4766b83ef1b",
+    "Core.Protocol.params": "4e25074e7c4e50cdd16023e1678f96a10e9dac4e1f2838c62aa4934e4d644542",
+    "Core.Protocol.profileJson": "199984f72573982fe8a9f5d922a14c5692ec8f87f6843d6f00735939c8150657",
+    "Core.Protocol.publicJson": "87fd7d040926056f5ec9f03b376506b0065ade709f0db5ad772c7d9a774be1c3",
+    "Core.Verdict": "ef73764db4779bb9cc649adda3080045d4b7f599582c9ccdd9823a3326012756",
+    "Core.Verdict.accept": "9f9a4017c4784ae8a12cd0921ca11b10c0daba0056b070b49206ab19b146bbe4",
+    "Core.Verdict.reject": "51a3f6946f282bd4c992323d0eddaa4101c87759f7eb96f348ef4195e69d3dd3",
+    "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
+    "Core.canonicalJson": "fc4daa943ca1c9ff34602507ea96024d86fe5ba98aae5cdf54528e3add3028c7"
+   },
+   "guarantees": [
+    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
+    "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
+    "Properties.NetworkCertifier.acceptsIff",
+    "Properties.NetworkCertifier.acceptsOneRecordEach",
+    "Properties.NetworkCertifier.answerAccepts",
+    "Properties.NetworkCertifier.decodeRefusals",
+    "Properties.NetworkCertifier.honestAccepted",
+    "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.undecidedIff",
+    "Properties.NetworkCertifier.undigestedParamsReject"
+   ]
+  },
   "Definitions.Core.Circuit": {
    "digest": "f463bd9c6e109b58644bd7fd3bc72db1cd65b21a820a3486f99af9e44f920e86",
    "definitions": {
