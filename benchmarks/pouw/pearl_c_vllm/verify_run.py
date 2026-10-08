@@ -39,7 +39,7 @@ from pathlib import Path
 
 import numpy as np
 from verity.ml.commitments import Commitment, Opening
-from verity.experimental.protocols.pouw.audit import (
+from verity.core.protocols.pouw.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -50,9 +50,9 @@ from verity.experimental.protocols.pouw.audit import (
     hm96_salt,
     opened_value,
 )
-from verity.experimental.protocols.pouw.coins import CoinCommitment
-from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW
+from verity.core.protocols.pouw.coins import CoinCommitment
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -102,7 +102,7 @@ def f32_row(data, k: int, i: int) -> bytes:
 
 
 class Opened:
-    """The prover's side of the audit from the pass's files: `open`, as `verity.experimental.protocols.pouw.audit.Prover` has it."""
+    """The prover's side of the audit from the pass's files: `open`, as `verity.core.protocols.pouw.audit.Prover` has it."""
 
     def __init__(self, man: dict, files: Files, refs):
         self.man, self.files, self.refs = man, files, refs
