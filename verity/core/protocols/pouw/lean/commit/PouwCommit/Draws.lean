@@ -2,7 +2,7 @@ import Randomness
 import PouwCommit.Coins
 
 /-!
-# The salts and draws PoUW derives (`verity.experimental.protocols.pouw`: `audit`, `schemes.pearl_c_work`)
+# The salts and draws PoUW derives (`verity.core.protocols.pouw`: `audit`, `schemes.pearl_c_work`)
 
 Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under PoUW's domains:
 

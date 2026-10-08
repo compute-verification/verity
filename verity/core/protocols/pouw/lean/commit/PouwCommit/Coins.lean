@@ -3,7 +3,7 @@ import PouwCommit.Frame
 import PouwCommit.Py
 
 /-!
-# The epoch coins' check (`verity.experimental.protocols.pouw.coins`)
+# The epoch coins' check (`verity.core.protocols.pouw.coins`)
 
 The challenger commits to epoch `e`'s coins, one 32-byte coin per label of `LABELS`, before the epoch:
 

@@ -1,7 +1,7 @@
 import PouwCommit.Tagged
 
 /-!
-# The protocol's bindings (`verity.experimental.protocols.pouw.audit`)
+# The protocol's bindings (`verity.core.protocols.pouw.audit`)
 
 What each of the protocol's trees is bound to, and the one root over the weights' roots, every one a `tagged` digest:
 
