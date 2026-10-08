@@ -1,0 +1,28 @@
+# Remote Verity as one `Core.Protocol` (`verity/remote/v0`): the composition of integrity (sampled proofs) and work
+# (PoUW), each a stub until its port lands. Its executable is the core CLI (`remote id | check | serve`),
+# which the difftest drives. Code: no Mathlib.
+name = "core_remote"
+defaultTargets = ["CoreRemote", "remote"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[require]]
+name = "core_protocol"
+path = "../interface"
+
+[[require]]
+name = "core_composition"
+path = "../composition"
+
+[[lean_lib]]
+name = "CoreRemote"
+
+[[lean_exe]]
+name = "remote"
+root = "RemoteMain"
