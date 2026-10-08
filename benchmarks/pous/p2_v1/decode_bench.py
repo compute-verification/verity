@@ -14,14 +14,20 @@ blocks of `C` with the v4 keys of a fixed setup:
   every block's `K` and `t` rows equal `reference.stream`'s (hashlib on every CPU, compared by SHA-512 per range of
   blocks).
 
-GB/s is of `W`, the payload bytes (2,054 of each 2,056-byte block), over the median time.  Writes `decode-bench.json`."""
+GB/s is of `W`, the payload bytes (2,054 of each 2,056-byte block), over the median time.  `setup_s` is the wall time of the
+first expansion of every block's keys (the setup's key derivation for the whole store, allocation included), before the timed
+repetitions.  Writes `decode-bench.json`, and with `--result-dir` the run's `result.json` (`result_doc`): the device as
+nvidia-smi names it, `keys_per_s`, `setup_s` and the keys' agreement with the reference, of the first library."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import statistics
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -89,10 +95,52 @@ def pinned_keys(lib_dir: str, build_dir: str) -> dict[str, object]:
     v = next(x for x in json.loads(KEYS.read_text())["vectors"] if int(x["w"]) == R.DEPLOYMENT.w)
     seg, blk = int(v["segment"]), int(v["block"])
     P = R.DEPLOYMENT.with_segments(seg + 1)
-    kern = Kernels(lib_dir, build_dir, P, bytes.fromhex(v["setup_salt"]), bytes.fromhex(v["model_commitment"]))
+    kern = Kernels(lib_dir, build_dir, P, R.expand_prefix(bytes.fromhex(v["setup_salt"]), P,
+                                                          bytes.fromhex(v["model_commitment"])))
     k, t = kern.keys(seg * P.blocks_per_segment + blk, 1)
     got = {"K": k[0].cpu().numpy().tobytes().hex() == v["K"], "t": t[0].cpu().numpy().tobytes().hex() == v["t"]}
     return {"vector": v["id"], "keys_version": kern.keys_version, "passed": all(got.values()) and kern.keys_version == 4, **got}
+
+
+def smi_device(uuid: str | None) -> str:
+    """nvidia-smi's `index, uuid, name` line of the leased GPU (`GPU_LEASE_UUID`'s first), else of the first visible one."""
+    sel = ["-i", uuid.split(",")[0]] if uuid else []
+    out = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid,name", "--format=csv,noheader", *sel],
+                         capture_output=True, text=True, check=False).stdout
+    return out.strip().splitlines()[0] if out.strip() else ""
+
+
+def result_doc(doc: dict, smi: str, run_id: str, run_dir: Path, out: Path, argv: list[str]) -> dict:
+    """The run's `result.json` (research/result/v0.1) from `decode-bench.json`'s document, for its first library: `device`
+    from nvidia-smi's `index, uuid, name` line, `keys_per_s` (blocks whose `K` and `t` are derived per second, at the median
+    of the timed expansions), `setup_s`, and `agreement`, the keys' checks against the reference."""
+    r = doc["results"][0]
+    g = r["gate"]
+    index, uuid, name = ([x.strip() for x in smi.split(",", 2)] + ["", "", ""])[:3]
+    every, pinned = g["keys_all"], g["pinned_keys"]
+    agreement = {"passed": (g["reference_keys_equal"] == g["reference_blocks"] and pinned["passed"]
+                            and every is not None and every["passed"]),
+                 "reference_keys_equal": g["reference_keys_equal"], "reference_blocks": g["reference_blocks"],
+                 "keys_all": every, "pinned_keys": pinned}
+    keys_per_s = r["blocks"] / r["keys_s"]
+    passed = doc["passed"] and agreement["passed"]
+    files = [str(p.relative_to(run_dir)) for p in [out / "decode-bench.json"] if p.is_relative_to(run_dir)]
+    return {"schema": "research/result/v0.1", "run_id": run_id,
+            "workload_fingerprint": {"harness": "benchmarks/pous/p2_v1/decode_bench.py", "argv": argv,
+                                     "source_sha": os.environ.get("RESEARCH_SOURCE_SHA"), "build": r["build"]},
+            "validation": {"status": "passed" if passed else "failed", "checker": "decode_bench gate + keys agreement",
+                           "detail": f"gate {'passed' if doc['passed'] else 'failed'}; keys agreement "
+                                     f"{'passed' if agreement['passed'] else 'failed'}", "evidence": files},
+            "device": {"name": name or doc["device"], "index": int(index) if index.isdigit() else None, "uuid": uuid or None},
+            "profile": "p2-2054B", "blocks": r["blocks"], "keys_version": r["keys_version"],
+            "keys_per_s": keys_per_s, "setup_s": r["setup_s"], "keys_s": r["keys_s"], "agreement": agreement,
+            "measurements": [{"name": "keys_per_s", "value": keys_per_s, "unit": "blocks/s"},
+                             {"name": "setup_s", "value": r["setup_s"], "unit": "s"},
+                             {"name": "keys_s", "value": r["keys_s"], "unit": "s"},
+                             {"name": "keys_GBps", "value": r["keys_GBps"], "unit": "GB/s"},
+                             {"name": "kernel_GBps", "value": r["kernel_GBps"], "unit": "GB/s"},
+                             {"name": "decode_GBps", "value": r["decode_GBps"], "unit": "GB/s"}],
+            "measurement_files": files}
 
 
 def main() -> int:
@@ -104,6 +152,7 @@ def main() -> int:
     ap.add_argument("--gate", type=int, default=48, help="pseudo-random blocks checked against the reference")
     ap.add_argument("--keys-all", action="store_true", help="check every block's v4 K and t against hashlib")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--result-dir", help="the run directory to write result.json in (RESEARCH_RUN_ID names the run)")
     a = ap.parse_args()
 
     import torch
@@ -134,8 +183,11 @@ def main() -> int:
         lib = kern.lib
         fused = hasattr(lib, "p2v1_decode_fused")
         version = kern.keys_version
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
         k, t = kern.keys(0, n)
         torch.cuda.synchronize()
+        setup_s = time.perf_counter() - t0
         keys_gate = {i: bytes(k[i].cpu().numpy()) == ref[i][1] and bytes(t[i].cpu().numpy()) == ref[i][2] for i in picks}
         every = keys_all(k, t, n, P.segments) if a.keys_all else None
         m = torch.empty_like(c)
@@ -167,7 +219,8 @@ def main() -> int:
         pay = n * P.payload_bytes / 1e9
         keys_ok = (all(keys_gate.values()) and version == 4 and pinned["passed"]
                    and (every is None or every["passed"]))
-        r = {"lib": lib_dir, "fused": fused, "keys_version": version, "blocks": n, "keys_s": statistics.median(keys_reps),
+        r = {"lib": lib_dir, "fused": fused, "keys_version": version, "blocks": n, "setup_s": setup_s,
+             "keys_s": statistics.median(keys_reps),
              "kernel_s": statistics.median(kernel_reps), "decode_s": statistics.median(decode_reps),
              "keys_reps_s": keys_reps, "kernel_reps_s": kernel_reps, "decode_reps_s": decode_reps,
              "kernel_GBps": pay / statistics.median(kernel_reps), "decode_GBps": pay / statistics.median(decode_reps),
@@ -193,6 +246,16 @@ def main() -> int:
            "results": results, "passed": all(r["gate"]["passed"] for r in results)}
     Path(a.out).mkdir(parents=True, exist_ok=True)
     (Path(a.out) / "decode-bench.json").write_text(json.dumps(doc, indent=1))
+    if a.result_dir:
+        run_dir = Path(a.result_dir).resolve()
+        res = result_doc(doc, smi_device(os.environ.get("GPU_LEASE_UUID")), os.environ["RESEARCH_RUN_ID"], run_dir,
+                         Path(a.out).resolve(), sys.argv)
+        tmp = run_dir / ".result.json.tmp"
+        tmp.write_text(json.dumps(res, indent=1))
+        os.replace(tmp, run_dir / "result.json")
+        doc["passed"] = res["validation"]["status"] == "passed"
+        print(json.dumps({x: res[x] for x in ("device", "keys_per_s", "setup_s")} | {"agreement": res["agreement"]["passed"]}),
+              flush=True)
     return 0 if doc["passed"] else 1
 
 
