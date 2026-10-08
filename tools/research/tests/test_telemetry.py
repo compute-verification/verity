@@ -634,6 +634,34 @@ def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tm
     assert st["state"] == "cancelled" and st["timed_out"] is True
 
 
+def test_the_timeout_control_file_accepts_a_bare_number_and_ignores_what_it_cannot_parse(tmp_path, capsys):
+    """An unparseable control file is reported once and otherwise ignored (never the reason a workload stops); a bare number is a
+    timeout_s.  The run loop acts on whatever this returns (test above)."""
+    from research.telemetry import run as trun
+
+    ctl = trun._TimeoutControl(tmp_path)
+    assert ctl.poll() is None
+    (tmp_path / "control").mkdir()
+    (tmp_path / "control" / "timeout_s").write_text("not json")
+    assert ctl.poll() is None
+    os.utime(tmp_path / "control" / "timeout_s", (1_600_000_000, 1_600_000_000))   # changed again, still unparseable: not said twice
+    assert ctl.poll() is None and capsys.readouterr().err.count("ignoring unparseable") == 1
+    (tmp_path / "control" / "timeout_s").write_text("30")
+    assert ctl.poll() == {"timeout_s": 30.0}
+    assert ctl.poll() is None, "unchanged: nothing new"
+
+
+def test_set_timeout_cli_writes_the_control_file():
+    from research.telemetry.cli import main
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        assert main(["set-timeout", "--attempt-dir", td, "--timeout-s", "14400", "--reason", "x"]) == 0
+        doc = json.loads((Path(td) / "control" / "timeout_s").read_text())
+        assert doc["timeout_s"] == 14400.0 and doc["actor"] == "manual" and doc["reason"] == "x" and doc["set_utc"]
+        assert main(["set-timeout", "--attempt-dir", td, "--timeout-s", "none", "--reason", "clear"]) == 0
+        assert json.loads((Path(td) / "control" / "timeout_s").read_text())["timeout_s"] is None
+
+
 def test_a_run_on_a_machine_that_caps_sessions_needs_a_cap_of_its_own(tmp_path):
     """On node 1 (8 Oct 01:59Z) and cpu-1 (06:00Z) user-1001.slice sat at its MemoryMax, logind failed to create 266 login session
     scopes, and those logins' runs went on in ssh.service, which has no per-run cap. The machine's session-.scope.d MemoryMax is the
@@ -675,34 +703,6 @@ def test_tele_run_never_starts_a_workload_without_its_memory_cap(tmp_path, monke
     assert st["state"] == "failed" and st["rc"] == 75 and "ssh.service" in st["error"]
     recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
     assert [x["name"] for x in recs if x.get("kind") == "mark"] == ["no_memory_cap"]
-
-
-def test_the_timeout_control_file_accepts_a_bare_number_and_ignores_what_it_cannot_parse(tmp_path, capsys):
-    """An unparseable control file is reported once and otherwise ignored (never the reason a workload stops); a bare number is a
-    timeout_s.  The run loop acts on whatever this returns (test above)."""
-    from research.telemetry import run as trun
-
-    ctl = trun._TimeoutControl(tmp_path)
-    assert ctl.poll() is None
-    (tmp_path / "control").mkdir()
-    (tmp_path / "control" / "timeout_s").write_text("not json")
-    assert ctl.poll() is None
-    os.utime(tmp_path / "control" / "timeout_s", (1_600_000_000, 1_600_000_000))   # changed again, still unparseable: not said twice
-    assert ctl.poll() is None and capsys.readouterr().err.count("ignoring unparseable") == 1
-    (tmp_path / "control" / "timeout_s").write_text("30")
-    assert ctl.poll() == {"timeout_s": 30.0}
-    assert ctl.poll() is None, "unchanged: nothing new"
-
-
-def test_set_timeout_cli_writes_the_control_file():
-    from research.telemetry.cli import main
-    import tempfile
-    with tempfile.TemporaryDirectory() as td:
-        assert main(["set-timeout", "--attempt-dir", td, "--timeout-s", "14400", "--reason", "x"]) == 0
-        doc = json.loads((Path(td) / "control" / "timeout_s").read_text())
-        assert doc["timeout_s"] == 14400.0 and doc["actor"] == "manual" and doc["reason"] == "x" and doc["set_utc"]
-        assert main(["set-timeout", "--attempt-dir", td, "--timeout-s", "none", "--reason", "clear"]) == 0
-        assert json.loads((Path(td) / "control" / "timeout_s").read_text())["timeout_s"] is None
 
 
 # ---- (g) 0.1.3 rule 7b: cgroup-v1 OOM kill of a descendant behind a wrapper's rc != 0 (r20 issue 3) ------------------------------------------------
