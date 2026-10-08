@@ -1,4 +1,4 @@
-import Specs.Pouw.Guarantees.Barrier
+import Models.Pouw.Guarantees.Barrier
 import Proofs.Pouw.Barrier.Proofs
 
 /-!
