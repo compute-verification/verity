@@ -7,6 +7,8 @@ dumps the workload's Python stacks with py-spy when D has not changed for --stal
 on timeout writes cancel_intent{actor: timeout} then SIGTERM -> grace -> SIGKILL with cancel_results, records rc/signal/pid/pgid in
 status.json, stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
+On a machine that caps each login session's memory, CMD never starts from a cgroup without a cap of its own (cgroup.uncapped): status
+failed, a no_memory_cap mark, exit 75.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from typing import Any
 
 from . import CANCEL_ACTORS, pyspy
 from .cancel import add_args as cancel_args, cancel as cancel_run
+from .cgroup import Cgroup, session_cap, uncapped
 from .classify import classify, write as write_failure
 from .events import Emitter, append, events_path, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
@@ -65,6 +68,7 @@ def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: 
 
 CONTROL_TIMEOUT = Path("control") / "timeout_s"     # attempt-dir relative; written by `tele set-timeout`, re-read by the run loop
 OUT_DIR = "out"                                     # attempt-dir relative; the workload's $OUT, which custody always uploads in full
+EX_NO_MEMORY_CAP = 75                               # EX_TEMPFAIL: the workload never started; it can start once its login gets its scope
 #: The clock (seconds) the stage timeout runs on; a test replaces it to decide when the deadline passes.  The recorded times
 #: (started_mono, ended_mono, wall_s) stay on time.monotonic, the clock of every event's t_mono.
 clock = time.monotonic
@@ -232,6 +236,11 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                         cadence_s=a.cadence, pss_every_s=a.pss_every)
         write_json_atomic(d / "job.json", job)
     em.queue("started", stage=a.stage, job=a.job, attempt=a.attempt)
+    if (why := uncapped(Cgroup().limits(), session_cap())) is not None:
+        set_status(d, "failed", rc=EX_NO_MEMORY_CAP, signal=None, error=f"no memory cap: {why}", stage=a.stage)
+        em.emit("mark", stage=a.stage, name="no_memory_cap", error=why)
+        print(f"[tele run] refused to start the workload: {why}", file=sys.stderr)
+        return EX_NO_MEMORY_CAP
     # ---- workload first (so the sampler gets its pid), suspended until the sampler is up? no: start it, then the sampler; the first sample is <1 s later
     out_f = err_f = None
     if a.inherit_io:
