@@ -249,9 +249,6 @@
   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Pouw.Dimension.Lifting": "read by guarantees PoUW's lock reduction drops (repo-organization plan item 1); leaves security_proofs at the split",
-  "Proofs.Pouw.PearlC.TileGamma": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
-  "Proofs.Pouw.Sanity": "non-vacuity witnesses; they leave the lock in @compute-accounting's lock reduction and stay as checked tests in security_proofs (plan item 1)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
  },
  "four_names": ["Nci", "NetTiming"],
@@ -3230,7 +3227,7 @@
    ]
   },
   "Definitions.Core.Game": {
-   "digest": "177b3dec5b19ad628674d5e9ef72121843e86b1bbb75aa1a51350b3073974b21",
+   "digest": "09a256999948812ecdffa78c6035e74c97809cf3cf35d005156abd0fd09fca4b",
    "definitions": {
     "Verity.Game": "34c713229a1259c2d5972e7184a6879ce0f3e67dbb8dc0fe4219cf7aad78bf16",
     "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
@@ -3240,7 +3237,6 @@
     "Verity.Game.InducedWithR": "8c9816d39502ef1f763da132e2211aa59ae1de4a5042e579bea165391dc4a16c",
     "Verity.Game.Strategy": "adbb9d9cc6b114fa6a9ebfb3c8d43406b9c2272e136d74953736875e7054817b",
     "Verity.Game.Strategy.ofMap": "6ea46533e626d971f430730846cec8e1f8c38af21feab3a98d39f5184155ee22",
-    "Verity.Game.Strategy.toMap": "e6463f7a6d4220a929cbda5a83873ac022964a292a6c70b6669819ac47e81e73",
     "Verity.Game.batch": "ab402840c5a36246c2bab7a131339b316ed204cbed98d862272ade83db9139cd",
     "Verity.Game.bind": "57f9bfd5a89f6841f4aa91aa534c194d08183e997fc3cf6e41d2459a37c717ce",
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
@@ -4010,17 +4006,9 @@
     "Pouw.Fp8Atom.Value.isInf": "d9b5db94d461fa5103b62b2560a034f20848a70a4a15d8dca1087f24b44fca7b",
     "Pouw.Fp8Atom.Value.isNaN": "0cbd1221934d98038acc16144170179cef9e03e5ce75c5a3d55835daa03dca01",
     "Pouw.Fp8Atom.Value.nan": "4140758ada9c669dacc946c61af7f32309944ca3ae1e97974cec2191ab5b1ea2",
-    "Pouw.Fp8Atom.Vec": "9abd2df14425d617ffb8baeb5223326eaa2d4a3011918a4f9fc5c0b41af03b93",
-    "Pouw.Fp8Atom.Vec.a": "bebac56dc38e98036baf83826e83eab9d454ee192446781471118708e8be5bc3",
-    "Pouw.Fp8Atom.Vec.acc": "f2b6e062a40c26540d1321504013003e1950cc10612f29d35a2d4cd1b824a9e7",
-    "Pouw.Fp8Atom.Vec.b": "3f3ec438da21ea111dd74db302d2493b435c652f2561bca76b99747ccb1205d6",
-    "Pouw.Fp8Atom.Vec.d": "2513796a601a122e2c0796c1e3ed06059127074222225b0826df123b19034390",
-    "Pouw.Fp8Atom.adaE4m3K32": "03cb85b74f286819ded33cfaf0e65d4288f2094116aa0c1f70dfec8a55c764cc",
-    "Pouw.Fp8Atom.adaStep": "cc032e8ec88124e03624a1c88499a8319661ff636f58dbf877199d386666daf4",
     "Pouw.Fp8Atom.aligned": "893f7ea7c50d4ec60f2c5c09fd6b383d9ae321514ec1b7782c52b74f237fed9c",
     "Pouw.Fp8Atom.alignedSum": "6d91f222ecc3e868df202167b828cf63b6a669814a9dd21b9bab32208f1fd7be",
     "Pouw.Fp8Atom.bitLength": "794c5cb9f83ae6b5439d509bcedd4a34531ea058d6462aee15bbad5bd7a07273",
-    "Pouw.Fp8Atom.codes": "65ac9ecb7d9012d147d68709a7080b910d5d49c2dcfe8f651a4cf4398cc94a6e",
     "Pouw.Fp8Atom.fp32Value": "ababc0176e7ad3e3c540ae953b037c2bb4cfe67efda28b55a514c6bb69b690f5",
     "Pouw.Fp8Atom.fromAdder": "f3437f95e8fe3b105bde733ea9a5662bc41a1491048ef161e57798b3be8b9968",
     "Pouw.Fp8Atom.groupStepTotal": "8ba3849dee88b388e2e801fbf7fba33cfc7d7858ed285a760bb24a969581924d",
@@ -4130,7 +4118,6 @@
     "Pouw.Fp8Atom.Code.expField": "6a4b07993a53660c33a5b80ed6c8991b6ea951feb3e0178f2d14e697145cf521",
     "Pouw.Fp8Atom.Code.expOr1": "8a49944ae900f872903f59934c9257bb8dae5426f4ce5ef8ac707de9c5820ca5",
     "Pouw.Fp8Atom.Code.isNaN": "73a5218754a6166e1d326c4e2e9f209b9e97bc0f4f3d6123f663b7ab1951f24b",
-    "Pouw.Fp8Atom.Code.isZero": "e7431e5c428cc5eb5c090b639bbccc4ae386daee4990cb39f15f3f0801e2241f",
     "Pouw.Fp8Atom.Code.lsbExp": "3dd75d29ec6c8430cbd36324c12eb768fcb17176b1ed705bb8246cf1c4e9f269",
     "Pouw.Fp8Atom.Code.manField": "743b9db1eb5ec13696a9c902af02c83ecd1c101e405fd8f670943743259de718",
     "Pouw.Fp8Atom.Code.sig": "c0a625380dd932afef8e6d26310d07d8c8078b71f49a4de3df6459023821b5cb",
@@ -4227,11 +4214,6 @@
   "Definitions.Pouw.Fp8Atom.Fp32": {
    "digest": "7099334f0c625f0563c5722f87817ebda246cc19978eee5925c00b216f006bff",
    "definitions": {
-    "Pouw.Fp8Atom.AddVec": "9a686a1d290e6ba675cf1e2e1489d6f4bbb1fad2e5fbfc52583ac6c321d4acb8",
-    "Pouw.Fp8Atom.AddVec.a": "7905c755042250ed14f53ada5d76c60df174e717dc8ee02650b1880e9c793526",
-    "Pouw.Fp8Atom.AddVec.b": "ddb6d82a4926eeb812def69dcb763ec5bfbab8cbb59669978687582f9b88a5fd",
-    "Pouw.Fp8Atom.AddVec.c": "38cc70a5c3490e623f474e64883fa8abe354002d7b09e70c6937e2b4c799f893",
-    "Pouw.Fp8Atom.Representable": "f13c1f3fb1160c11943846f14b1eed2ce0d2a21a85d860728998c3c83df63915",
     "Pouw.Fp8Atom.binade": "4e4b8b7f0379263db68cdf057af72e09a64ae16fc26e4364b03d29dbcd9700aa",
     "Pouw.Fp8Atom.rn": "343880f3c6437d93ce49cde1a4e3f7cbca65e81300345f4210dff41064572a41",
     "Pouw.Fp8Atom.rnAdd": "258d9a61213eff632295d48f76c759a78ccb15f3ff9396049ffa23c1c2ff3652",
@@ -4433,13 +4415,11 @@
     "Pouw.Layout.wid": "25290d19a9bb88eb16fd3c112a6554b6c78a952c5ee5cb1e4b31201679ba4675",
     "Pouw.OutOK": "36923e158438ab4f66170c0882135d3703bbb91c87c587b3219c0894adc6f7dd",
     "Pouw.Protocol": "9de4d268fda0a18e2e12d7697292862e2d3e8288d384c1f47fe216527ae22573",
-    "Pouw.Protocol.Complete": "c29b3ec0014173552aa8c868585e2fbea96ab62460a08d587758d74c3d974ed9",
     "Pouw.Protocol.Wref": "266ac4c2322894a8cef5c3da0563c656f68452e80289587c8c8e6f4026ee20bf",
     "Pouw.Protocol.Y": "381df30e10b20344f7e332c0c7c48d63538dad663905b584be475b7494bc1f65",
     "Pouw.Protocol.checkIdx": "e09228bd25726c76dd1b3fd66d2be412593d17519663c20ad8106d767b4c23f9",
     "Pouw.Protocol.refChecked": "afe60821aea46f2cae66746a96d2dc68d606b9f09981d594e811436800691130",
     "Pouw.Protocol.refOut": "378541d45fc2b26669ab0bc4b351d652acf769c0405bbf55f705dcb6d392a3f6",
-    "Pouw.Requirement": "70504e3e62bdf8fbe180d3ed852666fee755a5306fa321edf58db6aef756bbd5",
     "Pouw.Shape": "7079ba99f22f5aad33bbcbcfe62feca4cebf23b237aa0c5c0c4821d3e5119910",
     "Pouw.Shape.InDefaultDomain": "94fe81a981a0b1113d7dd5b566bcbcf256a3d8f541cc7d89b459814b5cb1e89b",
     "Pouw.Shape.Wmm": "ac20e89160724163ab222a02bdc8eb2dab4fce3958655fb1f426e4bc03e3044d",
@@ -4457,7 +4437,6 @@
     "Pouw.checkedSet": "146cff53c42f69698486cd1002a89dfff5315f517b75cc10217efa290e265cc8",
     "Pouw.correctSet": "65f3c4235814c036237829734679ddc74ad3fb1c8cb2cb9936478538d6c56646",
     "Pouw.honestTranscript": "d0ce91268cb68b41923182075146f19131f52d328bb4a7b978211b1b749eee02",
-    "Pouw.milestoneShape": "eaf4ea5c7e91e8cef41c48c7118529f707c43d776303af12d6b8b0720fc15014",
     "Pouw.totalWref": "3d8335db3ac54640710d963c0f384ba2b1873c754407a631506112891ea4f35a"
    },
    "guarantees": [
@@ -4931,14 +4910,10 @@
     "Pouw.PearlC.devH100": "5a43c1efe07cc2ac628095c95c6a205e1e584a4c451a1c7c0a8199510578dd0b",
     "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
     "Pouw.PearlC.devSm120v2": "4f59d45fd7215c5db0568e89746297fc170061906445f41b418d7022ac26153a",
-    "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
     "Pouw.PearlC.pearlCDomainDev": "efca9d83927acd176828923127fb955d5745e704f51b995db882f7e654426508",
     "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
-    "Pouw.PearlC.pearlCDomainDevNK": "2653a120d87aafb7cd768ecc73e0d63a375fe6e07544f2c8a4c4acd087981bbf",
-    "Pouw.PearlC.pearlCDomainDevShapes": "78adc7a7c4a1a04f003481193b6567586db39739f903d0da828e54908278bcfe",
     "Pouw.PearlC.pearlCProtocolDev": "db4659dcb7475e15f899edf4f1b866458a6152293660334714d9c8a8e97af9ff",
     "Pouw.PearlC.pearlCTilesDev": "0e25aa0c49d11e687cbf95864f1817864224d98d3442299d12ce99cab12b3698",
-    "Pouw.PearlC.qwen3_8bLinears": "e25b770eeb457e844d90861406541e27a7f86b9b6de54aecbf0e3be954c0fc31",
     "Pouw.PearlC.wrefDev": "122d664caedfadd83fb8bdb36749da7e283172c9bfb7c98db59652e72191d649"
    },
    "guarantees": [
@@ -5177,7 +5152,6 @@
    "definitions": {
     "Pouw.PearlC.pearlCProtocolDevK": "1ca3bf4ff8e3bb41ce9eaab52fc53cfdf32f45fa4e3fa51bcfb20824c7f32722",
     "Pouw.PearlC.pearlCProtocolDevRev1K": "dc463362112cbc6b4b42accddfe3f54e23b2f2eec22ac4086bb4f166fbcecda7",
-    "Pouw.PearlC.pearlCTilesDevK": "d213b31fbf93b46fbfe010d57e90398645ecb20f55ecfbc047fc5b43ca7f2afc",
     "Pouw.PearlC.pearlCTilesDevRev1K": "7915d854cd3050707212bca976dc4954af6793900e5a96e700a05e62abcb8637",
     "Pouw.PearlC.wrefDevK": "425638b05f9fc1aaa754d10d6cf92e93ef5c42aa519ad0509379c21f8b291b6e",
     "Pouw.PearlC.wrefDevRev1K": "879d0a21ff2119bde3087d1782bdd96e57d954cd44c008bde79373993cdbe272"
@@ -5301,9 +5275,7 @@
     "Pouw.PearlC.PearlCSem.tileDebitRev1": "354386da385cf396753c123767229172bb914fb2e8df1b11f9ac11de56901d38",
     "Pouw.PearlC.PearlCSem.unitDebitRev1": "7fa751f08be283546cab44dded59f63909e4854f65f6f5a54df2a04e1fc55738",
     "Pouw.PearlC.creditDevRev1": "b18a0d566c841b648106a55a28b2ff1b42ea699a6faf64c29977034181b3e9cc",
-    "Pouw.PearlC.creditOfRev1": "d63000cab8a735823d0a8344787df8fa81dc6f4a21e8547f826e815e903c6b8b",
     "Pouw.PearlC.firstAddDev": "363003ff8c2e23ceeb05a920b51197a3d9e6bdb95e997613d9e263bc91a49bba",
-    "Pouw.PearlC.firstAddOf": "13c09b1ec5e4defc4197f25d5c8a3365775e070b9cf9a6fbac3fad871b86f053",
     "Pouw.PearlC.laterZeroPromos": "9529d485d30f928525a53965a95fdc8d5e2ef713139440b238ededa720d7aa77",
     "Pouw.PearlC.pearlCProtocolDevRev1": "3a380880a10a6b16ffece997a379c711b1fce4155a86118972c2957011b2e3d4",
     "Pouw.PearlC.pearlCTilesDevRev1": "e4cb0c810a1a6fed510a49e646b94247e317ea96e749c19c1334ea1d6a162ccb",
@@ -5689,10 +5661,9 @@
    ]
   },
   "Definitions.Pouw.PearlC.HiddenTileGame": {
-   "digest": "4a732348e74721292681606a415a0c2e61c13df409822f77795703595746a1c8",
+   "digest": "c593713bf3219eb6b137f4a06eb99e5d9eec573f4180aee436ecf4a640f10688",
    "definitions": {
-    "Pouw.PearlC.BoundedByInduced": "acc65a495421e4974619395d20f727dede5be53d4a22a4358b07b221aa17e270",
-    "Pouw.PearlC.TileGame": "297e14c7f054dff64d5bf4b46b590a5c5609cc57ca5463e0b591ddb4dc85adbc"
+    "Pouw.PearlC.BoundedByInduced": "acc65a495421e4974619395d20f727dede5be53d4a22a4358b07b221aa17e270"
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
@@ -6142,7 +6113,6 @@
     "Pouw.PearlC.SkipP.pureSkipP": "392a38f05c1531baf4b89b07ce45743d1b5cc549be0b1ec5a3a204509afda1c6",
     "Pouw.PearlC.SkipP.stepP": "42bcd9dda5f06c86e42f4b6475b10cced4b4fb61f5c4d61f48a3b3080b04a7d6",
     "Pouw.PearlC.SkipP.unitFlagsAt": "baad7c6f1a2573244a98cf93d50b134575a0f80d2a586dd00f74cc4dabdec490",
-    "Pouw.PearlC.SkipP.unitFlagsP": "c2549c4c554633147df8c171a2a35c3e552543c7bd7b8d467a666c1183c471dd",
     "Pouw.PearlC.SkipP.wordFlagsP": "24e73e3b6b29ff7e84cbdfd0df6634e2ec236d24f19093aac53154e026390948",
     "Pouw.PearlC.SkipP.wordInP": "c697b7d4e2cc606f39b88e08fdeb3cd001cc6dd722127b28fbc8d70bf035c152"
    },
@@ -6267,13 +6237,9 @@
   "Definitions.Pouw.PearlC.Tile": {
    "digest": "cc4f3b22ad95f6c7c49985b6609dd84d2c19a537ba8e5211fe4b7117de5eda5e",
    "definitions": {
-    "Pouw.PearlC.AdmitsRefTile": "961568c920947179c74399681e6c2e81c3781f4f4d5b3344ca29a412d5fbde57",
     "Pouw.PearlC.GγSampled": "9279ec55cc7369b92f405866f30c59640610f26feb40111325cdad9ef8020a35",
-    "Pouw.PearlC.GγSampledU": "d323cdade25603d796ea398baa2b70d8aa8709b5ca9a50dbf723ad98f49a0c14",
     "Pouw.PearlC.PearlCSem.passRows": "501dbad8f3a8e06e8bb593ceaa0a7e85bcd2ce56d2ad81056371c8e4fb83fa22",
-    "Pouw.PearlC.PearlCSem.tileDebit": "cae963e1886eb8c93d1842768e1ec2ee2a27a775cc79a014cdc90c80de3de0b0",
     "Pouw.PearlC.TileGood": "351054e8bb81da78e089d086bac1419eeb20f1a9708a2e0d5d1437cb81d2bf20",
-    "Pouw.PearlC.TileGoodU": "3865e5619a939ad8148310dda9c90fcff64b5a2fa64545a27b06e601691acaf5",
     "Pouw.PearlC.TileRules": "649f993305ac489d086e2d2dcfbc8e2086fff7596f7c0e5575aeab71a8c3061e",
     "Pouw.PearlC.TileRules.Wcred": "309ab3b7ef23ebaf3fdb24f11c9edb455d031922e217237b30bfc244b23eb99a",
     "Pouw.PearlC.TileRules.Wref": "97a4344ba87dc0cfdcd7794748f0bd94c1bb859dcf9e9a02807240c15a797ece",
@@ -6290,9 +6256,7 @@
     "Pouw.PearlC.blankTiles": "ded17dcdd1ff10687592868fe90875a36149fec50400caff7973dbd5a333be6f",
     "Pouw.PearlC.claimedWref": "692adf0dd8d465a09b58a1776b904a9ca66cb58fc11a5057b3605110e8f1cdd3",
     "Pouw.PearlC.goodTiles": "d5e0ad40614504f0ae1fadacbfdea02990b7b21c82bb1a265f7520f36fbe78e1",
-    "Pouw.PearlC.goodTilesU": "2a899265ca48b4f6f2c78a032e1c209ae04bd2457bc4bde7588fb9b3141664d8",
     "Pouw.PearlC.gridTiles": "cd94e5959b68a2e8f30fb0dc72db8cd4817a255343b85f33bbfa7e4c7e5d9b39",
-    "Pouw.PearlC.pearlCTiles": "3b437f1f247b61f48446890a7d49baf412fa3fab511662237e866e5d0e2d3f3e",
     "Pouw.PearlC.tileShare": "e5769f881eba3e3067186ea9b70725c392bec6e7311827aa077a78e44fcb20fa",
     "Pouw.PearlC.tileWrefTotal": "386e9e51f5f23870c7a84efb172d3d877a87a0b0ee2b51bb608c59c1a613f9be"
    },
@@ -10024,7 +9988,6 @@
     "Pouw.PearlC.Assumptions.TTOutPearlC": "b631641af566bca1bac82b4ef24702b24ed6a7276e013b35872d8ab89afbaa24",
     "Pouw.PearlC.Assumptions.TTOutPearlCDev": "d4aca48a31e0ae534c5d272aa18a85a7e7c9af6aeaba490f01546d6059ee5a93",
     "Pouw.PearlC.Assumptions.TTOutTile": "953f75b038ef12f1ca8e035102cd694d2a82f97ea079f1ebbd54fa365fefab88",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlC": "eae8b884f1f2b56447c5018e0ca88fc6befbdbf52aaed93a9bf4799a45a38f6f",
     "Pouw.PearlC.Assumptions.TTOutTilePearlCDev": "6b1bff5df662d00b6d187db3143e77905fa46edcd5773bc5535eda66ff500ce2"
    },
    "guarantees": [
@@ -14379,8 +14342,7 @@
     "FlockSoundness.Game.prob": "aa6c4f14ea71e54be5b9f38b5e2f42c05ad50f31a1d43c2d5a1faddeac8c8854",
     "FlockSoundness.Game.recv": "f3c071dc45f8ef96187054a0fe77d99c21b7d56f56c3cff44d87f087ebc42348",
     "FlockSoundness.Game.ret": "ca065f6ebc033ce62a5479b973d71a65f99db83dd7269f01c3148a00421afab0",
-    "FlockSoundness.Game.send": "81985d03aa3b092a327d193e6bff40e7473d65f8e1478c49f719602b93ac3ac8",
-    "FlockSoundness.Game.value": "bc2660b60becad0b8b4c4f8f12e9810dd670a419e44ddecab4f976b1af502fda"
+    "FlockSoundness.Game.send": "81985d03aa3b092a327d193e6bff40e7473d65f8e1478c49f719602b93ac3ac8"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
