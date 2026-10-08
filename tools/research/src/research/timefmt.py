@@ -1,5 +1,5 @@
 """Times people read: Pacific first, then UTC (`1:41 PM PDT (20:41Z)`), so nobody converts by hand. Machine output (JSON, file
-names, ids, front matter, log lines) stays UTC. `slack_dates` rewrites the UTC times in a Slack post into Slack's date token,
+names, ids, front matter, log lines) stays UTC. `slack_dates` rewrites the dated UTC times in a Slack post into Slack's date token,
 which shows each reader their own zone and falls back to `both`. Stdlib only."""
 from __future__ import annotations
 
@@ -15,7 +15,13 @@ UTC = dt.timezone.utc
 
 #: left alone by `slack_dates`: code blocks and spans, Slack's <...> tokens (links, mentions, dates) and bare URLs
 _PROTECTED = re.compile(r"```.*?```|`[^`\n]*`|<[^<>\n]*>|\bhttps?://\S+", re.S)
-_UTC_TIME = re.compile(r"(?<![\w:.-])(?:(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?|(\d{1,2}):(\d{2}))Z(?![\w-])")
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+_MON = r"(?i:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
+_DATE = (rf"(?:(?P<d1>\d{{1,2}})\s+(?P<m1>{_MON})|(?P<m2>{_MON})\s+(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?)"
+         rf"(?:,?\s+(?P<y>\d{{4}}))?,?\s+(?:at\s+)?")
+_PAC = r"(?P<ph>\d{1,2}):(?P<pm>\d{2})\s*(?P<ap>[AP]M)\s+P[DS]T\s+\("
+_UTC_TIME = re.compile(rf"(?<![\w:.-])(?:(?P<iso>(?P<Y>\d{{4}})-(?P<M>\d{{2}})-(?P<D>\d{{2}})T(?P<H>\d{{2}}):(?P<N>\d{{2}})(?::(?P<S>\d{{2}}))?Z)"
+                       rf"|(?:{_DATE})?(?:{_PAC}(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})Z\)|(?P<bh>\d{{1,2}}):(?P<bm>\d{{2}})Z))(?![\w-])")
 
 
 def _utc(t: dt.datetime | str | float) -> dt.datetime:
@@ -37,23 +43,41 @@ def both(t: dt.datetime | str | float) -> str:
     return f"{p:%I:%M %p}".lstrip("0") + f" {p.tzname()} ({u:%H:%M}Z)"
 
 
+def _day(u: dt.datetime) -> str:
+    d = u.astimezone(PACIFIC) if PACIFIC else u
+    return f"{d.day} {d:%b}"
+
+
 def slack_dates(text: str, now: dt.datetime | None = None) -> str:
-    """Each `HH:MMZ` (the one nearest `now`: `00:00Z` written at 16:25Z is the coming midnight, not the one 16 h ago) and
-    `YYYY-MM-DDTHH:MM[:SS]Z` outside code, links and URLs, as `<!date^UNIX^{date_short_pretty} {time}|FALLBACK>` with `both`
-    as the fallback."""
+    """Each dated UTC time outside code, links and URLs, as `<!date^UNIX^{date_short_pretty} {time}|FALLBACK>`:
+    `YYYY-MM-DDTHH:MM[:SS]Z`, or `HH:MMZ` (or `both`'s `7:55 AM PDT (14:55Z)`) right after a date such as `14 Oct`,
+    `Oct 14` or `Oct 14, 2026` (a date without a year is the one nearest `now`; before `both`'s form it is the Pacific date).
+    A time with no date stays as written: guessing its day put a 14 Oct deadline on today."""
     t0 = _utc(now or dt.datetime.now(UTC))
 
     def token(m: re.Match) -> str:
-        y, mo, d, hh, mm, ss, h2, m2 = m.groups()
+        g = m.groupdict()
+        mon = g["m1"] or g["m2"]
+        if not g["iso"] and not mon:
+            return m[0]
         try:
-            if y:
-                u = dt.datetime(int(y), int(mo), int(d), int(hh), int(mm), int(ss or 0), tzinfo=UTC)
+            if g["iso"]:
+                u = dt.datetime(int(g["Y"]), int(g["M"]), int(g["D"]), int(g["H"]), int(g["N"]), int(g["S"] or 0), tzinfo=UTC)
             else:
-                at = dt.datetime.combine(t0.date(), dt.time(int(h2), int(m2)), tzinfo=UTC)
-                u = min((at + dt.timedelta(days=k) for k in (-1, 0, 1)), key=lambda c: abs(c - t0))
+                month, day = _MONTHS.index(mon[:3].lower()) + 1, int(g["d1"] or g["d2"])
+                pac = g["ph"] is not None and PACIFIC is not None
+                if pac:
+                    hour, minute, zone = int(g["ph"]) % 12 + (12 if g["ap"].upper() == "PM" else 0), int(g["pm"]), PACIFIC
+                else:
+                    hour, minute, zone = int(g["zh"] or g["bh"]), int(g["zm"] or g["bm"]), UTC
+                years = [int(g["y"])] if g["y"] else [t0.year - 1, t0.year, t0.year + 1]
+                u = min((dt.datetime(y, month, day, hour, minute, tzinfo=zone).astimezone(UTC) for y in years),
+                        key=lambda c: abs(c - t0))
+                if pac and (u.hour, u.minute) != (int(g["zh"]), int(g["zm"])):
+                    return m[0]
         except ValueError:
             return m[0]
-        return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{both(u)}>"
+        return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{'' if g['iso'] else _day(u) + ' '}{both(u)}>"
 
     out, i = [], 0
     for m in _PROTECTED.finditer(text):

@@ -28,35 +28,54 @@ def test_both_is_pacific_then_utc_across_the_dst_boundary(t, want):
     assert both(t) == want
 
 
-def _token(iso: str) -> str:
+def _token(iso: str, fallback: str | None = None) -> str:
     u = dt.datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{both(u)}>"
+    return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{fallback or both(u)}>"
 
 
-def test_slack_dates_rewrites_both_forms_with_hh_mm_nearest_now():
-    text = "freeze at 22:00Z, thaw 2026-11-01T09:30Z, recheck 2026-11-01T08:30:15Z; by 9:05Z."
-    assert slack_dates(text, NOW) == (f"freeze at {_token('2026-09-30T22:00Z')}, thaw {_token('2026-11-01T09:30Z')}, "
-                                      f"recheck {_token('2026-11-01T08:30:15Z')}; by {_token('2026-09-30T09:05Z')}.")
-    assert slack_dates("22:00Z", dt.datetime(2026, 11, 1, 23, 0, tzinfo=UTC)).endswith("|2:00 PM PST (22:00Z)>")
+def test_slack_dates_rewrites_iso_times():
+    text = "thaw 2026-11-01T09:30Z, recheck 2026-11-01T08:30:15Z."
+    assert slack_dates(text, NOW) == f"thaw {_token('2026-11-01T09:30Z')}, recheck {_token('2026-11-01T08:30:15Z')}."
+
+
+@pytest.mark.parametrize("text", [
+    "freeze at 22:00Z; by 9:05Z.",
+    "leases are clamped to 7:55 AM PDT (14:55Z), today",            # a time with no date names no day
+])
+def test_slack_dates_leaves_a_time_without_a_date_as_written(text):
+    assert slack_dates(text, NOW) == text
 
 
 @pytest.mark.parametrize("now, text, want", [
-    (dt.datetime(2026, 10, 3, 16, 25, tzinfo=UTC), "00:00Z", "2026-10-04T00:00Z"),   # the coming midnight, not 16 h ago
-    (dt.datetime(2026, 10, 3, 16, 25, tzinfo=UTC), "02:00Z", "2026-10-04T02:00Z"),
-    (dt.datetime(2026, 10, 3, 16, 25, tzinfo=UTC), "06:00Z", "2026-10-03T06:00Z"),   # 10 h ago is nearer than 14 h ahead
-    (dt.datetime(2026, 10, 3, 0, 10, tzinfo=UTC), "23:50Z", "2026-10-02T23:50Z"),    # 20 min ago, across the date line
-    (dt.datetime(2026, 12, 31, 23, 0, tzinfo=UTC), "01:00Z", "2027-01-01T01:00Z"),
+    (NOW, "on 14 Oct 14:55Z", f"on {_token('2026-10-14T14:55Z', '14 Oct 7:55 AM PDT (14:55Z)')}"),
+    (NOW, "on Oct 14 at 14:55Z", f"on {_token('2026-10-14T14:55Z', '14 Oct 7:55 AM PDT (14:55Z)')}"),
+    (NOW, "Oct 14th, 14:55Z", _token("2026-10-14T14:55Z", "14 Oct 7:55 AM PDT (14:55Z)")),
+    (NOW, "Oct 14, 2027 14:55Z", _token("2027-10-14T14:55Z", "14 Oct 7:55 AM PDT (14:55Z)")),
+    (NOW, "you mean 14 Oct 7:55 AM PDT (14:55Z)",
+     f"you mean {_token('2026-10-14T14:55Z', '14 Oct 7:55 AM PDT (14:55Z)')}"),
+    (NOW, "30 Sep 11:05 PM PDT (06:05Z)",                           # the date before a Pacific time is the Pacific date
+     _token("2026-10-01T06:05Z", "30 Sep 11:05 PM PDT (06:05Z)")),
+    (dt.datetime(2026, 12, 31, 23, 0, tzinfo=UTC), "3 Jan 01:00Z",  # the year nearest now
+     _token("2027-01-03T01:00Z", "2 Jan 5:00 PM PST (01:00Z)")),
 ])
-def test_slack_dates_takes_the_hh_mm_nearest_now_across_midnight(now, text, want):
-    assert slack_dates(text, now) == _token(want)
+def test_slack_dates_uses_the_date_written_before_the_time(now, text, want):
+    assert slack_dates(text, now) == want
+
+
+@pytest.mark.parametrize("text", [
+    "14 Oct 7:55 AM PDT (15:55Z)",                                  # the two zones disagree
+    "31 Feb 10:00Z",
+])
+def test_slack_dates_leaves_an_impossible_dated_time_as_written(text):
+    assert slack_dates(text, NOW) == text
 
 
 @pytest.mark.parametrize("text", [
     "note:20260930T2020Z-handoff-infra and lanes/x/20260930T2020Z-report-x.md",
     "run `research slack read --since 22:00Z` first",
-    "```\nat 22:00Z\n2026-09-30T20:41Z\n```",
+    "```\nat 14 Oct 22:00Z\n2026-09-30T20:41Z\n```",
     "see https://example.com/log?at=2026-09-30T20:41Z#22:00Z",
-    "<https://example.com/22:00Z|the 22:00Z log>",
+    "<https://example.com/22:00Z|the 14 Oct 22:00Z log>",
     "<!date^1790000000^{date_short_pretty} {time}|1:41 PM PDT (20:41Z)>",
     "2026-09-30T20:41:05.123Z 12:00:00Z 24:00Z 20:41Z-report 20:41Zulu",
 ])
@@ -65,7 +84,8 @@ def test_slack_dates_leaves_ids_code_links_and_non_times_alone(text):
 
 
 def test_slack_dates_rewrites_around_protected_spans():
-    assert slack_dates("`22:00Z` then 22:00Z", NOW) == f"`22:00Z` then {_token('2026-09-30T22:00Z')}"
+    assert (slack_dates("`2026-09-30T22:00Z` then 2026-09-30T22:00Z", NOW)
+            == f"`2026-09-30T22:00Z` then {_token('2026-09-30T22:00Z')}")
 
 
 def test_research_imports_without_a_tz_database_and_prints_utc_alone():
