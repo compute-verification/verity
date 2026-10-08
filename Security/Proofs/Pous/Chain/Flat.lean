@@ -36,10 +36,11 @@ import Mathlib.Data.Fintype.Sum
 P3 with a concrete `H`, the band, the dense chain scheme and the public encoder: every module of their proofs
 outside Mathlib and `Pous`, in import order, each in its own `section`, as graded (the POUS Project store's
 `lean/submissions/p3-concrete-multi/grading/` and `lean/submissions/sponge-dense/grading/`). The definitions the
-trusted layer provides (`Pous/Protocol/Model/P3Chain.lean`, `Pous/Protocol/Model/BandChain.lean`,
-`Pous/Protocol/Model/PubEncoder.lean`, `Pous/Protocol/Accounting/PubMeets.lean`) are removed from their source modules,
-and each source namespace `PousX` of those copies is renamed `Pous.X`, so the proofs are about the trusted constants.
-`Pous/SecurityProofs.lean` states the pinned forms.
+trusted layer provides (`Security/Definitions/Pous/Model/P3Chain.lean`,
+`Security/Definitions/Pous/Model/BandChain.lean`, `Security/Definitions/Pous/Model/PubEncoder.lean`,
+`Security/Definitions/Pous/Accounting/PubMeets.lean`) are removed from their source modules, and each source
+namespace `PousX` of those copies is renamed `Pous.X`, so the proofs are about the trusted constants.
+`Security/Proofs/Pous.lean` states the pinned forms.
 -/
 
 /-! ════ SpongeDense ════ -/
@@ -4152,7 +4153,8 @@ set_option relaxedAutoImplicit false
 /-!
 # P3 at 64 KB labels, over the tweaked model: the headline instance
 
-This is aligned with the reference implementation (`protocols/pous`, `DISCREPANCIES.md` items 1 and 3):
+This is aligned with the reference implementation (`verity/experimental/protocols/pous`, `DISCREPANCIES.md` items 1
+and 3):
 * **Labels** are 220 components of `wc = 2384` bits (298 B), i.e. `220·2384 = 524480` bits = 65,560 B.
 * **Salt and tag.** The salt is 24 bytes (`Coins = Bits 192`, `t = 192`), and segment `s` is keyed by
   `tag_s = salt ‖ u64(s)`. Bytes are little-endian (item 15): tag bit `i` is salt bit `i` for `i < 192`, and bit
@@ -53241,10 +53243,10 @@ set_option relaxedAutoImplicit true
 # The public-encoder audit game: the lane's remainder after the move into the trusted layer
 
 The trusted definitions of the public-encoder workstream now live in the trusted layer, verbatim and under the same
-names: `Pous/Protocol/Model/PubEncoder.lean` (`SetupCheck` … `PubAuditSecure`) and
-`Pous/Protocol/Accounting/PubMeets.lean` (`PubMeets`), as this file planned. Only `Scheme.EncDec`, which no pinned
-statement reads, stays here. Every file that imported this one builds unchanged, because the names and terms are the
-same.
+names: `Security/Definitions/Pous/Model/PubEncoder.lean` (`SetupCheck` … `PubAuditSecure`) and
+`Security/Definitions/Pous/Accounting/PubMeets.lean` (`PubMeets`), as this file planned. Only `Scheme.EncDec`,
+which no pinned statement reads, stays here. Every file that imported this one builds unchanged, because the names and
+terms are the same.
 -/
 
 namespace Pous

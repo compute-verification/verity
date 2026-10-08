@@ -1,6 +1,6 @@
 """The continuous audit's memory challenger (`verity.experimental.protocols.pous.continuous`): each of the continuous game's three requirements on the
 protocol (no pipelining, a hard deadline, every late answer counted) enforced on `audit.UnsignedRounds` over a stream
-of challenges, on a small band with the verifier's clock injected."""
+of challenges, on a small band with the memory challenger's clock injected."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_honest_stream(world, root_only):
         v.challenge()
 
 
-# Liveness: the driver closes every challenge by the verifier's clock.
+# Liveness: the driver closes every challenge by the memory challenger's clock.
 
 def test_a_silent_responder_cannot_hang_the_stream(world):
     """No reply ever: `run_continuous` still ends, each challenge rejected just past its hard deadline and counted
@@ -193,8 +193,8 @@ def test_a_pipelined_answer_is_refused(world):
 
 
 def test_deadlines_run_from_the_memory_challengers_send(world):
-    """Lateness is the verifier's own clock from its reveal: time before the arrival never counts, and a latency the
-    responder reports is kept but never read."""
+    """Lateness is the memory challenger's own clock from its reveal: time before the arrival never counts, and a
+    latency the responder reports is kept but never read."""
     blocks, vk = world
     clock = Clock()
     v = _verifier(vk, 2, clock)
@@ -305,7 +305,7 @@ def test_challenge_past_the_last_hard_deadline_closes_it_then_refuses(world):
 
 def test_the_hard_deadline_is_capped(world):
     """`Δ_late + RTT` must fit at most `D_late = 12` calls of 241.5 µs (under 3,139,500 ns) and at most the band's `d`,
-    and the continuous verifier does not run without one."""
+    and the continuous audit's memory challenger does not run without one."""
     _, vk = world
     key = challenge_key(b"audit", vk)
     assert PARAMS.call_ns == 241_500 and LATE_ROUNDS == 12
@@ -507,8 +507,8 @@ def test_a_stalling_prover_is_rejected_not_retried(world):
 
 
 def test_the_gaps_between_challenges_count_toward_the_cap(world):
-    """Answers on time, but the verifier's own gaps reach past the cap: the challenge sent past it closes at once,
-    rejected, and the audit is aborted."""
+    """Answers on time, but the memory challenger's own gaps reach past the cap: the challenge sent past it closes at
+    once, rejected, and the audit is aborted."""
     blocks, vk = world
     clock = Clock()
     v = _verifier(vk, 3, clock, audit_cap=AUDIT_CAP)
@@ -546,8 +546,8 @@ def test_an_answer_past_the_cap_is_rejected_unchecked(world, monkeypatch):
 
 
 def test_the_memory_challenger_caps_a_graded_audit(world):
-    """`run_timed` over a `UnsignedRounds` with a hard deadline and the cap, the graded audit's verifier: answers late
-    but within the hard deadline end at the cap, rejected."""
+    """`run_timed` over a `UnsignedRounds` with a hard deadline and the cap, the graded audit's memory challenger:
+    answers late but within the hard deadline end at the cap, rejected."""
     blocks, vk = world
     clock = Clock()
 
