@@ -618,6 +618,28 @@ def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
     assert sorted(A.read_groups(A.guarantee_reads(rec))["P.Defs"]["definitions"]) == ["P.g", "P.walk"]   # through its `_f`
 
 
+def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_out():
+    """A record whose declarations are unchanged but whose generated constants are grouped differently (`group_keys`) is
+    counted on one line that `statement_changes` leaves out, so Daniel's DM lists only real changes; a changed declaration
+    among them is still listed."""
+    enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
+    mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
+    cases = {"name": "P.Enc.casesOn", "module": "P.Defs", "kind": "def", "hash": "3" * 32, "own": []}
+    g = {"name": "P.g", "module": "P.Defs", "kind": "def", "hash": "4" * 32, "own": []}
+    pol = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}}}
+    now = facts(pins={"P.t": fact(reads=[enc, mk, cases, g])})
+    sha_ = lambda *rs: A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
+    by_parent = {"P.Enc": sha_(enc, mk, cases), "P.g": sha_(g)}
+    old = A.judge(pol, now, FILES, update=True)[1] | {"reads": {"P.Defs": {"digest": A.module_digest(by_parent),
+                                                                         "definitions": by_parent, "guarantees": ["P.t"]}}}
+    new = A.judge(old, now, FILES, update=True)[1]
+    notes = A.review(old, new, now, {})
+    assert notes == [f"reads: 2 {A.REGROUPED_OWN}"] and A.statement_changes(notes) == []
+    now2 = facts(pins={"P.t": fact(reads=[enc, mk, cases, {**g, "hash": "5" * 32}])})
+    notes = A.review(old, A.judge(old, now2, FILES, update=True)[1], now2, {})
+    assert [n.split(":")[0] for n in A.statement_changes(notes)] == ["definition P.g (P.Defs), read by P.t"]
+
+
 def test_update_prints_each_changed_guarantee_and_definition(tmp_path):
     (tmp_path / "Defs.lean").write_text("namespace P\n\ndef f (n : Nat) : Nat := n\n\nend P\n")
     old = recorded()

@@ -1162,6 +1162,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
 REHASHED = "rehashed with SHA-256: the same statement (its 32-bit hash matched)"
 REGROUPED = "read groups rehashed with SHA-256: the same definitions (their 32-bit hashes matched)"
+REGROUPED_OWN = "read records regrouped (generated constants), same declarations"
 MOVED = "the same statement under its old names"
 LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
@@ -1206,7 +1207,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it and its source as it is now.  A guarantee whose statement is the same
     but prints differently (a toolchain's printer, notation) gets one line, and so does one whose 32-bit record is rewritten
-    with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line.
+    with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line, and so are
+    records whose declarations are unchanged but whose generated constants `group_keys` groups differently.
     Definitions are compared by name, whichever module reads them.  A guarantee lifted into a `Guarantees` definition that
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
@@ -1252,25 +1254,33 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     oreads = old.get("reads", {})
     recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
                 for m, rec in oreads.items() for d, h in definitions(rec).items()}
-    now: dict[str, dict] = {}
     greads = guarantee_reads(facts)
-    key = group_keys(greads)
-    for m, es in greads.items():
-        groups: dict[str, list] = {}
-        for n, e in es.items():
-            d = key[n]
-            if moves and e.get("moved") and d not in recorded:
-                d = e["moved"]["as"].removesuffix(n[len(d):])
-            groups.setdefault(d, []).append(e)
-        for d, g in groups.items():
-            as_was = digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
-                             if moves and e.get("moved") else e for e in g])
-            sha256 = digest(g) if recorded.get(d, {}).get("hash") == digest(g) else as_was
-            now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": sha256,
-                      "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g)))}
+
+    def records(key: dict[str, str]) -> dict[str, dict]:
+        now: dict[str, dict] = {}
+        for m, es in greads.items():
+            groups: dict[str, list] = {}
+            for n, e in es.items():
+                d = key[n]
+                if moves and e.get("moved") and d not in recorded:
+                    d = e["moved"]["as"].removesuffix(n[len(d):])
+                groups.setdefault(d, []).append(e)
+            for d, g in groups.items():
+                as_was = digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
+                                 if moves and e.get("moved") else e for e in g])
+                sha256 = digest(g) if recorded.get(d, {}).get("hash") == digest(g) else as_was
+                now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": sha256, "members": [e["name"] for e in g],
+                          "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g)))}
+        return now
+
+    now = records(group_keys(greads))
+    # every generated constant with its declaration by name (`parent`), a superset of each `group_keys` group: a record that
+    # still matches so has the same declarations, and a change to it or out of it is regrouping only
+    by_parent = records({n: parent(n) for es in greads.values() for n in es})
+    same = {d for d, x in recorded.items() if x["hash"] is not None and by_parent.get(d, {}).get("sha256") == x["hash"]}
     regrouped = sum(old_group(rec) and all(now.get(d, {}).get("hash") == h for d, h in definitions(rec).items())
                     for rec in oreads.values())
-    elsewhere = 0
+    elsewhere = regrouped_own = 0
     for d in sorted(set(recorded) | set(now)):
         x, y = recorded.get(d), now.get(d)
         away = bool(x and y) and (x["module"] != y["module"] or y["name"] != d)
@@ -1278,6 +1288,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
             elsewhere += away and len(x["hash"]) != OLD
             continue
         if y and not x and set(y["guarantees"]) <= lifts.get(y["name"], set()):
+            continue
+        if (d in same if x else all(parent(n) in same for n in y["members"])):
+            regrouped_own += 1
             continue
         state = "new" if not x else "gone" if not y else "changed" if x["hash"] is not None else "in a changed module"
         z = y or x
@@ -1291,6 +1304,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {elsewhere} {MOVED_READS}")
     if regrouped:
         out.append(f"reads: {regrouped} {REGROUPED}")
+    if regrouped_own:
+        out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
     return out
 
 
@@ -1298,7 +1313,7 @@ def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review that change what a guarantee says: all but the guarantees and read groups whose statements and
     definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved or
     lifted), and a changed owner."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, LIFTED, MOVED_READS, OWNED))]
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED))]
 
 
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
