@@ -10,16 +10,17 @@ import struct
 import pytest
 
 from verity.primitives.commitments.identity import tagged_sha512
+from verity.primitives.crypto import lms
 from verity.protocols.accounting.communication.certifier.audit import Audit
 from verity.protocols.accounting.communication.certifier.certificate import (
-    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, RecordHead, certificate_message, depth, empty,
-    frames_root, open_frame, parameters_digest, real_frames, record_head, verify_frame)
+    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead, certificate_message, depth,
+    empty, frames_root, open_frame, parameters_digest, real_frames, record_head, verify_frame)
 from verity.protocols.accounting.communication.certifier.commitment import commit
 from verity.protocols.accounting.communication.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier, fill
 from verity.protocols.accounting.communication.certifier.schedule import ClockSync, run_shaper
 
 from test_network_certifier_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready, ingress_run
-from toy_signer import ToySigner
+import signers
 
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 PARAMS = bytes(range(64))
@@ -169,7 +170,7 @@ def scenarios():
 def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
     """The difftest on the test vectors: with an honest issuer, every egress scenario gets the raw audit's verdicts,
     rejections included, and the committed (v1) audit agrees."""
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     key = signer.public_key()
     seen = set()
     for name, (records, syncs) in scenarios().items():
@@ -183,7 +184,7 @@ def test_certified_audit_matches_raw_audit_on_every_egress_scenario(tmp_path):
 
 def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path):
     """One clock per spatial unit: a second link with another in-set sync in window 1 is advice there, certified too."""
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     key = signer.public_key()
     other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
     responses = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
@@ -199,7 +200,7 @@ def test_certified_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path
 def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
     """Ingress: different timings are both accepted, and an incomplete status, a duplicate and a missing window are the
     raw audit's violations, certified."""
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     key = signer.public_key()
     early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
     late = ingress_run([[0, 0, 0, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
@@ -213,7 +214,7 @@ def test_certified_audit_matches_raw_audit_on_ingress(tmp_path):
 def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
     """Moving a certificate to another window, link or direction, editing its head, signing with another key or
     forging the signature is a `signature` violation, and only in that window."""
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     key = signer.public_key()
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     certified = certify_all(Issuer(signer), honest)
@@ -238,14 +239,14 @@ def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
                                                   | {"signature": bytes(len(c0.certificate.signature))}))
     assert egress_verdicts([forged, *certified[1:]], key) == ["signature", None, None]
     (tmp_path / "stranger").mkdir()
-    stranger = ToySigner.create(tmp_path / "stranger", seed=b"other", height=6)
+    stranger = signers.signer(tmp_path / "stranger", seed=b"other")
     assert egress_verdicts(certify_all(Issuer(stranger), honest), key) == ["signature"] * 3
     assert egress_verdicts(certified, key) == [None, None, None]
 
 
 def test_a_relayed_status_the_certificate_disagrees_with_is_a_signature_violation(tmp_path):
     """The status is the signed head's: a relay that edits a faulted head to complete breaks the certificate."""
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     w = Certifier("requests", P)
     w.fault(Reason.DROPPED)
     for _ in range(P.buckets):
@@ -259,7 +260,7 @@ def test_a_relayed_status_the_certificate_disagrees_with_is_a_signature_violatio
 
 
 def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatch(tmp_path):
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     key = signer.public_key()
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     issuer = Issuer(signer)
@@ -279,7 +280,7 @@ def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatc
 
 
 def test_certified_records_need_the_key_and_ingress_its_parameters(tmp_path):
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     certified = certify_all(Issuer(signer), honest)
     with pytest.raises(ValueError, match="public key"):
@@ -293,24 +294,42 @@ def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_clos
     """No state: nothing is signed and every window is `no-verdict`. State restored from an old copy: the signer
     refuses rather than reuse a leaf, and the windows from then on are `no-verdict` until the state is current."""
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    signer = ToySigner.create(tmp_path, height=6)
+    signer = signers.signer(tmp_path)
     key = signer.public_key()
-    old = tmp_path / "old-state.json"
+    old, current = tmp_path / "old-state.json", tmp_path / "current-state.json"
     shutil.copy(signer.state, old)
     issuer = Issuer(signer)
     first = issuer.certify(honest[0], EGRESS, P, parameters_digest(P, SYNC_SET))
+    shutil.copy(signer.state, current)
     shutil.copy(old, signer.state)
     rest = certify_all(issuer, honest[1:])
     assert rest == [] and issuer.refused == [("responses", EGRESS, 1), ("responses", EGRESS, 2)]
     assert egress_verdicts([first], key) == [None, "no-verdict", "no-verdict"]
-    assert signer.used() == [0]
-    signer.state.write_text('{"next": 1}')
+    assert signers.used(signer) == [0]
+    shutil.copy(current, signer.state)
     assert egress_verdicts([first, *certify_all(issuer, honest[1:])], key) == [None, None, None]
-    assert signer.used() == [0, 1, 2]
+    assert signers.used(signer) == [0, 1, 2]
     signer.state.unlink()
     missing = Issuer(signer)
     assert certify_all(missing, honest) == [] and len(missing.refused) == 3
     assert egress_verdicts([], key) == ["no-verdict"] * 3
+
+
+def test_a_second_signer_on_one_state_or_below_its_floor_refuses(tmp_path):
+    """The leaf state is held by the signer that opened it: a second signer on it refuses until the first closes, and a
+    signer whose floor is past the state (a restore from before a published leaf) refuses outright."""
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    parameters = parameters_digest(P, SYNC_SET)
+    first = signers.signer(tmp_path)
+    assert Issuer(first).certify(honest[0], EGRESS, P, parameters) is not None
+    second = Issuer(LmsSigner(first.key, first.state))
+    assert second.certify(honest[1], EGRESS, P, parameters) is None and second.refused == [("responses", EGRESS, 1)]
+    first.close()
+    floored = Issuer(LmsSigner(first.key, first.state, floor=5))
+    assert floored.certify(honest[1], EGRESS, P, parameters) is None
+    again = second.certify(honest[1], EGRESS, P, parameters)
+    assert again is not None and again.verify(first.public_key())
+    assert lms.Signature.decode(signers.SMALL, again.certificate.signature).q == 1
 
 
 def test_certificate_message_binds_key_link_direction_window_and_digest():
@@ -320,3 +339,4 @@ def test_certificate_message_binds_key_link_direction_window_and_digest():
               certificate_message(b"I" * 16, "l", INGRESS, 0, d), certificate_message(b"I" * 16, "l", EGRESS, 1, d),
               certificate_message(b"I" * 16, "l", EGRESS, 0, b"\1" + bytes(63))]
     assert len(base) == 64 and len({base, *others}) == 6
+    assert base == lms.certificate_message(b"I" * 16, "l", "egress", 0, d)
