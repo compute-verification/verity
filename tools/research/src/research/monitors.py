@@ -4,8 +4,8 @@ monitors and writes each incident once when it opens and once when it clears; th
 (they need GitHub, the evidence store or Slack) and posts both sets to #agent-alerts. Every Nebius machine runs the `machine`
 monitors (`vy-watchdog.timer`: `run --where machine --machine NAME --peer HOST ...`): memory pressure that holds, each process
 the OOM killer took (named with its run and the run's sender), a peer that stops answering, /workspace filling within hours on its
-recent trend (named with the biggest live runs), and yesterday's count of full checks
-lost to infrastructure. The machines watch each other, so one that hangs is reported by one that doesn't.
+recent trend (named with the biggest live runs), a unit deploy.toml runs there that was never installed or is off, and
+yesterday's count of full checks lost to infrastructure. The machines watch each other, so one that hangs is reported by one that doesn't.
 
     research monitors list [--where node|relay] [--json]
     research monitors check [ID ...] [--where node|relay] [--json]     evaluate now and write nothing
@@ -693,6 +693,7 @@ EXPECTED_FAILED = {
     "nvidia-fabricmanager.service": "both nodes' GPUs are PCIe, with no NVSwitch to manage, so it fails at every boot",
 }
 UNITS = "systemctl --failed --no-legend --plain; echo ---; systemctl --user --failed --no-legend --plain"
+SESSION_RE = re.compile(r"session-(\d+)\.scope$")
 
 
 def failed_units(text: str) -> list[tuple[str, str]]:
@@ -720,11 +721,23 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
             if r.returncode and "connect to bus" not in (r.stderr or ""):
                 raise RuntimeError(f"systemctl --user exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
             text += "---\n" + (r.stdout if r.returncode == 0 else "")
-        return [Finding(f"{scope}:{u}", f"*{name}: {'the user unit' if scope == 'user' else 'unit'} `{u}` has failed*")
-                for scope, u in failed_units(text)]
+        failed = failed_units(text)
+        sessions = sorted((u for scope, u in failed if scope == "system" and SESSION_RE.match(u)),
+                          key=lambda u: int(SESSION_RE.match(u)[1]))
+        out = [Finding(f"{scope}:{u}", f"*{name}: {'the user unit' if scope == 'user' else 'unit'} `{u}` has failed*")
+               for scope, u in failed if not (scope == "system" and SESSION_RE.match(u))]
+        if sessions:
+            span = f"`{sessions[0]}`" + (f" to `{sessions[-1]}`" if len(sessions) > 1 else "")
+            out.append(Finding("system:session-*.scope", f"*{name}: {len(sessions)} login session scope"
+                               f"{'s have' if len(sessions) > 1 else ' has'} failed* ({span}): those logins (ssh, and the runs sent "
+                               "over it) got no scope of their own, so no per-run memory cap. `journalctl -u UNIT` names the cause; once it's fixed, "
+                               "`systemctl reset-failed 'session-*.scope'`.",
+                               cleared=f"*Cleared:* no failed login session scope on {name.lower()}."))
+        return out
 
     check.__doc__ = (f"A failed systemd unit on {name.lower()}, system or research's user manager (`systemctl --failed`), less "
-                     "EXPECTED_FAILED: units that fail on this hardware by design, each with its reason.")
+                     "EXPECTED_FAILED: units that fail on this hardware by design, each with its reason. Failed login "
+                     "session scopes are one incident.")
     return check
 
 
@@ -983,6 +996,69 @@ def disk_forecast(ctx: Ctx) -> list[Finding]:
     return found
 
 
+MANIFEST = Path(__file__).resolve().parent / "pods/nebius/deploy.toml"     # installed beside this file on every machine
+UNIT_SUFFIX_RE = re.compile(r"\.(service|timer|socket|path|target|mount)$")
+ENABLED = ("enabled", "enabled-runtime", "static", "indirect", "generated", "alias")
+EXPECTED_OFF: dict[tuple[str, str], str] = {     # (machine, `systemd:UNIT`): why a unit deploy.toml runs is off there by design
+    ("vy-nebius-1", "systemd:vy-n2-offload.service"): "node 2 runs checks, not its fill queue, since its restart on 8 Oct, so "
+                                                      "nothing on node 2 would take an offloaded build",
+    ("vy-nebius-1", "systemd:vy-n2-commit-offload.service"): "as vy-n2-offload: no fill runner on node 2 to take a Commit",
+}
+
+
+def expected_units(machine: str, manifest: str) -> list[str]:
+    """`systemd:UNIT` / `user-systemd:UNIT` for each unit a `run` of deploy.toml names on `machine`, less held entries' and
+    EXPECTED_OFF; a unit without a suffix is a service (ops deploy's unit_name)."""
+    import tomllib
+
+    m, out = tomllib.loads(manifest), set()
+    for e in m.get("file", []) + m.get("tree", []):
+        if machine not in e.get("nodes", []) or e.get("hold"):
+            continue
+        for r in e.get("run", []):
+            kind, _, name = r.partition(":")
+            if kind in ("systemd", "user-systemd") and name:
+                out.add(f"{kind}:{name if UNIT_SUFFIX_RE.search(name) else name + '.service'}")
+    return sorted(out - {u for (mm, u) in EXPECTED_OFF if mm == machine})
+
+
+def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, str]]:
+    """`systemctl show`'s load, unit-file and active state of each of `names` in `scope` (`systemd`, or research's user manager)."""
+    argv = ["systemctl", *(["--user"] if scope == "user-systemd" else []), "show", "--no-pager",
+            "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState", "-p", "SubState", *names]
+    env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    r = ctx.run(argv, capture_output=True, text=True, timeout=ctx.bound(30), env=env)
+    if r.returncode:
+        raise RuntimeError(f"`{' '.join(argv[:3])}` exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
+    blocks = [dict(ln.split("=", 1) for ln in b.splitlines() if "=" in ln) for b in r.stdout.strip().split("\n\n")]
+    if len(blocks) != len(names):
+        raise RuntimeError(f"`systemctl show` gave {len(blocks)} units for {len(names)}")
+    return dict(zip(names, blocks))
+
+
+def units_expected(ctx: Ctx) -> list[Finding]:
+    """A unit deploy.toml runs on this machine (its `run`s, beside this file) that was never installed, isn't enabled or isn't
+    active, held for 5 minutes; less EXPECTED_OFF."""
+    want = expected_units(ctx.machine, MANIFEST.read_text())
+    out = []
+    for scope in ("systemd", "user-systemd"):
+        names = [u.split(":", 1)[1] for u in want if u.startswith(scope + ":")]
+        for name, s in (unit_states(ctx, scope, names) if names else {}).items():
+            off = []
+            if s.get("LoadState") == "not-found":
+                off.append("was never installed (systemd doesn't know it)")
+            else:
+                if s.get("UnitFileState") not in ENABLED:
+                    off.append(f"isn't enabled ({s.get('UnitFileState') or '?'}), so it won't start at boot")
+                if s.get("ActiveState") not in ("active", "reloading"):
+                    off.append(f"isn't running ({s.get('ActiveState') or '?'}/{s.get('SubState') or '?'})")
+            if off:
+                what = "the user unit" if scope == "user-systemd" else "unit"
+                out.append(Finding(f"{scope}:{name}", f"*{ctx.machine}: {what} `{name}` {' and '.join(off)}*, though deploy.toml "
+                                   "runs it there.", cleared=f"*Cleared:* {ctx.machine}'s `{name}` is enabled and running."))
+    return out
+
+
 def is_full_check(req: dict) -> bool:
     args, cmd = [str(a) for a in req.get("harness_args") or []], " ".join(str(a) for a in req.get("command") or [])
     return ("--tool" in args[:-1] and args[args.index("--tool") + 1] == "check") or "check/slot.py" in cmd or "check/check.py" in cmd
@@ -1031,8 +1107,8 @@ MONITORS: list[Monitor] = [
     Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800, n2="probe"),
     Monitor("stalls-n1", "infra", "page", "node", stalls_n1,
             "A blocked pool: stop the process its `blocked` file names (or have its owner stop it), then remove the file. A "
-            "dispatcher that fails or doesn't tick: read its pane and loop.log, fix the cause, restart it in tmux "
-            "`node1-dispatch`.", unread_s=600),
+            "dispatcher that fails or doesn't tick: read loop.log and `systemctl status vy-node1-dispatch`, fix the cause, "
+            "`sudo systemctl restart vy-node1-dispatch`.", unread_s=600),
     Monitor("idle-while-waiting-n1", "infra", "warn", "node", idle_while_waiting_n1,
             "Why isn't the waiter granted? `cat /run/gpu-lease*/n1-lease.json` (mode, pool, waiting), the pool's cap "
             "(VY_POOL_MAX) and its queue's quota (n1_lease.py's grow rule), and the cluster agent's grants when the brain is on. "
@@ -1068,6 +1144,11 @@ MONITORS: list[Monitor] = [
             "Tell the senders of the runs it names what they are writing; then free space by the retention policy (`research "
             "retention report` on the machine, `research retention gc --apply`).",
             every_s=600, clear_s=1800),
+    Monitor("units-expected", "infra", "page", "machine", units_expected,
+            "Never installed: `research deploy install MACHINE --by infra --apply PATH` from deploy.toml, then `systemctl "
+            "daemon-reload`. Off: `systemctl status UNIT` and `journalctl -u UNIT -n 50` on the machine (`--user` for a user "
+            "unit); `systemctl enable --now UNIT` once its cause is fixed. A unit off there by design goes in EXPECTED_OFF in research/monitors.py with "
+            "the reason, or out of that machine's `nodes` in deploy.toml.", every_s=300, for_s=300, clear_s=300),
     Monitor("lost-checks", "infra", "warn", "machine", lost_checks,
             "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
