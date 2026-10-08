@@ -50,6 +50,8 @@ Registered functions (all `Name_v1`; statics K, N, G = 128 the scale block, KB =
   MoeExpertFp8BlockCoordinateW{K,G,KB,SWAP}   (xq, sx, g, wrow, sw) -> bf16: one w2 output word (routed weight g)
   MoeExpertFp8BlockGemm{K,N,G,KB,SWAP}        the w13 launch on one (token, slot) pair: the N coordinates over the expert's rows
   MoeExpertFp8BlockGemmW{K,N,G,KB,SWAP}       the w2 launch on one pair
+and `Name_v3{..., DOT}` of each, the same body with the e4m3 k32 step `DOT` (the target's `tl.dot` step: `BlackwellE4m3QmmaDot32_v1`
+on cc 12.0, where SWAP_AB is never taken and the block-[64, 64] checkpoints launch at G = 64).
 The expert's e4m3 weight rows `w` [N, K] and their f32 block scales `ws` [cdiv(N, G), K/G] (`w13_weight_scale_inv` /
 `w2_weight_scale_inv`, the checkpoint's words) are operands; `xq` / `sx` are the pair's quantised activation and its group scales.
 
@@ -108,9 +110,8 @@ def triton_block_acc(B, K: int, G: int, KB: int, SWAP: bool, xq, sx, wrow, sw, z
     return acc
 
 
-def _acc(B, S, xq, sx, wrow, sw):
-    return triton_block_acc(B, S.K, S.G, S.KB, bool(S.SWAP), xq, sx, wrow, sw, lambda: B.call(b1.ZERO32), HopperE4m3QgmmaDot32,
-                            P.F32Mul, P.F32Fma)
+def _acc(B, S, xq, sx, wrow, sw, dot=HopperE4m3QgmmaDot32):
+    return triton_block_acc(B, S.K, S.G, S.KB, bool(S.SWAP), xq, sx, wrow, sw, lambda: B.call(b1.ZERO32), dot, P.F32Mul, P.F32Fma)
 
 
 @composite("MoeExpertFp8BlockCoordinate", 1, ["K", "G", "KB", "SWAP"],
@@ -160,6 +161,55 @@ def MoeExpertFp8BlockGemm(B, S, xq, sx, w, ws):
 def MoeExpertFp8BlockGemmW(B, S, xq, sx, g, w, ws):
     """`fused_moe_kernel`'s w2 launch on one pair: y[n] = `MoeExpertFp8BlockCoordinateW_v1`(xq, sx, g, w[n], ws[n // G])."""
     coord = bind(MoeExpertFp8BlockCoordinateW, K=S.K, G=S.G, KB=S.KB, SWAP=S.SWAP)
+    return rows(B, coord, S.N, S.G, w, ws, (xq, sx, g))
+
+
+# ---------------------------------------------------------------------------------------------------------
+# the four with the e4m3 k32 step as a static: `tl.dot`'s step on the declared target (`frontend.targets.moe_expert_fp8_dot`), the
+# `_v1` bodies with `DOT` for `HopperE4m3QgmmaDot32_v1`; `_v2` is each `_v1`'s Boolean version
+# ---------------------------------------------------------------------------------------------------------
+
+DOT_CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; on cc 12.0 (DOT = BlackwellE4m3QmmaDot32_v1) "
+             "every 32-wide tile of the block-[64, 64] w13 and w2 launches is one QMMA.16832.F32.E4M3.E4M3 from RZ; its hardware check "
+             "is the cc 12.0 fused-MoE FP8 capture (pending)")
+
+
+def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):
+    g = (("g", f32),) if routed else ()
+    return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32))) + g
+                      + (("wrow", Array(S.K, e4m3)), ("sw", Array(S.K // S.G, f32))), bf16)
+
+
+def gemm_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):
+    g = (("g", f32),) if routed else ()
+    return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32))) + g
+                      + (("w", Array(S.N, Array(S.K, e4m3))), ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, f32)))),
+                      Array(S.N, bf16))
+
+
+@composite("MoeExpertFp8BlockCoordinate", 3, ["K", "G", "KB", "SWAP", "DOT"], coordinate_sig(False), conformance=DOT_CONF)
+def MoeExpertFp8BlockCoordinateV3(B, S, xq, sx, wrow, sw):
+    """`MoeExpertFp8BlockCoordinate_v1` with the e4m3 k32 step `DOT`: each tile's dot KB/32 `DOT` steps from +0."""
+    return B.call(P.F2fpBf16, _acc(B, S, xq, sx, wrow, sw, S.DOT))
+
+
+@composite("MoeExpertFp8BlockCoordinateW", 3, ["K", "G", "KB", "SWAP", "DOT"], coordinate_sig(True), conformance=DOT_CONF)
+def MoeExpertFp8BlockCoordinateWV3(B, S, xq, sx, g, wrow, sw):
+    """`MoeExpertFp8BlockCoordinateW_v1` with the e4m3 k32 step `DOT`."""
+    return B.call(P.F2fpBf16, B.call(P.F32Mul, _acc(B, S, xq, sx, wrow, sw, S.DOT), g))
+
+
+@composite("MoeExpertFp8BlockGemm", 3, ["K", "N", "G", "KB", "SWAP", "DOT"], gemm_sig(False), conformance=DOT_CONF)
+def MoeExpertFp8BlockGemmV3(B, S, xq, sx, w, ws):
+    """`MoeExpertFp8BlockGemm_v1` with the e4m3 k32 step `DOT`: y[n] = `MoeExpertFp8BlockCoordinate_v3`(xq, sx, w[n], ws[n // G])."""
+    coord = bind(MoeExpertFp8BlockCoordinateV3, K=S.K, G=S.G, KB=S.KB, SWAP=S.SWAP, DOT=S.DOT)
+    return rows(B, coord, S.N, S.G, w, ws, (xq, sx))
+
+
+@composite("MoeExpertFp8BlockGemmW", 3, ["K", "N", "G", "KB", "SWAP", "DOT"], gemm_sig(True), conformance=DOT_CONF)
+def MoeExpertFp8BlockGemmWV3(B, S, xq, sx, g, w, ws):
+    """`MoeExpertFp8BlockGemmW_v1` with the e4m3 k32 step `DOT`: y[n] = `MoeExpertFp8BlockCoordinateW_v3`(xq, sx, g, w[n], ws[n // G])."""
+    coord = bind(MoeExpertFp8BlockCoordinateWV3, K=S.K, G=S.G, KB=S.KB, SWAP=S.SWAP, DOT=S.DOT)
     return rows(B, coord, S.N, S.G, w, ws, (xq, sx, g))
 
 
@@ -222,4 +272,5 @@ def SiluMulFp8BlockQuant(B, S, gu):
 
 
 FP8_MOE_COMPOSITES = [MoeExpertFp8BlockCoordinate, MoeExpertFp8BlockCoordinateW, MoeExpertFp8BlockGemm, MoeExpertFp8BlockGemmW,
+                      MoeExpertFp8BlockCoordinateV3, MoeExpertFp8BlockCoordinateWV3, MoeExpertFp8BlockGemmV3, MoeExpertFp8BlockGemmWV3,
                       SiluMulFp8BlockQuantResult, SiluMulFp8BlockQuantGroup, SiluMulFp8BlockQuant]

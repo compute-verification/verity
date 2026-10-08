@@ -125,6 +125,11 @@ class GemmTarget:
     #: `ScaledMmFp8Block_v1` and its shared-scale form hard-code, pinned on the H100 (their conformance, `registry.fp8`); None = that
     #: kernel has no registered Definition on this target, and the blockwise FP8 linear is refused by name.
     fp8_block_dot: str | None = None
+    #: the block-FP8 fused-MoE experts (`TritonExperts`: `fused_moe_kernel` with `use_fp8_w8a8` over [M, K/G] x [E, cdiv(N, G), K/G]
+    #: scales), as measured: the e4m3 k32 step of its `tl.dot` (`targets.FP8_DOTS`; `targets.moe_expert_fp8_gemm_spec` binds each
+    #: (token, slot) pair over it).  None = that kernel has no registered Definition on this target, and the block-FP8 experts are
+    #: refused by name (cc 9.0's GLM-5.3 experts bind the Hopper-step `_v1` forms through their capture map, not this record).
+    fp8_moe_dot: str | None = None
     #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
     #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
     fp4_dot: str | None = None
