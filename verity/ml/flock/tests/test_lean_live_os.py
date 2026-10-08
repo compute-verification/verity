@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 FLOCK = Path(__file__).resolve().parents[1]
-LEAN = FLOCK / "verifier" / "lean"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 (4 instances) with a seeded and an FC_COINS=os loopback session of a proving build; the circuit is #306's
 FIXTURE = "art:12f95e2a"

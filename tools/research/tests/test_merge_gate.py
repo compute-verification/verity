@@ -529,6 +529,16 @@ def test_a_pr_stacked_on_another_in_the_tip_needs_grants_only_for_what_it_adds(t
     assert merge_main([_git(tmp_path / "tip-u", "rev-parse", "HEAD"), "--dry-run"]) == 3
     assert f"#31 at {heads[31][:12]} is stacked on #30 at {heads[30][:12]}" in capsys.readouterr().err
 
+    # #32 opened at #31's head (lean's #1385 at #1309's): it lands whole with #31, so it is no base #31 stacks on
+    _git(main, "push", "-q", "origin", f"{heads[31]}:refs/pull/32/head")
+    assert merge_main(["--train", "--prepare", "train-prep/d", f"30@{heads[30][:9]}", f"31@{heads[31][:9]}", "--lint", "true"]) == 0
+    _git(main, "fetch", "-q", "origin", "train-prep/d:train-prep/d")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "tip-d"), _git(main, "rev-parse", "train-prep/d"))
+    assert _record(tmp_path, tmp_path / "tip-d", monkeypatch, *CHECKED) == 0
+    monkeypatch.chdir(main)
+    capsys.readouterr()
+    assert merge_main(["train-prep/d", "--dry-run"]) == 0, capsys.readouterr().err
+
 
 def test_a_tip_whose_pr_heads_or_labels_cant_be_read_is_refused(tmp_path, monkeypatch, capsys):
     """The gate fails closed: with origin unreadable it can't tell the pull requests' heads, and with no store remote its labels may be stale
@@ -1101,7 +1111,7 @@ def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_pat
     _git(repo, "commit", "-q", "-m", "base")
     base = _git(repo, "rev-parse", "HEAD")
     (repo / "verity" / "ml" / "flock").mkdir(parents=True)
-    (repo / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    (repo / "verity" / "ml" / "flock" / "é.py").write_text("x = 1\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "é")
     assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/ml/flock/"]}

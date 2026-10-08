@@ -38,7 +38,8 @@ Say what you fixed in the PR description. It needs no note.
 ## 2. Ask, when you can't tell
 
 A change is near the line when it changes what other agents must do or what a gate accepts, touches another lane's
-in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
+in-flight files, spends money past its `budgets.toml` line, deletes others' work, or changes agreed semantics or acceptance
+criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
 - one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
@@ -100,9 +101,22 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-07 (3:54 PM PDT; 3:25 PM PDT: "skip check more", revert what breaks): `main` always passes the whole `check`,
+  kept fast by reusing each part's verdict while its declared inputs, the base image and the check's code are unchanged;
+  the merge queue runs it on the queued group, and a nightly uncached check must agree (the CI page in Notion). Until
+  reuse and the queue exist, a change lands by hand once every part whose declared inputs it touches passes; layout
+  moves and check or merge tooling get a full `check` first; a full `check` of the newest `main` follows on vy-nebius-1,
+  and the landing that fails it is reverted at once (`AGENTS.md`, "Checking and merging"). Effort goes into reuse
+  (declared inputs, a verdict cache, Lean replay per module), not into teaching `research merge` to land on part of a
+  check. Before an expensive step (a full check, a move window), rehearse the cheap one after it: `research merge
+  --dry-run` against a scratch `main` would have shown on 7 Oct, ten hours earlier, that main's gate could accept no
+  check of the moved tree.
 - 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
   rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
   This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
+- 2026-10-06 (8:00 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
+  `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
+  question.
 - 2026-10-06 (9:49 AM PDT): the repository becomes the minimal, DRY implementation of the system as now decided. Every
   owner removes the smells it finds in its own files without asking: code serving a retired question, two sources of
   truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired process,
@@ -114,9 +128,9 @@ Newest first. Each is Daniel's unless it names the coordinator.
   Daniel's to settle later. A certificate cites the Lean assumptions it rests on by name. The circuit templates, input
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:
-  `verity/ml/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
-  frozen numerical work goes to `archive/`, and `verity/experimental/protocols/accounting/{work,space,communication}/<name>` flattens
-  to `verity/experimental/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
+  `backends/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
+  frozen numerical work goes to `archive/`, and `verity/protocols/accounting/{work,space,communication}/<name>` flattens
+  to `verity/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
   recommendation to make, and the full tree is being settled with Daniel. "Network transparency" is "network
   accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci

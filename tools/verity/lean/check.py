@@ -33,8 +33,12 @@ environment extension loaded, so none of the package's code runs), and replays t
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
                  `imports` prefixes
+    assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
+                 as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
+                 definition no longer has the digest its record holds; or the policy still lists assumption modules,
+                 which `--update` converts into the definitions the guarantees read there
     guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
-                 hypothesis that is not a constant of an `assumptions` module, or no longer says what its record says:
+                 hypothesis that is not a listed assumption, or no longer says what its record says:
                  signature, named assumptions, type hash, and (under `reads`, per module) the definitions the guarantees
                  read, the guarantees that read them and the digest of those definitions; the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
@@ -54,7 +58,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
                  no axiom, and only this catches it (the `kernel` control); or the axioms found by walking the replayed
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
-                 kill
+                 kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
+                 module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
+                 unchecked, and its constants are still walked for axioms
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
@@ -130,7 +136,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 #: where the Lean files are run from: `main` points it at a copy taken before the first build
 TOOL = HERE
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[2]
 POLICY = "lean-audit.json"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
 #: compiler trust: `native_decide` declares an axiom `<decl>._native.native_decide.ax_<i>` (older toolchains used these two)
@@ -775,15 +781,34 @@ def guarantee_reads(facts: dict) -> dict[str, dict[str, dict]]:
 def read_groups(reads: dict[str, dict[str, dict]], old: bool = False) -> dict:
     """The `reads` records: per module, a digest per definition read there (generated constants with their declaration), the
     module's digest of those, and the guarantees that read it; in SHA-256, or (``old``) as records written before it."""
-    out = {}
+    out, key = {}, group_keys(reads)
     for m, es in sorted(reads.items()):
         groups: dict[str, list] = {}
         for n, e in es.items():
-            groups.setdefault(parent(n), []).append(e)
+            groups.setdefault(key[n], []).append(e)
         defs = {p: digest(g, old)[:OLD] if old else digest(g) for p, g in sorted(groups.items())}
         out[m] = {"digest": module_digest(defs), "definitions": defs,
                   "guarantees": sorted(set().union(*(e["guarantees"] for e in es.values())))}
     return out
+
+
+def group_keys(reads: dict[str, dict[str, dict]]) -> dict[str, str]:
+    """{read constant: the definition its `reads` digest is part of}: a generated constant goes with its declaration when the
+    declaration is read in its module and reaches it through its own type, value or constructors (`own`, transitively through
+    its other generated constants, as a structural recursion's `_f` reaches the matchers), so
+    the group is the same whichever guarantees read the declaration; any other read constant (an inductive's `casesOn`
+    another definition's match uses, an equation lemma a statement names) is a definition of its own."""
+    entries = {n: e for es in reads.values() for n, e in es.items()}
+    key = {}
+    for n, e in entries.items():
+        p, seen = parent(n), set()
+        stack = [p] if p != n and entries.get(p, {}).get("module") == e["module"] else []
+        while stack and n not in seen:
+            if (x := stack.pop()) not in seen:
+                seen.add(x)
+                stack += [d for d in entries.get(x, {}).get("own", []) if parent(d) == p]
+        key[n] = p if n in seen else n
+    return key
 
 
 def parent(name: str) -> str:
@@ -855,6 +880,11 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
         fails.append(f"moved: under the old names, {clash}{more}: the map cannot tell them apart, so the review compares "
                      f"nothing under the old names; map only the declarations that moved")
+    assumed = policy.get("assumptions", {})
+    prefixes = assumed if isinstance(assumed, list) else []
+    if prefixes and not update:
+        fails.append(f"assumptions: the policy lists assumption modules ({', '.join(prefixes)}); list the assumptions by "
+                     f"name instead, each with its record: `audit.py --update` converts the list")
     kept = {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
@@ -877,11 +907,11 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         for h in f["hypotheses"]:
             if not h["closed"]:
                 continue
-            if h["named"] and under(policy.get("assumptions", []), h["module"] or ""):
+            if h["named"] and (h["named"] in assumed if not prefixes else under(prefixes, h["module"] or "")):
                 named.append(h["named"])
             else:
-                fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
-                             f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
+                fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named "
+                             f"assumption: a Prop constant listed under `assumptions`")
         if name.split(".")[0] in policy.get("four_names", []) and not four_named(name, f):
             fails.append(f"four names: {name} is a guarantee of {name.split('.')[0]}, which `four_names` lists, so it is "
                          f"stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a definition of a `Guarantees` module "
@@ -923,10 +953,54 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             elif a.get("digest") != b["digest"]:
                 fails.append(f"guarantees: the digest recorded for {m} is not the SHA-256 of its definitions; "
                              f"`python tools/verity/lean/merge.py --normalize` recomputes it")
+    records, why = assumption_records(policy, now_reads, update, owner)
+    fails += why
     out = dict(policy)
     if kept:
         out["guarantees"], out["reads"] = kept, now_reads
+    if update and (records or "assumptions" in policy):
+        out["assumptions"] = records
     return fails, out
+
+
+def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None) -> tuple[dict, list[str]]:
+    """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
+    stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and the digest its
+    `reads` record holds, so a changed assumption shows as its own record, and an entry no guarantee reads fails.  An
+    update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
+    definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``)."""
+    assumed, fails, out = policy.get("assumptions", {}), [], {}
+    read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
+    owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
+    if isinstance(assumed, list):
+        if not update:
+            return {}, []
+        assumed = {}
+        for d, (m, _, by) in sorted(read.items()):
+            if under(policy["assumptions"], m):
+                who = {owners.get(g) for g in by} - {None}
+                assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
+    for a, rec in sorted(assumed.items()):
+        who = (rec or {}).get("owner") or owner
+        if a not in read:
+            if not update:
+                fails.append(f"assumptions: {a} is listed, but no guarantee reads it; remove the entry")
+            continue
+        m, h, _ = read[a]
+        if not who:
+            fails.append(f"assumptions: {a} has no owner: write \"owner\": \"@lane\" in its entry, or run "
+                         f"`audit.py --update --owner @lane`")
+        elif not OWNER.fullmatch(who):
+            fails.append(f"assumptions: {a}'s owner {who!r} is not a handle such as @proofs")
+        out[a] = ({"owner": who} if who else {}) | {"digest": h}
+        if update:
+            continue
+        if "digest" not in (rec or {}):
+            fails.append(f"assumptions: {a} has no record; run `audit.py --update` and commit the record")
+        elif rec["digest"] != h:
+            fails.append(f"assumptions: {a}'s definition in {m} changed; run `audit.py --update` and commit the record "
+                         f"(Daniel's DM shows the change when it lands)")
+    return out, fails
 
 
 def unowned(rec: dict | None) -> dict:
@@ -1141,6 +1215,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
 REHASHED = "rehashed with SHA-256: the same statement (its 32-bit hash matched)"
 REGROUPED = "read groups rehashed with SHA-256: the same definitions (their 32-bit hashes matched)"
+REGROUPED_OWN = "read records regrouped (generated constants), same declarations"
 MOVED = "the same statement under its old names"
 LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
@@ -1185,7 +1260,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it and its source as it is now.  A guarantee whose statement is the same
     but prints differently (a toolchain's printer, notation) gets one line, and so does one whose 32-bit record is rewritten
-    with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line.
+    with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line, and so are
+    records whose declarations are unchanged but whose generated constants `group_keys` groups differently.
     Definitions are compared by name, whichever module reads them.  A guarantee lifted into a `Guarantees` definition that
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
@@ -1231,21 +1307,33 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     oreads = old.get("reads", {})
     recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
                 for m, rec in oreads.items() for d, h in definitions(rec).items()}
-    now: dict[str, dict] = {}
-    for m, es in guarantee_reads(facts).items():
-        groups: dict[str, list] = {}
-        for n, e in es.items():
-            was = moves and e.get("moved") and parent(n) not in recorded
-            groups.setdefault(parent(e["moved"]["as"]) if was else parent(n), []).append(e)
-        for d, g in groups.items():
-            as_was = digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
-                             if moves and e.get("moved") else e for e in g])
-            sha256 = digest(g) if recorded.get(d, {}).get("hash") == digest(g) else as_was
-            now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": sha256,
-                      "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g)))}
+    greads = guarantee_reads(facts)
+
+    def records(key: dict[str, str]) -> dict[str, dict]:
+        now: dict[str, dict] = {}
+        for m, es in greads.items():
+            groups: dict[str, list] = {}
+            for n, e in es.items():
+                d = key[n]
+                if moves and e.get("moved") and d not in recorded:
+                    d = e["moved"]["as"].removesuffix(n[len(d):])
+                groups.setdefault(d, []).append(e)
+            for d, g in groups.items():
+                as_was = digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
+                                 if moves and e.get("moved") else e for e in g])
+                sha256 = digest(g) if recorded.get(d, {}).get("hash") == digest(g) else as_was
+                now[d] = {"name": parent(min(e["name"] for e in g)), "module": m, "sha256": sha256, "members": [e["name"] for e in g],
+                          "hash": digest(g, old=True)[:OLD], "guarantees": sorted(set().union(*(e["guarantees"] for e in g)))}
+        return now
+
+    now = records(group_keys(greads))
+    # every generated constant with its declaration by name (`parent`), a superset of each `group_keys` group: a record that
+    # still matches so has the same declarations, and a change to it or out of it is regrouping only
+    by_parent = records({n: parent(n) for es in greads.values() for n in es})
+    same = {d for d, x in recorded.items() if x["hash"] is not None and by_parent.get(d, {}).get("sha256") == x["hash"]}
     regrouped = sum(old_group(rec) and all(now.get(d, {}).get("hash") == h for d, h in definitions(rec).items())
                     for rec in oreads.values())
-    elsewhere = 0
+    elsewhere = regrouped_own = 0
     for d in sorted(set(recorded) | set(now)):
         x, y = recorded.get(d), now.get(d)
         away = bool(x and y) and (x["module"] != y["module"] or y["name"] != d)
@@ -1253,6 +1341,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
             elsewhere += away and len(x["hash"]) != OLD
             continue
         if y and not x and set(y["guarantees"]) <= lifts.get(y["name"], set()):
+            continue
+        if (d in same if x else all(parent(n) in same for n in y["members"])):
+            regrouped_own += 1
             continue
         state = "new" if not x else "gone" if not y else "changed" if x["hash"] is not None else "in a changed module"
         z = y or x
@@ -1266,6 +1357,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {elsewhere} {MOVED_READS}")
     if regrouped:
         out.append(f"reads: {regrouped} {REGROUPED}")
+    if regrouped_own:
+        out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
     return out
 
 
@@ -1273,7 +1366,7 @@ def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review that change what a guarantee says: all but the guarantees and read groups whose statements and
     definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved or
     lifted), and a changed owner."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, MOVED, LIFTED, MOVED_READS, OWNED))]
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED))]
 
 
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
@@ -1342,6 +1435,35 @@ def olean_digest(lib: Path, files: list[Path]) -> str:
     for p, d in zip(files, hashes):
         h.update(f"{p.relative_to(lib)}\0{d}\n".encode())
     return h.hexdigest()
+
+
+REPLAY_SCHEMA = "lean-replay/v1"
+
+
+def replay_keys(facts: dict, toolchain: str) -> dict[str, str]:
+    """{module: key} for each audited module: what its kernel replay's verdict is a function of. The key hashes the
+    toolchain, `Replay.lean`, and the `.olean` files (every part) of the module and of each module it imports, transitively,
+    each under its module's name (``facts``' `graph`), never a path: a module whose bytes and imports' bytes are unchanged
+    keeps its key wherever the package is built."""
+    graph = facts["graph"]
+    files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
+             for m, g in graph.items()}
+    with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
+        digests = dict(zip(files, ex.map(lambda ps: ",".join(sha256(p) for p in ps), files.values())))
+    head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
+    keys = {}
+    for m in facts["modules"]:
+        seen, stack = {m}, [m]
+        while stack:
+            for i in graph[stack.pop()]["imports"]:
+                if i not in seen:
+                    seen.add(i)
+                    stack.append(i)
+        h = hashlib.sha256(f"{head}{m}\0".encode())
+        for n in sorted(seen):
+            h.update(f"{n}\0{digests[n]}\n".encode())
+        keys[m] = h.hexdigest()
+    return keys
 
 
 def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str, str]:
@@ -1456,7 +1578,8 @@ def template(pkg: Path) -> dict:
 
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
-          ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None) -> dict:
+          ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
+          replay_cache: Path | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
@@ -1466,7 +1589,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  ``name`` writes each anonymous
     instance's name into its source (`name_instances`) instead of failing on it.  ``lifts`` writes those lifts (`lift`)
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
-    that no guarantee reads (`unread_spec`)."""
+    that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
+    its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
+    when the replay passes."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, list the theorems your documents cite "
@@ -1563,8 +1688,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         s = time.monotonic()
         found = work / "replay.json"
         found.unlink(missing_ok=True)
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *facts["modules"]], pkg,
-                       work / "replay.log")
+        keys = replay_keys(facts, rep["toolchain"]) if replay_cache else {}
+        reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
+        checked = [m for m in facts["modules"] if m not in reused]
+        rep["replay"] = {"checked": len(checked), "reused": len(reused)}
+        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
+                        *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
         if killed(rc):
             fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
         elif rc or not found.exists():
@@ -1573,6 +1702,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
             fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
                          f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
+        elif keys:
+            replay_cache.mkdir(parents=True, exist_ok=True)
+            for m in checked:
+                tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
+                tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
+                os.replace(tmp, replay_cache / f"{keys[m]}.json")
         rep["seconds"]["replay"] = round(time.monotonic() - s, 1)
     if fresh:
         s = time.monotonic()
@@ -1750,6 +1885,9 @@ def main(argv: list[str]) -> int:
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
+                    "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
+                    "checked here")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
@@ -1832,7 +1970,7 @@ def main(argv: list[str]) -> int:
             rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
                         runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
                         ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
-                        name=a.name_instances and mine, lifts=lifts if mine else None)
+                        name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)

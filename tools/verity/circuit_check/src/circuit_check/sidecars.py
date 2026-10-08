@@ -1,17 +1,18 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
     fp8.py                    a Definition module (`verity_vllm.program.registry.fp8`)
-    fp8.circuit-check.py      its bindings, in `targets.py`'s forms: binding functions (``_boolean_roots`` and the other
-                              names of `targets.ROOT_FUNCTIONS`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries
+    fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
+                              `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries
     fp8.circuit-check.json    its pins (`checks`' lowering counts by kind: ``definitions``, ``pieces``, ``units``)
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the counts of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
 so a pin's file is a function of the tree, never of what a process built first.  circuit-check finds every sidecar under the packages
 that define Definitions or templates (`PACKAGES`) and loads a binding file by its path: its name is no module name, so no
-registry enumeration imports it, and a Definition module imports nothing of circuit-check.  A sidecar whose module is gone is
-an error.  `targets.py` keeps what no one module owns, and `pins.json` the pins of Definitions no key names alone (made only inside
-another's body) or no module defines.
+registry enumeration imports it, and a Definition module imports nothing of circuit-check; the registries import every module
+with a sidecar (`targets.load_registries`).  A sidecar whose module is gone is an error.  `targets.py` keeps what no one module
+owns, and ``pins/`` the pins of Definitions no key names alone (made only inside another's body) or no module defines, one file
+per pin (`entries`): ``pins/<kind>/<entries.name(key)>.json``, in a pins file's form (``{kind: {key: counts}}``).
 """
 from __future__ import annotations
 
@@ -25,14 +26,15 @@ from types import ModuleType
 from typing import Any
 
 from . import cache as CC
+from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
 #: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
 PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.experimental", "verity_vllm", "verity_numerical",
             "verity_flock")
 SUFFIX = CC.SUFFIX
-#: the pins of a Definition no module defines
-SHARED_PINS = Path(__file__).with_name("pins.json")
+#: the pins of a Definition no module defines, one file per pin
+SHARED_PINS = Path(__file__).with_name("pins")
 PIN_KINDS = ("definitions", "pieces", "units")
 
 
@@ -46,16 +48,25 @@ def _roots() -> list[tuple[str, Path]]:
 
 @cache
 def discover() -> dict[str, dict[str, Path]]:
-    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name."""
+    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name.  A file
+    under two packages' roots (`verity_flock`'s tree is inside `verity`'s) is its module's once, named from the deeper root, and
+    only through regular packages: a directory without ``__init__.py`` would name a namespace-package copy of a module that
+    another package's root owns (``verity.ml.flock.python.verity_flock.rec_open``), and importing it registers its
+    Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
+    claimed: set[Path] = set()
     with CC.internal():
-        for pkg, root in _roots():
+        for pkg, root in sorted(_roots(), key=lambda r: len(r[1].parts), reverse=True):
             for kind in ("py", "json"):
                 for p in sorted(root.rglob(f"*{SUFFIX}.{kind}")):
-                    if "__pycache__" in p.parts:
+                    if "__pycache__" in p.parts or p in claimed:
                         continue
+                    rel = p.relative_to(root).parent.parts
+                    if not all((root.joinpath(*rel[:i + 1]) / "__init__.py").is_file() for i in range(len(rel))):
+                        continue
+                    claimed.add(p)
                     stem = p.name[:-len(f"{SUFFIX}.{kind}")]
-                    parts = [pkg, *p.relative_to(root).parent.parts]
+                    parts = [pkg, *rel]
                     mod = ".".join(parts if stem == "__init__" else [*parts, stem])
                     if not (p.with_name(f"{stem}.py").is_file() or (p.parent / stem / "__init__.py").is_file()):
                         raise FileNotFoundError(f"{p}: a circuit-check sidecar of {mod}, which has no module")
@@ -107,9 +118,26 @@ _SHARED: list[Path] = [SHARED_PINS]
 _WHERE: dict[tuple[str, str], Path] = {}
 
 
+def shared_pin(kind: str, key: str) -> Path:
+    """Where pin ``key`` of ``kind`` is, or goes, in ``pins/``."""
+    return E.path(_SHARED[0] / kind, key, ".json")
+
+
+def _shared_files() -> list[Path]:
+    """``pins/``'s files; one that is no one pin of its directory's kind, named by its key, is an error."""
+    with CC.internal():
+        found = sorted(_SHARED[0].rglob("*.json"))
+    for p in found:
+        kind, d = p.parent.name, _read(p)
+        if p.parent.parent != _SHARED[0] or kind not in PIN_KINDS or set(d) != {kind} or len(d[kind]) != 1:
+            raise ValueError(f"{p}: a file of {_SHARED[0]} is one pin, {{kind: {{key: counts}}}}, in the directory of its kind")
+        E.check(p, next(iter(d[kind])))
+    return found
+
+
 def pin_files() -> list[Path]:
-    """`pins.json` and every sidecar's pins file."""
-    return [_SHARED[0], *(f["json"] for f in discover().values() if "json" in f)]
+    """``pins/``'s files and every sidecar's pins file."""
+    return [*_shared_files(), *(f["json"] for f in discover().values() if "json" in f)]
 
 
 def _read(p: Path) -> dict:
@@ -118,7 +146,7 @@ def _read(p: Path) -> dict:
 
 
 def load_pins(shared: Path = SHARED_PINS) -> dict:
-    """Every pin, by kind and key: ``shared``'s (`pins.json`) and each sidecar's.  A pin in two files is an error."""
+    """Every pin, by kind and key: ``shared``'s (``pins/``) and each sidecar's.  A pin in two files is an error."""
     _SHARED[0] = Path(shared)
     out: dict[str, dict] = {k: {} for k in PIN_KINDS}
     where: dict[tuple[str, str], Path] = {}
@@ -136,20 +164,20 @@ def load_pins(shared: Path = SHARED_PINS) -> dict:
 
 
 def pin_file(kind: str, key: str) -> Path:
-    """The file that holds pin ``key`` of ``kind``, or would: the sidecar of the module that owns it (`pin_owner`), else
-    `pins.json`."""
+    """The file that holds pin ``key`` of ``kind``, or would: the sidecar of the module that owns it (`pin_owner`), else its
+    file in ``pins/`` (`shared_pin`)."""
     if (have := _WHERE.get((kind, key))) is not None:
         return have
     mod = pin_owner(kind, key)
-    return (path_of(mod, "json") if mod else None) or _SHARED[0]
+    return (path_of(mod, "json") if mod else None) or shared_pin(kind, key)
 
 
 def pin_reads(kind: str, key: str) -> list[Path]:
     """Where a check that looked up pin ``key`` of ``kind`` read it: the file that holds it; for one no file holds, the file a
-    new one goes to (`pin_file`) and `pins.json`, where it could be added by hand."""
+    new one goes to (`pin_file`) and its file in ``pins/``, where it could be added by hand."""
     if (have := _WHERE.get((kind, key))) is not None:
         return [have]
-    return list(dict.fromkeys([pin_file(kind, key), _SHARED[0]]))
+    return list(dict.fromkeys([pin_file(kind, key), shared_pin(kind, key)]))
 
 
 def write_pins(updates: dict[tuple[str, str], Any]) -> None:
@@ -161,6 +189,7 @@ def write_pins(updates: dict[tuple[str, str], Any]) -> None:
         d = _read(p)
         for kind, vals in kinds.items():
             d[kind] = dict(sorted({**d.get(kind, {}), **vals}.items()))
+        p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(d, indent=1, sort_keys=True) + "\n")
     discover.cache_clear()
     load_pins(_SHARED[0])
@@ -171,7 +200,7 @@ def write_pins(updates: dict[tuple[str, str], Any]) -> None:
 def pin_owner(kind: str, key: str) -> str | None:
     """The module that owns a pin: a template's subcircuit's, the module that defines the template (``units``); a Definition's
     or a piece's, the module that defines the Definition its key names (`named`, `owner`).  None when the key alone names none,
-    whatever this process has built: then the pin is in `pins.json`."""
+    whatever this process has built: then the pin is in ``pins/`` (`shared_pin`)."""
     if kind == "units":
         from verity_numerical.bench import templates as TM
 
@@ -277,4 +306,4 @@ def owner(d: Any) -> str | None:
 
 
 __all__ = ["PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",
-           "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "write_pins"]
+           "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "shared_pin", "write_pins"]

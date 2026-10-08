@@ -10,9 +10,10 @@ import Proofs.Pous.Continuous.Verifier
 # The continuous audit from `TimedINC`: `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`
 
 The proofs of both guarantees, pinned as `Pous.SecurityProofs.PerAnswer` and `Pous.SecurityProofs.ContinuousAudit`,
-over the verifier of `Pous/Protocol/Model/Continuous.lean`. Neither uses a hypothesis about the responder's timing.
-The verifier's rules enter through `Continuous/Verifier.lean`: each round's record depends only on the indices up to
-its own (`contRecords_ofFn`), and a hit returned the right block within `(D, Q)` (`hit_on_time`).
+over the memory challenger of `Security/Definitions/Pous/Model/Continuous.lean`. Neither uses a hypothesis about
+the responder's timing. The memory challenger's rules enter through `Continuous/Verifier.lean`: each round's record
+depends only on the indices up to its own (`contRecords_ofFn`), and a hit returned the right block within `(D, Q)`
+(`hit_on_time`).
 
 1. **One history** (`pr_bad_le`). Fix the indices `h` sent before a round. The responder's memory at that round's send
    time is a function of `(W, pp, C, ω)` (`heldAt`), and the round's program depends only on `W`, `pp`, `h`, that

@@ -176,10 +176,12 @@ def stage(tmp: Path, files: dict[str, bytes] | None = None) -> Path:
     return s
 
 
-FAKE_LAKE = """import shutil, sys
-# `lake cache unstage DIR`: copy what the client hands Lake to {dest!r}
-assert sys.argv[1:3] == ["cache", "unstage"], sys.argv
+FAKE_LAKE = """import json, os, shutil, sys
+# `lake cache unstage DIR [PKG]`: copy what the client hands Lake to {dest!r}, and log each call's package and mappings
+assert sys.argv[1:3] == ["cache", "unstage"] and len(sys.argv) in (4, 5), sys.argv
 shutil.copytree(sys.argv[3], {dest!r}, dirs_exist_ok=True)
+with open({dest!r} + ".calls", "a") as f:
+    f.write(json.dumps([sys.argv[4:], open(os.path.join(sys.argv[3], "outputs.jsonl")).read()]) + "\\n")
 """
 
 
@@ -236,8 +238,45 @@ def test_a_published_build_restores_every_file_checked(s3, tmp_path, lake):
     lines = []
     assert C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
     assert {p.name: p.read_bytes() for p in lake[1].iterdir()} == {n: (s / n).read_bytes() for n in rec["files"]}
-    assert "restored (1 modules" in lines[-1]
+    assert "restored (1 artifacts;" in lines[-1]
     assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "already published"
+
+
+def test_each_staged_dependency_is_unstaged_into_its_own_scope(s3, tmp_path, lake):
+    """A record's `dep.<scope>.jsonl` goes to Lake as the stage's `outputs.jsonl` with the package named, after the root
+    package's mappings, so ArkLib's modules restore under ArkLib's scope."""
+    b, url = s3
+    r, rev = repo(tmp_path)
+    root_map, dep_map = b'"2026-03-17"\n["aa","bb.ltar"]\n', b'"2026-03-17"\n["cc",{"o":"dd.olean"}]\n'
+    stage(tmp_path, {"outputs.jsonl": root_map, "bb.ltar": b"module archive", "dep.Arklib.jsonl": dep_map,
+                     "dd.olean": b"arklib module"})
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    lines = []
+    assert C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
+    calls = [json.loads(x) for x in lake[1].with_name("unstaged.calls").read_text().splitlines()]
+    assert calls == [[[], root_map.decode()], [["Arklib"], dep_map.decode()]]
+    assert (lake[1] / "dd.olean").read_bytes() == b"arklib module"
+    assert "restored (2 artifacts, with 1 dependencies (Arklib);" in lines[-1]
+
+
+def test_build_stages_no_mappings_for_itself_its_path_dependencies_or_what_mathlibs_cache_provides(tmp_path):
+    pkg = tmp_path / "pkg"
+    (pkg / ".lake" / "packages" / "mathlib").mkdir(parents=True)
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "security_proofs", "packages": [
+        {"name": "security", "type": "path"}, {"name": "Arklib", "type": "git"}, {"name": "«doc-gen4»", "type": "git"},
+        {"name": "mathlib", "type": "git"}, {"name": "batteries", "type": "git"}]}))
+    (pkg / ".lake" / "packages" / "mathlib" / "lake-manifest.json").write_text(json.dumps({"name": "mathlib", "packages": [
+        {"name": "batteries", "type": "git"}, {"name": "aesop", "type": "git"}]}))
+    assert C.unstaged(pkg) == {"security_proofs", "security", "mathlib", "batteries", "aesop"}
+    cache = tmp_path / "lc" / "outputs"
+    for scope, h, data in [("Arklib", "00000000000000aa", {"o": "x.olean"}), ("Arklib", "00000000000000bb", "y.art"),
+                           ("doc-gen4", "00000000000000cc", "z.art"), ("batteries", "00000000000000dd", "w.art"),
+                           ("security_proofs", "00000000000000ee", "v.ltar")]:
+        (cache / scope).mkdir(parents=True, exist_ok=True)
+        (cache / scope / f"{h}.json").write_text(json.dumps({"schemaVersion": "2026-03-17", "service": None, "data": data}))
+    got = C.dep_mappings(tmp_path / "lc", C.unstaged(pkg), '"2026-03-17"')
+    assert got == {"Arklib": '"2026-03-17"\n["00000000000000aa",{"o":"x.olean"}]\n["00000000000000bb","y.art"]\n',
+                   "doc-gen4": '"2026-03-17"\n["00000000000000cc","z.art"]\n'}
 
 
 def test_the_newest_published_ancestor_is_restored(s3, tmp_path, lake):
@@ -559,8 +598,58 @@ def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):
     assert "Unpacked" in out.stdout and "Built Control" not in out.stdout, out.stdout
 
 
+def git_dep(tmp: Path) -> Path:
+    """A one-module Lake package `dep` in a git repository of its own."""
+    dep = tmp / "dep"
+    dep.mkdir()
+    (dep / "lakefile.toml").write_text('name = "dep"\ndefaultTargets = ["Dep"]\n[[lean_lib]]\nname = "Dep"\n')
+    (dep / "Dep.lean").write_text("def depVal : Nat := 3\n")
+    (dep / "lean-toolchain").write_text((HERE / "fixtures" / "control" / "lean-toolchain").read_text())
+    (dep / ".gitignore").write_text(".lake/\n")
+    sh("git", "init", "-q", "-b", "main", cwd=dep)
+    sh("git", "add", ".", cwd=dep)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c", cwd=dep)
+    return dep
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_lake_restores_a_git_dependencys_build_with_the_package(s3, tmp_path):
+    """A git dependency Mathlib's cache doesn't provide (ArkLib, for the Proofs package) is built by integration from its
+    read-only sources and published with the package; a fresh clone with only its sources fetched compiles neither."""
+    b, url = s3
+    dep = git_dep(tmp_path)
+    r, _ = repo(tmp_path, "build")
+    pkg = r / "pkg"
+    (pkg / "lakefile.toml").write_text(f'name = "app"\ndefaultTargets = ["App"]\n[[require]]\nname = "dep"\n'
+                                       f'git = "file://{dep}"\nrev = "main"\n[[lean_lib]]\nname = "App"\n')
+    (pkg / "App.lean").write_text("import Dep\ntheorem t : depVal = 3 := rfl\n")
+    (pkg / "lean-toolchain").write_text((dep / "lean-toolchain").read_text())
+    sh(LAKE, "update", cwd=pkg)
+    sh("git", "add", ".", cwd=r)
+    sh("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "app", cwd=r)
+    rev = subprocess.run(["git", "-C", str(r), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    sh("git", "update-ref", "refs/remotes/origin/main", rev, cwd=r)
+    dev = tmp_path / "elsewhere" / "dev"
+    sh("git", "clone", "-q", str(r), str(dev))
+    shutil.copytree(pkg / ".lake" / "packages", dev / "pkg" / ".lake" / "packages", symlinks=True)
+    (pkg / ".lake" / "packages").rename(pkg / ".lake" / C.DEPS_RO)
+    assert C.build(pkg, tmp_path / "out" / "pkg", [LAKE]) == 0, (tmp_path / "out" / "pkg" / C.BUILD_LOG).read_text()
+    assert (tmp_path / "out" / "pkg" / "stage" / f"{C.DEP}dep.jsonl").is_file()
+    assert C.publish(r, rev, tmp_path / "out", ["pkg"], client(url), print) == 0
+    e = {**env(url, tmp_path), "PATH": f"{Path(LAKE).parent}{os.pathsep}{os.environ.get('PATH', '')}"}
+    lines = []
+    assert C.get(dev, ["pkg"], e, lines.append, fetch_state=lambda u: ON) == 0
+    assert "with 1 dependencies (dep)" in lines[-1], lines
+    out = subprocess.run([LAKE, "build"], cwd=dev / "pkg", env={**os.environ, "LAKE_CACHE_DIR": e["LAKE_CACHE_DIR"]},
+                         capture_output=True, text=True)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "Built Dep" not in out.stdout and "Built App" not in out.stdout, out.stdout
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only `.lake/packages` anyway")
 def test_a_build_works_on_its_own_copy_of_dependencies_bound_read_only(tmp_path):
     """With the artifact cache on, Lake writes beside a dependency's built artifacts, so a read-only `.lake/packages`
     fails the build; the same dependencies bound at `.lake/deps` build, from a copy deleted after."""

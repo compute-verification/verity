@@ -1217,6 +1217,17 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span. Every range's slots are at least a word, as on the BLAKE3 path, and at most the block
   (`7 ≤ slot_log ≤ k_log`): a slot below 64 bits makes the fold no `αA₀ᵀe + B₀ᵀe` of any matrices, and a packed range of
   no slots would escape the block bound.
+- **The nets the verifier builds.** The `sha512x3` and `hm96` nets must equal the verifier's own, in every field
+  (`Flock.HmNets`, D7). So must a unit net whose name starts with `rec-open/` (V*'s opening, `rec_outer.lowering`):
+  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16`;
+  - its input ports must total `384·LANES + 1024·⌈H/2⌉ + 2048` bits and its output ports 2048, compared before the
+    verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's rows
+    allow;
+  - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
+    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·⌈H/2⌉`, `64`, `16·LANES` and `64` u16 words, and
+    outputs `out` then `acc_out` of 64 words each, one 16-bit port per word.
+
+  Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
   when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.
 - **Blocks.** `vus_per_block ≥ 1` (D9, §17.1), and a power of two whatever returns the outputs. Every range's count is
@@ -1224,6 +1235,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   outputs, so a tail that returns them would otherwise pass with no VU in a block, or with `G = 3`: the `Digest` regions'
   `log2 G` VU bits (Lean's `Nat.log2`, Rust's `trailing_zeros`, which agree only at a power of two) would pin VUs 0 and 1
   in one verifier, VU 0 in the other, and VU 2 in neither.
+- **Header sizes.** A power of a number META chooses is computed only once the number is bounded. `parse` refuses
+  `k_log > 27` where it reads it (`HmRow.kLogOf`), before the layout check computes `2^{k_log}`, or `2^{slot_log}` once
+  `slot_log ≤ k_log`; and it compares a lookup's `in_bits` with its pinned table's `log2` before `2^{in_bits}`. `setupH`
+  refuses `k_log > 27` too, and a pinned table's words are a power of two, so the verifier accepts and refuses what it did
+  before (`kLogOf_ok`, `lookup_index_test`), refusing such a file before spending memory on it.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
@@ -1621,6 +1637,11 @@ expectation):
   the sessions refused last and for nothing else. So, too, under `--zk`, a statement
   whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the live server
   and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it; `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
+- **D13:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
+  unit's net as the file gives it. The spec refuses a `rec-open/` unit whose name is not `rec-open/l<LANES>-h<H>` at valid
+  parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
+  exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
+  verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

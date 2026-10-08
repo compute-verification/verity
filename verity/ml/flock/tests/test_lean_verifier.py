@@ -52,11 +52,14 @@ def test_no_escape_hatches():
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.)")
+AUDIT_STATEMENTS = PROOFS.parent / "Models" / "Flock" / "Guarantees" / "Audit.lean"
+AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.|"
+                           r"Models\.Flock\.Guarantees\.Audit$)")
 
 
 def test_audit_layer_is_abstract():
-    """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
+    """The audit theorems import only the interaction model, Mathlib, each other and their lifted statements
+    (`Models.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
@@ -68,6 +71,8 @@ def test_audit_layer_is_abstract():
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
     assert not bad, bad
+    statements = [line for line in AUDIT_STATEMENTS.read_text().splitlines() if line.startswith("import ")]
+    assert statements and all(line.startswith("import Mathlib.") for line in statements), statements
     admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
     assert not admitted, admitted
 
@@ -775,6 +780,50 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
         assert p.returncode == 1 and "a range's slots are smaller than a word or larger than the block" in p.stdout, (change, p.stdout)
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
+    """`HmRow.parse` refuses a `k_log` past 27 where it reads it, before `check` computes `2^k_log` and `2^slot_log`, and
+    compares a lookup's `in_bits` with its table's log before computing `2^in_bits`. A RoPE circuit naming `k_log = 2^32 - 1`
+    with 24 more mask ranges of that slot size, or a lookup of `in_bits = 2^32`, is refused at once with its reason under an
+    8 GiB address space; without the bounds the first holds a 512 MiB span per range until it runs out of memory, and the
+    second is a power the runtime refuses to compute."""
+    pytest.importorskip("verity_numerical")
+    import resource
+
+    from verity_flock import circuit as FC
+    from verity_flock.ir_lower import TABLES
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit)
+    FC.stage(low, s, 0, 4, tmp_path / "st")
+    head, meta_line, rest = text.split("\n", 2)
+    meta = json.loads(meta_line[5:])
+
+    def statement(circuit):
+        f = tmp_path / "c.circuit"
+        f.write_text(circuit)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
+                               "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True,
+                              text=True, preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
+
+    p = statement(text)
+    assert p.returncode == 0, p.stdout + p.stderr
+    big = 2**32 - 1
+    mask = next(r for r in meta["ranges"] if r["net"] == "mask")
+    wide = dict(meta, k_log=big, ranges=meta["ranges"] + [dict(mask, slot_log=big, pos0=0)] * 24)
+    lookup = dict(meta, lookups={"rsq": {"table": "rsq", "sha256": TABLES["rsq"], "out_bits": 31, "in_bits": 2**32,
+                                         "lo_bits": 2}})
+    for m, why in [(wide, f"META: k_log {big} is over 27: no fast100 schedule"),
+                   (lookup, "META: lookup rsq's index is not its table's")]:
+        p = statement(f"{head}\nMETA {json.dumps(m)}\n{rest}")
+        assert p.returncode == 1 and why in p.stdout, (why, p.returncode, p.stdout, p.stderr[-400:])
+
+
 def first_and_row(lines: list[str], name: str) -> int:
     """The line of section `name`'s first AND row: its first row that is neither an input's self row nor empty."""
     at = next(k for k, line in enumerate(lines) if line.startswith(f"CIRCUIT {name} ")) + 2
@@ -847,6 +896,38 @@ def test_row_nets_are_the_verifiers(tmp_path):
         p = statement("\n".join(lines))
         row = at - next(k for k, line in enumerate(lines) if line.startswith(f"CIRCUIT {name} ")) - 2
         assert p.returncode == 1 and f"circuit {name}: not the verifier's {what} (row {row} differs)" in p.stdout, p.stdout
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path):
+    """A unit named `rec-open/l<LANES>-h<H>` must be the verifier's opening net at those parameters (`Flock.RecOpen`,
+    PROTOCOL.md §16.10), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
+    before it builds that net. A toy statement is accepted; with its unit renamed `rec-open/l1000000000-h16` it is refused
+    for its bits, in an address space of 8 GiB, far below the net's size."""
+    import resource
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    bits, d = [0, 1, 881, 887, 889, 895], tmp_path / "s"
+    text = _bit_row_toy(bits, d)
+    head = text.index("\n", text.index("CIRCUIT unit ")) + 1
+    end = text.index("\n", head)
+    fields = text[head:end].split(" ")
+    renamed = text[:head] + " ".join([fields[0], "rec-open/l1000000000-h16", *fields[2:]]) + text[end:]
+
+    def statement(circuit):
+        (d / "c.txt").write_text(circuit)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+                               "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin")], capture_output=True, text=True,
+                              preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
+
+    p = statement(text)
+    assert p.returncode == 0, p.stdout + p.stderr
+    p = statement(renamed)
+    ins = 16 * sum(-(-b // 16) for b in bits)
+    opening = 384 * 10**9 + 1024 * 8 + 2048
+    why = f"unit rec-open/l1000000000-h16 has {ins} input and 16 output bits, not rec-open's {opening} and 2048"
+    assert p.returncode == 1 and why in p.stdout, p.stdout + p.stderr
 
 
 @pytest.mark.slow

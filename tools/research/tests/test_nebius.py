@@ -40,6 +40,7 @@ def reg(tmp_path, monkeypatch) -> Path:
     d = tmp_path / "notes" / "machines.d"
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     monkeypatch.setenv("RESEARCH_MACHINES_D", str(d))
+    monkeypatch.setenv("RESEARCH_NOTES", str(d.parent))
     return d
 
 
@@ -868,6 +869,8 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     a Verity job that finds no slot requeues the newest lent job, and nothing more is lent while it waits."""
     monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
     monkeypatch.setenv("FILL_VERITY_CPU_SLOTS", "2")
+    monkeypatch.setenv("FILL_VERITY_UNTIL", "9999-01-01T00:00:00+00:00")
+    monkeypatch.setenv("FILL_VERITY_STOP", "9999-01-01T01:00:00+00:00")
     spec = importlib.util.spec_from_file_location("fill_runner_lend", FILL_RUNNER)
     fr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fr)
