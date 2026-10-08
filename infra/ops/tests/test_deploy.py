@@ -141,6 +141,28 @@ def test_a_process_that_started_before_its_file_was_installed_needs_a_restart(wo
         assert e["state"] == "ok" and "restart systemd:a" in e["restart"]
 
 
+def test_a_file_installed_from_a_commit_main_has_since_merged_and_changed_is_stale_not_ahead(world, monkeypatch):
+    """Node 1's custody tree ran a store/local.py from 6 Oct that drift called `ahead` (its record named the commit) for two days
+    after main had merged that commit and changed the file (#1402), because the stale search reads only main's last HISTORY
+    commits and the record was taken at its word."""
+    node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
+    deploy.install(n, "origin/fix", "lane-x", [str(node / "bin" / "c.py")], local, apply=True, repo=repo)
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge fix", "origin/fix")
+    _commit(repo, {"src/c.py": "c3\n"}, "main changes c.py")
+    _commit(repo, {"src/b.sh": "b2\n"}, "and moves on")
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "push", "-q", "origin", "--delete", "fix")
+    _git(repo, "fetch", "-q", "--prune", "origin")
+    monkeypatch.setattr(deploy, "HISTORY", 1)
+    c = next(e for e in deploy.drift(n, "origin/main", local, repo)["entries"] if e["path"].endswith("c.py"))
+    assert c["state"] == "stale" and "which origin/main holds" in c["detail"]
+
+    (node / "bin" / "c.py").write_text("c-fix\n")
+    (node / "research" / "deploy" / "record.jsonl").unlink()
+    c = next(e for e in deploy.drift(n, "origin/main", local, repo)["entries"] if e["path"].endswith("c.py"))
+    assert c["state"] == "stale", "no record: the recent search finds the blob in main's own history"
+
+
 def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically_with_a_record(world, capsys):
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
     b = node / "bin" / "b"
@@ -348,6 +370,28 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             if e.src:
                 assert (deploy.REPO / e.src).is_dir() if e.tree else (deploy.REPO / e.src).is_file(), e.src
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
+
+
+def test_every_switched_unit_is_one_deploy_installs_on_its_node():
+    """The lock-out switches each tmux loop to its unit: every unit it starts, and every file of its own, is one deploy.toml installs."""
+    import importlib.util
+
+    from research.pods import registry
+
+    lockout = Path(registry.__file__).resolve().parent / "nebius" / "lockout"
+    spec = importlib.util.spec_from_file_location("vy_lockout", lockout / "lockout.py")
+    LO = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("vy_lockout", LO)
+    spec.loader.exec_module(LO)
+    nodes = deploy.load()
+    for node, loops in LO.SWITCH.items():
+        paths = {e.path for e in nodes[node].entries}
+        for lp in loops:
+            for u in {lp.unit, LO.service_of(lp.unit)}:
+                assert f"/etc/systemd/system/{LO.unit_file(u)}" in paths, (node, u)
+    srcs = {e.src for n in nodes.values() for e in n.entries if e.src}
+    files = [p for p in lockout.rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.name != "README.md"]
+    assert files and not [p for p in files if p.relative_to(deploy.REPO).as_posix() not in srcs], "deploy.toml installs every file"
 
 
 def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():

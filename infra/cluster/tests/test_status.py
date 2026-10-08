@@ -159,6 +159,7 @@ def test_the_bundle_command_is_release_pys_rule_and_fails_rather_than_reading_ze
     assert cmd.startswith("sudo -n true && ")
     assert "find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0" in cmd
     assert "xargs -0r du -sb" in cmd
+    assert "if [ -x /usr/local/sbin/vy-sudo ]; then sudo -n /usr/local/sbin/vy-sudo du-bundles" in cmd
 
 
 def test_owner_filters_jobs_and_held_workloads_but_not_the_nodes_holds_disk_or_bundles():

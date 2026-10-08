@@ -45,14 +45,17 @@ HOSTS = {nebius1.NODE: "research@81.85.2.165", nebius2.NODE: "research@81.85.2.1
 SSH_KEY = Path.home() / ".ssh" / "research_key"
 LIVE = "/workspace/pouw/infra/cluster/live"
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
+VY_SUDO = "/usr/local/sbin/vy-sudo"
 STALE_S = 60
 
 COMMANDS = {
     "kueue": shlex.join([*nebius1.KUBECTL, "get", "pods,workloads,jobs,clusterqueues,localqueues", "-n", "default", "-o", "json"]),
     "df": "df -P /workspace",
-    # release.py's bundles_gb, one line per bundle; `sudo -n true` first, so a refused sudo is an error and not 0 GB
-    "bundles": f"sudo -n true && {{ sudo -n find {' '.join(BUNDLE_ROOTS)} -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
-               " | sudo -n xargs -0r du -sb 2>/dev/null; true; }",
+    # release.py's bundles_gb, one line per bundle; `sudo -n true` first, so a refused sudo is an error and not 0 GB. vy-sudo's
+    # du-bundles is the same find, the form the node's sudoers allows once research has no blanket root (pods/nebius/lockout)
+    "bundles": f"sudo -n true && {{ if [ -x {VY_SUDO} ]; then sudo -n {VY_SUDO} du-bundles 2>/dev/null; else"
+               f" sudo -n find {' '.join(BUNDLE_ROOTS)} -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
+               " | sudo -n xargs -0r du -sb 2>/dev/null; fi; true; }",
     # the agent's state: <live>/state.json with --roll, else its run's <live>/<stamp>/state.json; the newest
     "state": f'cd {LIVE} && f=$(ls -t state.json */state.json 2>/dev/null | head -1) && test -n "$f" && echo "{LIVE}/$f"'
              ' && cat "$f"',

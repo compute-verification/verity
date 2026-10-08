@@ -1,0 +1,5 @@
+# /etc/sudoers.d/10-vy-admin: root for vy-admin, the account of Dan and infra's lead (vy-admin-setup installs it, after visudo -cf).
+# Every command vy-admin runs under sudo is a line in the journal (sudo's syslog), and so is each command a shell it starts runs
+# (log_subcmds); each session's output is kept under /var/log/sudo-io/vy-admin (root's: `sudoreplay -d /var/log/sudo-io/vy-admin -l`).
+Defaults:vy-admin log_subcmds, log_output, iolog_dir=/var/log/sudo-io/%{user}
+vy-admin ALL=(ALL:ALL) NOPASSWD: ALL

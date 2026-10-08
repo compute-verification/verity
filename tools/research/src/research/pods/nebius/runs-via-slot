@@ -1,0 +1,2 @@
+# /etc/vy/runs-via-slot: this machine takes a `research run` only through a check slot (python3 tools/verity/check/slot.py -- CMD).
+# research.remote's launcher refuses any other run, and vy-slot-only.timer (pods/nebius/slot_only.py) stops one from an older tree.
