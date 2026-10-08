@@ -1,5 +1,5 @@
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Specs.Core.Guarantees.PrivatePartition
+import Models.Core.Guarantees.PrivatePartition
 
 /-! # Proofs about private partitions: the per-Call check, the leakage weight, and the registration -/
 

@@ -1,6 +1,6 @@
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.Sampling
-import Specs.Pouw.Guarantees.Game
+import Models.Pouw.Guarantees.Game
 
 /-!
 # (b) Theorem 1, (d) end to end, (d″) at the milestone

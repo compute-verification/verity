@@ -1,4 +1,4 @@
-import Specs.Core.Guarantees.Circuit
+import Models.Core.Guarantees.Circuit
 
 /-!
 # Lemmas about circuits and partitions

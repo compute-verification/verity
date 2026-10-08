@@ -1,54 +1,54 @@
 {
- "roots": ["Definitions", "Specs"],
+ "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions": [
-  "Specs.Core.Assumptions",
-  "Specs.Nci.Assumptions",
-  "Specs.Pouw.Assumptions.Game",
-  "Specs.Pouw.Assumptions.NCP.Assumptions",
-  "Specs.Pouw.Assumptions.Dimension.Assumptions",
-  "Specs.Pouw.Assumptions.Dimension.PipeAssumptions",
-  "Specs.Pouw.Assumptions.NCP.RouteUAssumptions",
-  "Specs.Pouw.Assumptions.Dimension.RouteUPipeAssumptions",
-  "Specs.Pouw.Assumptions.Dimension.EmbedAssumptions",
-  "Specs.Pouw.Assumptions.Dimension.H100Assumptions",
-  "Specs.Pouw.Assumptions.Fp8Atom.H1TAssumptions",
-  "Specs.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions",
-  "Specs.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions",
-  "Specs.Pouw.Assumptions.PearlC.TTOut",
-  "Specs.Pouw.Assumptions.PearlC.TTOutRev1",
-  "Specs.Pouw.Assumptions.PearlC.TTOutUOnly",
-  "Specs.Pouw.Assumptions.PearlC.TTOutTileUOnly",
-  "Specs.Pouw.Assumptions.PearlC.DeviceChainCap",
-  "Specs.Pouw.Assumptions.PearlC.TTOutChainOnly",
-  "Specs.Pouw.Assumptions.PearlC.RowSeedAssumptions",
-  "Specs.Pouw.Assumptions.PearlC.TTOutFp4",
-  "Specs.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly",
-  "Specs.Pouw.Assumptions.PearlC.HiddenTile",
-  "Specs.Pouw.Assumptions.PearlC.HonestCap",
-  "Specs.Pouw.Assumptions.Deadline",
-  "Specs.Pouw.Assumptions.PearlC.Deadline",
-  "Specs.Pous.Assumptions",
-  "Specs.Pous.Assumptions.P2",
-  "Specs.NetworkCertifier.Assumptions",
+  "Models.Core.Assumptions",
+  "Models.Nci.Assumptions",
+  "Models.Pouw.Assumptions.Game",
+  "Models.Pouw.Assumptions.NCP.Assumptions",
+  "Models.Pouw.Assumptions.Dimension.Assumptions",
+  "Models.Pouw.Assumptions.Dimension.PipeAssumptions",
+  "Models.Pouw.Assumptions.NCP.RouteUAssumptions",
+  "Models.Pouw.Assumptions.Dimension.RouteUPipeAssumptions",
+  "Models.Pouw.Assumptions.Dimension.EmbedAssumptions",
+  "Models.Pouw.Assumptions.Dimension.H100Assumptions",
+  "Models.Pouw.Assumptions.Fp8Atom.H1TAssumptions",
+  "Models.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions",
+  "Models.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions",
+  "Models.Pouw.Assumptions.PearlC.TTOut",
+  "Models.Pouw.Assumptions.PearlC.TTOutRev1",
+  "Models.Pouw.Assumptions.PearlC.TTOutUOnly",
+  "Models.Pouw.Assumptions.PearlC.TTOutTileUOnly",
+  "Models.Pouw.Assumptions.PearlC.DeviceChainCap",
+  "Models.Pouw.Assumptions.PearlC.TTOutChainOnly",
+  "Models.Pouw.Assumptions.PearlC.RowSeedAssumptions",
+  "Models.Pouw.Assumptions.PearlC.TTOutFp4",
+  "Models.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly",
+  "Models.Pouw.Assumptions.PearlC.HiddenTile",
+  "Models.Pouw.Assumptions.PearlC.HonestCap",
+  "Models.Pouw.Assumptions.Deadline",
+  "Models.Pouw.Assumptions.PearlC.Deadline",
+  "Models.Pous.Assumptions",
+  "Models.Pous.Assumptions.P2",
+  "Models.NetworkCertifier.Assumptions",
   "Proofs.Flock.Soundness.Assumptions"
  ],
  "meaning": [
   "Definitions.Core",
-  "Specs.Core.Assumptions",
-  "Specs.Core.Guarantees",
+  "Models.Core.Assumptions",
+  "Models.Core.Guarantees",
   "Definitions.Nci",
-  "Specs.Nci.Assumptions",
-  "Specs.Nci.Guarantees",
+  "Models.Nci.Assumptions",
+  "Models.Nci.Guarantees",
   "Definitions.Pouw",
-  "Specs.Pouw.Assumptions",
-  "Specs.Pouw.Guarantees",
+  "Models.Pouw.Assumptions",
+  "Models.Pouw.Guarantees",
   "Definitions.Pous",
-  "Specs.Pous.Assumptions",
-  "Specs.Pous.Guarantees",
+  "Models.Pous.Assumptions",
+  "Models.Pous.Guarantees",
   "Definitions.NetworkCertifier",
-  "Specs.NetworkCertifier.Assumptions",
-  "Specs.NetworkCertifier.Guarantees",
+  "Models.NetworkCertifier.Assumptions",
+  "Models.NetworkCertifier.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
@@ -82,13 +82,13 @@
    "except": [],
    "why": "the relation (relation.py) imports no proofs and nothing of the semantics: the two transcriptions are independent"
   },
-  "Specs.Core.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Specs.Core.Assumptions"],
+  "Models.Core.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Core", "Models.Core.Assumptions"],
    "except": [],
    "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
   },
-  "Specs.Core.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Core", "Specs.Core.Assumptions", "Specs.Core.Guarantees"],
+  "Models.Core.Guarantees": {
+   "imports": ["Mathlib", "Definitions.Core", "Models.Core.Assumptions", "Models.Core.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   },
@@ -97,31 +97,31 @@
    "except": [],
    "why": "the policy is stated over core's model and imports no proofs"
   },
-  "Specs.Nci.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Specs.Core.Assumptions", "Definitions.Nci", "Specs.Nci.Assumptions"],
+  "Models.Nci.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Core", "Models.Core.Assumptions", "Definitions.Nci", "Models.Nci.Assumptions"],
    "except": [],
    "why": "a named assumption reads the protocol, never a proof"
   },
-  "Specs.Nci.Guarantees": {
+  "Models.Nci.Guarantees": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
-    "Specs.Core.Assumptions",
-    "Specs.Core.Guarantees",
+    "Models.Core.Assumptions",
+    "Models.Core.Guarantees",
     "Definitions.Nci",
-    "Specs.Nci.Assumptions",
-    "Specs.Nci.Guarantees"
+    "Models.Nci.Assumptions",
+    "Models.Nci.Guarantees"
    ],
    "except": [],
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   },
-  "Specs.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Specs.Pouw.Assumptions"],
+  "Models.Pouw.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions"],
    "except": [],
    "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof"
   },
-  "Specs.Pouw.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Specs.Pouw.Assumptions", "Specs.Pouw.Guarantees"],
+  "Models.Pouw.Guarantees": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions", "Models.Pouw.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   },
@@ -146,37 +146,37 @@
    "except": [],
    "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
   },
-  "Specs.Pous.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Pous", "Specs.Pous.Assumptions"],
+  "Models.Pous.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Pous", "Models.Pous.Assumptions"],
    "except": [],
    "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
   },
-  "Specs.Pous.Assumptions.P2": {
+  "Models.Pous.Assumptions.P2": {
    "imports": [
     "Mathlib",
     "Definitions.Pous.Game",
     "Definitions.Pous.Model",
     "Definitions.Pous.Accounting",
     "Definitions.Pous.P2",
-    "Specs.Pous.Assumptions.P2"
+    "Models.Pous.Assumptions.P2"
    ],
    "except": [],
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
-  "Specs.Pous.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Pous", "Specs.Pous.Assumptions", "Specs.Pous.Guarantees"],
+  "Models.Pous.Guarantees": {
+   "imports": ["Mathlib", "Definitions.Pous", "Models.Pous.Assumptions", "Models.Pous.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   },
-  "Specs.Pous.Guarantees.P2": {
+  "Models.Pous.Guarantees.P2": {
    "imports": [
     "Mathlib",
     "Definitions.Pous.Game",
     "Definitions.Pous.Model",
     "Definitions.Pous.Accounting",
     "Definitions.Pous.P2",
-    "Specs.Pous.Assumptions.P2",
-    "Specs.Pous.Guarantees.P2"
+    "Models.Pous.Assumptions.P2",
+    "Models.Pous.Guarantees.P2"
    ],
    "except": [],
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
@@ -212,17 +212,17 @@
    "except": [],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
   },
-  "Specs.NetworkCertifier.Assumptions": {
-   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Specs.NetworkCertifier.Assumptions"],
+  "Models.NetworkCertifier.Assumptions": {
+   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Models.NetworkCertifier.Assumptions"],
    "except": [],
    "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof"
   },
-  "Specs.NetworkCertifier.Guarantees": {
+  "Models.NetworkCertifier.Guarantees": {
    "imports": [
     "Mathlib",
     "Definitions.NetworkCertifier",
-    "Specs.NetworkCertifier.Assumptions",
-    "Specs.NetworkCertifier.Guarantees"
+    "Models.NetworkCertifier.Assumptions",
+    "Models.NetworkCertifier.Guarantees"
    ],
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
