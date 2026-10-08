@@ -93,6 +93,34 @@ src = "tools/research/src/research/pods/nebius/ssh-memory.conf"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
+# ---- cpu-1: a `research run` only through a check slot (research.remote refuses one; slot_only.py stops one from an older tree);
+# after installing, `sudo systemctl enable --now vy-slot-only.timer`
+
+[[file]]
+path = "/etc/vy/runs-via-slot"
+src = "tools/research/src/research/pods/nebius/runs-via-slot"
+nodes = ["vy-nebius-cpu-1"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/slot_only.py"
+src = "tools/research/src/research/pods/nebius/slot_only.py"
+nodes = ["vy-nebius-cpu-1"]
+run = ["systemd:vy-slot-only.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-slot-only.service"
+src = "tools/research/src/research/pods/nebius/vy-slot-only.service"
+nodes = ["vy-nebius-cpu-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-slot-only.timer"
+src = "tools/research/src/research/pods/nebius/vy-slot-only.timer"
+nodes = ["vy-nebius-cpu-1"]
+owner = "infra"
+
 [[file]]
 path = "/home/research/.research/lease.sh"
 src = "tools/research/src/research/pods/sh/lease.sh"
