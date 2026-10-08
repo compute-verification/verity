@@ -98,9 +98,11 @@ def fmt_utc(t: datetime) -> str:
 
 
 def parse_expires(s: str, now: datetime) -> str | None:
-    """`--expires`: `never` (None), a date (its midnight UTC), a UTC time, or an offset from now (`7d`, `36h`)."""
+    """`--expires`: `never` (None), `now`, a date (its midnight UTC), a UTC time, or an offset from now (`7d`, `36h`)."""
     if s == "never":
         return None
+    if s == "now":
+        return fmt_utc(now)
     if m := re.fullmatch(r"(\d+)([dh])", s):
         return fmt_utc(now + timedelta(**{"days" if m[2] == "d" else "hours": int(m[1])}))
     try:
@@ -108,7 +110,7 @@ def parse_expires(s: str, now: datetime) -> str | None:
             return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc))
         return fmt_utc(parse_utc(s))
     except ValueError:
-        raise RecordError(f"--expires {s!r}: give never, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z) or an offset (7d, 36h)") from None
+        raise RecordError(f"--expires {s!r}: give never, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z), an offset (7d, 36h) or now") from None
 
 
 def _utc_or_none(s: Any) -> datetime | None:
@@ -918,7 +920,7 @@ def keep_main(argv: list[str]) -> int:
                                  "`research keep show PATH` prints the record covering PATH")
     ap.add_argument("path")
     ap.add_argument("--owner", required=True, metavar="@LANE", help="the lane that owns it (agents end, lanes persist)")
-    ap.add_argument("--expires", required=True, metavar="DATE|never", help="a date, a UTC time, an offset (7d, 36h), or never")
+    ap.add_argument("--expires", required=True, metavar="DATE|never", help="a date, a UTC time, an offset (7d, 36h), now, or never")
     ap.add_argument("--priority", required=True, choices=PRIORITIES, help="gc takes low before normal, and never high or keep")
     ap.add_argument("--regenerate", default=None, metavar="CMD", help="how to rebuild it (an empty string clears it)")
     g = ap.add_mutually_exclusive_group()

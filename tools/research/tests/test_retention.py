@@ -149,6 +149,11 @@ def test_a_directory_with_a_record_inside_and_beside_it_is_invalid(tmp_path):
     assert by_path(plan)["pouw/twice"]["action"] == "skip" and d.exists()
 
 
+def test_expires_takes_the_now_that_rm_s_refusal_tells_an_owner_to_write():
+    assert R.parse_expires("now", NOW) == "2026-10-01T19:30:00Z"
+    assert R.parse_expires("36h", NOW) == "2026-10-03T07:30:00Z" and R.parse_expires("never", NOW) is None
+
+
 @pytest.mark.parametrize("change, fix", [
     ({"owner": "compute-accounting"}, "lane handle such as @compute-accounting"),
     ({"priority": "urgent"}, "one of low, normal, high, keep"),
