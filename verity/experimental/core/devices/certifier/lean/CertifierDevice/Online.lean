@@ -73,17 +73,18 @@ def arrive (l : Link) (position anchor index : Nat) (ready : Int) : Link := Id.r
                     ready := l.ready.push r }
   return l
 
-/-- `_Link.see`: extend the seen prefix to the frames ready by `bucket`, refusing, as Python raises `ValueError`, a frame
-ready no later than its anchor's bucket. -/
-def see (l : Link) (bucket : Int) : Except String Link := do
+/-- `_Link.see`: extend the seen prefix to the frames ready by `bucket`, and whether one of them is ready no later than
+its anchor's bucket. -/
+def see (l : Link) (bucket : Int) : Link × Bool := Id.run do
   let mut l := l
+  let mut early := false
   for k in [l.seen:l.ready.size] do
     if l.ready[k]! ≤ bucket then
-      if (l.anchor[k]! : Int) ≥ l.ready[k]! then throw "a frame is ready only after its anchor's bucket"
+      early := early || (l.anchor[k]! : Int) ≥ l.ready[k]!
       let w := l.anchor[k]! / l.T
       l := { l with positions := l.positions.insert w ((l.positions.getD w #[]).push k), seen := k + 1 }
     else break
-  return l
+  return (l, early)
 
 def count (l : Link) (u : Nat) : Nat := (l.positions.getD u #[]).size
 
@@ -197,17 +198,19 @@ def summarize (p : Prover) (u frames : Nat) : Past := Id.run do
   let own := p.syncs[u]?.getD p.envelope
   return ⟨u, own, frames, (cost own).isNone, frontier⟩
 
-/-- `Prover.declare`: the next window's sync, from the frames ready by its first bucket and the earlier declarations;
-refused where `see` refuses a frame. -/
-def declare (p : Prover) : Except String (Prover × ClockSync) := do
+/-- `Prover.declare`: the next window's sync, from the frames ready by its first bucket and the earlier declarations,
+and whether it was refused (`online.Refused`): a frame it reads then is ready no later than its anchor's bucket. Python
+raises, and its next `declare`, on the frames read, is the window's: the sync returned here. -/
+def declare (p : Prover) : Prover × ClockSync × Bool := Id.run do
   let w := p.syncs.size
-  let p := { p with link := ← p.link.see (w * p.T : Nat) }
+  let (link, refused) := p.link.see (w * p.T : Nat)
+  let p := { p with link }
   let mut seen := #[]
   for u in [w - p.rule.k:w] do
     let n := p.link.count u
     if n > 0 then seen := seen.push (p.summarize u n)
   let sync := p.rule.choose (lastN (p.prior ++ seen) p.rule.k) p.syncSet p.envelope
-  return ({ p with syncs := p.syncs.push sync }, sync)
+  return ({ p with syncs := p.syncs.push sync }, sync, refused)
 
 end Prover
 

@@ -19,10 +19,7 @@ connection and waits for the trace's `connected` or `refused`; a server connecti
 its writer records each write and holds a drain until the trace's `delivered`. After each event the loop runs until no
 callback is ready (`loop._ready` empty, with no timer or socket in play), so each event's effects, and the order of the
 actions its tasks take, are a function of the trace alone. An event the proxy isn't waiting for (bytes on a connection
-not open, a second `connected`) is dropped, as `step` drops it. Where `Proxy.run` raises (the online prover's
-`ValueError`), the script records a `crash` action with its message and stops the trace there: `run`'s `finally` has
-cancelled the link's and the streams' tasks, and the script cancels the other grid's ticker, which `asyncio.gather` leaves
-running, as `step` takes no event after a crash.
+not open, a second `connected`) is dropped, as `step` drops it.
 
 **The traces.** Each run has an honest base: sessions on random streams, each a request of one or two frames written on
 the link inside an ingress bucket, released by the ingress grid's FIFO, its connection opened and its request delivered
@@ -37,9 +34,10 @@ without a position, a position seen twice (also while the queue holds exactly Q)
 event on a stream with no released request, bytes left at a stream's end), link bytes that aren't frames (partial,
 padding, unknown kinds, a length past the frame, an early end), the online prover in place of the given syncs (with or
 without given ones before it, a prior history and an envelope outside Σ_sync), the prover with an ingress tick read
-early, so that the first event of the request it releases is read before the request's anchor bucket (which the prover
-refuses at its next declaration), or several at once. Every reading is integer nanoseconds at least `MARGIN` from every grid
-boundary and every boundary plus the slack, where Python's float seconds and Lean's integers could part.
+early, so that the first event of the request it releases is read before the request's anchor bucket (the prover
+refuses its next declaration, which faults that egress window `monitor-unavailable`), or several at once. Every reading
+is integer nanoseconds at least `MARGIN` from every grid boundary and every boundary plus the slack, where Python's
+float seconds and Lean's integers could part.
 """
 from __future__ import annotations
 
@@ -248,17 +246,9 @@ async def drive(h: Harness, inst: dict) -> dict:
     for ev in inst["events"]:
         apply(h, ev)
         await settle()
-        if running.done() and running.exception() is not None:
-            break
     if not running.done():
         raise RuntimeError("the trace leaves ticks unrun")
-    if isinstance(running.exception(), ValueError):  # the online prover's refusal, which `Proxy.run` raises
-        h.actions.append(["crash", str(running.exception())])
-        for task in asyncio.all_tasks() - {asyncio.current_task()}:  # `gather` leaves the other grid's ticker running
-            task.cancel()
-        await settle()
-    else:
-        running.result()
+    running.result()
     for st in proxy.streams.values():
         if st.task is not None and not st.task.cancelled() and st.task.exception() is not None:
             raise st.task.exception()

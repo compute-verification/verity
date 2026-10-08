@@ -38,21 +38,20 @@ def test_the_data_is_what_the_audit_pins(tmp_path):
 def test_the_generator_covers_what_it_says():
     insts = [vectors.instance(s) for s in range(300)]
     results = [vectors.python_results(i) for i in insts]
-    outcomes = Counter()
+    outcomes, refused = Counter(), Counter()
     for inst, res in zip(insts, results, strict=True):
         statuses = {a[1]["status"] for a in res["actions"] if a[0] == "publish"} - {None}
-        crashed = any(a[0] == "crash" for a in res["actions"])
-        outcomes[inst["path"], "crashed" if crashed else "faulted" if statuses else "accepted"] += 1
+        outcomes[inst["path"], "faulted" if statuses else "accepted"] += 1
         if inst["path"] == "duplicate-at-capacity":  # the duplicate is malformed, not the queue's overflow
             assert "malformed" in statuses
         if inst["program"] is not None:
             vectors.check_honest(inst, res)
-            assert not statuses and not crashed
+            assert not statuses
+        if inst["path"] == "early-tick":  # the prover's refusal, where the early tick can make one
+            refused["monitor-unavailable" in statuses] += 1
     assert {p for p, _ in outcomes} == set(vectors.PATHS)
-    assert {p for p, o in outcomes if o == "crashed"} == {"early-tick"}
-    assert outcomes["early-tick", "crashed"] > outcomes["early-tick", "faulted"] + outcomes["early-tick", "accepted"]
-    exempt = {"honest", "prover", "prover-after-syncs", "link-garbage", "slow-server", "early-tick"}
-    for path in set(vectors.PATHS) - exempt:
+    assert refused[True] > refused[False]
+    for path in set(vectors.PATHS) - {"honest", "prover", "prover-after-syncs", "link-garbage", "slow-server"}:
         assert outcomes[path, "faulted"] > outcomes[path, "accepted"], path
     reasons = {a[1]["status"] for r in results for a in r["actions"] if a[0] == "publish"}
     assert reasons == {None} | {r.value for r in vectors.Reason} - {"dropped"}

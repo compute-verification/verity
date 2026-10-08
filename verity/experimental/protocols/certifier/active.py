@@ -32,6 +32,9 @@ names the first reason (W6). Since the Program's grid carries a queue into the n
 closes faulted while its queue would still hold frames faults the next one too, with the same reason. They are:
 - a late tick (`monitor-unavailable`): the ticker woke more than `slack` after its boundary. A bucket it missed is
   still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
+- a declaration the online prover refuses (`monitor-unavailable`, `online.Refused`): a frame read by the window's first
+  tick is ready no later than its anchor's bucket, which an ingress tick read before its boundary makes. The egress
+  window that declares is faulted, and its sync is the prover's declaration once it has read those frames;
 - an overrun: the link still holds a whole bucket unwritten at a tick (`delivery-refused`), or the queue or the
   shaper's buffer passes Q (`overflow`); a server that refuses a stream's connection is `delivery-refused` on ingress;
 - a late forward (`delivery-refused`): a released request not written to its server connection by `slack` after its
@@ -65,7 +68,7 @@ from verity.experimental.protocols.certifier.grid import (
     Certifier,
     row_count,
 )
-from verity.experimental.protocols.certifier.online import Prover
+from verity.experimental.protocols.certifier.online import Prover, Refused
 from verity.experimental.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 HEADER = struct.Struct(">BII")
@@ -121,7 +124,9 @@ class Shaper:
     still queued faults the next one too, with the same reason: the Program's grid carries them over.
 
     With a `prover` (`online.Prover`), the syncs after the given ones are its: it sees every frame the shaper takes, and
-    declares each of the first `windows` windows' syncs at the window's first tick, before anything is handed."""
+    declares each of the first `windows` windows' syncs at the window's first tick, before anything is handed. A
+    declaration it refuses faults the window `monitor-unavailable`, and the next one, on the frames it has read, is
+    the window's."""
 
     def __init__(self, certifier: Certifier, syncs: Sequence[ClockSync], sync_set: SyncSet, prover: Prover | None = None,
                  windows: int | None = None) -> None:
@@ -151,7 +156,12 @@ class Shaper:
     def tick(self) -> tuple[Row, Record | None]:
         T = self.certifier.params.buckets
         if self.prover is not None and self.t % T == 0 and self.t // T == len(self.syncs) < self.windows:
-            self.syncs.append(self.prover.declare())
+            try:
+                sync = self.prover.declare()
+            except Refused:
+                self.certifier.fault(Reason.MONITOR_UNAVAILABLE)
+                sync = self.prover.declare()
+            self.syncs.append(sync)
             self._check_advice()
         while self.next in self.pending:
             frame, ready = self.pending[self.next]
