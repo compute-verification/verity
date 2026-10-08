@@ -4,9 +4,9 @@ from its beacon.
 """
 from __future__ import annotations
 
-from verity.experimental.protocols.pouw.audit import Epoch, Workload
-from verity.experimental.protocols.pouw.coins import CoinCommitment, CoinOpening
-from verity.experimental.protocols.pouw.protocol import DomainError, Matmul, Shape
+from verity.core.protocols.pouw.audit import Epoch, Workload
+from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
 #: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it (`manifest_epoch`)

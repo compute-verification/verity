@@ -26,7 +26,7 @@
    "name": "certifier_program",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/experimental/protocols/certifier/lean",
+   "dir": "../../verity/core/protocols/certifier/lean",
    "configFile": "lakefile.toml"
   },
   {
@@ -35,7 +35,7 @@
    "name": "core_randomness",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/experimental/core/primitives/randomness",
+   "dir": "../../verity/core/primitives/randomness",
    "configFile": "lakefile.toml"
   },
   {
@@ -44,7 +44,7 @@
    "name": "core_vstar",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/experimental/core/service/vstar",
+   "dir": "../../verity/core/service/vstar",
    "configFile": "lakefile.toml"
   },
   {
@@ -62,7 +62,7 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../verity/experimental/core/service/vstar/../../difftest/lean",
+   "dir": "../../verity/core/difftest/lean",
    "configFile": "lakefile.toml"
   },
   {
@@ -71,7 +71,7 @@
    "name": "network_check",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/protocols/network/lean",
+   "dir": "../../verity/core/protocols/network/lean",
    "configFile": "lakefile.toml"
   },
   {
@@ -80,7 +80,7 @@
    "name": "nci_check",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/protocols/network/nci/lean",
+   "dir": "../../verity/core/protocols/network/nci/lean",
    "configFile": "lakefile.toml"
   },
   {
@@ -89,7 +89,7 @@
    "name": "pouw_window",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/protocols/pouw/window",
+   "dir": "../../verity/core/protocols/pouw/lean/window",
    "configFile": "lakefile.toml"
   },
   {
@@ -98,7 +98,7 @@
    "name": "lms",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/protocols/network/lean/../../../primitives/lms/lean",
+   "dir": "../../verity/core/primitives/lms/lean",
    "configFile": "lakefile.toml"
   },
   {
@@ -107,7 +107,7 @@
    "name": "core_protocol",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/protocols/network/lean/../../interface",
+   "dir": "../../verity/core/protocols/interface",
    "configFile": "lakefile.toml"
   },
   {
@@ -116,7 +116,7 @@
    "name": "certifier_device",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/devices/certifier/lean",
+   "dir": "../../verity/core/devices/certifier/lean",
    "configFile": "lakefile.toml"
   },
   {
@@ -125,7 +125,7 @@
    "name": "pouw_check",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/protocols/pouw/check",
+   "dir": "../../verity/core/protocols/pouw/lean/check",
    "configFile": "lakefile.toml"
   },
   {
@@ -134,7 +134,7 @@
    "name": "core_world",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/experimental/core/devices/certifier/lean/../../../primitives/world",
+   "dir": "../../verity/core/primitives/world",
    "configFile": "lakefile.toml"
   },
   {
