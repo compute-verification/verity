@@ -9,16 +9,16 @@ The row units' words read in the protocol's terms (`pc8Sem`), under the named hy
 protocol's word functions agree only conditionally:
 
 * `Pc8OpsAgree ops`: core's primitives (`F32ToE4m3Sat`, `E4m3ToF32`, `F32Mul`, `F32Fma`, `F32Div`, `F32Fmaxf`,
-  `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. They
-  are open at core's instance `coreOps`;
+  `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. At
+  core's instance `coreOps` they follow from core's definitions (`CoreOps.pc8OpsAgree_coreOps`);
 * `Row8OK`: a row's words are finite and its `α` and `β` step words, with `β > 0` (`Stats8OK`). It is no hypothesis
   of L3: a credited row's follows from `PearlCSem.RowOK`, and a weight's from the check's own `weightOK`
   (`TileCheck.Accepts`), by magnitudes (`RowStats`, `TileCheckWords`). The table reads a `−0` word, and a word's bits
   above 32, as `pc8Sem` reads them (`ZeroSign`): `|−0| = |+0|`, `fma(−0, −0, ·) = fma(+0, +0, ·)`, and the step reads
   `α·(−0)` and `α·(+0)` alike (`alpha8_zeroSign`, `beta8_zeroSign`, `form8_zeroSign`);
-* `Noise8OK`: no code of the noise is NaN (`Line8OK` at every line of its four factors), a property of `pc8Sem`'s noise
-  parameter. Python's noise has none: `sample_line`'s codes are finite by its norm bound, and `fp8_to_f32` refuses a
-  NaN code. On the other codes, `−0` included, the table's `E′` is `lineCodes`'s (`eTilde8_line`: `fp32.mul(β, −0)` is
+* `Noise8OK`: no code of the noise is NaN (`Line8OK` at every line of its four factors). It is no hypothesis of L3:
+  the check refuses a noise with a NaN code (`tileCheck8`'s `anchorsOK`), as Python's verifier does (`fp8_to_f32`
+  refuses one), so an accepted tile's noise has it (`TileCheckWords`). On the other codes, `−0` included, the table's `E′` is `lineCodes`'s (`eTilde8_line`: `fp32.mul(β, −0)` is
   `−0`), never NaN (`lineCodes_notNaN`), and its `bf16(E′)` is the protocol's `codeBf16 E′` (`be8_word`).
 
 On them the formed words are `CastWord`s (`formWord8_castWord`), so the cast is `e4m3` of the formed value: the step
@@ -162,8 +162,8 @@ divide by a nonzero word rounds as `f32Word` (an exact zero signed as `F32Mul`'s
 zero of its sign; a product whose first factor is not finite is not finite; `F32Fmaxf` against a finite nonzero word
 is the larger, a NaN losing; `SelectI32` selects on its condition's low bit; an FMA of finite words whose exact value
 overflows writes its `f32Word` (`±inf`); and a quotient of a non-finite word by a finite one is not finite. Each is a
-fact about IEEE binary32 (round to nearest even, gradual underflow) or core's integer primitives, open at core's
-instance `coreOps`. -/
+fact about IEEE binary32 (round to nearest even, gradual underflow) or core's integer primitives. At core's instance
+`coreOps` all of them follow from core's definitions (`CoreOps.pc8OpsAgree_coreOps`). -/
 structure Pc8OpsAgree (ops : RowOps) : Prop where
   cast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val
   widen : ∀ c : Code, c.isNaN = false → c.val ≠ 0x80 → ops.e4m3ToF32 c.val % 2 ^ 32 = f32Word (codeVal c)
@@ -188,14 +188,6 @@ structure Pc8OpsAgree (ops : RowOps) : Prop where
   fmaOvf : ∀ a b c : ℕ, ∀ x y z : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → c < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
     wordQ c = some z → wordQ (f32Word (x * y + z)) = none → ops.f32FmaV2 a b c % 2 ^ 32 = f32Word (x * y + z)
   divNonfin : ∀ a b : ℕ, a < 2 ^ 32 → wordQ a = none → (wordQ b).isSome → wordQ (ops.f32DivV2 a b % 2 ^ 32) = none
-
-/-- A noise line as the table reads it: no NaN code (`0x7F`, `0xFF`). -/
-def Line8OK (e : Fin Params.pi.r → Code) : Prop := ∀ q, (e q).isNaN = false
-
-/-- **The noise as the table reads it**: `Line8OK` at every line of its four factors. Python's noise has no NaN code:
-`sample_line`'s codes are finite by its norm bound, and `fp8_to_f32` refuses a NaN code. -/
-def Noise8OK {m n k : ℕ} (z : Noise m n k Params.pi.r) : Prop :=
-  (∀ i, Line8OK (z.EA i)) ∧ (∀ l, Line8OK (z.FA l)) ∧ (∀ j, Line8OK (z.EB j)) ∧ ∀ l, Line8OK (z.FB l)
 
 /-- A row of words as values, as `wordsVal` reads it. -/
 def rowQ (k : ℕ) (w : ℕ → ℕ) : Fin k → ℚ := fun l => (wordQ (w l)).getD 0
