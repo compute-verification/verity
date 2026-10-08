@@ -27,7 +27,7 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
 
 **The hypotheses** are each over the configuration, the trace or the device's outputs, and each is checkable on them:
 
-* the configuration's: `Ticking` (both grids have buckets), `Encodable` (what a record encodes fits its field), `Distinct`
+* the configuration's: `Ticking` (both grids have buckets), `FieldsFit` (what a record encodes fits its field), `Distinct`
   (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canon` is a `partial def`, so this is a fact
   about the configuration that only running it shows), and `ValidKey` of the issuer's key;
 * the run's: `Closed` (both grids ran all their ticks), `HonestTiming` (`CompleteRows`'s: each frame handed at the bucket
@@ -118,7 +118,7 @@ def Ticking (c : Config) : Prop := 0 < c.egress.buckets ∧ 0 < c.ingress.bucket
 
 /-- What a record encodes fits its field (`RecordHead.encode`, `certificate_message`): each grid's T, r, B and τ_b are
 u32s, every window `w < W` a u64, and each link's UTF-8 is under 2^16 bytes. -/
-def Encodable (c : Config) : Prop :=
+def FieldsFit (c : Config) : Prop :=
   (∀ g ∈ [c.egress, c.ingress], g.buckets < 2 ^ 32 ∧ g.allocation < 2 ^ 32 ∧ g.frameBytes < 2 ^ 32 ∧
     g.bucketMs < 2 ^ 32) ∧
   c.windows ≤ 2 ^ 64 ∧ c.egressLink.toUTF8.size < 2 ^ 16 ∧ c.ingressLink.toUTF8.size < 2 ^ 16
@@ -165,7 +165,7 @@ accepts that commitment, whatever its bytes, with the evidence the device's shap
 parameters and the key's public key. -/
 def DeviceOutputAccepted : Prop :=
   ∀ (c : Config) (tr : List Event) (i : Issuer) (next : Nat),
-    Ticking c → Encodable c → Distinct c → Digested c → ValidKey i.key →
+    Ticking c → FieldsFit c → Distinct c → Digested c → ValidKey i.key →
     Closed c tr → HonestTiming c tr → NoFault c tr → SyncsDeclared c tr → SyncsAdmitted c tr →
     LeavesLeft i next c tr →
     ∃ i' crs, certifyAll c i next (published c tr) = .ok (i', crs) ∧
