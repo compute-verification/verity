@@ -209,7 +209,9 @@ class _Field:
         x = a * a
         x = (x & self.mask) + self.c0 * (x >> self.w)
         x = (x & self.mask) + self.c0 * (x >> self.w)
-        return x - self.p if x >= self.p else x
+        # Two folds leave x below 2^w + c0·(c0 + 1), under 2p only when c0² is small against 2^w (as at every registered
+        # width); `%` is exact for the large c0 a small width accepts.
+        return x % self.p if x >= self.p else x
 
     def sq(self, a: int) -> int:
         """`sq(a)`: a² mod p, negated when a is odd."""

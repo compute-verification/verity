@@ -25,7 +25,8 @@ machine, or lacks provider / pod_id (host for an ssh machine) / project is dropp
 404, or any API failure: G2); the pod's name (campaign suffix stripped) is not NAME (`--any-name` allows it: a pod created before
 the convention); machines.toml or the registry already binds NAME to another pod (`--replace` for the registry file only).  The
 `register --host` (an ssh machine, such as a cloud VM with a static address) refuses unless `hostname` answers over ssh with the
-research key.  The file is written atomically, and with `RESEARCH_NOTES_SYNC=1` synced to the notes remote at once.
+research key.  The file is written atomically and synced to the notes remote at once, so other agents' `research run --on` sees the machine
+(vy-nebius-cpu-1 was invisible to lanes for hours, 7 Oct); `RESEARCH_NOTES_SYNC=0` leaves the commit to the next `notes sync`.
 """
 from __future__ import annotations
 
@@ -333,7 +334,7 @@ def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[
 def _sync(paths: list[Path]) -> str | None:
     from .. import notes_sync
 
-    if os.environ.get(notes_sync.SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
+    if os.environ.get(notes_sync.SYNC_ENV, "").strip() in ("0", "false", "no", "off"):
         return None
     root = notes_root()
     rel = [str(p.relative_to(root)) for p in paths if root in p.parents]
