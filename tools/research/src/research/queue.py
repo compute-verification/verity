@@ -977,6 +977,8 @@ class RemoteQuickTier(QuickTier):
                 return status, None
             if gone := rec.get("launcher_exited"):
                 return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
+            if gone := rec.get("runner_gone"):
+                return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
         return status, (f"run {d.name} on {on} didn't end within {bound:g} s (last seen "
                         f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
 

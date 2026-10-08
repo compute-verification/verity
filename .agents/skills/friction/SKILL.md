@@ -101,6 +101,16 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-07 (3:54 PM PDT; 3:25 PM PDT: "skip check more", revert what breaks): `main` always passes the whole `check`,
+  kept fast by reusing each part's verdict while its declared inputs, the base image and the check's code are unchanged;
+  the merge queue runs it on the queued group, and a nightly uncached check must agree (the CI page in Notion). Until
+  reuse and the queue exist, a change lands by hand once every part whose declared inputs it touches passes; layout
+  moves and check or merge tooling get a full `check` first; a full `check` of the newest `main` follows on vy-nebius-1,
+  and the landing that fails it is reverted at once (`AGENTS.md`, "Checking and merging"). Effort goes into reuse
+  (declared inputs, a verdict cache, Lean replay per module), not into teaching `research merge` to land on part of a
+  check. Before an expensive step (a full check, a move window), rehearse the cheap one after it: `research merge
+  --dry-run` against a scratch `main` would have shown on 7 Oct, ten hours earlier, that main's gate could accept no
+  check of the moved tree.
 - 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
   rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
   This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
