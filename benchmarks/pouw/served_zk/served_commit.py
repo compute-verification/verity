@@ -266,27 +266,32 @@ def f32_rows(data, k: int, idx) -> list[bytes]:
     return out
 
 
-def _form(scheme: C.PearlC, noise: C.Noise, k: int, side: str, rows: list[bytes], idx: list[int]) -> list[list[int]]:
-    """The fp8-p words of rows `idx` (FP32 bytes `rows`) on one side, as `PearlC.encode` forms them; raises `P.Reject`."""
+def _form(scheme: C.PearlC, ctx: Context, noise: C.Noise, k: int, side: str, rows: list[bytes], idx: list[int]
+          ) -> list[list[int]]:
+    """The fp8-p words of rows `idx` (FP32 bytes `rows`) on one side, as `PearlC.encode` forms them (A's E lines from its
+    rows' own seeds under a row-seeded hashing); raises `P.Reject`."""
     seed_e = noise.seed_a if side == "a" else noise.seed_b
-    f, e = scheme._side(rows, idx, 0 if side == "a" else 1, seed_e, noise.seed_b, k)
+    rows_e = ([C.sample_line(x, 0, 0, 0) for x in scheme.row_seeds(ctx, rows, idx)]
+              if side == "a" and scheme.hashing in C.ROW_SEEDED else None)
+    f, e = scheme._side(rows, idx, 0 if side == "a" else 1, seed_e, noise.seed_b, k, rows_e)
     peel = C.peel_factors_a if side == "a" else C.peel_factors_b
     p = peel(f.codes, C.scaled_noise(f, e), noise.seed_b, k, scheme.line_norm, scheme.device)
     ok = [P.f32_of_bits(r) * P.f32_of_bits(a) >= P.SIGMA_MIN and C.live_row(x) for r, a, x in zip(f.rho, f.alpha, f.x)]
     return [L.words_fp8_p(c, q) if good else None for c, q, good in zip(f.codes, p, ok)]
 
 
-def form(scheme: C.PearlC, noise: C.Noise, k: int, side: str, rows: list[bytes], idx: list[int]) -> list[list[int] | None]:
+def form(scheme: C.PearlC, ctx: Context, noise: C.Noise, k: int, side: str, rows: list[bytes], idx: list[int]
+         ) -> list[list[int] | None]:
     """Each row's fp8-p words, or None for a row the scheme refuses (alone, so one refusal leaves its batch's others)."""
     out: list[list[int] | None] = []
     for at in range(0, len(idx), CHUNK):
         r, i = rows[at:at + CHUNK], idx[at:at + CHUNK]
         try:
-            out += _form(scheme, noise, k, side, r, i)
+            out += _form(scheme, ctx, noise, k, side, r, i)
         except P.Reject:
             for one, j in zip(r, i):
                 try:
-                    out += _form(scheme, noise, k, side, [one], [j])
+                    out += _form(scheme, ctx, noise, k, side, [one], [j])
                 except P.Reject:
                     out.append(None)
     return out
@@ -905,8 +910,8 @@ def cmd_commit(a) -> int:
             noise = scheme.noise(ctx)
             a_data = (pass_dir / u["rows"]["path"]).read_bytes()
             b_data = np.memmap(pass_dir / w["rows"]["path"], dtype=np.uint8, mode="r")
-            words = {"a": form(scheme, noise, k, "a", f32_rows(a_data, k, range(real)), list(range(real))),
-                     "b": form(scheme, noise, k, "b", f32_rows(b_data, k, range(n)), list(range(n)))}
+            words = {"a": form(scheme, ctx, noise, k, "a", f32_rows(a_data, k, range(real)), list(range(real))),
+                     "b": form(scheme, ctx, noise, k, "b", f32_rows(b_data, k, range(n)), list(range(n)))}
             record = {"matmul": u["index"], "shape": [u["m"], k, n], "weight": u["weight"], "real_rows": real,
                       "served": {"root_a": u["root_a"], "weight_root": w["root"]}}
             window.append({"record": record, "words": words})

@@ -69,13 +69,13 @@ def test_the_unit_is_a_sandboxed_system_service_of_the_job_user():
 
 
 def test_the_job_gets_the_runs_identity_its_gpus_and_what_its_env_names_and_no_other_credential():
-    environ = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": RUN, "RESEARCH_NOTES_TOKEN": "t", "PYTHONPATH": "/tool:/tree",
+    environ = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": RUN, "OUT": f"{RUN}/out", "RESEARCH_NOTES_TOKEN": "t", "PYTHONPATH": "/tool:/tree",
                "CUDA_VISIBLE_DEVICES": "2", "GPU_LEASE_ID": "7", "HF_TOKEN": "h", "AWS_SECRET_ACCESS_KEY": "a", "SSH_AUTH_SOCK": "/s",
                "KUBECONFIG": "/k", "PATH": "/home/research/.local/bin:/usr/bin", "HOME": "/home/research", "OMP_NUM_THREADS": "4",
                "XDG_RUNTIME_DIR": "/run/user/1001", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1001/bus", "TMUX": "/tmp/t,1,0"}
     assert jobuser.job_env(environ, ["HF_TOKEN", "OMP_NUM_THREADS"]) == {
         "PATH": jobuser.SYSTEM_PATH, "HOME": "/tmp", "LANG": "C.UTF-8", "RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": RUN,
-        "PYTHONPATH": "/tool:/tree", "CUDA_VISIBLE_DEVICES": "2", "GPU_LEASE_ID": "7", "HF_TOKEN": "h", "OMP_NUM_THREADS": "4"}
+        "OUT": f"{RUN}/out", "PYTHONPATH": "/tool:/tree", "CUDA_VISIBLE_DEVICES": "2", "GPU_LEASE_ID": "7", "HF_TOKEN": "h", "OMP_NUM_THREADS": "4"}
 
 
 def test_the_env_file_keeps_a_value_as_given():
@@ -189,6 +189,7 @@ def test_the_runner_reads_nothing_until_the_unit_is_gone_and_what_the_job_left_i
     os.chmod(d, 0o750)
     assert jobuser.prepare(str(d)) == 0o750
     assert stat.S_IMODE(d.stat().st_mode) == 0o1777 and (d / "control").is_dir()
+    assert stat.S_IMODE((d / "out").stat().st_mode) == 0o1777, "the job writes its $OUT"
     (d / "control" / "job.env").write_text("X=1\n")
     runs = Runner(find_out=f"{d}/out/link\n{d}/fifo\n")
     removed, still = jobuser.finish(str(d), "research-job-r1", "vyjob", 2**31 - 2, 0o750, run=runs)
@@ -197,9 +198,10 @@ def test_the_runner_reads_nothing_until_the_unit_is_gone_and_what_the_job_left_i
         ["sudo", "-n", "find", "-P", str(d), "-mindepth", "1", "-user", "vyjob", "!", "-type", "d", "!", "-type", "f", "-print", "-delete"],
         ["sudo", "-n", "chown", "-R", "-P", "--from=vyjob", f"{os.getuid()}:{os.getgid()}", "--", str(d)]]
     assert removed == ["out/link", "fifo"] and still == []
-    assert stat.S_IMODE(d.stat().st_mode) == 0o750 and not (d / "control" / "job.env").exists()
+    assert stat.S_IMODE(d.stat().st_mode) == stat.S_IMODE((d / "out").stat().st_mode) == 0o750
+    assert not (d / "control" / "job.env").exists()
     (d / "left").write_text("")
-    assert jobuser.finish(str(d), "u", "vyjob", os.getuid(), 0o750, run=Runner())[1] == ["control", "left"], \
+    assert sorted(jobuser.finish(str(d), "u", "vyjob", os.getuid(), 0o750, run=Runner())[1]) == ["control", "left", "out"], \
         "what the chown didn't give back is reported"
 
 
