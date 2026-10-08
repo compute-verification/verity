@@ -296,7 +296,12 @@
    "type_hash": "d53750168ca3e888be828d67ddf06ec2fce971334aab1109e34a6229fe8b556e"
   },
   "Properties.Pouw.Commit.coinBinding": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Commit.coinBinding : Properties.Pouw.Commit.CoinBinding"
+   ],
+   "assumptions": [],
+   "type_hash": "9881ce35860920a62862ad709801881a1d1ed754df2a5f433a78dc21e07d29ac"
   },
   "Properties.Pouw.Commit.coinNumbers": {
    "owner": "@compute-accounting",
@@ -355,7 +360,12 @@
    "type_hash": "552e94e629015560964a7134592c5c3b699c681120641a55554dac260e91fe1c"
   },
   "Properties.Pouw.Commit.frameInjective": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Commit.frameInjective : Properties.Pouw.Commit.FrameInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "55203d8399261f28172ad062cee20d71b2dff7c11cff480c9d93e90eec22c625"
   },
   "Properties.Pouw.Commit.frameSizes": {
    "owner": "@compute-accounting",
@@ -548,30 +558,6 @@
    ],
    "assumptions": [],
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
-  },
-  "Properties.Pouw.Window.tileAtCovers": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.tileAtCovers : Properties.Pouw.Window.TileAtCovers"
-   ],
-   "assumptions": [],
-   "type_hash": "d4a229e53fcd57f65b339310daaa0030d32f8a815328381c673811bb3acf6540"
-  },
-  "Properties.Pouw.Window.windowAccepts": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.windowAccepts : Properties.Pouw.Window.WindowAccepts"
-   ],
-   "assumptions": [],
-   "type_hash": "16bfb799d6d04bdf17bb1a4ffdf35b9bdd3b2f22db1abcc8a875ec6cb174607d"
-  },
-  "Properties.Pouw.Window.windowCreditsTheCalls": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.windowCreditsTheCalls : Properties.Pouw.Window.WindowCreditsTheCalls"
-   ],
-   "assumptions": [],
-   "type_hash": "52fab289d105e851e1d4ccdee06d7c06029873beb28f59d7a8b84e754a4df0d0"
   }
  },
  "reads": {
@@ -1045,7 +1031,7 @@
    "definitions": {
     "Verity.Declaration": "38f50370a42a6c7f146e8c556c0a240cde4cc1f8e025e5357cd49a5ae354f56f",
     "Verity.Declaration.D": "4796f04f2ae9193027263ff5a3e82a079e0104c069845088e0b6666b007fc552",
-    "Verity.Declaration.\u03b8": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
+    "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
    "guarantees": [
     "NciCheck.Properties.SecurityProofs.Reports",
@@ -1112,7 +1098,17 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.serviceRejectRejects",
-    "Properties.Pouw.Check.undecidedOnlyFromService"
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
+    "Properties.Pouw.Commit.coinNumbers",
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.domainRefusals",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.epochSaltAccepts",
+    "Properties.Pouw.Commit.frameInjective",
+    "Properties.Pouw.Commit.frameSizes",
+    "Properties.Pouw.Commit.leafRefusals"
    ]
   },
   "Flock.Canon": {
@@ -1149,10 +1145,24 @@
     "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
+  "Flock.Draw": {
+   "digest": "e32a5bc1040f0b4cbe09346e16ef9d1dfc283ed93dae67c38be15429ae89ceaf",
+   "definitions": {
+    "Flock.Draw.width": "80674d324269f3df3066a958d4159bf0d1321b5d14bfc80c928ca16a55aa77f4"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.drawShape"
+   ]
+  },
   "Flock.Hash": {
-   "digest": "077092f26b76edb68718a46b9b029251266c64b0bf0cb7a85b8c6fb2a6681baa",
+   "digest": "be4fcf4725e1f56ad99e47db13931b065c9ff34d64a0edfdfe6cb6e67952543e",
    "definitions": {
     "Flock.Digest": "8e3d2cc11be02a7c68cc7f2a3677ae2a30f05f73ee3a3a128f9bcd146cca6dd0",
+    "Flock.Sha256.compress": "865debd21cef29fbb6dbf88b3d2eb930f6c1b94388a15829ce560da84c43d64b",
+    "Flock.Sha256.hash": "fa785eed106208adf558217493a863ca4513a16fbbb02ebf7bbe026b1ab2f15d",
+    "Flock.Sha256.iv": "d22cd5f7303e44a7e7a3d7bbf158b1729b0e40f557eae1769f5c6bbaa56b9458",
+    "Flock.Sha256.k": "560caea143add4512f03c0ca75f64a07607b310b8ba6b9238ae0d06638a15a92",
+    "Flock.Sha256.rotr": "ed7dc3e636379110c66def51cec95a5e4f3e98f2e4ea17061785637d29c8f50e",
     "Flock.Sha512.Regs": "0290739a76a694916ee997a24a785eda10e92ee1d7773043386793f095d0885e",
     "Flock.Sha512.compress": "b6f42903fcd513c0c22f1a4c496cc7cefda8039d0833d0828337bda58bd9c355",
     "Flock.Sha512.hash": "c959baa24d7d893d6bed62c24a7f8e3d846629617591c67ec1fe531b11e21b15",
@@ -1182,7 +1192,72 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.serviceRejectRejects",
-    "Properties.Pouw.Check.undecidedOnlyFromService"
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
+    "Properties.Pouw.Commit.coinNumbers",
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.domainRefusals",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.epochSaltAccepts",
+    "Properties.Pouw.Commit.frameInjective",
+    "Properties.Pouw.Commit.frameSizes",
+    "Properties.Pouw.Commit.leafRefusals",
+    "Properties.Pouw.Commit.taggedSize"
+   ]
+  },
+  "Flock.Hm96": {
+   "digest": "47d79ffec0d59430faad555cc95cf44f22d69b52a2edf4878667b79a551711ff",
+   "definitions": {
+    "Flock.Hm96": "9299d56f48ec1fe9ffe26a3c2ae97f2544bd71066ec39dc147ddfeeaac88b068",
+    "Flock.Hm96.Default512.cols": "b5f41149ed2758c8199a851a93515d93b278f79526f0b98ff141a0c681075e98",
+    "Flock.Hm96.Default512.commitString": "5dad889b4ea7e3885ee79079583e51c2cfacb38fbd78801356f7cb7416dad3b3",
+    "Flock.Hm96.Default512.key": "aaa3fcd05add439c302181a5f6544a79f9ffc0be18f3c423a6d4eef57982aaca",
+    "Flock.Hm96.Default512.leaf": "16c77c6efa5a60f3b36ebf66713f27c5da57d809317e9fe8cbdee0565b79348e",
+    "Flock.Hm96.Default512.leafPrefix": "1a086741c7bba1f2244a36b5c3381c64f3c3fb3f9369a8ab1b5dc6d5b38ec919",
+    "Flock.Hm96.Default512.mask": "7c388df159b102981a7f684ad20ae3233939e61b6b3423fcca5786299c402a2d",
+    "Flock.Hm96.Default512.saltPrefix": "32dbba4cd558f09b46d78bf72dbd4827dca5ea107a1f63607ce8b7229534eb2a",
+    "Flock.Hm96.Default512.tables": "48dba400e24d883b4f333dc38b9aa77b5c369f118b2e7fe7d6e40e20794fb113",
+    "Flock.Hm96.Default512.treeLeaf": "886a3e72ac719884f3279e68e57053ea4ad601cbe0d7b9045cb59d1b44739423",
+    "Flock.Hm96.block": "edd875eeaf0fac2a97be31553bb8dbf5d1cb32b28783ba0b4d3b5d9d770dd7e6",
+    "Flock.Hm96.digestBytes": "896455bbe4e4c2a31506dc22e14b9c659a418f2412e102cb4973d06c213c91e2",
+    "Flock.Hm96.hash": "6ffe8d908366200b9a00d4169e034e8466b463c00629bf93ac41778ed9bff40a",
+    "Flock.Hm96.keyBits": "c8a27e1adef2f45fb0b4e57a101dfa73a14f9838c2402547b0638ff9e735c5d7",
+    "Flock.Hm96.keyBytes": "a4e8ee32d0e00544e9f1ddd7a574aaa5ef6b7078a81adf175b346f67004b92b5",
+    "Flock.Hm96.keyFromLabel": "e9d3ee926e03fb61fae85e126d5994ddcd49718f027250ad866adf6de96b6cfa",
+    "Flock.Hm96.keyLabel": "09f4964c0e4affbbb7256c913214a53e275a72a86ccceb7504fb4b048d4a0670",
+    "Flock.Hm96.leafPrefix": "dc732df8f4e5dcf90d70a0fa683cf40f1223de03a3f755e0155fb6d03b9053a6",
+    "Flock.Hm96.leafTag": "24e7d113a4302837e23275406787913b82a501611bf80255493801c98c77c5cd",
+    "Flock.Hm96.pad": "ee7a3dfc698cb952ce512be3d1c0d6b79b13af6f4e57ee80fa10457b2cf07378",
+    "Flock.Hm96.saltBytes": "133f5d9a1200f192e8c0c8c7c1eb3c6a117adba366c503db9d40d64e53a6aaea",
+    "Flock.Hm96.saltTag": "bb9e6c8c8e922d69d92c98c240665696dd7f210c105814cf4e60c4156f4c3da2",
+    "Flock.Hm96.sha512": "f32b7f14f94d7e1c0097b1d74d263d345ed57f484b1fd5c1c9ef31dcd0e84428",
+    "_private.Flock.Hm96.0.Flock.Hm96.Default512.keyBit": "8093b686534510973e90360c1868f8d33f1d8209b2471ad540d17f90fe41c0ff",
+    "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
+    "Properties.Pouw.Commit.coinNumbers",
+    "Properties.Pouw.Commit.coinRaises",
+    "Properties.Pouw.Commit.drawCoinAccepts",
+    "Properties.Pouw.Commit.epochSaltAccepts",
+    "Properties.Pouw.Commit.leafRefusals"
+   ]
+  },
+  "Flock.HmRow": {
+   "digest": "bad81245880dd3ab91013cf3afb6683c0f6b55a048fee3336b0384842c622e34",
+   "definitions": {
+    "Flock.HmRow.ROW_SCHEMA_SEG": "6db64657e5bbbe4a31f3de267bfa666018c91a08ef5ce79602392ddce59cbe4a",
+    "Flock.HmRow.ROW_SEG_BITS": "e567240f1c4593e29dbb2def1f181c244730d72887557ce2c51966dfd6277d2b",
+    "Flock.HmRow.be64": "d3f7363814c6e91245371e33a66487c248ed14b63c14fb3b8f45a1a801526fa8",
+    "Flock.HmRow.rowPrefixSeg": "6608a9eadc710355f3512abf66b298f63272f5ee7a8dc346e2dde99ba2f355fa",
+    "Flock.HmRow.segDigest": "8947e4d1606889c045c81eb337b7f55902ebaa239f79449b738fc00685e96413",
+    "Flock.HmRow.segShape": "7b4acd17de4f2b55f5789853e477e184a8966daa988789744f79d00c9cd99ce4",
+    "Flock.HmRow.segmentPrefix": "4697fee7f838457c74b72c6ab88de0b73fee17b5d13b33dad5c6f5b2bcabf297"
+   },
+   "guarantees": [
+    "Properties.Pouw.Commit.leafRefusals"
    ]
   },
   "Flock.Program": {
@@ -1293,6 +1368,7 @@
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.domainRefusals",
@@ -1311,6 +1387,7 @@
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.domainRefusals",
@@ -1765,7 +1842,7 @@
    ]
   },
   "PouwCommit.Coins": {
-   "digest": "9fb46f856e4675ec1e507fc22f635f4aa2bbcde4d85ab89be1a2d8c6cff2de3e",
+   "digest": "56c6db0f7fb7f4b3f897d2663c572a76f8a604f1ee42c72f8e74c144e3b1f73a",
    "definitions": {
     "PouwCommit.COIN_BYTES": "9170dc99954072437073819839553dbd79cc80dc5ef5caa2e823f7da4bf164ab",
     "PouwCommit.COIN_TAG": "494e3fdba2173b1fd9d292443e9c89a4dd1ff1c8065c83b754dd8fa5f13843fb",
@@ -1782,11 +1859,13 @@
     "PouwCommit.LABELS": "0e86f8db39f45f0b72288f1e0a3f64c06595175aa1b0411016ba3169778f2068",
     "PouwCommit.SCHEME": "a768d141c009d84cb876b8d54f97302102685b9a483e0d1601f55037a1947262",
     "PouwCommit.coinDomain": "9a8060cd0883eda4fd688ece2a9a2800c6d1a869357e07ffed0874cdeaf94a93",
-    "PouwCommit.coinReason": "6bbfa0756296cd79ed4f1e7cbac3589af982432e3350b2630bba8e2e85f66e4c",
+    "PouwCommit.coinReason": "d2ed07958600acd77fc1a964bb09ccb83d681034f52b1ea92b07be5dab23876a",
+    "PouwCommit.coinReason._sparseCasesOn_1": "a9ebf8046ced3233ddbd4101082ef22a56d6271fbf4d3df45be0c5ee90dd76a2",
     "PouwCommit.leafValue": "0a086cb3d0509926f891a48895a6f8ed78a66a4395d9c22c21c6f497b9d493f7"
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.drawCoinAccepts",
@@ -1796,14 +1875,15 @@
    ]
   },
   "PouwCommit.Draws": {
-   "digest": "e2df2d20e8965e65e13b9e1674c3e8a06f3ec4ad445e54a627a41c8df05da644",
+   "digest": "cce39fe8e7c406f096ecc536219489f21eab20db7f639bda72f05b63c090cb75",
    "definitions": {
     "PouwCommit.DRAW_WORDS": "3259ed121534b75ad3a72fe05c82b040467684fced892e1e9ccf9453a2669b45",
     "PouwCommit.EPOCH_SALT_DOMAIN": "73c53f36ab53df91575a62cf390eeebf764f6218f33fb51ed86c241a67e938ad",
     "PouwCommit.SALT_BYTES": "730b4e5788777c4fbf7442dc67a71ae44ca9965dce8a9eea7b952ed436f3e276",
     "PouwCommit.SALT_DOMAIN": "d6d03d428808e9c9ab29bf1e7e2a09b185f79224aff6f2189e406a34dd1b78cf",
     "PouwCommit.bisectRight": "fb183d371577b5e7b0ab896ba040913ff961656c4fb2a259ee18b40e71fc1750",
-    "PouwCommit.drawCoin": "4a12db96b226c146f08f851514bcef2efbe494ddb44fb47aed0f886a0c488a75",
+    "PouwCommit.drawCoin": "3602966a91db905529099b8e1942120ff4349a27a523cbd8b7fa4a1769e46421",
+    "PouwCommit.drawCoin._sparseCasesOn_1": "6f7a19beb628675d9841c486eb6738b7bcf7c803baa76c2acabc1fdb1a551b3d",
     "PouwCommit.epochSalt": "7b60f3257234c6ebf6179b7283ce8283123ad1c92a1d3541d0bd20cf1eadf736",
     "PouwCommit.key?": "f5d20a12aada8b11add4a4a8c159fc384058bcc5b4371dbf0ecd8523976cdac6",
     "PouwCommit.saltOf": "81221e88b0072b130a06ba57b91e01af051846b944df4d8e38f59fb127461717",
@@ -1821,7 +1901,7 @@
    ]
   },
   "PouwCommit.Frame": {
-   "digest": "9d2adba53a1fffa7290caf43f16a43ac3ba84eaa9c4b111507b815bfb19b002e",
+   "digest": "5150b0c5a25ced9e389d0a8c719cb47a3b3a011c07f7fd4b3e3156602f471635",
    "definitions": {
     "PouwCommit.Domain": "9fec723b34bd2909ea66bff49fb2c521467390aa31017d446d8cae7c122addd4",
     "PouwCommit.Domain.count": "656f0d5f545492183076ea329ae409106bab714818d56a577df3b42a746b0394",
@@ -1834,26 +1914,31 @@
     "PouwCommit.Domain.pad": "58eef236d2ca89306831b1ea656c3a72d453e43b3b49d66b1bd099e84ec2ed51",
     "PouwCommit.Domain.verify": "3c5fc91042e929bcca8dce56169ec91c2376cbbb051066b4a9b377fc9a357a0e",
     "PouwCommit.FRAME": "57f7b9e4a4dba5d34e901ef8d86fff4f7f1048e98bbc3c9d8de929322821e65c",
-    "PouwCommit.Hash": "c823720d287776d44473b9dcb771e4fbf0e85d65c6b16e503b1454615b5fcaf1",
+    "PouwCommit.Hash": "82c1a2fbc19601eeaa4944bf92ec42b009a2d66dd9d76e3b8b0946504200757d",
     "PouwCommit.Hash.bytes": "a071cc206480399943c6ab049aae108f90b341cc3f70045a06af198cbc8ef07e",
+    "PouwCommit.Hash.casesOn": "a20f46b00b521f1607e4675ea9b027d348fe13ae14bbe0c3150ff462f427635b",
+    "PouwCommit.Hash.rec": "4a485ac479549d96058517b3252b8539b3ff0f513d4ab28c9428d45d2c47ae2a",
     "PouwCommit.Hash.run": "7205ebbd439afb11cd6351c5944f1b009d2f1b523a0b52ad3ae40ea87016cc63",
     "PouwCommit.Hash.sha256": "b570aa8301307f10f2f0af68ce4dc75ef3b451955346ea451bf9e759db000aca",
     "PouwCommit.Hash.sha512": "2d744f94140667fc2266d18cc60d4bdf6d961c9b5f2a1c359cc5cb2fccd8eacb",
     "PouwCommit.Hash.tagged": "2292ef29bbfca4cc335440139f4e4501f37beb7965d42985847de7e3bfa98791",
     "PouwCommit.checkPath": "0588a9d5e634b7514c95675b40d8e1251a1cf22db15fdd8c32f77b7e3093a8b7",
     "PouwCommit.depth": "0136cc0777f5f29d54f92d6529872dbc95db24e16e35fe5f8135f58bc429c323",
-    "PouwCommit.frameHash": "9628343b068457866e56b179a21a72b21de94b5b4e113ed2fa71507c85d04954",
-    "PouwCommit.instReprHash.repr": "c55ef4c414901fd69be2a4afde393212707f6bada33e3c4f15c9d43f680f8843",
+    "PouwCommit.frameBytes": "9d299d976ca99f2d162dca798ae7b4a76df89ea77a29f985ab8516e70f4bd316",
+    "PouwCommit.frameHash": "b211c21bee57c8b838adfce7327a8af367b1a7329ceafb3a3058ecf360fa63c6",
+    "PouwCommit.instReprHash.repr.match_1": "c55ef4c414901fd69be2a4afde393212707f6bada33e3c4f15c9d43f680f8843",
     "PouwCommit.rangeIdentity": "78603c6c6af2df2ae1b5c19cbb561f6e9f2a3399071f4bc29dd3dc3b305bce5c"
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.depthServed",
     "Properties.Pouw.Commit.domainRefusals",
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
+    "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals"
    ]
@@ -1866,6 +1951,7 @@
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts"
@@ -1892,53 +1978,12 @@
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.taggedSize"
-   ]
-  },
-  "PouwWindow.Advice": {
-   "digest": "dcb615ac31de6a9c18f8631cb6c39d15b016ba6983297c644171a9fbabf82a83",
-   "definitions": {
-    "PouwWindow.Kind": "a8c666c38bae12be7837f9e7734e4c22a9ba676f9fd834168a1d2c5359c8aaa7",
-    "PouwWindow.Kind.call": "ec732624f608e282793ebe10fc31c1c835540a1557b9c7ff51f09f5fa56f85f3",
-    "PouwWindow.Kind.filler": "d63bcd8f24537e4e8c7c0f3b161ebb29fc63298dce78b29e581548c013e6eb59",
-    "PouwWindow.Kind.none": "38be3b1d9f70cd54a7877f28e3122451a2e71cf9b75782502a3e8fde8ecba87f",
-    "PouwWindow.Problem": "de9b846f3dacd5a8f6baf51ab2d766e323f8ecf71912a06113343feab71f56cd",
-    "PouwWindow.Problem.bound": "fd89c4d42d60ed374eae84279b3e4b98e3b95de10bfb620bdd42df82d30ffa97",
-    "PouwWindow.Problem.callTiles": "efe8108377e7aa96cc1be6691498618ad4074982cf6a31e96e543123ff0d123f",
-    "PouwWindow.Problem.ends": "29d0cc5987b062d45ad8cc4809f0e75dc58685b78697041f5725541a3b3aaaab",
-    "PouwWindow.Problem.fillerTiles": "e0e31413f5cd30cb3492d8574fbf086e76e024bafe00edb0f1835fcdc8f0702d",
-    "PouwWindow.Problem.keep": "0ffc01b24cf658bdf2bacc34a8453547cc4bbde7b2660c995bad6c6008cbe1ca",
-    "PouwWindow.Problem.kind": "d4b836a90a2a7c656dd3bf2cb7a36ab782498a265905303b77d38c0f306fae74",
-    "PouwWindow.Problem.level": "ecbf866cec60ad5df68808cf9d44f1cf8eb5d8c1b8a7745d600e02a1def8a3eb",
-    "PouwWindow.Problem.order": "5f8cc3f0939b1934116c2949557357e12cadb55e89635e1676411b5c31c9cb24",
-    "PouwWindow.Problem.range": "9a0e587ba418bfdb23fc3f250187bfc461dec4835f402c501bedbfb931ae274e",
-    "PouwWindow.Raw": "938dcef7d75484ee5b7b3bd51da74cccc849c0b3a5725fb6c2c96c65d2e0db53",
-    "PouwWindow.Raw.a": "1d390dd260bea8b43f46cfd3adff9628818134f5afc504229ced0bd074e6f37b",
-    "PouwWindow.Raw.b": "d4b2f226bc169ef7f198f0a6f526c9373382939fabc879d14db653ca5ef26921",
-    "PouwWindow.Raw.hi": "18a5e70e97eb56ad75be5eea0e0b3c157728362bf61392c46bf525e0a9a66b15",
-    "PouwWindow.Raw.kind": "8342335a8150a9f4ab42c2efe47a5142a4a0fd8eb1ec7f7efe6d43fbe0b81914",
-    "PouwWindow.Raw.lo": "bc64ff89d66ec70e3dd5dbbc9e356d7f5cc462d2cafa0657909283f2d8bd1bb2",
-    "PouwWindow.Raw.tiles": "9338eb3f64d29ce25757c53ddb04895c74acabd35d22e8405b6efede989a2139",
-    "PouwWindow.Side": "06e5052f84febca6296707aef9b366c1383d617600e218984009a8bd64644947",
-    "PouwWindow.Side.keep": "b3ad048d3187dae5aa2ca3faaf7efa2d46a8e3e074246b5df22b8f49bc7bd22a",
-    "PouwWindow.Side.ok": "4543832460dbb57075fe8c821019b9291cce765dea89bf37f9e906aecc35bc08",
-    "PouwWindow.Side.rows": "42870945102d209ffb40cd9e3ef938e564c7fc794fe5a543401029cfe8dd7136",
-    "PouwWindow.instDecidableEqKind": "73d106aefb6aed36fcf1541dbad307e19a6309ef00f2ff010d205afa0130be03",
-    "PouwWindow.ordered": "e9ba34dad5614f0eb8653d722d88b562c87723ea8bdf8e9b03650e49854b602b",
-    "PouwWindow.rangesFrom": "5a8ba18a97b1b25dca8f14cd129b43abab7660afca4767b35b973f48909af757",
-    "PouwWindow.tileAt": "1fa070f36b78f4cd9f5585386f6e7315df8908bcfbd39e46b6c56521530d5b6e",
-    "PouwWindow.tileAt.go": "dcce04b12921944fe8056462d9d4cabb7910bda76c5f053b09b1efcaaae9eefe",
-    "PouwWindow.tileIn": "ecbd3ac53b6c509fc17b7b8c8148cc3f5d396ca2eee76870864917f0b30b284c",
-    "PouwWindow.windowProblem": "a83f4a44e4a4f5eb287dc627f3494f1ea14148874317f3322a90fb52eaa757ed"
-   },
-   "guarantees": [
-    "Properties.Pouw.Window.tileAtCovers",
-    "Properties.Pouw.Window.windowAccepts",
-    "Properties.Pouw.Window.windowCreditsTheCalls"
    ]
   },
   "PouwWindow.Draw": {
@@ -1983,7 +2028,7 @@
    ]
   },
   "PouwWindow.Grid": {
-   "digest": "7e16425412b087097c3ee81989a5966d07ff32d59cc99cbcd37ad55d84ed73a4",
+   "digest": "a142699529191329dc23cb7390b823d3dfbb505ba639f0e9ed8159ea5a4122c6",
    "definitions": {
     "PouwWindow.Work": "014faba291a8d0f91a9aadca67182f9fa692286852a3c25dd0efc27b2a0c2296",
     "PouwWindow.Work.at": "264642daa24c4fedf5a153258f9f6dce395364d0e19d3edb28e627dbaccbd73f",
@@ -1997,8 +2042,6 @@
     "PouwWindow.floorPoint": "a84e299da0f33151d6efbdd4a1a479390ab2f44f550af903d23cb72b0387b069",
     "PouwWindow.floorPoint?": "a9824427cebc2456477c93c35643e098c3342c0537d471cdd1d7228ef0273d03",
     "PouwWindow.gridBits": "ed35576219c9dfaca9f47106b8394957b734fe87f8307356bc9999c136d4d908",
-    "PouwWindow.instDecidableEqWork": "3c756e663a879418e455f276c397f0fcfb5a3248b6f2660b0842a346558e5efb",
-    "PouwWindow.instDecidableEqWork.decEq": "1bbb23b49f2506ea31b8478938a821b736d15eb64e7f56e0b8545ff2d6049041",
     "PouwWindow.level": "4016d49aa0368b5392818b9a0624536ed586c230cc70bdad19a9405827d0598c",
     "PouwWindow.level?": "ac1c85f94704ece3aa7fa330944698bc91ec2310d88d5eb7c0a7a88ed85224ed",
     "PouwWindow.levels": "126480ed53f73a366d16a0205afd1f030b4b9aec4cb56a73c90bbb54f2014ab6",
@@ -2037,10 +2080,7 @@
     "Properties.Pouw.Window.levelsServed",
     "Properties.Pouw.Window.onGridMeans",
     "Properties.Pouw.Window.padLeast",
-    "Properties.Pouw.Window.pointEnumerates",
-    "Properties.Pouw.Window.tileAtCovers",
-    "Properties.Pouw.Window.windowAccepts",
-    "Properties.Pouw.Window.windowCreditsTheCalls"
+    "Properties.Pouw.Window.pointEnumerates"
    ]
   },
   "PouwWindow.Json": {
@@ -2175,14 +2215,13 @@
    ]
   },
   "Properties.Pouw": {
-   "digest": "9b87d55ab7b9b16975d21280dcd0d6ec786e90d6fdbf34dcf216da4d0adabef8",
+   "digest": "78400b67637ffb4a7bd2362e8b5508328f3b4de9979bedb3fa2959ea22791d78",
    "definitions": {
     "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
     "Properties.Pouw.Window.BucketCost": "322d0e98c3877937089f11c6a8ea1133785e984ca67b7a1e2a1ca1bc2cd24c0d",
     "Properties.Pouw.Window.BucketCost3": "5bc871c565b2bbd3c394649be4fad8e856045c669fee8fd8a28bc7ca23d88432",
     "Properties.Pouw.Window.BucketCredits": "6d557ebccf5f7bc302c561f3bc7a0df5a865595ad9b0d82e826e5285e8d3914a",
     "Properties.Pouw.Window.DrawMisses": "b7460ad7746259572f809666b0fa689896158bad64575f88e3bcdad19fc2d8a9",
-    "Properties.Pouw.Window.EntryOK": "a01518da8f1d63e9771e73f7a33381eeae298a99caed65b4b2d15e8f540024bf",
     "Properties.Pouw.Window.FloorPointGreatest": "4e68c5d4a0b0ac00e7286557b1b871000c9ae19f0aa29de86a196409fa097ffb",
     "Properties.Pouw.Window.GridRefusals": "89f6c58c824eb3b87ed21472f343ff23c23e87b18bb94caba9859fef6c08fb90",
     "Properties.Pouw.Window.IsPoint": "d5e22ed4ef29611ef12dd622bd16b62e17c8e5c9b305c568b431c58c672b9488",
@@ -2196,10 +2235,6 @@
     "Properties.Pouw.Window.PadLeast": "2716b052ecf964263d96abc359b8bbe04435015aec6144356b50da76140fa64f",
     "Properties.Pouw.Window.PointEnumerates": "9ac160d10502ba4e78680f6806df4ecc0a25efe76dc1ad1edd417310f0b32376",
     "Properties.Pouw.Window.PublicItems": "7a96c28fb3a37d5199a61fc33c6cc8957d0f805afe05baf140b2882fa359b880",
-    "Properties.Pouw.Window.TileAtCovers": "3698af32a98798582c46c0cd1b21a71f67000467e2a42958ef68a7973e7fd31f",
-    "Properties.Pouw.Window.WindowAccepts": "6727fb9e8b7fd8043dabf01a1f50a8d7c220c900e9c80f65ace72c4d9aec7689",
-    "Properties.Pouw.Window.WindowCreditsTheCalls": "2c1834cb99ce4fc736caedb1fb9d2c29ce966dfff3b1b180c02b04ac76beac62",
-    "Properties.Pouw.Window.WindowOK": "de0fb81f9596007f005fe5b822d2ef9afc7bcb88abb882ab9849558b77dd36b3",
     "Properties.Pouw.Window.missProb": "c5e678c835285495dce78a44f1f2877e8fadfd73147232bc5f705e24c34653e3",
     "Properties.Pouw.Window.servedK": "f180a0127ece52b30dea9c01733b3421eabdba5e8805040f54e44e4eb43e1d1e"
    },
@@ -2220,10 +2255,7 @@
     "Properties.Pouw.Window.onGridMeans",
     "Properties.Pouw.Window.padLeast",
     "Properties.Pouw.Window.pointEnumerates",
-    "Properties.Pouw.Window.publicItems_eq",
-    "Properties.Pouw.Window.tileAtCovers",
-    "Properties.Pouw.Window.windowAccepts",
-    "Properties.Pouw.Window.windowCreditsTheCalls"
+    "Properties.Pouw.Window.publicItems_eq"
    ]
   },
   "Properties.Pouw.Check": {
@@ -2256,9 +2288,10 @@
    ]
   },
   "Properties.Pouw.Commit": {
-   "digest": "3df4a2cf79100d055f514ef76dc3e7fb9960125dd03af3b032894dc57e53892c",
+   "digest": "b3196442446cb64e6d354fcfc38d12a08b4eadf18ddc7349018a8ccb9451f5d7",
    "definitions": {
     "Properties.Pouw.Commit.CoinAccepts": "3063d83c396c424a1c015414ec09ba2c4c0498de4244eb40e637c17676139c3b",
+    "Properties.Pouw.Commit.CoinBinding": "c4547bc524c96cc5affe829dbedce3c9feecd748dfd43a4da1848c8c241e4162",
     "Properties.Pouw.Commit.CoinNumbers": "ebf4b2d01ebc28e060bd4e40345dfad9deac9f93c91d22266f6a9d133851145d",
     "Properties.Pouw.Commit.CoinOpens": "ba127d1e53486c81f83dab9b1aba5b54a88bf50bf6abcbb9a54aedce801a2531",
     "Properties.Pouw.Commit.CoinRaises": "e4586bf1bf49595161880e22676295d3d91a485062cd45cb3890fc7716ad89be",
@@ -2267,6 +2300,7 @@
     "Properties.Pouw.Commit.DrawCoinAccepts": "3f4097c5ac40dbee539905f341878ed2e288ce66536ac9d81644cc1b8434c9ec",
     "Properties.Pouw.Commit.DrawShape": "8bf11cfb0a3649c87b1f88959aed2ce2eef174a9aa35ce7109faef723425af1e",
     "Properties.Pouw.Commit.EpochSaltAccepts": "472b6b7c334e773136e9694d8879e8beca17be9b7b798497389ceee7831e4635",
+    "Properties.Pouw.Commit.FrameInjective": "3503794599488d33a6c0bf04599a2a4fa23124e05100fbe073cfaaf47434921d",
     "Properties.Pouw.Commit.FrameSizes": "86c21e59981d31bc2bd8857a5399e8f24ddb38cbf23b36658eb8ab95cf6e7b82",
     "Properties.Pouw.Commit.KeyRefusals": "e67b12707e09df9902d8310ce49a74ce51d09687dd10e91091ecd6427a77d606",
     "Properties.Pouw.Commit.KeySize": "e7e452f85d5d233a4bde2dce33a01471fbcd6e3ab8ba1667d4adbefc18862fb8",
@@ -2274,10 +2308,13 @@
     "Properties.Pouw.Commit.SaltRefusals": "281b99307e1143566f840e27602e578669455f89c6ee02078b26eb922880ceb9",
     "Properties.Pouw.Commit.SaltSize": "fb8d2f825788ea26c7d957cf3a58692eb85b2e3c91cd40fec2582fc55acc9fd8",
     "Properties.Pouw.Commit.TaggedSize": "ed2d4ae90b13ab43f0d939fe7c5cb57d97c057368bea84183366cb4324e252c6",
-    "Properties.Pouw.Commit.coinRoot": "a434574eaf71a6b85e392f525784e4b09491dda6080cecd0d6d924a25faa6de7"
+    "Properties.Pouw.Commit.coinHashed": "1324bef2a2d6111de2f8a93fc554ba64d2ab770c46f5cf789726e0b01b03e066",
+    "Properties.Pouw.Commit.coinRoot": "a434574eaf71a6b85e392f525784e4b09491dda6080cecd0d6d924a25faa6de7",
+    "Properties.Pouw.Commit.pathFrames": "cd5ac37f8ce3b4984146e97fe4a35ee2be80d1a333950ba1df1c03e4d29383bd"
    },
    "guarantees": [
     "Properties.Pouw.Commit.coinAccepts",
+    "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
     "Properties.Pouw.Commit.coinRaises",
     "Properties.Pouw.Commit.depthServed",
@@ -2285,6 +2322,7 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.drawShape",
     "Properties.Pouw.Commit.epochSaltAccepts",
+    "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.keyRefusals",
     "Properties.Pouw.Commit.keySize",
