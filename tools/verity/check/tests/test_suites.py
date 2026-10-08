@@ -522,6 +522,65 @@ def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None
                           cwd=root, env=env, capture_output=True, text=True)
 
 
+def _env_workspace(root: Path, members: dict[str, str]) -> None:
+    """A checkout with this runner and a member per (path: test module) in ``members``, each named its path."""
+    import shutil
+
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "pyproject.toml").write_text(f'[tool.uv.workspace]\nmembers = {list(members)!r}\n'.replace("'", '"'))
+    for path, test in members.items():
+        (root / path / "tests").mkdir(parents=True)
+        (root / path / "pyproject.toml").write_text(f'[project]\nname = "{path}"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+        (root / path / "tests" / "test_it.py").write_text(test)
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+
+
+def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_prefix(tmp_path):
+    """Inside a `research run`, the run's RESEARCH_* and the machine's PYTHONPYCACHEPREFIX reached the tests, which check's steps
+    never get: test_remote_cwd's inner run inherited the prefix and wrote no bytecode where it looked (r20261008-010104-2b69,
+    passing with the prefix unset in r20261008-010441-bb7b). A VERITY_ switch still reaches them."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n    assert os.environ.get('VERITY_SWITCH') == '1'\n"
+                                 "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k == 'PYTHONPYCACHEPREFIX']\n"})
+    p = _run_suite(root, tmp_path, "--fresh", extra={"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(tmp_path / "run"),
+                                                     "PYTHONPYCACHEPREFIX": str(tmp_path / "pycache"), "VERITY_SWITCH": "1"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp_path):
+    """check's verity-flock and verity-lean-audit run after its lean-build step, with `lake` on the PATH; run on their own they
+    skipped the Lean tests or found no `flock-verify`. So suites.py builds the verifier first, only for those suites, not when
+    check says it's built (`--lean-built`), and a failed build fails them unrun."""
+    root, log = tmp_path / "tree", tmp_path / "lake.log"
+    _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
+                          "other": "def test_other():\n    pass\n"})
+    (root / "verity" / "core" / "service" / "flock").mkdir(parents=True)
+    (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "verifier")
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text('#!/bin/sh\necho "$PWD $*" >> "$FAKE_LAKE_LOG"\nexit "${FAKE_LAKE_RC:-0}"\n')
+    (bin_ / "lake").chmod(0o755)
+    extra = {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "FAKE_LAKE_LOG": str(log)}
+
+    p = _run_suite(root, tmp_path, "--fresh", "other", extra=extra)
+    assert p.returncode == 0 and not log.exists(), p.stdout
+    p = _run_suite(root, tmp_path, "--fresh", "--lean-built", "verity-flock", extra=extra)
+    assert p.returncode == 0 and not log.exists(), p.stdout
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
+    assert log.read_text() == f"{root / 'verity' / 'core' / 'service' / 'flock'} build\n"
+
+    p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/core/service/flock exited 1" in p.stdout
+    assert "passed  other" in p.stdout, p.stdout
+
+
 def _reused(tmp_path: Path) -> list[str]:
     import json
 
