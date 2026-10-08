@@ -7,7 +7,7 @@ import Proofs.Core.Prims.Round
 # Core's primitives at `pc8`'s and `pc4`'s rows (proofs)
 
 `Pc8OpsAgree` and `Pc4OpsAgree` name what the row units need of their primitives. At core's instance `coreOps` they
-follow from core's definitions (`Verity.Protocol.Fp32`, `.Scalar`, `.Prims`) and nothing else (`pc8OpsAgree_coreOps`,
+follow from core's definitions (`Verity.Fp32`, `Verity.Scalar`, `Verity.Prims`) and nothing else (`pc8OpsAgree_coreOps`,
 `pc4OpsAgree_coreOps`).
 
 From the definitions alone: `F32Neg` flips and `F32Fabs` clears the sign bit, `SelectI32` reads its condition's low bit,

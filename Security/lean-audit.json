@@ -3495,10 +3495,16 @@
    "type_hash": "0bcb8659637b845cc57e38ca30dcc285989ec9ad108ddbd6832a23df70d6ede7"
   },
   "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore : Pouw.Guarantees.PearlC.TileCheck4WordsCore"],
+   "assumptions": [],
+   "type_hash": "76e1dd28768cc1a4ef30251a9db63bda229915b3c2d50ff921394a143c179cdf"
   },
   "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PearlC.TileCheck8WordsCore : Pouw.Guarantees.PearlC.TileCheck8WordsCore"],
+   "assumptions": [],
+   "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
   "Pouw.SecurityProofs.Theorem1": {
    "owner": "@compute-accounting",
@@ -3731,7 +3737,9 @@
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
-    "Nci.SecurityProofs.UpdatedMatMul"
+    "Nci.SecurityProofs.UpdatedMatMul",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Core.Declaration": {
@@ -3750,6 +3758,35 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul"
    ]
+  },
+  "Definitions.Core.Fp32": {
+   "digest": "8bb886e10a4e6f80e6d59f564db9112841583eb3819c11271d0975b8d05d481a",
+   "definitions": {
+    "Verity.Fp32.Decoded": "741c1e63abfc5cb6c43b9e5ec0bc66c4472d1baa9693f9cecae0c14e48a82df5",
+    "Verity.Fp32.Decoded.addRn": "6b3ed70637ea01a05dd4ce2b3dd7120f1e77a89d535fca89f6d1fd7faceb254c",
+    "Verity.Fp32.Decoded.casesOn": "daf63c6eaa99e1ca5d928657f38ec77d66598735350c580a8484f196af883bdf",
+    "Verity.Fp32.Decoded.ctorIdx": "41fc017b927613b71609d8d7c944f9cddeaef2d373b4a164a4f7aebf3b58158c",
+    "Verity.Fp32.Decoded.fin": "78e3011e73ab9616703307e0f67dc6702342313d7cf1852c3ae802a294ea4b8f",
+    "Verity.Fp32.Decoded.inf": "fc9758948b0601c0ad6f049c5ced439476d094cfe5631cb46033a8764187bcc2",
+    "Verity.Fp32.Decoded.mul": "310a53b24ce911957f74becdaae8a6451b56ef399a93025d4a429575695d0543",
+    "Verity.Fp32.Decoded.nan": "b586e52182ed0aa4940d75b8b2adeec6709e4b0207cbe70e3113797878c88bab",
+    "Verity.Fp32.Decoded.rec": "2513b3b64c6a3aa90d0e3f14b79e299d66e6841e271d8b3356d6e7c71923bef7",
+    "Verity.Fp32.F32_NAN": "ec7f8909ec6e3ffe9d20b19a3f5f7624185fb6e8809de1d0a3f0d3c1ddbc849c",
+    "Verity.Fp32.F32_NAN_PTX": "40369d5f9de107bc9b269a63500f8e6106b0a4ed4211daafe8e46901faabaa36",
+    "Verity.Fp32.decode": "03f6dce77ae85123265207bb08e1223ab281bbfad420822f55540d5d9689de0c",
+    "Verity.Fp32.f32DivV2": "5cf395ef9b2b348328a3165c3ead96fcc72ad0e9fc119762e17cbf3974b2aca6",
+    "Verity.Fp32.f32FmaBits": "43781598fdb4471fa34fe228177053bfd53fde5555a3ff07b8b6b2d1eb24f60a",
+    "Verity.Fp32.f32FmaBits._sparseCasesOn_1": "bf39330eef9b84e9844528b939abc883847b15985bc2e450e9b1f5f60fe4e121",
+    "Verity.Fp32.f32FmaV2": "c232c1119eb6c72f16b2257e7e22923a77fefd4347d21f4cf8e96db3fec49107",
+    "Verity.Fp32.f32GpuNan": "0690835cc685a32b2d2d35836663dbc96bd05530ba3a9864a845587d53e16878",
+    "Verity.Fp32.f32IsNan": "d64079a365f4260532f720080398ca6c48f105cf60acf4b7ba8b80e435e8d806",
+    "Verity.Fp32.f32MulV2": "3b313772670ca8f06e12f4e13cb69e92e2f8945505694a88a72f15fa518c4837",
+    "Verity.Fp32.infWord": "1550d874405f8acf2a697db972ee92ef2ea2f34964b35cfb64df514838e4b9d9",
+    "Verity.Fp32.roundRn": "f25c488365098ea352ac6c5ae4c42bedea3b3f2c912ccd4e215613210cbc4c48",
+    "Verity.Fp32.roundSum": "66df74dade2af5323f74cba3f98a64cae4ac91ed3e62e188a1aa73b881949b6e",
+    "Verity.Fp32.zeroWord": "4750294dac346e7e5769c35c7f019c1f5f3d9e2f6f7b5c957932d6399ffab44c"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Core.Game": {
    "digest": "2c5c9d9537f4d276c83a61680d7cebf60b8ff5c7a45ecc827a21d9d3de8a0b8d",
@@ -3786,10 +3823,14 @@
    ]
   },
   "Definitions.Core.Partition": {
-   "digest": "a61efe7bc07bac847495f338197cdbd33a863ef3f0523f100bcb46ef3da67298",
+   "digest": "b3083f886d2688b18c39b60e3c506dcde7a5fceb8bc10c669367c17422f16bfc",
    "definitions": {
     "Verity.Partition": "22bc62b950d67ab5a0572f63a989d211fa3064e10e3f2bf031fd12353d29ead2",
+    "Verity.Partition.Correct": "78b891db9c227aedecdb4465a0fae50b84cc37ab777bcbdfdc69f5ac0662feee",
+    "Verity.Partition.committed": "99135ae5da1df43b8ae4641410bc1fec91cd0a82a8540c305415190a10f1f013",
+    "Verity.Partition.cone": "9baccb73673b4e9a8b7bed3e6524ce4cb0af89e4b00a2399a3af1269e530af87",
     "Verity.Partition.gates": "ee436a2cedef88f54396204589ab1dfaf55be636d8a0a1376f41740dd9ba79c7",
+    "Verity.Partition.localEval": "e242da1cf49523aae3ff87f9dc3c63a8048156a209055c554893212d41c48949",
     "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9"
    },
    "guarantees": [
@@ -3797,8 +3838,67 @@
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
-    "Nci.SecurityProofs.UpdatedMatMul"
+    "Nci.SecurityProofs.UpdatedMatMul",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
+  },
+  "Definitions.Core.Prims": {
+   "digest": "4312e4a3d0083549f51fbce5cb2aaec7b9ad11629465723400d743378a31d747",
+   "definitions": {
+    "Verity.Prims.E2M1_NAN_CODE": "01dc9e23ba553e60df40b9a49caa1bf0acd64789fccb8750636a05a649f54800",
+    "Verity.Prims.E2M1_UP": "e63e8538ad1d222e1e80630050dad4f730499b75937c7fd6c6212a940552c391",
+    "Verity.Prims.E4M3_NAN": "f8beebdfa0d39bd2585bcc259af7e67d43cbf77b3539a851d826612b29618d50",
+    "Verity.Prims.bf16ToF32": "24e5c35b550fe99c4fefdcb7196a0f54260415afc13da1abe50877da390517c9",
+    "Verity.Prims.dyadicLt": "5ffbd0f8ee6b40af2efb6ebd11c6fe1b64e72a9f8be80e24c5296652732e4e5d",
+    "Verity.Prims.e4m3ToF32": "e29f82581e5e75183cb71f6c325ec3a5004da2c5411cd592671face2ee9d2962",
+    "Verity.Prims.f2fpBf16": "2791ea6d2d43e2094acaae61b4576f35c28ba8a304090d03da41c73b250f5d72",
+    "Verity.Prims.f32ToE2m1Sat": "76d388e406ec63adb5871c3ea7281c89008e41a9fedd548a84c1f2e945c0eaad",
+    "Verity.Prims.f32ToE4m3Sat": "f2a0f375a25f18709497876450c1afa0f02c0ff52b19231b0da9b7c2d934bec0",
+    "Verity.Prims.roundEvenDyadic": "b829aac2724fa97e70ff976045f1bf0042b3bf0a60fd44de01e57c3cac417f0a"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Core.Scalar": {
+   "digest": "610d6b8751334c2d39892c296a0bfd02a675e56f0570b98f4397cf844c7e4c53",
+   "definitions": {
+    "Verity.Scalar.F32_NAN_PTX": "79b5b0cdecb22ef64de953be389c3bf07013ea9a0c5b126b976e80f9d3784d77",
+    "Verity.Scalar.bitAnd": "420660564f393ac904c702d76e1a90a97a5242f8e6a833e51390f77917e492a1",
+    "Verity.Scalar.f32Fabs": "cac5557f197bc09cc1cd67528fc30da52194659f11ae2b1c1781d20d1b124c1d",
+    "Verity.Scalar.f32Fmaxf": "aba0db8afa9012090655eaafbc5cb3cd98656e6464aac303ba9b159525bad5d0",
+    "Verity.Scalar.f32IsNan": "c4dee75463277621d7f67f2417ea9e224c0211aeb7d930c69eb4e618fc5c1a50",
+    "Verity.Scalar.f32Neg": "242e612ec254fe5aa36a1be9fae9936d1248abe5658785872def84e94c2642ca",
+    "Verity.Scalar.i32Add": "b84549877af74277627ae48383cf96a5f8e92f7dbf2f7b008b685996ddf09ec4",
+    "Verity.Scalar.i32Le": "7f5c95c284b298ff1886b551600a338f95a21d9cfe4ebdd9027699ebd52def2a",
+    "Verity.Scalar.order": "b4195abaf9700312bf5fd53d90fc1fac1996ff7e99e32974eddf77357570af7d",
+    "Verity.Scalar.selectBf16": "805dca972222c5f18663da83f393caab9e82600f00eb339bb2b0551a84b39380",
+    "Verity.Scalar.selectI32": "8d6acb95867e3c09ee6d7cf6bdb8d4c17e68a5e7041d4b42fe949b0ee1170432"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Core.TC.Pipeline": {
+   "digest": "da1b8c9eb4dfa3fbc26656010abf9daf086f4b98a7d25dd6da0d1786c9504d62",
+   "definitions": {
+    "Verity.TC.bitLength": "ccbed7043eb20211951e7bec1eed8b5bb0e5627b258ee4d913d1737c2fbf4162"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Core.TC.Spec": {
+   "digest": "0a6565772f73853f00f3915f9178529f6d86b8be1db4101d3ca9d6e6bd220101",
+   "definitions": {
+    "Verity.TC.Spec.Cls": "d1840798d9ff6dd67e8750d5451d1c92840b1da5317a9652cb02f3528b3fcd2b",
+    "Verity.TC.Spec.Cls.casesOn": "dff42aa5c257f52822653c5a37edf979600d5b1891fd64e3bde64ea8a8a8d81b",
+    "Verity.TC.Spec.Cls.ctorIdx": "a2ff32d52c0e70c1935c55c3e92667b6cf7e23dc08f88e7011636ec20995cbbc",
+    "Verity.TC.Spec.Cls.finite": "ec657bd6c072f498b499d61a5f8dd9b98fce7391d9794fb5f41ec8db740554c9",
+    "Verity.TC.Spec.Cls.inf": "299053cee93f86325a59be63287bff6fa96b7a08ab2683a63850ced3e5e7dea0",
+    "Verity.TC.Spec.Cls.nan": "ab54cceeb47649b66359bc682f3e96245dff8f263fc95151aba12ea63d97a8bd",
+    "Verity.TC.Spec.Cls.rec": "14230e38f67df43a480b92e2b3129049d77bb1edae92879ca8d55ccb59c4b30d",
+    "Verity.TC.Spec.Cls.zero": "b12c1412ab726a6fcb94359d460363a70c9bcdb08607b9dd4ba376b53c494277",
+    "Verity.TC.Spec.cvtRnBf16F32": "a8f2192006997dada720192020d1d74f8c7bd327d4763be405f5d65c8b531f00",
+    "Verity.TC.Spec.fp32Class": "1b34697b7501cb0a4a85fcd76ec879dd1477b8697ea69efac14faf350b718ca4",
+    "Verity.TC.Spec.instDecidableEqCls": "3a9f2d9f9dd81a3082dd77b3999150e40665f3ac40f43fa48d032affd3c94223"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Nci": {
    "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
@@ -4655,7 +4755,9 @@
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.Fp8Atom.E4M3": {
@@ -4755,7 +4857,9 @@
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.Fp8Atom.Fp32": {
@@ -4852,7 +4956,9 @@
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.Fp8Atom.H1T": {
@@ -5293,7 +5399,8 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Defs": {
@@ -5433,7 +5540,9 @@
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Device": {
@@ -5538,7 +5647,8 @@
     "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfUOnly",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.DeviceChainOnly": {
@@ -5665,7 +5775,8 @@
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
-    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192"
+    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.DeviceFp4ChainOnly": {
@@ -5944,7 +6055,8 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Fp4": {
@@ -5998,7 +6110,9 @@
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
-    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192"
+    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Fp4Chain": {
@@ -6017,7 +6131,8 @@
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
-    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192"
+    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Fp4Skip": {
@@ -6033,7 +6148,8 @@
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384",
     "Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192",
     "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384",
-    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192"
+    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Game": {
@@ -6186,7 +6302,9 @@
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Hidden": {
@@ -6319,7 +6437,9 @@
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.PeelExact": {
@@ -6421,7 +6541,9 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.PeelExactP": {
@@ -6484,8 +6606,211 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
+  },
+  "Definitions.Pouw.PearlC.Row4Circuit": {
+   "digest": "76c27f306a28e343998b162f1b26ca9992b539bbf0ae9b036b9be7271a74108e",
+   "definitions": {
+    "Pouw.PearlC.RowCircuit.a4At": "579468a095999928f5ca5c51f52c36aa1eacd1d80de6073a71f3c8869052adb2",
+    "Pouw.PearlC.RowCircuit.af4Run": "53a3c52dfe5c4292be59ddb090d3376fcb65c671c01b71041a88354f038f78f5",
+    "Pouw.PearlC.RowCircuit.alpha4Run": "ac21107f1e723c238e6796933bbbd5acebe471d9a8776c50ccf8561b221b51c1",
+    "Pouw.PearlC.RowCircuit.bk4At": "72540ec2b837c07ed1c89dcd500be22e5d82999ab132e157d84c1dcec6fd3d2e",
+    "Pouw.PearlC.RowCircuit.blk4": "1871bb4e42c88cf4ada03ff158bdb258b48fd5cdce3539de2125703572d7c269",
+    "Pouw.PearlC.RowCircuit.blk4Run": "4773c7e9d97e013d359a6d0e48f4e10c0d81c69d3cc3f1afd9703c62829527a0",
+    "Pouw.PearlC.RowCircuit.chain4": "c7266ea75383356f9e807dbd2934dd43a742821b390ce5d8c3a1d99fdc9a3af6",
+    "Pouw.PearlC.RowCircuit.code4": "b080f978b4451b216e677d13cad3327f4586630d120c0949ce2316ce2d4026df",
+    "Pouw.PearlC.RowCircuit.d4": "632b2f60ac3b564af7d35a0cd052e0790b35e8c2f562c6d5649816a06e9c0bc4",
+    "Pouw.PearlC.RowCircuit.d4At": "74d03c59f8432cb6ddefcd0ffd548d08f9dde2c899070f032c2edded4e41815b",
+    "Pouw.PearlC.RowCircuit.d4Run": "88be244b8a49788a5152ef45eb9246cdc30193845ff13a8ee47dbea83c9bbc0b",
+    "Pouw.PearlC.RowCircuit.et4Run": "895d400fc8e6e8b0b09e59f6d9dcadb9d0fea65a5f749258eec797b3e46c610c",
+    "Pouw.PearlC.RowCircuit.mid4": "07d06b61414d63668c0e344d643d91d5641128d0748113f46acc910afd5969ed",
+    "Pouw.PearlC.RowCircuit.mid4Run": "065dc5ffb99cb818329a794f7c8a5b184398350cda8a3dddeb1c713cb2e76f53",
+    "Pouw.PearlC.RowCircuit.nb4Run": "b86faab340c721f8a6ca183fe867305424fadd432ab4a98c4809fb6175dec322",
+    "Pouw.PearlC.RowCircuit.post4At": "7d0a60d20015c2e54c0014dc366c51616b3f393845625ea55f763fa103acb380",
+    "Pouw.PearlC.RowCircuit.pre4Runs": "eadaa38b538ec2e049d59b0caae1c88add6224b38d4c1d74027902def610bc45",
+    "Pouw.PearlC.RowCircuit.row4A": "a0a9904dbef0beb9077377430beb2500510447088683d75610e6fac59aec827f",
+    "Pouw.PearlC.RowCircuit.row4B": "18796fd91430102903f2e2db435d8bb96e5ac0a542c7ba89d15f5be9487344de",
+    "Pouw.PearlC.RowCircuit.scale4": "e9cd608fbe93aa9455f0fb6cb58e8803a7b21e3bb140a29be74d36cc31e822e8"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.RowCircuit": {
+   "digest": "4b6d1543326450eb4d10039afc057658ff6ccf021a4d6cd4b683ee8795f16f04",
+   "definitions": {
+    "Pouw.PearlC.RowCircuit.Arg": "930dd911d64ce32d09a1e3f8222c4cf80b7f49a9ee71c6de98c3006c8f4bf7b2",
+    "Pouw.PearlC.RowCircuit.Arg.c": "d31a837aef8801b52eeafd092c6a623ec2fbca18eed379c825a468dbabf02b28",
+    "Pouw.PearlC.RowCircuit.Arg.casesOn": "1c473b8daa316593f29b89cb8078b9a275b649d89a4fc4044e30a674b000cca5",
+    "Pouw.PearlC.RowCircuit.Arg.g": "f2e5af6caa127640b4279b44cb16191a194e0907615d343fba6658cc844a261a",
+    "Pouw.PearlC.RowCircuit.Arg.reads": "e78b9b25d19bbe360eb6f02283f74c93ee0359a40c404a289d50bff116ec3110",
+    "Pouw.PearlC.RowCircuit.Arg.rec": "537affc13ac6f7a15b7de7780ef8f6713f5da07ceebc901e5ac80bf88edfaf5b",
+    "Pouw.PearlC.RowCircuit.Prim": "0477c42a97aa70bcd1ff09fa85091fc8cdaf77f85895f1adcba2873362ecc9b8",
+    "Pouw.PearlC.RowCircuit.Prim.add": "47c4cc983be329c08da9d63be3fa06020900ac6057a301de3bf9fde21d1aecdc",
+    "Pouw.PearlC.RowCircuit.Prim.atom4": "aa45c0eb7289de6b313a7eef77d6fa83231b5edeb3c75ac1f1a0c8d76941b1bf",
+    "Pouw.PearlC.RowCircuit.Prim.atom8": "864a1acf78985512115e8bf10371158097f30ff12c331dbd43b83bfad82c0699",
+    "Pouw.PearlC.RowCircuit.Prim.band": "1063413585cabc2b0318c2057c6b4943652f4f8ddf825c6c9072f0172041e3e2",
+    "Pouw.PearlC.RowCircuit.Prim.bf16Neg": "0e40e46aac1cdf945b77573a4592c28f5155e18518e539a4691a9d08f52b1cc7",
+    "Pouw.PearlC.RowCircuit.Prim.casesOn": "5f48f17cceafed936f8509cfe3ee2b4aca3d17b28a4f0fb4b0234a3817fb0bfc",
+    "Pouw.PearlC.RowCircuit.Prim.ctorIdx": "3e84b61358035539b77451da6541cf3d070dde25051baff6119686ab20d5a719",
+    "Pouw.PearlC.RowCircuit.Prim.div": "5d8aa68148063492f44ac97cbbb5a429809938dfbf816f279b8ff2207efb7023",
+    "Pouw.PearlC.RowCircuit.Prim.e4m3ToF32": "820010fe345ae8eb988cdd01a1dbe988506795e70509a798d9fd28de43b10571",
+    "Pouw.PearlC.RowCircuit.Prim.eTilde": "14fb05b3e06dbb1e0c1378d3761f6d486e50875afd51cbff1a858e4dc19e0335",
+    "Pouw.PearlC.RowCircuit.Prim.eval": "b03f08c8d7ec5cb06b038f97dc39bf0217ddf39d09dd3baebfd9abca0c16bd71",
+    "Pouw.PearlC.RowCircuit.Prim.f2fpBf16": "99542e07eb9bed1a1ce3191674977a0e9465f685e09babb6f19ad17a7e873ce1",
+    "Pouw.PearlC.RowCircuit.Prim.fma": "235e9801aea58b26d0ae98421ac22c62646dc07d7c878e0cb0e6edd4810f9aa8",
+    "Pouw.PearlC.RowCircuit.Prim.fmaxf": "e6fa7e5bb4f59f136432a4b4bced7c15f56a26d05735e6b7a70fa3e1757e525b",
+    "Pouw.PearlC.RowCircuit.Prim.iadd": "c15f3f526ca84c02e69bce3dc7c1f00d35af7a29d98c6e01e29dc788e4691689",
+    "Pouw.PearlC.RowCircuit.Prim.le": "3d43e08e0c521a98967c33bc604870c4258a5b9e82408808e7ce2ef4183fab30",
+    "Pouw.PearlC.RowCircuit.Prim.mul": "e52d88469de6c28223565a82e84fd76b47ea4495e80343f808f29ca799d44b90",
+    "Pouw.PearlC.RowCircuit.Prim.neg": "6a7c5cde58d22dfeaa141eb8582a4d633fe8769dae79115b8f1f5317c5e87752",
+    "Pouw.PearlC.RowCircuit.Prim.rec": "8f0c88d609e390eb3e134a455bf023faa6b10267fd859f81ad6346678d51015a",
+    "Pouw.PearlC.RowCircuit.Prim.selBf16": "2fd42b0b988c4c4b2aa09330b59a1df7da4cfc355854f9fee7c5553bf7788c00",
+    "Pouw.PearlC.RowCircuit.Prim.selI32": "92f175d1d72d076adf929381e09b25d5df1f009c6205d1fe91deea9d26b44491",
+    "Pouw.PearlC.RowCircuit.Prim.sqAcc": "3243c7a5af0e21cd6ef07ce9fd43b0bf4036f53e71aac117a0c3129dba027a10",
+    "Pouw.PearlC.RowCircuit.Prim.sqCeil": "56369de0ff2be6031b7d4289ecfdf0a943e71e021b6e49948f62522694ab59ea",
+    "Pouw.PearlC.RowCircuit.Prim.sqGe": "09b45e024529095937fe5af346b2796cbf4151a854fd30cd75272a48f95444a8",
+    "Pouw.PearlC.RowCircuit.Prim.sqrt": "5a3d491d65864f5e8f797cc481076c7428e5414e8a7388e3f65e5369bc84af44",
+    "Pouw.PearlC.RowCircuit.Prim.toE2m1": "4160f2f9c141e2cbea35e0a22568a4fe8727dfd19cbf0cacd96dab3af3f95480",
+    "Pouw.PearlC.RowCircuit.Prim.toE4m3": "1987add59dff8fa14f4af3845c8917fac2a7bb74f3dc3869a93ff7a3eabb4248",
+    "Pouw.PearlC.RowCircuit.Prim.w": "34e11ea93fea215e671583c760996dfef47304586202321686722bb2b2e28be0",
+    "Pouw.PearlC.RowCircuit.Prim.w._sparseCasesOn_1": "950c2414ab49fa23f6efa30afa8edb806f30e5ef2fd1259078e7535cd65a0e74",
+    "Pouw.PearlC.RowCircuit.RGate": "d5f8374d3341c95414d392b88e80d38c7d356be8b13151a25b47fd923a7c76b4",
+    "Pouw.PearlC.RowCircuit.RGate.args": "89e1dc10e2d871c55edc53e49838d727b7547fcd8bcf5a303f033edcc7996b34",
+    "Pouw.PearlC.RowCircuit.RGate.prim": "b37f148c05a6d856e4e0551dd365053bbb2c249605dfcb60daa188eac9f02356",
+    "Pouw.PearlC.RowCircuit.RGate.reads": "3603916ed3fcf2f633e5b03c6413d3c00d084e42b774b1b123339fc34a69e0a5",
+    "Pouw.PearlC.RowCircuit.RGate.toGate": "6630e1a0a53b94f55714d679eb2535eaa25bad07ce5f950b2b7f156a39341b75",
+    "Pouw.PearlC.RowCircuit.RowOps": "188363ebfe6714161f07e8dce1d55f33cfc02936939b7194d120d21113f5425d",
+    "Pouw.PearlC.RowCircuit.RowOps.bf16ToF32": "0f350c4620e4e09eed90778c67ac81b433c5fa6b94ab06ac6d460406515f754d",
+    "Pouw.PearlC.RowCircuit.RowOps.bitAnd": "a5ec08c79b1879e7cf0ad6f96e49e214947f7ba2e3ac1b00e2ace3bdd4070eba",
+    "Pouw.PearlC.RowCircuit.RowOps.e4m3ToF32": "0d9d1cce8404fa40a9bd1537be007798d14fbeb8df7ee82fcd658c614e5e0439",
+    "Pouw.PearlC.RowCircuit.RowOps.f2fpBf16": "42eb888f4936189812f1cead1e5fd3ed0fefae9acb142bab8ffbe522356acb83",
+    "Pouw.PearlC.RowCircuit.RowOps.f32DivV2": "4054924143961490002091c0a0de2bd0ced49a7cef8276ee5ad544cc4fa05a18",
+    "Pouw.PearlC.RowCircuit.RowOps.f32Fabs": "925912089bb15186e6b8d3c8769efe8cf835a84afc525ffa9da12aa8bc26f1f6",
+    "Pouw.PearlC.RowCircuit.RowOps.f32FmaV2": "5d4d00fa99acc0e348990266f594fd1568b35a5d6af6fdca69612732a66a29eb",
+    "Pouw.PearlC.RowCircuit.RowOps.f32Fmaxf": "a0c59bd441b8a8f7b2225569982b73022c40614391948923b2b3653d4f509fa8",
+    "Pouw.PearlC.RowCircuit.RowOps.f32MulV2": "bc3219ad1e49081cb4b5ff187a9bc1a9360821ec29a43fab2848e98484ac1bda",
+    "Pouw.PearlC.RowCircuit.RowOps.f32Neg": "839571b88faf882437384b45f1040d17fef5efcdda62570d626e4b581ed5a2cf",
+    "Pouw.PearlC.RowCircuit.RowOps.f32ToE2m1Sat": "2dc498cf9557cc20a972a3df9b2d6322dac1a2cc0e87a39bd42f24716708ee86",
+    "Pouw.PearlC.RowCircuit.RowOps.f32ToE4m3Sat": "bdb17554793e4e1c6d401dc06884fc633a02df9d897547c50ab1745558800fc9",
+    "Pouw.PearlC.RowCircuit.RowOps.i32Add": "665a3fb14df6b481764c5a67e113758b02411415a5d57fe2fe643be3abdfa0b0",
+    "Pouw.PearlC.RowCircuit.RowOps.i32Le": "184cea31d338b7f1e7a84bf20cb3a9f0192891b69dfffdfcf693b51a6a913ed1",
+    "Pouw.PearlC.RowCircuit.RowOps.selectBf16": "ef6278e5610710df61066326d938bc0a99e5f4d260be5e578a3bee54fa08d2ca",
+    "Pouw.PearlC.RowCircuit.RowOps.selectI32": "e4b74e7d0e23a6ad7a69dae2c4a5978a8992e904c527167fe7a400948651449f",
+    "Pouw.PearlC.RowCircuit.Rows": "43895cf3b38ae26273e88ae9ef18aef3ee14bc987fdbd92d6d6718ccf33a62fd",
+    "Pouw.PearlC.RowCircuit.Rows.N": "fa81e3138a000c30f53474c28db8f5d0d0fbc3f84fec7383ec45223ddf19c860",
+    "Pouw.PearlC.RowCircuit.Rows.gate": "8e390f6e5645784562941fe078f71e3457728e604c50714c4ce366f047d586fe",
+    "Pouw.PearlC.RowCircuit.Rows.inW": "6407303b9771fc347ebfa43ec19379bb02dc67dd333a52d9de7063ad818d00b6",
+    "Pouw.PearlC.RowCircuit.Rows.nIn": "63a2f62050467a5b12787ffd45d79f9ca8a406351b87b4441ac558d1a81ab561",
+    "Pouw.PearlC.RowCircuit.Rows.outs": "c0429cd0e908a802fc72ab55e57eb4bf02704fec06dbf77341a297ea0a0752ac",
+    "Pouw.PearlC.RowCircuit.Rows.runs": "acbee780dc79e286fc043529e481882601cf70e3e12b58ebdbb9a01fce1165ac",
+    "Pouw.PearlC.RowCircuit.Rows.spec": "508021f33032fea2f3098b2edc6dd5adf57087b5e0872404e12a47c56a0456ea",
+    "Pouw.PearlC.RowCircuit.Run": "6a4ddaeafc3fa2b0e5e6f115f770c0e08674ec9a3d06fac3143901efd605f05a",
+    "Pouw.PearlC.RowCircuit.Run.OK": "e6729f025c103efab357eeda16c158f9f2d1e317f146cc2b3ab247d7487484ec",
+    "Pouw.PearlC.RowCircuit.Run.gate": "75c075135cb0076afe2d7425c009cc70bc81fd1187de5bf0c05bfe9df2453c1f",
+    "Pouw.PearlC.RowCircuit.Run.n": "66e23eddae9faca116d6e822273d02fccd561b95d005bbd03762627833600d11",
+    "Pouw.PearlC.RowCircuit.Run.ofList": "205c54fe5e063bb57478446cdf2bd903986959fa995cf25621b98abef72c0a6f",
+    "Pouw.PearlC.RowCircuit.Run.rep": "5f490cac01a446e263d575d1c4f6e69718874f0ce6500ffea44d6e8ffbae56c4",
+    "Pouw.PearlC.RowCircuit.RunsOK": "554f328079a9c6a44387e953900b5f142772bcc2adbd8e847ab19e11badf2389",
+    "Pouw.PearlC.RowCircuit.Wire": "5ae535094650860d16d88b1327d846f621be507dcd6f179bfcb5519f3222dd81",
+    "Pouw.PearlC.RowCircuit.Wire.bf16": "609e4c70fc9cd05990717580b8b5a60ded9835c9d0d4856ac1773bd776b8c053",
+    "Pouw.PearlC.RowCircuit.Wire.bf16Fabs": "a6297801e8c0ce7ef135417ca6efcaef141e3d267e9ce8de80b7a4ab352edc13",
+    "Pouw.PearlC.RowCircuit.Wire.casesOn": "8b60b8bc75fc505099b9b68dc51d1092a2af5f09c357ec4b6c431c32f8f2f096",
+    "Pouw.PearlC.RowCircuit.Wire.eval": "d80a57e9a757bd351967dea9f538048cc01a7b9e34f67a8ff8e4ebbb50104944",
+    "Pouw.PearlC.RowCircuit.Wire.fabs": "29453906397c966d249b0871ed55ce59226591e08d1ae954a875d53ceb67ff88",
+    "Pouw.PearlC.RowCircuit.Wire.id": "17dc3baf843f1738d456d60cc7379ae2b8ca24c7742876796270bb28dd5df26b",
+    "Pouw.PearlC.RowCircuit.Wire.rec": "9cebc6de8a6876fd119738ec2d5afe84daab4a325c1ad56a71371caae4cadcce",
+    "Pouw.PearlC.RowCircuit.af8Run": "361a540fe36ea32b9ea1e46619074058d59c7ac009a04601acc338ae8ff90e9e",
+    "Pouw.PearlC.RowCircuit.al8At": "b671b011e7fce3815be75ff4150e411d2bd561de20b91ff5c88433776e244f21",
+    "Pouw.PearlC.RowCircuit.alpha8Run": "a6c41eca818c2be3060166b1ba8b258daed51a398dd5ff29a9a403c1c7c62104",
+    "Pouw.PearlC.RowCircuit.bew8Run": "1c3860c432d9f9801d904da8fcb97cdd8b57c5c7085bc996c80e6ec9c9567ea3",
+    "Pouw.PearlC.RowCircuit.bf0At": "96f063a658771ee4493268b1bfd1ae812d37fc62cad60eb24d74731b6c31b1df",
+    "Pouw.PearlC.RowCircuit.bf1At": "98c96d7965a46afc176474fa9dd810f51a70857dc4dc8dabe1306d2ac27e6b89",
+    "Pouw.PearlC.RowCircuit.bf2At": "f57cf3ee7e5d8cf04f9627fda20960d3be92a4c746d7aa4e8c5da2438b280561",
+    "Pouw.PearlC.RowCircuit.bf3At": "f8ad9ea14d1cc98f8d3055846c4b07ee295eb01047bf7ee48af4b231c8da4ab3",
+    "Pouw.PearlC.RowCircuit.bf4At": "212b3658e67a3452308ef4e6a7052b19e802475cc744926f6f57b099a456d6fc",
+    "Pouw.PearlC.RowCircuit.bfly0Run": "31228dd1b8730d39e16e2ee6abca24c5df46523f861df6cf4e9aef1862228b59",
+    "Pouw.PearlC.RowCircuit.bflyRun": "5a174804a571faf344f4157c9b418382a024f8c8347d454764293c8b8e3c04a2",
+    "Pouw.PearlC.RowCircuit.chain8": "09c29f7bcc0e58021bd26628eeb365c5b50b219f66ecae51d3fe1fc0915a4cb8",
+    "Pouw.PearlC.RowCircuit.code8": "bd773b60411ee82fab295caa965070284dfe1a550a04ddeec68fa28301c40141",
+    "Pouw.PearlC.RowCircuit.code8At": "e303e0802d9d930125ab760bd321c6cbfc3a05c52af29deff07a609cf8c115bc",
+    "Pouw.PearlC.RowCircuit.code8Run": "75c9e47bb751c71b5adecb4f9833e7b840e415282d48d8a1abbb7cec73ac1a80",
+    "Pouw.PearlC.RowCircuit.coreOps": "dc6e0053579c9753b32aa9fcf5d63bb7cebfb7b8b36bf1d874faa7670f36f445",
+    "Pouw.PearlC.RowCircuit.dead8At": "482fda6416b46c2b25bf1fcd5b9ae0a70d418c56dae4e98fdfaa4d45c8be1485",
+    "Pouw.PearlC.RowCircuit.dead8Run": "ab28f66f589fbdebc4ab4b53ee24b25eadaede22fb4e80cdec6e4c36e1e50c96",
+    "Pouw.PearlC.RowCircuit.ep8At": "3e2e2dedf41f41271e40edde375feb503ffe3a9eaa9ef88a931c0f6ff2c72b4c",
+    "Pouw.PearlC.RowCircuit.ep8Run": "51f4d3312c6864da96d57cc6401e24793ee3c2e95e57f7dab5197f9eb88fb0f6",
+    "Pouw.PearlC.RowCircuit.ew8At": "720746ff1d65de0917ad5b0c0ff202f624443b6bc2c6faa195ef65d896ae2607",
+    "Pouw.PearlC.RowCircuit.ew8Run": "1cd27cc1ba0cb96ccd7c9d654cb6007fd696a1d8cb7db6c1a4f076a80e8920c5",
+    "Pouw.PearlC.RowCircuit.fill": "c8dc2eb005de4ddc5cde6423ff138eb9e903c87f8435b2c9f8ff047829aae0ca",
+    "Pouw.PearlC.RowCircuit.fmaAt": "90630367752ef46d4d4b32c164c4795d86ae9b9b4ec45d5de26805e815418d65",
+    "Pouw.PearlC.RowCircuit.fmaRun": "e8d64fcb90d12a5899cf233d531a26f38de2c28480661d61df385a2f0e217e86",
+    "Pouw.PearlC.RowCircuit.lastFma": "f0e42eee23e5f183fda44b2a48b2450f9d4261dee7a7a8c7b39613dcfab45cde",
+    "Pouw.PearlC.RowCircuit.mid8": "4e10eaa275ba72a34e7a2b79ecd6d3a130d58190a5aa9d558748729fca4b73d3",
+    "Pouw.PearlC.RowCircuit.mid8Run": "f651a289ca934b862d152c8fc78286d70fd1db7b8d37b2f30f036f0848eb3d2e",
+    "Pouw.PearlC.RowCircuit.nb8Run": "2c57cbd2ce75221ea2ec562211dbd8bba8ecf264b55787aecf2eb8c8b37c3469",
+    "Pouw.PearlC.RowCircuit.ok8At": "77c3cf4af9cf24c4bda5c79d8d6a1aa25b36d2b96d1ecc32e4b91cbe6dfbe87c",
+    "Pouw.PearlC.RowCircuit.ok8Run": "13efeb88255d794e32d257dd53fb551ffa1404d207783ae2e66840c16ec3daf3",
+    "Pouw.PearlC.RowCircuit.okwRun": "f9445382f0646d116104d191f10bb6c07951d44b6627f16a501651d6ca68b6df",
+    "Pouw.PearlC.RowCircuit.post8At": "33a7348196ef88277e4b09bcfb0bc99fb7406bced579167da988ff603f74bf60",
+    "Pouw.PearlC.RowCircuit.pre8Runs": "a43f7da4199497632ffaeda473869bfc240d0466990d70260cff62726d46016c",
+    "Pouw.PearlC.RowCircuit.rhoAt": "7762b647ea48b94b8906c06c72eb7f9f6f99b8b5524be453c43b4c685d275e21",
+    "Pouw.PearlC.RowCircuit.rhoRun": "41492e30545f39e5d495de0505f80c0ca955a57c5b07bc8eb60d74da9d116b08",
+    "Pouw.PearlC.RowCircuit.row8A": "2af75b9ca07088249df71a562743c553520e2ffd195e3fbe12d728a93e6f87f1",
+    "Pouw.PearlC.RowCircuit.row8B": "b932e420b21c08c87fe5ff98dbd3d05a952c95a96972f07b456d36cf34c2ef27",
+    "Pouw.PearlC.RowCircuit.rowIn": "86fbbb83b461e1330a8ae907daf3b688a20a9b2d95e6af782b7d1517228e32fd",
+    "Pouw.PearlC.RowCircuit.runsAt": "772b619a96801c06a799fb9bc9ab650d4a4f3230d204e19db1bc4e4d25d14263",
+    "Pouw.PearlC.RowCircuit.runsLen": "8704af6689a2b8de402cbb50dc827a379d6a6a9891b3d54d8bd3a422c6738be8",
+    "Pouw.PearlC.RowCircuit.selRun": "c0a1a5f35b588f8695ec2acb0c10cfb64510cbe893d799791f91771bff849996",
+    "Pouw.PearlC.RowCircuit.sq8At": "45b41b8869e93ef076b660f2666f5688e1369dc55d0eae9395a44448f56183c9",
+    "Pouw.PearlC.RowCircuit.sq8Run": "a182f97893f2316a7fac96d29b3541326680ff93c855dbde34295b11738ff42a",
+    "Pouw.PearlC.RowCircuit.statsRuns": "0b31935e7e6d8ff1a5dec7f9bd5a3d30a71c35fa751ba8e4a16c0fd4a5364c23",
+    "Pouw.PearlC.RowCircuit.th8At": "2178bcc0923bfcc0ae73de562be8e9205e29e4d100ba4087b0f1cce6e4db406f",
+    "Pouw.PearlC.RowCircuit.th8Run": "119e560fa35d7ff4fd0916831e1b1ff86b5878650546a4f1dfe3db475962585e"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.RowPrims": {
+   "digest": "0b4f08f9c8bc6471a39857b05513516b195661fe5f7e0b9b19455c5af4993d50",
+   "definitions": {
+    "Pouw.PearlC.RowCircuit.bf16NegWord": "885700462db7b82bada23f9330c6e18fca488d6b30e24aaa2ce635d4f9465fb2",
+    "Pouw.PearlC.RowCircuit.eTildeWord": "a6af96725432ff8c64e8aee7b0f8713739ada540065787d3b30b476d2f6232ad",
+    "Pouw.PearlC.RowCircuit.isqrt": "97553330ea0ee191081879392e555b2a6f00df4e06c73900c2fb8232a0edc4dc",
+    "Pouw.PearlC.RowCircuit.isqrtBits": "ae7c32d17aa3547a1fa53d98e4fbe8cd1e95092c34c9d7fc250228645bf70b41",
+    "Pouw.PearlC.RowCircuit.sq300": "28b9bf538663942e4c19e8ec07b5cc3cf099cd935009c94afe535b0923d8f643",
+    "Pouw.PearlC.RowCircuit.sqAccWord": "b6396c2503d4b7b5da0b8548ad08d0326483154301798575075cab3d1dcd0979",
+    "Pouw.PearlC.RowCircuit.sqCeilWord": "a67f7261de67354beaff4110eb388739d3395c6eff702a6f233c9bc08cbb4a8b",
+    "Pouw.PearlC.RowCircuit.sqGeWord": "8db48f997ecf05eadbaa8642dcb2b2d4dc1463d939d870a933bb642a88253562",
+    "Pouw.PearlC.RowCircuit.sqrtWord": "f242aebfd27805def0316efb36b1d1913f409f366a0832f8faf87de5fdb4491d",
+    "Pouw.PearlC.RowCircuit.up48": "d45cc57ecd8ec0b25486cd461f75b7620d154b8ab75488686c73cf630381ea69"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.RowSem": {
+   "digest": "c36ef4296738596105b1108f0fffb583daa42b32115989be218fdc31867784b3",
+   "definitions": {
+    "Pouw.PearlC.RowCircuit.accLast": "8a0c594bbb15fe563daef99dd496fa599b8e6bf2fd6e014218dbec5f4200b446",
+    "Pouw.PearlC.RowCircuit.alpha4": "5da3cefb647289015d588594688874b7d68f94fa017f64c0b4a5e9520dc36459",
+    "Pouw.PearlC.RowCircuit.alpha8": "27e5be4917f3eefaa2994404463db265fd84dfbfd8efb5b6b9ebf5f2e8a7e017",
+    "Pouw.PearlC.RowCircuit.beta4": "6f2688017576195c7da014ddb967adb17fb756c7e14b46efb15dfc90a8cd2ec2",
+    "Pouw.PearlC.RowCircuit.beta8": "e5d402809f2a05ddb4c808d7b1a1dbe6e4684380689960741eabe2f5f962b6da",
+    "Pouw.PearlC.RowCircuit.bfly": "3982153d379587b782db2e03676454373d5eed6d465dc90837f580e4aeb0651c",
+    "Pouw.PearlC.RowCircuit.drho4": "cadc21f3bf9d3e959de8b70952cae92d61a9a5d93dce2a9b5d183adaf4e225a0",
+    "Pouw.PearlC.RowCircuit.eTilde8": "a3f3782f663c9df2653d875fdea2dc03cab54826b9e7ea132f1cf37d21b135c3",
+    "Pouw.PearlC.RowCircuit.encCodes": "a1f6781ced27d35dc32fe047af0a3bbac8bcac44c1832d10e66f927d46a49f0a",
+    "Pouw.PearlC.RowCircuit.encRow": "9abc2652e4793f4de673578d592040f495b91de52bbdaa12c32ef8212dc00f1c",
+    "Pouw.PearlC.RowCircuit.encRow16": "e19b4896a68f654d6624c8e73331eb67fe32181273b799533258bd8ebacc15e1",
+    "Pouw.PearlC.RowCircuit.floor8": "434b4acaa008af8f059aa1f81ef139704416c43ae73e0118fb72adb50671ee0e",
+    "Pouw.PearlC.RowCircuit.fmaAcc": "cae5cd41ab1589bf136cb986863e23f1a1e36e00b706330069618e44ae333ba0",
+    "Pouw.PearlC.RowCircuit.form8": "6b54e6762b3007b62978865a4c36f10f1e8f762e264df403bac1fd8b36b1186e",
+    "Pouw.PearlC.RowCircuit.pc4Sem": "8b681598c16ac6abc1d1b9db3ef97ab3b1084a3ec5d312b0e6c3e12e188ad0a3",
+    "Pouw.PearlC.RowCircuit.pc8Form": "97adce7a46cd323a2c6b09bc9152d341963281c77641ced28f07630956b63674",
+    "Pouw.PearlC.RowCircuit.pc8Sem": "a22ed40d6dc8f613f30673af19f2e8898af1837d0723a3aceef1eb8dec0daf4a",
+    "Pouw.PearlC.RowCircuit.rowMax": "64d2a48d80e5a67a3f71b374adc0757b258c7e2046ee97cf1ace98ff12bbe1c5",
+    "Pouw.PearlC.RowCircuit.rowRho": "5c226ce96b6f87d30d5b89e28d8855e49760fa2eac397e34bb924c32743396c9",
+    "Pouw.PearlC.RowCircuit.sumSq": "bcbfa9d6c3953d057fd1be78db1f54e92a2fa5b79453eff146b476b6691ba47e"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Pouw.PearlC.SaltDead": {
    "digest": "3b91d506e7fe396375e7f7fe063a2688fb52991232438fbb84b34e2bba2e5e97",
@@ -6554,7 +6879,8 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
-    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192"
+    "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Skip": {
@@ -6650,7 +6976,8 @@
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.SkipP": {
@@ -6724,7 +7051,8 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384",
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
-    "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass"
+    "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
   },
   "Definitions.Pouw.PearlC.Sm120": {
@@ -6789,10 +7117,11 @@
    ]
   },
   "Definitions.Pouw.PearlC.Tile": {
-   "digest": "cc4f3b22ad95f6c7c49985b6609dd84d2c19a537ba8e5211fe4b7117de5eda5e",
+   "digest": "a9015415957d3a64b37eb85e76da6e51ae31431e9a3b1688c3c21365541742fe",
    "definitions": {
     "Pouw.PearlC.GγSampled": "9279ec55cc7369b92f405866f30c59640610f26feb40111325cdad9ef8020a35",
     "Pouw.PearlC.PearlCSem.passRows": "501dbad8f3a8e06e8bb593ceaa0a7e85bcd2ce56d2ad81056371c8e4fb83fa22",
+    "Pouw.PearlC.PearlCSem.tileDebit": "cae963e1886eb8c93d1842768e1ec2ee2a27a775cc79a014cdc90c80de3de0b0",
     "Pouw.PearlC.TileGood": "351054e8bb81da78e089d086bac1419eeb20f1a9708a2e0d5d1437cb81d2bf20",
     "Pouw.PearlC.TileRules": "649f993305ac489d086e2d2dcfbc8e2086fff7596f7c0e5575aeab71a8c3061e",
     "Pouw.PearlC.TileRules.Wcred": "309ab3b7ef23ebaf3fdb24f11c9edb455d031922e217237b30bfc244b23eb99a",
@@ -6811,6 +7140,7 @@
     "Pouw.PearlC.claimedWref": "692adf0dd8d465a09b58a1776b904a9ca66cb58fc11a5057b3605110e8f1cdd3",
     "Pouw.PearlC.goodTiles": "d5e0ad40614504f0ae1fadacbfdea02990b7b21c82bb1a265f7520f36fbe78e1",
     "Pouw.PearlC.gridTiles": "cd94e5959b68a2e8f30fb0dc72db8cd4817a255343b85f33bbfa7e4c7e5d9b39",
+    "Pouw.PearlC.pearlCTiles": "3b437f1f247b61f48446890a7d49baf412fa3fab511662237e866e5d0e2d3f3e",
     "Pouw.PearlC.tileShare": "e5769f881eba3e3067186ea9b70725c392bec6e7311827aa077a78e44fcb20fa",
     "Pouw.PearlC.tileWrefTotal": "386e9e51f5f23870c7a84efb172d3d877a87a0b0ee2b51bb608c59c1a613f9be"
    },
@@ -6844,8 +7174,183 @@
     "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192",
     "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut",
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
+    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile",
+    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
+    "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"
    ]
+  },
+  "Definitions.Pouw.PearlC.Tile4Circuit": {
+   "digest": "245d87752ef031a245d2a94e7ab3211c412114764f80b0deced0368eca570f6a",
+   "definitions": {
+    "Pouw.PearlC.TileCircuit.atom4F": "0d250619c0294e21316987da2696cd8bcbe6aba9b601ca36fad76a440495c037",
+    "Pouw.PearlC.TileCircuit.block4Len": "8649152f1d92808c155627bbddc2fcc44f8ac46f638aa23b65ea5c637851bbb7",
+    "Pouw.PearlC.TileCircuit.byte": "4177369777ad0a58bcc06c18f238bc71a742217236b084e1aeae619790f3f5e4",
+    "Pouw.PearlC.TileCircuit.c4Gate": "fa62f5c4f6d8c554d8ff461ce8841bb0e8f8ccd7de766278a50454d132b2bdef",
+    "Pouw.PearlC.TileCircuit.entry4Base": "86a618e96dd0d74e5fa25df782fc8a53fd4dd8e3ddf55d79d1719ce5933138fa",
+    "Pouw.PearlC.TileCircuit.entry4Gate": "a96de2f0119d3cfd7005924e0e767d97e7db069d63e14bf1d18a080922b0aa19",
+    "Pouw.PearlC.TileCircuit.nib": "45f1f1e4b25d72ca4ececace4bff163556cd96da616ca3c4126a2fd0bab62cff",
+    "Pouw.PearlC.TileCircuit.nvf4Word": "0dcbb8f347fd4287cb34eff780d33ee27a692a18ba40ad560c906dc78107ce59",
+    "Pouw.PearlC.TileCircuit.row4": "3507ac0204c4531f637f4b9b9f37bd600ebe5a07cc1e4fc826d513dd6288c8ee",
+    "Pouw.PearlC.TileCircuit.tile4Gate": "4a459c0deb6e7c79681007d4f4a859126ba9a32a3f34c939d5b4a643811dc303",
+    "Pouw.PearlC.TileCircuit.tile4In": "75cbdc4b0724e090dac89366cfc916155249517ea2c9a1318fe12340d611a66b",
+    "Pouw.PearlC.TileCircuit.tile4N": "d9b5a708a06825b18817f03a76cfd918b4228b669274ac58d3d14fe47691d257",
+    "Pouw.PearlC.TileCircuit.tile4Spec": "2a66024aa1dffaec0a4f0aef6041ce7a939b77371530e846820f32589e90191e",
+    "Pouw.PearlC.TileCircuit.u4Gate": "7fe4b4d08dcab609d83f0edce47cfbe5cb4c15b50d2fa541c5e74759a8e4ff0f"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.TileCheck": {
+   "digest": "526ebb25dc806cf8889f021cbfa2b943b125ef94b92f636a80daf5c9817b8eaf",
+   "definitions": {
+    "Pouw.PearlC.TileCheck": "ef36300540031a53f23ce00025388be300182d06efb1698cbf301bc12347c9e5",
+    "Pouw.PearlC.TileCheck.Accepts": "55cff526c462141039eeb12883cd3cf28caddabf20c604e07f7d408991a72cd9",
+    "Pouw.PearlC.TileCheck.C": "c3dc540c555e4949c553df394ac0b1fb36eb8a29c8d6dd91332338132f9d2aaa",
+    "Pouw.PearlC.TileCheck.Collides": "4b84e3d677be2981556e88dd4f960365565a93db15d2b8b9b884ecf54e3d637f",
+    "Pouw.PearlC.TileCheck.ComputesWords": "082308fe9565c0c49b7a55da8a2796a5d00e92a6735320a925832b89cb4d3d9d",
+    "Pouw.PearlC.TileCheck.anchorsOK": "faf612e6f2383196ef73334319113e16115ec1fa2a0b90528e1a70b202eb7ccb",
+    "Pouw.PearlC.TileCheck.anchorsOf": "51d53726b94dd79b7a2a47269a7e3e28b7de982c3967659518e478b9bee8d158",
+    "Pouw.PearlC.TileCheck.n": "2f9d32d9a8d59b728abcb0cf27f8ca23708dcf9789fef2cd40b89bfb2a71ac6d",
+    "Pouw.PearlC.TileCheck.out": "5d5dcd5b269899f35b76297aef5bb2635e136cf0c7bf97ec86cc14f54edea66f",
+    "Pouw.PearlC.TileCheck.part": "97f06ccb423f4645da14318f497712abf41720cbbaf994b8e48ae74a63e46bf8",
+    "Pouw.PearlC.TileCheck.pub": "8d2958d7ec0babe19d2880e4ba8c606023050aea8b58ea6fb38b241ee56dd31f",
+    "Pouw.PearlC.TileCheck.reg": "385c590deae677f2277a88e392ffb21b82d8a48720bc587407d5c9c539d7edb1",
+    "Pouw.PearlC.TileCheck.rowsOf": "7a9d27cf6ef9504246c82bb5605ca8834c9292410aea0cc3cf4f7101e65e813e",
+    "Pouw.PearlC.TileWordsGood": "b39fbee0b0f8578c663ae9577a30ecfb2bd6cbb02c600242794263d479ae3621"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.TileCheck4": {
+   "digest": "106447f6433a16df22b4179d8982a7ccbf59e13fa42813bb46b43095e1156ab4",
+   "definitions": {
+    "Pouw.PearlC.WholeCircuit.anchors4": "ababf170520838636730d93c2ee57523f2a421b079ce00d44c6b2ddeb6f4ca2f",
+    "Pouw.PearlC.WholeCircuit.encNibs": "6b0ca66483f5756d7c0578ba6b8c8cdac1a082c4a98d4a8eb89b84acc2e983a0",
+    "Pouw.PearlC.WholeCircuit.entry4": "faefda3dbb473c06e9eef1f1a181c82619df2578fbf1c83b7f20ae03e31bb3d6",
+    "Pouw.PearlC.WholeCircuit.gram4": "a5c78713276fa84790cb4ca2c04a06c7984fa16cdcd89b13c655a8fa94124f8d",
+    "Pouw.PearlC.WholeCircuit.rows4": "69155f34a6914be300ec8111590043ceab247b4537b8641dadd993288f6ed5b1",
+    "Pouw.PearlC.WholeCircuit.tileCheck4": "550b9c373f97e758ab2da58992abf949d5b594e3c2dce9701037d7131b3ecafe"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.TileCheck8": {
+   "digest": "b82c86f719759460bcb1ff751125573470d2d21b21113a2d528bcc01bc52ff12",
+   "definitions": {
+    "Pouw.PearlC.WholeCircuit.Line8OK": "e893d1a4ed170d164ff9a860b5d45017d488e8e8e1acdee71ded282d565ee14b",
+    "Pouw.PearlC.WholeCircuit.Noise8OK": "1ce3b2f1c495f1593c02df2154bb522565f31d191851dc69d572d8c85f07d58e",
+    "Pouw.PearlC.WholeCircuit.anchors8": "f95d9b1fdf453768105630d84b2c79db72f247b6e10ac350755956cf324b0330",
+    "Pouw.PearlC.WholeCircuit.entry8": "cd10cbb15ea8b6f1a5e076b5ec16d7fc35e66d9bebdae6cfe2b5632c224bd7d2",
+    "Pouw.PearlC.WholeCircuit.gram8": "9dac697ebe9ad86a8a47bf49b6f75e30d7a3f18aed65270408c477e148cc47f2",
+    "Pouw.PearlC.WholeCircuit.rows8": "7346abe698fff42f28177f690ba526a4a11dd553aeffa49c39baa527cda21d03",
+    "Pouw.PearlC.WholeCircuit.tileCheck8": "8e3ec0f16e9b31136586ebd5d65cdcd370ee60b629ae0026085f8f7d05cd2143",
+    "Pouw.PearlC.WholeCircuit.tileSide": "29dc4d9489d7da5150cb41baaca1aff6446d1aa51b388cc9b6e6f82c8c498d33",
+    "Pouw.PearlC.WholeCircuit.tiles8": "a26bf3c6f7a6adfa793c510c8f706ad7b27742e03a88188161226902347ede32"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.TileCircuit": {
+   "digest": "c61e82daf0fbc4fd58e36b87d2d8983da48346dd19241e3c10b21a7869657830",
+   "definitions": {
+    "Pouw.PearlC.TileCircuit.Gate": "f2f29022b0f4d74fb1d27ecb2350d45f01726ce4630ece9cd20071329059b9ab",
+    "Pouw.PearlC.TileCircuit.Gate.f": "3e18dcee29efb6efde3d2e794fbbc43c40245bc3f8fc9223b376a892197487a2",
+    "Pouw.PearlC.TileCircuit.Gate.input": "0eccb1b3af71ae026edd33fde55b344bc4b871dafa204ca8cae8ab0c1b2fc528",
+    "Pouw.PearlC.TileCircuit.Gate.rd": "3b0f6423a97233c20c76c3203f7a6e4038b6df1116ae3d002bef44b0e7628cf3",
+    "Pouw.PearlC.TileCircuit.Gate.w": "a8cb5654b6b5008670ff837bbe29cc6e55ded5a8fc06808d6180c64a59cd6505",
+    "Pouw.PearlC.TileCircuit.Spec": "edc2cecde0255aa0139cbb2f1d73b775a956e96a4dc3770994e7eebf0e3a6339",
+    "Pouw.PearlC.TileCircuit.Spec.N": "8a3a2fc372f221e43c14c863a810c22d619dea060ad801dbd05a88d753958cd6",
+    "Pouw.PearlC.TileCircuit.Spec.gate": "f84a82ff04879f30626be291222113d425945895a55be1f6e876f2eef28fbffa",
+    "Pouw.PearlC.TileCircuit.Spec.outs": "12c4fb46cc8c0b0dedd10b8fb838588cf4cd2c50c105cfc4e40455baa96f33ae",
+    "Pouw.PearlC.TileCircuit.Spec.toCircuit": "e3b1dbc96f167929cf0515f5a9573e00b70310595f62477caea108e899ef9bd7",
+    "Pouw.PearlC.TileCircuit.addF": "02d1e1f1ed734830e8b28f026db049262008f9e2abffd3eb843531aa6d8e1f36",
+    "Pouw.PearlC.TileCircuit.atomF": "b1ab829e5ae82c7a72d227fa64d659893ae22bdbc044e21c0d65fdec53521c3b",
+    "Pouw.PearlC.TileCircuit.blockLen": "b6f0af251b9bcacd0f1bbdcdf79d526e79910d83392add10c7f416424bdd468e",
+    "Pouw.PearlC.TileCircuit.cGate": "bd944f98d13b2c8c7e48d48a67fe066b0a1707cbb704c0a96ca27b276eaf0ca3",
+    "Pouw.PearlC.TileCircuit.code": "cd654ed655e790220c06f54c27504a316f89f4491d6523a059831a59b310ba5b",
+    "Pouw.PearlC.TileCircuit.entryBase": "4668934e2963d6f19611c61230cb4745d74c6ab98fee73f836bbc86d2180d65e",
+    "Pouw.PearlC.TileCircuit.entryGate": "d83098f248bc3008b63e6c8f24451de9501781a47a726c13a3a365ef2d6aab08",
+    "Pouw.PearlC.TileCircuit.f32Add": "b4ee9e17e436ca69905beffca50f5b314b1ce96a5f01a28cb97211903834b9ae",
+    "Pouw.PearlC.TileCircuit.f32Add._sparseCasesOn_1": "31bff3aadf7580e346465e61fc689052e89badd4c402c06b2038a81a37660cda",
+    "Pouw.PearlC.TileCircuit.f32Add._sparseCasesOn_2": "9ab69168b3297eb6fffb6a9ab3c99b772c6f238897c614137f779b68448c45a8",
+    "Pouw.PearlC.TileCircuit.f32Add._sparseCasesOn_5": "564c63ff4adfa285b90b4106d1768bd9e5b1cb67ccbbc3a4f268cae8b18d7e3d",
+    "Pouw.PearlC.TileCircuit.peelF": "1aebacdb4ef9bc6ee04266943dc94f4b474356c5c4478e3663799fb81d7db0f1",
+    "Pouw.PearlC.TileCircuit.tileGate": "9e3099fb6509bc2826ca2f50c3547a3c720100f413c83f17b439601170303bf7",
+    "Pouw.PearlC.TileCircuit.tileIn": "cc814a8422c7545e56d876a31948d9c46c6e1d233e63fa10d0a6b4242dc4ada4",
+    "Pouw.PearlC.TileCircuit.tileN": "59d5557d497694932920fd1a75a757086f9cdd4a682010cdf5137398e6af9936",
+    "Pouw.PearlC.TileCircuit.tileSpec": "6796c3ee4475f25e96aec852d6b085b7a00147715831c9a332168fc8635b24a2",
+    "Pouw.PearlC.TileCircuit.uGate": "6b7b9b25a7f42c90e5fff1be9f7c0e2c1136472cf07f8ab3df68f6370e816232",
+    "Pouw.PearlC.TileCircuit.val": "5eba5b68841a39918695a18e0e73ccd6a967f7f072c3c12129067f507623d17e"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.WholeCircuit": {
+   "digest": "4e07ba011253ad7028a94ce69d22acd2d4631ad74583d6392c16c6b6dfad71d6",
+   "definitions": {
+    "Pouw.PearlC.WholeCircuit.Block": "2761ff3f747f6f6cb74d73fb2bad1bf06d2070997cdbfe779128ad9297aa99ea",
+    "Pouw.PearlC.WholeCircuit.Block.S": "ab9e2f887dc76450b39108180b03a7d0903dd197559a0c35bae9908a988e29f3",
+    "Pouw.PearlC.WholeCircuit.Block.cnt": "2a493f5bdd2cd99588c6a84d5f6ae57394a1b16968a07c75b40c2f88a74dc397",
+    "Pouw.PearlC.WholeCircuit.Block.gateAt": "44953392fc4dc3473830b64d12fcaa3bc9ef1c706b88a734c2a464bf29dfd307",
+    "Pouw.PearlC.WholeCircuit.Block.len": "77e6f23eeaf4d811c032e62ce1c21f15242b35bbb7fcc1eee933a15fa4687017",
+    "Pouw.PearlC.WholeCircuit.Block.nIn": "4d6f5fff1f94463771eb971bfb713e3ddfc4214401b4a4785d44a6d874ac165a",
+    "Pouw.PearlC.WholeCircuit.Block.port": "5aeb35220e39947eeea9fa0724ae06ae206862eabbe17d99f03b722af995106f",
+    "Pouw.PearlC.WholeCircuit.Block.reloc": "ec12dc5eeab4ef02dff3f0cd1a59d7d3e250a428ddcb7f885c1b483236d9685c",
+    "Pouw.PearlC.WholeCircuit.BlocksOK": "11e64625cd3e5881eefc0d59d1d03aafee7dc88fe5d4d2500b7461c7a3e301e9",
+    "Pouw.PearlC.WholeCircuit.Loc": "f39bbcd1eb5711c46dbc2482df836a73f32ac4bd8bed97c026923e3b750ff1cb",
+    "Pouw.PearlC.WholeCircuit.Loc.B": "3a27b8a55949389d6237b9ab1dfc1adffa16609a12dc5c947303ae8adb3dedb4",
+    "Pouw.PearlC.WholeCircuit.Loc.a": "26fcbcef7959c0232fc9ea196550445c7c3aa9cedf2b08ad01832086fa572ab8",
+    "Pouw.PearlC.WholeCircuit.Loc.o": "7a25b85f1b76ba439e4b1c41d89b58fb7871a061c9ccc166bcc63f1f6c501e50",
+    "Pouw.PearlC.WholeCircuit.Loc.q": "16328c29a697ddeadbbf0cc29efeb4373727345ecf7baf97a4e3bb23b54ee7f9",
+    "Pouw.PearlC.WholeCircuit.Loc.u": "23ab2c4c733386a1600a0feec2a1a74555d3a239050ee1ee3381d5e98bb7bc10",
+    "Pouw.PearlC.WholeCircuit.Whole": "d1c67af4c721c1c77da6ccb281a3157b3e6334faa0726f5cf720e64e6d2adc63",
+    "Pouw.PearlC.WholeCircuit.Whole.N": "3c9147d59d2c1c57425cecbbf4f5750cfdaced6b6aaf39f3560a292be2a2238c",
+    "Pouw.PearlC.WholeCircuit.Whole.blocks": "16d49c023d4d034624d178b4193494aa3f47f83a8efe9ccaab5029244d989cdb",
+    "Pouw.PearlC.WholeCircuit.Whole.gate": "d362a5a31379607d831e99f2237a3ecec68cc8fa03621b21b2a01921ba0c67d8",
+    "Pouw.PearlC.WholeCircuit.Whole.inW": "e824dc36c437d00d435855655b3eaeeffd16d11c84733dd276beaceb782a3ebd",
+    "Pouw.PearlC.WholeCircuit.Whole.nIn": "246220c39aea1476cf2b8f2b5fc12adfddf450efe895b0a0079bded76c9c4ecf",
+    "Pouw.PearlC.WholeCircuit.Whole.outs": "93cbe5c1a1dab04a54eafccd3d46d62e6cb3660e95b97e2904fdecd82d298a14",
+    "Pouw.PearlC.WholeCircuit.Whole.part": "11c3943cd882f71f5ce4a06d4e5a2f42d458b6ee7fd1bcf2b8c9434311f92748",
+    "Pouw.PearlC.WholeCircuit.Whole.spec": "565ea9a0418ecf7aecccaa4d97846ff929205cd3a02e39751989d9fe001ee034",
+    "Pouw.PearlC.WholeCircuit.Whole.unitOf": "4aed5efa77e0e0c66b3cfc331cf2920f3c731d118136bc94cd600963d4baac1e",
+    "Pouw.PearlC.WholeCircuit.bAt": "4472502111ea2142409ae6f6e3f926b0a7a6ac1125e443affb8fffebf5040714",
+    "Pouw.PearlC.WholeCircuit.blocksLen": "d66cdf856fd418cce039d78b30bbea9224d6265ebad4499372318788c3167c53",
+    "Pouw.PearlC.WholeCircuit.cGlob8": "8925438a0564fe8d29e5188e052fece5d3c3e9ff2da3d8e6615b07c43c382842",
+    "Pouw.PearlC.WholeCircuit.eaAt": "85668720b828f698438347466c03b822bc6831b822964a7a881267e3ec9f84f4",
+    "Pouw.PearlC.WholeCircuit.ebAt": "eb5296817fe58d59835653f938e2c5503d81bdd770d45bee7d7e25a63fcd5980",
+    "Pouw.PearlC.WholeCircuit.faAt": "fe9c330e326908deee55f7598f2aef7fa6348b7176d745f5f05a4a3402f2bc5d",
+    "Pouw.PearlC.WholeCircuit.fbAt": "c0050659f1a85554602473e82cc311b08f811d6fd9bcc864f7a1dfa79d0ced93",
+    "Pouw.PearlC.WholeCircuit.gAt": "9d7c006ec29292cd8376eab731116ca18587b65c920af34433ce8feaa7dc3e74",
+    "Pouw.PearlC.WholeCircuit.in8": "9dec676229b467b842091ed74a22954e4fd0b0f43353c7fae9ea5f84c611e66f",
+    "Pouw.PearlC.WholeCircuit.inW8": "05aefac12eaaf9153d494e4fc18a697f48a5707f1d7b0b2e482f273477b2b385",
+    "Pouw.PearlC.WholeCircuit.locate": "f8611809715d648a67a5c77708f374266322ffae6ee4c7b3cd0b1511faabea44",
+    "Pouw.PearlC.WholeCircuit.outs8": "17efd881c84acb3bb779407a382ffc364e6b60955c610084d5619ca8aae62d51",
+    "Pouw.PearlC.WholeCircuit.paOut8": "f3c3f7d9d5cda15daa8881d36275827c40502b410e6bda53b29ed2dae443c7d7",
+    "Pouw.PearlC.WholeCircuit.pbOut8": "5009322257d89a84f7be7a7e1dfe3db6efbadfcd96df61d641c400b2da2ea6d0",
+    "Pouw.PearlC.WholeCircuit.portA8": "bd3cc551fc72d2a479be25c988d44b46e4c4eaff04176781e8fb06837123fcbc",
+    "Pouw.PearlC.WholeCircuit.portB8": "b53006071c3a7a3a136356d1efa4837655376c5fc8e4911d259ee0b83d665ecf",
+    "Pouw.PearlC.WholeCircuit.portT8": "26f9f476d79b4312f9a9f54fa33dcb647d5c98df30845e29272d7fbb31b05423",
+    "Pouw.PearlC.WholeCircuit.rowA8": "7a22655594ac0a45646a58319bb9341dd975fae7f1567af02f6e9527bcb4ea35",
+    "Pouw.PearlC.WholeCircuit.rowB8": "9e6d67f727c3f09d97656bec2c59c93e4c7b080157cedc4c6cf335eed5ba294e",
+    "Pouw.PearlC.WholeCircuit.tile8": "97b83b5e410e125f4125ce678511b1244c7563f90987538f49ac3be1e510e18f",
+    "Pouw.PearlC.WholeCircuit.uGlob8": "f30a196d8c88c67321cd92aca332ea671eeaedd52a5cf3d6dc4506b1ca667730",
+    "Pouw.PearlC.WholeCircuit.unitCount": "afdadc5fa56e433c390686fd08a59fab95118f4e362269a222fb3fcce73f1435",
+    "Pouw.PearlC.WholeCircuit.whole8": "94cacb3fcc0c37c76f7b5fc22fdabc972823a3aea99f1951bc995e9583f6e526"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Pouw.PearlC.WholeCircuit4": {
+   "digest": "47a72727e3f0f10ff3449a3716538be22d8a74ad7e82bade7711a068fba8a9e7",
+   "definitions": {
+    "Pouw.PearlC.WholeCircuit.cGlob4": "3e1bf5983f424456cd699ae3becf3e4d562de5f510038f9a940d235b7c438721",
+    "Pouw.PearlC.WholeCircuit.inW4": "57a8603dbd27d6e4aeb0b7395bd38ba6a11e7726b23819d0ece38da77691e249",
+    "Pouw.PearlC.WholeCircuit.outs4": "fd158186489ed65458bdc6543d8e5533416129cba7f27f99eec69643ab7c6bdd",
+    "Pouw.PearlC.WholeCircuit.paOut4": "52e970633c8e49b2a3268d7226eba139c9cd22da96290103e8525e629c58d9dc",
+    "Pouw.PearlC.WholeCircuit.pbOut4": "6686f961ea64106adf14dd23673dc8216aea25b17d52e40071fc6e24cc428287",
+    "Pouw.PearlC.WholeCircuit.portT4": "106584aadf415b1cd35e88c776a5b06608f7a5b64eb02d1cb14cc46f1610c97a",
+    "Pouw.PearlC.WholeCircuit.rowA4": "038de7c5902dc4a1a5d8b0e64c2f08c242f2b69dbf39ad41d5de24e0f3cd1214",
+    "Pouw.PearlC.WholeCircuit.rowB4": "9a0f65028349f0a282b6716f72c90d5b243458958d0bcf6e8502be6c7b45a0f3",
+    "Pouw.PearlC.WholeCircuit.tile4": "d16594217840bf63ba10984f53bc3a76fffcfa610b49d04382edb89d1b41f12d",
+    "Pouw.PearlC.WholeCircuit.tiles4": "05d6d5e3cdaf094cd6c981beacf59eb5865e21371550a6e63d129e478b5144d3",
+    "Pouw.PearlC.WholeCircuit.uGlob4": "c46fec4f5f02a08e714673edf4115b3534ce0795e331e237050a368891e90725",
+    "Pouw.PearlC.WholeCircuit.whole4": "e36c4798af4536b0e142e5f41038376a3e2d6785e9589997e45830d60f7774e5"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"]
   },
   "Definitions.Pouw.TileBound.AlignedExactDefs": {
    "digest": "aa6df604df5d1374fc9654ddc830a74a7d73c1f0e0a0540202ae1a5cd2398f1d",
@@ -11368,6 +11873,14 @@
     "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap",
     "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile"
    ]
+  },
+  "Models.Pouw.Guarantees.PearlCTileCheck": {
+   "digest": "7b0cd4e5ab80cd133fbb97d2db3f13461f992283185d131888681e8eb7d4e41d",
+   "definitions": {
+    "Pouw.Guarantees.PearlC.TileCheck4WordsCore": "966b089ab34bc9d66c4805063cd0185f9b82dc77366cb3b9d6359e509a76748b",
+    "Pouw.Guarantees.PearlC.TileCheck8WordsCore": "be8ed3299b5c7ac88f29ea45f354afe730ec0b664f84136fdd134ff67a022946"
+   },
+   "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Models.Pouw.Guarantees.TileBound": {
    "digest": "12c74a1bd0296a82c06014f75ba8977a1f21f367cf7cbba71e957e0f2ff2d212",
