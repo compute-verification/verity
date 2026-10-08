@@ -629,6 +629,29 @@ def lead_names(text: str, reg: dict) -> list[str]:
     return names
 
 
+UNROUTED_SKIP_RE = re.compile(r"```.*?```|`[^`\n]*`|<[^>\n]*>|^\s*>.*$", re.S | re.M)   # code, links, quoted lines
+LATER_AT_RE = re.compile(r"(?<![\w.@/-])@([a-z0-9][a-z0-9._-]*)")
+LATER_NAME_RE = re.compile(r"(?:^|(?<=[.!?;])[ \t]+)[ \t]*([a-z0-9][a-z0-9._-]*):\s", re.M)
+
+
+def unrouted_names(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> list[str]:
+    """The handles other than `author`, the `rung` ones and the lead's that a body names where no doorbell reaches: `@handle` after its
+    lead, or `handle:` right after the lead, starting a later line or starting a sentence (only a post's start routes, `lead_names`)."""
+    body = body or ""
+    m = LEAD_RE.match(body)
+    rest = UNROUTED_SKIP_RE.sub("", body[m.end() if m else 0:])
+    found = [n.rstrip("._-") for n in LATER_AT_RE.findall(rest)] + LATER_NAME_RE.findall(rest)
+    handles = {h["handle"] for h in reg["handles"]} - {author, *rung, *lead_names(body, reg)}
+    return list(dict.fromkeys(n for n in found if n in handles))
+
+
+def refuse_unrouted(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> None:
+    if names := unrouted_names(body, reg, author, rung):
+        raise SlackError(f"it names {' '.join('@' + n for n in names)} past its start, where nothing rings: only the names a "
+                         "post starts with wake anyone. Move them to the start (--to, or the leading @names) to ring them, "
+                         "or drop the @ (and don't start a line or sentence with `name:`) to mention them without a doorbell")
+
+
 def header_names(text: str, reg: dict) -> list[str]:
     """The names an announcement's header (`📣 *Announcement* from @x to @a @b`) addresses; empty for `to every handle`."""
     first = (text or "").split("\n", 1)[0]
@@ -1035,7 +1058,8 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    body = linear_ask(ns, owner, h["handle"], _body(ns))
+    refuse_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
+    body = linear_ask(ns, owner, h["handle"], body)
     _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1124,6 +1148,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    if to or kind != "announce":                                     # an announcement with no --to reaches every handle
+        refuse_unrouted(body, reg, h["handle"], tuple(t["handle"] for t in to))
     if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
         raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
     if kind == "announce":
@@ -1214,7 +1240,9 @@ def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
-    body = _body(ns) + (f" {QUIET}" if ns.quiet else "")
+    body = _body(ns)
+    refuse_unrouted(body, reg, h["handle"])
+    body += f" {QUIET}" if ns.quiet else ""
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1581,7 +1609,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and not is_quiet(m.get("text") or "")
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and \
+            not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})

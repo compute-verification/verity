@@ -10,7 +10,7 @@ import Lean.Data.Json
 which computes the same results from the program's definitions (`NetworkCertifier`), gives every one of them. The Lean
 audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code`
 (`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`, membership
-in `Σ_sync`) equal to the reference definitions in `verity/Security/Definitions/NetworkCertifier/`, which the guarantees read.
+in `Σ_sync`) equal to the reference definitions in `Security/Definitions/NetworkCertifier/`, which the guarantees read.
 
 An instance is `L` egress links and `K ≥ L` boundary links (the egress links first), windows of `T` buckets, `W` of
 them with advice, the allocation `S`, the sync set `Σ_sync`, and per egress link its frames in canonical order and the
