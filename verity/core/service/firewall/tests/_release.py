@@ -29,7 +29,7 @@ from verity_flock import firewall as FW
 
 HERE = Path(__file__).resolve().parent
 PKG = HERE.parent
-ROOT = PKG.parents[4]
+ROOT = PKG.parents[3]
 FLOCK = ROOT / "verity" / "ml" / "flock"
 LEAN_FLOCK = ROOT / "verity" / "core" / "service" / "flock"
 VECTORS = FLOCK / "live" / "src" / "firewall_record_vectors.json"

@@ -61,5 +61,5 @@ trial's differs, and the reference is changed to match (`verdict`; the trial's, 
   (integrity's reach it through them), and space's or communication's reasons only zero their explained usage in the
   balance. Here each component's rejection rejects; `trial_verdict` already counts every component's.
 
-A bare `uv run` inside this directory stops its workspace search at `verity/experimental/pyproject.toml`; run the suite
+A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.
