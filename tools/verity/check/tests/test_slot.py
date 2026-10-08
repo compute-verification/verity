@@ -544,3 +544,45 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     assert calls[-1][calls[-1].index("--") + 1:][:6] == ["python3", "tools/verity/check/slot.py", "--priority", "--by", "lander", "--"]
     with pytest.raises(SystemExit):
         SLOT.main(["--fast", "--", "true"])
+
+
+def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(tmp_path):
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc/meminfo").write_text(f"MemTotal: {2000 << 20} kB\nMemAvailable: {1500 << 20} kB\n")
+    (tmp_path / "proc/self").mkdir()
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice/user-1001.slice/run-1.scope\n")
+    cg = tmp_path / "sys/fs/cgroup"
+    for d, mx, cur in (("user.slice", "max", 0), ("user.slice/user-1001.slice", 1600 << 30, 1200 << 30),
+                       ("user.slice/user-1001.slice/run-1.scope", 900 << 30, 10 << 30)):
+        (cg / d).mkdir(parents=True)
+        (cg / d / "memory.max").write_text(f"{mx}\n")
+        (cg / d / "memory.current").write_text(f"{cur}\n")
+    assert SLOT.memory_gb(tmp_path) == 400
+    (cg / "user.slice/user-1001.slice/memory.current").write_text(f"{1700 << 30}\n")
+    assert SLOT.memory_gb(tmp_path) == 0
+    assert SLOT.memory_gb(tmp_path / "absent") == 0
+
+
+def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, monkeypatch, capsys):
+    """Node 1, 8 Oct 02:00Z: OOM kills at 1,605 of 1,716 GB across ~8 runs under the user slice; a check whose peak doesn't fit
+    waits in line instead of starting and being killed with the others."""
+    (tmp_path / "slots").write_text("a 0 mem=560\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    assert SLOT.parse("a 0 mem=560\nb 1\n")[0]["mem"] == 560 and SLOT.parse("b 1")[0]["mem"] is None
+    free = [300, 600]
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: free[0])
+    assert SLOT.blocked(SLOT.parse("a 0 mem=560")[0], NOW) == "300 GB of memory free, under the 560 GB a check here may peak at"
+    assert SLOT.blocked(SLOT.parse("b 1")[0], NOW) is None
+    assert SLOT.status(SLOT.parse("a 0 mem=560"), tmp_path, NOW)[0].startswith("a  cores 0  mem 560 GB  free; blocked: 300 GB")
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: free.pop(0))
+    assert ran["slot"] == "a" and free == [600]
+    assert "a: 300 GB of memory free, under the 560 GB a check here may peak at" in capsys.readouterr().err
