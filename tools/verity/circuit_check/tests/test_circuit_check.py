@@ -53,6 +53,20 @@ def test_every_registered_definition_is_checked():
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
 
+def test_the_registries_import_every_module_with_a_sidecar_and_key_every_target_on_them():
+    """A Definition module is registered by having a sidecar, not by a line in `targets.py`, so the set of them is in every
+    target's key (`cache.registries`): a new one reruns every target, as a new import line did."""
+    import hashlib
+    import sys
+
+    from circuit_check import cache as CC
+    from circuit_check import sidecars as SC
+
+    assert len(SC.discover()) > 50 and not sorted(set(SC.discover()) - set(sys.modules))
+    want = hashlib.sha256("\n".join(sorted(SC.discover())).encode()).hexdigest()
+    assert CC.key({})["registries"] == want
+
+
 def test_every_operation_is_checked_and_reaches_no_table_outside_the_library():
     """The guard does not visit an operation (`verity.ml.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
@@ -116,7 +130,8 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
 
 def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
-    `boolean_gather.gather_bf16(n)` builds), and an id neither knows still raises."""
+    `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
+    an id neither knows still raises."""
     from verity_vllm.query import word as W
 
     real = W.specialization
@@ -130,6 +145,8 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     monkeypatch.setattr(TG, "suite", lambda: SUITE)
     for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
         assert TG.definition(fid) is SUITE[fid]
+    [res] = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
+    assert TG.definition(res) is SUITE[res]
     with pytest.raises(KeyError):
         TG.definition("NoSuchDefinition_v9")
 

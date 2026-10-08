@@ -8,7 +8,8 @@ initializers disabled and no environment extension loaded, so none of the packag
 attribute handler, no delaborator. It writes one JSON document to the path `CONFIG` names. It reports facts and makes no
 judgement; `audit.py` holds the policy.
 
-- `modules`: the imported modules under the roots; `imports`: what each imports.
+- `modules`: the imported modules under the roots; `imports`: what each imports. `oleans`: the `.olean` file of every
+  imported module, the roots' dependencies' included; `graph`: each one's `.olean` file and what it imports.
 - `declarations`: how many constants of each kind those modules declare.
 - `axioms`: every axiom any of them uses, found by walking the bodies; `offenders`: each one that uses an axiom outside
   `allowed`.
@@ -18,7 +19,9 @@ judgement; `audit.py` holds the policy.
 - `pins`: for each name in `pins`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
   axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
-  `meaning`, with their source lines (`reads`), and the constants other than theorems outside `meaning` where that walk
+  `meaning`, with their source lines and the constants under each one's declaration's name (`family`) that its own type,
+  value or constructors use (`reads`, `own`: what its record hashes with it), and the constants other than theorems outside
+  `meaning` where that walk
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
@@ -266,6 +269,12 @@ def reads (env : Environment) (meaning : Array Name) (roots : Array Name) :
       stack := stack ++ ds
   return (out, outside)
 
+/-- `c` less the trailing components with a leading `_` that Lean's compilers add (`batch._f`, `go._unary`): the declaration
+under whose name `c`'s `own` constants are, so that a helper's `own` names its declaration's matchers. -/
+def family : Name → Name
+  | .str p s => if s.startsWith "_" && !p.isAnonymous then family p else .str p s
+  | n => n
+
 def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
@@ -284,8 +293,11 @@ def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
     return out
   let readJson := fun (r : Name × Name × ConstantInfo) =>
     let (c, m, ci) := r
+    let fam := family c
+    let own := (meaningDeps ci).foldl (fun (s : NameSet) d => if d != c && fam.isPrefixOf d then s.insert d else s) {}
     Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
       ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
+      ("own", toJson (own.toArray.qsort Name.lt |>.map toString)),
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
@@ -432,10 +444,14 @@ unsafe def main (args : List String) : IO UInt32 := do
       else
         took := took.insert (rn c) c
   let mut oleans := #[]
-  for m in mnames do
-    oleans := oleans.push (toString (← findOLean m))
+  let mut graph := #[]
+  for h : i in [0:mnames.size] do
+    let olean := toString (← findOLean mnames[i])
+    oleans := oleans.push olean
+    graph := graph.push (mnames[i].toString, Json.mkObj [("olean", toJson olean),
+      ("imports", toJson (env.header.moduleData[i]!.imports.map (·.module.toString)))])
   let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", toJson modules), ("imports", Json.mkObj imports.toList),
-    ("oleans", toJson oleans),
+    ("oleans", toJson oleans), ("graph", Json.mkObj graph.toList),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),

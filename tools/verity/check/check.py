@@ -72,7 +72,8 @@ doesn't name:
     circuit-check   first flock-circuit-build, `verity/ml/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
-                    `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/verity/circuit_check`),
+                    `circuit-check --all --jobs` the other half, at most one per 128 GB of memory (`circuit_check_jobs`):
+                    every registered Definition and template (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
@@ -208,10 +209,7 @@ _sha256 = COMMON.sha256
 tracked_files = COMMON.tracked_files
 
 
-#: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
-ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
-        'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
-        'export PATH="$HOME/.elan/bin:$PATH"; ')
+ELAN = SUITES.ELAN
 
 
 #: upstream's verifier builds and the sets' stored inputs, stored once and pinned by hash (`upstream-build.sh`)
@@ -526,12 +524,25 @@ def lean_slot(cmd: list[str]) -> list[str]:
     return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd, only) else cmd
 
 
+def requires_outside(lean: Path) -> list[str]:
+    """The packages the Lean package ``lean`` requires from outside its directory, by its manifest or its lakefile: the
+    agreement's pass is kept under that directory's files only, so it would outlive a change to one of them."""
+    import tomllib
+
+    m, lf = lean / "lake-manifest.json", lean / "lakefile.toml"
+    entries = [*(json.loads(m.read_text()).get("packages", []) if m.exists() else []),
+               *(tomllib.loads(lf.read_text()).get("require", []) if lf.exists() else [])]
+    return sorted({e.get("name", "?") for e in entries
+                   if (p := e.get("dir") or e.get("path")) is None or not (lean / p).resolve().is_relative_to(lean.resolve())})
+
+
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
-    `--record` sends it then."""
+    `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
+    directory (`requires_outside`)."""
     lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
         if FLOCK_VERIFIER.is_dir():
@@ -546,6 +557,9 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             agreement = [sys.executable, str(Path(__file__).resolve()), "--lean-agreement", str(out), str(got["upstream"]), str(got["inputs"])]
         elif got:
             agreement = f"only {', '.join(got)} of the pinned upstream build and inputs was sent"
+    if outside := requires_outside(lean):
+        agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
+                     f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
@@ -556,20 +570,43 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             ("lean-agreement", agreement, ROOT)]
 
 
-def memory_gb() -> int:
-    """The memory this process may use: the cgroup limit when there is one, v2 or v1 (a pod's /proc/meminfo is the host's),
-    else MemAvailable."""
-    for f in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):     # cgroup v2, then v1
+def memory_gb(root: Path = Path("/")) -> int:
+    """The memory this process may use: the least of MemAvailable and what each cgroup limit over it leaves, v2 or v1 (a pod's
+    /proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope)."""
+    def read(p: Path) -> str | None:
         try:
-            m = Path(f).read_text().strip()
-            if m != "max" and int(m) < 1 << 60:        # v1 writes "no limit" as a number near 2^63
-                return int(m) >> 30
-        except (OSError, ValueError):
-            pass
-    for line in open("/proc/meminfo"):
+            return p.read_text().strip()
+        except OSError:
+            return None
+
+    left: list[int] = []
+    for line in (read(root / "proc/self/cgroup") or "").splitlines():
+        if line.startswith("0::"):                     # cgroup v2: this process's cgroup, then each ancestor
+            top = root / "sys/fs/cgroup"
+            d = top / line[3:].strip("/")
+            for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
+                m, used = read(c / "memory.max"), read(c / "memory.current")
+                if m and m.isdigit():
+                    left.append(int(m) - int(used if used and used.isdigit() else 0))
+    v1 = root / "sys/fs/cgroup/memory"
+    m, used = read(v1 / "memory.limit_in_bytes"), read(v1 / "memory.usage_in_bytes")
+    if m and m.isdigit() and int(m) < 1 << 60:         # v1 writes "no limit" as a number near 2^63
+        left.append(int(m) - int(used if used and used.isdigit() else 0))
+    for line in (read(root / "proc/meminfo") or "").splitlines():
         if line.startswith("MemAvailable:"):
-            return int(line.split()[1]) >> 20
-    return 0
+            left.append(int(line.split()[1]) << 10)
+    return max(0, min(left)) >> 30 if left else 0
+
+
+#: the memory circuit-check counts on per worker: a cold `--all` on vy-nebius-cpu-1 (755 GB) at 23 workers grew six of them to
+#: 136, 84, 80, 54, 51 and 40 GiB and took the node down twice (7 Oct,
+#: note:core-firewall/20261007T2327Z-finding-circuit-check-all-exhausts-cpu-1)
+CIRCUIT_CHECK_GB_PER_JOB = 128
+
+
+def circuit_check_jobs(b: int) -> int:
+    """circuit-check's `--jobs`: its share ``b`` of the cores, at most one per `CIRCUIT_CHECK_GB_PER_JOB` of this process's memory."""
+    return max(1, min(b, memory_gb() // CIRCUIT_CHECK_GB_PER_JOB))
 
 
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
@@ -817,7 +854,8 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 #: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
 #: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
-AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-pouw-window-difftest", "core-identity")
+#: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
+AFTER_LEAN = SUITES.AFTER_LEAN
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
@@ -837,10 +875,10 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
-        lean_suites = [*suites, *AFTER_LEAN, "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
+        lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
-    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
+    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(circuit_check_jobs(b)), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]

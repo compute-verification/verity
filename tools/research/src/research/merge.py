@@ -59,7 +59,8 @@ head whose change against the train's base this one repeats file for file and by
 `research.queue.carry`, which prints the head it carried from) (`ungranted`).
 
 A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
-what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts.
+what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts,
+and SPEC_ALERTED_REF stays where it was, so every later `research merge` sends it again and `--sweep` fails until it goes.
 """
 from __future__ import annotations
 
@@ -590,7 +591,8 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
 def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
     """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
     changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
-    one with a `/` against its path), so `["verity/ml/flock/", "!README.md"]` leaves out every README.md there."""
+    one with a `/` against its path), so `["verity/ml/flock/", "verity/core/service/flock/", "!README.md"]` leaves out every
+    README.md under either."""
     import fnmatch
 
     prefixes = [r for r in rule if not r.startswith("!")]
@@ -804,7 +806,7 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                            f"name it as N@SHA")
                 continue
             lacking = set(need) - grants(pr, sha) if need else set()
-            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto)):
+            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto, rules)):
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: from {by.get(g) or 'its rule, which names no `by`'}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
@@ -876,7 +878,8 @@ def unstacked(repo: Path, commit: str, base: str, remote: str, log=print) -> tup
                 continue
         ok.append((n, sha, onto))
         for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
-            for m in prs.get(h, []):
+            # a pull request whose head is N's own pinned head lands whole with N: it is no base left behind
+            for m in prs.get(h, []) if h != sha else ():
                 # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
                 if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
                     out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
@@ -899,7 +902,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
         for n, sha, onto in pins:
             need = rules.needs(repo, onto, sha) if rules else set()
             lacking = need - grants(n, sha)
-            if missing := lacking - grants.carried(n, sha, lacking, onto):
+            if missing := lacking - grants.carried(n, sha, lacking, onto, rules):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
         raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e
@@ -1172,14 +1175,16 @@ def _mirror_target(name: str) -> tuple[list[str], str]:
 
 
 def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
-    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward. False, after one line naming the
-    failure and the command that reruns it, when it doesn't land."""
+    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward, past this checkout's own pre-push
+    guard, which judges pushes that move origin's main (a hand landing has no check attempt of its tree, and the guard refused
+    node 1's copy of 61f64824c and 24aa9a9a4, 7 Oct). False, after one line naming the failure and the command that reruns it,
+    when it doesn't land."""
     from .remote import git_push_url
 
     rerun = f"cd {shlex.quote(str(repo))} && research merge --mirror {sha}"
     try:
         ssh, bare = (target or _mirror_target)(name)
-        r = run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, bare), f"{sha}:refs/heads/main"],
+        r = run(["git", "-c", "protocol.ext.allow=always", "push", "-q", "--no-verify", git_push_url(ssh, bare), f"{sha}:refs/heads/main"],
                 cwd=repo, capture_output=True, text=True, timeout=MIRROR_TIMEOUT_S)
         why = None if r.returncode == 0 else f"git push exited {r.returncode}: {' '.join((r.stderr or r.stdout).split())[-300:]}"
     except subprocess.TimeoutExpired:
@@ -1219,49 +1224,89 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
 
 #: the remote's ref holding the main commit the after-landing steps last ran for
 AFTER_LAND_REF = "refs/research/after-land"
+#: the remote's ref holding the main commit Daniel was last sent the spec change up to: it moves only when the DM went, so one
+#: that failed is sent again by the next `research merge`, and `--sweep` fails while it lags main
+SPEC_ALERTED_REF = "refs/research/spec-alerted"
+
+
+def _remote_refs(repo: Path, remote: str, *refs: str) -> dict[str, str] | None:
+    r = _git(repo, "ls-remote", remote, *refs, check=False)
+    return None if r.returncode else {ref: sha for sha, ref in (line.split() for line in r.stdout.splitlines())}
+
+
+def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> bool:
+    """Push ``tip`` to ``remote``'s ``ref``, leased on ``was`` (the one read) so two landers don't both advance it."""
+    p = _git(repo, "push", "-q", f"--force-with-lease={ref}:{was}", remote, f"{tip}:{ref}", check=False)
+    if p.returncode:
+        log(f"research merge: {remote}'s {ref} wasn't moved to {tip[:12]} ({(p.stderr or p.stdout).strip()[-200:]}); "
+            "another lander may have caught up first")
+    return not p.returncode
 
 
 def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
-    the caller's own push, when the remote has no marker yet): DM Daniel the spec change over that range (`spec_alert`), push main's
-    tip to node 1's mirror, start ``tool``'s `after_land` on the tip (a later landing's `post_train.py` tests the ones before it
-    too), then move the marker to the tip, leased on the one read so two landers don't both advance it.  Without a marker or
-    ``since`` it only sets the marker.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
+    the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
+    on the tip (a later landing's `post_train.py` tests the ones before it too), then move the marker to the tip.  The spec DM
+    (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
+    when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
+    the markers.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
     from .spec_alert import alert
 
-    r = _git(repo, "ls-remote", remote, "refs/heads/main", AFTER_LAND_REF, check=False)
-    if r.returncode:
-        log(f"research merge: {remote}'s main can't be read ({(r.stderr or r.stdout).strip()[-200:]}); the steps after a landing "
-            "wait for the next `research merge`")
+    refs = _remote_refs(repo, remote, "refs/heads/main", AFTER_LAND_REF, SPEC_ALERTED_REF)
+    if refs is None:
+        log(f"research merge: {remote}'s main can't be read; the steps after a landing wait for the next `research merge`")
         return None
-    refs = {ref: sha for sha, ref in (line.split() for line in r.stdout.splitlines())}
-    tip, mark = refs.get("refs/heads/main", ""), refs.get(AFTER_LAND_REF, "")
-    if not tip or tip == mark:
-        return None
+    tip, mark, alerted = refs.get("refs/heads/main", ""), refs.get(AFTER_LAND_REF, ""), refs.get(SPEC_ALERTED_REF, "")
     start = mark or since
-    lease = f"--force-with-lease={AFTER_LAND_REF}:{mark}"
+    spec_from = alerted or start
+    if not tip or (tip == mark and spec_from in ("", tip)):
+        return None
+    if start or spec_from:
+        fetched = _git(repo, "fetch", "-q", remote, "refs/heads/main", *(r for r, s in ((AFTER_LAND_REF, mark),
+                                                                                         (SPEC_ALERTED_REF, alerted)) if s),
+                       check=False)
+        if fetched.returncode:
+            log(f"research merge: {remote}'s main or its markers can't be fetched; the steps after a landing wait for the next "
+                "`research merge`")
+            return None
+    if spec_from and spec_from != tip:
+        if _git(repo, "merge-base", "--is-ancestor", spec_from, tip, check=False).returncode:
+            log(f"research merge: Daniel was last sent the spec change up to {spec_from[:12]}, which isn't in {remote}'s main "
+                f"({tip[:12]}); no DM was sent: send it by hand, then `git push {remote} {tip}:{SPEC_ALERTED_REF}`")
+        elif alert(repo, spec_from, tip, remote=remote, log=log):
+            _move(repo, remote, SPEC_ALERTED_REF, alerted, tip, log)
+        else:
+            log(f"research merge: the spec DM over {spec_from[:12]}..{tip[:12]} wasn't sent; {SPEC_ALERTED_REF} stays at "
+                f"{spec_from[:12]}, so the next `research merge` or `research merge --sweep` sends it again")
+    elif not alerted:
+        _move(repo, remote, SPEC_ALERTED_REF, "", tip, log)
+    if tip == mark:
+        return None
     if start:
-        fetched = _git(repo, "fetch", "-q", remote, "refs/heads/main", *([AFTER_LAND_REF] if mark else []), check=False)
-        if fetched.returncode or _git(repo, "merge-base", "--is-ancestor", start, tip, check=False).returncode:
-            why = "can't be fetched" if fetched.returncode else f"isn't in {remote}'s main ({tip[:12]})"
-            log(f"research merge: the steps after a landing last ran for {start[:12]}, which {why}; nothing ran: run them by "
-                f"hand, then `git push {remote} {tip}:{AFTER_LAND_REF}`")
+        if _git(repo, "merge-base", "--is-ancestor", start, tip, check=False).returncode:
+            log(f"research merge: the steps after a landing last ran for {start[:12]}, which isn't in {remote}'s main "
+                f"({tip[:12]}); nothing ran: run them by hand, then `git push {remote} {tip}:{AFTER_LAND_REF}`")
             return None
         if mark and mark != since:
             n = len(_git(repo, "rev-list", "--first-parent", f"{mark}..{tip}").stdout.split())
             log(f"research merge: the steps after a landing last ran for {mark[:12]}; catching up {n} commit(s) of main to {tip[:12]}")
-        alert(repo, start, tip, remote=remote, log=log)
         if remote == "origin" and (name := mirror_name()):
             push_mirror(repo, tip, name)
         after_land(repo, tool, tip, log=log)
-    p = _git(repo, "push", "-q", lease, remote, f"{tip}:{AFTER_LAND_REF}", check=False)
-    if p.returncode:
-        log(f"research merge: {remote}'s {AFTER_LAND_REF} wasn't moved to {tip[:12]} ({(p.stderr or p.stdout).strip()[-200:]}); "
-            "another lander may have caught up first")
-    elif not start:
+    if _move(repo, remote, AFTER_LAND_REF, mark, tip, log) and not start:
         log(f"research merge: {remote} had no {AFTER_LAND_REF}; set it to main ({tip[:12]}): the steps after a landing are "
             "caught up from here, and nothing before it was looked at")
     return tip if start else None
+
+
+def spec_alert_lag(repo: Path, remote: str) -> str:
+    """Why the spec DM is behind ``remote``'s main ("" when it isn't, or there is no marker yet to be behind)."""
+    refs = _remote_refs(repo, remote, "refs/heads/main", SPEC_ALERTED_REF) or {}
+    tip, alerted = refs.get("refs/heads/main", ""), refs.get(SPEC_ALERTED_REF, "")
+    if not alerted or alerted == tip:
+        return ""
+    return (f"{remote}'s {SPEC_ALERTED_REF} is {alerted[:12]}, behind main ({tip[:12]}): the spec DM over that range "
+            "hasn't been sent")
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
@@ -1382,6 +1427,9 @@ def main(argv: list[str]) -> int:
             sweep(repo, a.into, a.remote, a.dry_run)
         except (Refused, ValueError, KeyError) as e:
             print(f"research merge: sweep failed: {e}", file=sys.stderr)
+            return 1
+        if a.into == "main" and not a.dry_run and (lag := spec_alert_lag(repo, a.remote)):
+            print(f"research merge: {lag}; rerun `research merge --sweep` once Slack is reachable", file=sys.stderr)
             return 1
         return 0
     if not a.ref:

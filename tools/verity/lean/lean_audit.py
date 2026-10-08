@@ -47,12 +47,15 @@ they're dropped, so a run's compile-time code cannot leave the next run a cache 
 earlier passing run. The package's own `.lake/build` is kept the same way (`WarmBuilds`), under its toolchain, manifest and
 lakefile less the paths to what it requires (`build_key`), not under its path: Lake decides what is up to date by content
 hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
-`.olean` files with the package's record, and the kernel replay still covers the package's own modules. Lean gets this
+`.olean` files with the package's record, and the kernel replay still covers the package's own modules: each one whose
+`.olean` files, and those of every module it imports, transitively, passed an earlier replay here is reused
+(`audit.py --replay-cache`, `lean-replay/` beside the passes; not with `--fresh`), so a change to a few modules replays
+those and what imports them. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
-throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json` + `lean-toolchain`
-by sha256; the launcher sends a presigned URL for each (`--urls`, `check.py --record`), and a bundle is used only when its
+throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json`'s fetched entries + `lean-toolchain`
+(`deps_key`; a `path` entry changes no key) by sha256; the launcher sends a presigned URL for each (`--urls`, `check.py --record`), and a bundle is used only when its
 bytes are the pinned ones. A bundle leaves out the builds Mathlib's cache supplies: `lake exe cache get` takes those from
 Mathlib's CDN, which is not GitHub. After a bump, a passing cold audit run with `--export` writes the new bundles into its run
 directory, custody puts them on R2, and `--pin RUN` pins them.
@@ -307,11 +310,16 @@ def explain(name: str, cache: Path) -> tuple[int, list[str]]:
 
 
 def deps_key(pkg: Path) -> str | None:
-    """What a package's fetched dependencies are a function of: its manifest and toolchain (None: it fetches nothing)."""
+    """What a package's fetched dependencies are a function of: its manifest's fetched entries and its toolchain (None: it
+    fetches nothing). A `path` entry is not in it: `.lake/packages` holds only fetched packages, so requiring another
+    package of this repository by path needs no new bundle."""
     m = pkg / "lake-manifest.json"
-    if not m.exists() or not [d for d in json.loads(m.read_text()).get("packages", []) if d.get("type") != "path"]:
+    doc = json.loads(m.read_text()) if m.exists() else {}
+    fetched = [d for d in doc.get("packages", []) if d.get("type") != "path"]
+    if not fetched:
         return None
-    return hashlib.sha256(m.read_bytes() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
+    canon = json.dumps({"packagesDir": doc.get("packagesDir"), "packages": fetched}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canon.encode() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
 
 
 PIN = "tools/verity/lean/lean-deps.json"
@@ -632,6 +640,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         t0 = time.monotonic()
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
+                            *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay")]),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
