@@ -10,7 +10,7 @@ import Definitions.Core.Prims
 /-!
 # The evaluator's primitives: each is the definition of `Definitions.Core` it copies
 
-The descriptor v1 evaluator (`verity/experimental/core/primitives/evaluate/`, package `verity_evaluate`) is code, so it
+The descriptor v1 evaluator (`verity/core/primitives/evaluate/`, package `verity_evaluate`) is code, so it
 requires nothing of `Security/`: where `Definitions.Core` defines a primitive, the evaluator holds a copy, whose doc names
 the definition it must equal. These are those equalities, each a `Prop` stated against the two functions as they are, and
 `Properties.Proofs.Evaluate` proves every one.
