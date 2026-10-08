@@ -49,7 +49,10 @@ def _roots() -> list[tuple[str, Path]]:
 @cache
 def discover() -> dict[str, dict[str, Path]]:
     """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name.  A file
-    under two packages' roots (`verity_flock`'s tree is inside `verity`'s) is its module's once, named from the deeper root."""
+    under two packages' roots (`verity_flock`'s tree is inside `verity`'s) is its module's once, named from the deeper root, and
+    only through regular packages: a directory without ``__init__.py`` would name a namespace-package copy of a module that
+    another package's root owns (``verity.ml.flock.python.verity_flock.rec_open``), and importing it registers its
+    Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
     claimed: set[Path] = set()
     with CC.internal():
@@ -58,9 +61,12 @@ def discover() -> dict[str, dict[str, Path]]:
                 for p in sorted(root.rglob(f"*{SUFFIX}.{kind}")):
                     if "__pycache__" in p.parts or p in claimed:
                         continue
+                    rel = p.relative_to(root).parent.parts
+                    if not all((root.joinpath(*rel[:i + 1]) / "__init__.py").is_file() for i in range(len(rel))):
+                        continue
                     claimed.add(p)
                     stem = p.name[:-len(f"{SUFFIX}.{kind}")]
-                    parts = [pkg, *p.relative_to(root).parent.parts]
+                    parts = [pkg, *rel]
                     mod = ".".join(parts if stem == "__init__" else [*parts, stem])
                     if not (p.with_name(f"{stem}.py").is_file() or (p.parent / stem / "__init__.py").is_file()):
                         raise FileNotFoundError(f"{p}: a circuit-check sidecar of {mod}, which has no module")

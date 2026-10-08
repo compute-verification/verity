@@ -550,6 +550,27 @@ def test_a_sidecar_under_two_packages_roots_is_named_once_from_the_deeper(tmp_pa
         SC.discover.cache_clear()
 
 
+def test_a_sidecar_behind_a_namespace_directory_is_named_only_from_its_own_package(tmp_path, monkeypatch):
+    """Two roots side by side, the outer holding a copy of the inner's tree behind a directory without ``__init__.py`` (as
+    `verity_flock`'s stage-cache test copies the sources): the copy is no module of the outer package, so importing it under
+    that name would register its Definitions a second time."""
+    from circuit_check import sidecars as SC
+
+    for base in (tmp_path / "synout2/src/synin2", tmp_path / "synin2"):
+        base.mkdir(parents=True)
+        (base / "__init__.py").write_text("")
+        (base / "rec.py").write_text("")
+        (base / "rec.circuit-check.json").write_text('{"definitions": {"SynRec_v1": {}}}')
+    (tmp_path / "synout2/__init__.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(SC, "PACKAGES", ("synout2", "synin2"))
+    SC.discover.cache_clear()
+    try:
+        assert list(SC.discover()) == ["synin2.rec"]
+    finally:
+        SC.discover.cache_clear()
+
+
 def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
     """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
     other package is never read, so its bindings would leave the task list without an error."""
