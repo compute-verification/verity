@@ -80,6 +80,7 @@ import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
 import Proofs.Pouw.PearlC.DeviceSm120v2LoopEquiv
 import Proofs.Pouw.PearlC.EncChecks
+import Proofs.Pouw.PearlC.FlockTile
 import Proofs.Pouw.PearlC.Forming
 import Proofs.Pouw.PearlC.FormingP
 import Proofs.Pouw.PearlC.Fp4ChainOnlyGamma
