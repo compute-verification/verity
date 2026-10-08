@@ -74,7 +74,7 @@ theorem step_good {c : Config} {st : State} (hg : Good c st) (ev : Event) :
     rw [e2]
     simp [run, tickView, ht]
   · obtain ⟨q, -⟩ := step_quiet hg ev hl
-    exact ⟨hg.quiet q, by rw [q.2.1.2, not_live hl]⟩
+    exact ⟨hg.quiet q, by rw [q.2.1.2.1, not_live hl]⟩
 
 theorem after_good {c : Config} {st : State} (hg : Good c st) (tr : List Event) :
     Good c (after st tr) ∧ (after st tr).shaper.t = (tr.map tickView).foldl (run c) st.shaper.t := by
@@ -287,7 +287,7 @@ theorem rows_inv (c : Config) (tr : List Event) (n : Nat) (hn : n ≤ tr.length)
           rw [this, push_size, hsize, Nat.div_add_mod', hrow]
     · have hl' : ¬ ∃ now backlog, tr[n] = .tick .egress now backlog ∧ (pre c tr n).shaper.t < horizon c := hl
       obtain ⟨q, -⟩ := step_quiet hg tr[n] hl'
-      rw [q.2.1.2, q.2.1.1.rows]
+      rw [q.2.1.2.1, q.2.1.1.rows]
       exact ih
 
 /-! ## The properties -/
@@ -349,51 +349,54 @@ theorem linkSchedule_proof : LinkSchedule := by
 theorem contentIndependent_proof : ContentIndependent := fun c tr tr' h => by
   rw [linkSchedule_proof c tr, linkSchedule_proof c tr', h]
 
+/-- Egress bucket `k`'s tick does `egressActions` of the rows and statuses the device's ticks compute. -/
+theorem egress_acts {c : Config} {tr : List Event} {n k backlog : Nat} (hE : EgressAt c tr n k backlog) :
+    (outputs (init c) tr)[n]? = some (egressActions c (rowOf c tr) (statusOf c tr) k backlog) := by
+  have hn := (egressAt_lt hE)
+  obtain ⟨now, he⟩ := (egressAt_get hE)
+  have hg := (prefix_good c tr n).1
+  have ht := (egressAt_t hE)
+  have hk : k < horizon c := hE.2.2
+  rw [outputs_get _ _ _ hn]
+  change some (step (pre c tr n) tr[n]).2 = _
+  rw [he, step_egress_snd hg (ht ▸ hk)]
+  obtain ⟨-, -, row, status, -, hr, hs, hacts, -⟩ := egress_spec hg now backlog
+  have hrow : rowOf c tr k = row := by rw [rowOf_eq hE, hr]; simp only [he, evRow]
+  rw [hacts, ht]
+  unfold egressActions
+  rw [hrow]
+  congr 2
+  split
+  · rename_i hc
+    obtain ⟨hT, hm, hlast⟩ := mod_last hc
+    have hst : statusOf c tr (k / c.egress.buckets) = status := by
+      rw [statusOf_eq hE _ hlast.symm]
+      simp only [he, evStatus]
+      rw [hs (ht ▸ hc)]
+      rfl
+    rw [hst]
+    congr 3
+    have hinv := rows_inv c tr n hn.le
+    rw [ht] at hinv
+    have hsize : (pre c tr n).shaper.certifier.rows.size = k % c.egress.buckets := by
+      rw [hg.shaper.rows, ht]
+    apply Array.ext
+    · rw [Array.size_push, Array.size_ofFn, hsize, hm]; omega
+    · intro i h1 h2
+      rw [Array.getElem_ofFn, Array.getElem_push]
+      split
+      · rename_i hi
+        have := hinv i (by rw [← hsize]; exact hi)
+        rw [Array.getElem?_eq_getElem hi] at this
+        exact Option.some.inj this
+      · rename_i hi
+        have : i = c.egress.buckets - 1 := by rw [Array.size_ofFn] at h2; omega
+        simp only [this, hlast, hrow]
+  · rfl
+
 theorem records_proof : Records := by
   intro c tr
-  refine ⟨rowOf c tr, statusOf c tr, rowOf_packed c tr, ?_, ?_⟩
-  · intro n k backlog hE
-    have hn := (egressAt_lt hE)
-    obtain ⟨now, he⟩ := (egressAt_get hE)
-    have hg := (prefix_good c tr n).1
-    have ht := (egressAt_t hE)
-    have hk : k < horizon c := hE.2.2
-    rw [outputs_get _ _ _ hn]
-    change some (step (pre c tr n) tr[n]).2 = _
-    rw [he, step_egress_snd hg (ht ▸ hk)]
-    obtain ⟨-, -, row, status, -, hr, hs, hacts, -⟩ := egress_spec hg now backlog
-    have hrow : rowOf c tr k = row := by rw [rowOf_eq hE, hr]; simp only [he, evRow]
-    rw [hacts, ht]
-    unfold egressActions
-    rw [hrow]
-    congr 2
-    split
-    · rename_i hc
-      obtain ⟨hT, hm, hlast⟩ := mod_last hc
-      have hst : statusOf c tr (k / c.egress.buckets) = status := by
-        rw [statusOf_eq hE _ hlast.symm]
-        simp only [he, evStatus]
-        rw [hs (ht ▸ hc)]
-        rfl
-      rw [hst]
-      congr 3
-      have hinv := rows_inv c tr n hn.le
-      rw [ht] at hinv
-      have hsize : (pre c tr n).shaper.certifier.rows.size = k % c.egress.buckets := by
-        rw [hg.shaper.rows, ht]
-      apply Array.ext
-      · rw [Array.size_push, Array.size_ofFn, hsize, hm]; omega
-      · intro i h1 h2
-        rw [Array.getElem_ofFn, Array.getElem_push]
-        split
-        · rename_i hi
-          have := hinv i (by rw [← hsize]; exact hi)
-          rw [Array.getElem?_eq_getElem hi] at this
-          exact Option.some.inj this
-        · rename_i hi
-          have : i = c.egress.buckets - 1 := by rw [Array.size_ofFn] at h2; omega
-          simp only [this, hlast, hrow]
-    · rfl
+  refine ⟨rowOf c tr, statusOf c tr, rowOf_packed c tr, fun n k backlog hE => egress_acts hE, ?_⟩
   · intro n acts hacts hnot a ha
     have hn := outputs_lt hacts
     rw [outputs_get _ _ _ hn] at hacts
@@ -460,7 +463,7 @@ theorem failClosed_proof : FailClosed := by
             rw [this, push_size, hrow]
       · obtain ⟨q, -⟩ := step_quiet hg _ hl
         have hc := q.2.1.1.of_fault i1
-        rw [q.2.1.2, hc]
+        rw [q.2.1.2.1, hc]
         exact ⟨i1, i2, i3, i4⟩
   obtain ⟨i1, -, i3, i4⟩ := inv (m - n) (by omega)
   rw [show n + (m - n) = m by omega] at i1 i3 i4

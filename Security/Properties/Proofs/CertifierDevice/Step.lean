@@ -40,13 +40,14 @@ theorem foldl_inv {α β : Type _} (P : β → Prop) {l : Array α} {b : β} {f 
 
 /-! ## Quiet steps -/
 
-/-- The egress shaper, faulted at most, at the same tick. -/
-def ShRel (s s' : Shaper) : Prop := CertRel s.certifier s'.certifier ∧ s'.t = s.t
+/-- The egress shaper, faulted at most, at the same tick, having handed and queued as many frames. -/
+def ShRel (s s' : Shaper) : Prop := CertRel s.certifier s'.certifier ∧ s'.t = s.t ∧ s'.next = s.next ∧
+  s'.queued = s.queued
 
-theorem ShRel.refl (s : Shaper) : ShRel s s := ⟨CertRel.refl _, rfl⟩
+theorem ShRel.refl (s : Shaper) : ShRel s s := ⟨CertRel.refl _, rfl, rfl, rfl⟩
 theorem ShRel.trans {s s' s'' : Shaper} (h : ShRel s s') (h' : ShRel s' s'') : ShRel s s'' :=
-  ⟨h.1.trans h'.1, h'.2.trans h.2⟩
-theorem ShRel.fault (s : Shaper) (r : Reason) : ShRel s (s.fault r) := ⟨Or.inr ⟨r, rfl⟩, rfl⟩
+  ⟨h.1.trans h'.1, h'.2.1.trans h.2.1, h'.2.2.1.trans h.2.2.1, h'.2.2.2.trans h.2.2.2⟩
+theorem ShRel.fault (s : Shaper) (r : Reason) : ShRel s (s.fault r) := ⟨Or.inr ⟨r, rfl⟩, rfl, rfl, rfl⟩
 theorem ShRel.arrive (s : Shaper) (position : Nat) (frame : Frame) (ready : Int) :
     ShRel s (s.arrive position frame ready) := by
   unfold Shaper.arrive
@@ -54,11 +55,11 @@ theorem ShRel.arrive (s : Shaper) (position : Nat) (frame : Frame) (ready : Int)
   · exact ShRel.fault _ _
   · split
     · exact ShRel.fault _ _
-    · exact ⟨CertRel.refl _, rfl⟩
+    · exact ⟨CertRel.refl _, rfl, rfl, rfl⟩
 
 theorem ShGood.rel {link : String} {p : Params} {s s' : Shaper} (h : ShGood link p s) (hr : ShRel s s') :
     ShGood link p s' :=
-  ⟨hr.1.shape h.shape, by rw [hr.1.rows, hr.2]; exact h.rows, by rw [hr.1.window, hr.2]; exact h.window,
+  ⟨hr.1.shape h.shape, by rw [hr.1.rows, hr.2.1]; exact h.rows, by rw [hr.1.window, hr.2.1]; exact h.window,
     by rw [hr.1.rows]; exact h.packed⟩
 
 /-- What a step other than a live egress tick keeps. -/
@@ -101,7 +102,8 @@ theorem init_good (c : Config) : Good c (init c) := by
     { certifier := { link := c.egressLink, params := c.egress }, syncs := c.syncs, syncSet := c.syncSet,
       prover := c.prover.map fun p => Prover.make c.syncSet c.egress.buckets p.rule p.envelope p.prior,
       windows := c.windows }
-  refine ShGood.rel ⟨⟨rfl, rfl, by simp, by simp⟩, by simp, by simp, by simp⟩ ⟨hr, checkAdvice_t _⟩
+  refine ShGood.rel ⟨⟨rfl, rfl, by simp, by simp⟩, by simp, by simp, by simp⟩
+    ⟨hr, checkAdvice_t _, by rw [e], by rw [e]⟩
 
 /-! ## The handlers -/
 
@@ -393,7 +395,7 @@ theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Qu
   obtain ⟨f1, f2, f3, f4, f5⟩ := tick_spec _ hsh
   have hof : ∀ r, st0.shaper.certifier.fault = some r →
       (st.checkForwarding now).shaper.certifier = st0.shaper.certifier := fun r hr => hq'.2.1.1.of_fault hr
-  have ht : (st.checkForwarding now).shaper.t = st0.shaper.t := hq'.2.1.2
+  have ht : (st.checkForwarding now).shaper.t = st0.shaper.t := hq'.2.1.2.1
   have hrows : (st.checkForwarding now).shaper.certifier.rows = st0.shaper.certifier.rows := hq'.2.1.1.rows
   unfold egressTail
   dsimp only
