@@ -13,7 +13,7 @@ Formerly ``verity.verification`` (item 25).  Two layers, both promoted from veri
   ``lowering.lower_subcircuit`` is the IR-level adapter: one IR subcircuit -> its ``typed-obligation/v0/lowering``
   section.
 
-Verification plans and sampling are a protocol, ``verity/experimental/protocols/sampled_proofs`` (decision 41).  ``conformance`` is the Python
+Verification plans and sampling are a protocol, ``verity/core/protocols/sampled_proofs`` (decision 41).  ``conformance`` is the Python
 column of the cross-language vector suite in ``fixtures/typed-obligation-v0``.
 
 Import from the owning submodule.  This package depends on ``verity.ml.circuits``, ``verity.ml.circuits.ops`` (for the pinned

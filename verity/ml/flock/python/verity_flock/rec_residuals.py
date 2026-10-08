@@ -390,7 +390,7 @@ def verifier_value(program: str, value: str, rows: list[list[int]]):
     """A value the verifier registers itself (`registered.Registered`): rows it computes from the inner session's public record,
     the inner statement and its own coins, under `verifier_salts`. Its entry is then a function of those rows alone, which the
     verifier's reads file names, and the prover's table rows and salts are the same registration's."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     return RG.Registered.commit(program, value, rows, verifier_salts(program, value, len(rows)))
 
@@ -399,7 +399,7 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
     """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
     from verity.ml.commitments.merkle import tree_levels
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     dom = RG.domain(program, value, words_, len(bcs))
     root = tree_levels(dom, [RG.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
@@ -409,7 +409,7 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
 def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
     decide."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     t0 = time.perf_counter()
     defn = definition(S)
@@ -431,8 +431,8 @@ def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evalua
     instance's row of it; ``vs``: each instance's v (F elements), which the verifier registers as `V_VALUE` (`verifier_value`),
     instance i reading row i. ``own``: per row port the verifier's own entry (default the registration's), which its reads file
     names; the outputs are the verifier's zero rows, registered under its own salts."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import partition as P
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     S, n, low, sub, text = st.S, st.n, st.low, st.sub, st.text
     names = [nm for nm, _ in S["ports"]]

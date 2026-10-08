@@ -195,9 +195,9 @@ Until reuse and the merge queue exist:
   new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
-    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/experimental/protocols/pous/lean/`) and
-    the certifier program (`verity/experimental/protocols/certifier/lean/`, `NetworkCertifier`, with its
-    difftest) and the NCI check (`verity/experimental/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
+    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
+    the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
+    difftest) and the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.

@@ -161,7 +161,7 @@ def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
 
 def test_lean_audit_audits_only_the_packages_it_is_given():
     assert LA.select(PACKAGES, None) == PACKAGES
-    assert LA.select(PACKAGES, ["verity/experimental/protocols/pous/lean", "Security"]) == ["Security", "verity/experimental/protocols/pous/lean"]
+    assert LA.select(PACKAGES, ["verity/core/protocols/pous/lean", "Security"]) == ["Security", "verity/core/protocols/pous/lean"]
     with pytest.raises(ValueError, match="no audited package nowhere"):
         LA.select(PACKAGES, ["nowhere"])
 

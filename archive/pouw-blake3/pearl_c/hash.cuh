@@ -1,5 +1,5 @@
 // Pearl-C's hashing kernels, arch-neutral (no wgmma, no bulk copies): BLAKE3's compression, hashing format -h1 (the message
-// digests, the tile leaves and the frame-b3 trees of A's rows and of the tile leaves, as `verity.experimental.protocols.pouw.audit` commits them), the
+// digests, the tile leaves and the frame-b3 trees of A's rows and of the tile leaves, as `verity.core.protocols.pouw.audit` commits them), the
 // unit's seed_A over A's root and its subkeys, and Pearl's lottery tickets.  pearl_c.cu includes it for sm_90a; hash.cu builds it
 // alone for sm_120a.
 #pragma once
