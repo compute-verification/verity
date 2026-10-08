@@ -34,7 +34,7 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../.." 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no Verity tree above $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
 RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no tools/research/src beside $ROOT" >&2; exit 3; }
-[ -d "$CORE/verity/experimental" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/experimental beside $ROOT" >&2; exit 3; }
+[ -d "$CORE/verity/core" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/core beside $ROOT" >&2; exit 3; }
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
@@ -158,9 +158,9 @@ fi
 
 # ---- 5. readiness: prove the environment mechanically and record the identities --------------------------------------------------
 HG_SO=$(echo "$HG_LINE" | awk '{print $3}')
-$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" "$CORE/verity/experimental" <<'EOF' || fail READINESS "see $OUT/readiness.json"
+$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" "$CORE/verity/core" <<'EOF' || fail READINESS "see $OUT/readiness.json"
 import hashlib, importlib, json, os, platform, subprocess, sys
-root, core, out, hg_so, cc, research, mode, experimental = sys.argv[1:9]
+root, core, out, hg_so, cc, research, mode, verifiers = sys.argv[1:9]
 gpu = mode == "gpu"
 r = {"schema": "verity-vllm/readiness/v1", "checks": {}, "identities": {}}
 if not gpu:
@@ -188,10 +188,10 @@ check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__vers
 check("verity_from_tree", lambda: under("verity.ml.circuits", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
-check("sampled_proofs_from_tree", lambda: under("verity.core.protocols.sampled_proofs.plan", experimental))   # the program tests import it
+check("sampled_proofs_from_tree", lambda: under("verity.core.protocols.sampled_proofs.plan", verifiers))   # the program tests import it
 def distributions_from_tree():
-    # the catalog, the kernels and experimental, distributions of their own before the platform layout, now in verity
-    mods = {"catalog": "verity.ml.circuits.ops", "kernels": "verity.ml.kernels", "experimental": "verity.experimental"}
+    # the catalog and the kernels, distributions of their own before the platform layout, and the verifiers, now in verity
+    mods = {"catalog": "verity.ml.circuits.ops", "kernels": "verity.ml.kernels", "core": "verity.core"}
     return {d: under(m, os.path.join(core, *m.split("."))) for d, m in mods.items()}
 check("distributions_from_tree", distributions_from_tree)
 check("numpy_import", lambda: __import__("numpy").__version__)
