@@ -1,5 +1,11 @@
 {
  "deps": {
+  "2f8af35703744b987ceb76ac91c4902345a664c656cace3e6773afe15811de5a": {
+   "bytes": 701909680,
+   "package": "Security/Properties",
+   "run": "r20261003-152421-a7fe",
+   "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
+  },
   "34eca9b62d8e350c7695beb50ccd907658e74ee51f3574e7355fd2ef26c63755": {
    "bytes": 1309786850,
    "package": "Security/Proofs",
@@ -11,12 +17,6 @@
    "package": "Security/Proofs",
    "run": "r20260929-032531-8f07",
    "sha256": "ab583debd99442d229191651497f784b71050bb57dd0384fb528bc74e24c75d8"
-  },
-  "936a4958079055b2af1cfcdc4c9fae5a0a91dc9ee5784dae0af9185a7a76b72c": {
-   "bytes": 701909680,
-   "package": "Security/Properties",
-   "run": "r20261003-152421-a7fe",
-   "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
   },
   "ffa0705a8465f9a411fd3d909dc363d6663eb036e64a49df98d1aa7d9ae9f682": {
    "bytes": 701909680,
