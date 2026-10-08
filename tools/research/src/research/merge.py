@@ -878,7 +878,8 @@ def unstacked(repo: Path, commit: str, base: str, remote: str, log=print) -> tup
                 continue
         ok.append((n, sha, onto))
         for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
-            for m in prs.get(h, []):
+            # a pull request whose head is N's own pinned head lands whole with N: it is no base left behind
+            for m in prs.get(h, []) if h != sha else ():
                 # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
                 if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
                     out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
