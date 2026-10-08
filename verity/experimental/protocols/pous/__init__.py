@@ -4,8 +4,9 @@
 Import from the owning module: `params`, `labels` (the bit layout), `oracle` (queries, programs and their rounds),
 `primitives` (`H`, `P_t` and their choices), `scheme` (encode, decode, per-segment decode), `layout` (tensors in `W`,
 per-tensor decode), `setup` (commit to `W`, the verifier's salt and `vk`), `verifier` (`vk`: per-block digests and the
-Merkle root), `audit` (the challenger, responders and the memory challengers) and `adversary` (partial holdings replayed
+Merkle root), `audit` (the challenger, responders and the unsigned timed rounds) and `adversary` (partial holdings replayed
 against the real labels).  `protocol` is the generic protocol over any scheme (abstract `Scheme`, `Certificate`,
-`MemoryChallenger`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).
+`TimedAudit`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).  `memory_challenger` is
+the memory challenger, which signs its rounds (`MemoryChallenger`).
 `PROTOCOL.md` says what is here, and `DISCREPANCIES.md` where the Lean model and the prose spec differ.
 """

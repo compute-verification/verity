@@ -103,12 +103,12 @@ def test_audit_through_the_interface(name):
     blocks = [b for seg in c for b in seg]
     key = protocol.challenge_key(b"audit secret", vk)
     with pytest.raises(ValueError, match="no certificate"):
-        protocol.MemoryChallenger(sch, vk, key, k=20, experimental=True)
-    v = protocol.MemoryChallenger(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
+        protocol.TimedAudit(sch, vk, key, k=20, experimental=True)
+    v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     profile = v.profile()
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
-    wrong = protocol.MemoryChallenger(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
+    wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert not wrong.run(lambda i: bytes(len(blocks[i]))).accepted
     with pytest.raises(ValueError, match="accepted"):
         wrong.profile()
@@ -227,12 +227,12 @@ def test_a_shared_domain_breaks_the_audit(name):
     shared = [sch.encode_segment(SALT, 0, seg) for _ in range(3)]
     vk_shared = VerifierKey.from_segments(sch.params, SALT, shared)
     held = shared[0]
-    v = protocol.MemoryChallenger(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
+    v = protocol.TimedAudit(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
                           experimental=True, clock=_ticks())
     assert v.run(lambda i: held[i % b]).accepted
     own = protocol.encode(sch, seg * 3, SALT)
     vk = VerifierKey.from_segments(sch.params, SALT, own)
-    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
+    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
                           clock=_ticks())
     assert not v.run(lambda i: own[0][i % b]).accepted
 
@@ -254,13 +254,13 @@ def test_the_14_gb_certificate():
     """448 segments (14 GB, where the family is also `BandMultiMeets14`) and 30 segments are certified, with no gap."""
     sch = schemes.get(segments=448)
     vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(32)] * sch.params.blocks)
-    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
+    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
     assert v.gaps == ()
     p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800,
                                 sch.certificate)
     assert p.certified and p.state_bound_bits == 113_929_658_799
     s30 = schemes.get(segments=30)
-    assert protocol.MemoryChallenger(s30, _fake_vk(s30), protocol.challenge_key(b"\x00" * 32, vk)).gaps == ()
+    assert protocol.TimedAudit(s30, _fake_vk(s30), protocol.challenge_key(b"\x00" * 32, vk)).gaps == ()
 
 
 def test_the_family_certificate_covers_a_70_gb_store():
@@ -353,8 +353,8 @@ def test_a_two_ms_deadline_is_refused_for_five_rounds():
     vk = _fake_vk(sch)
     k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="fits 8 calls of 241500 ns; the certificate covers 5"):
-        protocol.MemoryChallenger(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000)
-    research = protocol.MemoryChallenger(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000, research=True)
+        protocol.TimedAudit(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000)
+    research = protocol.TimedAudit(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000, research=True)
     assert any("covers 5" in g for g in research.gaps) and research.certificate.effective_rounds(research.limit_ns) == 8
 
 
@@ -364,19 +364,19 @@ def test_the_memory_challenger_enforces_the_certificate():
     sch = schemes.get()
     vk, key = _fake_vk(sch), b"\x00" * 32
     k = protocol.challenge_key(key, vk)
-    assert protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=36_800).k == 111
-    assert protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=948_999).gaps == ()
+    assert protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=36_800).k == 111
+    assert protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=948_999).gaps == ()
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=949_000)
+        protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=949_000)
     with pytest.raises(ValueError, match="below"):
-        protocol.MemoryChallenger(sch, vk, k, k=110, rtt_allowance_ns=224_500)
-    assert protocol.MemoryChallenger(sch, vk, k, k=110).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD2"
-    uncertified = protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=2_639_499, research=True)
+        protocol.TimedAudit(sch, vk, k, k=110, rtt_allowance_ns=224_500)
+    assert protocol.TimedAudit(sch, vk, k, k=110).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD2"
+    uncertified = protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=2_639_499, research=True)
     assert any("covers 5" in g for g in uncertified.gaps)
     with pytest.raises(ValueError, match="cliff"):
-        protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=2_639_500, research=True)
+        protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=2_639_500, research=True)
     with pytest.raises(ValueError, match="parameters"):
-        protocol.MemoryChallenger(schemes.get(segments=2), vk, k)
+        protocol.TimedAudit(schemes.get(segments=2), vk, k)
 
 
 def test_the_band_has_certificates_at_fewer_rounds():
@@ -412,29 +412,29 @@ def test_the_memory_challenger_audits_at_two_or_one_rounds_when_asked():
     sch = schemes.get()
     vk = _fake_vk(sch)
     key = protocol.challenge_key(b"\x00" * 32, vk)
-    assert protocol.MemoryChallenger(sch, vk, key).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamily"
-    assert protocol.MemoryChallenger(sch, vk, key, deadline_ns=300_000).k == 111
-    two = protocol.MemoryChallenger(sch, vk, key, k=97)
+    assert protocol.TimedAudit(sch, vk, key).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamily"
+    assert protocol.TimedAudit(sch, vk, key, deadline_ns=300_000).k == 111
+    two = protocol.TimedAudit(sch, vk, key, k=97)
     assert (two.k, two.certificate.theorem, two.gaps) == (97, "Pous.SecurityProofs.BandMultiMeetsFamilyD2", ())
-    assert protocol.MemoryChallenger(sch, vk, key, k=100, rtt_allowance_ns=224_499).certificate.rounds == 2
+    assert protocol.TimedAudit(sch, vk, key, k=100, rtt_allowance_ns=224_499).certificate.rounds == 2
     with pytest.raises(ValueError, match="below the certificate's 111; under Pous.SecurityProofs.BandMultiMeetsFamilyD2"
                                          ": .* fits 3 calls of 241500 ns; the certificate covers 2"):
-        protocol.MemoryChallenger(sch, vk, key, k=97, rtt_allowance_ns=224_500)
+        protocol.TimedAudit(sch, vk, key, k=97, rtt_allowance_ns=224_500)
     with pytest.raises(ValueError, match="covers 1, so Δ \\+ RTT must stay under 483000 ns"):
-        protocol.MemoryChallenger(sch, vk, key, k=93)
-    one = protocol.MemoryChallenger(sch, vk, key, k=93, deadline_ns=482_999)
+        protocol.TimedAudit(sch, vk, key, k=93)
+    one = protocol.TimedAudit(sch, vk, key, k=93, deadline_ns=482_999)
     assert (one.k, one.certificate.theorem, one.gaps) == (93, "Pous.SecurityProofs.BandMultiMeetsFamilyD1", ())
     with pytest.raises(ValueError, match="below the certificate's 93"):
-        protocol.MemoryChallenger(sch, vk, key, k=92, deadline_ns=482_999)
-    research = protocol.MemoryChallenger(sch, vk, key, k=92, deadline_ns=482_999, research=True)
+        protocol.TimedAudit(sch, vk, key, k=92, deadline_ns=482_999)
+    research = protocol.TimedAudit(sch, vk, key, k=92, deadline_ns=482_999, research=True)
     assert research.certificate.rounds == 5 and research.gaps == ("k = 92 is below the certificate's 111",)
     for d, k, deadline in ((4, 97, 500_000), (2, 97, 500_000), (1, 93, 482_999)):
         b = schemes.Band(band.BandParams(512, 524_288, d))
-        v = protocol.MemoryChallenger(b, _fake_vk(b), key, deadline_ns=deadline)
+        v = protocol.TimedAudit(b, _fake_vk(b), key, deadline_ns=deadline)
         assert (v.k, v.gaps, v.certificate.cliff) == (k, (), d)
     b1 = schemes.Band(band.BandParams(512, 524_288, 1))
     with pytest.raises(ValueError, match="past the cliff at 1"):
-        protocol.MemoryChallenger(b1, _fake_vk(b1), key)
+        protocol.TimedAudit(b1, _fake_vk(b1), key)
 
 
 def test_a_two_round_audit_gives_its_profile():
@@ -443,7 +443,7 @@ def test_a_two_round_audit_gives_its_profile():
     sch = schemes.get()
     blocks = [bytes(sch.params.block_bytes)] * sch.params.blocks
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
+    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
                           clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
@@ -458,8 +458,8 @@ def test_the_dense_certificate_has_no_cliff_but_the_same_rounds():
     vk = _fake_vk(sch)
     k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=949_000)
-    far = protocol.MemoryChallenger(sch, vk, k, rtt_allowance_ns=10_000_000, research=True)
+        protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=949_000)
+    far = protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=10_000_000, research=True)
     assert not any("cliff" in g for g in far.gaps)
 
 
@@ -470,7 +470,7 @@ def test_certified_profile_of_one_band12_segment():
     rng = random.Random(7)
     blocks = [rng.randbytes(sch.params.block_bytes) for _ in range(sch.params.blocks)]
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
+    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.gaps == () and p.effective_rounds == 2
@@ -479,7 +479,7 @@ def test_certified_profile_of_one_band12_segment():
     assert "given" not in p.statement()
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
-    late = protocol.MemoryChallenger(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
+    late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
     assert not late.run(protocol.responder(sch, blocks.__getitem__)).accepted
 
 
@@ -488,9 +488,9 @@ def test_many_segments_are_a_gap_not_a_refusal():
     and no guarantee covers the dense chain scheme at more.  The band's family pin covers every count, so two
     band segments have none."""
     band2 = schemes.get(segments=2)
-    assert protocol.MemoryChallenger(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
+    assert protocol.TimedAudit(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
     sch = schemes.get("dense-chain/v1", segments=2)
-    v = protocol.MemoryChallenger(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
+    v = protocol.TimedAudit(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
     assert v.gaps == ("W has 2 segments; Pous.SecurityProofs.ChainDenseMeets64 is about 1",)
 
 
@@ -526,14 +526,14 @@ def test_p2_is_experimental_and_says_so():
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
         key = protocol.challenge_key(b"\x00" * 32, vk)
         with pytest.raises(ValueError, match="experimental"):
-            protocol.MemoryChallenger(one, vk, key)
-        v = protocol.MemoryChallenger(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
+            protocol.TimedAudit(one, vk, key)
+        v = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
         assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
-        capped = protocol.MemoryChallenger(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
+        capped = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
         assert capped.limit_ns == 854_000 and capped.k == 105 and capped.certificate == cert
         for rtt in (RTT_ALLOWANCE_CAP_NS + 1_000, 1_000_000):
             with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854029 ns"):
-                protocol.MemoryChallenger(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
+                protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
         p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
                                     experimental=sch.experimental)
         assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({sch.experimental}). ")
@@ -598,9 +598,9 @@ def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_u
     key = protocol.challenge_key(b"\x00" * 32, vk)
     edge = ROOT_CALL_NS - 1 - delta
     assert edge - RTT_ALLOWANCE_CAP_NS == 28
-    assert protocol.MemoryChallenger(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge).k == 105
+    assert protocol.TimedAudit(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge).k == 105
     with pytest.raises(ValueError, match="must stay under 854029 ns"):
-        protocol.MemoryChallenger(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge + 1)
+        protocol.TimedAudit(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge + 1)
     cooperating_root = 2 * half
     assert cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS) >= 2 > cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS + 1_000)
 
