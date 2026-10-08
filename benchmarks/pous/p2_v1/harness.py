@@ -4,7 +4,7 @@ The kernels take a setup's key prefix, so one arm runs either framing:
 
 - `V1` (`p2-v1-gpu`): the frozen v1 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v3`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
-  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.MemoryChallenger` through `band_gpu/memory_challenger.py --strict`, which
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `band_gpu/memory_challenger.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
   with v3's own codec back to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
@@ -106,7 +106,7 @@ class V1:
 class V3(V1):
     """`p2-16448/v3` (`verity.experimental.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under v3's
     manifest, `protocol.draw_salt`'s 24-byte salt, v3's key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.MemoryChallenger` (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the
+    leaves, audited by `protocol.TimedAudit` (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
@@ -298,7 +298,7 @@ def payload_bytes(m: Any, params: R.Params, used: int) -> Any:
 
 def profile(k: int, limit_ns: int, gaps: tuple[str, ...], scheme: str = R.PROTOCOL,
             storage: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The run's profile; `storage` is `protocol.MemoryChallenger`'s `StorageProfile` of the audit of record (v3), whose
+    """The run's profile; `storage` is `protocol.TimedAudit`'s `StorageProfile` of the audit of record (v3), whose
     `certified` it reports alongside the arm's own gaps."""
     return {"scheme": scheme, "k": k, "limit_ns": limit_ns, "rho": "18/19", "error": "1% + 2^-128", "pins": list(PINS),
             "assumptions": list(ASSUMPTIONS), "gaps": list(gaps),
@@ -537,7 +537,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     if "--strict" in fr.memory_challenger_args:
         gates["certificate"] = {"passed": not honest.get("refused") and bool(honest.get("audits")),
                                 "refused": honest.get("refused"), "memory_challenger_gaps": honest.get("gaps"),
-                                "note": "protocol.MemoryChallenger refuses any k or Δ + RTT the certificate does not cover; the "
+                                "note": "protocol.TimedAudit refuses any k or Δ + RTT the certificate does not cover; the "
                                         "gaps it lists (such as W's segment count) are reported, not refused"}
         gaps += tuple(honest.get("gaps") or ())
     deadline = {"limit_ns": limit, "limit_fixed_before_load": bool(honest.get("limit_fixed_before_load")),

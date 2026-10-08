@@ -9,7 +9,7 @@ import random
 import pytest
 
 from verity.experimental.protocols.pous import setup
-from verity.experimental.protocols.pous.audit import (DEADLINE_NS, HonestResponder, MemoryChallenger, challenge_key, deadline_rounds, run_timed,
+from verity.experimental.protocols.pous.audit import (DEADLINE_NS, HonestResponder, UnsignedRounds, challenge_key, deadline_rounds, run_timed,
                                simulate)
 from verity.experimental.protocols.pous.oracle import PQuery, Tweak, pure
 from verity.experimental.protocols.pous.params import Params
@@ -111,12 +111,12 @@ def test_memory_challenger(world):
     _, _, enc, vk = world
     key = challenge_key(b"audit", vk)
     responder = HonestResponder(enc, tree(enc))
-    assert run_timed(MemoryChallenger(vk, key, k=30, clock=itertools.count(0, 1000).__next__), responder.block).accepted
-    assert run_timed(MemoryChallenger(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
+    assert run_timed(UnsignedRounds(vk, key, k=30, clock=itertools.count(0, 1000).__next__), responder.block).accepted
+    assert run_timed(UnsignedRounds(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
 
     assert DEADLINE_NS == 500_000
     clock = FakeClock()
-    v = MemoryChallenger(vk, key, k=3, rtt_allowance_ns=40_000, clock=clock)
+    v = UnsignedRounds(vk, key, k=3, rtt_allowance_ns=40_000, clock=clock)
     assert v.limit_ns == 540_000
     i = v.challenge()
     with pytest.raises(RuntimeError):

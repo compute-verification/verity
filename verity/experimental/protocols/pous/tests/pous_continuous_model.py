@@ -7,7 +7,7 @@ Two restatements of one set of rules:
   definition, which is its docstring after the first line, and `test_the_oracle_transcribes_the_lean_model` finds that
   text verbatim in the Lean file the first line names. A responder is a `ContMachine` (`rest`, `step`) whose `W`, `pp`,
   `C` and `ω` are fixed for a run and so closed over, and `f` is the primitive that answers its queries.
-* **On the verifier's clock** (`ClockOracle`): the same rules on what `audit.MemoryChallenger` observes, nanoseconds on its
+* **On the verifier's clock** (`ClockOracle`): the same rules on what `audit.UnsignedRounds` observes, nanoseconds on its
   own clock. `(D, Q)` becomes `limit = Δ + RTT` and `(D_late, Q_late)` becomes `late_limit = Δ_late + RTT`, or `None`
   for a verifier without a hard deadline, which waits for every answer.
 
