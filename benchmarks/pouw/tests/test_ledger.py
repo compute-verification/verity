@@ -280,10 +280,10 @@ end Pouw.Guarantees.PearlC
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
     lean = tmp_path / "Security"
-    (lean / "Specs" / "Pouw" / "Guarantees").mkdir(parents=True)
-    (lean / "Specs" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    (lean / "Models" / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / "Models" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Specs.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "reads": {"Models.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
     return audit, lean
 
 
