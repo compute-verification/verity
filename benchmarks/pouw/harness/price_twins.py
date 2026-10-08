@@ -5,7 +5,7 @@ A twin is one pinned theorem: the Gγ statement of a device record at a cast (FP
 function (v1-hot, v2-hot, Pearl-C4 v1 and v2). Its key is
 
   statement   the panel line and version it is γ for, hashing format aside: pearl-c-sm120/v2, pearl-c-fp4/v1, ...
-  path        the priced path, as `verity.protocols.accounting.work.pouw.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
+  path        the priced path, as `verity.experimental.protocols.pouw.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
               statement's), cast-8.72, cast-16, cast-32, cast-32.06; lut256 or rcpApprox for Pearl-C4's block scale
   fadd        the FP32 add's W1 price: 8 (the cheapest bit-exact FADD) or 1047/125 (the measured in-loop one)
   reading     forming-credited, chain-only or chain-cap
@@ -47,8 +47,8 @@ FADD_PRICES = (Fraction(8), Fraction(1047, 125))
 #: staged with a red-team GO (price-twins-lean/README.md)
 LEAN_STORE = "lean/submissions/pouw/lean-audit.json"
 #: the repository's security analysis audit, where PoUW's pins land now; read after the store's files, so a pin they hold keeps its row
-REPO_AUDIT = HERE.parents[2] / "verity" / "Security" / "lean-audit.json"
-REPO_SOURCE = "verity/Security/lean-audit.json"
+REPO_AUDIT = HERE.parents[2] / "Security" / "lean-audit.json"
+REPO_SOURCE = "Security/lean-audit.json"
 STAGED = ("internal/pouw/price-twins-lean/proposed-pins.json", "internal/pouw/price-twins-lean/v2-hot/v2-hot-pins.json",
           "internal/pouw/price-twins-lean/v1-hot/v1-hot-pins.json", "internal/pouw/price-twins-lean/fp4-delta/fp4-delta-pins.json")
 CASTS = {"8": "cast-8", "8p72": "cast-8.72", "16": "cast-16", "32": "cast-32", "32p06": "cast-32.06"}
@@ -92,7 +92,7 @@ def _q(num: str, den: str | None) -> Fraction:
 def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
     """The body of each `Pouw.Guarantees` definition that the audit's `reads` record, from its module's source under `lean`,
     with whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix, or
-    `def _root_.G : Prop :=` in any namespace (how `tools/lean/audit.py --lift` writes it)."""
+    `def _root_.G : Prop :=` in any namespace (how `tools/verity/lean/check.py --lift` writes it)."""
     out = {}
     for module, group in audit.get("reads", {}).items():
         names = [d for d in group.get("definitions", {}) if d.startswith("Pouw.Guarantees.")]
@@ -120,10 +120,16 @@ def _statement(name: str, pin: dict, defs: dict[str, str]) -> tuple[str, bool]:
     return sig, False
 
 
+def _short(name: str) -> str:
+    """A pin's name before its lift: `Pouw.SecurityProofs.PearlC.GammaX` and `Pouw.PearlC.pearlCGammaX` are both
+    `pearlCGammaX`."""
+    return re.sub(r"^Pouw\.SecurityProofs\.PearlC\.(?=Gamma|Sampled)", "pearlC", name).removeprefix("Pouw.PearlC.")
+
+
 def parse(name: str, pin: dict, defs: dict[str, str] | None = None) -> dict | None:
     """One pin as a twin, or None when it isn't one; TwinError when its name and its statement disagree, or when it is a
     lifted guarantee whose definition `defs` (`lifted_definitions`) doesn't give or whose statement isn't a twin."""
-    short = re.sub(r"^Pouw\.SecurityProofs\.PearlC\.(?=Gamma|Sampled)", "pearlC", name).removeprefix("Pouw.PearlC.")
+    short = _short(name)
     if not any(r.fullmatch(short) for r in (_FP8, _HOT, _FP4)):
         return None
     sig, lifted = _statement(name, pin, defs or {})
@@ -210,7 +216,7 @@ def guarantees(doc: dict) -> dict[str, dict]:
 
 def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
     """The table from the POUS Project store at `root` and the repository's audit: every twin, one per pin (the Lean
-    store's copy of a pin first, the repository's last)."""
+    store's copy of a pin first, the repository's last, a pin the store holds by its name before its lift included)."""
     files = {rel: root / rel for rel in (LEAN_STORE, *STAGED)} | {REPO_SOURCE: repo_audit}
     pinned: dict[str, str] = {}
     for rel in (REPO_SOURCE, LEAN_STORE):
@@ -222,8 +228,8 @@ def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
         rows = extract(guarantees(json.loads(raw)), rel, pinned, defs)
         sources.append({"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
         for r in rows:
-            if r["pin"] not in seen:
-                seen.add(r["pin"])
+            if _short(r["pin"]) not in seen:
+                seen.add(_short(r["pin"]))
                 twins.append(_jsonable(r))
     keys = [(t["statement"], t["path"], t["fadd"], t["reading"], t["kind"], t["shape"], t["sizing"], t["cap"]) for t in twins]
     dup = sorted({k for k in keys if keys.count(k) > 1})

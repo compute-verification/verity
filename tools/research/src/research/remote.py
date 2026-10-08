@@ -449,10 +449,13 @@ QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's 
 
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (tools/cluster). Refused when the queue refuses the job."""
-    src = Path(source) / "tools" / "cluster" if source is not None else None
+    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
+    from .store import tools_registry
+
+    src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
+           if source is not None else None)
     if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
-        raise Refused("--queue: the --source tree has no tools/cluster with `cluster submit` (the queue's description and client)")
+        raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
@@ -1666,6 +1669,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
+                   **({"submitted_by": by} if (by := os.environ.get("RESEARCH_AGENT_URL")) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
@@ -1784,6 +1788,26 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
 
 
+def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
+    """Why a run whose status isn't terminal has no runner on its machine, or None while it may have one: the machine rebooted
+    since the runner started (job.json's boot id), or the pid is gone where the runner ran in the machine's own pid namespace
+    (job.json's hostname is the machine's; a Kubernetes pod's runner isn't visible from the host). Unreadable is None."""
+    env = (_read_json(local_dir / "job.json") or {}).get("environment") or {}
+    if not env.get("boot_id"):
+        return None
+    probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
+                                      "|| echo gone"], timeout=120)
+    lines = probe.stdout.decode(errors="replace").split() if probe.returncode == 0 else []
+    if len(lines) != 3:
+        return None
+    boot, host, alive = lines
+    if boot != env["boot_id"]:
+        return f"the machine rebooted since its runner started (boot {env['boot_id']}, now {boot})"
+    if host == env.get("hostname") and alive == "gone":
+        return f"its runner (pid {pid}) is gone without recording an end"
+    return None
+
+
 def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir.  Unreachable -> observed_utc unchanged, reason recorded."""
     rec = _read_json(local_dir / "remote.json")
@@ -1818,6 +1842,10 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
     rec.pop("launcher_exited", None)
+    rec.pop("runner_gone", None)
+    if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
+        if why := _runner_gone(ssh, local_dir, st["pid"]):
+            rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
@@ -1837,7 +1865,7 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
 
 #: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py
 #: --slots` does) for the check and Lean slots a run holds or waits on; without them the reading has no slots
-CHECK_DIR = Path(__file__).resolve().parents[3] / "check"
+CHECK_DIR = Path(__file__).resolve().parents[3] / "verity" / "check"
 #: what `node_readings` runs on a machine as `python3 - RUN_DIR...`, after `SRC = {...}`: research.scopemem's `node`
 NODE_PROGRAM = '''
 import json, sys, types
@@ -1852,8 +1880,8 @@ def load(name, src, file):
 
 
 mem = load("research_scopemem", SRC["scopemem"], "research/scopemem.py")
-mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/check/slot.py"),
-        load("check_lean_slot", SRC["lean"], "tools/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
+mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/verity/check/slot.py"),
+        load("check_lean_slot", SRC["lean"], "tools/verity/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
 print(json.dumps(mem.node(sys.argv[1:], slot_mods=mods)))
 '''
 

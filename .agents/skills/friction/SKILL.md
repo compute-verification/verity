@@ -38,7 +38,8 @@ Say what you fixed in the PR description. It needs no note.
 ## 2. Ask, when you can't tell
 
 A change is near the line when it changes what other agents must do or what a gate accepts, touches another lane's
-in-flight files, spends money, deletes others' work, or changes agreed semantics or acceptance criteria. Read the rulings
+in-flight files, spends money past its `budgets.toml` line, deletes others' work, or changes agreed semantics or acceptance
+criteria. Read the rulings
 below first, and follow one if it covers the case. Otherwise ask:
 
 - one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
@@ -100,6 +101,22 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-07 (3:54 PM PDT; 3:25 PM PDT: "skip check more", revert what breaks): `main` always passes the whole `check`,
+  kept fast by reusing each part's verdict while its declared inputs, the base image and the check's code are unchanged;
+  the merge queue runs it on the queued group, and a nightly uncached check must agree (the CI page in Notion). Until
+  reuse and the queue exist, a change lands by hand once every part whose declared inputs it touches passes; layout
+  moves and check or merge tooling get a full `check` first; a full `check` of the newest `main` follows on vy-nebius-1,
+  and the landing that fails it is reverted at once (`AGENTS.md`, "Checking and merging"). Effort goes into reuse
+  (declared inputs, a verdict cache, Lean replay per module), not into teaching `research merge` to land on part of a
+  check. Before an expensive step (a full check, a move window), rehearse the cheap one after it: `research merge
+  --dry-run` against a scratch `main` would have shown on 7 Oct, ten hours earlier, that main's gate could accept no
+  check of the moved tree.
+- 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
+  rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
+  This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
+- 2026-10-06 (8:00 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
+  `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
+  question.
 - 2026-10-06 (9:49 AM PDT): the repository becomes the minimal, DRY implementation of the system as now decided. Every
   owner removes the smells it finds in its own files without asking: code serving a retired question, two sources of
   truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired process,
@@ -107,7 +124,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   unclear (it changes agreed semantics, deletes what another owner may use, or crosses owners) goes to Daniel with a
   recommendation.
 - 2026-10-06 (9:45 AM PDT): the benchmark comparison tables (`verity_numerical.bench`'s `views`, `tables`, `drilldown`
-  and `store_tables`, spec `kb/TABLES.md`) and `verity.claims`, their label registry, go to `archive/`; the docs site is
+  and `store_tables`, spec `kb/TABLES.md`) and `verity.experimental.claims`, their label registry, go to `archive/`; the docs site is
   Daniel's to settle later. A certificate cites the Lean assumptions it rests on by name. The circuit templates, input
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:
@@ -179,7 +196,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
   and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
   `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
-- 2026-10-05 (8:53 AM PDT): the Lean audit is the Lean check. `tools/lean/audit.py` becomes `lean_check.py` (the CI
+- 2026-10-05 (8:53 AM PDT): the Lean audit is the Lean check. `tools/verity/lean/check.py` becomes `lean_check.py` (the CI
   step `lean-check`), and each package's `lean-audit.json` becomes `lean-lock.json`, its lock. The alert that DMs
   Daniel treats the renamed lock as a move, so the rename sends no DM. Until lean's rename lands, docs say "the Lean
   check" and "the lock" and keep the current paths.
@@ -199,7 +216,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   proof, and progress is never measured by which workloads' files fall inside a proof's scope. Pushback is welcome:
   send it to Daniel through @proofs.
 - 2026-10-03: a test tier too slow for `check` (the vLLM reference regression's manifest rebuilds, about an hour) runs as a
-  detached job after each train lands on `main` (`tools/check/post_train.py`, started by `research merge --push`) and labels
+  detached job after each train lands on `main` (`tools/verity/check/post_train.py`, started by `research merge --push`) and labels
   the landing's check attempt `note=regression pass` or `fail:<rows>`, which circuits sweeps daily; `check` blocks on the
   cheap tier only (its T0 checks, about four minutes), and under `VERITY_STORE_REQUIRED=1` a fixture or input that doesn't
   resolve fails rather than skips.
@@ -207,13 +224,13 @@ Newest first. Each is Daniel's unless it names the coordinator.
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
 - 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`ALLOWED` in
-  `verity/tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
+  `tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
   edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
   for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
   guarantees. Its package clause is superseded by the Lean layout move (2026-10-06): every proof is in
-  `verity/Security/Proofs`, whose package requires C-Flock's verifier.
+  `Security/Proofs`, whose package requires C-Flock's verifier.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
@@ -259,7 +276,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   said yes to, each naming its research question (`--question`, or a `question` label on its run). There is no filler:
   idle GPUs beat padded ones, a steward reports idle GPUs instead of offering them as backfill, and approved backfill runs
   on preemptible leases.
-- 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
+- 2026-09-30: the Lean infrastructure lane changes `tools/verity/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
   Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
   lane's proofs when no guarantee's record changes; a changed record in another lane's package goes through that lane. What a
   headline theorem may rest on, what "proved" means, retiring a theorem a table cites, spend past a budget line and any

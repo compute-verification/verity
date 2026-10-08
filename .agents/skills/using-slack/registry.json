@@ -51,7 +51,7 @@
       "usergroup": "S0C5APDSYF9",
       "owns": [
         "infra/",
-        "tools/cluster/",
+        "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
         "benchmarks/judge.py"
@@ -65,8 +65,7 @@
       "usergroup": "S0C5Q6KJZTQ",
       "owns": [
         "verity/",
-        "backends/",
-        "verity/protocols/verification/sampled_proofs/",
+        "verity/experimental/protocols/sampled_proofs/",
         "benchmarks/one_stage/",
         "benchmarks/commitments/",
         "archive/sp1/benchmarks/dot_product/",
@@ -83,27 +82,27 @@
       "usergroup": "S0C5U3LHMFT",
       "owns": [
         "integrations/",
-        "tools/circuit_check/",
-        "tools/native_peak/",
-        "tools/tc_probe/",
-        "tools/tc_probe_fp4/",
-        "catalog/verity_catalog/definitions/"
+        "tools/verity/circuit_check/",
+        "benchmarks/native_peak/",
+        "benchmarks/tc_probe/",
+        "benchmarks/tc_probe_fp4/",
+        "verity/ml/circuits/ops/"
       ]
     },
     {
       "handle": "compute-accounting",
       "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
-      "remit": "Proof of useful work: verity/protocols/accounting/work/pouw, its schemes and their runs.",
+      "remit": "Proof of useful work: verity/experimental/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD",
       "owns": [
-        "verity/protocols/accounting/work/pouw/",
-        "verity/Security/Definitions/Pouw/",
-        "verity/Security/Specs/Pouw/",
-        "verity/Security/Proofs/Pouw/",
-        "verity/Security/Definitions/Nci.lean",
-        "verity/Security/Specs/Nci/",
-        "verity/Security/Proofs/Nci/",
+        "verity/experimental/protocols/pouw/",
+        "Security/Definitions/Pouw/",
+        "Security/Models/Pouw/",
+        "Security/Proofs/Pouw/",
+        "Security/Definitions/Nci.lean",
+        "Security/Models/Nci/",
+        "Security/Proofs/Nci/",
         "benchmarks/pouw/",
         ".agents/skills/kernel-engineering/"
       ]
@@ -111,28 +110,28 @@
     {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
-      "remit": "Proof of useful space: verity/protocols/accounting/space/pous, its Lean package and its runs.",
+      "remit": "Proof of useful space: verity/experimental/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE",
       "owns": [
-        "verity/protocols/accounting/space/pous/",
-        "verity/Security/Definitions/Pous/",
-        "verity/Security/Specs/Pous/",
-        "verity/Security/Proofs/Pous/",
+        "verity/experimental/protocols/pous/",
+        "Security/Definitions/Pous/",
+        "Security/Models/Pous/",
+        "Security/Proofs/Pous/",
         "benchmarks/pous/"
       ]
     },
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
-      "remit": "Network accounting: the network certifier (verity/protocols/accounting/communication/certifier) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/experimental/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
       "owns": [
-        "verity/protocols/accounting/communication/certifier/",
-        "verity/Security/Definitions/NetworkCertifier/",
-        "verity/Security/Specs/NetworkCertifier/",
-        "verity/Security/Proofs/NetworkCertifier/",
+        "verity/experimental/protocols/certifier/",
+        "Security/Definitions/NetworkCertifier/",
+        "Security/Models/NetworkCertifier/",
+        "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
       ]
     },
@@ -143,7 +142,7 @@
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
       "usergroup": "S0C5LSDENA1",
       "owns": [
-        "catalog/census/"
+        "benchmarks/census/"
       ]
     },
     {
@@ -153,7 +152,7 @@
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": null,
       "owns": [
-        "tools/check/",
+        "tools/verity/check/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"
@@ -166,9 +165,9 @@
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": null,
       "owns": [
-        "tools/lean/",
+        "tools/verity/lean/",
         ".agents/skills/lean-proofs/",
-        "verity/Security/"
+        "Security/"
       ]
     },
     {

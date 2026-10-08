@@ -2,8 +2,8 @@
 29 Sep 2026): the reference the harness's GPU kernels are gated against.
 
 A port of the P2 lane's `internal/efficient-crypto/p2-bounty-kit/p2_ref.py`: `randomness_v1.frame` and `derive` beside it are
-the spec's framing and derivation (`verity.primitives.randomness` v1, SHA-256, which core has since moved to SHA-512), and
-`verity.primitives.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
+the spec's framing and derivation (`verity.ml.randomness` v1, SHA-256, which core has since moved to SHA-512), and
+`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
 `powmod` when it is installed). It is pinned by `vectors.json` beside it, the kit's `p2-test-vectors/v1` (SHA-256
 `781fec77…`, the file hash in the spec's §7).
 
@@ -21,7 +21,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.primitives.commitments.identity import canonical_json_bytes
+from verity.ml.commitments.identity import canonical_json_bytes
 
 from .randomness_v1 import Key, derive, frame
 
@@ -38,7 +38,7 @@ DELTA_NS = 500_000
 MAX_RTT_ALLOWANCE_NS = 354_000
 """Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, Daniel's ruling of 4 Oct
 2026, so that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
-(`verity.protocols.accounting.space.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
+(`verity.experimental.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:
     import gmpy2
@@ -66,6 +66,8 @@ class Params:
             raise ValueError("P2 needs w a multiple of 32 bits and c0 = 1 mod 4 with p = 2^w - c0 = 3 mod 4")
         if not 0 < self.payload_bytes < self.width_bytes:
             raise ValueError("a payload is fewer bytes than a block")
+        if self.p <= 1 << 8 * self.payload_bytes:
+            raise ValueError("every payload is below p")
 
     @property
     def p(self) -> int:
@@ -108,8 +110,14 @@ def expand_prefix(salt: bytes, params: Params, model: bytes) -> bytes:
 
 def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
     """Block `(segment, block)`'s full-width mask `K`, its tweak `t` (uniform below `p`) and `t`'s candidate index."""
+    return keys_after(expand_prefix(salt, params, model), params, segment, block)
+
+
+def keys_after(prefix: bytes, params: Params, segment: int, block: int) -> tuple[int, int, int]:
+    """`keys` after any framing's `prefix`: v1's (`expand_prefix`), or `p2-16448/v3`'s, whose prefix frames the protocol's
+    24-byte salt and no model commitment (`verity...schemes.p2.expand_prefix`)."""
     n = params.width_bytes
-    base = expand_prefix(salt, params, model) + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
+    base = prefix + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
     k = int.from_bytes(hashlib.shake_256(base + b"K").digest(n), "big")
     stream = hashlib.shake_256(base + b"t")
     attempt = 0
