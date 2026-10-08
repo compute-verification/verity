@@ -1,8 +1,8 @@
 ---
 name: friction
 description: >
-  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself when the change is clearly yours,
-  ask Daniel when you can't tell, record his ruling so nobody asks the same question twice, or leave a short friction note
+  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask Daniel only when it is money,
+  keys or a claim, record his ruling so nobody asks the same question twice, or leave a short friction note
   when you can't fix it now. Holds the rulings so far on which changes an agent makes without asking (spend, gates in
   `check`, tests, shared tools, other lanes' work) and the `kind: friction` note format with its `severity: incident` flag.
   Use when you worked around something, a step bit you twice, you see a better abstraction, you're unsure whether a change
@@ -38,15 +38,16 @@ Say what you fixed in the PR description. It needs no note.
 ## 2. Ask, when you can't tell
 
 A change is near the line when it changes what other agents must do or what a gate accepts, touches another lane's
-in-flight files, spends money past its `budgets.toml` line, deletes others' work, or changes agreed semantics or acceptance
-criteria. Read the rulings
-below first, and follow one if it covers the case. Otherwise ask:
+in-flight files, or deletes others' work. Read the rulings below first, and follow one if it covers the case. Otherwise
+ask:
 
-- one stand-alone question to your coordinator (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or
-  reply to the coordinator that launched it). The coordinator answers from the rulings when one applies, and
-  otherwise puts the question to Daniel as written;
+- one stand-alone question to the owner of what the change touches, or to your coordinator when owners disagree or you
+  can't tell who owns it (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or reply to
+  the coordinator that launched it). The coordinator decides, and says what it decided. Only money (spend past a
+  `budgets.toml` line), keys (access, a credential, a node's root) and claims (what a guarantee says or rests on) go on to
+  Daniel, as written;
 - the case, the change, and your recommendation, in a few lines;
-- meanwhile, prepare the change on your branch, and land it only after the ruling.
+- meanwhile, prepare the change on your branch, and mark it ready only after the answer.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`, and put the
 proposal in the question.
@@ -94,13 +95,29 @@ writes it under the Project store's `internal/lanes/<lane>/`, which the mirror f
 private (lane contract §5b).
 
 **The coordinator's pass.** The root coordinator reads new friction notes once a day in its existing loop
-(`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to someone, or
-into a question for Daniel.
+(`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
+Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
 
 ## Rulings so far
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. It ends in a break tied to the run, such as
+  two distinct inputs the run itself hashed with one SHA-512 digest, and an input condition becomes the verifier's
+  refusal rather than a hypothesis. The form is in `.agents/skills/lean-proofs/SKILL.md`.
+- 2026-10-08 (7:16 AM PDT): research waits on Daniel only for money, keys and claims: spend past a budget line, access
+  and keys (a node's root, a credential), and what a guarantee says or rests on. Everything else is its owner's call, or
+  the coordinator's when owners disagree, and the owner says what it decided. The clauses below that sent anything else to
+  him are rewritten. The same day:
+  - a lane works toward one or two outcomes a night, each with a done-condition anyone can check; its lead proposes them
+    and Daniel approves or edits them in one pass. The coordinator's reports lead with which outcomes moved and what
+    blocked the rest, not with landing counts;
+  - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
+    back only if the PR fails. A lane holds at most two open PRs;
+  - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
+    Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
+  - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
+    them aren't proven yet.
 - 2026-10-07 (3:54 PM PDT; 3:25 PM PDT: "skip check more", revert what breaks): `main` always passes the whole `check`,
   kept fast by reusing each part's verdict while its declared inputs, the base image and the check's code are unchanged;
   the merge queue runs it on the queued group, and a nightly uncached check must agree (the CI page in Notion). Until
@@ -120,19 +137,18 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-06 (9:49 AM PDT): the repository becomes the minimal, DRY implementation of the system as now decided. Every
   owner removes the smells it finds in its own files without asking: code serving a retired question, two sources of
   truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired process,
-  structure that doesn't earn itself, and dead references. Directory moves wait for the consolidation move. What is
-  unclear (it changes agreed semantics, deletes what another owner may use, or crosses owners) goes to Daniel with a
-  recommendation.
+  structure that doesn't earn itself, and dead references. Directory moves wait for the consolidation move. What
+  deletes what another owner may use, or crosses owners, goes to that owner, and the coordinator settles a disagreement;
+  only a change to a claim goes to Daniel (8 Oct).
 - 2026-10-06 (9:45 AM PDT): the benchmark comparison tables (`verity_numerical.bench`'s `views`, `tables`, `drilldown`
-  and `store_tables`, spec `kb/TABLES.md`) and `verity.core.claims`, their label registry, go to `archive/`; the docs site is
-  Daniel's to settle later. A certificate cites the Lean assumptions it rests on by name. The circuit templates, input
+  and `store_tables`, spec `kb/TABLES.md`) and `verity.core.claims`, their label registry, go to `archive/`. A
+  certificate cites the Lean assumptions it rests on by name. The circuit templates, input
   sets and generators stay live.
 - 2026-10-06 (9:32 AM PDT): the repository is consolidated in one pure move after the current trains land:
   `backends/flock` becomes `flock/`, `integrations/vllm` becomes `vllm/`, the GPU probes go to `benchmarks/`, the
   frozen numerical work goes to `archive/`, and `verity/protocols/accounting/{work,space,communication}/<name>` flattens
   to `verity/protocols/<name>`. Whether the cluster and repository tools live in `tools/` or `infra/` is infra's
-  recommendation to make, and the full tree is being settled with Daniel. "Network transparency" is "network
-  accounting".
+  call. "Network transparency" is "network accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
   tip that pins the old one at landing, and their checks are spent for nothing.
@@ -186,8 +202,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   the integrity profile, and no protocol keeps its own copy of them.
 - 2026-10-05 (7:11 PM PDT): a circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the
   circuit accepting implies the verifier of record accepts; completeness stays a test.
-- 2026-10-05: don't resume or re-dispatch a turn cut off by a console drop or a provider outage unless Daniel asks;
-  report it to your coordinator and wait.
+- 2026-10-05 (rewritten 8 Oct): a lead resumes or re-dispatches a turn cut off by a console drop or a provider outage on
+  its own judgment, and tells its coordinator.
 - 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. Nothing reaches a running agent:
   a `Task` resume is refused, another agent's `SendToAgent` refuses it ("not a worker of this coordinator") and its
   dashboard follow-up box is disabled. So the Lean move lead went 85 minutes unreachable. Every brief therefore names an
@@ -196,10 +212,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
   and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
   `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
-- 2026-10-05 (8:53 AM PDT): the Lean audit is the Lean check. `tools/verity/lean/check.py` becomes `lean_check.py` (the CI
-  step `lean-check`), and each package's `lean-audit.json` becomes `lean-lock.json`, its lock. The alert that DMs
-  Daniel treats the renamed lock as a move, so the rename sends no DM. Until lean's rename lands, docs say "the Lean
-  check" and "the lock" and keep the current paths.
+- 2026-10-05 (8:53 AM PDT), superseded: `main` kept `tools/verity/lean/check.py` and each package's `lean-audit.json`
+  under their names (`f507299a4`), so no rename is pending. What stands: the Lean audit is the Lean check.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
   piece that doesn't wait on another (Lean ones in separate checkouts), and spends compute wherever it shortens the
   critical path: reruns, check capacity, extra CPU pods. Pods still bound themselves under a `budgets.toml` line, and GPU
@@ -224,8 +238,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   retention rm --approved-by @OWNER`, which refuses unless every retention record on the path names that owner; never a bare
   `rm`, and never on another lane's word about who owns it.
 - 2026-10-03 (card `d9eb2f28`): PoUW may import sampled proofs, in Python (`ALLOWED` in
-  `tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is still Daniel's call, and the
-  edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
+  `tests/test_boundaries.py`) as in Lean. Any other protocol → protocol import is the importing protocol's owner's
+  call, told to the imported one's owner, and the edges stay acyclic. The layout that follows (lean with compute-accounting): a protocol guarantee that needs a proof
   system (PoUW's `TileProofSoundAll`) is stated over sampled proofs' statements of what a backend proves (its soundness on
   registered inputs, and the honest prover's membership in the backend's class), which the backend's own package proves
   for itself. No package requires both a protocol and a backend, there is no `bridges/` layer, and a citation names both
@@ -246,8 +260,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-01 (3:32 PM PDT): no protocol deals with public values, so none gets an exemption; PoUW's tile check moves into
   a proof. During development a proof may be replaced by replay, or verification skipped, for research velocity: that's
   a shortcut, never the protocol. Its clause letting shapes stay public is superseded (2026-10-05, 7:48 PM PDT).
-- 2026-10-01 (2:43 PM PDT): a decision Daniel must make goes where Slack notifies him, never only in a note or a lead's
-  thread. Use one question per post, with its options, your recommendation, and its deadline or default:
+- 2026-10-01 (2:43 PM PDT): a decision Daniel must make (money, keys or a claim, since 8 Oct) goes where Slack notifies
+  him, never only in a note or a lead's thread. Use one question per post, with its options, your recommendation, and its deadline or default:
   `research msg ask-daniel` (the card mentions him), or, if the card fails, `research msg send --to @daniel`.
 - 2026-10-01 (1:14 PM PDT; this wording 3:06 PM): the circuit holds only gates, and values are always hidden, the core
   guarantee of even the most basic protocol. An operation's own definition is gates: the floating-point formats'

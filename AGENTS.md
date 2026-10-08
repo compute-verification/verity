@@ -212,7 +212,7 @@ Until reuse and the merge queue exist:
     in `Proofs.Flock` until its spec is extracted.
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
-- **The Lean check.** Every Lake package has a lock, `lean-audit.json` until lean renames it `lean-lock.json`, and `check` runs the Lean check on every declaration
+- **The Lean check.** Every Lake package has a lock, `lean-audit.json`, and `check` runs the Lean check on every declaration
   (`tools/verity/lean/check.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
@@ -243,12 +243,13 @@ Glossary, the skills, READMEs, docstrings and CLI help. When code has to change 
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
 
-Make reversible engineering decisions yourself. When a tool, rule or step gets in your way, fix it at the source if the
-fix is clearly yours. Surface changes to agreed semantics, acceptance criteria, material spending or destructive
-behavior. When you can't tell which side a change is on, ask Daniel through your coordinator, with your recommendation,
-and record his ruling. The friction skill, `.agents/skills/friction/SKILL.md`, has the rulings so far and the friction
-notes. Daniel tunes two balances through those rulings: how much cross-agent chatter and note-taking, and how much
-autonomy versus asking him. On 6 Oct he set the second toward autonomy: be generous and cut ceremony.
+Make every decision yourself except money, keys and claims (Daniel, 8 Oct). Spend past a budget line, access and keys,
+and what a guarantee says or rests on go to Daniel through your coordinator, with your recommendation. A change that
+crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
+your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
+`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes. Daniel tunes two balances through those
+rulings: how much cross-agent chatter and note-taking, and how much autonomy versus asking him. On 6 Oct he set the
+second toward autonomy (be generous and cut ceremony), and on 8 Oct he cut what waits on him to money, keys and claims.
 
 A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
 results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
@@ -299,9 +300,13 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
   `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
   (`research notes claim`).
+- **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
+  lead proposed and Daniel approved.
 - **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a tip being checked
   (Checking and merging). Only the lander moves `main`, through
   `research merge`.
+- **Landing is the lander's.** Push your PR, mark it ready and go back to research. Only the lander lands, restacks and
+  reruns, and you hear back only if your PR fails. A lane holds at most two open PRs.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`.
