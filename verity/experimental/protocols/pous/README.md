@@ -57,6 +57,25 @@ v.run(protocol.responder(scheme, blocks.__getitem__))
 print(v.profile().statement())                                                 # Pous.SecurityProofs.BandMultiMeetsFamily
 ~~~
 
+On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
+inside the node's isolation boundary. It commits its indices in a coin tree before the session, hashes each whole
+answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
+`answer_circuit.py` opens), and signs the session's round records once. `verdict` checks a
+signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
+(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
+
+~~~python
+from verity.ml.crypto import lms
+from verity.experimental.protocols.pous import memory_challenger as mc
+
+signer = mc.LmsSigner(key, lms.LeafState(state_path, lms.public_key(key), lms.DEPLOYED.H))  # key = lms.keygen(lms.DEPLOYED, seed)
+coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # before the session
+c = mc.MemoryChallenger(coins, signer, limit_ns=500_000 + rtt, block_bytes=params.block_bytes)
+signed = c.run(blocks.__getitem__)                                                  # witness: never sent in the clear
+v = mc.verdict(signed, c.commitment, c.openings(), lambda i: mc.block_digest(blocks[i]), trusted={signer.public_key})
+print(v.public())                                                                   # {"accepted": ...}
+~~~
+
 Tests: `uv run pytest verity/experimental/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/experimental/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
 `tests/lean/generate.sh`.
