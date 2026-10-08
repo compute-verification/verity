@@ -41,18 +41,16 @@ Each layer may depend on the layers below it:
 ~~~text
 integrations/vllm, benchmarks/ (with the census)
 ---------------------------------------------------------------------------
-verity/experimental/: work in progress     archive/
-  protocols: profile, sampled_proofs,        kept, not developed:
-  pouw, pous, certifier; claims              gkr, direct, sp1, vole
+verity/core/: the verifiers, trusted           archive/
+  protocols: profile, sampled_proofs,          kept, not developed:
+  pouw, pous, certifier; claims                gkr, direct, sp1, vole
+  the Lean ports; service/flock: C-Flock's Lean verifier
+Security/: the definitions, models and proofs of the guarantees (nci among them)
 ---------------------------------------------------------------------------
-verity/ml/: Python and CUDA, nothing soundness rests on
+verity/ml/: Python and CUDA; what core's verifiers read of it is on the soundness path
   flock: C-Flock, the proof system
   circuits: evaluation, boolean, Definitions (ops), silicon semantics, targets
-  kernels, commitments, crypto, randomness
----------------------------------------------------------------------------
-verity/core/: trusted, all Lean, every part with proven properties
-  service/flock: C-Flock's Lean verifier
-Security/: the definitions, models and proofs of the guarantees (nci among them)
+  kernels, commitments, crypto, randomness, private_circuits
 ~~~
 
 `tools/` and `infra/` sit outside the layers: `tools/research` runs and records the work and depends on none of them, and
@@ -81,7 +79,7 @@ The commitment establishes the first, and the proof system's proof the second. A
 
 ### Protocols
 
-Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol is a package under `verity.core.protocols` and imports only the standard library, the parts of `verity.ml` it is allowed, itself and the protocols it builds on (PoUW builds on sampled proofs, and reads the primitive circuits' silicon semantics). Its Lean versions land in `verity/core/` one verifier at a time.
+Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol is a package under `verity.core.protocols` and imports only the standard library, the parts of `verity.ml` it is allowed, itself and the protocols it builds on (PoUW builds on sampled proofs, and reads the primitive circuits' silicon semantics). Its Lean port lands beside it in `verity/core/`, one verifier at a time.
 
 ### The proof system and the proof service
 
@@ -95,10 +93,9 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 
 ## Repository structure
 
-- [`verity/`](verity/README.md): the library, the distribution `verity`, in three parts:
-  - `verity/core/`: trusted code, all Lean, every part with proven properties; today only `verity/core/service/flock/`, C-Flock's verifier of record
-  - `verity/ml/` (`verity.ml`): Python and CUDA: `verity.ml.circuits` and the [circuit format](verity/ml/circuits/PROTOCOL.md), with exact hardware semantics (`silicon`), the primitive circuits' Definitions (`ops`) and the targets; `verity.ml.kernels`, the fast code checked against them; `verity.ml.commitments` (commitments to the records), `crypto` and `randomness`; and [`verity/ml/flock/`](verity/ml/flock/README.md), C-Flock, the proof system, whose verifier's specification and scripts are [`verity/ml/flock/verifier/`](verity/ml/flock/verifier/README.md)
-  - `verity/experimental/` (`verity.experimental`): what is under development, including today's Python verifiers: `verity.core.protocols` (the protocols and the integrity profile an audit returns) and the claims
+- [`verity/`](verity/README.md): the library, the distribution `verity`, in two parts:
+  - `verity/core/` (`verity.core`): the verifiers, trusted code: the Python verifiers, `verity.core.protocols` (the protocols and the integrity profile an audit returns) and the claims, their Lean ports, and `verity/core/service/flock/`, C-Flock's verifier of record. `Security/Models/` states their guarantees, each open until its proof lands
+  - `verity/ml/` (`verity.ml`): Python and CUDA: `verity.ml.circuits` and the [circuit format](verity/ml/circuits/PROTOCOL.md), with exact hardware semantics (`silicon`), the primitive circuits' Definitions (`ops`) and the targets; `verity.ml.kernels`, the fast code checked against them; `verity.ml.commitments` (commitments to the records), `crypto` and `randomness`; and [`verity/ml/flock/`](verity/ml/flock/README.md), C-Flock, the proof system, whose verifier's specification and scripts are [`verity/ml/flock/verifier/`](verity/ml/flock/verifier/README.md); what core's verifiers read of it is on the soundness path, and the rest (C-Flock's prover, the private circuits) can't affect soundness
 - [`verity/core/protocols/sampled_proofs/`](verity/core/protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit and the two-stage law
 - [`verity/core/protocols/pous/`](verity/core/protocols/pous/README.md): proofs of useful space
 - [`verity/core/protocols/pouw/`](verity/core/protocols/pouw/PROTOCOL.md): proofs of useful work
@@ -149,13 +146,13 @@ query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each w
 
 ## Development
 
-Dependencies point inward: integrations, the proof system and benchmarks depend on `verity`, `verity` imports no other distribution, `verity.experimental` may import `verity.ml` but never the reverse (apart from C-Flock's tests), `verity/core/` never imports `verity/experimental/`, nothing outside `infra/` imports `infra/`, and `verity`'s modules depend on each other in one direction:
+Dependencies point inward: integrations, the proof system and benchmarks depend on `verity`, `verity` imports no other distribution, `verity.core` may import the parts of `verity.ml` that `ALLOWED` lists, which puts them on the soundness path, and `verity.ml` never imports `verity.core` (apart from a few tests and V*'s builders), nothing outside `infra/` imports `infra/`, and `verity`'s modules depend on each other in one direction:
 
 ~~~text
 ml.circuits  <-  ml.commitments  ->  ml.crypto
 ml.circuits  <-  ml.circuits.silicon, .targets, .ops, ml.kernels  (the primitive circuits and the kernels)
-ml.circuits  <-  experimental.protocols.profile  <-  the protocols
-ml.randomness, ml.crypto, experimental.claims: import no other module of verity
+ml.circuits  <-  core.protocols.profile  <-  the protocols
+ml.randomness, ml.crypto, core.claims: import no other module of verity
 ~~~
 
 `tests/test_boundaries.py` enforces these rules. Import each object from the module that owns it (`from verity.ml.circuits import Program`); `verity` itself re-exports nothing.
