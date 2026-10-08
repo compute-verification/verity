@@ -5,6 +5,8 @@ in gates is the work's own digest:
 * `PearlTileDigest{TM,TN}`: `pearl_c.leaf` (hashing h0) of a tile's C̃ and U: TurboSHAKE128 (D = 0x21) of each row's
   32-column chunks, then TurboSHAKE128 (D = 0x22) of those digests, on `hashes.KeccakP1600R12`.  A hiding tile unit returns
   it in place of its checked words.
+* Under -h3 the leaf is ``sha512/row-seg/v1`` over the messages themselves, so the hiding tile (`pc8.Pc8TileHiddenH3`)
+  returns no digest: its value is the messages' words (`tile_messages`), which the unit that hashes them reads.
 
 The rows (`SCHEMAS`), each a row of 16-bit words with every narrower element packed low bits first (flock-fp's packed
 rows), so the row's bytes are the tensor's memory.  Each is committed under its row's and role's frame-leaf schema
@@ -121,6 +123,7 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
                                         sha512_row_seg_word_digest, sha512_row_v2_digest)
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value
 
 from ..schemes import pearl_c as C
@@ -202,6 +205,20 @@ def tile_digest(tm: int, tn: int) -> SpecializedDefinition:
 def digest_bytes(words: Sequence[int]) -> bytes:
     """`PearlTileDigest`'s output as the digest's 32 bytes."""
     return b"".join((v & W.M32).to_bytes(4, "little") for v in words)
+
+
+def messages_type(tm: int, tn: int) -> Array:
+    """-h3's tile value (`tile_messages`): the 2·TM·TN words of a TM x TN tile's messages."""
+    return Array(2 * tm * tn, W.F32)
+
+
+def tile_messages(c, u, tm: int, tn: int):
+    """A tile's C̃ and U (``c``, ``u``: `Array<TM, Array<TN, F32>>`) as its messages' words (`messages_type`), wiring only:
+    `pearl_c.messages`' order, row-major, per row each 32-column chunk's C̃ words, then its U words.  Each word's bits least
+    significant first (a Boolean element's, `boolean.bit_type`) are then ``b"".join(messages)``'s bits, bit i bit i % 8 of
+    byte i // 8: the bit row `Sha512RowSeg_v1{N_BITS = 64·TM·TN}` reads (`rowleaf.bit_row`)."""
+    return coll_concat(messages_type(tm, tn), [x[i][h:h + C.CHUNK] for i in range(tm) for h in range(0, tn, C.CHUNK)
+                                               for x in (c, u)])
 
 
 # ---- the reference -----------------------------------------------------------------------------------------------------
@@ -387,8 +404,8 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
 
 
 __all__ = ["CAP_CHUNKS", "CAP_ROW_WORDS", "DIGEST", "INST", "KEY", "OK", "P_WORDS", "PearlTileDigestDef", "ROW_SCHEMA",
-           "ROW_WORDS", "SCHEMAS", "chunk_digests", "commit", "digest_bytes", "leaf_digest", "ok_of", "row_digest",
-           "statement_rows", "tile_digest", "tree_leaf", "words_bf16", "words_cap_chunks", "words_cap_flags",
-           "words_cap_rows", "words_cap_sums", "words_cap_word", "words_fp32", "words_fp8_codes", "words_fp8_p",
-           "words_nvfp4_codes", "words_nvfp4_p", "words_ok", "words_pc4_carry", "words_pc4_head", "words_pc8_carry",
-           "words_pc8_head", "words_sd", "words_tile"]
+           "ROW_WORDS", "SCHEMAS", "chunk_digests", "commit", "digest_bytes", "leaf_digest", "messages_type", "ok_of",
+           "row_digest", "statement_rows", "tile_digest", "tile_messages", "tree_leaf", "words_bf16", "words_cap_chunks",
+           "words_cap_flags", "words_cap_rows", "words_cap_sums", "words_cap_word", "words_fp32", "words_fp8_codes",
+           "words_fp8_p", "words_nvfp4_codes", "words_nvfp4_p", "words_ok", "words_pc4_carry", "words_pc4_head",
+           "words_pc8_carry", "words_pc8_head", "words_sd", "words_tile"]
