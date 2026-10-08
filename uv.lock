@@ -32,6 +32,8 @@ members = [
     "verity-commitments-benchmarks",
     "verity-core-evaluate",
     "verity-core-firewall",
+
+    "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-direct",
     "verity-flock",
@@ -1633,6 +1635,17 @@ requires-dist = [
     { name = "verity-difftest" },
     { name = "verity-flock" },
 ]
+
+[[package]]
+name = "verity-core-sampled-proofs"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/service/sampled_proofs" }
+dependencies = [
+    { name = "hypothesis" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 
 [[package]]
 name = "verity-difftest"
