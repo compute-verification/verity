@@ -323,9 +323,9 @@ def gram_g(shape, seed_b: bytes, _i=None) -> list[int]:
 
 
 _LINE = f"TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = {S.D_LINE:#04x}), 16 bytes, low nibble first; role "
-#: each anchor's recomputation from `pearl_c4`'s seeds (`noise`: seed_A = BLAKE3 keyed by blake3("pearl-c4/v0/seed-A") over
-#: salt ‖ root_A ‖ root_B ‖ matmul u64 LE, seed_B keyed by blake3("pearl-c4/v0/seed-B") over salt ‖ root_B), each under its
-#: rule's versioned id
+#: each anchor's recomputation from `pearl_c4`'s seeds (`noise`: seed_A = H_"pearl-c4/v1/seed-A"(salt ‖ root_A ‖ root_B ‖
+#: matmul u64 LE), seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B), H_ℓ `pearl_c4.labelled`'s SHA-512), each under its rule's
+#: versioned id
 DERIVATIONS = {
     "ea": A.Derivation("verity/pouw/anchor/pearl-c4/ea/v1", "seed_a",
                        _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
