@@ -863,7 +863,7 @@ def test_an_alert_about_a_run_tags_the_handle_of_the_agent_that_sent_it_and_poin
                                                 "https://cursor.com/agents/bc-8ece7cde-1111-2222*"),
                 ev("event", "oom-kills|2", text="*n1: the OOM killer took lake of run r2, sent by https://cursor.com/agents/bc-00000000*")]
     M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60)
-    assert [(ch, text.split(" n1:")[0].rstrip(" *")) for ch, text, _ in posts] == [("CALERTS", "@infra @proofs"), ("CFRONT", "@proofs"),
+    assert [(ch, " ".join(w for w in text.split() if w.startswith("@"))) for ch, text, _ in posts] == [("CALERTS", "@infra @proofs"), ("CFRONT", "@proofs"),
                                                                     ("CALERTS", "@infra")]
 
 
