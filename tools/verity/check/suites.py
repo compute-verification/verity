@@ -86,6 +86,10 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
 kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. Parallel suites run first, one
 at a time, then the others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
+
+`--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
+still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
+an hour, not its slot until the run's own timeout.
 """
 from __future__ import annotations
 
@@ -127,6 +131,21 @@ ENV_PREFIXES = ("VERITY_", "FLOCK_")
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 #: and the runner's own, which it sets for the tests (`VERITY_SUITE_ROOT`, `..._MODULE`, `..._READS`, ...)
 UNKEYED_PREFIX = "VERITY_SUITE_"
+#: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
+#: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
+#: run` would reach another verdict than inside check (test_remote_cwd, r20261008-010104-2b69)
+RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
+#: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
+#: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
+              "verity-core-evaluate", "verity-core-firewall",
+              "verity/experimental/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/experimental/core/protocols/network", "verity-pouw-window-difftest",
+              "verity-pouw-check-difftest")
+#: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
+ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
+        'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
+        'export PATH="$HOME/.elan/bin:$PATH"; ')
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
@@ -191,6 +210,7 @@ class Suite:
     inputs: tuple[str, ...]      # paths it declares under [tool.verity.tests] inputs
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
+    timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
 
 
 def _pyproject(path: str) -> dict:
@@ -311,7 +331,7 @@ def discover() -> list[Suite]:
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
-                            tuple(tests.get("artifacts", []))))
+                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0))))
     return suites
 
 
@@ -452,6 +472,31 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     by_path = {p: n for n, p in pkgs.items()}
     groups = [_requirement_name(r) for g in root.get("dependency-groups", {}).values() for r in g if isinstance(r, str)]
     return sorted({*([own] if own else []), *(by_path[p] for p in suite.inputs if p in by_path), *groups})
+
+
+def flock_lean() -> Path:
+    """The Lean verifier of record, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
+    return ROOT / "verity" / "core" / "service" / "flock"
+
+
+def lean_on_path() -> None:
+    """Put elan's `lake` on this process's PATH, installing elan when there is none, as check's Lean steps have it; the suites'
+    keys then see `lake` as they do inside check."""
+    p = subprocess.run(["bash", "-c", ELAN + "command -v lake"], capture_output=True, text=True)
+    lake = p.stdout.strip().splitlines()[-1] if p.returncode == 0 and p.stdout.strip() else ""
+    if lake and shutil.which("lake") is None:
+        os.environ["PATH"] = os.pathsep.join([str(Path(lake).parent), os.environ.get("PATH", "")])
+
+
+def lean_build(log: Path) -> str | None:
+    """check's `lean-build` step, `lake build` in the verifier: None when it built (or the tree has no verifier), else why not."""
+    lean = flock_lean()
+    if not (lean / "lakefile.toml").exists():
+        return None
+    print(f"suites: `lake build` in {lean.relative_to(ROOT)} (check's lean-build step) before {', '.join(AFTER_LEAN)}")
+    with log.open("w") as out:
+        rc = subprocess.run(["bash", "-c", ELAN + "lake build"], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
+    return None if rc == 0 else f"`lake build` in {lean.relative_to(ROOT)} exited {rc}"
 
 
 def environment() -> dict:
@@ -1123,6 +1168,7 @@ class Result:
     peak_rss_gb: float = 0.0         # pytest's peak RSS, its reaped children's included
     oom: bool = False                # SIGKILL while the kernel's OOM-kill count rose
     leftover: int = 0                # processes still in the suite's group when pytest ended, killed
+    timed_out: float = 0.0           # the bound (seconds) the run reached, its process group then killed (0: it ended by itself)
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -1130,14 +1176,21 @@ class Result:
 _PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest.main(sys.argv[1:]))"
 #: xdist's scheduling: an idle worker takes queued tests from a busy one, which evens out suites whose tests differ in length.
 DIST = ["--dist", "worksteal"]
+#: `--timeouts`: a suite's run is bounded by its `timeout_s`, else this. The longest passes on vy-nebius-1 took about an hour
+#: (verity-circuit-check, which declares its own); a suite that hangs holds its check slot until the run's own timeout (45fe hung
+#: 82 min in test_suites.py on a FIFO until it was killed by hand, 7 Oct).
+SUITE_TIMEOUT_S = 3600.0
+#: what `run` arms the bound with (a test injects one that fires at once)
+Timer = threading.Timer
 
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
-        reuse: list[str] = ()) -> Result:
+        reuse: list[str] = (), timeout_s: float = 0.0) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
-    env = dict(os.environ, VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
+    env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
+    env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)))
     env.pop("VERITY_SUITE_REUSE", None)
     env.pop("VERITY_SUITE_MODULE", None)
@@ -1161,16 +1214,29 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
                              start_new_session=True)
         with _GROUPS_LOCK:
             _GROUPS.add(p.pid)
+        expired = threading.Event()
+
+        def expire() -> None:
+            expired.set()
+            kill_group(p.pid)
+
+        bound = Timer(timeout_s, expire) if timeout_s > 0 else None
+        if bound:
+            bound.daemon = True
+            bound.start()
         try:
             status, usage = _wait4(p.pid)
         finally:
+            if bound:
+                bound.cancel()
             with _GROUPS_LOCK:
                 _GROUPS.discard(p.pid)
             leftover = kill_group(p.pid)
     rc = p.returncode = os.waitstatus_to_exitcode(status)
     seconds = time.monotonic() - start
     sig = signal.Signals(-rc).name if rc < 0 else ""
-    oom = sig == "SIGKILL" and ooms is not None and (oom_kills() or 0) > ooms
+    timed_out = timeout_s if expired.is_set() else 0.0
+    oom = sig == "SIGKILL" and not timed_out and ooms is not None and (oom_kills() or 0) > ooms
     rep = json.loads(report.read_text()) if report.exists() else None
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
     rep = rep or {}
@@ -1193,7 +1259,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
             untraced.setdefault(module, set()).add(rel)
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
     # a child's read outside the inputs is the test's own: no key covers it, so nothing vouches for a pass
-    passed = ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside
+    passed = ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside and not timed_out
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
                   rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=reported,
                   watched=rep.get("watched"), distributions=rep.get("distributions"), missing=rep.get("missing"),
@@ -1201,7 +1267,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
                   child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
                   untraced={m: sorted(v) for m, v in untraced.items()}, ran_all=ran_all,
                   child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())], signal=sig,
-                  peak_rss_gb=usage.ru_maxrss / 2**20, oom=oom, leftover=leftover)
+                  peak_rss_gb=usage.ru_maxrss / 2**20, oom=oom, leftover=leftover, timed_out=timed_out)
 
 
 #: the process groups of the suites running now: a ^C reaches suites.py's group only, so `main` passes it on to these
@@ -1308,6 +1374,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quick", action="store_true", help="deselect the tests marked slow")
     ap.add_argument("--changed", metavar="REV", help="of those, only the suites the change from REV to the tree touches (`touched`)")
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
+    ap.add_argument("--timeouts", action="store_true",
+                    help=f"kill a suite's process group once it has run its [tool.verity.tests] timeout_s (default {SUITE_TIMEOUT_S:.0f}) "
+                         "and fail it as timed out (`check` passes this)")
     ap.add_argument("--list", action="store_true", help="list the suites, their inputs, and whether a pass is cached")
     ap.add_argument("--skip", action="append", default=[], metavar="SUITE", help="leave this suite out (repeatable)")
     ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
@@ -1320,6 +1389,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-per-test", action="store_true", help="neither reuse nor keep per-test passes")
     ap.add_argument("--explain", metavar="SUITE", help="say why SUITE would run: its key against the nearest pass kept here, and its "
                     "per-test reuse; runs nothing")
+    ap.add_argument("--lean-built", action="store_true", help=f"the Lean verifier is built and `lake` is on the PATH (check's "
+                    f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
     if not in_git():
@@ -1335,10 +1406,15 @@ def main(argv: list[str] | None = None) -> int:
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
-    tree, env = worktree(), environment()
+    tree = worktree()
     if a.changed:
         chosen = touched(chosen, pkgs, a.changed, tree, locked())
         print(f"suites: the change from {a.changed[:12]} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
+    build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
+                  and (flock_lean() / "lakefile.toml").exists())
+    if build_lean:
+        lean_on_path()
+    env = environment()
     inputs = {s: inputs_of(s, pkgs) for s in chosen}
     fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
@@ -1381,6 +1457,12 @@ def main(argv: list[str] | None = None) -> int:
               f"{', '.join(sorted(p for p in unfetched if _under(p, inputs[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
         results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
+    if build_lean and any(s.name in AFTER_LEAN for s, *_ in todo) and (why := lean_build(logs / "lean-build.log")):
+        for s, *_ in todo:
+            if s.name in AFTER_LEAN:
+                print(f"failed  {s.name:28} {why} (log: {logs / 'lean-build.log'})")
+                results.append(Result(s, "failed", log=logs / "lean-build.log"))
+        todo = [t for t in todo if t[0].name not in AFTER_LEAN]
     known = _durations()
     todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].name, float("inf"))))
     for r in results:
@@ -1405,7 +1487,8 @@ def main(argv: list[str] | None = None) -> int:
         with slots.take(turn, n):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
-            return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not _under(m, paths)], reuse.get(s, []))
+            return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not _under(m, paths)], reuse.get(s, []),
+                       (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0)
 
     def finish(fut) -> None:
         s, k, paths, deps = futures[fut]
@@ -1420,7 +1503,10 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
-        if r.signal:
+        if r.timed_out:
+            print(f"        TIMED OUT: still running after {r.timed_out:g} s, so its process group was killed; a suite that needs "
+                  f"longer declares [tool.verity.tests] timeout_s in {s.path}/pyproject.toml")
+        elif r.signal:
             mem = memory_gb()
             print(f"        {'OOM-KILLED' if r.oom else 'killed by ' + r.signal}: pytest died by {r.signal} at a peak RSS of "
                   f"{r.peak_rss_gb:.1f} GB" + (f" on a machine with {mem:.0f} GB" if mem else "")
@@ -1499,7 +1585,8 @@ def main(argv: list[str] | None = None) -> int:
                                        "failed_tests": r.failed_tests, "log": str(r.log) if r.log else None,
                                        "outside": r.outside, "child_outside": r.child_outside, "unguarded": r.unguarded,
                                        "since": r.since, "reused": r.reused,
-                                       "contradicts": r.contradicts, "nondeterministic": r.nondeterministic} for r in results]
+                                       "contradicts": r.contradicts, "nondeterministic": r.nondeterministic,
+                                       "timed_out": r.timed_out} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
     return 1 if failed or written else 0
 

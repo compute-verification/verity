@@ -78,4 +78,57 @@ private def rootHex : String := Flock.hexOf root
   some "params: k is missing or not a natural number"
 #guard (protocol.case "not json").reason.map (·.startsWith "case: not JSON") == some true
 
+private def reread (params evidence : String) : String :=
+  let go : V String := do
+    let b ← Answer.ofJson (protocol.answer params.toUTF8 root evidence.toUTF8).toJson
+    if let some p := b.profile then
+      if (← Flock.canon (← Integrity.ofJson p).toJson) != (← Flock.canon p) then throw "the profile did not read back"
+    b.canonical
+  match go with
+  | .ok s => s
+  | .error e => s!"error: {e}"
+
+private def readsBack : Outcome Nat Integrity → Bool
+  | .accept _ p => match Integrity.ofJson p.toJson with
+    | .ok q => decide (q = p)
+    | .error _ => false
+  | _ => false
+
+private def refusal (s : String) : String :=
+  match Json.parse s with
+  | .ok j => match Answer.ofJson j with
+    | .ok _ => "accepted"
+    | .error e => e
+  | .error e => e
+
+private def profileRefusal (s : String) : String :=
+  match Json.parse s with
+  | .ok j => match Integrity.ofJson j with
+    | .ok _ => "accepted"
+    | .error e => e
+  | .error e => e
+
+-- each outcome's answer, and the accept's profile, read back to the same canonical JSON
+#guard reread "{\"k\":2}" "{\"drawn\":2,\"passed\":2}" == run "{\"k\":2}" "{\"drawn\":2,\"passed\":2}"
+#guard reread "{\"k\":2}" "{\"drawn\":2,\"passed\":1}" == run "{\"k\":2}" "{\"drawn\":2,\"passed\":1}"
+#guard reread "{\"k\":3}" "{\"drawn\":2,\"passed\":2}" == run "{\"k\":3}" "{\"drawn\":2,\"passed\":2}"
+#guard readsBack (check 2 root ⟨2, 2⟩)
+-- the shapes `answer` never returns, and the spellings `toJson` never writes, are refused
+#guard refusal "{\"commitment\":null,\"profile\":null,\"protocol\":\"p\",\"public\":null,\"reason\":\"r\",\"verdict\":\"accept\"}" ==
+  "answer: an accept has no reason, and both its public outputs and its profile"
+#guard refusal "{\"commitment\":null,\"profile\":{},\"protocol\":\"p\",\"public\":null,\"reason\":\"r\",\"verdict\":\"reject\"}" ==
+  "answer: a reject has a reason, and neither public outputs nor a profile"
+#guard refusal "{\"commitment\":\"0A\",\"profile\":null,\"protocol\":\"p\",\"public\":null,\"reason\":\"r\",\"verdict\":\"reject\"}" !=
+  "accepted"
+#guard refusal "{\"commitment\":null,\"extra\":1,\"profile\":null,\"protocol\":\"p\",\"public\":null,\"reason\":\"r\",\"verdict\":\"reject\"}" ==
+  "answer: not in the form Answer.toJson writes"
+#guard refusal "{\"commitment\":null,\"profile\":null,\"protocol\":\"p\",\"public\":null,\"reason\":\"r\",\"verdict\":\"maybe\"}" ==
+  "answer.verdict: not accept, reject or undecided"
+#guard profileRefusal ("{\"covered\":[],\"delta\":\"2/4\",\"drawn\":{},\"levels\":[],\"linked\":true,\"prescribed\":[]," ++
+  "\"programs\":[]}") == "profile.delta: \"2/4\" is not in lowest terms"
+#guard profileRefusal ("{\"covered\":[],\"delta\":\"1\",\"drawn\":{},\"levels\":[],\"linked\":true,\"prescribed\":[\"b\",\"a\"]," ++
+  "\"programs\":[]}") == "profile: not in the form toJson writes"
+#guard profileRefusal ("{\"covered\":[],\"delta\":\"1\",\"drawn\":{\"x\":1},\"levels\":[],\"linked\":true,\"prescribed\":[]," ++
+  "\"programs\":[]}") == "profile: not in the form toJson writes"
+
 end Core.Example

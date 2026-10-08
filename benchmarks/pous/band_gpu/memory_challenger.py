@@ -1,5 +1,5 @@
 """The verifier process of the harness's timed audit: a client of the responder (`pous_native.cu`'s wire format, or the
-harness's `ControlResponder`) and `verity.experimental.protocols.pous.protocol.MemoryChallenger`'s audits against it.
+harness's `ControlResponder`) and `verity.experimental.protocols.pous.protocol.TimedAudit`'s audits against it.
 
     python benchmarks/pous/band_gpu/memory_challenger.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
@@ -13,9 +13,13 @@ harness's `ControlResponder`) and `verity.experimental.protocols.pous.protocol.M
   calibrates its own. The allowance is a loopback one (`allowance_kind`): a remote memory challenger's round trip adds to it.
 - **An audit** is `k` challenges (`--k`, else the certificate's, else `audit.CHALLENGES`), revealed one at a time, each correct
   and within the limit. Audits run as research audits, so a limit or a store the certificate does not cover is measured
-  anyway; `gaps` names what it does not cover, and `bench.py`'s certificate gate decides.
+  anyway; `gaps` names what it does not cover, and `bench.py`'s certificate gate decides.  With `--strict` (P2 v3's arm)
+  the memory challenger refuses a `k` or limit the certificate does not cover, sends no challenge and records `refused`.
 - **The record** keeps what re-derives every number: each audit's challenge source (with `vk` it gives every index), and each
-  answer's time, the responder's reported device and server time, and its verdicts.
+  answer's time, the responder's reported device and server time, and its verdicts.  Under `--clock wall`, `host_trace`
+  splits every round trip over `TRACE_OVER_NS` into where its time went, on CLOCK_MONOTONIC (`hosttrace.sh`'s kernel trace
+  of the same cores reads that clock), and `memory_challenger_rusage` counts the memory challenger thread's page faults and
+  context switches.
 - **Clocks.** `--clock wall` (the default) times each answer on this process's monotonic clock. `--clock logical` takes each
   answer's time to be the responder's reported server time (the CPU tests: no outcome there depends on the machine).
 
@@ -28,6 +32,7 @@ import argparse
 import gc
 import json
 import os
+import resource
 import socket
 import struct
 import sys
@@ -39,6 +44,8 @@ from typing import Any
 OP_CHALLENGE, OP_PING, OP_CLOSE = 1, 2, 3
 HEADER = 24
 ALLOWANCE_KIND = "loopback"
+TRACE_OVER_NS = 60_000
+"""A round trip over this (or an answer the memory challenger timed over it) is kept in the audit's host trace."""
 
 
 def quantiles(xs: list[float]) -> dict[str, float]:
@@ -60,33 +67,49 @@ class LogicalClock:
 
 
 def params_of(name: str, manifest: dict[str, Any]) -> Any:
-    """The scheme's geometry from its manifest (every geometry's manifest is its fields, plus the scheme's name); a name that
-    is not registered is the band at another in-degree."""
-    from verity.experimental.protocols.pous import schemes
-    from verity.experimental.protocols.pous.band import BandParams
+    """The scheme's geometry from its manifest: its fields, and nothing it does not give back as its own manifest.  A name
+    that is not registered is P2 at another width (a `p2` manifest), else the band at another in-degree."""
+    import dataclasses
 
-    fields = {k: v for k, v in manifest.items() if k != "scheme"}
-    return type(schemes.get(name).params)(**fields) if name in schemes.REGISTRY else BandParams(**fields)
-
-
-def scheme_of(name: str, params: Any) -> Any:
-    """The scheme `name` at `params`: a registered one, or the band at another in-degree `d` (`band-chain/d{d}/v1`): the
-    registered band's class at those parameters, its codec the band's at `d`, with no byte-format name registered for it."""
     from verity.experimental.protocols.pous import schemes
     from verity.experimental.protocols.pous.band import BandParams
 
     if name in schemes.REGISTRY:
+        cls = type(schemes.get(name).params)
+    else:
+        cls = schemes.P2Params if manifest.get("scheme") == "p2" else BandParams
+    names = {f.name for f in dataclasses.fields(cls)}
+    params = cls(**{k: v for k, v in manifest.items() if k in names})
+    if params.manifest() != manifest:
+        raise ValueError(f"{manifest} is not the manifest of {params!r}")
+    return params
+
+
+def scheme_of(name: str, params: Any) -> Any:
+    """The scheme `name` at `params`: a registered one, the band at another in-degree `d` (`band-chain/d{d}/v1`), or P2 at
+    another width (`p2-{w}/v3`, the CPU tests'): the registered class at those parameters, with no byte-format name
+    registered for it and no certificate."""
+    from verity.experimental.protocols.pous import schemes
+
+    if name in schemes.REGISTRY:
         return schemes.get(name, params=params)
-    if isinstance(params, BandParams) and schemes.Band(params).name == name:
-        return schemes.Band(params)
+    for cls in (schemes.Band, schemes.P2, schemes.P2ChaCha):
+        try:
+            scheme = cls(params)
+        except (TypeError, ValueError):
+            continue
+        if scheme.name == name:
+            return scheme
     raise KeyError(f"no POUS scheme {name!r} at {params!r}")
 
 
 class LiveResponder:
     """A connection to the responder, polled: the verifier never sleeps waiting for an answer.  With a `LogicalClock`, each
-    round trip advances it by the answer's reported server time instead of reading a clock."""
+    round trip advances it by the answer's reported server time instead of reading a clock.  With `trace`, each round trip
+    appends `(op, arg, start, sent, first byte, end, longest poll gap, its start, server ns)` to `log`, all on the clock."""
 
-    def __init__(self, host: str, port: int, block_bytes: int, clock: Callable[[], int] = time.perf_counter_ns) -> None:
+    def __init__(self, host: str, port: int, block_bytes: int, clock: Callable[[], int] = time.perf_counter_ns,
+                 trace: bool = False) -> None:
         self.clock = clock
         self.sock = socket.create_connection((host, port))
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -94,17 +117,28 @@ class LiveResponder:
         self.buf = bytearray(HEADER + block_bytes)
         self.view = memoryview(self.buf)
         self.device_ns = self.server_ns = 0
+        self.log: list[tuple[int, ...]] | None = [] if trace else None
 
     def roundtrip(self, op: int, arg: int) -> float:
         """One request and its whole answer; its time in seconds."""
-        want = len(self.buf)
-        t0 = self.clock()
+        want, log, clock = len(self.buf), self.log, self.clock
+        t0 = clock()
         self.sock.send(struct.pack("<QQ", op, arg))
-        got = 0
+        got = first = gap = gap_at = 0
+        sent = last = clock() if log is not None else 0
         while got < want:
             try:
                 n = self.sock.recv_into(self.view[got:], want - got)
             except BlockingIOError:
+                n = -1
+            if log is not None:
+                now = clock()
+                if now - last > gap:
+                    gap, gap_at = now - last, last
+                last = now
+                if n > 0 and not got:
+                    first = now
+            if n < 0:
                 continue
             if n == 0:
                 raise ConnectionError("the responder closed the connection")
@@ -112,10 +146,13 @@ class LiveResponder:
         _, self.device_ns, self.server_ns = struct.unpack_from("<QQQ", self.buf, 0)
         if isinstance(self.clock, LogicalClock):
             self.clock.now += self.server_ns
-        return (self.clock() - t0) / 1e9
+        end = clock()
+        if log is not None:
+            log.append((op, arg, t0, sent, first, end, gap, gap_at, self.server_ns))
+        return (end - t0) / 1e9
 
     def block(self, i: int) -> tuple[bytes, dict[str, Any]]:
-        """`respond` for `protocol.MemoryChallenger.run`: block `i` as the responder sent it, with its report."""
+        """`respond` for `protocol.TimedAudit.run`: block `i` as the responder sent it, with its report."""
         self.roundtrip(OP_CHALLENGE, i)
         return bytes(self.view[HEADER:]), {"index": i, "device_ns": self.device_ns, "server_ns": self.server_ns}
 
@@ -125,6 +162,37 @@ class LiveResponder:
             self.sock.sendall(struct.pack("<QQ", OP_CLOSE, 0))
         finally:
             self.sock.close()
+
+
+def host_trace(log: list[tuple[int, ...]], records: list[dict[str, Any]], over_ns: int = TRACE_OVER_NS) -> dict[str, Any]:
+    """The round trips of `log` over `over_ns` (pings, and challenges whose round trip or memory challenger time is), each
+    split on the clock (CLOCK_MONOTONIC under `--clock wall`, as bpftrace's `nsecs`): `send_ns` the request's send, `wait_ns`
+    from it to the answer's first byte, of which `server_ns` the responder reported and `responder_other_ns` it did not (its
+    socket calls, loopback both ways, its core lost), `recv_ns` the rest of the answer, `outside_ns` the memory challenger's
+    own work between the challenge's clock and its answer's, and the longest gap between two of the memory challenger's polls
+    (its core lost) with its start."""
+    answers = iter([(ai, j, a) for ai, rec in enumerate(records) for j, a in enumerate(rec["answers"])])
+    kept = []
+    for op, arg, t0, sent, first, end, gap, gap_at, server in log:
+        rt, row = end - t0, None
+        if op == OP_CHALLENGE:
+            ai, j, a = next(answers)
+            if max(rt, a["elapsed_ns"]) > over_ns:
+                row = {"kind": "challenge", "audit": ai, "round": j, "index": arg, "elapsed_ns": a["elapsed_ns"],
+                       "outside_ns": a["elapsed_ns"] - rt}
+        elif rt > over_ns:
+            row = {"kind": "ping"}
+        if row is not None:
+            kept.append({**row, "start_ns": t0, "roundtrip_ns": rt, "send_ns": sent - t0, "wait_ns": first - sent,
+                         "server_ns": server, "responder_other_ns": first - sent - server, "recv_ns": end - first,
+                         "poll_gap_ns": gap, "poll_gap_at_ns": gap_at})
+    return {"clock": "CLOCK_MONOTONIC", "over_ns": over_ns, "roundtrips": len(log), "kept": kept}
+
+
+def thread_rusage() -> dict[str, int]:
+    """This thread's page faults and context switches (`RUSAGE_THREAD`)."""
+    ru = resource.getrusage(resource.RUSAGE_THREAD)
+    return {"minflt": ru.ru_minflt, "majflt": ru.ru_majflt, "nvcsw": ru.ru_nvcsw, "nivcsw": ru.ru_nivcsw}
 
 
 def cgroup_cpu() -> dict[str, int]:
@@ -153,10 +221,12 @@ def limit_of(rtt: list[float], deadline_ns: int, allowance: str) -> dict[str, An
 
 def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int, k: int | None = None, cpu: int | None = None,
           allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
-          clock: Callable[[], int] = time.perf_counter_ns) -> dict[str, Any]:
-    """Run `audits` audits (the first is the audit of record) against the limit `limit_ns`, or `Δ` plus a calibration of
-    this connection when none is given; pings before and after are kept either way.  The timed part runs with the garbage
-    collector frozen and off, on core `cpu` when given, since the verifier's own stalls count against the server."""
+          clock: Callable[[], int] = time.perf_counter_ns, research: bool = True) -> dict[str, Any]:
+    """Run `audits` audits (the first is the audit of record) against the limit `limit_ns`, or `Δ` plus a calibration of this
+    connection when none is given; pings before and after are kept either way.  The timed part runs with the garbage
+    collector frozen and off, on core `cpu` when given, since the memory challenger's own stalls count against the server.
+    With `research=False` (`--strict`) the memory challenger refuses an audit its certificate does not cover: no challenge is
+    sent, and the record says why (`refused`)."""
     from verity.experimental.protocols.pous import audit as pous_audit
     from verity.experimental.protocols.pous import protocol
 
@@ -168,9 +238,10 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
     gc.collect()
     gc.freeze()
     gc.disable()
-    r = LiveResponder(host, port, vk.params.block_bytes, clock)
-    cpu_before = cgroup_cpu()
+    r = LiveResponder(host, port, vk.params.block_bytes, clock, trace=not isinstance(clock, LogicalClock))
+    cpu_before, ru_before = cgroup_cpu(), thread_rusage()
     records, sources = [], []
+    refused = None
     try:
         before = calibrate(r, pings)
         fixed = limit_ns is not None
@@ -179,14 +250,26 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
         results = []
         for _ in range(audits):
             source = os.urandom(32)
-            v = protocol.MemoryChallenger(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline_ns,
-                                  rtt_allowance_ns=limit - deadline_ns, clock=clock, research=True, experimental=True)
+            try:
+                v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline_ns,
+                                      rtt_allowance_ns=limit - deadline_ns, clock=clock, research=research,
+                                      experimental=True)
+            except ValueError as e:
+                refused = str(e)
+                break
             results.append((v, v.run(r.block)))
             sources.append(source.hex())
         after = calibrate(r, pings)
+        ru_after = thread_rusage()
     finally:
         r.close()
         gc.enable()
+    if refused is not None:
+        return {"refused": refused, "strict": not research, "limit_ns": limit, "limit_fixed_before_load": fixed,
+                "deadline_ns": deadline_ns, "allowance": allowance, "allowance_kind": ALLOWANCE_KIND,
+                "rtt_allowance_ns": limit - deadline_ns, "calibration_here": cal, "rtt_after_s": quantiles(after),
+                "scheme": scheme.name, "audits": 0, "audits_accepted": 0, "answers": 0, "late": 0, "wrong": 0,
+                "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()}, "records": []}
     for (_, res), source in zip(results, sources):
         records.append({"source": source, "answers": [{"index": a.report["index"], "elapsed_ns": a.elapsed_ns,
                                                        "device_ns": a.report["device_ns"], "server_ns": a.report["server_ns"],
@@ -196,7 +279,8 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
     return {"limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns, "allowance": allowance,
             "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "calibration_here": cal,
             "rtt_after_s": quantiles(after), "pings_raw_s": {"before": before, "after": after},
-            "k": first_v.k, "scheme": scheme.name, "gaps": list(first_v.gaps),
+            "k": first_v.k, "scheme": scheme.name, "gaps": list(first_v.gaps), "strict": not research,
+            "profile": first_v.profile().to_json() if first.accepted else None,
             "audit_of_record": {"accepted": first.accepted, "elapsed_max_ns": max(a.elapsed_ns for a in first.answers)},
             "audits": len(results), "audits_accepted": sum(res.accepted for _, res in results),
             "answers": len(answers), "late": sum(not a["on_time"] for a in answers),
@@ -205,7 +289,9 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
             "margin_s": quantiles([(limit - a["elapsed_ns"]) / 1e9 for a in answers]),
             "device_s": quantiles([a["device_ns"] / 1e9 for a in answers]),
             "server_s": quantiles([a["server_ns"] / 1e9 for a in answers]),
-            "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()}, "records": records}
+            "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()},
+            "memory_challenger_rusage": {"before": ru_before, "after": ru_after},
+            **({"host_trace": host_trace(r.log, records)} if r.log is not None else {}), "records": records}
 
 
 def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: int | None, allowance: str, deadline_ns: int,
@@ -238,6 +324,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit-ns", type=int, default=0, help="the limit fixed before any load (0: calibrate here)")
     ap.add_argument("--calibrate-only", action="store_true", help="measure the round trip and write the limit, audit nothing")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"])
+    ap.add_argument("--strict", action="store_true",
+                    help="refuse an audit the certificate does not cover (protocol.TimedAudit's default) instead of running "
+                         "it as a research audit; the refusal is recorded and the exit is 1")
     a = ap.parse_args(argv)
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
@@ -254,9 +343,10 @@ def main(argv: list[str] | None = None) -> int:
                                  [raw[i:i + DIGEST_BYTES] for i in range(0, len(raw), DIGEST_BYTES)])
     doc = {"root": vk.root.hex(), "clock": a.clock,
            **audit("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu,
-                   allowance=a.allowance, deadline_ns=deadline, limit_ns=a.limit_ns or None, clock=clock)}
+                   allowance=a.allowance, deadline_ns=deadline, limit_ns=a.limit_ns or None, clock=clock,
+                   research=not a.strict)}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
-    return 0 if doc["audits_accepted"] == doc["audits"] else 1
+    return 0 if doc["audits"] and doc["audits_accepted"] == doc["audits"] else 1
 
 
 if __name__ == "__main__":

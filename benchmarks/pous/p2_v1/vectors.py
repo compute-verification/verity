@@ -111,17 +111,6 @@ def map_vectors() -> dict:
 
 # --- audit-vectors.json ----------------------------------------------------------------------------------------------------
 
-def pack_payloads(payloads: list[int], bits: int) -> bytes:
-    """Fixed-width payloads packed continuously, the first payload and the most significant bit first, zero-padded."""
-    packed = 0
-    for value in payloads:
-        if not 0 <= value < 1 << bits:
-            raise ValueError("payload does not fit its profile width")
-        packed = packed << bits | value
-    pad = -len(payloads) * bits % 8
-    return (packed << pad).to_bytes((len(payloads) * bits + pad) // 8, "big")
-
-
 def _setup(params: R.Params, w_bytes: bytes, payloads: list[int], source: bytes) -> dict:
     manifest = canonical_json_bytes(params.manifest())
     commitment = R.w_commitment(params, w_bytes)
@@ -144,7 +133,7 @@ FULL = R.Params(R.DEPLOYMENT.w, R.DEPLOYMENT.c0, 2054, blocks_per_segment=1, seg
 
 def small_vector() -> dict:
     payloads = list(range(1, SMALL.blocks + 1))
-    w_bytes = pack_payloads(payloads, 63)
+    w_bytes = R.pack_payloads(payloads, 63)
     s = _setup(SMALL, w_bytes, payloads, SMALL_SETUP_SOURCE)
     counter, k, delta, rtt, elapsed = 7, 2, R.DELTA_NS, 0, [101_000, 102_000]
     audit_id, key = R.audit_key(SMALL_AUDIT_SOURCE, s["epoch"], s["root"], s["salt"], counter)
@@ -162,7 +151,7 @@ def small_vector() -> dict:
                           "response_sha512": _sha512(response)})
     final = Wi.final_message(s["epoch"], audit_id, Wi.FAIL_SUCCESS, delta, rtt, transcript, records)
     frames = s["messages"] + transcript
-    if Wi.verify_audit(frames, elapsed, verifier_source=SMALL_AUDIT_SOURCE) != final:
+    if Wi.verify_audit(frames, elapsed, verifier_source=SMALL_AUDIT_SOURCE, seen_audits=set()) != final:
         raise AssertionError("the reference verifier does not accept the small transcript")
     return {"w": SMALL.w, "c0": SMALL.c0, "manifest": s["manifest"].decode(), "W": w_bytes.hex(), "W_bit_length": 63 * SMALL.blocks,
             "w_commitment": s["commitment"].hex(), "setup_source": SMALL_SETUP_SOURCE.hex(), "setup_salt": s["salt"].hex(),
@@ -210,7 +199,7 @@ def _splice(data: bytes, start: int, stop: int, value: bytes) -> bytes:
 
 def _case(name: str, category: str, frames: list[bytes], elapsed: list[int], source: bytes, expected: int, stop_round: int,
           reused: bool = False) -> dict:
-    seen = None
+    seen: set = set()
     if reused:
         body = next(f for f in frames if f[5] == Wi.AUDIT_OPEN)[10:]
         seen = {(body[:Wi.D], body[Wi.D:Wi.D + Wi.S])}

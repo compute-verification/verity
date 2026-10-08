@@ -4,9 +4,9 @@ the exact `FINAL` frame.
 
 A port of the P2 kit's `p2_audit_verifier.py` (`p2-audit-wire/v1`) onto `reference.py` and `verity.ml.randomness`,
 with v4's hashes: every digest is SHA-512's whole 64 bytes, so the commitment, root, epoch id, sibling, transcript hash and
-the frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Like the
-kit's, it checks a public setup's blocks against the declared root but does not decode them back to `W`; that belongs to
-setup, not to the audit.
+the frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Unlike the
+kit's, it decodes a public setup's blocks back to the committed `W`, and checks a private setup's declared root against the
+root the verifier built from `W` itself (`private_root`), which it never trusts.
 """
 from __future__ import annotations
 
@@ -143,7 +143,11 @@ def _canonical_json(data: bytes) -> tuple[dict, bytes]:
         raise WireError(FAIL_MALFORMED, "manifest is not canonical UTF-8 JSON") from error
     if type(value) is not dict:
         raise WireError(FAIL_MALFORMED, "manifest is not an object")
-    encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True,
+                             separators=(",", ":")).encode("utf-8")
+    except ValueError as error:
+        raise WireError(FAIL_MALFORMED, "manifest holds a value canonical JSON cannot") from error
     if encoded != data:
         raise WireError(FAIL_MALFORMED, "manifest is not canonical JSON")
     return value, encoded
@@ -190,7 +194,7 @@ class Setup:
     blocks: tuple[bytes, ...]
     root: bytes
     epoch_id: bytes
-    authentication_failed: bool
+    failure: int
 
 
 @dataclass(frozen=True)
@@ -220,8 +224,16 @@ def _params(m: dict) -> tuple[R.Params, int]:
         raise WireError(FAIL_MALFORMED, f"no P2 prime: {error}") from error
 
 
-def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
+def _parse_setup(frames: Sequence[bytes], private_root: bytes | None) -> tuple[Setup, int]:
+    """The setup, raising its failure in the spec's 1, 2, 3, 5 precedence whatever the frames' order: a malformed frame
+    (1) at once, a binding mismatch (2) once every setup frame is read, and a root or decode failure (3, 5) as
+    `Setup.failure` only when neither came first."""
     cursor = 0
+    mismatches: list[WireError] = []
+
+    def bind(ok: bool, message: str) -> None:
+        if not ok:
+            mismatches.append(WireError(FAIL_IDENTITY, message))
     _, body = parse_envelope(frames[cursor], SETUP_COMMIT)
     cursor += 1
     if len(body) < 4 + D:
@@ -239,8 +251,9 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
         raise WireError(FAIL_TRANSPORT, "missing SETUP_SALT")
     _, body = parse_envelope(frames[cursor], SETUP_SALT)
     cursor += 1
-    if len(body) != D + S or body[:D] != commitment:
-        raise WireError(FAIL_IDENTITY, "SETUP_SALT commitment mismatch")
+    if len(body) != D + S:
+        raise WireError(FAIL_MALFORMED, "SETUP_SALT length mismatch")
+    bind(body[:D] == commitment, "SETUP_SALT commitment mismatch")
     salt = body[D:]
 
     blocks: list[bytes] = []
@@ -252,13 +265,11 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
         cursor += 1
         if len(body) < D + S + 8 + 4:
             raise WireError(FAIL_MALFORMED, "truncated SETUP_BLOCK")
-        if body[:D] != commitment or body[D:D + S] != salt:
-            raise WireError(FAIL_IDENTITY, "SETUP_BLOCK identity mismatch")
+        bind(body[:D] == commitment and body[D:D + S] == salt, "SETUP_BLOCK identity mismatch")
         index = int.from_bytes(body[D + S:D + S + 8], "big")
         length = int.from_bytes(body[D + S + 8:D + S + 12], "big")
         block = body[D + S + 12:]
-        if index != len(blocks):
-            raise WireError(FAIL_IDENTITY, "SETUP_BLOCK is missing, duplicated, or reordered")
+        bind(index == len(blocks), "SETUP_BLOCK is missing, duplicated, or reordered")
         if length != n or len(block) != length:
             raise WireError(FAIL_MALFORMED, "SETUP_BLOCK length mismatch")
         if int.from_bytes(block, "big") >= params.p:
@@ -266,30 +277,47 @@ def _parse_setup(frames: Sequence[bytes]) -> tuple[Setup, int]:
         blocks.append(block)
 
     if cursor >= len(frames):
-        raise WireError(FAIL_TRANSPORT, "missing SETUP_ROOT")
+        raise mismatches[0] if mismatches else WireError(FAIL_TRANSPORT, "missing SETUP_ROOT")
     _, body = parse_envelope(frames[cursor], SETUP_ROOT)
     cursor += 1
     if len(body) != SETUP_ROOT_BYTES:
         raise WireError(FAIL_MALFORMED, "SETUP_ROOT length mismatch")
-    if body[:D] != commitment or body[D:D + S] != salt:
-        raise WireError(FAIL_IDENTITY, "SETUP_ROOT identity mismatch")
+    bind(body[:D] == commitment and body[D:D + S] == salt, "SETUP_ROOT identity mismatch")
     declared_count = int.from_bytes(body[D + S:D + S + 8], "big")
     declared_root, mode = body[D + S + 8:D + S + 8 + D], body[-1]
     if mode not in (0, 1):
         raise WireError(FAIL_MALFORMED, "unknown setup mode")
-    if declared_count != params.blocks:
-        raise WireError(FAIL_IDENTITY, "setup block count disagrees with manifest")
-    if mode == 1 and len(blocks) != params.blocks:
-        raise WireError(FAIL_IDENTITY, "public setup has missing blocks")
     if mode == 0 and blocks and len(blocks) != params.blocks:
         raise WireError(FAIL_MALFORMED, "partial private setup blocks")
-    failed = False
-    if blocks:
-        bps = params.blocks_per_segment
-        failed = R.root([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]) != declared_root
+    bind(declared_count == params.blocks, "setup block count disagrees with manifest")
+    bind(mode == 0 or len(blocks) == params.blocks, "public setup has missing blocks")
+    if mismatches:
+        raise mismatches[0]
+    if not blocks and private_root is None:
+        raise ValueError("a private setup sends no blocks: pass the root the verifier built from W (private_root)")
+    failure = FAIL_SUCCESS
+    if private_root is not None and private_root != declared_root:
+        failure = FAIL_AUTHENTICATION
+    elif blocks:
+        failure = _check_blocks(params, bits, commitment, salt, blocks, declared_root)
     epoch = hashlib.sha512(R.EPOCH_TAG + len(manifest).to_bytes(4, "big") + manifest + commitment + salt
                            + params.blocks.to_bytes(8, "big") + declared_root).digest()
-    return Setup(manifest, commitment, salt, params, bits, tuple(blocks), declared_root, epoch, failed), cursor
+    return Setup(manifest, commitment, salt, params, bits, tuple(blocks), declared_root, epoch, failure), cursor
+
+
+def _check_blocks(params: R.Params, bits: int, commitment: bytes, salt: bytes, blocks: Sequence[bytes], root: bytes) -> int:
+    """Setup blocks against the declared root (3), then decoded: outside the payload profile (5), or to a `W` other than
+    the committed one (3)."""
+    bps = params.blocks_per_segment
+    if R.root([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]) != root:
+        return FAIL_AUTHENTICATION
+    payloads = []
+    for i, block in enumerate(blocks):
+        k, t, _ = R.keys(salt, params, commitment, i // bps, i % bps)
+        payloads.append(R.decode(params, int.from_bytes(block, "big"), k, t))
+        if payloads[-1] >> bits:
+            return FAIL_DECODE
+    return FAIL_SUCCESS if R.w_commitment(params, R.pack_payloads(payloads, bits)) == commitment else FAIL_AUTHENTICATION
 
 
 def _open_fields(frame_bytes: bytes, body: bytes) -> AuditOpen:
@@ -366,16 +394,21 @@ def _parse_response(frame_bytes: bytes, block_bytes: int) -> tuple[bytes, bytes,
 
 def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier_source: bytes | None = None,
                  beacon_inputs: Mapping[int, bytes] | None = None,
-                 seen_audits: MutableSet[tuple[bytes, bytes]] | None = None) -> bytes:
+                 seen_audits: MutableSet[tuple[bytes, bytes]], private_root: bytes | None = None,
+                 w_bytes: bytes | None = None) -> bytes:
     """Verify a setup and one audit transcript, returning the exact FINAL frame.
 
     `frames` is SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*, SETUP_ROOT, AUDIT_OPEN, then alternating CHALLENGE and RESPONSE.
     A missing final response is a transport failure. `elapsed_ns[j]` is the verifier's measured challenge-to-response time
-    for round j."""
+    for round j. `seen_audits` holds every `(epoch_id, audit_id)` pair this verifier has used, and gains this audit's.
+    `private_root` is the root the verifier built from `W` itself, which a private setup's declared root must be.
+    `w_bytes` is the `W` the verifier holds, which flag bit 1 compares each decoded payload with."""
+    if any(type(t) is not int or not 0 <= t < 1 << 64 for t in elapsed_ns):
+        raise ValueError("an elapsed time is not a record's u64")
     if not frames:
         raise WireError(FAIL_TRANSPORT, "empty transcript has no audit identity")
     try:
-        setup, cursor = _parse_setup(frames)
+        setup, cursor = _parse_setup(frames, private_root)
     except WireError as error:
         opened = _recover_open(frames)
         if opened is None:
@@ -392,21 +425,22 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
             raise
         return _final(salvaged, error.code, [open_frame], [])
     cursor += 1
+    if opened.verification_flags & 0x02 and w_bytes is None:
+        raise ValueError("flag bit 1 compares each payload with the held W: pass it (w_bytes)")
     transcript: list[bytes] = [opened.frame]
     records: list[bytes] = []
 
     def stop(code: int) -> bytes:
         return _final(opened, code, transcript, records)
 
-    if setup.authentication_failed:
-        return stop(FAIL_AUTHENTICATION)
+    if setup.failure:
+        return stop(setup.failure)
     if opened.epoch_id != setup.epoch_id:
         return stop(FAIL_IDENTITY)
     pair = (opened.epoch_id, opened.audit_id)
-    if seen_audits is not None:
-        if pair in seen_audits:
-            return stop(FAIL_IDENTITY)
-        seen_audits.add(pair)
+    if pair in seen_audits:
+        return stop(FAIL_IDENTITY)
+    seen_audits.add(pair)
     if not verifier_source or opened.audit_id != R.audit_id(verifier_source, opened.epoch_id, opened.audit_counter):
         return stop(FAIL_IDENTITY)
     audit_key = None
@@ -473,15 +507,20 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
         if opened.verification_flags & 0x01:
             flags |= 0x04
             k_value, tweak, _ = R.keys(setup.salt, setup.params, setup.commitment, segment, local)
-            if R.decode(setup.params, int.from_bytes(block, "big"), k_value, tweak) >> setup.payload_bits:
+            payload = R.decode(setup.params, int.from_bytes(block, "big"), k_value, tweak)
+            if payload >> setup.payload_bits:
                 return fail(FAIL_DECODE, flags)
             flags |= 0x08
-        if opened.verification_flags & 0x02:
-            # comparison with verifier-held payload is setup's, outside this audit-only reference
-            return fail(FAIL_DECODE, flags)
+            if opened.verification_flags & 0x02 and payload != _held_payload(w_bytes, setup.payload_bits, index):
+                return fail(FAIL_DECODE, flags)
         records.append(record(j, index, elapsed, flags, challenge_hash, response_hash))
 
     return stop(FAIL_IDENTITY if cursor != len(frames) else FAIL_SUCCESS)
+
+
+def _held_payload(w: bytes, bits: int, index: int) -> int:
+    start, stop = index * bits, (index + 1) * bits
+    return int.from_bytes(w[start // 8:(stop + 7) // 8], "big") >> (-stop % 8) & ((1 << bits) - 1)
 
 
 def _final(opened: AuditOpen, code: int, transcript: Sequence[bytes], records: Sequence[bytes]) -> bytes:

@@ -1,7 +1,8 @@
 /-!
 # What the window makes public (`window.py`, "Public items")
 
-`PUBLIC`, exactly the draft's list, in the service's `Public` form, and `REGISTERED`, the items a registration carries.
+`PUBLIC`, exactly the draft's list, in the service's `Public` form, `REGISTERED`, the items a registration carries, and
+`KINDS`, the kinds of an entry.
 -/
 
 namespace PouwWindow
@@ -28,5 +29,8 @@ def publicItems : List PublicItem := [
 
 /-- `REGISTERED`: the items a registration carries; the verdict and the draw come after it. -/
 def registered : List String := ["work", "check", "sampling", "root_W"]
+
+/-- `KINDS`. -/
+def kinds : List String := ["call", "filler", "none"]
 
 end PouwWindow

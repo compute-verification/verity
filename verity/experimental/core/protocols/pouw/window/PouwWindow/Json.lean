@@ -1,14 +1,12 @@
 import PouwWindow.Draw
-import PouwWindow.Advice
 import PouwWindow.Public
 import Lean.Data.Json
 
 /-!
 # The window's values as JSON
 
-Entries are read in the shape `window.py` reads (`kind`, `lo`, `hi`, `a` and `b` with `rows` and `keep`) into `Raw`; a
-number is an integer only when written without a fraction or exponent, as Python's `json` writes an `int`. The items are
-written as Python writes them: `Work` as its dataclass fields, `Work.to_json`, the `sampling` item with `str(Fraction)`.
+A number is an integer only when written without a fraction or exponent, as Python's `json` writes an `int`. The items
+are written as Python writes them: `Work` as its dataclass fields, `Work.to_json`, the `sampling` item with `str(Fraction)`.
 -/
 
 namespace PouwWindow
@@ -28,22 +26,6 @@ def field? (j : Json) (k : String) : Option Json :=
   match j with
   | .obj _ => (j.getObjVal? k).toOption
   | _ => none
-
-/-- A side as `_keep_ok` reads it: an object whose `rows` is a natural number and whose `keep` is a list of them. -/
-def sideOf? (j : Json) : Option Side := do
-  let rows ← natOf? (← field? j "rows")
-  let .arr keep ← field? j "keep" | none
-  pure ⟨rows, ← keep.toList.mapM natOf?⟩
-
-/-- An entry as the window statement reads it (`Raw`). -/
-def rawOf (j : Json) : Raw where
-  kind := match field? j "kind" with
-    | some (.str s) => Kind.ofName? s
-    | _ => none
-  lo := field? j "lo" >>= natOf?
-  hi := field? j "hi" >>= natOf?
-  a := field? j "a" >>= sideOf?
-  b := field? j "b" >>= sideOf?
 
 def Work.toJson (w : Work) : Json :=
   Json.mkObj [("level", w.level), ("credited", w.credited), ("n", w.n)]

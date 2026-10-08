@@ -1,0 +1,24 @@
+[Unit]
+Description=this machine's watchdog: one pass of the machine monitors (memory pressure, OOM kills, peers, the disk forecast, deploy.toml's units, lost checks; research/monitors.py)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=research
+Group=research
+# journalctl -k: the OOM killer's lines
+SupplementaryGroups=systemd-journal
+# it runs in system.slice, outside the user slice's cap, and the OOM killer takes a run before it: it must report the pressure
+OOMScoreAdjust=-900
+Nice=-5
+TimeoutStartSec=240
+# 3 is another runner holding the state's lock; 1 (the alert dir takes no writes, or a crash) fails the unit
+SuccessExitStatus=3
+Environment=PYTHONPATH=/usr/local/lib/vy-monitoring
+Environment=PYTHONDONTWRITEBYTECODE=1
+# VY_MONITORS_SLACK_WEBHOOK, when Slack's incoming webhook is chosen (root-only file; its value is never logged)
+EnvironmentFile=-/etc/vy/monitors.env
+# VY_WATCHDOG_ARGS: `--by vy-watchdog@NAME --machine NAME` and a `--peer HOST` for each machine it watches (root-written)
+EnvironmentFile=/etc/vy/watchdog.env
+ExecStartPre=+/usr/bin/install -d -o research -g research /workspace/monitoring/watchdog
+ExecStart=/usr/bin/python3 -m research.monitors run --where machine $VY_WATCHDOG_ARGS --alerts /workspace/monitoring/watchdog/alerts --state /workspace/monitoring/watchdog/state.json
