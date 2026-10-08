@@ -95,7 +95,7 @@ def verify_path(root: bytes, count: int, i: int, leaf: bytes, path: Sequence[byt
         return False
     fn, sn, r = i, count - 1, leaf
     for p in path:
-        if sn == 0:
+        if sn == 0 or len(p) != len(leaf):
             return False
         if fn & 1 or fn == sn:
             r = node_hash(p, r)

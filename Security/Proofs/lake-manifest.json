@@ -111,6 +111,33 @@
    "configFile": "lakefile.toml"
   },
   {
+   "type": "path",
+   "scope": "",
+   "name": "certifier_device",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir": "../Properties/../../verity/experimental/core/devices/certifier/lean",
+   "configFile": "lakefile.toml"
+  },
+  {
+   "type": "path",
+   "scope": "",
+   "name": "pouw_check",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir": "../Properties/../../verity/experimental/core/protocols/pouw/check",
+   "configFile": "lakefile.toml"
+  },
+  {
+   "type": "path",
+   "scope": "",
+   "name": "core_world",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir": "../Properties/../../verity/experimental/core/devices/certifier/lean/../../../primitives/world",
+   "configFile": "lakefile.toml"
+  },
+  {
    "url": "https://github.com/Verified-zkEVM/ArkLib",
    "type": "git",
    "subDir": null,
