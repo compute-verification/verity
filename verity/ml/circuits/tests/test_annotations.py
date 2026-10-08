@@ -60,8 +60,8 @@ def test_keys_resolve_against_the_descriptor(desc):
         {"key": "port:F32Fmaxf_v1/in/0", "name": "a"},
         {"key": "group:pair-sums", "members": ["node:APair_v1/0", "node:APair_v1/1"], "name": "sums"},
         {"key": "def:Absent_v1", "name": "a Definition this program lacks"},
-        {"key": "call:3", "program": PO.program_sha512(desc), "name": "the max of two"},
-    ), desc, PO.program_sha512(desc))
+        {"key": "call:3", "program": codec.program_digest(desc), "name": "the max of two"},
+    ), desc, codec.program_digest(desc))
     assert v.ok, v.errors
     assert v.absent == ["def:Absent_v1"] and not v.stale
 
@@ -83,7 +83,7 @@ def test_keys_resolve_against_the_descriptor(desc):
     (["not", "an", "entry"], "entry"),
 ])
 def test_refusals(desc, entry, code):
-    v = A.validate(ann(entry), desc, PO.program_sha512(desc))
+    v = A.validate(ann(entry), desc, codec.program_digest(desc))
     assert [e["code"] for e in v.errors][:1] == ([code] if code else [])
 
 
@@ -98,7 +98,7 @@ def test_guards_report_staleness(desc):
     v = A.validate(ann({"key": f"def:{fid}", "digest": good}, {"key": "node:AMaxAbs_v1/1", "callee": "F32Fmaxf_v1"}), desc)
     assert v.ok and v.stale == [{"key": "node:AMaxAbs_v1/1", "definition": codec.descriptor_id(M2), "callee": "F32Fabs_v1",
                                  "written_for": "F32Fmaxf_v1"}]
-    v = A.validate(ann({"key": f"def:{fid}", "digest": "0" * 64}), desc)
+    v = A.validate(ann({"key": f"def:{fid}", "digest": "0" * 128}), desc)
     assert v.ok and v.stale[0]["digest"] == good
 
 
@@ -113,7 +113,7 @@ def test_attaching_moves_no_digest(desc):
     with_a = A.attach(desc, a)
     assert with_a["annotations"][A.FORMAT] == a["entries"]
     assert codec.program_digest(with_a) == codec.program_digest(desc)
-    assert PO.program_sha512(with_a) == PO.program_sha512(desc)
+    assert codec.program_digest(with_a) == codec.program_digest(desc)
 
 
 def test_merge_layers_later_fields_win():

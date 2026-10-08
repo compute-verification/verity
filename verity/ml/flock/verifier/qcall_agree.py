@@ -102,7 +102,7 @@ def check_format(a, out, bad):
     got = qcall(a, out / "registered.desc")
     want_nodes = [[k, fid, {"Input": "run", "RegisteredInput": "registration"}[fid.rsplit("Input", 1)[0] + "Input"], n]
                   for k, fid, n in reg["input_nodes"]]
-    if got.get("program_sha512") != reg["program_sha512"] or got.get("input_nodes") != want_nodes \
+    if got.get("program_sha512") != reg["program_digest"] or got.get("input_nodes") != want_nodes \
             or got.get("calls") != [k for k, _fid in reg["calls"]]:
         bad.append(("registered_program", got.get("error") or {k: got.get(k) for k in ("program_sha512", "input_nodes", "calls")}))
     return len(ids) + 1
