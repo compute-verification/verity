@@ -92,6 +92,11 @@ a `sys.path` entry another test file added: every suite runs alone.
   (637 s in one process, 209 s on four). Its tests must then run in any order and in any process. Session and module
   fixtures are built once per worker, so keep them cheap. Declare it only after the suite passes
   `uv run tools/verity/check/suites.py SUITE --fresh` a few times.
+- In `check`, a suite still running after an hour (`SUITE_TIMEOUT_S`) has its process group killed and fails as timed out. A
+  suite that honestly needs longer declares `timeout_s` under `[tool.verity.tests]`, with a comment giving its longest pass.
+  The bound is flat, not a multiple of a suite's measured time: a suite slowed by memory load on a shared node would then
+  fail falsely and cost a full rerun, while a hung suite costs at most an hour of one slot (Daniel left the choice to
+  velocity, 7 Oct 10:29 PM PDT).
 
 ## Write tests that mean something
 

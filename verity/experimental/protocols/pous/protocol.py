@@ -10,9 +10,9 @@ honest answer is more than the stored block.  Everything else is written once, h
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
 4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
-5. **Audit.** `MemoryChallenger` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
-   The verifier refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit gives a
-   `StorageProfile`: what the certificate says about the server, and what that rests on.
+5. **Audit.** `TimedAudit` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
+   The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
+   gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
 Every coin is drawn here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
 none.  The claims a certificate rests on are ids in `verity.experimental.claims`' format (`claim`).
@@ -159,8 +159,8 @@ class Scheme(ABC):
 
     name: ClassVar[str] = ""
     experimental: ClassVar[str | None] = None
-    """Why the scheme is experimental, or None.  An experimental scheme is never the default; the verifier audits it
-    only when asked to (`MemoryChallenger(..., experimental=True)`), and its profile states the reason."""
+    """Why the scheme is experimental, or None.  An experimental scheme is never the default; the memory challenger
+    audits it only when asked to (`TimedAudit(..., experimental=True)`), and its profile states the reason."""
     backend: ClassVar[Callable[[Any], Primitives]]
 
     def __init__(self, params: Geometry, prims: Primitives | None = None) -> None:
@@ -175,9 +175,14 @@ class Scheme(ABC):
     @property
     def certificates(self) -> tuple[Certificate, ...]:
         """Every certificate at these parameters, the default (`certificate`, when there is one) first.  A scheme with
-        guarantees at several round budgets lists them all; the verifier audits under the first that covers its `k` and
-        deadline."""
+        guarantees at several round budgets lists them all; the memory challenger audits under the first that covers its
+        `k` and deadline."""
         return () if self.certificate is None else (self.certificate,)
+
+    def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
+        """Why the scheme's spec refuses this `Δ` and RTT allowance apart, beyond what its certificates read from their
+        sum (empty: it does not)."""
+        return ()
 
     @abstractmethod
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
@@ -259,9 +264,9 @@ def verifier_key(scheme: Scheme, commitment: bytes, salt: bytes, *, mode: str = 
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key, bound to `vk`'s root and salt; `source` is the verifier's own secret, kept secret until the
-    audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover compute
-    the challenged indices before the audit and rebuild only those blocks within the deadline."""
+    """The audit's key, bound to `vk`'s root and salt; `source` is the memory challenger's own secret, kept secret until
+    the audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover
+    compute the challenged indices before the audit and rebuild only those blocks within the deadline."""
     return audit.challenge_key(source, vk)
 
 
@@ -323,14 +328,14 @@ class StorageProfile:
                 "gaps": list(self.gaps), "certified": self.certified, "experimental": self.experimental}
 
 
-class MemoryChallenger:
-    """The timed audit of a scheme: `audit.MemoryChallenger` at the certificate's `k`, with sequential reveal and a strict
+class TimedAudit:
+    """The timed audit of a scheme: `audit.UnsignedRounds` at the certificate's `k`, with sequential reveal and a strict
     deadline per answer.
 
     It audits under the first of the scheme's `certificates` that covers `k` and the deadline (with `k` unset, each at
     its own `k`), so the default `k` is the first certificate's: the band's `k = 111` at `D = 5`, and `k = 97` at
-    `D = 2` or `k = 93` at `D = 1` only when asked for.  It refuses an audit that none covers, and a scheme with no
-    certificate at its parameters.  `research=True` runs such an audit anyway, and its profile lists the first
+    `D = 2` or `k = 93` at `D = 1` only when asked for.  It refuses an audit that none covers, one whose `Δ` or RTT
+    allowance the scheme refuses (`Scheme.deadline_refusals`), and a scheme with no certificate at its parameters.  `research=True` runs such an audit anyway, and its profile lists the first
     certificate's refusals as gaps.  An experimental scheme is refused unless `experimental=True`.  The band's cliff is
     refused regardless (`band.check_deployment`); the attack past it is replayed with `audit.simulate`."""
 
@@ -354,12 +359,13 @@ class MemoryChallenger:
             refused = cert.refusals(k, limit)
             if cert.segments is not None and scheme.params.segments != cert.segments:
                 uncovered = (f"W has {scheme.params.segments} segments; {cert.theorem} is about {cert.segments}",)
+        refused += scheme.deadline_refusals(deadline_ns, rtt_allowance_ns)
         if refused and not research:
             others = "".join(f"; under {c.theorem}: {'; '.join(c.refusals(k, limit))}" for c in certs if c is not cert)
             raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)}{others} "
                              "(research=True runs it anyway)")
         self.scheme, self.certificate, self.gaps = scheme, cert, refused + uncovered
-        self.timed = audit.MemoryChallenger(vk, key, k, deadline_ns, rtt_allowance_ns, clock, root_only=root_only)
+        self.timed = audit.UnsignedRounds(vk, key, k, deadline_ns, rtt_allowance_ns, clock, root_only=root_only)
 
     @property
     def k(self) -> int:
@@ -400,5 +406,5 @@ class MemoryChallenger:
                               self.gaps, self.scheme.experimental)
 
 
-__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "MemoryChallenger", "challenge_key",
+__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
            "claim", "commit", "decode", "decode_tensor", "draw_salt", "encode", "responder", "verifier_key"]

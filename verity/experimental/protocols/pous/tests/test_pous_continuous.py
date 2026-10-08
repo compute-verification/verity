@@ -1,6 +1,6 @@
 """The continuous audit's memory challenger (`verity.experimental.protocols.pous.continuous`): each of the continuous game's three requirements on the
-protocol (no pipelining, a hard deadline, every late answer counted) enforced on `audit.MemoryChallenger` over a stream
-of challenges, on a small band with the verifier's clock injected."""
+protocol (no pipelining, a hard deadline, every late answer counted) enforced on `audit.UnsignedRounds` over a stream
+of challenges, on a small band with the memory challenger's clock injected."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import random
 import pytest
 
 from verity.experimental.protocols.pous import band, dense
-from verity.experimental.protocols.pous.audit import AUDIT_CAP, DEADLINE_NS, LATE_ROUNDS, MemoryChallenger, challenge_key, run_timed
+from verity.experimental.protocols.pous.audit import AUDIT_CAP, DEADLINE_NS, LATE_ROUNDS, UnsignedRounds, challenge_key, run_timed
 from verity.experimental.protocols.pous.codec import encode_segments
 from verity.experimental.protocols.pous.continuous import ContinuousMemoryChallenger, Reply, run_continuous
 from verity.experimental.protocols.pous.verifier import MerkleTree, VerifierKey
@@ -98,7 +98,7 @@ def test_honest_stream(world, root_only):
         v.challenge()
 
 
-# Liveness: the driver closes every challenge by the verifier's clock.
+# Liveness: the driver closes every challenge by the memory challenger's clock.
 
 def test_a_silent_responder_cannot_hang_the_stream(world):
     """No reply ever: `run_continuous` still ends, each challenge rejected just past its hard deadline and counted
@@ -193,8 +193,8 @@ def test_a_pipelined_answer_is_refused(world):
 
 
 def test_deadlines_run_from_the_memory_challengers_send(world):
-    """Lateness is the verifier's own clock from its reveal: time before the arrival never counts, and a latency the
-    responder reports is kept but never read."""
+    """Lateness is the memory challenger's own clock from its reveal: time before the arrival never counts, and a
+    latency the responder reports is kept but never read."""
     blocks, vk = world
     clock = Clock()
     v = _verifier(vk, 2, clock)
@@ -234,11 +234,11 @@ def test_a_stale_answer_is_not_credited_to_the_next_challenge(world):
 
 
 def test_a_bare_memory_challenger_would_credit_it(world):
-    """Why the continuous audit runs only on `ContinuousMemoryChallenger`: the same sequence on a bare `MemoryChallenger` with a
+    """Why the continuous audit runs only on `ContinuousMemoryChallenger`: the same sequence on a bare `UnsignedRounds` with a
     hard deadline credits answer 0, which names no challenge, to challenge 1 as a hit."""
     blocks, vk = world
     clock = Clock()
-    v = MemoryChallenger(vk, challenge_key(_same_block_twice(vk), vk), 2, clock=clock, late_deadline_ns=LATE)
+    v = UnsignedRounds(vk, challenge_key(_same_block_twice(vk), vk), 2, clock=clock, late_deadline_ns=LATE)
     i = v.challenge()
     clock.now = LATE + 1
     assert v.challenge() == i
@@ -305,7 +305,7 @@ def test_challenge_past_the_last_hard_deadline_closes_it_then_refuses(world):
 
 def test_the_hard_deadline_is_capped(world):
     """`Δ_late + RTT` must fit at most `D_late = 12` calls of 241.5 µs (under 3,139,500 ns) and at most the band's `d`,
-    and the continuous verifier does not run without one."""
+    and the continuous audit's memory challenger does not run without one."""
     _, vk = world
     key = challenge_key(b"audit", vk)
     assert PARAMS.call_ns == 241_500 and LATE_ROUNDS == 12
@@ -329,10 +329,10 @@ def test_the_hard_deadline_is_capped(world):
 
 
 def test_without_a_hard_deadline_the_single_audit_waits(world):
-    """`MemoryChallenger` without `late_deadline_ns` is unchanged: it waits for each answer, however late."""
+    """`UnsignedRounds` without `late_deadline_ns` is unchanged: it waits for each answer, however late."""
     blocks, vk = world
     clock = Clock()
-    v = MemoryChallenger(vk, challenge_key(b"audit", vk), k=1, clock=clock)
+    v = UnsignedRounds(vk, challenge_key(b"audit", vk), k=1, clock=clock)
     i = v.challenge()
     clock.now = 10**12
     with pytest.raises(RuntimeError, match="the previous challenge is unanswered"):
@@ -446,12 +446,12 @@ def test_the_cap_is_1505_calls_of_call_ns(world):
     for target in (vk, flat):
         v = ContinuousMemoryChallenger(target, key, 1, late_deadline_ns=LATE, audit_cap=AUDIT_CAP)
         assert v.timed.cap_ns == AUDIT_CAP * target.params.call_ns and v.ends_at is None
-    assert MemoryChallenger(vk, key, audit_cap=1).cap_ns == PARAMS.call_ns
+    assert UnsignedRounds(vk, key, audit_cap=1).cap_ns == PARAMS.call_ns
     for cap in (0, AUDIT_CAP + 1):
         with pytest.raises(ValueError, match="an audit's cap is from 1 to 1505 calls"):
             ContinuousMemoryChallenger(vk, key, 1, late_deadline_ns=LATE, audit_cap=cap)
     assert ContinuousMemoryChallenger(vk, key, 1, late_deadline_ns=LATE).timed.cap_ns is None
-    assert MemoryChallenger(vk, key).cap_ns is None
+    assert UnsignedRounds(vk, key).cap_ns is None
 
 
 def test_an_honest_audit_under_the_cap_accepts(world):
@@ -507,8 +507,8 @@ def test_a_stalling_prover_is_rejected_not_retried(world):
 
 
 def test_the_gaps_between_challenges_count_toward_the_cap(world):
-    """Answers on time, but the verifier's own gaps reach past the cap: the challenge sent past it closes at once,
-    rejected, and the audit is aborted."""
+    """Answers on time, but the memory challenger's own gaps reach past the cap: the challenge sent past it closes at
+    once, rejected, and the audit is aborted."""
     blocks, vk = world
     clock = Clock()
     v = _verifier(vk, 3, clock, audit_cap=AUDIT_CAP)
@@ -535,7 +535,7 @@ def test_an_answer_past_the_cap_is_rejected_unchecked(world, monkeypatch):
         m.setattr(VerifierKey, "check", lambda *_: pytest.fail("an answer past the cap was checked"))
         a = v.respond(j, blocks[i])
     assert a.rejected and a.elapsed_ns < LATE and v.aborted and len(v.answers) == 2
-    bare = MemoryChallenger(vk, challenge_key(b"audit", vk), k=2, clock=clock, audit_cap=10)
+    bare = UnsignedRounds(vk, challenge_key(b"audit", vk), k=2, clock=clock, audit_cap=10)
     clock.now = 0
     bare.challenge()
     clock.now = bare.ends_at
@@ -546,8 +546,8 @@ def test_an_answer_past_the_cap_is_rejected_unchecked(world, monkeypatch):
 
 
 def test_the_memory_challenger_caps_a_graded_audit(world):
-    """`run_timed` over a `MemoryChallenger` with a hard deadline and the cap, the graded audit's verifier: answers late
-    but within the hard deadline end at the cap, rejected."""
+    """`run_timed` over a `UnsignedRounds` with a hard deadline and the cap, the graded audit's memory challenger:
+    answers late but within the hard deadline end at the cap, rejected."""
     blocks, vk = world
     clock = Clock()
 
@@ -555,7 +555,7 @@ def test_the_memory_challenger_caps_a_graded_audit(world):
         clock.now += LATE
         return blocks[i]
 
-    v = MemoryChallenger(vk, challenge_key(b"audit", vk), k=243, clock=clock, late_deadline_ns=LATE, audit_cap=AUDIT_CAP)
+    v = UnsignedRounds(vk, challenge_key(b"audit", vk), k=243, clock=clock, late_deadline_ns=LATE, audit_cap=AUDIT_CAP)
     result = run_timed(v, respond)
     assert result.aborted and not v.accepted and len(result.answers) == 182 and result.answers[-1].rejected
 
