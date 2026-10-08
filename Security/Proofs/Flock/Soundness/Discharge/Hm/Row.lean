@@ -104,8 +104,7 @@ theorem chainV_one_row {words n : ℕ} {data : List UInt8} (hd : data.length = 1
       Sha512.compress Sha512.iv (HmRow.rowPrefix words) 0 := by
     refine compress_congr _ fun k hk => ?_
     rw [get!_eq_getD, get!_eq_getD, rowMsg_pad hd, Nat.zero_add, getD_rowPad_pre hd hk]
-  rw [chainV, show chain (padData (rowMsg words data)) 1 = Sha512.compress Sha512.iv (padData (rowMsg words data)) 0
-    from rfl, h1]
+  rw [chainV, chain_succ, show chain (padData (rowMsg words data)) 0 = Sha512.iv from rfl, Nat.mul_zero, h1]
   rfl
 
 /-- Block `k + 1` (`k < n`) is chunk `k` of the data. -/
