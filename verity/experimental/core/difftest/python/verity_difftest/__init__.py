@@ -103,20 +103,23 @@ def canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-#: held around every `lake build`: a port's package writes the `.lake` of each package it requires by path, which other
-#: ports' builds write too, and two builds writing one `.lake` at once fail (two suites side by side, or xdist workers)
-BUILD_LOCK = Path(tempfile.gettempdir()) / "verity-difftest-lake-build.lock"
+#: Lake builds a path require in place, and ports share theirs (`lean/` here, the core protocol interface), so two ports'
+#: builds at once, as two suites in one `check` run them, compile one module's C in one directory together, and clang
+#: reads it while the other rewrites it
+BUILD_LOCK = Path(__file__).resolve().parents[2] / "lean" / ".lake" / "harness-build.lock"
 
 
 @functools.cache
 def build(package: Path, exe: str) -> Path:
-    """`lake build EXE` in the Lake package `package`, once per process and under `BUILD_LOCK`; the built executable's path."""
-    try:
-        with open(BUILD_LOCK, "a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+    """`lake build EXE` in the Lake package `package`, once per process and one at a time across processes (`BUILD_LOCK`);
+    the built executable's path."""
+    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(BUILD_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
             p = subprocess.run(["lake", "build", exe], cwd=package, capture_output=True, text=True)
-    except FileNotFoundError:
-        raise BuildError(f"lake is not on the PATH, so {exe} in {package} cannot be built") from None
+        except FileNotFoundError:
+            raise BuildError(f"lake is not on the PATH, so {exe} in {package} cannot be built") from None
     if p.returncode != 0:
         raise BuildError(f"lake build {exe} in {package} failed ({p.returncode}):\n{p.stdout}{p.stderr}")
     return package / ".lake" / "build" / "bin" / exe
