@@ -1,0 +1,42 @@
+{
+ "roots": ["Lms"],
+ "exempt": {
+  "Lms.DifftestMain": "the difftest against verity/ml/crypto/lms.py, under `runs`: compiled evaluation of Lms.Difftest.main, audited under Lms, a test and not a proof",
+  "Lms.SignDifftestMain": "the sign difftest against verity/ml/crypto/lms.py, under `runs`: compiled evaluation of Lms.SignDifftest.main, audited under Lms, a test and not a proof"
+ },
+ "runs": {
+  "Lms.DifftestMain": {
+   "why": "600 instances, keys at every parameter set Params admits (N = 64 and TOY_N, W = 1, 2, 4, 8, heights 1 to 5, and DEPLOYED's height 20, 11 and 30 under a stand-in tree), their signatures and tampered ones, on which Lms.Verify gives what verity/ml/crypto/lms.py gives: Params' admission, Signature.decode, digits, root_of and every accept and reject of verify",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "600"],
+   "data": {
+    "difftest/instances.jsonl": "6c1d357b724afe7b726851f3f9c93c696f870fb4fba4fc2cb313b163a1df26d4",
+    "difftest/python.jsonl": "3a3b90a476e5ebdab404d505ec8fa1ada86369a128b3e3d3c030e30ad56c9d7a"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "Lms.SignDifftestMain": {
+   "why": "80 instances, keys at N = 64 (W = 1, 2, 4) and at TOY_N (every W) of heights 1 to 4, from keygen and from key, with seeds and identifiers of the right length and of others, and parameter sets Params refuses, on which Lms.Sign gives what verity/ml/crypto/lms.py gives: the public key, each sign_at's signature byte for byte (every leaf, or a sample, and leaves past 2^H refused) and verify's verdict on it",
+   "args": ["{sign/instances.jsonl}", "{sign/python.jsonl}", "80"],
+   "data": {
+    "sign/instances.jsonl": "c145a6069c742703884b43547c580c7ed04053ec680d2fac52db3f7cd64d94b8",
+    "sign/python.jsonl": "ba2d3dbbfab7c383e1d680d1e03389216a9f87323dec4658dc585c3489d75282"
+   },
+   "generate": ["python3", "scripts/sign_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
+ "layers": {
+  "Lms.Verify": {
+   "imports": ["Flock.Hash", "Flock.Bytes"],
+   "except": [],
+   "why": "the verifier is code: Lean core and C-Flock's hashes and bytes only, no Mathlib and nothing of Security"
+  },
+  "Lms.Sign": {
+   "imports": ["Lms.Verify"],
+   "except": [],
+   "why": "signing is code: Lean core and the verifier's definitions only, no Mathlib and nothing of Security"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

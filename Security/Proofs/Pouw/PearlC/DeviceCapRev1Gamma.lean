@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # v1 under rev1 at a stricter cap, and γ there (FP8 security's file)
@@ -246,3 +247,9 @@ theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384_of_cap400
 end Gamma
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_16384_of_cap400
+
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400
+
+theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1CapAnti : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1CapAnti := @Pouw.PearlC.ttOutPearlCDevRev1_cap_anti

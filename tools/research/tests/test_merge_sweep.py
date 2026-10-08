@@ -381,6 +381,23 @@ def test_a_refused_node_1_push_leaves_the_merge_landed_and_names_the_command_tha
     assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
 
 
+def test_a_hand_landed_main_reaches_node_1_past_the_checkouts_push_guard(tmp_path, monkeypatch, capsys):
+    """The guard judges pushes to origin's main; node 1's copy follows origin, so a main landed by hand, which has no check
+    attempt of its tree, still reaches it (61f64824c and 24aa9a9a4 didn't, 7 Oct)."""
+    repo, _gh, _tips, _merge = _world(tmp_path)
+    bare, _asked = _node1(tmp_path, monkeypatch)
+    _git(repo, "config", "core.hooksPath", str(repo / ".git" / "hooks"))
+    assert M.install_push_guard(repo) == repo / ".git" / "hooks" / "pre-push"
+    (repo / "by-hand.txt").write_text("landed by hand\n")
+    _git(repo, "add", "by-hand.txt")
+    _git(repo, "commit", "-qm", "landed by hand")
+    main = _git(repo, "rev-parse", "HEAD")
+    plain = subprocess.run(["git", "push", "-q", str(bare), f"{main}:refs/heads/main"], cwd=repo, capture_output=True, text=True)
+    assert plain.returncode != 0 and _main_of(bare) is None, "the guard refuses it as a push to main"
+    monkeypatch.chdir(repo)
+    assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
+
+
 def test_a_machine_that_cannot_be_resolved_fails_only_the_node_1_push(tmp_path, monkeypatch, capsys):
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
