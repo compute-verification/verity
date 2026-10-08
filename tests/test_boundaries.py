@@ -65,15 +65,16 @@ ALLOWED = {
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli",
+FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
                       "benchmarks", "frontends", "infra", "integrations", "tools", "veritor")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, and the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``).
-SEPARATE = ("ml/flock", "ml/kernels/hash_gpu")
+#: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), and the Lean ports' differential test
+#: (``verity_difftest``, which their tests import, on Hypothesis).
+SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "experimental/core/difftest")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "experimental/claims")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
