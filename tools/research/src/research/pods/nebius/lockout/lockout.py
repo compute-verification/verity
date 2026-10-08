@@ -88,9 +88,9 @@ ALLOW = (
     Rule("/usr/local/bin/vy-lean-sandbox", "*", "journal n1 5 (`vy-lean-sandbox probe`); lean_sandbox.py:17 is meant for `sudo -n` "
          "and never runs a build as root, research or a privileged group"),
     Rule("/usr/bin/systemctl", "start vy-steward-watch.service", "journal n1 3 (infra's duty pass; the watch is read-only)"),
-    Rule("/usr/bin/true", "", "journal n2 21 + n1 11 `sudo -n true` (tools/cluster/src/cluster/status.py:54)"),
+    Rule("/usr/bin/true", "", "journal n2 21 + n1 11 `sudo -n true` (infra/cluster/src/cluster/status.py:54)"),
     Rule("/usr/local/sbin/vy-sudo", "du-bundles", "journal n1 23,140 each `find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev "
-         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (tools/cluster/src/cluster/status.py:54, sky/release.py's: a "
+         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py:54, sky/release.py's: a "
          "root unit after the switch); vy-sudo runs that find with -exec du, since `xargs du` as root takes du's options from stdin"),
 )
 #: who besides root research may run as, for anything: itself (journal n1 1,471 tmux, 512 env), and the job user ubuntu (journal n1
