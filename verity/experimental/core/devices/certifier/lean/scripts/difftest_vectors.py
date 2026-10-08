@@ -33,11 +33,13 @@ valid syncs that don't cover the server (frames ready after their eligibility), 
 without a position, a position seen twice (also while the queue holds exactly Q), an event longer than a frame, an
 event on a stream with no released request, bytes left at a stream's end), link bytes that aren't frames (partial,
 padding, unknown kinds, a length past the frame, an early end), the online prover in place of the given syncs (with or
-without given ones before it, a prior history and an envelope outside Σ_sync), the prover with an ingress tick read
-early, so that the first event of the request it releases is read before the request's anchor bucket (the prover
-refuses its next declaration, which faults that egress window `monitor-unavailable`), or several at once. Every reading
-is integer nanoseconds at least `MARGIN` from every grid boundary and every boundary plus the slack, where Python's
-float seconds and Lean's integers could part.
+without a prior history, and an envelope outside Σ_sync), the prover with an ingress tick read early, so that the
+first event of the request it releases is read before the request's anchor bucket (the prover refuses the first choice
+that reads it, which faults the egress window declaring it `monitor-unavailable`), or several at once. The prover
+chooses each window's sync `lag` buckets before the window (1, T − 1, or between), on `active.InlineExecutor`, so every
+choice is ready by its tick; each tick that starts a choice wakes late within the slack, after some of its bucket's
+response reads, which the choice has read but mustn't see. Every reading is integer nanoseconds at least `MARGIN` from every grid boundary and every
+boundary plus the slack, where Python's float seconds and Lean's integers could part.
 """
 from __future__ import annotations
 
@@ -51,7 +53,7 @@ from pathlib import Path
 
 import verity.experimental.protocols.certifier
 from verity.experimental.protocols.certifier import online
-from verity.experimental.protocols.certifier.active import DATA, LAST, PAD, Proxy, encode_frame
+from verity.experimental.protocols.certifier.active import DATA, LAST, PAD, InlineExecutor, Proxy, encode_frame
 from verity.experimental.protocols.certifier.grid import GridParams, Reason, Record
 from verity.experimental.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 
@@ -61,10 +63,10 @@ MARGIN = 10_000
 RHOS = [Fraction(1), Fraction(2), Fraction(1, 2), Fraction(1, 3), Fraction(3, 2)]
 PATHS = ["honest", "honest", "honest", "late-tick", "stall", "backlog", "overrun", "refused", "late-forward",
          "undelivered", "overflow-egress", "overflow-ingress", "advice", "no-id", "duplicate", "duplicate-at-capacity",
-         "long", "no-request", "trailing", "slow-server", "link-garbage", "prover", "prover", "prover-after-syncs",
+         "long", "no-request", "trailing", "slow-server", "link-garbage", "prover", "prover", "prover",
          "early-tick", "chaos", "chaos"]
 PERTURBATIONS = [p for p in dict.fromkeys(PATHS)
-                 if p not in ("honest", "chaos", "prover", "prover-after-syncs", "early-tick", "duplicate-at-capacity")]
+                 if p not in ("honest", "chaos", "prover", "early-tick", "duplicate-at-capacity")]
 
 
 # --- the world the proxy runs in ------------------------------------------------------------------------------------
@@ -231,7 +233,8 @@ def prover_of(x: dict | None, sync_set: SyncSet, buckets: int) -> online.Prover 
     k, margin, fallback = x["rule"]
     prior = [online.Past(p["window"], sync_of(p["sync"]), p["frames"], p["late"],
                          tuple(None if f is None else (f[0], f[1]) for f in p["frontier"])) for p in x["prior"]]
-    return online.Prover(sync_set, buckets, online.cover(k, margin, fallback), sync_of(x["envelope"]), prior=prior)
+    return online.Prover(sync_set, buckets, online.cover(k, margin, fallback), sync_of(x["envelope"]), prior=prior,
+                         lag=x["lag"])
 
 
 async def drive(h: Harness, inst: dict) -> dict:
@@ -240,7 +243,8 @@ async def drive(h: Harness, inst: dict) -> dict:
     proxy = h.proxy = Proxy(("upstream", 0), egress, ingress, sync_set, [sync_of(s) for s in c["syncs"]],
                             origin=c["origin"] / 1e9, slack=c["slack"] / 1e9, clock=h.clock, sleep=h.sleep,
                             publish=h.publish, egress_link=c["egress_link"], ingress_link=c["ingress_link"],
-                            prover=prover_of(c["prover"], sync_set, egress.buckets), windows=c["windows"])
+                            prover=prover_of(c["prover"], sync_set, egress.buckets), windows=c["windows"],
+                            executor=InlineExecutor())
     running = asyncio.create_task(proxy.run(LinkReader(h), LinkWriter(h)))
     await settle()
     for ev in inst["events"]:
@@ -552,6 +556,10 @@ class Trace:
                 x.connected = self.at(early + rng.randrange(2 * MARGIN, MS))
             x.delivered = self.at(max(x.connected, early) + rng.randrange(2 * MARGIN, MS))
             x.times[0] = self.at(x.delivered + rng.randrange(3 * MARGIN, 2 * MS))
+            # the choice that reads it, and refuses, is window ⌈(anchor + lag)/T⌉'s: one inside the run where a lag allows
+            inside = [g for g in range(1, self.T) if -(-(x.anchor + g) // self.T) < self.W]
+            if self.prover is not None and inside and self.prover["lag"] not in inside:
+                self.prover["lag"] = rng.choice(inside)
         elif path == "slow-server":  # valid syncs that don't cover it: frames ready after their eligibility
             self.syncs = [ClockSync(min(self.deltas), max(self.rhos)) for _ in range(self.W)]
         elif path == "advice":
@@ -598,8 +606,9 @@ class Trace:
         else:
             raise ValueError(path)
 
-    def configure_prover(self, after_syncs: bool) -> None:
+    def configure_prover(self) -> None:
         rng = self.rng
+        lag = rng.choice([1, self.T - 1, rng.randrange(1, self.T)])
         k, margin, fallback = rng.choice([(1, 0, False), (1, 0, False), (2, 1, False), (2, 0, True), (3, 1, False),
                                          (1, 1, True)])
         envelope = ClockSync(max(self.deltas), min(self.rhos)) if rng.random() < 0.85 else \
@@ -615,9 +624,32 @@ class Trace:
                     d = rng.choice([x for x in self.deltas if x >= d])
                 prior.append({"window": u, "sync": sync_json(rng.choice(self.syncs)), "frames": rng.randint(1, 4),
                               "late": rng.random() < 0.3, "frontier": frontier})
-        self.prover = {"rule": [k, margin, fallback], "envelope": sync_json(envelope), "prior": prior}
+        self.prover = {"rule": [k, margin, fallback], "envelope": sync_json(envelope), "lag": lag, "prior": prior}
         self.windows = self.W
-        self.syncs = self.syncs[: rng.randint(1, self.W - 1)] if after_syncs else []
+        self.syncs = []
+        self.read_before_choices(lag)
+
+    def read_before_choices(self, lag: int) -> None:
+        """Each tick w·T − lag that starts a choice wakes late within the slack, and some of its bucket's response reads
+        move before it: ready at w·T − lag + 1, read by the choice's start, and not ready by the bucket it reads to."""
+        rng = self.rng
+        for w in range(1, self.W):
+            t = w * self.T - lag
+            if ("egress", t) in self.tick_late:  # a perturbation's late tick or stall
+                continue
+            late = rng.randrange(self.slack // 2, self.slack - 2 * MARGIN)
+            self.tick_late[("egress", t)] = late
+            lo, hi = self.boundary(self.tau, t), self.boundary(self.tau, t) + late - 3 * MARGIN
+            for x in self.sessions:
+                for k, s in enumerate(x.times):
+                    prev = x.times[k - 1] if k else x.delivered
+                    if prev is None or not lo <= s < self.boundary(self.tau, t + 1) or rng.random() < 0.4:
+                        continue
+                    new = self.at(max(lo, prev) + rng.randrange(3 * MARGIN, 6 * MARGIN))
+                    if new < min(hi, s):
+                        x.times[k] = new
+                        if s in x.replace:
+                            x.replace[new] = x.replace.pop(s)
 
 
 def instance(seed: int) -> dict:
@@ -629,11 +661,11 @@ def instance(seed: int) -> dict:
         for p in rng.sample(PERTURBATIONS, rng.randint(2, 3)):
             t.perturb(p)
         if rng.random() < 0.3:
-            t.configure_prover(rng.random() < 0.3)
-    elif path in ("prover", "prover-after-syncs"):
-        t.configure_prover(path == "prover-after-syncs")
+            t.configure_prover()
+    elif path == "prover":
+        t.configure_prover()
     elif path == "early-tick":
-        t.configure_prover(False)
+        t.configure_prover()
         t.perturb(path)
     elif path != "honest":
         t.perturb(path)

@@ -19,12 +19,44 @@ structure Frame where
   anchor : Nat
   index : Nat
 
+/-- `active.LaggedChoices` on an executor where every choice is ready by its tick (`InlineExecutor`): `start`, right
+after tick w·T − lag (window 0's before the first tick), makes window w's choice (`Prover.choose`), and `declare` at
+tick w·T declares it, or the envelope if none was started for w. A refused choice is kept (`refused`) and refuses the
+window's declaration once. -/
+structure LaggedChoices where
+  prover : Prover
+  next : Option (Nat × ClockSync) := none
+  refused : Option Nat := none
+
+namespace LaggedChoices
+
+def arrive (l : LaggedChoices) (position anchor index : Nat) (ready : Int) : LaggedChoices :=
+  { l with prover := l.prover.arrive position anchor index ready }
+
+/-- `LaggedChoices.start`: window w's choice on what the prover has read by now; a refusal is kept for w. -/
+def start (l : LaggedChoices) : LaggedChoices :=
+  let w := l.prover.syncs.size
+  let (prover, sync, refused) := l.prover.choose
+  { prover, next := some (w, sync), refused := if refused then some w else l.refused }
+
+/-- `LaggedChoices.declare`: window w's declaration, and whether it is refused (Python raises `Refused` once, and the
+next call declares the choice made on what was read: the sync returned here). -/
+def declare (l : LaggedChoices) : LaggedChoices × ClockSync × Bool :=
+  let w := l.prover.syncs.size
+  let refused := l.refused == some w
+  let sync := match l.next with
+    | some (v, s) => if v = w then s else l.prover.envelope
+    | none => l.prover.envelope
+  ({ prover := l.prover.declare sync, next := none, refused := if refused then none else l.refused }, sync, refused)
+
+end LaggedChoices
+
 /-- `active.Shaper`. `queued` is what the certifier's queue would hold had no fault dropped it. -/
 structure Shaper where
   certifier : Certifier
   syncs : Array ClockSync
   syncSet : SyncSet
-  prover : Option Prover
+  prover : Option LaggedChoices
   windows : Nat
   pending : Std.HashMap Nat (Frame × Int) := {}
   next : Nat := 0
@@ -42,8 +74,8 @@ def checkAdvice (s : Shaper) : Shaper :=
   | some sync => if inSet s.syncSet sync then s else { s with certifier := s.certifier.doFault .coverageNeverEstablished }
   | none => s
 
-def make (certifier : Certifier) (syncs : Array ClockSync) (ss : SyncSet) (prover : Option Prover) (windows : Nat) :
-    Shaper :=
+def make (certifier : Certifier) (syncs : Array ClockSync) (ss : SyncSet) (prover : Option LaggedChoices)
+    (windows : Nat) : Shaper :=
   checkAdvice { certifier, syncs, syncSet := ss, prover, windows }
 
 def fault (s : Shaper) (r : Reason) : Shaper := { s with certifier := s.certifier.doFault r }
@@ -55,9 +87,10 @@ def arrive (s : Shaper) (position : Nat) (frame : Frame) (ready : Int) : Shaper 
   else { s with pending := s.pending.insert position (frame, ready),
                 prover := s.prover.map (·.arrive position frame.anchor frame.index ready) }
 
-/-- `Shaper.tick`: the prover's declaration at a window's first tick, then the frames due by the handing rule, then the
-certifier's row, with the window's record at its last bucket. A window closing faulted with frames still queued faults
-the next one with the same reason. A declaration the prover refuses faults the window `monitor-unavailable`. -/
+/-- `Shaper.tick`: the prover's declaration at a window's first tick (a choice already made), then the frames due by the
+handing rule, then the certifier's row, with the window's record at its last bucket. A window closing faulted with
+frames still queued faults the next one with the same reason. A declaration the prover refuses faults the window
+`monitor-unavailable`. -/
 def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
   let T := s.certifier.params.buckets
   let mut s := s
