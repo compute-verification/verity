@@ -1029,6 +1029,8 @@ def cmd_fetch(argv: list[str]) -> int:
     if ex := rec.get("launcher_exited"):
         print(f"research fetch: {s['run_id']}: the machine's runner (pid {ex['runner_pid']}) exited without writing status.json; "
               f"launcher.log ends: {ex['last_line'] or '(empty)'}", file=sys.stderr)
+    if gone := rec.get("runner_gone"):
+        print(f"research fetch: {s['run_id']}: it ended without recording it: {gone['why']}", file=sys.stderr)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
     marker = rec.get("fetched_marker") if ns.all else None

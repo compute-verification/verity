@@ -3,6 +3,7 @@ status.json, a relative command started outside the shipped tree, and push_branc
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -51,6 +52,27 @@ def test_fetch_reports_a_runner_that_exited_without_status(tmp_path, monkeypatch
     assert R.summarize(local)["state"] == "launcher-exited"
     assert cli.main(["fetch", str(local), "--runs-dir", str(local.parent)]) == 0
     assert "exited without writing status.json" in capsys.readouterr().err
+
+
+def test_fetch_reports_a_running_run_whose_machine_rebooted_or_whose_runner_is_gone(tmp_path, monkeypatch, capsys):
+    import socket
+    local = _machine_run(tmp_path, monkeypatch, launcher_log="")
+    d = tmp_path / "machine" / "r-x"
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    dead = json.loads((d / "launch.json").read_text())["runner_pid"]
+
+    def at(pid, **env):
+        (d / "status.json").write_text(json.dumps({"state": "running", "pid": pid}))
+        (d / "job.json").write_text(json.dumps({"environment": {"hostname": socket.gethostname(), "boot_id": boot, **env}}))
+        return remote.fetch(local)
+
+    assert "rebooted since its runner started" in at(os.getpid(), boot_id="0-old-boot")["runner_gone"]["why"]
+    assert R.summarize(local)["state"] == "runner-gone"
+    assert cli.main(["fetch", str(local), "--runs-dir", str(local.parent)]) == 0
+    assert "ended without recording it: the machine rebooted" in capsys.readouterr().err
+    assert at(dead)["runner_gone"]["why"] == f"its runner (pid {dead}) is gone without recording an end"
+    assert "runner_gone" not in at(dead, hostname="a-kubernetes-pod")      # its runner is in a pid namespace the host can't see
+    assert "runner_gone" not in at(os.getpid()) and R.summarize(local)["state"] == "running"
 
 
 def test_push_refusal_names_the_bind_for_a_worktree_on_another_branch(tmp_path, monkeypatch):
