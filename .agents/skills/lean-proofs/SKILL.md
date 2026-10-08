@@ -8,7 +8,7 @@ description: >
   of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
   them). Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
-  and its Proofs, the PoUS grader in verity/experimental/protocols/pous/lean), when a Lean build or proof is slow,
+  and its Proofs, the PoUS grader in verity/core/protocols/pous/lean), when a Lean build or proof is slow,
   editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -116,7 +116,7 @@ simp with that.
   `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`), and listed by name in the lock's
   `assumptions` with its owner (`check.py --update` writes its record). Its docstring opens with its
-  claim id (`uniform/io-getrandombytes`, from `verity.experimental.claims`) and gives its rationale. Lean is the source of truth for
+  claim id (`uniform/io-getrandombytes`, from `verity.core.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
   `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an
   assumption, or a theorem in a lane branch, not on `main`.
@@ -168,9 +168,17 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. Its conclusion is the property or a break
+  tied to the run: for SHA-512, `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`, over the
+  inputs the run itself hashed; for LMS, a signature in the run that verifies on a message missing from the device's
+  signing log; for Merkle binding, a collision among the inputs hashed along the two openings' paths. Every `∃` in the
+  break is bounded by something the run carries. "Some collision exists", or an extractor free to ignore the run, is
+  vacuous: collisions exist by pigeonhole, and `Classical.choice` is an allowed axiom, so the axiom check can't catch it.
+  No advantage bounds, which would need a probability model. An input condition becomes a refusal in the verifier, not a
+  hypothesis (the Lean check refuses NaN-coded noise, as Python's verifier does); that the honest draw never produces
+  such an input is a completeness fact, measured rather than proved.
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
-  Daniel gets a DM showing it. Approval may come back for chosen packages (a grant in `tools/verity/check/queue.toml`). "Pin" is
-  retired: say guarantee.
+  Daniel gets a DM showing it. "Pin" is retired: say guarantee. (Since 8 Oct no change waits on a per-head grant at all.)
 - 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
   conclusion, where an assumption is a named `Prop` (README "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
@@ -186,7 +194,8 @@ These are Daniel's rulings, newest first.
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
   hard to break, a table, a ledger or a PR cites a guarantee with its assumptions, and proving an assumption removes it
-  from every guarantee that took it.
+  from every guarantee that took it. Since 2026-10-08 a hash or a signature is not an assumption at all: the guarantee
+  ends in a break tied to the run (above).
 - 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
   derived from Lean and the Lean check's output, and no hand-kept ledger is generated alongside.
 - 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not

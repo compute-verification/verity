@@ -829,7 +829,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     it), of exactly its words (its bits a multiple of 16); output
     port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
-    its own ceil(bits / 16) u16 words, low first (`verity.experimental.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
+    its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words."""
     params, ret = definition.signature()
     types = dict(params)
@@ -1197,7 +1197,7 @@ def _source_digest() -> str:
             yield from (d / f for f in files if f.endswith(".py") and "." not in f[:-3])
 
     h = hashlib.sha256()
-    for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.experimental", "verity_flock", "circuit_check",
+    for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", "verity_flock", "circuit_check",
                  "verity_vllm"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []

@@ -21,7 +21,7 @@ THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 #: (module, what it imports outside the rule) -> why it stays
-EXCEPTIONS = {("pouw_rows", "verity.experimental.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
+EXCEPTIONS = {("pouw_rows", "verity.core.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
 
 
 def _imports(name: str) -> list[tuple[int, str]]:
@@ -45,14 +45,15 @@ def _imports(name: str) -> list[tuple[int, str]]:
 
 
 def _core(name: str) -> bool:
-    """`name` is core as it was before the move: under `verity`, except what the move put there from outside it (experimental,
-    the catalog, the kernels, C-Flock), with core's own protocols and claims, which moved under `verity.experimental`."""
+    """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
+    (the catalog, the kernels, C-Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
+    protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.experimental", "verity.ml.circuits.ops", "verity.ml.circuits.silicon", "verity.ml.circuits.targets",
-                "verity.ml.kernels", "verity.ml.flock")
+    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
     return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.experimental.protocols", "verity.experimental.claims"))))
+                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
 
 def _allowed(mod: str) -> bool:

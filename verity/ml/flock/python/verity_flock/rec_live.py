@@ -42,7 +42,7 @@ sorts them: the domain and labels are public constants and are dropped; a ``BYTE
 top), a proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
 statement digest (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
 laid out as one row of whole :data:`ROW_WORDS`-word blocks (each element 8 words, its 16 bytes lo LE then hi LE; the last
-block zero-padded) and committed as a registered row is (``verity.experimental.protocols.sampled_proofs.one_stage.registered``:
+block zero-padded) and committed as a registered row is (``verity.core.protocols.sampled_proofs.one_stage.registered``:
 ``hm96-sha512/row/v1`` under its own fresh 192-byte salt), so ``c_k`` is that row's ``b || c``: one commitment a round, as
 one port of V*'s algebra reads it. A round with no free message has an empty ``c_k``. The row and salt are the prover's:
 V*'s algebra opens each round's row against the registered value the verifier builds from that round's ``c_k`` of both reps

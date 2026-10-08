@@ -32,7 +32,7 @@ Anything else is refused, with what differed and its first offending hunk. Exit 
 git error.
 
 The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
-whole subtree in BASE moved there file by file. When only `verity/experimental/protocols/pous` moved, `protocols -> security_proofs` is never
+whole subtree in BASE moved there file by file. When only `verity/core/protocols/pous` moved, `protocols -> security_proofs` is never
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above.
 `--map OLD=NEW` adds an entry, and a dotted one (no `/`) also maps a Python or Lean module and those below it.
 """

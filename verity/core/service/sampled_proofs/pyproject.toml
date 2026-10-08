@@ -1,0 +1,22 @@
+[project]
+name = "verity-core-sampled-proofs"
+version = "0.0.0"
+description = "The difftest of sampled proofs' one-stage audit in Lean (core_sampled_proofs) against one_stage's Python."
+requires-python = ">=3.12"
+# `verity` and `verity-difftest` come from the workspace environment, which the tests run in.
+dependencies = ["hypothesis>=6.100"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: `lake` builds this package and, through its path requires, the core protocol interface, the difftest
+# harness's Lean and C-Flock's verifier library; the tests import the harness's Python and the reference, one_stage with
+# the profile, and what they import of verity.ml (the circuits, the partition object, the commitments' domains).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/protocols",
+          "verity/core", "verity/core/service/flock"]

@@ -16,7 +16,7 @@
    },
    "generate": [
     "python3",
-    "{repo}/verity/experimental/protocols/pouw/lean/scripts/fp8atom_vectors.py",
+    "{repo}/verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py",
     "{repo}",
     "--out",
     "{out}"

@@ -21,8 +21,8 @@ verifier = root / "verity/core/service/flock"
 data["inputs"] = {
     "verity/ml/flock/tests/lean/RandomnessVectors.lean": sha(here / "RandomnessVectors.lean"),
     "verity/ml/randomness/tests/vectors.json": sha(root / "verity/ml/randomness/tests/vectors.json"),
-    "verity/experimental/core/primitives/randomness/Randomness.lean":
-        sha(root / "verity/experimental/core/primitives/randomness/Randomness.lean"),
+    "verity/core/primitives/randomness/Randomness.lean":
+        sha(root / "verity/core/primitives/randomness/Randomness.lean"),
     **{"Security/Proofs/" + f: sha(pkg / f) for f in (
         "Flock/Soundness/PlanDraw.lean", "lake-manifest.json", "lean-toolchain")},
     **{"verity/core/service/flock/" + f: sha(verifier / f) for f in ("Flock/Hash.lean", "Flock/Draw.lean")}}

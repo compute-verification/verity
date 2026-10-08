@@ -1,6 +1,6 @@
 """The difftest of `verity.ml.crypto.lms`'s verifier against the Lean package `lms`: the Python half.
 
-`verity/experimental/core/primitives/lms/lean/scripts/difftest_vectors.py` writes 600 instances (keys at every parameter
+`verity/core/primitives/lms/lean/scripts/difftest_vectors.py` writes 600 instances (keys at every parameter
 set `Params` admits, their signatures and tampered ones) and this module's results on each (`Params`, `Signature.decode`,
 `digits`, `root_of`, `verify`). `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`):
 `Lms/DifftestMain.lean` computes every result with `Lms.Verify` and fails on any difference. The audit checks the data
@@ -20,7 +20,7 @@ from pathlib import Path
 
 from verity.ml.crypto import lms
 
-LEAN = Path(__file__).resolve().parents[3] / "experimental" / "core" / "primitives" / "lms" / "lean"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "primitives" / "lms" / "lean"
 SCRIPT = LEAN / "scripts" / "difftest_vectors.py"
 _spec = importlib.util.spec_from_file_location("lms_difftest_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
