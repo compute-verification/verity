@@ -611,6 +611,11 @@ def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
     assert defs[0]["P.Enc"] == defs[1]["P.Enc"] == A.digest(hashed[:2]) and defs[0]["P.f"] == A.digest(hashed[2:])
     alone = facts(pins={"P.t": fact(reads=[g, m1])})
     assert sorted(A.read_groups(A.guarantee_reads(alone))["P.Defs"]["definitions"]) == ["P.f.match_1", "P.g"]
+    walk = {"name": "P.walk", "module": "P.Defs", "kind": "def", "hash": "7" * 32, "own": ["P.walk._f"]}
+    walk_f = {"name": "P.walk._f", "module": "P.Defs", "kind": "def", "hash": "8" * 32, "own": ["P.g", "P.walk.match_1"]}
+    walk_m = {"name": "P.walk.match_1", "module": "P.Defs", "kind": "def", "hash": "9" * 32, "own": []}
+    rec = facts(pins={"P.t": fact(reads=[walk, walk_f, walk_m, g])})
+    assert sorted(A.read_groups(A.guarantee_reads(rec))["P.Defs"]["definitions"]) == ["P.g", "P.walk"]   # through its `_f`
 
 
 def test_update_prints_each_changed_guarantee_and_definition(tmp_path):

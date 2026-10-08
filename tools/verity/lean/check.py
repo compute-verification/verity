@@ -790,7 +790,8 @@ def read_groups(reads: dict[str, dict[str, dict]], old: bool = False) -> dict:
 
 def group_keys(reads: dict[str, dict[str, dict]]) -> dict[str, str]:
     """{read constant: the definition its `reads` digest is part of}: a generated constant goes with its declaration when the
-    declaration is read in its module and reaches it through its own type, value or constructors (`own`, transitively), so
+    declaration is read in its module and reaches it through its own type, value or constructors (`own`, transitively through
+    its other generated constants, as a structural recursion's `_f` reaches the matchers), so
     the group is the same whichever guarantees read the declaration; any other read constant (an inductive's `casesOn`
     another definition's match uses, an equation lemma a statement names) is a definition of its own."""
     entries = {n: e for es in reads.values() for n, e in es.items()}
@@ -801,7 +802,7 @@ def group_keys(reads: dict[str, dict[str, dict]]) -> dict[str, str]:
         while stack and n not in seen:
             if (x := stack.pop()) not in seen:
                 seen.add(x)
-                stack += entries.get(x, {}).get("own", [])
+                stack += [d for d in entries.get(x, {}).get("own", []) if parent(d) == p]
         key[n] = p if n in seen else n
     return key
 
