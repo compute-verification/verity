@@ -696,6 +696,12 @@ UNITS = "systemctl --failed --no-legend --plain; echo ---; systemctl --user --fa
 SESSION_RE = re.compile(r"session-(\d+)\.scope$")
 
 
+#: A timer's oneshot that fails every run is `failed` only between its runs, so its incident stays open until the unit has
+#: been out of `systemctl --failed` this long (vy-custody.service, every 5 minutes, opened and cleared 12 times in an hour on
+#: node 1, 8 Oct).
+UNITS_CLEAR_S = 1800
+
+
 def failed_units(text: str) -> list[tuple[str, str]]:
     """(scope, unit) for each failed unit in UNITS' output (`system` before the `---`, `user` after), less EXPECTED_FAILED."""
     out, scope = [], "system"
@@ -1123,8 +1129,8 @@ MONITORS: list[Monitor] = [
             "window it belongs to; ask its owner to end it, or release it once it is dead."),
     Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
     Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
-    Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300),
-    Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, n2="units"),
+    Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S),
+    Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S, n2="units"),
     Monitor("held-idle", "infra", "warn", "node", held_idle,
             "Your held GPUs sat idle above your target: release GPUs between phases, or lease for less. The `held-idle-hourly` "
             "panel on the live console says where the time went.", every_s=300, events=True),
