@@ -145,17 +145,6 @@
    ],
    "assumptions": [],
    "type_hash": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
-  },
-  "Flock.RecOpen.check_ok": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.RecOpen.check_ok {c : Flock.Circuit} (h : Eq (Flock.RecOpen.check c) (Except.ok Unit.unit)) {L H : Nat}",
-    "  (hp : Eq (Flock.RecOpen.params c.unit.name) (Option.some { fst := L, snd := H })) :",
-    "  And (Eq (Flock.RecOpen.valid L H) Bool.true)",
-    "    (Eq (Flock.HmNets.netOf (Flock.RecOpen.unitName L H) (Flock.RecOpen.unitLaid L H)) (Except.ok c.unit))"
-   ],
-   "assumptions": [],
-   "type_hash": "ef6b461e806ef8cb2dceb1aa517db72242b363e9962bf572755eda78c9a66f47"
   }
  },
  "reads": {
