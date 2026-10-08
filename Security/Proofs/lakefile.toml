@@ -34,6 +34,11 @@ path = "../../verity/experimental/core/primitives/randomness"
 name = "core_vstar"
 path = "../../verity/experimental/core/service/vstar"
 
+# The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
+[[require]]
+name = "security_properties"
+path = "../Properties"
+
 [[lean_lib]]
 name = "Proofs"
 roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock"]
