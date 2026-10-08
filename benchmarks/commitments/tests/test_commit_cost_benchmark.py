@@ -43,7 +43,7 @@ def test_commit_cost_blake3_rows(tmp_path: Path) -> None:
 
 
 def test_commit_cost_root_is_the_reference_root() -> None:
-    from verity.primitives.commitments import vllm_v1
+    from verity.ml.commitments import vllm_v1
 
     bench = _bench()
     row = bench.measure("vllm-v1", 9, 16, 1)

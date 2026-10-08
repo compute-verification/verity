@@ -1,4 +1,4 @@
-"""Run every red-team attack against ``verity_catalog.silicon.relation`` (and ``silicon.tc_dot``) and write the findings report.
+"""Run every red-team attack against ``verity.ml.circuits.silicon.relation`` (and ``silicon.tc_dot``) and write the findings report.
 
     python -m verity_numerical.redteam.campaign --out backends/numerical/reports/redteam_relation.json [--full]
 
@@ -20,9 +20,9 @@ from pathlib import Path
 
 import z3
 
-from verity_catalog.silicon import relation as R
-from verity_catalog.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
-from verity_catalog.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP
+from verity.ml.circuits.silicon import relation as R
+from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
+from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP
 
 from . import cases as C
 from . import forge as F
@@ -474,7 +474,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--full", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--target", choices=("relation", "checker", "checker-v2"), default="relation",
-                    help="relation: verity_catalog.silicon.relation (wave 1); checker: the WP2 checker contracts (wave 2); "
+                    help="relation: verity.ml.circuits.silicon.relation (wave 1); checker: the WP2 checker contracts (wave 2); "
                          "checker-v2: the v2 arithmetisation (wave 3)")
     a = ap.parse_args(argv)
     runner = {"relation": run, "checker": run_checker, "checker-v2": run_checker_v2}[a.target]

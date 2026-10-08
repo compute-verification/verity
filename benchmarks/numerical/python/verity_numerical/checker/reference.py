@@ -1,4 +1,4 @@
-"""``verity_catalog.silicon.silicon`` generalised to :class:`Params`, kept in its successive-shift form.
+"""``verity.ml.circuits.silicon.silicon`` generalised to :class:`Params`, kept in its successive-shift form.
 
 At ``REAL`` this must agree with ``silicon.tc_dot`` word for word (``tests/checker/test_differential.py`` checks
 it), at ``Params.from_model(HOPPER_E4M3_K32)`` / ``ADA_E4M3_M16N8K32`` with ``model.step`` (``test_fp8.py``); at

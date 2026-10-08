@@ -188,7 +188,7 @@ TreeKey = tuple[bytes, int, int, bytes]          # (binding, owner, count, root)
 
 def _row_digests(rows, word_bits: int, role: int) -> list[bytes]:
     """Keyed-BLAKE3 row digests (``blake3-keyed/row/v2``): the ``blake3`` package when installed, else core's reference."""
-    from verity.primitives.commitments import rowleaf
+    from verity.ml.commitments import rowleaf
     key = rowleaf.blake3_row_key(role)
     try:
         import blake3
@@ -265,9 +265,9 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     Poseidon2 leaf over that format's lanes, as ``hashchain.compose`` builds it.  ``ValueError`` when the set cannot be
     recomputed (no ``set`` block, a ``set.tile`` other than the bench's, a sharing label without one, a digest mismatch, a
     lane format under a tile or another leaf)."""
-    from verity.primitives.commitments import CommitmentDomain, RangeIndexedDomain
-    from verity.primitives.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-    from verity.primitives.commitments.rowleaf import ROLE_W, ROLE_X
+    from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain
+    from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
 
     from . import hashauth
     from .auth import OWNER
@@ -358,10 +358,10 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
 
 def _vllm_committed_trees(x_rows, w_cols, y_words, *, rel, claimed: str, total: int, K: int, word_bits: int, dataset: str | None = None,
                           tier: str | None = None) -> dict[str, TreeKey]:
-    """The ``vllm-v1`` port references of the set, from the core scheme alone (``verity.primitives.commitments.vllm_v1``: position
+    """The ``vllm-v1`` port references of the set, from the core scheme alone (``verity.ml.commitments.vllm_v1``: position
     leaves of the raw row bytes and of each output word's little-endian bytes, node/lift fold, step-root binding) under
     the verifier-derived domains of ``vllm_tree`` (ctx = input set and range)."""
-    from verity.primitives.commitments import vllm_v1
+    from verity.ml.commitments import vllm_v1
 
     from . import vllm_tree
     from .auth import OWNER
