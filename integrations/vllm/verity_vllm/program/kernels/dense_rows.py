@@ -2,7 +2,7 @@
 ATen chain and the logits soft cap -- and the Ampere k16 GEMM chain of a large Gemm row (the logits `lm_head`).
 
 The chain's kernels are numpy, elementwise over a leading batch axis (one instance is a batch of one), registered with core
-`verity.primitives.circuits.evaluation` as kernel "dense" through `kernel_registry.register`, per instance and as a batch (`_claim_rows`), and
+`verity.ml.circuits.evaluation` as kernel "dense" through `kernel_registry.register`, per instance and as a batch (`_claim_rows`), and
 self-checked against the reference by tests/program/test_kernel_self_check.py.  Each is bit-equal to its Definition on the instances
 it claims: the chain's f32 arithmetic is `F32Add_v1` / `F32Mul_v1`, which are numpy float32 RN without FTZ; `RsqrtF32` is
 `derived_rows.rsqrt_approx`, `RsqrtApprox_v1`'s twin; `MeanTriton`'s reduction follows its body's register, warp-butterfly and warp
@@ -407,7 +407,7 @@ def gemm_dot_rows(dot_of: Callable[[dict], str], x: np.ndarray, w: np.ndarray, *
 # ---- registration --------------------------------------------------------------------------------------------------------
 
 def _targets():
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import dense
     return {
         "SquareBf16_v1": [bind(dense.SquareBf16, N=16)], "SquareF32_v1": [bind(dense.SquareF32, N=16)],
@@ -433,7 +433,7 @@ _EDGE = np.array([0x00000000, 0x80000000, 0x00010000, 0x80010000, 0x007F0000, 0x
 
 def _sample(rng: np.random.Generator, n: int, params, **_statics) -> list[np.ndarray]:
     """Self-check words: normals at a random scale per instance (2^-30 .. 2^30), one in sixteen a signed zero, a subnormal or +-1."""
-    from verity.primitives.circuits.evaluation.batch import type_shape
+    from verity.ml.circuits.evaluation.batch import type_shape
     out = []
     for pt in params:
         shape = (n, *type_shape(pt))

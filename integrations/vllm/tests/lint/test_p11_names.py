@@ -62,7 +62,8 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
         out.append(R.Violation(rel, kind, symbol, detail, getattr(node, "lineno", 0)))
 
     stem = rel.rsplit("/", 1)[-1].removesuffix(".py")
-    if stem != "__init__" and bad_name(stem):
+    # a circuit-check sidecar (`circuit_check.sidecars`) is named by its module, which is judged by its own name
+    if stem != "__init__" and not stem.endswith(".circuit-check") and bad_name(stem):
         emit("module-name", tree, "<module>", stem)
     for node, symbol in R.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and bad_name(node.name) \
@@ -126,7 +127,7 @@ def test_detectors_on_examples() -> None:
     src = (
         "'''Lane tp2 [lane tp2] (window 2026-09-17), coord M-0451, rev F-r16-18, R17.'''\n"
         "import os\n"
-        "from verity.primitives.circuits.defs import primitive\n"
+        "from verity.ml.circuits.defs import primitive\n"
         "@primitive('Gemm', 1, [], None)\n"
         "def Gemm_v1(a): return a\n"
         "def build_v2(p, fast=False): return os.environ.get('VERITY_TP2_MODE')\n"
@@ -140,3 +141,4 @@ def test_detectors_on_examples() -> None:
                    ("doc-board-id", "M-nnnn"), ("doc-date", "date"), ("doc-lane", "[lane"), ("doc-round", "R1N"),
                    ("env-name", "VERITY_M1_DIR"), ("env-name", "VERITY_TP2_MODE"), ("flag-name", "--fast-copy"),
                    ("module-name", "m1_capture")], got
+    assert file_violations("", "verity_vllm/tp/m1_capture.circuit-check.py") == []

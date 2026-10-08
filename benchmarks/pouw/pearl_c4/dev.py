@@ -11,7 +11,7 @@ and compares every buffer the kernels write with the fixture, the rows' commitme
 object per line on stdout.  Exit 3: identity refused; 4: a buffer differs.
 
 The host supplies only public inputs: the operands, the epoch's salt and each commitment's domain id (`dom_a`, `dom_b`: the
-32-byte ids verity.primitives.commitments derives from the salt, the matmul's index and the row count).  The device commits A's and
+32-byte ids verity.ml.commitments derives from the salt, the matmul's index and the row count).  The device commits A's and
 B's rows as the verifier checks them (`commit_rows`) and derives the seeds from the roots; self-timing takes labels for the
 salt and the domain ids.
 
@@ -271,10 +271,10 @@ class Pipeline:
         if hashing:
             name, geo, kw = self.commit("b")
             L(name, *geo, **kw)
-        L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fa"]], i=[ROLE_FA, k])
-        L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fb"]], i=[ROLE_FB, k])
+        L("lines", cdiv(k, 512), 128, p=[b["seed_b"], b["lines_fa"]], i=[ROLE_FA, k])
+        L("lines", cdiv(k, 512), 128, p=[b["seed_b"], b["lines_fb"]], i=[ROLE_FB, k])
         if not hashing:
-            L("lines", cdiv(n, 128), 128, p=[b["seed_b"], b["lines_eb"]], i=[ROLE_EB, n])
+            L("lines", cdiv(n, 512), 128, p=[b["seed_b"], b["lines_eb"]], i=[ROLE_EB, n])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fa"], b["fat"]], i=[k])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fb"], b["fbt"]], i=[k])
         L(self.form, (n // 16, self.split_b), 256, self.form_smem, p=[
@@ -290,7 +290,7 @@ class Pipeline:
         real lines."""
         name, geo, kw = self.commit("a")
         self.dev.launch(name, *geo, stream=stream, **kw)
-        self.dev.launch("lines", cdiv(self.m, 128), 128, p=[self.buf["seed_a"], self.buf["lines_ea"]], i=[ROLE_EA, self.m],
+        self.dev.launch("lines", cdiv(self.m, 512), 128, p=[self.buf["seed_a"], self.buf["lines_ea"]], i=[ROLE_EA, self.m],
                         stream=stream)
 
     def steps(self, mode: str = "hash") -> list[tuple[str, tuple, dict]]:

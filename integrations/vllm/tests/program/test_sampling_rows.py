@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.program.registry import sampling as SP
+from verity_vllm.program.registry import sampling_twins
 from verity_vllm.program.registry import sampling_rows as SR
 
 HERE = os.path.dirname(__file__)
@@ -63,7 +64,7 @@ def test_add_rz_ftz_v1_model_equals_the_registered_v1_scalar_and_is_rn_on_every_
     a, b = _pairs()
     v = SR.add_rz_ftz_v1_model(a, b)
     for x, y, w in zip(a.tolist(), b.tolist(), v.tolist()):
-        ref = SP.add_rz_ftz_v1_model(x, y)
+        ref = sampling_twins.add_rz_ftz_v1_model(x, y)
         if _is_nan(ref):
             assert _is_nan(w)
         else:
@@ -107,16 +108,16 @@ def test_add_rz_ftz_is_true_toward_zero_against_an_exact_fraction_reference_and_
             continue
         assert s == ref, ("scalar", hex(x), hex(y), hex(s), hex(ref))
         assert w == ref, ("twin", hex(x), hex(y), hex(w), hex(ref))
-        if s != SP.add_rz_ftz_v1_model(x, y):
+        if s != sampling_twins.add_rz_ftz_v1_model(x, y):
             n_diff += 1
     assert n_diff > 0.1 * a.size, n_diff
     # the construction of the finding: RN carries 1 - 2^-26 up to 1.0; RZ stays one ulp under
-    assert SP.add_rz_ftz_v1_model(0xB2800000, SP.ONE_BITS) == 0x3F800000
+    assert sampling_twins.add_rz_ftz_v1_model(0xB2800000, SP.ONE_BITS) == 0x3F800000
     assert SP.add_rz_ftz(0xB2800000, SP.ONE_BITS) == 0x3F7FFFFF and int(SR.add_rz_ftz(np.array([0xB2800000], np.uint32), np.uint32(SP.ONE_BITS))[0]) == 0x3F7FFFFF
     # the RN model is what its name says it is not: RN on every pair
     for x, y in zip(a.tolist()[:2000], b.tolist()[:2000]):
         rn = SP._ftz(SP._u(SP._f(SP._ftz(x)) + SP._f(SP._ftz(y))))
-        assert SP.add_rz_ftz_v1_model(x, y) == rn or (_is_nan(rn) and _is_nan(SP.add_rz_ftz_v1_model(x, y))), (hex(x), hex(y))
+        assert sampling_twins.add_rz_ftz_v1_model(x, y) == rn or (_is_nan(rn) and _is_nan(sampling_twins.add_rz_ftz_v1_model(x, y))), (hex(x), hex(y))
     # saturation and signed zero
     assert SP.add_rz_ftz(0x7F7FFFFF, 0x7F7FFFFF) == 0x7F7FFFFF and SP.add_rz_ftz(0xFF7FFFFF, 0xFF7FFFFF) == 0xFF7FFFFF
     assert SP.add_rz_ftz(0x3F800000, 0xBF800000) == 0 and SP.add_rz_ftz(0x80000000, 0x80000000) == 0x80000000
@@ -146,9 +147,9 @@ def test_nv_log1pf_true_rz_vs_the_rn_model_the_one_differing_word_is_positive_an
     only such word in fp32; a Gumbel draw never forms it (the lane feeds -u).  In the lane's domain the single word where the
     selector itself moves (0xBE800001: RN(1 + a) = 0.75 exactly) yields the same log1pf word on both paths."""
     a = LOG1PF_ONLY_DIFFERING_WORD
-    rz, rn = SP.nv_log1pf(a), SP.nv_log1pf_v1_model(a)
+    rz, rn = SP.nv_log1pf(a), sampling_twins.nv_log1pf_v1_model(a)
     assert (rz, rn) == (0x3ECF991F, 0x3ECF9920), (hex(rz), hex(rn))
-    assert SP.add_rz_ftz_v1_model(a, SP.ONE_BITS) == 0x3FC00000 and SP.add_rz_ftz(a, SP.ONE_BITS) == 0x3FBFFFFF
+    assert sampling_twins.add_rz_ftz_v1_model(a, SP.ONE_BITS) == 0x3FC00000 and SP.add_rz_ftz(a, SP.ONE_BITS) == 0x3FBFFFFF
     assert _e_of(0x3FC00000) != _e_of(0x3FBFFFFF)
     exact = float(np.log1p(np.float64(SP._f(a))))
     assert abs(SP._f(rz) - exact) < abs(SP._f(rn) - exact)                 # the true-RZ word is libdevice's (nearer) answer
@@ -156,9 +157,9 @@ def test_nv_log1pf_true_rz_vs_the_rn_model_the_one_differing_word_is_positive_an
     assert int(SR.nv_log1pf(arr)[0]) == rz and int(SR.nv_log1pf_v1_model(arr)[0]) == rn
     # the lane domain: the selector moves at exactly one word and the output does not
     b = LOG1PF_E_DIFFERING_WORD_IN_LANE_DOMAIN
-    s_rn, s_rz = SP.add_rz_ftz_v1_model(b, SP.ONE_BITS), SP.add_rz_ftz(b, SP.ONE_BITS)
+    s_rn, s_rz = sampling_twins.add_rz_ftz_v1_model(b, SP.ONE_BITS), SP.add_rz_ftz(b, SP.ONE_BITS)
     assert (s_rn, s_rz) == (0x3F400000, 0x3F3FFFFF) and _e_of(s_rn) != _e_of(s_rz)
-    assert SP.nv_log1pf(b) == SP.nv_log1pf_v1_model(b) == 0xBE934B12
+    assert SP.nv_log1pf(b) == sampling_twins.nv_log1pf_v1_model(b) == 0xBE934B12
     # every selector boundary in the lane's domain (RN(1 + a) = 0.75 * 2^k or 2^k, k <= 0): the candidates, enumerated, all agree
     cands = []
     for k in range(0, -30, -1):
@@ -167,15 +168,15 @@ def test_nv_log1pf_true_rz_vs_the_rn_model_the_one_differing_word_is_positive_an
             cands += [((w & 0x7FFFFFFF) + d) | 0x80000000 for d in (-2, -1, 0, 1, 2) if (w & 0x7FFFFFFF) + d > 0]
     cands = sorted(set(c for c in cands if 0x80000000 < c < 0xBF800000))
     assert len(cands) > 200 and b in cands
-    e_moved = [c for c in cands if _e_of(SP.add_rz_ftz_v1_model(c, SP.ONE_BITS)) != _e_of(SP.add_rz_ftz(c, SP.ONE_BITS))]
+    e_moved = [c for c in cands if _e_of(sampling_twins.add_rz_ftz_v1_model(c, SP.ONE_BITS)) != _e_of(SP.add_rz_ftz(c, SP.ONE_BITS))]
     assert e_moved == [b], [hex(c) for c in e_moved]
     for c in cands:
-        assert SP.nv_log1pf(c) == SP.nv_log1pf_v1_model(c), hex(c)
+        assert SP.nv_log1pf(c) == sampling_twins.nv_log1pf_v1_model(c), hex(c)
     arr = np.array(cands, np.uint32)
     assert int((SR.nv_log1pf(arr) != SR.nv_log1pf_v1_model(arr)).sum()) == 0
     # the finding's own construction (u = 2^-26): the sums differ, the selector and the word do not
-    assert SP.add_rz_ftz_v1_model(0xB2800000, SP.ONE_BITS) != SP.add_rz_ftz(0xB2800000, SP.ONE_BITS)
-    assert SP.nv_log1pf(0xB2800000) == SP.nv_log1pf_v1_model(0xB2800000)
+    assert sampling_twins.add_rz_ftz_v1_model(0xB2800000, SP.ONE_BITS) != SP.add_rz_ftz(0xB2800000, SP.ONE_BITS)
+    assert SP.nv_log1pf(0xB2800000) == sampling_twins.nv_log1pf_v1_model(0xB2800000)
 
 
 @pytest.mark.skipif(os.environ.get("VERITY_EXHAUSTIVE") != "1", reason="2^32-word scan (~100 s vectorised): VERITY_EXHAUSTIVE=1")
@@ -205,7 +206,7 @@ def test_nv_logf_and_nv_log1pf_are_word_equal_to_the_libdevice_transcriptions_on
     a = _words(40000, 3)
     vl, vl1, vl2 = SR.nv_logf(a), SR.nv_log1pf(a), SR.nv_log1pf_v1_model(a)
     for x, l, l1, l2 in zip(a.tolist(), vl.tolist(), vl1.tolist(), vl2.tolist()):
-        rl, rl1, rl2 = SP.nv_logf(x), SP.nv_log1pf(x), SP.nv_log1pf_v1_model(x)
+        rl, rl1, rl2 = SP.nv_logf(x), SP.nv_log1pf(x), sampling_twins.nv_log1pf_v1_model(x)
         if _is_nan(x):
             assert _is_nan(l) == _is_nan(rl) and _is_nan(l1) == _is_nan(rl1)   # NaN payloads are not modelled (unreachable in the chain)
         else:
@@ -225,11 +226,12 @@ def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
     a = np.concatenate([rng.integers(0x80000001, 0xFF800001, size=20000, dtype=np.uint64).astype(np.uint32),
                         np.array(edges, dtype=np.uint32)])
     tr = {"nv_logf": L.nv_logf(a.view(np.float32)).view(np.uint32), "nv_log1pf": L.nv_log1pf(a.view(np.float32)).view(np.uint32)}
+    scalar = {"nv_logf": SP.nv_logf, "nv_log1pf": SP.nv_log1pf, "nv_log1pf_v1_model": sampling_twins.nv_log1pf_v1_model}
     for name, domain_ok in (("nv_logf", lambda x: (x & 0x7FFFFFFF) < 0x00800000), ("nv_log1pf", lambda x: x <= 0xBF800000),
                             ("nv_log1pf_v1_model", lambda x: x <= 0xBF800000)):
         rows = getattr(SR, name)(a)
         for i, x in enumerate(a.tolist()):
-            want = getattr(SP, name)(x)
+            want = scalar[name](x)
             assert int(rows[i]) == want, (name, hex(x), hex(int(rows[i])), hex(want))
             if name in tr:
                 assert int(tr[name][i]) == want, (name, "transcription", hex(x), hex(int(tr[name][i])), hex(want))
@@ -316,7 +318,7 @@ def test_philox_stream_key_and_the_noise_row_match_the_scalar_registry_lane_for_
 def test_the_registry_keeps_one_gumbel_chain_at_version_1_and_its_evaluator_is_the_true_rz_lane():
     """No version bump: GumbelNoiseLane_v1's word map did not move (exhaustive), so the chain stays at v1 with one evaluator; the
     witness functions are not registered and not exported as evaluators."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     assert SP.GumbelNoiseLane.id == "GumbelNoiseLane_v1" and SP.GumbelSelectF32.id == "GumbelSelectF32_v1"
     assert SP.GumbelTokenSelect.id == "GumbelTokenSelect_v1" and SP.GumbelTopPTokenSelect.id == "GumbelTopPTokenSelect_v1"
     assert [n for n in SP.__all__ if n.endswith(("V2", "_v2"))] == ["GumbelNoiseLaneV2"], SP.__all__   # the GPU-NaN logs' lane

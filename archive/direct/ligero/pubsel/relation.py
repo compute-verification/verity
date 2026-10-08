@@ -1,7 +1,7 @@
 """The BF16 / FP8 transition unit compiled with *public selection* (lane relmin-lookup): the ``-v2`` relations.
 
 The relation is the one ``unit.py`` (BF16) and ``fp8/relation.py`` (FP8) prove -- the pinned instruction semantics of
-``verity_catalog.silicon.models.GroupSum`` seen through the checker's gadgets (``verity_numerical.checker.gadgets``: group maximum,
+``verity.ml.circuits.silicon.models.GroupSum`` seen through the checker's gadgets (``verity_numerical.checker.gadgets``: group maximum,
 truncating alignment, exact signed sum, RZ normalisation with the subnormal clamp, overflow / zero flags, component-wise pack).
 What changes is *who computes what*.  In v1 the prover commits the operand decodes, every product, every alignment
 quotient / remainder and the normalisation's quotient / remainder, and proves each with bit decompositions (65-73 % of the

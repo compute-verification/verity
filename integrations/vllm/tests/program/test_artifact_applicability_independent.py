@@ -41,6 +41,9 @@ import pytest
 REPO = pathlib.Path(__file__).resolve().parents[2]
 CB_A = tuple(REPO / f for f in ("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/program/frontend/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
 FRONTEND = REPO / "verity_vllm" / "program" / "frontend"
+#: frontend modules that are not its rules: the registered target records and the GEMM targets name every GPU's arch (tables,
+#: not the declared input)
+NOT_RULES = (FRONTEND / "targets.py", FRONTEND / "gemm_targets.py")
 #: the R9 baseline (A's `request_8_4` on cp-cba with a GPU, CB-C's `sens/base` on cp-cbc without one, owner 9's `repro_base` on cp-cb8)
 B0_REQUEST_8_4_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"
 R9_REFERENCE_MANIFESTS = [  # other construction hosts, same profile (pre-fix manifests: Program digest only)
@@ -48,7 +51,7 @@ R9_REFERENCE_MANIFESTS = [  # other construction hosts, same profile (pre-fix ma
     REPO / "out/gen/r9/cb-a/request_8_4/construction_manifest.json",                          # cp-cba (4090), cuda_available true
     REPO / "out/gen/r10/cb-test/repro_base/sens/base/construction_manifest.json",             # cp-cb8 (L40S hidden), owner 9
 ]
-SOURCE_ROOTS = ("verity.primitives.circuits", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
+SOURCE_ROOTS = ("verity.ml.circuits", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
 #: core `verity` is not copied into the build trees (only the integration is mutated); the builds import it from the repo
 CORE_SRC = REPO.parents[1]
 
@@ -109,7 +112,7 @@ def _source_files() -> list[pathlib.Path]:
     files = []
     for root in (*CB_A, FRONTEND):
         for p in ([root] if root.is_file() else sorted(root.rglob("*.py"))):
-            if "tests" in p.parts or "__pycache__" in p.parts:
+            if "tests" in p.parts or "__pycache__" in p.parts or p in NOT_RULES:
                 continue
             files.append(p)
     return files

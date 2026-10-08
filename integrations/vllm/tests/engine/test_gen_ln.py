@@ -23,7 +23,7 @@ from verity_vllm.engine.profiles.gen_ln_patterns import (GeluErfPattern, LayerNo
 pythia = importlib.import_module("verity_vllm.engine.profiles.derived_PYTHIA160M")
 from verity_vllm.observe.fold.patterns import BiasAdd, RotaryEmbedding
 from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.quarantine.ln import ALL_DEFINITIONS, ALL_PRIMITIVES, gelu_erf_bf16, gelu_erf_table, layer_norm_aten
+from verity_vllm.program.registry import act, gelu_erf_table, layer_norm
 
 C = pythia.C
 
@@ -134,7 +134,7 @@ def test_check_header_accepts_the_registered_config_and_reports_drift():
 
 def test_gelu_table_is_measured_and_satisfies_the_kernel_facts():
     assert gelu_erf_table.SHA256 and len(gelu_erf_table.TABLE_WORDS) == 2 * 65536
-    g = gelu_erf_bf16.gelu_erf_bf16_bits
+    g = act.gelu_erf_bf16_bits
     assert g(0x0000) == 0x0000 and g(0x8000) == 0x8000                    # +-0
     assert g(0x7F80) == 0x7F80 and g(0xFF80) == 0x7FFF                    # +inf -> +inf, -inf -> NaN (-inf * 0)
     assert g(0x7FC0) == 0x7FFF and g(0xFFC0) == 0x7FFF                    # NaN -> canonical
@@ -146,18 +146,21 @@ def test_gelu_table_is_measured_and_satisfies_the_kernel_facts():
     assert g(0x3F80) == 0x3F57 and g(0xBF80) == 0xBE22                    # gelu(1) = 0.8413 -> 0.83984375; gelu(-1) -> -0.158203125
 
 
-def test_lane_registry_lists_the_three_definitions():
-    assert [d.name for d in ALL_DEFINITIONS] == ["LayerNormAten", "GeluErf"] and [p.name for p in ALL_PRIMITIVES] == ["GeluErfBf16"]
-    assert layer_norm_aten.VEC == 4 and layer_norm_aten.NTHREADS == 128 and layer_norm_aten.MEAN_FMA_ORDER == "A"
+def test_layer_norm_and_gelu_erf_are_registry_definitions():
+    from verity.ml.circuits.defs import REGISTRY
+    fns = (layer_norm.LayerNormAten, layer_norm.LayerNormAtenV2, act.GeluErf, act.GeluErfBf16)
+    assert [f.id for f in fns] == ["LayerNormAten_v1", "LayerNormAten_v2", "GeluErf_v1", "GeluErfBf16_v1"]
+    assert all(REGISTRY[f.id] is f for f in fns)
+    assert layer_norm.VEC == 4 and layer_norm.NTHREADS == 128 and layer_norm.MEAN_FMA_ORDER == "A"
 
 
 def test_layer_norm_body_matches_a_float64_layer_norm_within_bf16_rounding():
     from verity_vllm.properties.admission import evaluate_spec
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     N = 64
     rng = np.random.default_rng(0)
     x, w, b = (rng.standard_normal(N).astype(np.float32).view(np.uint32) >> 16 for _ in range(3))
-    got = np.array(evaluate_spec(bind(layer_norm_aten.LayerNormAten, N=N, EPS=1e-5), [a.astype(np.uint16) for a in (x, w, b)]), dtype=np.uint32)
+    got = np.array(evaluate_spec(bind(layer_norm.LayerNormAten, N=N, EPS=1e-5), [a.astype(np.uint16) for a in (x, w, b)]), dtype=np.uint32)
 
     def bf(u):
         return (u.astype(np.uint32) << 16).view(np.float32).astype(np.float64)

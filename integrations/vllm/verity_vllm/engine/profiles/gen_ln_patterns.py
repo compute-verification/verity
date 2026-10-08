@@ -22,9 +22,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.quarantine.ln import gelu_erf, layer_norm_aten
+from verity_vllm.program.registry import act, layer_norm
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (BiasAdd, GeometryError, RotaryEmbedding, _fmt, _group_compute, _positions_ok, as_float,
@@ -117,12 +117,12 @@ class LayerNormAtenPattern:
             return unsupported(node, "LayerNormAten is bf16 (x, y, weight, bias)", dtypes=[x.dtype, y.dtype, w.dtype, b.dtype])
         if eps is None or eps != self.eps:
             return unsupported(node, "eps differs from the profile's EPS", eps=eps, pinned=self.eps)
-        if N % layer_norm_aten.VEC:
+        if N % layer_norm.VEC:
             return unsupported(node, "N is not a multiple of vec_size=4: torch takes the non-vectorized LayerNorm path (not modelled)", N=N)
         if not any(r.role == "weight" for r in ctx.roots_of(w)) or not any(r.role == "weight" for r in ctx.roots_of(b)):
             return unsupported(node, "layer_norm weight / bias are not weight Roots", w=repr(w), b=repr(b))
         roots = ctx.roots_of(w)
-        return _compute(node, ctx, bind(layer_norm_aten.LayerNormAten, N=N, EPS=self.eps), M, (PerRow(x), Shared(w), Shared(b)), (PerRow(y),),
+        return _compute(node, ctx, bind(layer_norm.LayerNormAten, N=N, EPS=self.eps), M, (PerRow(x), Shared(w), Shared(b)), (PerRow(y),),
                         self.name, KERNELS_LAYER_NORM, roots[0].name if roots else "layer_norm", consumed=tuple(sorted(node.ids())))
 
 
@@ -149,7 +149,7 @@ class GeluErfPattern:
         if not (x.dtype == y.dtype == "bfloat16"):
             return unsupported(node, "GeluErf is bf16", dtypes=[x.dtype, y.dtype])
         M, N = x.shape
-        return _compute(node, ctx, bind(gelu_erf.GeluErf, N=N), M, (PerRow(x),), (PerRow(y),), self.name, KERNELS_ELEMENTWISE, "gelu")
+        return _compute(node, ctx, bind(act.GeluErf, N=N), M, (PerRow(x),), (PerRow(y),), self.name, KERNELS_ELEMENTWISE, "gelu")
 
 
 @dataclass

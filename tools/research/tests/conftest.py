@@ -14,7 +14,7 @@ import pytest
 #: holds its run's variables, and a pod's shell its own: no test may reach the real account or bucket, or act as a run, through them
 #: (nor extend or read a real machine's lease: a Nebius host exports LEASE_DIR; nor post to the real Slack workspace; nor, with those
 #: cleared, read as a cloud VM's shell that lost its injected secrets: secret_hint.py)
-CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_", "SLACK_", "CLOUD_AGENT_")
+CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_", "SLACK_", "CLOUD_AGENT_", "LINEAR_")
 
 
 @pytest.fixture(autouse=True)
@@ -46,7 +46,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # /workspace/jobs/dispatch, node 1's loop's) into os.environ outside monkeypatch, so every later test in the worker would see
     # node 1's CPU slices
     monkeypatch.setenv("VY_DISPATCH_ROOT", str(tmp_path_factory.mktemp("dispatch") / "absent"))
-    # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research slack asks this socket for an OIDC token for its broker
+    # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research msg asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
 
 

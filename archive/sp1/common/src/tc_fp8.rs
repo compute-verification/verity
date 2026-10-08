@@ -1,5 +1,5 @@
 //! The two FP8 Table 2 rows: `GemmAccumulator<1536>` over E4M3 operands with an
-//! FP32 accumulator, bit for bit as `verity_catalog.silicon.models` computes them.
+//! FP32 accumulator, bit for bit as `verity.ml.circuits.silicon.models` computes them.
 //!
 //! * `fp8-ada` (RTX 4090 FP8, `ADA_E4M3_M16N8K32`): `mma.sync.m16n8k32.e4m3`,
 //!   two groups of 16 products, a 14-bit adder, exponent floor `-139`.

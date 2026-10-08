@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from verity.primitives.circuits import partition
-from verity.primitives.circuits.parts import Limits, Part
-from verity.primitives.circuits.partition import (ReadinessReport, VuVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
+from verity.ml.circuits import partition
+from verity.ml.circuits.parts import Limits, Part
+from verity.ml.circuits.partition import (ReadinessReport, VuVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
                                  validate_partition, validate_vu_family, validate_width, vu_status)
 from tests.query.test_partition_stubs import (OracleBoundary, StubFamily, StubGateSet, body_tiling, family_of,
                                                   gemm_program,                                                   materialise, members_k, ranges_of, synth_program, tiling,
@@ -161,7 +161,7 @@ def test_shared_callee_from_two_parents_two_plans():
     assert fast.detail["sets"] == 2 + 2 * 32 * (3 + 1) == sweep.detail["sets"] and fast.detail["bodies"] == 5
     # width: the tiling path must count 64 coordinate activations (2 parents x 32 members) and 64 dot activations
     B = OracleBoundary(P_)
-    import verity.primitives.circuits.partition as pm
+    import verity.ml.circuits.partition as pm
     saved = pm._BOUNDARY
     pm._BOUNDARY = B
     try:
@@ -189,7 +189,7 @@ def test_scopes_of_enumerates_every_activation():
     coord_t = whole_body(coord, key="coord")
     g = whole_body(gemm_spec, {0: ("descend", coord_t)}, key="gemm")
     t = tiling(whole_body(P_.root, {2: ("descend", g), 3: ("descend", g)}))
-    from verity.primitives.circuits.partition import CheckedTiling
+    from verity.ml.circuits.partition import CheckedTiling
     T = CheckedTiling(P_, t)
     assert T.instances == {(t.root,): 1, ("gemm",): 2, ("coord",): 64}
     scopes = list(T.scopes_of(("coord",)))
@@ -405,9 +405,9 @@ def test_readiness_lists_64bit_input_and_primitive():
 
 
 def test_readiness_gumbel_const64():
-    G = pytest.importorskip("verity_vllm.program.registry.quarantine.ov_sampling.gumbel")
-    from verity.primitives.circuits.defs import bind
-    from verity.primitives.circuits.program import Program
+    G = pytest.importorskip("verity_vllm.program.registry.sampling")
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.program import Program
     P_ = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
     r = readiness_32bit(P_)
     assert not r.ok
@@ -456,7 +456,7 @@ def test_vu_verdict_fail_and_not_ready_and_unsupported(gemm, oracle):
     assert v.status == "ok"
     v = validate_vu_family(W, fam, 96)
     assert v.status == "ok"
-    from verity.primitives.circuits.partition import gate_width_readiness
+    from verity.ml.circuits.partition import gate_width_readiness
     assert not gate_width_readiness(W, 32).ok
 
     class L(Limits):
@@ -468,7 +468,7 @@ def test_vu_verdict_fail_and_not_ready_and_unsupported(gemm, oracle):
 
 
 def test_vu_status_precedence():
-    from verity.primitives.circuits.partition import PartitionVerdict
+    from verity.ml.circuits.partition import PartitionVerdict
     ok_p = PartitionVerdict("exact", (), {})
     gap_p = PartitionVerdict("gap", (), {})
     un_p = PartitionVerdict("unsupported", (), {})

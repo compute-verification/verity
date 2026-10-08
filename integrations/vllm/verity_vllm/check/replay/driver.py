@@ -59,7 +59,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.primitives.randomness import Key
+from verity.ml.randomness import Key
 
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import replay_codes as RC
@@ -171,16 +171,16 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
         out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
-            from verity_vllm.program.registry import prims as _prims
-            rm, _t = _prims._rms()
+            from verity_vllm.program.kernels import prims_twins
+            rm, _t = prims_twins._rms()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
         except Exception as e:  # noqa: BLE001
             out["rms_triton_model"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
     if "fa2" in need:
         try:
-            from verity_vllm.program.registry import prims as _prims
-            _fa2_model, _tables = _prims._fa2()
+            from verity_vllm.program.kernels import prims_twins
+            _fa2_model, _tables = prims_twins._fa2()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001
             out["fa2_mufu_tables"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"

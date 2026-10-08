@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity_catalog.definitions import mufu as MU
+from verity.ml.circuits.ops import mufu as MU
 from verity_vllm.program.kernels import derived_rows as DR
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v1"
@@ -90,7 +90,7 @@ def _finite(w) -> np.ndarray:
 
 # ----------------------------------------------------------------------------------------------------------------------- twin
 def sigmoid_words(x) -> np.ndarray:
-    """`moe.nv_sigmoid_bits` (`NvSigmoid_v1`, the SASS of the kernel's sigmoid) on an array of f32 words, in integer arithmetic."""
+    """`moe_twins.nv_sigmoid_bits` (`NvSigmoid_v1`, the SASS of the kernel's sigmoid) on an array of f32 words, in integer arithmetic."""
     x = np.asarray(x, U32)
     h = _mul(x, U32(HALF))
     ah = h & U32(0x7FFFFFFF)
@@ -387,7 +387,7 @@ _PROGRAMS: dict[str, Any] = {}
 
 
 def _program(launch: str):
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import moe
 
     if launch not in _PROGRAMS:
@@ -397,7 +397,7 @@ def _program(launch: str):
 
 def program_row(job: tuple[str, np.ndarray, np.ndarray]) -> list[int]:
     """`MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL=launch}` on one row (the reference evaluator): 8 weights, 8 ids."""
-    from verity.primitives.circuits.evaluation import evaluate
+    from verity.ml.circuits.evaluation import evaluate
 
     launch, x, b = job
     return [int(v) for v in evaluate(_program(launch), [int(v) for v in x] + [int(v) for v in b])]

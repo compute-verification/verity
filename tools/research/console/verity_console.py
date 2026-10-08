@@ -1018,8 +1018,9 @@ def uc_hour(t: float) -> str:
 
 IDLE_READINGS = Path("/workspace/usage/held-idle-hourly.jsonl")  # one line per completed UTC hour, node and lane; infra's relay alerts on it
 IDLE_TARGETS = {("node 1", "circuits"): 40.0}  # the 11:30 AM PDT Oct 1 set: circuits' Commits at or below 40% held idle on node 1
+POOL_UNLEASED = "lease pool, not leased"  # cluster.usage.POOL_UNLEASED
 N1_LANES = [(re.compile(p), lane) for p, lane in (
-    (r"^gpu-pool-circuits-", "circuits"), (r"^gpu-pool-\d", "proofs"),
+    (r"^gpu-pool-circuits-", "circuits"), (r"^gpu-pool-\d", POOL_UNLEASED),  # the provers pool serves every lane
     (r"^Kueue (vllm-|commit-pack|circuits-|mps-golden|n2-build)", "circuits"), (r"^Kueue (proofs-|backend-sweep|assumption-)", "proofs"),
     (r"^SkyPilot (cfgtp2|sm120|vcd)-", "circuits"), (r"^SkyPilot (m0|tcdefs|as)-", "proofs"))]
 N2_LANES = {"bc-17cc41f1": "infra", "bc-8416bc72": "proofs", "bc-b8aaadaa": "circuits", "bc-e90634dd": "compute-accounting",
@@ -1027,11 +1028,22 @@ N2_LANES = {"bc-17cc41f1": "infra", "bc-8416bc72": "proofs", "bc-b8aaadaa": "cir
 
 
 def lane_of(node: str, holder: str) -> str:
-    """The lane a holder's GPU-time counts to: node 1's by job name, node 2's by the coordinator's id; anything else by its label."""
+    """The lane a holder's GPU-time counts to: node 1's by job name, node 2's by its lease's who (who_lane); anything else by its
+    label."""
     if node == "node 1":
         return next((lane for rx, lane in N1_LANES if rx.search(holder)), holder)
-    m = re.search(r"bc-[0-9a-f]{8}", holder)
-    return N2_LANES.get(m.group(0), holder) if m else holder
+    return who_lane(holder)
+
+
+def who_lane(who: str) -> str:
+    """The lane a gpu-lease `who` counts to: the lane its first field names, after a `keeper:` or `fill:` prefix if it has one
+    (`keeper:memory-accounting`, `memory-accounting:erase-calib`), else the coordinator's id (`bc-xxxxxxxx`, N2_LANES), else
+    the who itself."""
+    m = re.match(r"(?:(?:keeper|fill)[: ])?([a-z-]+)(?=[:_ ]|$)", who)
+    if m and m.group(1) in N2_LANES.values():
+        return m.group(1)
+    m = re.search(r"bc-[0-9a-f]{8}", who)
+    return N2_LANES.get(m.group(0), who) if m else who
 
 
 def kind_of(node: str, holder: str) -> str:
@@ -1045,7 +1057,9 @@ def kind_of(node: str, holder: str) -> str:
     return first if rest else "gpu-lease"
 
 
-N1_LEASE_POOLS = {"/run/gpu-lease-circuits": "circuits", "/run/gpu-lease": "proofs"}  # n1_lease.py's pools on node 1, by lane
+#: n1_lease.py's pools on node 1, each with the lane a lease it granted counts to when no record names the lease's who
+N1_LEASE_POOLS = {"/run/gpu-lease-circuits": "circuits", "/run/gpu-lease": "proofs"}
+N1_LEASE_USAGE = Path("/workspace/research/lease-usage.jsonl")  # gpu-lease's GPU_LEASE_USAGE_LOG default: node 1's finished leases
 N1_POOL_DIR = "/run/gpu-lease"  # n1_lease.py's GPU_LEASE_DIR default
 N1_POOL_IDLE_S = 120  # n1_lease.py's VY_POOL_IDLE_S default: a pool GPU free this long, with nobody waiting, leaves the pool
 N1_LOOP_ENV = ("GPU_LEASE_DIR", "VY_POOL_IDLE_S", "VY_LEASE_BRAIN")  # the only variables read from a loop's environment
@@ -1057,7 +1071,7 @@ USAGE_RECORD = Path("/workspace/usage/usage-hourly.jsonl")  # cluster.usage.RECO
 def usage_module():
     """`cluster.usage`, the one usage computation: the copy deploy.toml ships beside this script, else the checkout's; never
     another `cluster` on the path."""
-    for p in (HERE, HERE.parents[1] / "cluster" / "src"):
+    for p in (HERE, HERE.parents[2] / "infra" / "cluster" / "src"):
         if (p / "cluster" / "usage.py").is_file():
             if str(p) not in sys.path:
                 sys.path.insert(0, str(p))
@@ -1119,8 +1133,52 @@ def n1_pool_idle(pool: str, loops: dict[str, set[tuple[str, str]]]) -> int:
         raise LookupError(f"{pool}'s loop has a VY_POOL_IDLE_S that isn't a whole number of seconds") from None
 
 
-def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None = None) -> list[tuple]:
-    """(GPU, start, end, lane) for each lease a node-1 pool granted, from n1_lease.py's log and state in each pool's directory.
+def _utc(s: str) -> float:
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+
+
+def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEASE_USAGE) -> list[tuple]:
+    """(GPU, start, end, who) for each lease node 1's gpu-lease granted: since to end of each finished one's
+    `gpu-lease/usage/v1` record in usage_log, and since to now of each live one in a pool's n1-lease.json that no record has."""
+    out = []
+    for ln in usage_log.read_text().splitlines() if usage_log.exists() else ():
+        try:
+            d = json.loads(ln)
+            if d.get("schema") == "gpu-lease/usage/v1" and d.get("who"):
+                a, b = _utc(d["since"]), _utc(d["end"])
+                out += [(int(g["index"]), a, b, d["who"]) for g in d["gpus"]]
+        except (ValueError, KeyError, TypeError, AttributeError):
+            continue
+    done = {(g, a, who) for g, a, _, who in out}
+    for d in pools:
+        f = Path(d) / "n1-lease.json"
+        for g in (json.loads(f.read_text()).get("gpus") or []) if f.exists() else ():
+            lease = g.get("lease") or {}
+            try:
+                a = _utc(lease["since"])
+            except (ValueError, KeyError, TypeError):
+                continue
+            if lease.get("who") and (g["index"], a, lease["who"]) not in done:
+                out.append((g["index"], a, max(a, now), lease["who"]))
+    return out
+
+
+def by_lease(spans: list[tuple], leases: list[tuple]) -> list[tuple]:
+    """Each pool span (GPU, start, end, pool's lane) as the leases on its GPU that overlap it, clipped to it, each counting to
+    its who's lane (who_lane). A span no lease overlaps keeps its pool's lane: nobody's who is known for it. In a span some
+    lease overlaps, the time no lease covers is the pool's, leased to nobody, so no span holds it and the minute's reading
+    counts it: the pool's pod there is cluster.usage's POOL_UNLEASED."""
+    out = []
+    for g, a, b, lane in spans:
+        mine = [(g, max(a, x), min(b, y), who_lane(who)) for h, x, y, who in leases if h == g and x < b and y > a]
+        out += mine or [(g, a, b, lane)]
+    return out
+
+
+def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None = None,
+                   usage_log: Path = N1_LEASE_USAGE) -> list[tuple]:
+    """(GPU, start, end, lane) for each lease a node-1 pool granted, from n1_lease.py's log and state in each pool's directory,
+    each pool span split by the leases gpu-lease records in it (by_lease over n1_leases).
 
     The log records pool membership, not leases: a GPU joins the pool (`unfenced`) for a waiting lease and leaves it (`shrink`)
     once it has been free for the pool's idle seconds with nobody waiting, so its lease ran from the unfence to the shrink less
@@ -1161,14 +1219,14 @@ def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None =
             b = now if g in leased else st - idle_s
             if b > a:
                 spans.append((g, a, b, lane))
-    return spans
+    return by_lease(spans, n1_leases(now, pools, usage_log)) if spans else []
 
 
 def usage_rows(minutes: dict, spans: dict | None = None) -> list[dict]:
     """`cluster.usage.hourly`'s rows (per UTC hour, node, owner and kind: GPU-seconds held, busy, idle, unmeasured, useful) for
     each node whose minutes were read. Owners are lanes (lane_of), kinds job families (kind_of). spans: per node, (GPU, start,
-    end, lane) of its pools' leases (n1_lease_spans), each a `gpu-lease` holding of its pool's lane; on such a node a pool's own
-    pod outside every lease is the module's POOL_UNLEASED."""
+    end, lane) of its pools' leases (n1_lease_spans), each a `gpu-lease` holding of its lane; on such a node a pool's own
+    pod outside every lease is the module's POOL_UNLEASED, and the provers pool's pod is owned by POOL_UNLEASED too."""
     usage = usage_module()
     out = []
     for node, rows in minutes.items():

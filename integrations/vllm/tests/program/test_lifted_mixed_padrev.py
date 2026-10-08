@@ -20,15 +20,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.primitives.circuits import Program  # noqa: E402
-from verity.primitives.circuits.defs import composite  # noqa: E402
-from verity.primitives.circuits.layout import resolve  # noqa: E402
-from verity.primitives.circuits.refs import Coll, concat  # noqa: E402
+from verity.ml.circuits import Program  # noqa: E402
+from verity.ml.circuits.defs import composite  # noqa: E402
+from verity.ml.circuits.layout import resolve  # noqa: E402
+from verity.ml.circuits.refs import Coll, concat  # noqa: E402
 from verity_vllm.program.registry import lifted as L  # noqa: E402
-from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
+from verity_vllm.program.kernels import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs  # noqa: E402
-from verity.primitives.circuits.types import Array, Value  # noqa: E402
+from verity.ml.circuits.types import Array, Value  # noqa: E402
 
 I32 = Value(32)
 NEVER = 0x7FFFFFFF  # an EOS id no TINY event emits: the cap decides

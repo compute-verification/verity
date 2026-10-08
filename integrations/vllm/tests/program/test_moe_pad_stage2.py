@@ -26,14 +26,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.primitives.circuits import Program, bind
-from verity.primitives.circuits.codec import encode_program, program_digest
-from verity.primitives.circuits.defs import composite
-from verity.primitives.circuits.refs import array_of, tuple_of
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.defs import composite
+from verity.ml.circuits.refs import array_of, tuple_of
 from verity_vllm.program.registry import b1, lifted as L, moe, moe_pad as MP, prims as P
-from verity_vllm.program.registry import serve3_reference as ref
+from verity_vllm.program.kernels import serve3_reference as ref
 from verity_vllm.program.registry.prims import BF16, F32, I32
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array, Tuple
 
 E, VPT, H, I = 4, 2, 16, 16
 BOT16, BOT32, BOT1 = L.enc_bot(16), L.enc_bot(32), L.enc_bot(1)
@@ -494,8 +494,8 @@ def test_moe_ffn_fixed_unlifted_twin_equals_moe01_and_its_lift_of_record_is_the_
     assert program_digest(encode_program(Program(lifted))) == d_padded != d_fixed
     # (ii) the decoded path (the Build path: GP-01 request_component / codec.decode_program): a Program that CALLS the twin, encoded and
     # decoded, lifts its twin node to bind(LMoeFfn), not to a replay
-    from verity.primitives.circuits.codec import decode_program
-    from verity.primitives.circuits.defs import REGISTRY
+    from verity.ml.circuits.codec import decode_program
+    from verity.ml.circuits.defs import REGISTRY
     dec = decode_program(encode_program(Program(bind(CallsTheTwin, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I))), REGISTRY)
     node = next(n for n in dec.root.body.nodes if getattr(n.fn, "defn", None) is not None and n.fn.defn.id == "MoeFfnFixed_v1")
     assert L._is_decoded(node.fn) and node.fn.bindings == fixed.bindings

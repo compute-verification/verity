@@ -9,39 +9,20 @@ vllm-flash-attn 506341a `flash_fwd_kernel.h::compute_attn_1rowblock_splitkv` run
 `AttnBlock_v2` guards both on every block; on a row whose running max is still -inf at an unguarded block the two differ (the kernel's
 rescale is exp2(NaN), the guarded block's 0).
 
-`AttentionHead_v5` takes the lowest key block the kernel guards as the static `MASKED_FROM` (`fa2_masked_from`): block b runs
+`AttentionHead_v5` takes the lowest key block the kernel guards as the static `MASKED_FROM` (`attention_vocab.fa2_masked_from`): block b runs
 `AttnBlock_v5{..., CHECK = b >= MASKED_FROM}`.  The row's first block is always at or above it.  `targets.attention_spec` binds `Attention_v5`
 on an FA2 target whose family registers `fa2_construction = "check-inf-per-iteration"`; the other FA2 targets keep their accepted chains.
 """
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import bind, composite
-from verity.primitives.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.gemm import DotBf16 as DotBf16V2
-from verity_catalog.definitions.prims import ZERO32, const
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.ml.circuits.ops.prims import ZERO32, const
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import ZERO16, _lane, _scale_log2_bits
 from verity_vllm.program.registry.prims import A16, BF16, F32
-
-#: FA2's splitkv tile height (`run_mha_fwd_splitkv_align`: kBlockM = 64 at every head dim)
-KBLOCK_M = 64
-
-
-def fa2_masked_from(seqlen_k: int, seqlen_q: int, row: int, BN: int, causal: bool) -> int:
-    """The lowest key block FA2's splitkv kernel runs with `Check_inf` for query row `row` of a sequence of `seqlen_q` query rows over
-    `seqlen_k` keys: `n_block_max - n_masking_steps`, where a causal launch's `n_block_max` is its 64-row tile's,
-    `min(ceil(seqlen_k / BN), ceil(((m_block + 1) * 64 + seqlen_k - seqlen_q) / BN))`, and a non-causal launch guards its first block only."""
-    seqlen_k, seqlen_q, row, BN = int(seqlen_k), int(seqlen_q), int(row), int(BN)
-    if not (0 <= row < seqlen_q <= seqlen_k) or BN < 1:
-        raise ValueError(f"FA2 row {row} of {seqlen_q} query rows over {seqlen_k} keys (BN {BN})")
-    nb = -(-seqlen_k // BN)
-    if not causal:
-        if seqlen_q != 1:
-            raise ValueError(f"FA2: a non-causal launch has one query row per sequence, not {seqlen_q}")
-        return nb - 1
-    n_block_max = min(nb, -(-((row // KBLOCK_M + 1) * KBLOCK_M + seqlen_k - seqlen_q) // BN))
-    return max(0, n_block_max - (-(-KBLOCK_M // BN) + 1))
 
 
 @composite("AttnBlock", 5, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"],
@@ -107,7 +88,7 @@ def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
            conformance="not-yet-established")
 def AttentionHeadV5(B, S, q, k, v):
     """`AttentionHead_v2` over `AttnBlock_v5`: causal attention of one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks visited
-    last -> first, block b with `CHECK = b >= MASKED_FROM` (FA2's masking iterations; `fa2_masked_from`); epilogue
+    last -> first, block b with `CHECK = b >= MASKED_FROM` (FA2's masking iterations; `attention_vocab.fa2_masked_from`); epilogue
     `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`."""
     return _check_inf_head(B, S, q, k, v, AttnBlockV5, ())
 
@@ -202,5 +183,4 @@ def AttentionV11(B, S, q, kc, vc, scale_log2):
 
 FA2_CHECK_INF_COMPOSITES = [AttnBlockV5, AttentionHeadV5, AttentionV5, AttnBlockV11, AttentionHeadV11, AttentionV11]
 
-__all__ = ["KBLOCK_M", "fa2_masked_from", "AttnBlockV5", "AttentionHeadV5", "AttentionV5", "AttnBlockV11", "AttentionHeadV11", "AttentionV11",
-           "FA2_CHECK_INF_COMPOSITES"]
+__all__ = ["AttnBlockV5", "AttentionHeadV5", "AttentionV5", "AttnBlockV11", "AttentionHeadV11", "AttentionV11", "FA2_CHECK_INF_COMPOSITES"]

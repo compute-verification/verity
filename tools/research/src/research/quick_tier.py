@@ -1,5 +1,6 @@
 """The quick tier at one checkout, as facts and a verdict: each Lake package `--lean` names built first (with the PATH's `lake`, else
-elan's; with neither it refuses), then CMD (`suites.py --quick`) with `--changed BASE`.  `tier` gathers the facts; `judge` reads them
+elan's; with neither it refuses; in a check slot, from the slot's warm `.lake`: `build`), then CMD (`suites.py --quick`) with
+`--changed BASE`.  `tier` gathers the facts; `judge` reads them
 as the refusal `research queue ready` prints, or None for a pass, the same way wherever the tier ran.
 
     python3 quick_tier.py --head SHA --base SHA [--lean DIR ...] -- CMD...
@@ -20,7 +21,7 @@ import sys
 from pathlib import Path
 
 KIND = "quick-tier/v1"
-SUITES = "tools/check/suites.py"
+SUITES = "tools/verity/check/suites.py"
 #: variables that would point the tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 ROW_KEYS = ("name", "suite", "status", "failed_tests", "log")
@@ -53,6 +54,48 @@ def run_env(environ, run_dir: str, run_id: str) -> dict:
     return out
 
 
+def warm_dir(env: dict, d: str) -> Path | None:
+    """The warm `.lake` of package ``d`` that the check slot this tier holds keeps (`CHECK_SLOT`, set by slot.py), or None outside
+    a slot. A slot runs one check at a time, so no two runs share it, and each run builds in a copy of it."""
+    slot = env.get("CHECK_SLOT")
+    if not slot or "/" in slot:
+        return None
+    return Path(env.get("HOME") or Path.home()) / ".cache" / "verity" / f"lake-slot-{slot}" / d.strip("/").replace("/", "--")
+
+
+def build(lake: str, pkg: Path, d: str, env: dict) -> dict:
+    """`lake build` in ``pkg``, started from the slot's warm `.lake` when it has one. Lake's traces are content hashes, so it
+    rebuilds only what changed since. A warm build that fails is retried cold, so a stale cache never fails a tier; a cold or warm
+    build that passes becomes the slot's warm copy."""
+    warm, lake_dir = warm_dir(env, d), pkg / ".lake"
+    started = None
+    if warm is not None and warm.is_dir() and not lake_dir.exists():
+        try:
+            shutil.copytree(warm, lake_dir, symlinks=True)
+            started = "warm"
+        except OSError as e:
+            print(f"quick tier: can't copy {warm} ({e}); building {d} cold", flush=True)
+            shutil.rmtree(lake_dir, ignore_errors=True)
+    print(f"quick tier: `lake build` in {d}" + (f" (from {warm})" if started else ""), flush=True)
+    rc = subprocess.run([lake, "build"], cwd=pkg, env=env).returncode
+    if rc and started:
+        print(f"quick tier: the warm build in {d} exited {rc}; building it cold", flush=True)
+        shutil.rmtree(lake_dir, ignore_errors=True)
+        started = None
+        rc = subprocess.run([lake, "build"], cwd=pkg, env=env).returncode
+    if rc == 0 and warm is not None and lake_dir.is_dir():
+        tmp = warm.with_name(f".{warm.name}.{os.getpid()}")
+        try:
+            shutil.rmtree(tmp, ignore_errors=True)
+            shutil.copytree(lake_dir, tmp, symlinks=True)
+            shutil.rmtree(warm, ignore_errors=True)
+            os.replace(tmp, warm)
+        except OSError as e:
+            print(f"quick tier: can't keep {d}'s .lake as the slot's warm copy ({e})", flush=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+    return {"dir": d, "rc": rc, "start": started or "cold"}
+
+
 def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(), env: dict | None = None) -> dict:
     """The facts of one run of the tier in ``tree``: the commit checked out there, what differs from it before anything runs (each
     kept `.venv` and `.lake` aside), each Lean build's exit, and CMD's exit and report (`out/suites.json`, logs in `out/logs/`).  It
@@ -82,8 +125,7 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
             if lake is None:
                 doc["error"] = f"no `lake` on the PATH or in {elan} to build {d} with, and without that build its tests skip"
                 return doc
-            print(f"quick tier: `lake build` in {d}", flush=True)
-            doc["lean"].append({"dir": d, "rc": subprocess.run([lake, "build"], cwd=tree / d, env=env).returncode})
+            doc["lean"].append(build(lake, tree / d, d, env))
             if doc["lean"][-1]["rc"]:
                 return doc
     runner = tree / SUITES

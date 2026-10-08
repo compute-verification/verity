@@ -8,7 +8,7 @@ weight -> `_moe_C.moe_sum`), bf16, unquantized, routing given:
 `production` runs vLLM's own entry and records what each `fused_moe_kernel` launch wrote, by wrapping the module's
 `dispatch_fused_moe_kernel`: the w13 launch's output (`MoeExpertGemm{E,K=H,N=2I}` per (token, slot) pair), the w2 launch's input
 (`SiluMul_v1{I}`) and output (`MoeExpertGemmW{E,K=I,N=H}`), then the block's output (`MoeSum_v1{TOPK,H}` per token).  The expert
-GEMMs are the ones a config run binds on the capture's device (`registry.targets.moe_expert_gemm_spec`: `_v1`, or `_v2{DOT}` with the
+GEMMs are the ones a config run binds on the capture's device (`frontend.targets.moe_expert_gemm_spec`: `_v1`, or `_v2{DOT}` with the
 device's k16 step).  The launch configuration vLLM chose (tile sizes, sorted or naive schedule) and the device's compute capability are
 recorded with the case.  H spans several BLOCK_SIZE_K tiles, so the k-chain crosses tile boundaries; the token counts take both the
 naive and the sorted block schedule."""
@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import struct
 
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.refs import array_of, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.refs import array_of, tuple_of
+from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.moe import MoeExpertGemm, MoeExpertGemmV2, MoeExpertGemmW, MoeExpertGemmWV2, MoeSum
 from verity_vllm.program.registry.prims import BF16, F32, I32
@@ -123,10 +123,10 @@ FusedMoEDifftestDot = CompositeDefinition("FusedMoEDifftestDot", 1, ("E", "TOPK"
 
 
 def spec(statics: dict):
-    """The block as a config run on the capture's device binds it (`registry.targets.moe_expert_dot` of its compute capability,
+    """The block as a config run on the capture's device binds it (`frontend.targets.moe_expert_dot` of its compute capability,
     recorded by `production`; none recorded = the default target's `_v1` Definitions)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import targets as T
+    from verity_vllm.program.frontend import targets as T
     st = {k: int(statics[k]) for k in ("E", "TOPK", "H", "I", "M")}
     cc = statics.get("cc")
     dot = T.moe_expert_dot(TargetProfile(compute_capability=tuple(cc))) if cc else None

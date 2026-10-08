@@ -24,11 +24,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
 import numpy as np
 
-from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelArgmaxBf16, GumbelArgmaxTempBf16
+from verity_vllm.program.registry.sampling import GumbelArgmaxBf16, GumbelArgmaxTempBf16
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import SCRATCH_TOKEN_SELECT, ComputeGroup, _fmt, bound_args, first, hint_of, is_int, sub_rows, triton_name, unsupported, widened_source

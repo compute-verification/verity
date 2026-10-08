@@ -9,12 +9,12 @@ import json
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.defs import bind
-from verity.primitives.circuits.evaluate import evaluate_region
-from verity.primitives.circuits.layout import resolve
-from verity.primitives.circuits.program import Program
-from verity_vllm.program.registry import b1_tp2 as TP2
-from verity_vllm.program.registry import prims as P
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.layout import resolve
+from verity.ml.circuits.program import Program
+from verity_vllm.program.registry import b1_tp2 as TP2, prims as P
+from verity_vllm.program.frontend import collective_kinds
 
 
 # --- helpers --------------------------------------------------------------------------------------------------------------
@@ -102,11 +102,11 @@ def test_allgather_world_n_is_the_rank_order_concatenation(W, N):
 
 def test_registry_derived_family_selectors():
     """Consumers (the v2 query, sampled_replay, tp/worker, tp/commit) ask the registry, never a spelled prefix."""
-    assert TP2.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == TP2.collective_kind("AllReduce_v2{WORLD=3,N=8}")
-    assert TP2.collective_kind("AllGather2_v1") == "all_gather" == TP2.collective_kind("AllGather_v1{WORLD=4,N=8}")
-    assert TP2.collective_kind("Gemm_v1{K=1,N=2}") is None and TP2.collective_kind("") is None
-    assert TP2.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
-    assert TP2.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
+    assert collective_kinds.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == collective_kinds.collective_kind("AllReduce_v2{WORLD=3,N=8}")
+    assert collective_kinds.collective_kind("AllGather2_v1") == "all_gather" == collective_kinds.collective_kind("AllGather_v1{WORLD=4,N=8}")
+    assert collective_kinds.collective_kind("Gemm_v1{K=1,N=2}") is None and collective_kinds.collective_kind("") is None
+    assert collective_kinds.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
+    assert collective_kinds.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
     from verity_vllm.check.match import xrank_collectives as XC
     from verity_vllm.query import required as v1_bridge
     assert v1_bridge.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"

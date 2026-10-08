@@ -33,10 +33,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from verity.primitives.circuits.defs import bind, composite, primitive
-from verity.primitives.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+from verity.ml.circuits.defs import bind, composite, primitive
+from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R
@@ -146,18 +146,6 @@ def NvExpf(B, S, x):
     f = B.call(P.F32Fma, x, B.call(C_LOG2E_LO), f)
     e = B.call(P.MufuEx2Ftz, f)
     return B.call(P.F32Mul, e, B.call(F32BitsShl23, jb))
-
-
-def nv_expf_bits(x: int) -> int:
-    """The same sequence evaluated directly on one f32 encoding (for probes / difftests; `NvExpf` is the Program-side
-    statement of it and the two are asserted equal by the lane's tests)."""
-    t = P.F32Fma.evaluate(x, 0x3BBB989D, 0x3F000000)
-    s = F32Sat.evaluate(t)
-    jb = F32FmaRm.evaluate(s, bits_of(252.0), bits_of(12582913.0))
-    j = P.F32Add.evaluate(jb, bits_of(-12583039.0))
-    f = P.F32Fma.evaluate(x, 0x3FB8AA3B, F32Neg.evaluate(j))
-    f = P.F32Fma.evaluate(x, 0x32A57060, f)
-    return P.F32Mul.evaluate(P.MufuEx2Ftz.evaluate(f), F32BitsShl23.evaluate(jb))
 
 
 ONE32 = b1.f32c(1.0)
@@ -419,29 +407,6 @@ def NvSigmoid(B, S, x):
     return B.call(P.F32Fma, t, half, half)
 
 
-def nv_sigmoid_bits(x: int) -> int:
-    """The SASS of `sigmoid_accurate` instruction by instruction on one f32 encoding (FSETP.GE, FSEL and the LOP3 sign OR as they
-    are; the probes' and tests' reference for `NvSigmoid_v1`)."""
-    h = P.F32Mul.evaluate(x, 0x3F000000)
-    ah = h & 0x7FFFFFFF
-    a = P.F32Mul.evaluate(ah, 0x4038AA3B)
-    s = P.F32Mul.evaluate(h, h)
-    poly = not f32_of(ah) >= f32_of(0x3F19999A)
-    big = f32_of(ah) >= f32_of(0x41102CB4)
-    p = P.F32Fma.evaluate(s, 0x3C80F082, 0xBD563CAE)
-    e = P.MufuEx2Ftz.evaluate(a)
-    p = P.F32Fma.evaluate(s, p, 0x3E085941)
-    d = P.F32Add.evaluate(e, 0x3F800000)
-    p = P.F32Fma.evaluate(s, p, 0xBEAAA9ED)
-    q = P.F32Fma.evaluate(s, p, 0)
-    r = P.MufuRcpFtz.evaluate(d)
-    t = 0x3F800000 if big else P.F32Fma.evaluate(r, 0xC0000000, 0x3F800000)
-    t |= h & 0x80000000
-    if poly:
-        t = P.F32Fma.evaluate(h, q, h)
-    return P.F32Fma.evaluate(t, 0x3F000000, 0x3F000000)
-
-
 @composite("MoeRouterBiasScore", 1, [], lambda S: ((("x", F32), ("sig", F32), ("b", F32)), F32), conformance="not-yet-established")
 def MoeRouterBiasScore(B, S, x, sig, b):
     """`preprocess_score<float, float, SIGMOID>`'s selection score from the logit x, its sigmoid and the correction bias b:
@@ -671,7 +636,7 @@ def MoeExpertGemmW(B, S, x, e, g, w):
 
 # ---------------------------------------------------------------------------------------------------------
 # the expert GEMMs with the k16 tensor-core step as a static: `fused_moe_kernel`'s `tl.dot` on a target whose step is not the
-# Ampere/Ada one (`registry.targets.moe_expert_dot`); the bodies are the `_v1` ones with `DotBf16_v2{K,DOT}` for `DotBf16_v1`
+# Ampere/Ada one (`frontend.targets.moe_expert_dot`); the bodies are the `_v1` ones with `DotBf16_v2{K,DOT}` for `DotBf16_v1`
 # ---------------------------------------------------------------------------------------------------------
 
 SM120_EVIDENCE = ("RTX PRO 6000 (cc 12.0, 188 SMs), vLLM d9105ea80 fused_experts under VLLM_BATCH_INVARIANT=1 (BLOCK 64/64/32, GROUP_SIZE_M 8): "

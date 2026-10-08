@@ -27,8 +27,8 @@ import struct
 
 import torch
 
-from verity.primitives.circuits.refs import Coll
-from verity.primitives.circuits.types import Array, Value
+from verity.ml.circuits.refs import Coll
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape
@@ -44,7 +44,7 @@ def f32_bits(x: float) -> int:
 class GumbelTopPTokenSelectRule(OpRule):
     """`vllm_iface.gumbel_topp_token_select(logits bf16 [.., V], seed int64 [1], temperature: float, top_p: float, pos: int, splits int32 [1])`
     -> per row `GumbelTopPTokenSelect_v1{V}(row, Const32[top_p], seed[0], Const64[pos], Const32[temperature], splits[0])` (its
-    `registry.sampling.SHARED_GREEDY` entry under the target's `sampler_construction = shared-greedy`), an I32 token id per row (the op's
+    `registry.sampling_vocab.SHARED_GREEDY` entry under the target's `sampler_construction = shared-greedy`), an I32 token id per row (the op's
     int32 result).  Refused: a temperature of 0 (that is the greedy `TokenSelect_v1`, not a stochastic select — do not
     relabel), a seed that is not a 64-bit 1-element value collection (the seed must be a Program input, never a literal), a non-static
     pos, a `splits` that is not a 32-bit 1-element value collection (S is the workload's derived value, read from the request's `splits`
@@ -139,7 +139,7 @@ class GumbelTopPTokenSelectRule(OpRule):
             temp_c = ctx.call(ctx.kind("const", node, W=32, BITS=tbits), node=node, rule=self, name=f"{hint}/temperature")
             s_c = splits_c if splits_c is not None else ctx.call(ctx.kind("const", node, W=32, BITS=int(S)), node=node, rule=self, name=f"{hint}/splits")
             outs.append(ctx.call(fn, r, topp_c, seed_c, pos_c, temp_c, s_c, node=node, rule=self, name=f"{hint}[{i}]"))
-        from verity.primitives.circuits.refs import array_of
+        from verity.ml.circuits.refs import array_of
         out = array_of(outs).reshape(_tensor_type(lead, 32)) if lead else outs[0]
         ctx.define(node, out)
         S_rec = ("Program input (derived: SplitsFor_v1(|live(t)|, num_SMs), the request's `splits` entry for this event)" if splits_c is not None

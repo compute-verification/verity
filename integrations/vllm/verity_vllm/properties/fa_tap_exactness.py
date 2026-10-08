@@ -142,7 +142,7 @@ def visited_rows(c: dict[str, Any], geo: dict[str, Any]) -> Iterator[tuple[int, 
 
 
 def masked_from(c: dict[str, Any], geo: dict[str, Any]) -> dict[tuple[int, int], int]:
-    """FA3: (slab, packed row) -> the row's tile's `n_block_min_causal_local_mask` (`fa3_check_inf.fa3_masked_from`), the lowest key block
+    """FA3: (slab, packed row) -> the row's tile's `n_block_min_causal_local_mask` (`attention_vocab.fa3_masked_from`), the lowest key block
     the kernel runs with `Check_inf`: tile `m_block = row // kBM` starts at query row `m_block * kBM // g`, and the blocks at or above
     `(m_idx_min + sk - sq) // BN` are its first and causal-masked iterations."""
     BN, kBM, g, out = geo["BN"], geo["kBM"], geo["g"], {}
@@ -200,7 +200,7 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
 
 def ir_guard(m: int) -> int:
     """The IR model's `GuardNegInfZero_v1(m)` by the reference evaluator."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
+    from verity.ml.circuits.evaluation.reference import evaluate
     from verity_vllm.program.registry import prims
 
     return int(evaluate(prims.GuardNegInfZero, int(m))[0])
@@ -250,7 +250,7 @@ def scale_log2_bits(c: dict[str, Any], D: int) -> int:
 def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
     """The IR model's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
     unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
+    from verity.ml.circuits.evaluation.reference import evaluate
     from verity_vllm.program.registry import prims
 
     return int(evaluate(prims.F32MulFtz, ir_guard(m) if check else int(m), int(scale_log2))[0])

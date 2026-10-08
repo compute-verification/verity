@@ -9,35 +9,21 @@ running max of -inf to 0.  `AttnBlock_v2` guards on every block; on a row whose 
 (the kernel's `max_scaled` is -inf and its P and rescale NaN, the guarded block's 0, 0 and 0).
 
 `AttentionHead_v4` takes the tile's `n_block_min_causal_local_mask` as the static `MASKED_FROM` (the lowest key block the kernel guards;
-`fa3_masked_from`): block b runs `AttnBlock_v4{..., CHECK = b >= MASKED_FROM}`.  The row's first block (`ceil(T/BN) - 1`) is always at or
+`attention_vocab.fa3_masked_from`): block b runs `AttnBlock_v4{..., CHECK = b >= MASKED_FROM}`.  The row's first block (`ceil(T/BN) - 1`) is always at or
 above it.  `targets.attention_spec` binds `Attention_v4` under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default);
 `"guard-every-block"` binds `Attention_v2`.  New versions because the identity changed; v2 stays registered and untouched (registry version
 discipline).
 """
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import bind, composite
-from verity.primitives.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.primitives.circuits.types import Array, Tuple
-from verity_catalog.definitions.gemm import DotBf16 as DotBf16V2
-from verity_catalog.definitions.prims import ZERO32, const
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.ml.circuits.ops.prims import ZERO32, const
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.b1 import ZERO16, _lane, _scale_log2_bits
 from verity_vllm.program.registry.prims import A16, BF16, F32
-
-
-def fa3_masked_from(T: int, BN: int, row: int, kBM: int, g: int) -> int:
-    """`n_block_min_causal_local_mask` of the FA3 tile holding query row `row` of its sequence (causal, not local, one context-parallel
-    rank): `(m_idx_min + seqlen_k - seqlen_q) / kBlockN`, with `m_idx_min` the tile's first query row (PackGQA: packed row `row * g + h`,
-    `m_idx_min = (m_block * kBlockM) / g`) and `seqlen_k - seqlen_q = T - 1 - row` (the row sees T keys).  Refuses a group size that does
-    not divide kBlockM (a row's heads would straddle two tiles)."""
-    T, BN, row, kBM, g = int(T), int(BN), int(row), int(kBM), int(g)
-    if g < 1 or kBM % g:
-        raise ValueError(f"FA3 tile: qheads_per_kvhead {g} does not divide kBlockM {kBM}")
-    if not 0 <= row < T:
-        raise ValueError(f"FA3 row {row} outside the {T} keys it sees")
-    m_idx_min = (row * g // kBM) * kBM // g
-    return (m_idx_min + T - 1 - row) // BN
 
 
 @composite("AttnBlock", 4, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"],
@@ -98,7 +84,7 @@ def AttnBlockV4(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
            conformance="not-yet-established")
 def AttentionHeadV4(B, S, q, k, v, *extra, block=AttnBlockV4):
     """`AttentionHead_v2` over `AttnBlock_v4`: causal attention of one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks visited
-    last -> first, block b with `CHECK = b >= MASKED_FROM` (the FA3 tile's causal-masked iterations; `fa3_masked_from`); epilogue
+    last -> first, block b with `CHECK = b >= MASKED_FROM` (the FA3 tile's causal-masked iterations; `attention_vocab.fa3_masked_from`); epilogue
     `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`, `out = bf16(o * inv)`.  `extra` / `block`: `AttentionHead_v13`'s."""
     T, D, BN, DOT, INV, MF = S.T, S.D, S.BN, S.DOT, S.INV, S.MASKED_FROM
     nb = (T + BN - 1) // BN
@@ -152,4 +138,4 @@ def AttentionV4(B, S, q, kc, vc, *extra, head=AttentionHeadV4):
 
 FA3_CHECK_INF_COMPOSITES = [AttnBlockV4, AttentionHeadV4, AttentionV4]
 
-__all__ = ["fa3_masked_from", "AttnBlockV4", "AttentionHeadV4", "AttentionV4", "FA3_CHECK_INF_COMPOSITES"]
+__all__ = ["AttnBlockV4", "AttentionHeadV4", "AttentionV4", "FA3_CHECK_INF_COMPOSITES"]

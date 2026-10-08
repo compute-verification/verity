@@ -113,7 +113,7 @@ def test_sampling_params_prefers_the_request_params(monkeypatch):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# quarantine Definition `GumbelArgmaxBf16_v1` (torch-free): the circuit against the NumPy libdevice oracle
+# registry Definition `GumbelArgmaxBf16_v1` (torch-free): the circuit against the NumPy libdevice oracle
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -124,9 +124,9 @@ def _program_output_gate(P):
 
 
 def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
-    from verity.primitives.circuits import Program, bind
-    from verity.primitives.circuits.evaluate import evaluate_region
-    from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelArgmaxBf16
+    from verity.ml.circuits import Program, bind
+    from verity.ml.circuits.evaluate import evaluate_region
+    from verity_vllm.program.registry.sampling import GumbelArgmaxBf16
     P = Program(bind(GumbelArgmaxBf16, V=V, SEED=seed, POS=pos))
     C = P.circuit
     gates = [g for _, _, g in P.input_coll(0).refs]
@@ -166,7 +166,7 @@ def test_gumbel_lane_noise_is_bit_exact_against_the_gpu_probe():
     the lane's NumPy transcription and the Definition's per-lane primitive must reproduce every word."""
     import numpy as np
     from verity_vllm.program.kernels.libdevice_sampling import gumbel_noise_exact
-    from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelNoiseLane, GumbelStreamKey
+    from verity_vllm.program.registry.sampling import GumbelNoiseLane, GumbelStreamKey
     probe = Path(__file__).resolve().parents[2] / "out/gen/lanes/ov-sampling/runs/probe"
     cmp = probe / "compare.json"
     if not cmp.exists():
@@ -308,10 +308,10 @@ def test_tempered_row_is_gumbel_argmax_temp_over_the_bf16_source():
 def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     """div.full.f32 quotient (F32Mul(DivFullScaleA(x,T), DivFullRcp(T))) + noise, lowest-index argmax."""
     import numpy as np
-    from verity.primitives.circuits import Program, bind
-    from verity.primitives.circuits.evaluate import evaluate_region
+    from verity.ml.circuits import Program, bind
+    from verity.ml.circuits.evaluate import evaluate_region
     from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelArgmaxTempBf16
+    from verity_vllm.program.registry.sampling import GumbelArgmaxTempBf16
     from verity_vllm.program.kernels.libdevice_sampling import gumbel_noise_exact
     V, seed, pos = 80, 11, 5
     for T in (0.7, 1.3):

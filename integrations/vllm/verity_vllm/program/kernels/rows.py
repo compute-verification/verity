@@ -7,7 +7,7 @@ members too.  It raises `Declined` with the reason when the instance is outside 
 step, a wiring of another arity, a non-finite lane of a vectorised twin) and ValueError on operands the Definition does not
 take.
 
-Every row kernel is registered with core `verity.primitives.circuits.evaluation` under the kernel name "rows" against its Definition id
+Every row kernel is registered with core `verity.ml.circuits.evaluation` under the kernel name "rows" against its Definition id
 (`kernel_registry.register`).  The core kernel returns the `returns` members flattened, and declines the instances the row
 kernel declines or raises ValueError on, and those with a bf16 operand or result word that is not finite: the domain
 `self_check` covers.  The replay calls the row kernel on whatever words were committed.
@@ -24,7 +24,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.primitives.circuits.evaluation.batch import type_dtype, type_shape
+from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 from verity_vllm.program.kernels import value_rows as VR
@@ -86,9 +86,9 @@ EVALUATORS = {
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
-    # evaluated by the core reference (`verity.primitives.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
+    # evaluated by the core reference (`verity.ml.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
-    "GumbelTopPTokenSelect_v1": "verity_vllm.program.registry.sampling.GumbelTopPTokenSelect{V} via verity.primitives.circuits.evaluation.evaluate (TemperatureScale -> "
+    "GumbelTopPTokenSelect_v1": "verity_vllm.program.registry.sampling.GumbelTopPTokenSelect{V} via verity.ml.circuits.evaluation.evaluate (TemperatureScale -> "
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
                                             "TargetProfile.sampler_construction = shared-greedy)",
@@ -115,7 +115,7 @@ EVALUATORS = {
     "MoeExpertGemmW_v1": "dot_bf16 over W2[e] gathered by the committed router_ids word, the committed routed weight multiplied into the f32 "
                          "accumulator (one F32Mul) before the single f2fp_bf16 (MoeExpertCoordinateW_v1: the w2 launch, MUL_ROUTED_WEIGHT=True) -> down",
     # the same rows with the k16 step read from the DOT static (registry.moe MoeExpertGemm_v2 / MoeExpertGemmW_v2: a target whose
-    # fused_moe_kernel tl.dot is not the Ampere/Ada step, registry.targets.moe_expert_dot); an unregistered DOT is declined by name
+    # fused_moe_kernel tl.dot is not the Ampere/Ada step, frontend.targets.moe_expert_dot); an unregistered DOT is declined by name
     "MoeExpertGemm_v2": "derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}) over W13[e] gathered by the committed router_ids word + f2fp_bf16 "
                         "(MoeExpertCoordinate_v2) -> up",
     "MoeExpertGemmW_v2": "derived_rows.dot_bf16_for(DOT) over W2[e], the committed routed weight into the f32 accumulator (one F32Mul), then "
@@ -173,7 +173,7 @@ _DOT_STATIC_FN = re.compile(r'^\{"fn":"([A-Za-z0-9_]+)"\}$')
 
 def prim_static(statics: dict[str, Any], key: str, family: str) -> str:
     """[R17 dense, ruling R17-3] A function-valued static (`DOT` of `Gemm_v2{K,N,DOT}` / `Attention_v2{..., DOT, INV}`, `INV` of the latter)
-    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.primitives.circuits.codec._spec_id); a bare
+    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.ml.circuits.codec._spec_id); a bare
     `<Name>_v<k>` id is accepted too.  Anything else is unresolved BY NAME: the evaluator never guesses the architecture from the target."""
     v = statics.get(key, "")
     raw = str(getattr(v, "id", v) or "")
@@ -221,10 +221,10 @@ def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]
     """[R16 stoch, rev F-r16-20(a)] `GumbelTopPTokenSelect_v1{V}` on its six operand word arrays -- (bf16 logits[V], f32 top_p, i64 seed,
     i64 pos, f32 temp, i32 splits) -- evaluated by the REGISTRY (the composite of record: TemperatureScale -> TopPMask_v1{V} with `splits`
     as the S operand -> GumbelSelectF32, Philox draws from (seed, pos)); returns the sampled id.  No re-implementation: the core
-    reference (`verity.primitives.circuits.evaluation.evaluate`, the one-call walk the difftest (G4) and the Match-time stoch recompute run).  The words
+    reference (`verity.ml.circuits.evaluation.evaluate`, the one-call walk the difftest (G4) and the Match-time stoch recompute run).  The words
     arrive as the committed / Const encodings; every operand is checked against the signature's leaf count before the walk (a slice
     that is not exactly one f32 word is a fault of the Program's wiring, named here, never a silent truncation)."""
-    from verity.primitives.circuits.evaluation import evaluate
+    from verity.ml.circuits.evaluation import evaluate
     from verity_vllm.program.registry import sampling_topp_difftest as DT
     V = int(statics["V"])
     if len(operands) != len(_GUMBEL_TOPP_OPERANDS):
@@ -686,7 +686,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import b1, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}

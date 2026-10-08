@@ -261,3 +261,45 @@ def test_push_to_a_new_branch_and_never_over_one(repo, tmp_path, monkeypatch, ca
         RS.main(["pr", "--move-commit", "move", "--push-to", "pr-restacked"])
     assert RS.main(["pr", "--move-commit", "move", "--push-to", "other", "--dry-run"]) == 0
     assert "other" not in git(remote, "branch")
+
+
+def _uv_version() -> str:
+    return subprocess.run(["uv", "--version"], capture_output=True, text=True, check=True).stdout.split()[1]
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv on the PATH")
+def test_the_script_runs_under_the_uv_the_move_s_base_pins(tmp_path):
+    """layout.py refuses to `uv lock` with any uv but pod_setup.sh's pin, so a caller with another uv got script-failed on
+    every branch: the script now finds a `uv` first on its PATH that runs the pinned version."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    pinned = commit(repo, "pin another uv", {"tools/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-0.0.1}\n"})
+    env = RS.pinned_uv_env(pinned, str(tmp_path), str(repo))
+    shim = Path(env["PATH"].split(os.pathsep)[0]) / "uv"
+    assert "tool run --quiet uv@0.0.1 " in shim.read_text() and os.access(shim, os.X_OK)
+    same = commit(repo, "pin this uv", {"tools/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-%s}\n" % _uv_version()})
+    assert RS.pinned_uv_env(same, str(tmp_path / "b"), str(repo)) is None
+    unpinned = commit(repo, "pin nothing", {"tools/check/pod_setup.sh": None})
+    assert RS.pinned_uv_env(unpinned, str(tmp_path / "c"), str(repo)) is None
+
+
+def test_the_script_runs_with_its_arguments(repo, monkeypatch):
+    """The rename move's script takes its map as `--map`: restack runs it with the same arguments as the move did, and a move
+    commit written with other arguments is refused."""
+    git(repo, "checkout", "-q", "main")
+    argv = "import pathlib, sys\npathlib.Path('ARGS').write_text(' '.join(sys.argv[1:]) + '\\n')\n"
+    base = commit(repo, "the args script", {"tools/move/argv.py": argv})
+    subprocess.run(["python3", "tools/move/argv.py", "--map", "tools/move/x.toml"], cwd=repo, check=True)
+    move = commit(repo, "argv: generated")
+    git(repo, "checkout", "-q", "-b", "args-pr", base)
+    commit(repo, "a change", {"app/new.py": "x = 1\n"})
+    git(repo, "checkout", "-q", "main")
+    monkeypatch.setattr(RS, "SCRIPT", "tools/move/argv.py")
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", ("--map", "tools/move/x.toml"))
+    r = RS.restack("args-pr", move, cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert show(repo, r["steps"][0]["commit"], "ARGS") == "--map tools/move/x.toml\n"
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", ())
+    with pytest.raises(SystemExit, match="isn't what"):
+        RS.restack("args-pr", move, cwd=str(repo))

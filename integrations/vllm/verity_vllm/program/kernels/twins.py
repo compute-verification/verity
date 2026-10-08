@@ -2,9 +2,9 @@
 
 A *twin* re-implements one registered composite (`verity_vllm/program/registry/b1.py`) for speed — numpy over whole operands,
 or the numerics lane's C++ models through ctypes — and is admissible only where its output words are IDENTICAL to
-`verity.primitives.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
+`verity.ml.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
 declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
-are core `verity.primitives.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
+are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
 
     covers(spec, KERNEL)                   # None when a twin claims spec (e.g. `Gemm_v1{K=576,N=960}`), else why not
     words = instance(spec, KERNEL)(*args, **spec.statics)
@@ -48,12 +48,12 @@ from typing import Any, Callable
 import numpy as np
 from dataclasses import dataclass
 
-from verity.primitives.circuits.evaluation import self_check
-from verity.primitives.circuits.defs import SpecializedDefinition, bind
+from verity.ml.circuits.evaluation import self_check
+from verity.ml.circuits.defs import SpecializedDefinition, bind
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import b1, prims as P
+from verity_vllm.program.kernels import prims_twins
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64
@@ -124,13 +124,13 @@ def _tc_lib() -> ctypes.CDLL:
 
 
 def _fa2():
-    fa2, tabs = P._fa2()
+    fa2, tabs = prims_twins._fa2()
     LIBRARIES["fa2_model"] = str(fa2.LIB)
     return fa2, tabs
 
 
 def _rms():
-    rm, tabs = P._rms()
+    rm, tabs = prims_twins._rms()
     LIBRARIES["rms_triton_model"] = str(rm.LIB)
     return rm, tabs
 
@@ -709,7 +709,7 @@ DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the twins as core `verity.primitives.circuits.evaluation` kernels, checked against the reference by core `self_check`
+# the twins as core `verity.ml.circuits.evaluation` kernels, checked against the reference by core `self_check`
 # ---------------------------------------------------------------------------------------------------------
 
 KERNEL = "twin"
@@ -876,7 +876,7 @@ def _captured_providers(result, vals, store, spec_id: str, rng: np.random.Genera
     """Callables yielding (node, args, expected words) for real instances of `spec_id` at snapshot steps: operands by
     provenance exactly as tier a resolves them (`compare.Values`), expected from the instance's own output snapshot."""
     from verity_vllm.check.fold_compare import _component_ranges
-    from verity.primitives.circuits.refs import runs
+    from verity.ml.circuits.refs import runs
     steps = set(store.steps)
     metas = [m for m in result.instances if m["spec"] == spec_id and m["step"] in steps]
     idx = list(range(len(metas)))

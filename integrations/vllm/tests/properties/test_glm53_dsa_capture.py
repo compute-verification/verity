@@ -14,13 +14,13 @@ import pytest
 import torch
 
 from tests.properties import glm53_dsa_capture_gpu as X
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import dsa
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.registry.fp8 import np_f32_to_e4m3_sat
+from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 PAIRS = [(a, b) for fs in (X.L_FORMS, X.H_FORMS) for i, a in enumerate(fs) for b in fs[i + 1:]]

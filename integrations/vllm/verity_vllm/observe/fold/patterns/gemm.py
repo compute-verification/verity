@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
@@ -29,7 +29,7 @@ class GemmLaunch:
 
     Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  [R13 ampere] The TILING pinned is the
     record target's launch geometry for (M, N, K) — `gemm_target_of(ctx)`: the registered GEMM specialization of the
-    header's capability (`verity_vllm.program.registry.gemm_targets`; `ada` = vLLM's sm_89 tuned table rows else the default, `ampere`
+    header's capability (`verity_vllm.program.frontend.gemm_targets`; `ada` = vLLM's sm_89 tuned table rows else the default, `ampere`
     = the default for every shape); `constexprs` / `num_warps` / `num_stages` given at construction are the profile's default
     expectation for the fields the target does not decide.  A target without a registered specialization is Unsupported
     (`numerics_unregistered`) whatever the launch shows.  The `NUM_SMS` pin is the record target's SM count ([X-01]
@@ -66,7 +66,7 @@ class GemmLaunch:
         a = bound_args(launch)
         consts = dict(launch.enter.constexprs)
         # [R13 ampere] the tiling (BLOCK_SIZE_*, num_warps, num_stages) a launch must show is the record TARGET's launch geometry for
-        # (M, N, K) — the registered GEMM specialization's `launch_config` (verity_vllm.program.registry.gemm_targets: vLLM's tuned-table row for the
+        # (M, N, K) — the registered GEMM specialization's `launch_config` (verity_vllm.program.frontend.gemm_targets: vLLM's tuned-table row for the
         # target's arch family, else the default), the same source Bet A pins.  An unregistered target is refused whatever the launch shows.
         gt, refusal = gemm_target_of(ctx)
         if gt is None:
@@ -122,7 +122,7 @@ class GemmLaunch:
         roots = ctx.roots_of(w)
         wname = roots[0].name if roots else ""
         rows = M
-        # [R13 hopper] the registered GEMM Definition of the record's target (`registry.targets.gemm_spec`: Gemm_v1 on the accepted
+        # [R13 hopper] the registered GEMM Definition of the record's target (`frontend.targets.gemm_spec`: Gemm_v1 on the accepted
         # Ampere-family target, Gemm_v2{DOT=<target step>} otherwise) — the same selection the Bet A builder makes
         try:
             spec = _targets().gemm_spec(target_of(ctx)[0], K, N)
@@ -203,7 +203,7 @@ def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -
 
 
 def _gemm_bias_of(g: Compute, ctx: StepContext):
-    """The record target's one-Call Definition of a biased linear whose launch is `g` (`registry.targets.gemm_bias_spec`: `GemmBias_v1`
+    """The record target's one-Call Definition of a biased linear whose launch is `g` (`frontend.targets.gemm_bias_spec`: `GemmBias_v1`
     or `GemmBias_v2{DOT}`), or None: `g` is not the target's GEMM Definition of its (K, N), or the target keeps the pair as two Calls."""
     T = _targets()
     statics = getattr(g.spec, "bindings", None) or {}

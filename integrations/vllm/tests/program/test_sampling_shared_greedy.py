@@ -9,10 +9,11 @@ import re
 
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import sampling as SM
-from verity.primitives.circuits.cut import call_scope
+from verity_vllm.program.registry import sampling_vocab
+from verity.ml.circuits.cut import call_scope
 from verity_vllm.query import word as W
 
 PAIRS = [(SM.GumbelTokenSelect, SM.GumbelTokenSelectSharedGreedy), (SM.GumbelTopPTokenSelect, SM.GumbelTopPTokenSelectSharedGreedy)]
@@ -29,7 +30,7 @@ def _canon(fn, table: dict) -> tuple[int, ...]:
         g = c.gate(lo + j)
         ops = tuple(ids[o - lo] if lo <= o < lo + n else table.setdefault(("in", o), len(table)) for o in g.operands)
         ids[j] = table.setdefault((g.prim.id, ops), len(table))
-    from verity.primitives.circuits.layout import resolve
+    from verity.ml.circuits.layout import resolve
     return tuple(ids[resolve(call, r) - lo] for r in fn.body.ret)
 
 
@@ -84,7 +85,7 @@ def test_new_ids_carry_no_version_in_their_names():
     for old, new in PAIRS:
         name = new.id.rsplit("_v", 1)[0]
         assert new.id == f"{name}_v1" and not re.search(r"[Vv]\d", name) and name.startswith(old.id.rsplit("_v", 1)[0])
-        assert SM.SHARED_GREEDY[old.id] is new and bind(new, V=16).signature() == bind(old, V=16).signature()
+        assert sampling_vocab.SHARED_GREEDY[old.id] is new and bind(new, V=16).signature() == bind(old, V=16).signature()
 
 
 @pytest.mark.parametrize("construction, shared", [(None, True), ("shared-greedy", True), ("greedy-check-per-stage", False)])
@@ -100,7 +101,7 @@ def test_the_target_binds_the_select_in_the_vocabulary_and_the_fold(construction
     V = 64
     tp = DEFAULT_TARGET.with_overrides(sampler_construction=construction)
     for old, new in PAIRS:
-        assert SM.select_for(old, tp.effective_sampler_construction()) is (new if shared else old)
+        assert sampling_vocab.select_for(old, tp.effective_sampler_construction()) is (new if shared else old)
     select = SM.GumbelTopPTokenSelectSharedGreedy if shared else SM.GumbelTopPTokenSelect
     assert PROFILE_B1_EAGER_V3.kind("token_select_stochastic", V=V, CONSTRUCTION=tp.effective_sampler_construction()).id == bind(select, V=V).id
     logits = ViewDesc(1, 0, (1, V), (V, 1), "bfloat16", "cuda:0")

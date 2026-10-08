@@ -214,7 +214,7 @@ def p_attention_tgrouped(node, ctx):
     never shows M-ARRIVAL-ORDER; this variant reproduces it on CPU with the same fold code path (`fold._compute_emit` per group)."""
     from tests.observe.test_fold_synthetic import _kv_flat, _slot
     from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import b1
     BN = e2e.BN
     if node.op != "vllm.unified_attention_with_output.default" or len(node.children) != 1:
@@ -254,7 +254,7 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     request step violates the dependency order.  The IR builder cannot construct such a body (a forward reference has no value to
     substitute), so this is what a hand-edited program.json/instances.jsonl looks like; the DAG criterion must FAIL it (G3: the
     consumer's Merkle hash names a forward reference; G4: no canonical address; G8: consumer-before-producer), as `sequence` does."""
-    from verity.primitives.circuits import codec
+    from verity.ml.circuits import codec
 
     doc = json.load(open(f"{oracle_dir}/program.json"))
     desc = doc["program"]
@@ -447,8 +447,8 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     """MATCH_IMPL=fast hands GM-01 and its X-09 run `global_match_fast.ops()` explicitly: after a fast check() every Verity core and
     checker-of-record function is the object it was before, the fast run's Programs are its own (MemoProg, progressions), and a record
     check() in the same process still loads the record's Programs and writes the same document."""
-    import verity.primitives.circuits.codec as codec
-    import verity.primitives.circuits.refs as refs
+    import verity.ml.circuits.codec as codec
+    import verity.ml.circuits.refs as refs
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match_fast as GMF
@@ -833,7 +833,7 @@ def test_workload_applicability_refuses_a_row_the_components_do_not_model():
 
 def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_program(tmp_path):
     # rev-pm M-0123 (E): a component descriptor edited after the derive composed silently to another workload digest -> now refused, named
-    from verity.primitives.circuits.codec import program_digest
+    from verity.ml.circuits.codec import program_digest
     from verity_vllm.pipeline import global_program as G
     desc = {"schema": "toy/descriptor", "program_fn": "Toy_v1", "definitions": {"Toy_v1": {"form": "composite", "body": {"nodes": [1, 2]}}},
             "root": "Toy_v1", "annotations": {"free": "text"}}
@@ -855,7 +855,7 @@ def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_
 
 def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_an_edited_one(tmp_path):
     # rev-pm M-0112: the artifact's workload_digest is a claim; the checker verifies it against the descriptor GP-01 wrote beside it
-    from verity.primitives.circuits.codec import canonical_json, program_digest
+    from verity.ml.circuits.codec import canonical_json, program_digest
     desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}, "annotations": {"free": "text"}}
     d = tmp_path / "build_workload"
     d.mkdir()
@@ -892,7 +892,7 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
     same dirs sit beside the artifact -- the v2 acquisition's B64 GM-01 died on exactly this FileNotFoundError.  from_gprog resolves them
     beside `<row>/build_workload/workload_program.json`, records what moved, and leaves an existing path / a path missing at both places
     alone (the loader's error must still name the recorded path)."""
-    from verity.primitives.circuits.codec import canonical_json, program_digest
+    from verity.ml.circuits.codec import canonical_json, program_digest
     desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}}
     row = tmp_path / "staged" / "row"
     bw = row / "build_workload"
@@ -954,9 +954,9 @@ def _real_workload_descriptor(lag: int | None):
     """A REAL workload Program through verity_vllm.program.workload + the descriptor codec (the toy request Programs of tests/program/
     test_workload_program.py): the `lag` static lands where GP-01's descriptor.json.gz carries it -- inlined in the program_fn spec id and the
     root id, NOT a root `bindings` entry.  lag=None: a pre-R17-1 shaped descriptor (the static stripped from both ids)."""
-    from verity.primitives.circuits.codec import encode_program
-    from verity.primitives.circuits.defs import REGISTRY
-    from verity.primitives.circuits.program import Program
+    from verity.ml.circuits.codec import encode_program
+    from verity.ml.circuits.defs import REGISTRY
+    from verity.ml.circuits.program import Program
     from verity_vllm.program import workload as W
     from tests.program.test_workload_program import _toy_request, _WP
     reqs = []
@@ -974,7 +974,7 @@ def _real_workload_descriptor(lag: int | None):
 def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_an_edited_lag_block(tmp_path):
     """[R17-1] (mechanism row OLMoE B2 16:43Z: the first real Build crashed GM-01 here -- the mock-shaped reader looked for a root
     `bindings.lag` the codec never writes).  The static is inlined in program_fn / the root id; both inside the verified digest."""
-    from verity.primitives.circuits.codec import canonical_json, program_digest
+    from verity.ml.circuits.codec import canonical_json, program_digest
     for lag in (0, 1):
         wl, desc = _real_workload_descriptor(lag)
         assert desc["program_fn"].endswith(f",lag={lag}}}") and desc["root"].endswith(f",lag={lag}}}]_v1"), (desc["program_fn"][-30:], desc["root"][-30:])
@@ -1789,7 +1789,7 @@ def test_sampler_geometry_check_evaluates_s_per_engine_step_against_the_realized
     """M-0169: vLLM picks the top-p split count S = splits_for(sampler batch, num_SMs) on the host per launch; the fold carries it on every
     GumbelTopPTokenSelect of the step. GM-01 evaluates S_t = SplitsFor_v1(|live(t)|, num_SMs) from the RECORD's live count (the requests with
     a logits row at t) and the Program's declared num_SMs -- L40S 142 SMs: 8 live -> 16, 4 live -> 32 (registry/topp_split)."""
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     assert (splits_for(8, 142), splits_for(4, 142), splits_for(1, 142)) == (16, 32, 32)
     gp = {"applicability": {"components": {"num_sms": 142}}}
     # engine step 0: 8 live requests (S must be 16); step 1: 4 live (S must be 32) -- a verified EOS halved the batch
@@ -1972,7 +1972,7 @@ def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_refuses_
     """R17 stoch: with the scheduled state, the record's logits rows and the SampleEnd batch must EQUAL the scheduled live count and S is
     evaluated at that count. A sampler row the workload does not schedule (an undeclared request, a row past a stop) inflates the observed
     batch and vLLM's S follows it -- the R16 form (observed rows) accepted that; the scheduled form names both disagreements."""
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     gp = {"applicability": {"components": {"num_sms": 142}}}
     reqs = [_req(f"r{i}", 0, 2) for i in range(4)] + [_req("r4", 0, 1)]      # 5 live at step 0 (S 16), 4 at step 1 (S 32)
     sc = SG.scheduled_live_counts(reqs, _present(reqs))
@@ -2017,7 +2017,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     """The R15 B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
-    from verity_vllm.program.registry.topp_split import splits_for
+    from verity_vllm.program.registry.topp_geometry import splits_for
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
     d = json.load(open(p))
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]
@@ -2108,10 +2108,10 @@ def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(me
 
 
 def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
-    """[unit 5 (a)] global_match_fast._runs_fast == verity.primitives.circuits.refs.runs on Affine / Concat-of-Affine (incl. zero-count parts and
+    """[unit 5 (a)] global_match_fast._runs_fast == verity.ml.circuits.refs.runs on Affine / Concat-of-Affine (incl. zero-count parts and
     fusing neighbours) and falls back to the original on every other shape (Strided, Explicit, nested Concat)."""
     import random
-    from verity.primitives.circuits.refs import Affine, Concat, Explicit, Strided, runs
+    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, runs
     from verity_vllm.check.match import global_match_fast as GMF
     rng = random.Random(7)
     def affine():
@@ -2354,7 +2354,7 @@ def test_fold_encodes_its_program_once_and_program_json_carries_that_descriptor(
     """[COORD R17-28 F3] `_finish` encodes the Program for the digest; `persist_program` used to encode and digest it AGAIN (36 s +
     a second digest at B8 1024/128).  Now the FoldResult carries the descriptor and program.json's `program` IS it: its digest (the
     codec's canonical bytes) equals the fold's, and a result without a descriptor (older producer) still encodes and cross-checks."""
-    from verity.primitives.circuits import codec
+    from verity.ml.circuits import codec
     from verity_vllm.pipeline.match import persist_program as _persist
     evs = batched_log([R0, R1])
     r = fold(evs, profile(), strict=True)

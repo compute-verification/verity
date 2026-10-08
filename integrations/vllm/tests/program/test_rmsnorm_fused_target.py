@@ -1,4 +1,4 @@
-"""`_C.fused_add_rms_norm`'s Definition is decided in one place, by the declared target (`registry.targets.rmsnorm_fused_spec`):
+"""`_C.fused_add_rms_norm`'s Definition is decided in one place, by the declared target (`frontend.targets.rmsnorm_fused_spec`):
 the Build's vocabularies, the fold's `FusedAddRMSNorm` and the predictor all ask it.  Under `batch_invariant` it binds what they
 bound before (`RMSNormFusedCuda_v2{N,EPS}`, or `RMSNormFusedCuda_v4{N}` under registered values); without it each side refuses by
 name, naming the width-8 kernel vLLM launches there."""
@@ -12,7 +12,7 @@ import pytest
 import torch
 from torch import nn
 
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.resolver import StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
@@ -24,7 +24,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations,
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import targets as T
+from verity_vllm.program.frontend import targets as T
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 
 WIDTH8 = "fused_add_rms_norm_kernel<bf16, 8>"

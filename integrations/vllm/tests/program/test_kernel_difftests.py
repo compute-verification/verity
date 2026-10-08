@@ -1,5 +1,5 @@
-"""The kernel difftest adapters without a GPU (`registry.rope_difftest`, `registry.rope_gptj_difftest`, `registry.moe_difftest`,
-`registry.collectives_difftest`): their cases carry every edge kind admission requires, each case binds a spec whose parameters take exactly
+"""The kernel difftest adapters without a GPU (`difftests.rope_difftest`, `difftests.rope_gptj_difftest`, `registry.moe_difftest`,
+`difftests.collectives_difftest`): their cases carry every edge kind admission requires, each case binds a spec whose parameters take exactly
 the case's input words, the rotary specs are the NeoX and the interleaved rotation of the query and the key by one cache row, the fused-MoE spec reads each (token, slot) pair's own expert id and
 routed weight, and the two-rank collectives are a bf16 add and a concatenation in rank order."""
 from __future__ import annotations
@@ -9,13 +9,13 @@ import random
 import numpy as np
 import pytest
 
-from verity.primitives.circuits.evaluation import evaluate
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import moe_difftest as MD
-from verity_vllm.program.registry import rope_difftest as RD
-from verity_vllm.program.registry import rope_gptj_difftest as RG
-from verity_vllm.program.registry import collectives_difftest as TD
+from verity_vllm.properties.difftests import rope_difftest as RD
+from verity_vllm.properties.difftests import rope_gptj_difftest as RG
+from verity_vllm.properties.difftests import collectives_difftest as TD
 from verity_vllm.program.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
 from verity_vllm.properties import admission as A
 

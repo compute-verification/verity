@@ -1,5 +1,5 @@
 """[X-06] `verity_vllm.program.registry.sampling`: stochastic token select with seed / pos / temperature as OPERANDS.  CPU: agreement with the
-RTX-4090-validated static-seed composites of `registry/quarantine/ov_sampling/gumbel.py`, the kernel's early returns, masked lanes,
+RTX-4090-validated static-seed composites (`GumbelArgmaxBf16_v1`, `GumbelArgmaxTempBf16_v1`), the kernel's early returns, masked lanes,
 and the plain-argmax limit.  The kernel correspondence itself is `registry/sampling_difftest.py` (G4, produce on the pod)."""
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 
 from verity_vllm.properties.admission import evaluate_spec
-from verity.primitives.circuits.defs import bind
+from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import sampling as S
-from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import (
+from verity_vllm.program.registry.sampling import (
     GumbelArgmaxBf16,
     GumbelArgmaxTempBf16,
 )
@@ -125,9 +125,6 @@ def test_temperature_scale_early_returns_and_div_full():
 
 
 def test_libdevice_and_philox_helpers_are_the_validated_ones():
-    """The quarantine module re-exports this module's helpers (one transcription, one set of evidence)."""
-    from verity_vllm.program.registry.quarantine.ov_sampling import gumbel as Q
-    assert Q.noise_lane is S.noise_lane and Q.stream_key is S.stream_key and Q.nv_logf is S.nv_logf
-    assert Q.GumbelNoiseLane is S.GumbelNoiseLane and Q.GumbelStreamKey is S.GumbelStreamKey
+    """The libdevice logs and the Philox stream key at their fixed points."""
     assert S.nv_logf(S.f32_bits(1.0)) == 0 and S.nv_log1pf(0) == 0
     assert S.stream_key(0, 0) == S.philox4x32_10_word0(0, 0, 0, 0, 0, 0)

@@ -7,7 +7,7 @@ partition and refuses any other set).
 They are interior to the Call: `kernel_rows` adds one `scale_products` identity per (step, linear module), ranging over the module's
 shared-scale Calls at that step, and the scale-products source (`acquire.sources.scale_products_source`) acquires
 `<linear module>/scale_products`, f32 [rows, cdiv(N, G) * K/G], computed from the launch's activation scales and the module's
-`weight_scale_inv` by `registry.fp8.scale_products`.  No kernel changes.  The policy applies to every manifest: a Program without a
+`weight_scale_inv` by `kernels.fp8_twins.scale_products`.  No kernel changes.  The policy applies to every manifest: a Program without a
 shared-scale Call gets no identity and an unchanged header.  The Match record holds no value for it.
 """
 from __future__ import annotations
@@ -18,12 +18,13 @@ from functools import lru_cache
 from typing import Any, Callable, Mapping
 
 from verity_vllm.program.registry import fp8
+from verity_vllm.program.registry import fp8_vocab
 from verity_vllm.program.registry import prims as P
 
 FAMILY = "scale_products"
 MEMBER = "scale_products"
 #: the shared-scale GEMM Definitions whose Calls commit their scale products
-SHARED = frozenset(d.id for d in fp8.SHARED_SCALE.values())
+SHARED = frozenset(d.id for d in fp8_vocab.SHARED_SCALE.values())
 
 
 def blocks(st: Mapping[str, Any]) -> tuple[int, int]:
@@ -47,7 +48,7 @@ POLICY_TEXT = ("scale products: per token row of " + ", ".join(sorted(SHARED)) +
 def slots(K: int, N: int, G: int) -> tuple[int, ...]:
     """The shared-scale Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i
     of a row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.defs import bind
     from verity_vllm.query import word as W
 
     g = W.Graph(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))

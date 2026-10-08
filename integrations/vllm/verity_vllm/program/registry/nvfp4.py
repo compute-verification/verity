@@ -18,16 +18,15 @@ Each linear launches two kernels (the attention lane's capture, art:3bc1b2c4):
 `input_scale` and `weight_scale_2` as they are, `g = f32(1 / input_scale)`.  A linear's bias is a separate bf16 add after the
 GEMM (`out + bias`).
 
-The device layouts the Commit opens (`sf_offset`, `unpack_codes`): the codes are packed two per byte, element 2i in the low
-nibble; the scale bytes are the swizzled [ceil(M/128)*128, round_up(K/16, 4)] layout of `cvt_quant_to_fp4_get_sf_out_offset`.
+The device layouts the Commit opens (`sf_offset`, `unpack_codes`) are `kernels.nvfp4_twins`.
 """
 from __future__ import annotations
 
-from verity.primitives.circuits.defs import bind, composite
-from verity.primitives.circuits.refs import Coll as _Coll, concat, tuple_of
-from verity.primitives.circuits.types import Array, Tuple, Value
-from verity_catalog.definitions.prims import E4m3ToF32, F32ToE2m1Sat, F32ToE4m3Sat
-from verity_catalog.definitions.scalar import F32Eq, F32Fabs, F32Fmaxf, SelectF32
+from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Coll as _Coll, concat, tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.ops.prims import E4m3ToF32, F32ToE2m1Sat, F32ToE4m3Sat
+from verity.ml.circuits.ops.scalar import F32Eq, F32Fabs, F32Fmaxf, SelectF32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16, F32
@@ -40,17 +39,6 @@ C6 = b1.f32c(6.0)
 
 _QUANT_CONF = "exact-model-tested; see tests/program/test_nvfp4.py and the PRO 6000 capture its docstring cites"
 _GEMM_CONF = "exact-model-tested; see tests/program/test_nvfp4.py and the PRO 6000 capture its docstring cites"
-
-
-def sf_offset(row: int, kblock: int, K: int) -> int:
-    """Byte offset of the scale of (row, 16-block) in the swizzled layout: [M tiles of 128][K tiles of 4 blocks][32][4][4]."""
-    k_tiles = (K + 63) // 64
-    return (((row >> 7) * k_tiles + (kblock >> 2)) << 9) | ((row & 31) << 4) | (((row >> 5) & 3) << 2) | (kblock & 3)
-
-
-def unpack_codes(packed: bytes | list[int]) -> list[int]:
-    """The E2M1 codes of a packed row: element 2i is the low nibble of byte i (`cvt.rn.satfinite.e2m1x2.f32 d, x[2i+1], x[2i]`)."""
-    return [c for b in packed for c in (b & 0xF, b >> 4)]
 
 
 @composite("Nvfp4QuantBlock", 1, [], lambda S: ((("x", Array(BLOCK, BF16)), ("g", F32)), Tuple(Array(BLOCK, E2M1), UE4M3)),
@@ -130,4 +118,4 @@ def QuantLinearNvfp4(B, S, x, g, w, ws, alpha):
 
 
 __all__ = ["BLOCK", "DotNvfp4", "E2M1", "Nvfp4ActQuant", "Nvfp4QuantBlock", "QuantLinearNvfp4", "STEP_K", "ScaledMmNvfp4",
-           "ScaledMmNvfp4Coordinate", "UE4M3", "sf_offset", "unpack_codes"]
+           "ScaledMmNvfp4Coordinate", "UE4M3"]

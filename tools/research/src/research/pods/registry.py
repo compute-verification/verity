@@ -13,10 +13,13 @@ The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`,
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
-Where it is read (`registry_dir`): `$RESEARCH_MACHINES_D` when set (`none` turns it off), else `<notes>/machines.d` on a machine
-that has no machines.toml (a cloud VM; with RESEARCH_NOTES_TOKEN set, a missing notes clone is cloned first:
-`notes_sync.ensure_clone`), else nowhere -- the laptop reads machines.toml alone until the switch-over sets the
-variable.  Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
+Where it is read and written (`registry_dir`, the one directory `register`, `unregister`, `registry import` and `research run --on`
+use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with RESEARCH_NOTES_TOKEN
+set, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none` turns the registry off: run
+reads machines.toml alone, and the commands that write refuse, since nothing would read what they wrote.  With
+`$RESEARCH_MACHINES_D` pointing elsewhere, `research run --on` still takes a machine only the notes clone's machines.d lists:
+a hand-copied override never hides a machine registered since it was copied (vy-nebius-cpu-1 from the lander's VM, 8 Oct 03:43Z).
+Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
 as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
 machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.
 
@@ -24,7 +27,8 @@ machine, or lacks provider / pod_id (host for an ssh machine) / project is dropp
 404, or any API failure: G2); the pod's name (campaign suffix stripped) is not NAME (`--any-name` allows it: a pod created before
 the convention); machines.toml or the registry already binds NAME to another pod (`--replace` for the registry file only).  The
 `register --host` (an ssh machine, such as a cloud VM with a static address) refuses unless `hostname` answers over ssh with the
-research key.  The file is written atomically, and with `RESEARCH_NOTES_SYNC=1` synced to the notes remote at once.
+research key.  The file is written atomically and synced to the notes remote at once, so other agents' `research run --on` sees the machine
+(vy-nebius-cpu-1 was invisible to lanes for hours, 7 Oct); `RESEARCH_NOTES_SYNC=0` leaves the commit to the next `notes sync`.
 """
 from __future__ import annotations
 
@@ -58,17 +62,24 @@ def notes_root(environ: dict | None = None) -> Path:
 
 
 def registry_dir(machines_toml: Path, environ: dict | None = None) -> Path | None:
-    """The registry directory to read, or None (module docstring)."""
+    """The registry directory, or None when it is off (module docstring)."""
     env = os.environ if environ is None else environ
     if REGISTRY_ENV in env:
         v = env[REGISTRY_ENV].strip()
         return None if v.lower() in OFF else Path(v).expanduser()
-    return None if machines_toml.exists() else notes_root(env) / "machines.d"
+    return notes_root(env) / "machines.d"
 
 
 def write_dir(machines_toml: Path, environ: dict | None = None) -> Path:
-    """Where `register` writes: the directory `registry_dir` reads, else the notes repo's (register turns the registry on)."""
-    return registry_dir(machines_toml, environ) or notes_root(environ) / "machines.d"
+    """Where `register`, `unregister` and `import` write: the directory `research run --on` reads.  Refused when the registry is
+    off, since nothing would read the file."""
+    from .. import remote
+
+    d = registry_dir(machines_toml, environ)
+    if d is None:
+        raise remote.Refused(f"the registry is off (${REGISTRY_ENV}={(os.environ if environ is None else environ)[REGISTRY_ENV]!r}), "
+                             f"so `research run --on` would not read a machines.d file; unset it or point it at a directory")
+    return d
 
 
 def validate(name: str, entry: Any) -> str | None:
@@ -126,7 +137,8 @@ def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
 
 def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | None = None) -> dict[str, dict]:
     """machines.toml's machines plus the registry's; a name the two bind to different pods, or a broken registry file, is dropped
-    (reason in `problems`).  Unchanged (and `problems` empty) when no registry directory is read."""
+    (reason in `problems`).  Unchanged (and `problems` empty) when no registry directory is read.  Under a `$RESEARCH_MACHINES_D`
+    override, a name neither it nor machines.toml defines comes from the notes clone's machines.d, if there is one."""
     problems.clear()
     d = registry_dir(machines_toml, environ)
     if d is None:
@@ -149,6 +161,10 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
                               "refused until one of them is removed")
         elif t is None:
             out[name] = e
+    if (notes := notes_root(environ) / "machines.d") != d and notes.is_dir():
+        for name, e in load_dir(notes)[0].items():
+            if name not in out and name not in problems:
+                out[name] = e
     return out
 
 
@@ -325,7 +341,7 @@ def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[
 def _sync(paths: list[Path]) -> str | None:
     from .. import notes_sync
 
-    if os.environ.get(notes_sync.SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
+    if os.environ.get(notes_sync.SYNC_ENV, "").strip() in ("0", "false", "no", "off"):
         return None
     root = notes_root()
     rel = [str(p.relative_to(root)) for p in paths if root in p.parents]
@@ -400,7 +416,7 @@ def main(argv: list[str]) -> int:
                 print(json.dumps(rs, indent=1))
             else:
                 d = registry_dir(mt)
-                print(f"machines.toml: {mt if mt.exists() else '(absent)'}; registry: {d if d else '(off: set ' + REGISTRY_ENV + ')'}")
+                print(f"machines.toml: {mt if mt.exists() else '(absent)'}; registry: {d if d else '(off: ' + REGISTRY_ENV + ' is none)'}")
                 for r in rs:
                     print(f"{r['name']:<36} {r['source']:<13} {r['pod_id'] or '-':<16} {','.join(p for p in r['projects'] if p):<12} "
                           f"{r['problem'] or ''}".rstrip())

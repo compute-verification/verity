@@ -60,7 +60,7 @@ FINITE_SAMPLE = 2
 # ------------------------------------------------------------------------------------------------------------------------ tanh
 def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
     """`MufuTanh_v1`'s table words over its shard, decoded from the in-tree blocks: (words, lo, the shard's record)."""
-    from verity_catalog.definitions import mufu
+    from verity.ml.circuits.ops import mufu
 
     (s,) = mufu.mufu_tanh_shards()
     words = np.concatenate([s.block(k) for k in range(len(s.header["blocks"]))]).astype("<u4")
@@ -70,7 +70,7 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from verity_catalog.definitions import mufu
+    from verity.ml.circuits.ops import mufu
 
     R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"
@@ -115,14 +115,14 @@ def case_list() -> list[dict[str, Any]]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against `AttentionSoftcap_v2` (a worker process: numpy words in, a record out)."""
-    from verity.primitives.circuits.evaluation.reference import evaluate
-    from verity.primitives.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.ml.circuits.defs import bind
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.registry import b1, hopper
     from verity_vllm.program.registry import fa2_softcap as F2S
     from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry import targets as TG
+    from verity_vllm.program.frontend import targets as TG
 
     table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
     tanh = lambda x: mufu_tanh(x, table, job["tanh_lo"])  # noqa: E731

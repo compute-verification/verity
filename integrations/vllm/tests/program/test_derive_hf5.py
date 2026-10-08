@@ -15,8 +15,8 @@ from torch import nn
 
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
-from verity_vllm.program.registry.serve3_reference import materialize
-from verity.primitives.circuits.types import Array, Value
+from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.circuits.types import Array, Value
 
 REF = dict(mode="reference")
 

@@ -111,6 +111,13 @@ def test_an_incident_clears_only_once_gone_for_its_clear_s(tmp_path):
     assert [[e["event"] for e in evs] for evs in out] == [["open"], [], [], [], [], ["clear"]]
 
 
+def test_a_timers_unit_that_fails_every_run_is_one_incident(tmp_path):
+    """vy-custody.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
+    [m] = [m for m in M.MONITORS if m.id == "units-n1"]
+    out = passes(M.new_state(), m, [["system:vy-custody.service"], []] * 6, tmp_path, every=300)
+    assert [e["event"] for evs in out for e in evs] == ["open"]
+
+
 def test_a_check_that_isnt_due_doesnt_run(tmp_path):
     state, ran = M.new_state(), []
     m = mon(lambda ctx: ran.append(ctx.now) or [], every_s=600)
@@ -286,7 +293,7 @@ def test_every_monitor_names_an_owner_a_severity_an_action_and_what_it_checks():
     handles = {h["handle"] for h in slack.load_registry(slack.registry_path())["handles"]}
     assert set(M.HANDLES) <= handles
     for m in M.MONITORS:
-        assert m.owner in handles and m.severity in ("warn", "page") and m.where in ("node", "relay"), m.id
+        assert m.owner in handles and m.severity in ("warn", "page") and m.where in ("node", "relay", "machine"), m.id
         assert m.action and m.doc and m.every_s >= 60, m.id
 
 
@@ -668,6 +675,19 @@ def test_units_on_node_1_tolerate_a_user_manager_that_isnt_there_and_node_2_read
     assert M.units("n2")(M.Ctx(now=T0, run=run)) == [] and M.UNITS in run.calls[0][1]
 
 
+def test_failed_login_session_scopes_are_one_incident_spanning_them():
+    scopes = "".join(f"session-{n}.scope loaded failed failed Session {n} of User research\n" for n in (8334, 8212, 8299))
+    run = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (0, "", "")),
+              (lambda a, _: a[0] == "systemctl", (0, FAILED + scopes, "")))
+    other, s = M.units("n1")(M.Ctx(now=T0, run=run))
+    assert other.key == "system:systemd-ask-password-console.path"
+    assert s.key == "system:session-*.scope"
+    assert "3 login session scopes have failed* (`session-8212.scope` to `session-8334.scope`)" in s.text
+    one = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (0, "", "")),
+              (lambda a, _: a[0] == "systemctl", (0, scopes.splitlines()[0] + "\n", "")))
+    assert "1 login session scope has failed* (`session-8334.scope`)" in M.units("n1")(M.Ctx(now=T0, run=one))[0].text
+
+
 # ---- relay-side ----------------------------------------------------------------------------------------------------------------
 
 def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_the_check():
@@ -799,9 +819,9 @@ def test_a_source_that_cant_be_read_is_logged_and_the_next_source_still_posts():
     assert posted == ["node-heartbeat|stale"] and len(logged) == 2 and logged[0].startswith("node1 unread: RuntimeError: node1: exited 255")
 
 
-def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None) -> list:
+def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None, handles=()) -> list:
     """slack_post's Slack: `_post` records (channel, the text's first line, thread) unless `fail(channel, thread)` returns an
-    error to raise; chat.getPermalink raises `permalink` when given."""
+    error to raise; chat.getPermalink raises `permalink` when given. The registry holds `handles`."""
     from research import slack as S
     posts = []
 
@@ -823,7 +843,7 @@ def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None) -> lis
         return f"ts{len(posts)}"
 
     monkeypatch.setattr(S, "registry_path", lambda *a: Path("registry.json"))
-    monkeypatch.setattr(S, "load_registry", lambda p: {"handles": [], "channels": {}})
+    monkeypatch.setattr(S, "load_registry", lambda p: {"handles": list(handles), "channels": {}})
     monkeypatch.setattr(S, "channel_id_for", lambda reg, key: {"agent-alerts": "CALERTS", S.FRONT_DOOR: "CFRONT"}[key])
     monkeypatch.setattr(S, "Routes", lambda *a, **kw: None)
     monkeypatch.setattr(S, "Slack", Api)
@@ -850,6 +870,21 @@ def test_an_alert_whose_pointer_fails_is_posted_once_and_its_pointer_once_slack_
     assert [(ch, thread) for ch, _, thread in posts] == [("CALERTS", None), ("CFRONT", None)]
     assert posts[1][1] == "@proofs open stalls-n1|blocked (alert: #agent-alerts)"
     assert rstate["threads"]["node1|stalls-n1|blocked"] == {"t": T0 + 60, "ts": "ts1", "pointer": "ts2", "done": True}
+
+
+def test_an_alert_about_a_run_tags_the_handle_of_the_agent_that_sent_it_and_points_it_at_the_alert(monkeypatch):
+    posts = fake_slack(monkeypatch, handles=[
+        {"handle": "infra", "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)"},
+        {"handle": "proofs", "holder": "the proofs coordinator (bc-8416bc72-c4cc); the research coordinator (bc-8ece7cde) too"},
+        {"handle": "circuits", "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)"}])
+    src, rstate = FakeSource("node1"), {}
+    M.relay_pass(rstate, [src], M.slack_post(False), T0)
+    src.all += [ev("event", "oom-kills|1", text="*n1: the OOM killer took lake of run r1, sent by "
+                                                "https://cursor.com/agents/bc-8ece7cde-1111-2222*"),
+                ev("event", "oom-kills|2", text="*n1: the OOM killer took lake of run r2, sent by https://cursor.com/agents/bc-00000000*")]
+    M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60)
+    assert [(ch, " ".join(w for w in text.split() if w.startswith("@"))) for ch, text, _ in posts] == [("CALERTS", "@infra @proofs"), ("CFRONT", "@proofs"),
+                                                                    ("CALERTS", "@infra")]
 
 
 def test_a_clear_into_a_deleted_thread_is_a_post_of_its_own(monkeypatch, capsys):
@@ -932,3 +967,197 @@ def test_the_files_deploy_toml_installs_on_node_1_run_every_node_side_check(tmp_
     assert f"Environment=PYTHONPATH={lib.rstrip('/')}" in text and "-m research.monitors run --by vy-monitors@vy-nebius-1 --where node" in text
     for name in ("vy-monitors.service", "vy-monitors.timer"):
         assert any(e["path"] == f"/etc/systemd/system/{name}" for e in manifest["file"])
+
+
+# ---- every machine: memory, OOM kills, peers, lost checks -----------------------------------------------------------------------
+
+def machine_root(tmp_path, scopes: dict[str, tuple[str | None, int]], *, full=0.0, avail_kb=900 * 2**20, total_kb=1000 * 2**20):
+    """A fake machine under `tmp_path`: PSI, meminfo, and USER_SLICE's session scopes, each {name: (run id or None, bytes)}."""
+    (tmp_path / "proc/pressure").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "proc/pressure/memory").write_text(f"some avg10=1.00 avg60={full:.2f} avg300=0.00 total=1\n"
+                                                   f"full avg10=0.00 avg60={full:.2f} avg300=0.00 total=1\n")
+    (tmp_path / "proc/meminfo").write_text(f"MemTotal:       {total_kb} kB\nMemFree:        1 kB\nMemAvailable:   {avail_kb} kB\n")
+    for i, (name, (rid, nbytes)) in enumerate(scopes.items()):
+        d = tmp_path / M.USER_SLICE.lstrip("/") / name
+        d.mkdir(parents=True, exist_ok=True)
+        pid = str(1000 + i)
+        (d / "cgroup.procs").write_text(pid + "\n")
+        (d / "memory.current").write_text(f"{nbytes}\n")
+        argv = ["python3", "-m", "research", "run", "--runs-dir", "/r", "--id", rid] if rid else ["tmux", "new-session"]
+        (tmp_path / "proc" / pid).mkdir(parents=True, exist_ok=True)
+        (tmp_path / "proc" / pid / "cmdline").write_text("\0".join(argv) + "\0")
+    return tmp_path
+
+
+def mctx(root, run=None, memo=None, now=T0, **kw) -> M.Ctx:
+    return M.Ctx(now=now, memo={} if memo is None else memo, run=run or Run(), root=root, machine="vy-nebius-1", **kw)
+
+
+def test_memory_pressure_names_the_biggest_runs_once_every_task_stalls_or_little_is_left(tmp_path):
+    scopes = {"session-1.scope": (None, 0), "session-2.scope": ("r20261008-000440-0c41", 551 * 2**30),
+              "session-3.scope": ("r20261008-002727-b62e", 132 * 2**30)}
+    assert M.memory_pressure(mctx(machine_root(tmp_path, scopes, full=2))) == []
+    (f,) = M.memory_pressure(mctx(machine_root(tmp_path, scopes, full=25)))
+    assert f.key == "memory" and "25% of the last minute" in f.text
+    assert f.text.index("r20261008-000440-0c41 551G") < f.text.index("r20261008-002727-b62e 132G")
+    (f,) = M.memory_pressure(mctx(machine_root(tmp_path, scopes, full=0, avail_kb=2 * 2**20)))
+    assert "0.2% of its 1000G available" in f.text
+
+
+def test_an_oom_kill_is_named_with_the_run_its_scope_held_and_who_sent_it_even_after_the_scope_is_gone(tmp_path):
+    rid = "r20261008-000440-0c41"
+    root = machine_root(tmp_path, {"session-5807.scope": (rid, 500 * 2**30)})
+    req = root / M.REQUESTS.lstrip("/") / rid
+    req.mkdir(parents=True)
+    (req / "request.json").write_text(json.dumps({"command": ["python3", "tools/verity/check/slot.py", "--by",
+                                                              "https://cursor.com/agents/bc-x", "--", "uv"]}))
+    quiet = Run((has("journalctl"), (0, "1791420000.1 host kernel: Linux version\n", "")))
+    memo: dict = {}
+    assert M.oom_kills(mctx(root, quiet, memo)) == []
+    shutil.rmtree(root / M.USER_SLICE.lstrip("/") / "session-5807.scope")
+    line = ("1791421183.523 host kernel: oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0-1,"
+            "oom_memcg=/user.slice/user-1001.slice/session-5807.scope,task_memcg=/user.slice/user-1001.slice/session-5807.scope,"
+            "task=python3,pid=4132925,uid=1001\n")
+    (f,) = M.oom_kills(mctx(root, Run((has("journalctl"), (0, line, ""))), memo, now=T0 + 60))
+    assert f.key == "1791421183:4132925"
+    assert f"run {rid}, sent by https://cursor.com/agents/bc-x" in f.text and "session-5807.scope" in f.text
+    blind = Run((has("journalctl"), (0, "", "Hint: You are currently not seeing messages from other users and the system.")))
+    with pytest.raises(RuntimeError, match="can't read the kernel's log"):
+        M.oom_kills(mctx(root, blind, memo))
+
+
+def test_disk_forecast_pages_when_the_fitted_line_reaches_the_watermark_within_6_hours_and_names_the_biggest_live_runs(
+        tmp_path, monkeypatch):
+    rid, quiet = "r20261008-000440-0c41", "r20261008-002727-b62e"
+    root = machine_root(tmp_path, {"session-1.scope": (rid, 1), "session-2.scope": (quiet, 1), "session-3.scope": (None, 1)})
+    for r in (rid, quiet):
+        (root / M.RUNS.lstrip("/") / r).mkdir(parents=True)
+    req = root / M.REQUESTS.lstrip("/") / rid
+    req.mkdir(parents=True)
+    (req / "request.json").write_text(json.dumps({"submitted_by": "https://cursor.com/agents/bc-x"}))
+    use = {"pct": 70.0, "ipct": 50.0, "size_b": 5 * 2**40}
+    monkeypatch.setattr(M, "disk_use", lambda path: dict(use))
+    du = Run((has("du"), (124, f"412\t/r/{rid}\n3\t/r/{quiet}\n", "du: cut off")))
+    memo: dict = {}
+    for i in range(3):                                   # 3 readings over 20 minutes: too few for a line
+        use["pct"] = 70.0 + 2 * i
+        assert M.disk_forecast(mctx(root, du, memo, now=T0 + 600 * i)) == []
+    use["pct"] = 76.0                                    # 12 points/h: 85% in 0.75 h
+    (f,) = M.disk_forecast(mctx(root, du, memo, now=T0 + 1800))
+    assert f.key == "disk" and "disk use reaches 85% in about 0.8 h*: 76.0% now" in f.text and "+12.00 points/h (+614 GiB/h)" in f.text
+    assert f.text.index(f"{rid} 412G (sent by https://cursor.com/agents/bc-x)") < f.text.index(f"{quiet} 3G")
+    (argv, _), = [c for c in du.calls if "du" in c[0]]
+    assert argv[:2] == ["timeout", "55"] and "nice" in argv and str(root / M.RUNS.lstrip("/") / rid) in argv
+    use["pct"] = 76.0                                    # flat for 3 hours: the old rise falls out of the fit
+    for k in range(1, 19):
+        found = M.disk_forecast(mctx(root, du, memo, now=T0 + 1800 + 600 * k))
+    assert found == [] and len(memo["readings"]) == 19             # 3 hours of 10-minute readings, both ends kept
+    use["ipct"] = 81.0
+    (f,) = M.disk_forecast(mctx(root, du, memo, now=T0 + 20000))
+    assert f.key == "inode" and "inode use is past 80%" in f.text
+
+
+MANIFEST = """
+[[file]]
+path = "/etc/systemd/system/vy-a.service"
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+run = ["systemd:vy-a", "systemd:vy-b.timer"]
+[[file]]
+path = "/home/research/.config/systemd/user/u.service"
+nodes = ["vy-nebius-1"]
+run = ["user-systemd:u", "tmux:x"]
+[[file]]
+path = "/etc/systemd/system/vy-held.service"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-held"]
+hold = "waits for its owner"
+[[tree]]
+path = "/opt/t"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-n2-only"]
+"""
+
+
+def show(*units: tuple[str, str, str]) -> str:
+    return "\n\n".join(f"LoadState={load}\nUnitFileState={uf}\nActiveState={act}\nSubState={act}" for load, uf, act in units) + "\n"
+
+
+def test_the_units_deploy_toml_runs_on_a_machine_are_its_run_entries_less_held_ones_tmux_and_expected_off(monkeypatch):
+    assert M.expected_units("vy-nebius-1", MANIFEST) == ["systemd:vy-a.service", "systemd:vy-b.timer", "user-systemd:u.service"]
+    assert M.expected_units("vy-nebius-2", MANIFEST) == ["systemd:vy-n2-only.service"]
+    monkeypatch.setitem(M.EXPECTED_OFF, ("vy-nebius-1", "systemd:vy-b.timer"), "stopped by design")
+    assert M.expected_units("vy-nebius-1", MANIFEST) == ["systemd:vy-a.service", "user-systemd:u.service"]
+    assert M.expected_units("vy-nebius-cpu-1", MANIFEST) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
+    real = set(M.expected_units("vy-nebius-1", M.MANIFEST.read_text()))
+    assert real >= {"systemd:vy-watchdog.timer", "systemd:vy-lease.service", "systemd:vy-monitors.timer"}
+    assert "systemd:vy-n2-offload.service" not in real and all(M.EXPECTED_OFF.values())
+
+
+def test_units_expected_flags_a_unit_disabled_stopped_or_never_installed(tmp_path, monkeypatch):
+    manifest = tmp_path / "deploy.toml"
+    manifest.write_text(MANIFEST)
+    monkeypatch.setattr(M, "MANIFEST", manifest)
+    system = show(("loaded", "disabled", "active"), ("loaded", "enabled", "active"))
+    user = show(("loaded", "enabled", "inactive"))
+    run = Run((lambda a, _i: "--user" in a and a[-1] == "u.service", (0, user, "")),
+              (lambda a, _i: a[:2] == ["systemctl", "show"] and a[-2:] == ["vy-a.service", "vy-b.timer"], (0, system, "")))
+    a, u = M.units_expected(mctx(tmp_path, run))
+    assert a.key == "systemd:vy-a.service" and "unit `vy-a.service` isn't enabled (disabled), so it won't start at boot*" in a.text
+    assert u.key == "user-systemd:u.service" and "the user unit `u.service` isn't running (inactive/inactive)*" in u.text
+    gone = Run((lambda a, _i: "--user" in a, (0, show(("loaded", "enabled", "active")), "")),
+               (has("show"), (0, show(("loaded", "enabled", "active"), ("not-found", "", "inactive")), "")))
+    [g] = M.units_expected(mctx(tmp_path, gone))
+    assert g.key == "systemd:vy-b.timer" and "unit `vy-b.timer` was never installed (systemd doesn't know it)*" in g.text
+    assert "isn't running" not in g.text
+    ok = Run((lambda a, _i: "--user" in a, (0, show(("loaded", "enabled", "active")), "")),
+             (has("show"), (0, show(("loaded", "static", "active"), ("loaded", "enabled", "active")), "")))
+    assert M.units_expected(mctx(tmp_path, ok)) == []
+    with pytest.raises(RuntimeError, match="exited 1"):
+        M.units_expected(mctx(tmp_path, Run((has("show"), (1, "", "Failed to connect to bus")))))
+
+
+def test_a_peer_that_doesnt_answer_ssh_is_a_finding_and_one_that_does_isnt(tmp_path):
+    run = Run((lambda a, _i: a[0] == "ssh" and "vy-nebius-cpu-1" in a, (255, "", "ssh: connect to host: Connection timed out")),
+              (lambda a, _i: a[0] == "ssh", (0, "", "")))
+    (f,) = M.answering(mctx(tmp_path, run, peers=("vy-nebius-cpu-1", "vy-nebius-cpu-2")))
+    assert f.key == "vy-nebius-cpu-1" and "Connection timed out" in f.text and "isn't answering vy-nebius-1" in f.text
+
+
+def test_the_daily_line_counts_yesterdays_full_checks_infrastructure_ended_and_pages_past_the_target(tmp_path):
+    now = 1791441000.0                     # 2026-10-08T06:30Z: the line is 2026-10-07's
+    root = machine_root(tmp_path, {"session-9.scope": ("r20261007-230000-0004", 1)})
+    def run(rid, cls, state, cmd):
+        d = root / M.RUNS.lstrip("/") / rid
+        d.mkdir(parents=True)
+        (d / "status.json").write_text(json.dumps({"transitions": [{"state": "running"}] + ([{"state": state}] if state else [])}))
+        if cls:
+            (d / "failure.json").write_text(json.dumps({"class": cls}))
+        q = root / M.REQUESTS.lstrip("/") / rid
+        q.mkdir(parents=True)
+        (q / "request.json").write_text(json.dumps({"command": cmd, "harness_args": []}))
+    check = ["python3", "tools/verity/check/slot.py", "--by", "x", "--", "uv", "run"]
+    run("r20261007-100000-0001", "SUCCESS", "done", check)
+    run("r20261007-110000-0002", "CGROUP_OOM_ATTRIBUTED", "failed", check)
+    run("r20261007-120000-0003", None, None, check)                       # its machine went down under it
+    run("r20261007-230000-0004", None, None, check)                       # still running in session-9
+    run("r20261007-130000-0005", "CGROUP_OOM_ATTRIBUTED", "failed", ["bash", "-c", "pytest"])
+    run("r20261008-010000-0006", "CGROUP_OOM_ATTRIBUTED", "failed", check)
+    (f,) = M.lost_checks(mctx(root, now=now))
+    assert f.key == "2026-10-07" and f.severity == "page"
+    assert "2 of 4 full checks lost to infrastructure (50.0%" in f.text
+    assert "r20261007-110000-0002 (CGROUP_OOM_ATTRIBUTED)" in f.text and "r20261007-120000-0003 (never ended)" in f.text
+
+
+def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its_own_name_and_peers():
+    manifest = tomllib.loads((SRC / "research/pods/nebius/deploy.toml").read_text())
+    rows = {e["path"]: e for e in manifest["file"]}
+    for path in ("/etc/systemd/system/vy-watchdog.service", "/etc/systemd/system/vy-watchdog.timer",
+                 "/usr/local/lib/vy-monitoring/research/monitors.py", "/usr/local/lib/vy-monitoring/research/__init__.py",
+                 "/usr/local/lib/vy-monitoring/research/pods/nebius/deploy.toml"):
+        assert {"vy-nebius-1", "vy-nebius-cpu-1"} <= set(rows[path]["nodes"]), path
+    text = (SRC / "research/pods/nebius/monitoring/vy-watchdog.service").read_text()
+    assert "-m research.monitors run --where machine $VY_WATCHDOG_ARGS" in text
+    assert "EnvironmentFile=/etc/vy/watchdog.env" in text and "SupplementaryGroups=systemd-journal" in text
+    assert re.search(r"^OOMScoreAdjust=-\d+$", text, re.M)
+    assert {m.id for m in M.MONITORS if m.where == "machine"} == {"memory-pressure", "oom-kills", "answering", "disk-forecast",
+                                                                    "units-expected", "lost-checks"}
