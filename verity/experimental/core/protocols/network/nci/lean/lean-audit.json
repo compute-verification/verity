@@ -1,0 +1,28 @@
+{
+ "roots": ["NciCheck"],
+ "exempt": {
+  "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof"
+ },
+ "runs": {
+  "NciCheck.DifftestMain": {
+   "why": "4,000 random declarations and divisions on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4000"],
+   "data": {
+    "difftest/instances.jsonl": "1534ec02c129a19d6b9086d905499ed9a1604009b68bb05ca906cb3ab7525fa3",
+    "difftest/python.jsonl": "8e64d14792f4a82e0f43801f625d781637dfdb37cf4a27f022a33ed63242e369"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
+ "layers": {
+  "NciCheck.Check": {
+   "imports": ["Std", "Flock.Program"],
+   "except": [],
+   "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security (the coordinator's ruling for this port)"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
+ }
+}

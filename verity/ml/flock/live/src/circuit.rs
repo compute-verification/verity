@@ -202,6 +202,14 @@ pub fn leaf_scheme() -> Value {
            "key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key()))})
 }
 
+/// The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
+/// firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
+/// SHA-512 digest (`HashKind::Sha512`) and an opening carries no salt. ZK off only (`verity_flock.circuit.LEAF_SCHEME_PLAIN`).
+pub fn leaf_scheme_plain() -> Value {
+    json!({"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
+           "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"})
+}
+
 /// `hm96-sha512/v1`'s pinned key: `SHA-512("verity/hm96-sha512/key/v1\0" || u32be(i))` for i = 0..3, bit 2047 cleared.
 pub fn hm96_sha512_default_key() -> [u8; 256] {
     let mut k = [0u8; 256];
@@ -665,6 +673,11 @@ fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
 }
 
 impl Composite {
+    /// The statement's Ligerito trees have plain SHA-512 leaves ([`leaf_scheme_plain`], the SHA-512 build only).
+    pub fn plain_leaves(&self) -> bool {
+        cfg!(feature = "sha512") && self.leaf_scheme == leaf_scheme_plain()
+    }
+
     /// `tables`: the directory of the pinned MUFU tables (`verity_flock.ir_lower.write_tables`), when the circuit has lookups.
     pub fn parse(text: &str, tables: Option<&str>) -> Result<Self, String> {
         let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
@@ -1063,8 +1076,8 @@ impl Composite {
         if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
-        if self.leaf_scheme != leaf_scheme() {
-            return Err(format!("leaf-commitment scheme {} is not the one this verifier implements", self.leaf_scheme));
+        if self.leaf_scheme != leaf_scheme() && !self.plain_leaves() {
+            return Err(format!("leaf-commitment scheme {} is not one this verifier implements", self.leaf_scheme));
         }
         self.check_public_inputs()
     }
@@ -1227,8 +1240,8 @@ impl Composite {
         if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
-        if self.leaf_scheme != leaf_scheme() {
-            return Err(format!("leaf-commitment scheme {} is not the one this verifier implements", self.leaf_scheme));
+        if self.leaf_scheme != leaf_scheme() && !self.plain_leaves() {
+            return Err(format!("leaf-commitment scheme {} is not one this verifier implements", self.leaf_scheme));
         }
         Ok(())
     }

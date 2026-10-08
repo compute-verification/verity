@@ -30,68 +30,72 @@ managed = [
 # no timed window runs or waits, by the fill runner's status while it is fresh: a start can touch the GPUs (pouw-infra-util's NVML)
 quiet = 'test -n "$(find /workspace/pouw/fill/status.txt -mmin -3)" && head -1 /workspace/pouw/fill/status.txt | grep -q "timed False, window waiting False,"'
 
-# ---- both nodes: the VM itself (pods/nebius/launch.sh installs these at first boot)
+[nodes.vy-nebius-cpu-1]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*"]
+
+# ---- every node: the VM itself (pods/nebius/launch.sh installs these at first boot)
 
 [[file]]
 path = "/usr/local/sbin/vy-setup"
 src = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-nebius-stop"
 src = "tools/research/src/research/pods/nebius/vm_stop.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]  # after installing it, `systemctl --user daemon-reexec` as research (the file says why)
 path = "/etc/systemd/system/user@.service.d/vy-cpuset.conf"
 src = "tools/research/src/research/pods/nebius/user-cpuset.conf"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/home/research/.research/lease.sh"
 src = "tools/research/src/research/pods/sh/lease.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 run = ["systemd:vy-lease"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-lease-loop"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 run = ["systemd:vy-lease"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-deadline-check"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-lease.service"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-deadline.service"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-deadline.timer"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-clocks.service"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
@@ -300,19 +304,19 @@ owner = "infra"
 [[file]]
 path = "/usr/local/lib/vy-monitoring/research/__init__.py"
 src = "tools/research/src/research/__init__.py"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/research/monitors.py"
 src = "tools/research/src/research/monitors.py"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/research/pods/__init__.py"
 src = "tools/research/src/research/pods/__init__.py"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
@@ -339,6 +343,21 @@ path = "/etc/systemd/system/vy-monitors.timer"
 src = "tools/research/src/research/pods/nebius/monitoring/vy-monitors.timer"
 nodes = ["vy-nebius-1"]
 run = ["systemd:vy-monitors.timer"]
+owner = "infra"
+
+# every machine's watchdog: each has its own /etc/vy/watchdog.env (its name and the peers it watches)
+[[file]]
+path = "/etc/systemd/system/vy-watchdog.service"
+src = "tools/research/src/research/pods/nebius/monitoring/vy-watchdog.service"
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+run = ["systemd:vy-watchdog.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-watchdog.timer"
+src = "tools/research/src/research/pods/nebius/monitoring/vy-watchdog.timer"
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+run = ["systemd:vy-watchdog.timer"]
 owner = "infra"
 
 [[file]]
