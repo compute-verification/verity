@@ -70,6 +70,19 @@ def test_the_reading_is_the_cgroup_not_the_host_and_reservations_count_what_they
     assert "not counted: integrator-gone.json (pid" in text
 
 
+def test_a_run_in_its_own_scope_reads_the_slice_above_it_when_that_has_less_headroom(machine, monkeypatch):
+    scope = machine["cg"] / "session-7.scope"          # a Nebius node: each run's own scope under the user slice's cap
+    scope.mkdir()
+    (scope / "memory.max").write_text(f"{600 * GB}\n")
+    (scope / "memory.current").write_text("0\n")
+    (scope / "memory.stat").write_text("inactive_file 0\n")
+    monkeypatch.setenv("RESEARCH_CGROUP_DIR", str(scope))
+    r = M.reading()
+    assert (r["limit"], r["in_use"], r["source"]) == (100 * GB, 20 * GB, str(machine["cg"]))
+    (machine["cg"] / "memory.max").write_text("max\n")
+    assert M.reading()["source"] == str(scope)
+
+
 def test_without_a_finite_cgroup_limit_the_reading_is_meminfo(machine):
     (machine["cg"] / "memory.max").write_text("max\n")
     r = M.reading()
