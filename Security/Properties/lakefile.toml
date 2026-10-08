@@ -42,4 +42,5 @@ path = "../../verity/core/protocols/network/lean"
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Proofs.Pouw", "Properties.Proofs.Pouw.Check",
   "Properties.Nci", "Properties.Proofs.Nci", "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice",
-  "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier", "Properties.CertifierNetwork"]
+  "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier", "Properties.CertifierNetwork",
+  "Properties.Proofs.CertifierNetwork"]
