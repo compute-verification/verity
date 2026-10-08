@@ -47,7 +47,7 @@ def _world(tmp_path: Path):
     repo.mkdir()
     (repo / "mytools").mkdir()
     (repo / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (repo / "tools" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
     for rel, text in CHECK_FILES.items():
         (repo / rel).write_text(text)
     (repo / ".gitignore").write_text("__pycache__/\n")
@@ -100,6 +100,33 @@ def test_the_sweep_keeps_a_landed_branch_that_moved_past_its_landed_head(tmp_pat
     lines: list[str] = []
     assert M.sweep(repo, gh=gh, log=lines.append) == ([1, 2], [5])
     assert _heads(repo) == {"main", "A", "C", "D", "E"} and any(line.startswith("research merge: kept A") for line in lines)
+
+
+def test_the_sweep_closes_a_pr_whose_pinned_head_landed_and_whose_head_since_only_merged_main(tmp_path):
+    """#1273, #1274 and #1283 merged `main` into heads a tip had pinned (6 Oct): the tip lands them as the pinned heads, so the sweep
+    closes such a PR, saying so, and keeps its branch.  One whose head since adds content stays open."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "train", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge #3 ({tips['C'][:8]})", tips["C"])
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Merge train U (#3)", "train")
+    _git(repo, "push", "-q", "origin", "main")
+    landed = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "C")
+    _git(repo, "merge", "-q", "--no-ff", "--no-edit", tips["B"])
+    _git(repo, "push", "-q", "origin", "C")
+    gh.open[3]["headRefOid"] = moved = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "D")
+    (repo / "D2.txt").write_text("more\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "more")
+    _git(repo, "checkout", "-q", "main")
+    lines: list[str] = []
+    closed, _ = M.sweep(repo, gh=gh, log=lines.append)
+    assert 3 in closed and 4 not in closed
+    note = f"Merged into main at {landed[:12]} (Merge train U (#3)). Its head since, {moved[:12]}, adds nothing to main."
+    assert ("pr", "close", "3", "--comment", note) in gh.mutations
+    assert "C" in _heads(repo)
 
 
 def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
@@ -351,6 +378,23 @@ def test_a_refused_node_1_push_leaves_the_merge_landed_and_names_the_command_tha
     assert f"main ({main[:12]}) not pushed to vy-nebius-1 (git push exited 1: " in line and "rejected" in line
     assert line.endswith(f"; rerun: cd {repo} && research merge --mirror {main}")
     _git(tmp_path, "--git-dir", str(bare), "update-ref", "-d", "refs/heads/main")
+    assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
+
+
+def test_a_hand_landed_main_reaches_node_1_past_the_checkouts_push_guard(tmp_path, monkeypatch, capsys):
+    """The guard judges pushes to origin's main; node 1's copy follows origin, so a main landed by hand, which has no check
+    attempt of its tree, still reaches it (61f64824c and 24aa9a9a4 didn't, 7 Oct)."""
+    repo, _gh, _tips, _merge = _world(tmp_path)
+    bare, _asked = _node1(tmp_path, monkeypatch)
+    _git(repo, "config", "core.hooksPath", str(repo / ".git" / "hooks"))
+    assert M.install_push_guard(repo) == repo / ".git" / "hooks" / "pre-push"
+    (repo / "by-hand.txt").write_text("landed by hand\n")
+    _git(repo, "add", "by-hand.txt")
+    _git(repo, "commit", "-qm", "landed by hand")
+    main = _git(repo, "rev-parse", "HEAD")
+    plain = subprocess.run(["git", "push", "-q", str(bare), f"{main}:refs/heads/main"], cwd=repo, capture_output=True, text=True)
+    assert plain.returncode != 0 and _main_of(bare) is None, "the guard refuses it as a push to main"
+    monkeypatch.chdir(repo)
     assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
 
 

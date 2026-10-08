@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from research.cli import main as research_main
+from research.cli import _custody_ttl_problem, main as research_main
 from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, grant_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
@@ -33,8 +33,8 @@ paths = ["integrations/vllm/"]
 by = "the vLLM coordinator"
 
 [[grant]]
-role = "statement-reviewer"
-lean_audit = ["guarantees", "reads"]
+role = "red-team"
+paths = ["pkg/", "pké/"]
 """
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
 
@@ -181,17 +181,17 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
-def test_grants_follow_paths_and_lean_audit_sections_at_the_exact_head(world):
+def test_grants_follow_paths_at_the_exact_head(world):
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 1\n"}))
     world.gh.put(2, world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
-    world.gh.put(3, world.change({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})}))
+    world.gh.put(3, world.change({"other/x.txt": "x\n"}))
     q = world.queue()
     _, entries = q.sync()
     assert entries[1].why.startswith("waiting for the vllm-coordinator grant")
-    assert entries[2].why.startswith("waiting for the statement-reviewer grant")
-    assert "statement-reviewer (no `by` in ci/queue.toml)" in entries[2].why
-    assert entries[3].state == "queued"                         # a dependency digest isn't a statement
+    assert entries[2].why.startswith("waiting for the red-team grant")
+    assert "red-team (no `by` in ci/queue.toml)" in entries[2].why
+    assert entries[3].state == "queued"
     world.grants[(1, world.gh.prs[1].head)] = {"vllm-coordinator"}
     assert 1 in [m.pr for m in q.sync()[0]]
     world.gh.put(1, world.change({"integrations/vllm/x.py": "x = 2\n"}))
@@ -213,21 +213,34 @@ def test_a_file_renamed_out_of_a_grants_paths_needs_the_grant(tmp_path):
     assert Rules.parse(RULES).needs(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD")) == {"vllm-coordinator"}
 
 
-def test_a_lean_review_covers_only_the_change_it_printed_as_the_same_statements():
-    """`reviewed`: an `audit.py --update` report stands in for the statement reviewer only on its own package, only when it printed
-    nothing a reviewer must read, and only for entries it saw change: one another PR changed on `main` meanwhile isn't covered."""
-    from research.queue import reviewed
+def test_a_head_with_two_merge_bases_needs_only_what_merging_it_onto_main_changes(tmp_path):
+    """A head that merged two PRs main merged separately has both as merge bases with main, and the diff from either carries the
+    other's change: here a vLLM file the head never touched (#1169, #1171)."""
+    def commit(files: dict[str, str], msg: str) -> str:
+        for p, text in files.items():
+            (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / p).write_text(text)
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "commit", "-q", "-m", msg)
+        return _git(tmp_path, "rev-parse", "HEAD")
 
-    old, new = {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": None}, {"guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
-    rep = {"package": "lean", "statement_changes": False, "before": {"guarantees": {"P.t": "1", "P.u": "5"}, "reads": {}},
-           "guarantees": {"Q.t": "1q", "P.u": "5"}, "reads": {"Q": "d"}}
-    assert reviewed("lean/lean-audit.json", old, new, rep)
-    assert reviewed("lean/lean-audit.json", old, new, rep | {"package": "/w/verity/lean/"})
-    assert not reviewed("other/lean/lean-audit.json", old, new, rep) and not reviewed("lean-audit.json", old, new, rep)
-    assert not reviewed("lean/lean-audit.json", old, new, rep | {"statement_changes": True})
-    assert not reviewed("lean/lean-audit.json", old, new, {k: v for k, v in rep.items() if k != "before"})
-    assert not reviewed("lean/lean-audit.json", {**old, "guarantees": {"P.t": "1", "P.u": "6"}}, new, rep), "P.u changed on main since"
-    assert not reviewed("lean/lean-audit.json", old, {**new, "reads": "{not json"}, rep)
+    _git(tmp_path, "init", "-q", "-b", "main")
+    base = commit({"a.txt": "a\n"}, "base")
+    _git(tmp_path, "checkout", "-q", "-b", "x", base)
+    x = commit({"integrations/vllm/x.py": "x = 1\n"}, "x")
+    _git(tmp_path, "checkout", "-q", "-b", "y", base)
+    y = commit({"integrations/vllm/y.py": "y = 1\n"}, "y")
+    _git(tmp_path, "checkout", "-q", "main")
+    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "x lands", x)
+    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "y lands", y)
+    main = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-q", "-b", "pr", y)
+    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "the PR takes x", x)
+    head = commit({"a.txt": "b\n"}, "the PR's own change")
+    assert len(_git(tmp_path, "merge-base", "--all", main, head).split()) == 2
+    rules = Rules.parse(RULES)
+    assert rules.needs(tmp_path, main, head) == set()
+    assert rules.needs(tmp_path, main, commit({"integrations/vllm/x.py": "x = 2\n"}, "and a vLLM change")) == {"vllm-coordinator"}
 
 
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
@@ -472,15 +485,16 @@ def test_grants_read_through_to_the_remote_and_without_that_pull_the_queue_refus
 
 
 def test_rules_refuse_what_they_cannot_place():
-    assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator", "statement-reviewer"]
+    assert [r.role for r in Rules.parse(RULES).grants] == ["vllm-coordinator", "red-team"]
     for bad in ('[[grant]]\nrole = "whoever"\npaths = ["x/"]\n', '[[grant]]\nrole = "review"\n', 'colour = "red"\n',
+                '[[grant]]\nrole = "red-team"\nlean_audit = ["guarantees"]\n',
                 '[[grant]]\nrole = "review"\npaths = ["x/"]\nwhen = "always"\n'):
         with pytest.raises(QueueError):
             Rules.parse(bad)
 
 
 def test_until_the_move_the_rules_are_read_from_tools_check(world):
-    moved = world.change({"tools/check/queue.toml": RULES.replace('paths = ["integrations/vllm/"]', 'paths = ["integrations/vllm/", "!README.md"]')})
+    moved = world.change({"tools/verity/check/queue.toml": RULES.replace('paths = ["integrations/vllm/"]', 'paths = ["integrations/vllm/", "!README.md"]')})
     _git(world.dev, "rm", "-q", "ci/queue.toml")
     _git(world.dev, "commit", "-q", "-m", "rules where they are before the move")
     _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
@@ -568,7 +582,7 @@ from pathlib import Path
 a = sys.argv[1:]
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
                                                      "pythonpath": os.environ.get("PYTHONPATH"),
-                                                     "built": Path("backends/flock/verifier/lean/.lake/built").is_file(),
+                                                     "built": Path("verity/core/service/flock/.lake/built").is_file(),
                                                      "lake": shutil.which("lake"),
                                                      "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
                                                              "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL",
@@ -584,12 +598,12 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     seen = world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -615,7 +629,7 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     world.gh.put(1, h2, ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and _git(wt, "rev-parse", "HEAD") == h2
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is True
-    h3 = world.change({"tools/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
+    h3 = world.change({"tools/verity/check/suites.py": FAKE_SUITES.replace('"--changed"', "nothing")})
     world.gh.put(1, h3, ready=False)
     assert tier(world.gh.prs[1]) is None
     assert json.loads(seen.read_text())["argv"][:2] == ["--quick", "--json"]     # a runner from before --changed: every suite
@@ -626,7 +640,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": "name = \"flock\"\n"})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "verity/core/service/flock/lakefile.toml": "name = \"flock\"\n"})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -636,7 +650,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
                                'mkdir -p .lake && echo built > .lake/built\n')
     (bin_ / "lake").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("FAKE_LAKE_LOG", str(ran))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -645,16 +659,16 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
 
     assert tier(world.gh.prs[1]) is None and json.loads(seen.read_text())["built"]
     [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
-    lean = wt / "backends" / "flock" / "verifier" / "lean"
+    lean = wt / "verity" / "core" / "service" / "flock"
     assert ran.read_text().split("\n") == [f"{lean} build", ""]
     (lean / ".lake" / "built").write_text("from the last PR\n")
     (lean / "stray.olean").write_text("left by the last PR\n")
     monkeypatch.setenv("FAKE_LAKE_FAIL", "1")
-    assert tier(world.gh.prs[1]) == "`lake build` in backends/flock/verifier/lean exited 1 (its output is above)"
+    assert tier(world.gh.prs[1]) == "`lake build` in verity/core/service/flock exited 1 (its output is above)"
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
 
 
-RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["backends/flock/", "!README.md"]\n'
+RED_TEAM = '\n[[grant]]\nrole = "red-team"\npaths = ["verity/ml/flock/", "!README.md"]\n'
 
 
 def _move_main(world: World, files: dict[str, str]) -> str:
@@ -681,7 +695,7 @@ def _carrying(world: World, rules: str | None = None) -> Queue:
     workdir = world.tmp / "q" / "verity"
     labels = StoreGrants(world.store, log=world.logs.append, repo=workdir)
     return Queue(workdir, remote=str(world.origin), github=world.gh, grants=labels, ready=lambda n, h: (n, h) in world.gh.ready,
-                 store=world.store, notes=world.tmp / "notes", log=world.logs.append, reviews=labels.reviews, carry=labels.carried,
+                 store=world.store, notes=world.tmp / "notes", log=world.logs.append, carry=labels.carried,
                  rules=Rules.parse(rules) if rules else None)
 
 
@@ -693,42 +707,42 @@ def _grant(world: World, pr: int, head: str, role: str) -> None:
 
 
 def test_a_grant_carries_to_a_restack_with_a_byte_identical_lean_audit_change_and_the_queue_names_the_head_it_came_from(world):
-    """Daniel's ruling (2 Oct): a statement review carries across a restack when the new head's `lean-audit.json` change is
+    """Daniel's ruling (2 Oct): a grant carries across a restack when the new head's `lean-audit.json` change is
     byte-identical to the one granted.  The clone holds the old head from the sync that admitted it; the grant was written on
     another machine and comes through the store's remote, pulled for every head of the PR at once."""
     q = _carrying(world)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     pin = {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}
     world.gh.put(1, old := world.change(pin))
-    _grant(world, 1, old, "statement-reviewer")
+    _grant(world, 1, old, "red-team")
     assert [m.pr for m in q.sync()[0]] == [1]
     _move_main(world, {"d.txt": "landed meanwhile\n"})
     world.gh.put(1, new := world.change(pin))                   # the same change on the new `main`
     members, _ = q.sync()
     assert [(m.pr, m.head) for m in members] == [(1, new)]
-    assert (f"research queue: grant statement-reviewer carried from pr:1@{old} to {new[:12]} "
+    assert (f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} "
             f"(restack; lean-audit.json change identical)") in world.logs
 
 
 def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_change(world):
     """A merge of `main` carries; a restated pin doesn't, and neither does the same pin change restacked onto a `main` that changed
-    the same `lean-audit.json` meanwhile, since its change now starts from other bytes (fail closed: a new grant, or a lean_review)."""
+    the same line of `lean-audit.json` meanwhile (fail closed: a new grant)."""
     q = _carrying(world)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
     world.gh.put(1, old := world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})}))
-    _grant(world, 1, old, "statement-reviewer")
+    _grant(world, 1, old, "red-team")
     q.sync()
     _move_main(world, {"d.txt": "landed meanwhile\n"})
     world.gh.put(1, merged := _merge_main(world, old))
     assert [m.head for m in q.sync()[0]] == [merged]
-    assert (f"research queue: grant statement-reviewer carried from pr:1@{old} to {merged[:12]} "
+    assert (f"research queue: grant red-team carried from pr:1@{old} to {merged[:12]} "
             f"(merge of main; lean-audit.json change identical)") in world.logs
 
     def refused(h: str) -> None:
         world.gh.put(1, h)
         members, entries = q.sync()
-        assert members == [] and entries[1].why.startswith(f"waiting for the statement-reviewer grant at {h[:8]}")
-        assert (f"research queue: grant statement-reviewer on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json change "
+        assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
+        assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its lean-audit.json patch "
                 f"isn't byte-identical (pkg/lean-audit.json)") in world.logs
 
     refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "3"}})}))
@@ -736,12 +750,44 @@ def test_a_grant_carries_to_a_merge_of_main_and_not_to_any_other_lean_audit_chan
     refused(world.change({"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2", "U": "1"}})}))
 
 
+def test_a_grant_carries_the_prs_lean_audit_patch_onto_a_main_that_changed_other_lines_of_that_file(world):
+    """Daniel's ruling (6 Oct, 8:03 AM PDT): the PR's own patch must be byte-identical, not the file, so a lock that `main`
+    changed elsewhere since the grant carries it.  The patch is its lines in place: one whose lines `main` changed, or the same
+    edit made to another occurrence of a repeated line, needs a new grant."""
+    from research.queue import carry
+
+    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    keys = "ABCDEFGH"
+
+    def lock(**pins: str) -> dict[str, str]:
+        return {"pkg/lean-audit.json": json.dumps({**audit, "guarantees": {k: pins.get(k, "1") for k in keys}}, indent=1) + "\n"}
+
+    _move_main(world, lock())
+    old = world.change(lock(A="2"))
+    _move_main(world, lock(H="5"))
+    same = "lean-audit.json change identical"
+    assert carry(world.dev, "origin/main", old, world.change(lock(A="2", H="5"))) == (True, f"restack; {same}")
+    assert carry(world.dev, "origin/main", old, _merge_main(world, old)) == (True, f"merge of main; {same}")
+    patch = "its lean-audit.json patch isn't byte-identical (pkg/lean-audit.json)"
+    assert carry(world.dev, "origin/main", old, world.change(lock(A="3", H="5"))) == (False, patch)
+    _move_main(world, lock(A="4", H="5"))
+    assert carry(world.dev, "origin/main", old, world.change(lock(A="2", H="5"))) == (False, patch)    # main changed the PR's line
+
+    repeated = {"pkg/notes.txt": "x\n" + "same\n" * 6 + "y\n"}
+    _move_main(world, repeated)
+    edited = world.change({"pkg/notes.txt": "x\nsame\nedit\n" + "same\n" * 4 + "y\n"})
+    _move_main(world, {"pkg/notes.txt": "x2\n" + "same\n" * 6 + "y\n"})
+    moved = world.change({"pkg/notes.txt": "x2\n" + "same\n" * 4 + "edit\nsame\ny\n"})
+    assert carry(world.dev, "origin/main", edited, moved) == (False, "its change against origin/main differs (pkg/notes.txt)")
+    assert carry(world.dev, "origin/main", edited, world.change({"pkg/notes.txt": "x2\nsame\nedit\n" + "same\n" * 4 + "y\n"}))[0]
+
+
 def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     """A path grant carries the same way: to a restack of the change it saw, never to one that changes another file too, a
     `lean-audit.json` the granted head didn't change included."""
     q = _carrying(world, RULES + RED_TEAM)
     audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
-    flock = {"backends/flock/x.py": "x = 1\n"}
+    flock = {"verity/ml/flock/x.py": "x = 1\n"}
     world.gh.put(1, old := world.change(flock))
     _grant(world, 1, old, "red-team")
     assert [m.pr for m in q.sync()[0]] == [1]
@@ -749,14 +795,36 @@ def test_a_red_team_grant_on_flock_follows_the_same_restack_rule(world):
     world.gh.put(1, new := world.change(flock))
     assert [m.head for m in q.sync()[0]] == [new]
     assert f"research queue: grant red-team carried from pr:1@{old} to {new[:12]} (restack; no lean-audit.json change)" in world.logs
-    for extra, why in (({"backends/flock/y.py": "y = 1\n"}, "its change against origin/main differs (backends/flock/y.py)"),
-                       ({"a.txt": "a, too\n"}, "its change against origin/main differs (a.txt)"),
-                       ({"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
-                        "its lean-audit.json change isn't byte-identical (pkg/lean-audit.json)")):
+    for extra, why in (({"verity/ml/flock/y.py": "y = 1\n"}, "its change against origin/main differs (verity/ml/flock/y.py)"),
+                       ({"verity/ml/flock/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})},
+                        "its lean-audit.json patch isn't byte-identical (verity/ml/flock/lean-audit.json)")):
         world.gh.put(1, h := world.change({**flock, **extra}))
         members, entries = q.sync()
         assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
         assert f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: {why}" in world.logs
+
+
+def test_a_grant_carries_across_a_change_its_rule_leaves_out(world):
+    """Friction from proofs (7 Oct): a tests-only fix after a red-team grant voided it, though the rule leaves tests out and the
+    fix alone would need no grant.  Only the paths the grant's rule covers are compared; one it covers still voids it."""
+    q = _carrying(world, RULES + '\n[[grant]]\nrole = "red-team"\npaths = ["verity/ml/flock/", "!README.md", "!*/tests/*"]\n')
+    audit = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    flock = {"verity/ml/flock/x.py": "x = 1\n"}
+    world.gh.put(1, old := world.change(flock))
+    _grant(world, 1, old, "red-team")
+    assert [m.pr for m in q.sync()[0]] == [1]
+    for extra in ({"verity/ml/flock/tests/test_x.py": "assert True\n"}, {"verity/ml/flock/README.md": "x\n", "other.txt": "o\n"},
+                  {"pkg/lean-audit.json": json.dumps({**audit, "dependencies": {"M": "2"}})}):
+        world.gh.put(1, h := world.change({**flock, **extra}))
+        assert [m.head for m in q.sync()[0]] == [h]
+        n = len(extra)
+        assert (f"research queue: grant red-team carried from pr:1@{old} to {h[:12]} (restack; "
+                f"no lean-audit.json change; {n} changed path{'s' * (n != 1)} its rule leaves out not compared)") in world.logs
+    world.gh.put(1, h := world.change({**flock, "verity/ml/flock/tests/test_x.py": "assert True\n", "verity/ml/flock/y.py": "y\n"}))
+    members, entries = q.sync()
+    assert members == [] and entries[1].why.startswith(f"waiting for the red-team grant at {h[:8]}")
+    assert (f"research queue: grant red-team on pr:1@{old} doesn't carry to {h[:12]}: its change against origin/main differs "
+            f"(verity/ml/flock/y.py)") in world.logs
 
 
 def test_a_grant_on_a_head_git_cannot_compare_carries_nothing(world):
@@ -766,7 +834,7 @@ def test_a_grant_on_a_head_git_cannot_compare_carries_nothing(world):
 
     q = _carrying(world, RULES + RED_TEAM)
     q.sync()                                                    # the clone first: a local clone hardlinks every object there is
-    flock = {"backends/flock/x.py": "x = 1\n"}
+    flock = {"verity/ml/flock/x.py": "x = 1\n"}
     unseen = world.change(flock)                                # on the origin, but never a PR head the queue fetched
     ghost = "0123456789abcdef" * 2 + "01234567"
     for h in (unseen, ghost):
@@ -816,10 +884,10 @@ def test_a_submodule_pinned_elsewhere_is_another_change_whatever_git_is_told_to_
 
     _git(world.dev, "config", "diff.ignoreSubmodules", "all")
     a, b = (_git(world.dev, "commit-tree", "origin/main^{tree}", "-m", m) for m in ("a", "b"))
-    old = _gitlink(world, "backends/flock/vendored", a)
+    old = _gitlink(world, "verity/ml/flock/vendored", a)
     _move_main(world, {"d.txt": "landed meanwhile\n"})
-    new, restacked = _gitlink(world, "backends/flock/vendored", b), _gitlink(world, "backends/flock/vendored", a)
-    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (backends/flock/vendored)")
+    new, restacked = _gitlink(world, "verity/ml/flock/vendored", b), _gitlink(world, "verity/ml/flock/vendored", a)
+    assert carry(world.dev, "origin/main", old, new) == (False, "its change against origin/main differs (verity/ml/flock/vendored)")
     assert carry(world.dev, "origin/main", old, restacked) == (True, "restack; no lean-audit.json change")
     assert Rules.parse(RULES + RED_TEAM).needs(world.dev, "origin/main", new) == {"red-team"}
 
@@ -843,7 +911,7 @@ def test_a_change_under_a_name_git_would_quote_needs_its_grants(world):
     _move_main(world, {"pké/lean-audit.json": json.dumps(audit)})
     rules = Rules.parse(RULES)
     pin = world.change({"pké/lean-audit.json": json.dumps({**audit, "guarantees": {"T": "2"}})})
-    assert rules.needs(world.dev, "origin/main", pin) == {"statement-reviewer"}
+    assert rules.needs(world.dev, "origin/main", pin) == {"red-team"}
     assert rules.needs(world.dev, "origin/main", world.change({"integrations/vllm/café.py": "x\n"})) == {"vllm-coordinator"}
 
 
@@ -973,12 +1041,12 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
 
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
     seen = world.tmp / "seen.json"
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("PYTHONPATH", str(world.tmp / "the-callers-tree"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
@@ -999,9 +1067,13 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     rid = flags[flags.index("--id") + 1]
     assert flags[:4] == [sys.executable, "-m", "research", "run"] and "--require-result" in flags
     assert [flags[flags.index(k) + 1] for k in ("--on", "--project", "--cwd", "--declared-output")] == ["vy-test", "verity", "source", "out/*"]
-    assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_TIMEOUT_S
+    assert float(flags[flags.index("--timeout") + 1]) == Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S
+    ttl = flags[flags.index("--custody-ttl") + 1]
+    assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
+        "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
     assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
-    assert json.loads((world.tmp / "slot-seen.json").read_text())[:4] == ["--by", "lane-1", "--", "python3"]
+    assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
+        "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "python3"]
     s = json.loads(seen.read_text())
     assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None
     assert Path(s["argv"][s["argv"].index("--json") + 1]) == machine.root / "runs" / rid / "out" / "suites.json"
@@ -1026,11 +1098,11 @@ def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_reposito
 
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
 
@@ -1189,17 +1261,55 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     refused = lambda argv, cwd: subprocess.CompletedProcess(argv, 3, "", "research run: refused: vy-test isn't in machines.toml\n")
     tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp), launch=refused)
     assert tier(pr) == "`research run --on vy-test` failed (exit 3): research run: refused: vy-test isn't in machines.toml" and sleeps == []
-    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports({"state": "running"})), timeout_s=60)
-    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 90 s \(last seen running\): `research inspect r\S+`", tier(pr))
-    assert sleeps == [Q.REMOTE_POLL_S] * 3, "the run's timeout and the grace, at one fetch per poll"
-    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports(), reachable=False), timeout_s=60)
-    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 90 s \(last seen without a status\): .*", tier(pr)) and len(sleeps) == 3
+    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports({"state": "running"})), timeout_s=60, wait_s=30)
+    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 120 s \(last seen running\): `research inspect r\S+`", tier(pr))
+    assert sleeps == [Q.REMOTE_POLL_S] * 4, "the run's wait for a slot, its timeout and the grace, at one fetch per poll"
+    tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports(), reachable=False), timeout_s=60, wait_s=30)
+    assert re.fullmatch(r"run r\S+ on vy-test didn't end within 120 s \(last seen without a status\): .*", tier(pr)) and len(sleeps) == 4
     exited = Machine(world.tmp, outcome=lambda run, rid, head: None, fetched={"launcher_exited": {"last_line": "Traceback: boom"}})
     tier, sleeps = _remote_tier(world, monkeypatch, exited)
     assert re.fullmatch(r"run r\S+'s runner on vy-test exited before the run ended \(Traceback: boom\)", tier(pr)) and len(sleeps) == 1
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
     assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
     assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+
+
+def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_not_fail(world, monkeypatch, capsys):
+    """6 Oct: #1344's and compute-accounting's #1282/#1314 tiers spent their 3 h waiting in node 1's line and were reported failed.
+    slot.py gives up at --wait-max with exit 75 before running anything; that is no verdict on the head, and says so."""
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports({"state": "failed", "rc": Q.SLOT_NOT_STARTED}, result=lambda d: None))
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.READY_NOT_STARTED
+    err = capsys.readouterr().err
+    assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
+                     r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h1) is False
+    rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
+    assert "never ran the tier" in capsys.readouterr().err
+
+
+def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_never_starts(world, monkeypatch, capsys):
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports())
+    asked = []
+    placed = lambda spec, repo: asked.append(spec) or ("vy-test", "a check slot and a Lean check slot are free (check slots: d free)")
+    tier, _ = _remote_tier(world, monkeypatch, machine, place=placed)
+    tier.on = "auto"
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and asked == ["auto"]
+    flags = machine.launched[-1][:machine.launched[-1].index("--")]
+    assert flags[flags.index("--on") + 1] == "vy-test"
+    assert "research queue: --on auto: vy-test: a check slot and a Lean check slot are free" in capsys.readouterr().out
+    tier.place, tier.on = (lambda spec, repo: (None, "no machine's slots could be read")), "vy-a,vy-b"
+    world.gh.put(1, h2 := world.change({"a.txt": "a2\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.READY_NOT_STARTED and len(machine.launched) == 1
+    assert "the quick tier never started: --on vy-a,vy-b: no machine's slots could be read" in capsys.readouterr().err
+    assert Q.StoreGrants(world.store, log=world.logs.append).ready(1, h2) is False
 
 
 def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_takes(tmp_path):
@@ -1217,11 +1327,11 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
         clock[0] += 900
         return {}
 
-    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, poll_s=30, fetch=hung_fetch, sleep=advance,
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, wait_s=1800, poll_s=30, fetch=hung_fetch, sleep=advance,
                              clock=lambda: clock[0])
     (d := tmp_path / "runs" / "r1").mkdir(parents=True)
-    _, why = tier._wait(d)
-    bound = 3600 + Q.REMOTE_GRACE_S
+    _, why = tier._wait(d, "vy-test")
+    bound = 1800 + 3600 + Q.REMOTE_GRACE_S
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
 
@@ -1235,10 +1345,10 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     tier ran tools/research on vy-nebius-1 failed it (#985, #1021)."""
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(world.tmp / "the-machines-pycache"))
     monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
@@ -1264,10 +1374,10 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
     It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
     from research import queue as Q
 
-    main = world.change({"tools/check/suites.py": FAKE_SUITES, "backends/flock/verifier/lean/lakefile.toml": 'name = "flock"\n'})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "verity/core/service/flock/lakefile.toml": 'name = "flock"\n'})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
-    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen := world.tmp / "seen.json"))
     monkeypatch.delenv("FAKE_FAIL", raising=False)
     tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp))
@@ -1276,7 +1386,7 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
         (bare / t).symlink_to(shutil.which(t))
     monkeypatch.setenv("PATH", str(bare))
     monkeypatch.setenv("HOME", str(home := world.tmp / "home"))
-    lean = "backends/flock/verifier/lean"
+    lean = "verity/core/service/flock"
     assert tier(world.gh.prs[1]) == f"no `lake` on the PATH or in {home}/.elan/bin to build {lean} with, and without that build its tests skip"
     (elan := home / ".elan" / "bin").mkdir(parents=True)
     (elan / "lake").write_text("#!/bin/sh\nmkdir -p .lake && echo built > .lake/built\n")
@@ -1335,14 +1445,14 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
     lake.chmod(0o755)
     log = tmp_path / "log"
     env = {"HOME": str(tmp_path / "home"), "PATH": os.environ["PATH"], "LOG": str(log), "CHECK_SLOT": "a"}
-    d = "backends/flock/verifier/lean"
+    d = "verity/core/service/flock"
 
     def run(n, **extra):
         (pkg := tmp_path / f"t{n}" / d).mkdir(parents=True)
         return quick_tier.build(str(lake), pkg, d, {**env, **extra})
 
     assert run(1) == {"dir": d, "rc": 0, "start": "cold"}
-    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / "backends--flock--verifier--lean"
+    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / "verity--core--service--flock"
     assert (warm / "warm").is_file()
     assert run(2) == {"dir": d, "rc": 0, "start": "warm"}
     assert run(3, FAIL_WARM="1") == {"dir": d, "rc": 0, "start": "cold"}

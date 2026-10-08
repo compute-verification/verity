@@ -24,17 +24,21 @@ import sys
 import time
 from pathlib import Path
 
-from verity.primitives.commitments.identity import identity_digest
-from verity.primitives.commitments.indexed import RangeIndexedDomain
-from verity.primitives.commitments.merkle import CommitmentDomain
-from verity.primitives.circuits.codec import canonical_json, encode_program, program_digest
-from verity.primitives.circuits.program import Program
+from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
+from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
-from verity.protocols.verification.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
+from verity.experimental.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
-STAND_IN_BINDING = "verity/flock-ir-frame/binding/v1"   # M0's set-bound frame domains (verity_flock.ir_frame.BINDING_TAG)
+#: M0's set-bound frame domains (verity_flock.circuit.BINDING_TAG), each tag with its identity digest; v1 is M0's before
+#: 64-byte bindings, for a pinned tree that old (--binding)
+STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
+                     "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
+STAND_IN_BINDING = "verity/flock-circuit/binding/v2"
 STATEMENT_ID = "verity/flock-circuit"
 
 
@@ -125,8 +129,8 @@ def stand_in_ports(name: str, content_digest: str, meta: dict, n: int) -> dict[s
     out = {}
     content = {} if hidden_outputs(meta) else {"content_digest": content_digest}
     for p, (schema, count) in ports(meta, n).items():
-        b = identity_digest(STAND_IN_BINDING, {"set": name, **content, "lo": 0, "hi": n, "port": p, "schema": schema})
-        out[p] = {"leaves": count, "domain": CommitmentDomain(bytes.fromhex(b), -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
+        b = STAND_IN_BINDINGS[STAND_IN_BINDING](STAND_IN_BINDING, {"set": name, **content, "lo": 0, "hi": n, "port": p, "schema": schema})
+        out[p] = {"leaves": count, "domain": CommitmentDomain(b, -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
     return out
 
 
@@ -320,9 +324,12 @@ def main() -> int:
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
                     help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
+    ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
+                    help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()
     a.lean_verify = a.lean_verify or a.lean
     globals()["STATEMENT_ID"] = a.statement
+    globals()["STAND_IN_BINDING"] = a.binding
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     s = InputSet.open(a.set)

@@ -1,7 +1,8 @@
 // Pearl-C4 on sm_120a (RTX PRO 6000, RTX 5090): the kernels of `pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`
-// (verity/protocols/accounting/work/pouw/schemes/pearl_c4.py), for dev.py.  Every kernel takes one Args by value: 16 pointers p[] and
+// (verity/experimental/protocols/pouw/schemes/pearl_c4.py), for dev.py.  Every kernel takes one Args by value: 16 pointers p[] and
 // 16 ints i[].  FMT 0 is NVFP4 (E2M1, UE4M3 per 16 along k), FMT 1 MXFP4 (E2M1, UE8M0 per 32).  Hashing is GPU 2's
-// pouw_hash.cuh (TurboSHAKE128, BLAKE3), included from the pinned commit build.sh names.
+// pouw_hash.cuh (TurboSHAKE128, SHA-256), included from the pinned commit build.sh names, and the seeds' SHA-512 is
+// pearl_c/sha512.cuh's (Pearl-C's -h3 compression).
 //
 // Buffers, all row-major (scales k-tile major) and little-endian:
 //   x        rows x k BF16 (A or B)                          codes    rows x k/2 bytes, E2M1, even position in the low nibble
@@ -22,6 +23,9 @@
 struct Args { uint64_t p[16]; int32_t i[16]; };
 
 #define DEV __device__ __forceinline__
+
+#include "../pearl_c/sha512.cuh"
+
 constexpr unsigned FULL = 0xFFFFFFFFu;
 enum { NVFP4 = 0, MXFP4 = 1 };
 template <int FMT> struct Fmt;
@@ -68,7 +72,7 @@ DEV float e2m1f(uint32_t c) {
   return mag[c & 7];
 }
 
-// ---------------------------------------------------------------- mma.sync (fragment layouts: tools/tc_probe_fp4/mma_fp4.cu)
+// ---------------------------------------------------------------- mma.sync (fragment layouts: benchmarks/tc_probe_fp4/mma_fp4.cu)
 template <int FMT> DEV void mma_fp4(float d[4], const uint32_t a[4], uint32_t b0, uint32_t b1, const float c[4], uint32_t sfa,
                                     uint32_t sfb) {
   if constexpr (FMT == NVFP4)
@@ -138,14 +142,14 @@ extern "C" __global__ void __launch_bounds__(256) transpose(const Args a) {
 }
 
 // ---------------------------------------------------------------- the rows' commitments and the seeds
-// audit.commit_rows as the verifier checks it: verity.primitives.commitments.merkle's SHA-256 tree over a RangeIndexedDomain, with
+// audit.commit_rows as the verifier checks it: verity.ml.commitments.merkle's SHA-256 tree over a RangeIndexedDomain, with
 // H(tag, parts) = SHA-256(FRAME ‖ |tag| u32 BE ‖ tag ‖ (|part| u64 BE ‖ part) ...), FRAME = "veritor/protocol/merkle/frame/v3\0",
 // uint(v) = v big-endian in its fewest bytes (at least one), dom = the domain id (32 B, from the host: public before A exists),
 //   leaf(i) = H("leaf", dom, uint(i), uint(i), "verity/pouw/row/v1", row i)      pad(r) = H("pad", dom, uint(r))
 //   node(d, j, left, right) = H("node", dom, uint(d), uint(j), left, right)      over ranks padded to a power of two.
-// Then the seed, pearl_c4.noise: keyed BLAKE3 under blake3("pearl-c4/v0/seed-A") of salt ‖ root ‖ root_b ‖ index u64 LE
-// (A), or under blake3("pearl-c4/v0/seed-B") of salt ‖ root (B).  Messages are assembled at byte positions fixed at compile
-// time (the rank's width L is a template parameter), so they stay in registers.
+// Then the seed, pearl_c4.noise: H_"pearl-c4/v1/seed-A"(salt ‖ root ‖ root_b ‖ index u64 LE) (A), or
+// H_"pearl-c4/v1/seed-B"(salt ‖ root) (B), H_ℓ `pearl_c4.labelled` (`labelled` below).  Messages are assembled at byte
+// positions fixed at compile time (the rank's width L is a template parameter), so they stay in registers.
 __constant__ uint8_t MK_FRAME[33] = "veritor/protocol/merkle/frame/v3";
 template <int NW> struct Msg {
   uint32_t w[NW];
@@ -265,6 +269,33 @@ template <int L> DEV void mk_leaf(const uint32_t dom[8], int rank, const uint4* 
   blk[15] = (uint32_t)(P + V) * 8;
   ph::sha256_compress(h, blk);
 }
+// pearl_c4.labelled: the first 32 bytes of SHA-512 over the label's block (its ll bytes, zero-padded to 128) and the len < 112
+// bytes at msg, which it pads in place (msg has 128 bytes)
+DEV void labelled(const char* label, int ll, uint8_t* msg, int len, uint8_t* out) {
+  uint64_t st[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 16; i++) {
+    uint64_t x = 0;
+#pragma unroll
+    for (int t = 0; t < 8; t++) x = x << 8 | (8 * i + t < ll ? (uint64_t)(uint8_t)label[8 * i + t] : 0);
+    w[i] = x;
+  }
+  rs_iv(st);
+  rs_compress(st, w);
+  for (int i = len; i < 128; i++) msg[i] = 0;
+  msg[len] = 0x80;
+  msg[126] = (uint8_t)((8 * (128 + len)) >> 8);
+  msg[127] = (uint8_t)(8 * (128 + len));
+#pragma unroll
+  for (int i = 0; i < 16; i++) {
+    uint64_t x = 0;
+#pragma unroll
+    for (int t = 0; t < 8; t++) x = x << 8 | msg[8 * i + t];
+    w[i] = x;
+  }
+  rs_compress(st, w);
+  for (int t = 0; t < 32; t++) out[t] = (uint8_t)(st[t >> 3] >> (56 - 8 * (t & 7)));
+}
 DEV void load_digest(const uint8_t* p, uint32_t h[8]) {
 #pragma unroll
   for (int i = 0; i < 8; i++) h[i] = ph::bswap32(__ldcg(reinterpret_cast<const uint32_t*>(p) + i));
@@ -323,17 +354,14 @@ extern "C" __global__ void __launch_bounds__(32) commit_rows(const Args a) {
   load_digest(scr, h);
   store_digest(reinterpret_cast<uint8_t*>(a.p[4]), h);
   uint8_t* msg = scr + 32 * G;
-  uint32_t* key = reinterpret_cast<uint32_t*>(msg + 128);
   const bool is_a = a.p[6] != 0;
-  const char* label = is_a ? "pearl-c4/v0/seed-A" : "pearl-c4/v0/seed-B";
-  ph::blake3_chunk(nullptr, reinterpret_cast<const uint8_t*>(label), 18, reinterpret_cast<uint8_t*>(key));
   for (int i = 0; i < 32; i++) msg[i] = reinterpret_cast<const uint8_t*>(a.p[5])[i];
   store_digest(msg + 32, h);
   if (is_a) {
     for (int i = 0; i < 32; i++) msg[64 + i] = reinterpret_cast<const uint8_t*>(a.p[6])[i];
     for (int i = 0; i < 8; i++) msg[96 + i] = (uint8_t)((uint64_t)(uint32_t)a.i[2] >> (8 * i));
   }
-  ph::blake3_chunk(key, msg, is_a ? 104 : 64, reinterpret_cast<uint8_t*>(a.p[7]));
+  labelled(is_a ? "pearl-c4/v1/seed-A" : "pearl-c4/v1/seed-B", 18, msg, is_a ? 104 : 64, reinterpret_cast<uint8_t*>(a.p[7]));
   *reinterpret_cast<unsigned*>(a.p[3]) = 0;
 }
 

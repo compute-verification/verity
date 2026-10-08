@@ -1,4 +1,4 @@
-"""`research slack` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
+"""`research msg` against a fake Slack Web API: a local HTTP server that keeps channels, threads, reactions and user groups the
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
@@ -210,10 +210,10 @@ def test_handles_and_subscriptions(registry, capsys):
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
-                     "catalog/verity_catalog/definitions/tc.py", "verity/primitives/circuits/cut.py", "AGENTS.md", "nowhere/x")
+                     "verity/ml/circuits/ops/tc.py", "verity/ml/circuits/cut.py", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
         ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
-        ["@circuits", "catalog/verity_catalog/definitions/tc.py"], ["@proofs", "verity/primitives/circuits/cut.py"],
+        ["@circuits", "verity/ml/circuits/ops/tc.py"], ["@proofs", "verity/ml/circuits/cut.py"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")
@@ -453,8 +453,9 @@ def test_a_slack_error_through_the_broker_is_slacks_own(broker, registry, capsys
 def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
     with pytest.raises(slack.SlackError, match="not in BROKER_METHODS"):
         slack.Slack(None).call("chat.delete", channel=COORD, ts="1.0")
-    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", "1.0", "--text", "x" * slack.BROKER_MAX_BODY)
-    assert rc == 2 and "more than the broker takes" in err and not broker.requests
+    with pytest.raises(slack.SlackError, match="more than the broker takes"):
+        slack.Slack(None).call("chat.postMessage", channel=COORD, text="x" * slack.BROKER_MAX_BODY)
+    assert not broker.requests
 
 
 def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
@@ -609,7 +610,7 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
     assert run(capsys, "done", "--as", "compute-accounting", "--thread", t)[0] == 0
-    assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 23:00Z")[0] == 0
+    assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 7 Oct 23:00Z")[0] == 0
     assert run(capsys, "done", "--as", "console", "--thread", t)[0] == 0                   # not addressed: not counted
     assert not [r for r in fake.reactions if r[1] == t]                                    # one bot can't carry many agents' reactions
     fake.add(COORD, text=f"{slack.DONE} done", user="UINTRUDER", thread_ts=t)              # a human's line is no status of a handle
@@ -1077,6 +1078,36 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 2                                             # a quiet post still reaches the names it starts with
     assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
+
+
+def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "infra")
+    lines = [f"*@infra:* row {i} " + "x" * 90 for i in range(80)] + ["see <!date^1791361800^{time}|1:30 AM PDT (08:30Z)> -> " + "y " * 900]
+    assert run(capsys, "send", "--as", "circuits", "--to", "@infra", "--text", "\n".join(lines))[0] == 0
+    root = fake.messages[COORD][1]
+    rest = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]
+    assert len(rest) >= 2 and not [m for m in fake.messages[COORD] if not m.get("thread_ts") and m["ts"] not in (box, root["ts"])]
+    assert all(len(m["text"].encode()) <= slack.POST_MAX + 20 for m in [root, *rest])
+    assert all(m["text"].startswith(f"({i}/{len(rest) + 1}) ") and slack.tags_of(m["text"]) == [slack.QUIET]
+               for i, m in enumerate(rest, 2))
+    body = "\n".join(slack.FOOTER_RE.sub("", re.sub(r"^\(\d+/\d+\) ", "", m["text"])) for m in [root, *rest])
+    assert body.split() == f"<!subteam^SINFRA|@infra> {chr(10).join(lines)}".split()
+    assert "<!date^1791361800^{time}|1:30 AM PDT (08:30Z)>" in body
+    assert len(bells(fake, box)) == 1
+
+
+def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--dry-run", "--text", "<!subteam^SINFRA|@infra> steward: is exit 1 harmless?")
+    assert rc == 2 and "never wakes its author" in err
+    assert run(capsys, "send", "--as", "infra", "--dry-run", "--text", "@infra @ci is exit 1 harmless?")[0] == 0
+
+
+def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys):
+    rc, _, err = run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "@lean @ci daily wasters")
+    assert rc == 2 and "pass them as --to" in err
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "Daily wasters. @lean, yours")[0] == 0
+    assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--to", "@lean", "@ci", "--dry-run", "--text", "daily")[0] == 0
+    assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):

@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity_catalog.silicon.cast import f32_to_bf16_word
-from verity_catalog.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot_chain
-from verity_catalog.targets.target import BF16_HOPPER, TC_VECTORS
+from verity.ml.circuits.silicon.cast import f32_to_bf16_word
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot_chain
+from verity.ml.circuits.targets.target import BF16_HOPPER, TC_VECTORS
 from verity_numerical.checker import REAL, Params, Reject, check_step, check_vu, contracts, gen_step, gen_vu, step_output, vu_output
 from verity_numerical.checker import reference
 

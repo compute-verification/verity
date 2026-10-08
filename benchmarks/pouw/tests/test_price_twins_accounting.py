@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.work.pouw.protocol import Matmul, Shape
-from verity.protocols.accounting.work.pouw.schemes import get
-from verity.protocols.accounting.work.pouw.schemes import pearl_c as C
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_debit as D
-from verity.protocols.accounting.work.pouw.schemes import pearl_c_work as W
-from verity.protocols.accounting.work.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.experimental.protocols.pouw.protocol import Matmul, Shape
+from verity.experimental.protocols.pouw.schemes import get
+from verity.experimental.protocols.pouw.schemes import pearl_c as C
+from verity.experimental.protocols.pouw.schemes import pearl_c_debit as D
+from verity.experimental.protocols.pouw.schemes import pearl_c_work as W
+from verity.experimental.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
@@ -35,7 +35,8 @@ DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}
 PRICES = {Fraction(8): (SM120.prices, Fraction(8)),
           Fraction(1047, 125): (replace(SM120.prices, fadd=Fraction(1047, 125), forming_a_only=2), Fraction(8953, 1000))}
 TWINS = [t for t in P.load() if t["status"] == "pinned"]
-H100_PINS = {f"Pouw.PearlC.pearlC{kind}H100Rev1_{n}": n for kind in ("Gamma", "Sampled") for n in (8192, 16384)}
+H100_PINS = {f"Pouw.SecurityProofs.PearlC.{kind}H100Rev1_{n}": n
+             for kind in ("Gamma", "Sampled") for n in (8192, 16384)}
 
 
 def scheme_of(twin: dict) -> C.PearlC:
@@ -107,9 +108,12 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
 
 @pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
 def test_h100_gamma_is_rev1s_pin(pin, n):
-    """`pearl-c-h100-v1`'s γ at the cap is `DeviceRev1Gamma.lean`'s, read off the repository's pin."""
-    sig = " ".join(" ".join(P.guarantees(json.loads(P.REPO_AUDIT.read_text()))[pin]["signature"]).split())
-    lit = P._GAMMA_LITERAL.search(sig)
+    """`pearl-c-h100-v1`'s γ at the cap is `DeviceRev1Gamma.lean`'s, read off the repository's pin (its lifted
+    guarantee's statement)."""
+    audit = json.loads(P.REPO_AUDIT.read_text())
+    sig, lifted = P._statement(pin, P.guarantees(audit)[pin], P.lifted_definitions(audit, P.REPO_AUDIT.parent))
+    lit = P._GAMMA_LITERAL.search(sig) or P._GAMMA_SOURCE.search(sig)
+    assert lifted and lit, sig
     s = get("pearl-c-h100-v1")
     assert gamma(s, n, Fraction(0), "forming-credited", "unit") == Fraction(int(lit[1]), int(lit[2]))
     assert s.credit_of(Shape(n, n, n)) == lean_credit(Fraction(int(lit[1]), int(lit[2])), n, s.cap,

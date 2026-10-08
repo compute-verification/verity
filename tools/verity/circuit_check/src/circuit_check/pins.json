@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "GatherBf16x1024u10_v1": {
+   "and": 16368
+  },
+  "GatherBf16x1100_v2": {
+   "and": 18016
+  },
+  "GatherBf16x2u22_v1": {
+   "and": 352
+  },
+  "GatherBf16x64_v2": {
+   "and": 1424
+  },
+  "GatherBf16x76u10_v1": {
+   "and": 1296
+  }
+ },
+ "pieces": {
+  "AmpereBF16TcDot16_v1": {
+   "and": 8623
+  }
+ }
+}

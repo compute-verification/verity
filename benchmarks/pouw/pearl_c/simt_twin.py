@@ -1,5 +1,4 @@
-"""A host build of `hash.cuh`, `hash_sm120.cuh`, `hash_h2.cuh`, `h1_standin.cu` and `pearl_c_sm120/h2_rows_stats.cuh` (with
-pearl_c_sm120.cu's S5_LINE and S5_FLOOR) that runs its kernels thread for thread, for byte tests without a GPU.
+"""A host build of `hash_h3.cuh` that runs its kernels thread for thread, for byte tests without a GPU.
 
 Every CUDA thread of a block is a host thread; `__syncthreads` and `__syncwarp` are one barrier over the block (stronger than
 a warp's, which the kernels here allow: every thread of a block reaches the same syncs), which a thread leaves when it
@@ -9,7 +8,6 @@ kernel over a grid with `Args` built from host buffers.
 from __future__ import annotations
 
 import ctypes as C
-import re
 import shutil
 import subprocess
 import tempfile
@@ -17,11 +15,8 @@ from functools import lru_cache
 from pathlib import Path
 
 HERE = Path(__file__).parent
-KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_node_keys", "hash_nodes",
-           "hash_tree_leaves", "hash_tree_small", "hash_rows_wt", "lat_chain", "derive_rows_hash", "derive_rows_wide",
-           "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm",
-           "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s", "hash_rows_b3s_stats")
-SM120 = HERE.parent / "pearl_c_sm120"
+KERNELS = ("s512_rows", "s512_seeds", "s512_tickets", "s512_tile_leaves", "s512_pads", "s512_nodes", "s512_tree_small", "hm_leaves",
+           "s512_frame_leaves")
 
 PRELUDE = r"""
 #include <cmath>
@@ -58,6 +53,7 @@ static inline uint32_t __funnelshift_r(uint32_t lo, uint32_t hi, int n) { n &= 3
 static inline uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, int n) { n &= 31; return n ? (hi << n) | (lo >> (32 - n)) : hi; }
 static inline int min(int a, int b) { return a < b ? a : b; }
 static inline int __clz(int x) { return x ? __builtin_clz((unsigned)x) : 32; }
+static inline int __clzll(long long x) { return x ? __builtin_clzll((unsigned long long)x) : 64; }
 struct Dim { unsigned x = 0, y = 0, z = 0; };
 static thread_local Dim threadIdx;
 static Dim blockIdx, blockDim, gridDim;
@@ -102,10 +98,8 @@ static std::vector<uint32_t> twin_dyn;
 
 
 def _source() -> str:
-    s5 = "".join(re.findall(r"^constexpr \w+ S5_(?:LINE|FLOOR) = .*\n", (SM120 / "pearl_c_sm120.cu").read_text(), re.M))
-    body = ((HERE / "hash.cuh").read_text() + (HERE / "hash_sm120.cuh").read_text() + (HERE / "hash_h2.cuh").read_text()
-            + (HERE / "h1_standin.cu").read_text() + s5 + (SM120 / "h2_rows_stats.cuh").read_text()).replace(
-        "extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace("#pragma once", "")
+    body = (HERE / "hash_h3.cuh").read_text().replace("extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace(
+        '#include "sha512.cuh"', (HERE / "sha512.cuh").read_text()).replace("#pragma once", "")
     runs = "".join(
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
         f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block; gridDim.x = grid;\n"
@@ -113,7 +107,7 @@ def _source() -> str:
         f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
         f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"
         f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in KERNELS)
-    return PRELUDE + re.sub(r'#include "hash(_sm120|_h2)?.cuh"', "", body) + runs
+    return PRELUDE + body + runs
 
 
 class Args(C.Structure):
@@ -143,8 +137,3 @@ def launch(kernel: str, grid: int, block: int, ptrs, ints, smem: int = 0) -> Non
     for j, v in enumerate(ints):
         a.i[j] = v
     getattr(build(), f"run_{kernel}")(C.byref(a), grid, block, smem)
-
-
-def rows_w_words(rb: int) -> int:
-    """`hash_sm120.cuh`'s rows_w_words: shared words per warp of hash_rows_w (the leaf header is one 64-byte block)."""
-    return 8 * ((64 + rb + 1023) // 1024)

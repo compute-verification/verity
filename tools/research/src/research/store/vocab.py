@@ -61,6 +61,7 @@ DOMAINS = ("total", "finite-only")
 BREAKTHROUGH = "breakthrough"
 LANE = "lane"
 QUESTION = "question"
+CITED_BY = "cited-by"
 ROW = "row"
 SWEEP = "sweep"
 ARM = "arm"
@@ -177,9 +178,10 @@ ANCHOR = "anchor"
 #: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
-#: The owner's word that a pull request is ready at one head (`research queue ready`); the merge queue admits nothing without it.
+#: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
+#: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
-#: An `audit.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
+#: A `check.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
 #: where it printed the head's whole lean-audit.json change as the same statements (`research.queue.reviewed`).
 LEAN_REVIEW = "lean_review"
 
@@ -268,6 +270,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(BREAKTHROUGH, GROUP_RESULT, BOOL, "the lane's own flag that the row moves the campaign"),
     _k(LANE, GROUP_RESULT, TEXT, "the lane that produced the result, when the artifact's meta does not carry it (tables read meta.lane first)"),
     _k(QUESTION, GROUP_RESULT, TEXT, "the research question the job answers, as its lane's research owner named it (Daniel, 30 Sep: every job names one)"),
+    _k(CITED_BY, GROUP_RESULT, TEXT, "one place that cites the run or artifact as evidence (note:<id>, <repo>#<n>, a doc path): a lane marks what it must never lose"),
     _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
     _k(SWEEP, GROUP_RESULT, TEXT, "the parameter a series of results varies (batch, subbatch, l, zk, ...); old spelling `axis`"),
     _k(ARM, GROUP_RESULT, TEXT, "this result's point or variant within its sweep or comparison (pipeline4-window4, 1M-vu); old spelling `milestone`"),
@@ -277,7 +280,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "approach record, the <campaign>/<slug> that replaces it"),
     _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
-       "(`research data select --label replay_set=warden/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
+       "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
     _k(REPLAY_EXPECT, GROUP_RESULT, TEXT, "the change a replay at current main should show instead of the recorded verdict, with --ref "
        "naming the ruling: `refused: FORM` (the verifier of record now refuses that form) or `blocked: GATE` (fail-closed refuses the "
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
@@ -314,7 +317,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
        GRANT_ROLES),
-    _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it again"),
+    _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
+       "again; a train member needs none (Q14)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of an `audit.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed) needs no statement-reviewer grant"),
     # evidence
@@ -328,13 +332,13 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_DATASET, GROUP_EVIDENCE, TEXT, "the instance dataset a run or set draws from, e.g. bench-instances/v1"),
     _k(INSTANCES_TIER, GROUP_EVIDENCE, TEXT, "the tier within the dataset, e.g. vu-k1536"),
     _k(MISMATCHES, GROUP_EVIDENCE, INT, "tiles or instances that disagreed with the reference"),
-    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity_catalog.targets.target name)"),
+    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.ml.circuits.targets.target name)"),
     _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture ran on, as its UUID (nvidia-smi --query-gpu=uuid: GPU-...); the trust framework's device identity"),
     _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (tools/tc_probe/trust.py)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (benchmarks/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
     # approach
     _k(APPROACH, GROUP_APPROACH, TEXT, "on a run or artifact: the <campaign>/<slug> of the approach it belongs to"),

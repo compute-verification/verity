@@ -78,8 +78,9 @@ except ImportError:                                                 # run as a s
 
 SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
-REGISTRY_REFS = ("origin/main", "origin/cursor/slack-routing-b252")   # where a checkout older than the registry finds it
+REGISTRY_REFS = ("origin/main",)                                  # where a checkout older than the registry finds it
 FRONT_DOOR = "agent-coordination"
+ASKS_ON_LINEAR = False                                            # the Linear trial's cutover turns it on (`linear.py`)
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
 #: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
@@ -125,6 +126,7 @@ AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
+POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
@@ -444,17 +446,38 @@ def plain(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
 
 
+def _pieces(text: str, limit: int = POST_MAX) -> list[str]:
+    """`text` cut at line breaks (else at a space outside `<...>`) into pieces of at most `limit` bytes."""
+    out = []
+    while len(text.encode()) > limit:
+        window = text.encode()[:limit].decode(errors="ignore")
+        cut = window.rfind("\n")
+        if cut < len(window) // 2:
+            depth, cut = 0, len(window)
+            for i, c in enumerate(window):
+                depth = max(0, depth + (c == "<") - (c == ">"))
+                if c == " " and depth == 0 and i:
+                    cut = i
+        out.append(text[:cut].rstrip())
+        text = text[cut:].lstrip()
+    return [p for p in out if p] + [text]
+
+
 def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None, *,
           route: tuple[dict, Routes | None] | None = None, urgent: bool = False, tags: tuple[str, ...] = ()) -> str:
     """Post, print `<ts> <permalink>`, and with `route` (the registry and the routes) deliver it to whoever it reaches."""
     tags = tuple(tags) + (("urgent",) if urgent and "urgent" not in tags else ())
-    text = f"{slack_dates(text)}{_footer(tags)}"
-    if thread and not api.dry_run and len(text.encode()) < BROKER_MAX_BODY:   # a reply's ts (a doorbell's `reply R`): its thread
+    head, *rest = _pieces(slack_dates(text))
+    text = f"{head}{_footer(tags)}"
+    if thread and not api.dry_run:                       # a reply's ts (a doorbell's `reply R`): its thread
         first = api.call("conversations.replies", channel=ch, ts=thread, limit=1).get("messages", [])
         thread = (first[0].get("thread_ts") or first[0].get("ts") or thread) if first else thread
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=text,
                    unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"
+    for i, piece in enumerate(rest, 2):                  # quiet, and led by its number, so the rest of a post wakes nobody
+        api.call("chat.postMessage", channel=ch, thread_ts=thread or ts, username=handle, unfurl_links="false",
+                 unfurl_media="false", text=f"({i}/{len(rest) + 1}) {piece}{_footer((QUIET,))}")
     try:
         link = api.call("chat.getPermalink", channel=ch, message_ts=ts).get("permalink") or "-"
     except SlackError:                                   # the post went out: a caller that retries on a raise would post it twice
@@ -668,7 +691,7 @@ def matches(filt: str, msg: dict, reg: dict, targets: list[str]) -> bool:
 def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset()) -> list[dict]:
     """Who gets `msg`, and how: each of `route_targets` is woken (`wake`, why `addressed`); then each other name in `book`
     (name -> route) whose `subscriptions` match it, by its first matching subscription's `deliver` (`wake`: now; `digest`:
-    when that name reads its digest).  A quiet post wakes no one, but still reaches digests.  Nothing in an inbox thread,
+    when that name reads its digest).  A quiet post wakes only the names it starts with, and still reaches digests.  Nothing in an inbox thread,
     and nothing by an unknown author, reaches anyone; the author never gets their own post."""
     targets = route_targets(msg, root, reg, inboxes)
     out = [{"name": t, "deliver": "wake", "why": "addressed"} for t in targets]
@@ -990,8 +1013,29 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    _post(client(ns), ch, h["handle"], f"{tag(owner)} {_body(ns)}", route=_route(ns, reg, ch), urgent=ns.urgent)
+    body = _body(ns)
+    if (ns.linear or ASKS_ON_LINEAR) and not ns.dry_run:
+        from . import linear  # noqa: PLC0415
+
+        issue, why = linear.ask_issue(owner["handle"], h["handle"], body)
+        if issue:
+            body = f"{body}\nLinear: <{issue['url']}|{issue['identifier']}>"
+            print(f"linear: {issue['identifier']} {issue['url']}")
+        else:
+            print(f"research msg ask: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
+    _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
+
+
+def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
+    from . import linear  # noqa: PLC0415
+
+    try:
+        lines, ok = linear.Linear().check(ns.write, name_entry(ns, reg, ns.handle)["handle"])
+    except linear.LinearError as e:
+        raise SlackError(str(e)) from None
+    print("\n".join(lines))
+    return 0 if ok else 1
 
 
 def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: list[str]) -> str:
@@ -1012,11 +1056,18 @@ def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: 
     return "\n".join(lines)
 
 
+def _check_audience(to: list[dict], body: str, reg: dict) -> None:
+    if not to and (lead := lead_names(body, reg)):
+        raise SlackError(f"with no --to an announcement goes to every handle, but it starts with "
+                         f"{' '.join('@' + n for n in lead)}: pass them as --to, or move them off the start")
+
+
 def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
-    _post(client(ns), ch, h["handle"], announcement(h, to, _body(ns), ns.verify, ns.ships),
+    _check_audience(to, body := _body(ns), reg)
+    _post(client(ns), ch, h["handle"], announcement(h, to, body, ns.verify, ns.ships),
           route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1033,9 +1084,12 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
+        raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
     if kind == "announce":
         if ns.thread:
             raise SlackError("an announcement starts its own thread: drop --thread")
+        _check_audience(to, body, reg)
         text = announcement(h, to, body, ns.verify, ns.ships)
     else:
         if ns.verify or ns.ships:
@@ -1764,7 +1818,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     except RouteError as e:
         if e.status != 400:
             raise
-        print(f"research slack: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
+        print(f"research msg: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
         out, fell_back = route.call("POST", "", old), True
     cid, ts = out.get("id"), out.get("ts")
     if not cid or not ts:
@@ -1849,6 +1903,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True, url=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
+    p.add_argument("--linear", action="store_true", help="also file it as an issue in the owner's Linear team, linked from the post")
+    p = cmd("linear", "the Linear asks trial: `check` shows what the credentials reach, and is fit for asks (exit 0)")
+    p.add_argument("verb", choices=("check",))
+    p.add_argument("--write", default=None, metavar="TEAM", help="also file, comment on and cancel a test issue in TEAM (a handle)")
+    p.add_argument("--as", dest="handle", default="comms", metavar="HANDLE", help="the test issue's sender (default comms)")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
@@ -1931,7 +1990,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                 "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "inbox": cmd_inbox, "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close, "list": cmd_list,
-                "subscribe": cmd_subscribe, "watch": cmd_watch}[ns.cmd](ns, reg)
+                "subscribe": cmd_subscribe, "watch": cmd_watch, "linear": cmd_linear}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"{prog}: {e}", file=sys.stderr)
         return 2

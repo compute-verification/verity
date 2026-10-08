@@ -5,7 +5,7 @@
   research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
-                                                 # the one queue (tools/cluster) places the job and runs it under its node's executor
+                                                 # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
@@ -15,13 +15,13 @@
                                                  # cancel; never the runner, never SIGKILL, so it still records the exit and publishes
                                                  # custody.  From any VM: a run another VM launched is found as `inspect` finds it
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
-  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json]
+  research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
                                                  # each ssh machine, and its records fetched here (remote.adopt)
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
-                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (research/keeper.py)
+                                                 # until UTC (<= 48 h), preemptible; no VM stays awake (`ops keeper`, verity_ops/keeper.py)
   research compare <original>... <replay> [--expect E] [--json]
                                                  # the replay's verdict from the store (same | within-band | differs | expected-change);
                                                  # --dirs: two run dirs' differences and ratios, which the workload contract judges
@@ -57,12 +57,12 @@
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
-                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (research/deploy.py)
+                                                 # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
                                                  # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
-                                                 # idle: `cluster usage` (tools/cluster usage.py) over the console's record on vy-nebius-1
+                                                 # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -189,7 +189,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--job-user", default=None, metavar="USER",
                     help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
-    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (tools/cluster) places and runs the job; "
+    q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
@@ -200,7 +200,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                    help="its longest run in minutes, which the GPU lease enforces (default --timeout, else its kind's max_wall_min); "
                         "without --timeout, a GPU job's runner also allows GPU_WAIT_MIN for the lease to be granted")
     q.add_argument("--kind", dest="queue_kind", default="adhoc", metavar="K",
-                   help="what the job is: a kind in tools/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
+                   help="what the job is: a kind in infra/cluster/kinds/<owner>.toml supplies its shape, time and question (default adhoc)")
     q.add_argument("--question", default=None, metavar="Q", help="the research question it answers, recorded (default: its kind's)")
     q.add_argument("--disk-gb", type=float, default=None, metavar="N",
                    help="the disk it will write: held on the machine while N more GB would fill the disk past 80%% (released at "
@@ -850,7 +850,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
     are an `--on` run's."""
     if not ns.source or not ns.project:
-        print("research run --queue: --source GITDIR (the tree with tools/cluster, whose kinds/ it resolves) and --project are "
+        print("research run --queue: --source GITDIR (the tree with infra/cluster, whose kinds/ it resolves) and --project are "
               "required", file=sys.stderr)
         return 2
     timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
@@ -1029,6 +1029,8 @@ def cmd_fetch(argv: list[str]) -> int:
     if ex := rec.get("launcher_exited"):
         print(f"research fetch: {s['run_id']}: the machine's runner (pid {ex['runner_pid']}) exited without writing status.json; "
               f"launcher.log ends: {ex['last_line'] or '(empty)'}", file=sys.stderr)
+    if gone := rec.get("runner_gone"):
+        print(f"research fetch: {s['run_id']}: it ended without recording it: {gone['why']}", file=sys.stderr)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
     marker = rec.get("fetched_marker") if ns.all else None
@@ -1164,6 +1166,26 @@ def cmd_launch_request(argv: list[str]) -> int:
     return 0
 
 
+def _read_holds(rows: list[dict]) -> None:
+    """Each live run's `scope_memory` and `holds` (research.holds' lines) where it executes, one ssh per machine for remote runs,
+    or its `scope_memory_error`."""
+    from . import holds, scopemem
+
+    remotes = [Path(s["dir"]) for s in rows if s.get("remote_rec")]
+    got = remote.node_readings(remotes) if remotes else {}
+    for s in rows:
+        if s.get("remote_rec"):
+            r = got.get(str(Path(s["dir"]))) or {"error": "not read"}
+        else:
+            doc = scopemem.node([str(s["dir"])])
+            r = {"run": doc.pop("runs")[str(s["dir"])], "node": doc, "machine": None}
+        if r.get("error"):
+            s["scope_memory_error"] = r["error"]
+            continue
+        s["scope_memory"] = r["run"]["memory"]
+        s["holds"] = holds.lines(s.get("run_id") or s["id"], r["machine"], r)
+
+
 def _fmt(s: dict) -> str:
     cmd = " ".join(s["command"]).replace("\n", " ") if s.get("command") else "?"
     if len(cmd) > 50:
@@ -1215,9 +1237,8 @@ def cmd_status(argv: list[str]) -> int:
     rows = [R.summarize(one)] if one else R.list_runs(root)
     if not ns.all:
         rows = rows[-20:]
-    from . import scopemem
-
     unread = 0
+    live = []
     for s in rows:
         rr = s.get("remote_rec")
         if s["state"] not in R.ACTIVE or (rr and not rr.get("remote_run_dir")):
@@ -1225,10 +1246,8 @@ def cmd_status(argv: list[str]) -> int:
         if rr and not (ns.refresh or one):
             unread += 1
             continue
-        try:
-            s["scope_memory"] = remote.scope_memory(Path(s["dir"])) if rr else scopemem.reading(Path(s["dir"]))
-        except remote.Refused as e:
-            s["scope_memory_error"] = str(e)
+        live.append(s)
+    _read_holds(live)
     if ns.json:
         print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
         return 0
@@ -1244,8 +1263,8 @@ def cmd_status(argv: list[str]) -> int:
     print(f"{'run':<24} {'state':<10} {'rc':>3}  {'class':<22} {'res':<4} {'valid':<8} {'project':<10} {'where':<11} {'stage':<16} command")
     for s in rows:
         print(_fmt(s))
-        for m in s.get("scope_memory") or []:
-            print(f"{'':<26}mem  {scopemem.render(m)}")
+        for label, text in s.get("holds") or []:
+            print(f"{'':<26}{label:<4} {text}")
         if s.get("scope_memory_error"):
             print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
@@ -1271,6 +1290,8 @@ def cmd_inspect(argv: list[str]) -> int:
     ap.add_argument("--runs-dir", default=None)
     ap.add_argument("--on", default=None, metavar="NAME", help="a run another VM launched: look for it on this machine only")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--py-spy", action="store_true", help="instead: print a py-spy dump of the live run's Python processes, read on its "
+                                                          "machine (research.telemetry.pyspy)")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     try:
@@ -1278,6 +1299,8 @@ def cmd_inspect(argv: list[str]) -> int:
     except (FileNotFoundError, LookupError) as exc:
         print(f"research inspect: {exc}", file=sys.stderr)
         return 1
+    if ns.py_spy:
+        return _inspect_py_spy(run_dir)
     s = R.summarize(run_dir)
     if ns.json:
         print(json.dumps(s, indent=2, sort_keys=True))
@@ -1316,6 +1339,15 @@ def cmd_inspect(argv: list[str]) -> int:
         print(f"observed  phase={rr.get('phase')} at={rr.get('observed_utc')} state={lo.get('state')}"
               + (f"  ERROR={rr.get('error')}" if rr.get("error") else "")
               + ("  (records shown are a cached copy; `research fetch` refreshes)" if rr.get("observed_utc") else "  (nothing fetched yet)"))
+        if q := rr.get("queue"):
+            print(f"queue     placed on {q.get('machine')} ({q.get('why')}); {q.get('phase')} phase")
+    if s["state"] in R.ACTIVE and (not s.get("remote_rec") or s["remote_rec"].get("remote_run_dir")):
+        row = {**s, "id": Path(s["dir"]).name}
+        _read_holds([row])
+        for label, text in row.get("holds") or []:
+            print(f"{label:<9} {text}")
+        if row.get("scope_memory_error"):
+            print(f"mem       unread: {row['scope_memory_error']}")
     files = sorted(p.name for p in Path(s["dir"]).iterdir() if p.is_file())
     print(f"files     {', '.join(files)}")
     missing = [n for n, ok in (("job.json", s["has_job"]), ("status.json", s["has_status"])) if not ok]
@@ -1324,21 +1356,58 @@ def cmd_inspect(argv: list[str]) -> int:
     return 0
 
 
-CLUSTER_SRC = Path(__file__).resolve().parents[3] / "cluster" / "src"
+def _inspect_py_spy(run_dir: Path) -> int:
+    from .telemetry import pyspy
+
+    if (run_dir / "remote.json").exists():
+        try:
+            text = remote.py_spy(run_dir)
+        except remote.Refused as e:
+            print(f"research inspect: {run_dir.name}: {e}", file=sys.stderr)
+            return 1
+    else:
+        if (state := R.summarize(run_dir)["state"]) != "running":
+            print(f"research inspect: {run_dir.name} is {state}: no live workload to dump", file=sys.stderr)
+            return 1
+        results = pyspy.of_run(run_dir)
+        if results is None:
+            print(f"research inspect: {pyspy.MISSING}", file=sys.stderr)
+            return 3
+        text = pyspy.render(results)
+    sys.stdout.write(text)
+    return 0
+
+
+CLUSTER_SRC = Path(__file__).resolve().parents[4] / "infra" / "cluster" / "src"
 
 
 def cmd_usage(argv: list[str]) -> int:
-    """`research usage ...` is `cluster usage ...`, run from this tree's tools/cluster (research never imports cluster), with
+    """`research usage ...` is `cluster usage ...`, run from this tree's infra/cluster (research never imports cluster), with
     its output and exit code: 0, 1 on a finding (the record unread, stale or short of hours), 2 on bad arguments or with no
-    tools/cluster here."""
+    infra/cluster here."""
     import subprocess
 
     if not (CLUSTER_SRC / "cluster" / "usage.py").is_file():
-        print(f"research usage: no tools/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
+        print(f"research usage: no infra/cluster beside this research package ({CLUSTER_SRC})", file=sys.stderr)
         return 2
     env = dict(os.environ)
     env["PYTHONPATH"] = str(CLUSTER_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     return subprocess.run([sys.executable, "-m", "cluster", "usage", *argv], env=env).returncode
+
+
+OPS_COMMANDS = ("keeper", "deploy")
+OPS_SRC = Path(__file__).resolve().parents[4] / "infra" / "ops"
+
+
+def hand_to_ops(cmd: str, rest: list[str]) -> int:
+    """`research keeper|deploy ...` is `ops ...` (infra/ops), exec'd in this interpreter with this tree's
+    infra/ops first on its path, so a venv synced before verity-ops existed still runs it. research never imports it."""
+    env = dict(os.environ)
+    if (OPS_SRC / "verity_ops" / "cli.py").is_file():
+        env["PYTHONPATH"] = str(OPS_SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execve(sys.executable, [sys.executable, "-m", "verity_ops", cmd, *rest], env)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1355,6 +1424,8 @@ def main(argv: list[str] | None = None) -> int:
 
     recover()
     cmd, rest = argv[0], argv[1:]
+    if cmd in OPS_COMMANDS:
+        return hand_to_ops(cmd, rest)
     if cmd == "run":
         return cmd_run(rest)
     if cmd == "status":
@@ -1403,18 +1474,10 @@ def main(argv: list[str] | None = None) -> int:
         from .retention import main as retention_main
 
         return retention_main(rest)
-    if cmd == "keeper":
-        from .keeper import main as keeper_main
-
-        return keeper_main(rest)
     if cmd == "pods":
         from .pods.part import main as pods_main
 
         return pods_main(rest)
-    if cmd == "deploy":
-        from .deploy import main as deploy_main
-
-        return deploy_main(rest)
     if cmd == "monitors":
         from .monitors import main as monitors_main
 
