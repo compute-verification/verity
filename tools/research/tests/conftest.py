@@ -14,7 +14,7 @@ import pytest
 #: holds its run's variables, and a pod's shell its own: no test may reach the real account or bucket, or act as a run, through them
 #: (nor extend or read a real machine's lease: a Nebius host exports LEASE_DIR; nor post to the real Slack workspace; nor, with those
 #: cleared, read as a cloud VM's shell that lost its injected secrets: secret_hint.py)
-CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_", "SLACK_", "CLOUD_AGENT_")
+CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_", "SLACK_", "CLOUD_AGENT_", "LINEAR_")
 
 
 @pytest.fixture(autouse=True)
