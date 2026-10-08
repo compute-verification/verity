@@ -1,7 +1,7 @@
 """P2 v1's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every block's `K` and `t` expanded on the
-device by SHAKE256 with the spec's v1 framing (`band_gpu`'s `pous_native.shake256_rows`: one shared prefix, then each block's
-`u64be(segment) ‖ u64be(local block) ‖ purpose`, or the library's own `p2v1_keys` when it is built with one) just before the
-kernel that uses them, and freed after it."""
+device by SHAKE256 (`band_gpu`'s `pous_native.shake256_rows`: the setup's shared prefix, v1's framing or `p2-16448/v3`'s, then
+each block's `u64be(segment) ‖ u64be(local block) ‖ purpose`, or the library's own `p2v1_keys` when it is built with one)
+just before the kernel that uses them, and freed after it."""
 from __future__ import annotations
 
 import ctypes
@@ -25,9 +25,10 @@ def exponent_split(params: reference.Params) -> tuple[int, int, int]:
 
 
 class Kernels:
-    """The library and the SHAKE256 kernel on the current CUDA device, for one parameter set, salt and model commitment."""
+    """The library and the SHAKE256 kernel on the current CUDA device, for one parameter set and one setup's key prefix
+    (`reference.expand_prefix` for v1, `schemes.p2.expand_prefix` for `p2-16448/v3`)."""
 
-    def __init__(self, lib_dir: str, build_dir: str, params: reference.Params, salt: bytes, model: bytes) -> None:
+    def __init__(self, lib_dir: str, build_dir: str, params: reference.Params, prefix: bytes) -> None:
         import torch
 
         root = str(Path(__file__).resolve().parents[1])
@@ -53,7 +54,7 @@ class Kernels:
             self.lib.p2v1_keys.argtypes = [ctypes.c_char_p, ctypes.c_int, q, u, q, v, v, v]
         self.params, self.split = params, exponent_split(params)
         self.device = torch.device("cuda", torch.cuda.current_device())
-        prefix = self.prefix_bytes = reference.expand_prefix(salt, params, model)
+        prefix = self.prefix_bytes = bytes(prefix)
         self.prefix = torch.tensor(list(prefix), dtype=torch.uint8, device=self.device).view(1, -1)
         self.flags = torch.zeros(1, dtype=torch.int32, device=self.device)
 
