@@ -1,6 +1,6 @@
 """The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network certifier, inside the
-node's isolation boundary, which signs its rounds.  It replaces `audit.MemoryChallenger`'s unsigned loop on the deployed
-path.
+node's isolation boundary, which signs its rounds.  On the deployed path it replaces `audit.UnsignedRounds`, the same
+rounds unsigned.
 
 A session has four steps:
 
@@ -347,7 +347,7 @@ class SignedSession:
 
 
 def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> Certificate:
-    """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.MemoryChallenger` picks it;
+    """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.TimedAudit` picks it;
     `ValueError` when none does, or when the scheme is experimental and `experimental` is not set."""
     if scheme.experimental and not experimental:
         raise ValueError(f"{scheme.name} is experimental ({scheme.experimental}): pass experimental=True to audit it")
@@ -405,7 +405,7 @@ class MemoryChallenger:
         self._open = None
         r = Round(j, i, send, receipt, block_digest(block))
         self.rounds.append(r)
-        if r.elapsed_ns > self.commitment.limit_ns:
+        if not 0 <= r.elapsed_ns <= self.commitment.limit_ns:
             self.ended = LATE
         elif len(self.rounds) == self.coins.k:
             self.ended = COMPLETE
