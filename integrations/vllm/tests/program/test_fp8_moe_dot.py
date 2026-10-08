@@ -146,7 +146,7 @@ def test_the_gathers_are_column_reads() -> None:
     for e in range(3):
         assert X.gather_e4m3(3).evaluate(e, *col8) == col8[e]
         assert X.gather_f32(3).evaluate(e, *col32) == col32[e]
-    assert (X.gather_e4m3(3).evaluate(3, *col8), X.gather_f32(3).evaluate((1 << 32) - 1, *col32)) == (0x7F, 0x7FFFFFFF)
+    assert (X.gather_e4m3(3).evaluate(3, *col8), X.gather_f32(3).evaluate((1 << 32) - 1, *col32)) == (0x7F, 0x7FC00000)
     assert X.gather_e4m3(3).id == "GatherE4m3x3_v1" and X.gather_f32(128).id == "GatherF32x128_v1"
 
 

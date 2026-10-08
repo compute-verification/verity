@@ -3,7 +3,7 @@ whole expert stack as the weight operand, the rows gathered inside the body (`mo
 derive rule and fold scope bind, since a pair's expert is data (the router's output), not structure.
 
     GatherE4m3x{E}_v1                       (e: i32, column: Array<E, e4m3>) -> e4m3 = column[e]; e outside [0, E) -> 0x7F (NaN)
-    GatherF32x{E}_v1                        (e: i32, column: Array<E, f32>) -> f32 = column[e]; e outside [0, E) -> 0x7FFFFFFF (NaN)
+    GatherF32x{E}_v1                        (e: i32, column: Array<E, f32>) -> f32 = column[e]; e outside [0, E) -> 0x7FC00000 (NaN): `ref_prims.gather_f32`, main's
     MoeExpertFp8Row{E,K}                    (e, slab: [E][K] e4m3) -> [K] e4m3 = slab[e]
     MoeExpertFp8ScaleRow{E,K}               (e, slab: [E][K] f32) -> [K] f32 = slab[e]
     MoeExpertFp8Coordinate{E,K,G,KB,SWAP,DOT}    (xq, sx, e, slab, sw) -> bf16: `MoeExpertFp8BlockCoordinate_v3` over slab[e]
@@ -22,10 +22,11 @@ from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.ml.circuits.refs import Coll, concat, strided_view
 from verity.ml.circuits.types import Array
 from verity_vllm.program.registry import fp8_moe as FM
+from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry.fp8 import E4M3, E4M3_NAN, weight_blocks
 from verity_vllm.program.registry.prims import BF16, F32, I32
 
-F32_NAN_FILL = 0x7FFFFFFF
+F32_NAN_FILL = 0x7FC00000
 
 _GATHERS: dict[tuple[str, int], PrimitiveDefinition] = {}
 
@@ -56,8 +57,9 @@ def gather_e4m3(vocab: int) -> PrimitiveDefinition:
 
 
 def gather_f32(vocab: int) -> PrimitiveDefinition:
-    """`GatherF32x{V}_v1`: column[token] of V f32 words, else 0x7FFFFFFF."""
-    return _gather("GatherF32", vocab, F32, F32_NAN_FILL)
+    """`GatherF32x{V}_v1`: column[token] of V f32 words, else 0x7FC00000. It is `ref_prims.gather_f32`'s Definition itself,
+    since a registry holds one Definition per id."""
+    return RP.gather_f32(vocab)
 
 
 def columns(slab: Coll, E: int, K: int, word) -> Coll:
