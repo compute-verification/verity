@@ -44,12 +44,14 @@ def _info(task: tuple) -> dict:
 def _one(kind: str, label: str, fn: Callable[[], dict]) -> dict:
     t0 = time.time()
     reset_peak()
+    start = _status_gb("VmRSS")
     try:
         r = fn()
     except Exception as e:  # noqa: BLE001  (a target the checks cannot run on is a failure by name, not a crash)
         r = {"failures": [{"check": "circuit-check", "code": "error", "definition": label,
                            "name": f"circuit-check/error {label}: {type(e).__name__}: {str(e)[:200]}"}], "warnings": []}
-    return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3), "peak_gb": peak_gb()}
+    return {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3), "peak_gb": peak_gb(),
+            "rss_start_gb": start}
 
 
 def _errored(r: dict) -> bool:
@@ -136,14 +138,20 @@ def reset_peak() -> None:
         pass
 
 
-def peak_gb() -> float:
-    """This process's peak RSS since `reset_peak`, in GiB (VmHWM; without /proc, ``ru_maxrss``: the peak since it started)."""
+def _status_gb(field: str) -> float | None:
     try:
         for ln in Path("/proc/self/status").read_text().splitlines():
-            if ln.startswith("VmHWM:"):
+            if ln.startswith(field + ":"):
                 return round(int(ln.split()[1]) / (1 << 20), 2)
     except OSError:
         pass
+    return None
+
+
+def peak_gb() -> float:
+    """This process's peak RSS since `reset_peak`, in GiB (VmHWM; without /proc, ``ru_maxrss``: the peak since it started)."""
+    if (g := _status_gb("VmHWM")) is not None:
+        return g
     import resource
 
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1 << 20), 2)
@@ -256,7 +264,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     is not stored once its process did something the tracer cannot see, nor when the check raised (no verdict), nor when the
     reads as that process sees them right after its check differ from what would be recorded (the tree changed during the run).
 
-    Each result has ``peak_gb``, the RSS peak of the process while it checked that target (`peak_gb`); the report's ``peaks``
+    Each result has ``peak_gb``, the RSS peak of the process while it checked that target (`peak_gb`), and ``rss_start_gb``, its
+    RSS when the check started (what earlier checks in the same worker left resident, which the peak includes); the report's ``peaks``
     lists the heaviest of the targets run now, and ``progress`` (JSON lines) gets a line per target as it finishes, so a run that
     is itself killed still leaves them.
 
@@ -278,7 +287,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         out[i] = r
         if progress is not None:
             with progress.open("a") as f:
-                f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "seconds": r.get("seconds"),
+                f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
                                     "failures": len(r["failures"]), **({"killed": True} if r.get("killed") else {})}) + "\n")
         if tracing and got is not None:
             if _errored(r):
@@ -331,7 +340,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
     rep = CK.report([r for r in out if r is not None], opts)
     ran = [r for r in rep["targets"] if r.get("peak_gb") is not None and "cache" not in r]
-    rep["peaks"] = [{"target": r["target"], "peak_gb": r["peak_gb"], **({"killed": True} if r.get("killed") else {})}
+    rep["peaks"] = [{"target": r["target"], "peak_gb": r["peak_gb"], "rss_start_gb": r.get("rss_start_gb"), **({"killed": True} if r.get("killed") else {})}
                     for r in sorted(ran, key=lambda r: -r["peak_gb"])[:PEAKS_REPORTED]]
     if tracing:
         rep["cache"] = stats
