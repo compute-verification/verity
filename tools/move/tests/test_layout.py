@@ -140,6 +140,32 @@ def test_a_reference_to_a_directory_the_map_splits_fails_unless_split_acknowledg
     assert branch.returncode == 0 and "gates.toml: backends/flock (" in branch.stdout, branch.stderr
 
 
+def _anchor_tree(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
+    r = tmp_path / "repo"
+    files = {"scripts/gen.sh": 'ROOT=$(cd "$(dirname "$0")/.." && pwd)\ncat "$ROOT/data.txt"\n', "data.txt": "x\n",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text('[roots]\nold = { verity = "pkg/src/verity" }\nnew = { verity = "verity" }\n\n'
+                                       '[paths]\n"scripts/" = "tools/deep/scripts/"\n\n[modules]\n"scripts" = "tools.deep.scripts"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    return subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock", *args],
+                          capture_output=True, text=True)
+
+
+def test_a_move_that_anchors_py_finds_reaching_elsewhere_fails_and_on_a_branch_is_noted(tmp_path):
+    """The core move's generated commit left nine anchored paths reaching elsewhere (a Lean vector generator's
+    `$(dirname "$0")` climbing one level short, a firewall test's `parents[N]`), each found by a test that read the path or
+    fixed by hand afterwards: the move fails while `anchors.py` lists one, and on a branch's tree it's noted."""
+    p = _anchor_tree(tmp_path / "main")
+    assert p.returncode != 0 and "scripts/gen.sh:2 (now tools/deep/scripts/gen.sh): reached data.txt" in p.stderr, p.stderr
+    branch = _anchor_tree(tmp_path / "branch", "--report-splits")
+    assert branch.returncode == 0 and "anchored paths no longer reached: 1" in branch.stdout, branch.stderr
+
+
 def test_a_relative_path_through_a_moved_directory_is_normalized_though_neither_end_moved(tmp_path):
     """Lake writes an inherited path requirement as its requirer's path joined to the requirement's own, so a manifest that
     stays can name a directory that stays through one that moves (`lms/lean/../../../../core/service/flock`); as written it
@@ -151,7 +177,7 @@ def test_a_relative_path_through_a_moved_directory_is_normalized_though_neither_
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
         (r / p).write_text(t)
-    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"old/" = "new/"\n\n[modules]\n"old" = "new"\n')
+    (tmp_path / "map.toml").write_text('[roots]\nold = { verity = "pkg/src/verity" }\nnew = { verity = "verity" }\n\n[paths]\n"old/" = "new/"\n\n[modules]\n"old" = "new"\n')
     git(r, "init", "-q", "-b", "main")
     git(r, "add", "-A")
     git(r, "commit", "-q", "-m", "old")

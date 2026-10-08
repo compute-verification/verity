@@ -29,6 +29,10 @@ It fails on a rewritten reference to a directory the map splits across destinati
 with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
 with the reason; one that no longer occurs is an error too.
+
+It fails, leaving the move staged, while `tools/verity/check/anchors.py BASE <the moved tree>` lists anything: a file whose
+`Path(__file__)` join or `$(dirname "$0")` path reaches somewhere else after the move. The fix goes into this script or the
+map, so the move commit needs no hand fixup for it.
 """
 from __future__ import annotations
 
@@ -37,6 +41,7 @@ import ast
 import bisect
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import posixpath
@@ -49,6 +54,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+#: what judges the move: every path a file reached from its own place, it still reaches
+ANCHORS = HERE.parent / "verity" / "check" / "anchors.py"
 _ROOT_JOIN = "\x00root\x00"
 IDENT = re.compile(r"[A-Za-z_]\w*\Z")
 TEXT_LIMIT = 4 << 20
@@ -1384,6 +1391,16 @@ def unpinned_uv(root: Path) -> str | None:
     return None if got == [m.group(1)] else f"uv is {got[0] if got else 'broken'}, not the {m.group(1)} pod_setup.sh pins"
 
 
+def load_anchors():
+    """`anchors.py` beside this script, loaded before the move can move it."""
+    if not ANCHORS.is_file():
+        raise SystemExit(f"{ANCHORS} is missing: the move can't be checked")
+    spec = importlib.util.spec_from_file_location("layout_anchors", ANCHORS)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def renamed(name: str, map_path: Path = HERE / "layout_map.toml") -> str:
     """The name module `name` has after the move (unchanged when the move didn't rename it)."""
     return load(map_path).module(name)
@@ -1400,8 +1417,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--report", type=Path, help="write every change and note as JSON here")
     ap.add_argument("--allow-dirty", action="store_true")
     ap.add_argument("--report-splits", action="store_true",
-                    help="note references to a split directory that [split] doesn't acknowledge, instead of failing (restack.py "
-                         "on a branch: its own references are its owner's to check)")
+                    help="note references to a split directory that [split] doesn't acknowledge, and paths anchors.py finds "
+                         "no longer reached, instead of failing (restack.py on a branch: its own references are its owner's "
+                         "to check)")
     a = ap.parse_args(argv)
     layout = load(a.map)
     if a.resolve:
@@ -1424,6 +1442,7 @@ def main(argv: list[str] | None = None) -> int:
     if not a.dry_run and not a.no_lock and (why := unpinned_uv(root)):
         raise SystemExit(f"{why}: put the pinned uv first on the PATH, or pass --no-lock")
     base = git(root, "rev-parse", "HEAD").strip()
+    anchors = None if a.dry_run else load_anchors()
     run = Run(root, layout, a.dry_run)
     moves = run.plan()
     run.index(moves)
@@ -1452,6 +1471,16 @@ def main(argv: list[str] | None = None) -> int:
         if moves:
             subprocess.run(["git", "--literal-pathspecs", "add", "-f", "--pathspec-from-file=-", "--pathspec-file-nul"], cwd=root,
                            input="\0".join(n for _, n in moves).encode(), check=True, capture_output=True)
+        try:
+            broken = anchors.run(base, git(root, "write-tree").strip(), root)
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"anchors.py: git failed: {e.stderr.strip()}")
+        if a.report_splits:
+            for x in broken:
+                run.note("anchored paths no longer reached", x)
+        elif broken:
+            raise SystemExit("anchored paths the move no longer reaches (anchors.py; the move is left staged):\n"
+                             + "".join(f"  {x}\n" for x in broken))
         if not a.no_lock:
             r = subprocess.run(["uv", "lock"], cwd=root, capture_output=True, text=True)
             if r.returncode:
