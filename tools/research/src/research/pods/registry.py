@@ -16,7 +16,9 @@ them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VR
 Where it is read and written (`registry_dir`, the one directory `register`, `unregister`, `registry import` and `research run --on`
 use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with RESEARCH_NOTES_TOKEN
 set, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none` turns the registry off: run
-reads machines.toml alone, and the commands that write refuse, since nothing would read what they wrote.
+reads machines.toml alone, and the commands that write refuse, since nothing would read what they wrote.  With
+`$RESEARCH_MACHINES_D` pointing elsewhere, `research run --on` still takes a machine only the notes clone's machines.d lists:
+a hand-copied override never hides a machine registered since it was copied (vy-nebius-cpu-1 from the lander's VM, 8 Oct 03:43Z).
 Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
 as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
 machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.
@@ -135,7 +137,8 @@ def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
 
 def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | None = None) -> dict[str, dict]:
     """machines.toml's machines plus the registry's; a name the two bind to different pods, or a broken registry file, is dropped
-    (reason in `problems`).  Unchanged (and `problems` empty) when no registry directory is read."""
+    (reason in `problems`).  Unchanged (and `problems` empty) when no registry directory is read.  Under a `$RESEARCH_MACHINES_D`
+    override, a name neither it nor machines.toml defines comes from the notes clone's machines.d, if there is one."""
     problems.clear()
     d = registry_dir(machines_toml, environ)
     if d is None:
@@ -158,6 +161,10 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
                               "refused until one of them is removed")
         elif t is None:
             out[name] = e
+    if (notes := notes_root(environ) / "machines.d") != d and notes.is_dir():
+        for name, e in load_dir(notes)[0].items():
+            if name not in out and name not in problems:
+                out[name] = e
     return out
 
 

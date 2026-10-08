@@ -1788,6 +1788,26 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
 
 
+def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
+    """Why a run whose status isn't terminal has no runner on its machine, or None while it may have one: the machine rebooted
+    since the runner started (job.json's boot id), or the pid is gone where the runner ran in the machine's own pid namespace
+    (job.json's hostname is the machine's; a Kubernetes pod's runner isn't visible from the host). Unreadable is None."""
+    env = (_read_json(local_dir / "job.json") or {}).get("environment") or {}
+    if not env.get("boot_id"):
+        return None
+    probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
+                                      "|| echo gone"], timeout=120)
+    lines = probe.stdout.decode(errors="replace").split() if probe.returncode == 0 else []
+    if len(lines) != 3:
+        return None
+    boot, host, alive = lines
+    if boot != env["boot_id"]:
+        return f"the machine rebooted since its runner started (boot {env['boot_id']}, now {boot})"
+    if host == env.get("hostname") and alive == "gone":
+        return f"its runner (pid {pid}) is gone without recording an end"
+    return None
+
+
 def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir.  Unreachable -> observed_utc unchanged, reason recorded."""
     rec = _read_json(local_dir / "remote.json")
@@ -1822,6 +1842,10 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
     rec.pop("launcher_exited", None)
+    rec.pop("runner_gone", None)
+    if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
+        if why := _runner_gone(ssh, local_dir, st["pid"]):
+            rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import itertools
 import json
 import math
@@ -22,7 +23,6 @@ import pytest
 import epoch_coins as E
 
 import pearl_c4_vectors as V
-from verity.ml.crypto.turboshake import turboshake128
 from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon import fp32
 from verity.experimental.protocols.pouw.audit import Epoch, Prover, Workload
@@ -90,10 +90,16 @@ def test_nvfp4_blocks_keep_the_sign_of_minus_zero():
     assert F.quantize(F.NVFP4, d) == ([8, 7] + [0] * 13 + [8], [0x23])
 
 
-def test_lines_are_turboshake_nibbles():
+def test_lines_are_sha512_nibbles_four_to_a_block():
+    """Line t is quarter t mod 4 of SHA-512 over the padded "pearl-c4/v2/line" block, the seed, the role and ⌊t/4⌋ u32 LE,
+    low nibble first; the pinned bytes are line 5 of role 2 under the seed 0, 1, ..., 31."""
     seed = bytes(range(32))
-    raw = turboshake128(seed + bytes([2]) + (5).to_bytes(4, "little"), F.D_LINE, 16)
+    block = hashlib.sha512(b"pearl-c4/v2/line\0".ljust(128, b"\0") + seed + bytes([2]) + (1).to_bytes(4, "little")).digest()
+    raw = bytes.fromhex("ccba50373990aeaffa1ad59bbf454387")
+    assert block[16:32] == raw and F.line_block(seed, 2, 1) == block
     assert F.line(seed, 2, 5) == [x for b in raw for x in (b & 0xF, b >> 4)]
+    assert [F.line(seed, 2, t) for t in range(4, 8)] == [[x for b in block[16 * q:16 * q + 16] for x in (b & 0xF, b >> 4)]
+                                                         for q in range(4)]
     assert F.line(seed, 1, 5) != F.line(seed, 2, 5) != F.line(seed, 2, 6)
 
 
@@ -359,9 +365,9 @@ def test_row_rules_and_debit(fmt):
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
-    # share; MXFP4 chains hold identity atoms (about 0.21% on Gaussian inputs), NVFP4's here none
+    # share; MXFP4 chains hold identity atoms on some draws (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
-    assert clean.total == clean.forming + clean.identity + clean.split and (clean.identity == 0) == (fmt == "nvfp4")
+    assert clean.total == clean.forming + clean.identity + clean.split and (fmt != "nvfp4" or clean.identity == 0)
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
     # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
@@ -1006,26 +1012,31 @@ def test_the_work_law_audits_pearl_c4():
 
 
 #: -h3's row seeds under Pearl-C4's seed-A label: (unit, row) -> seed, at salt bytes 0 … 31, root_B bytes 32 … 63 and the
-#: leaf blake3("pearl-c row leaf")
-ROW_SEEDS = {(7, 3): "c6bf5c2d438504c44f5dda34ec27840d2403852bc8bbad0afac759da47fe3fb5",
-             (7, 200): "5efa282aa56b5f5b4b48fec6c4d8142a619385b2bae0c20f77bde37d4a2af0a3",
-             (2 ** 32 - 1, 3): "70d1c4a7113aec65a3a3e443253fc5de2922be2390c03ecb1d31297076e9c9ff",
-             (2 ** 32 - 1, 200): "facaf01038342577857bbc390cb1aa84323eb3e24908104cc6e0eef01a3b2b91"}
+#: leaf SHA-512("pearl-c row leaf")
+ROW_SEEDS = {(7, 3): "f0f7f0ecbc5b5aa0a0146c655ff68f7d0f798280672ffbb41d64741ae7b504b2",
+             (7, 200): "85ee536b3f107c5489f96ba8c5c61a7eb914f9186256057ad2aa930d4d33c079",
+             (2 ** 32 - 1, 3): "84f5b70a105d94cda2b2882d177db0a53ac7dd12010327044d1bbe0b0f87243d",
+             (2 ** 32 - 1, 200): "44bb2a7603202bc1e7357e7657aebfb04a935e8ee4c78fa14ac5aad3f3b5fcb9"}
+
+
+def _h(label: bytes, message: bytes) -> bytes:
+    return hashlib.sha512((label + b"\0").ljust(128, b"\0") + message).digest()[:32]
 
 
 def test_h3_row_seeds_are_pearl_cs_layout_under_pearl_c4s_label():
-    """-h3's row seed is the pinned bytes: `pearl_c.row_seed`'s message under `pearl-c4/v0/seed-A`, the one-row unit's
+    """-h3's row seed is the pinned bytes: `pearl_c.row_seed`'s message under `pearl-c4/v1/seed-A`, the one-row unit's
     seed_A (`unit_seed_a`, which `noise` keys a unit by) at index unit · 2^32 + row, so never Pearl-C's seed; a unit or
-    row of 2^32 or more is refused."""
-    from verity.ml.crypto.blake3 import blake3, keyed
-
-    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), blake3(b"pearl-c row leaf")
+    row of 2^32 or more is refused.  Both seeds are the first 32 bytes of SHA-512 after the label's zero-padded 128-byte
+    block."""
+    salt, root_b, leaf = bytes(range(32)), bytes(range(32, 64)), hashlib.sha512(b"pearl-c row leaf").digest()
     for (unit, row), seed in ROW_SEEDS.items():
         got = F.row_seed(salt, leaf, root_b, unit, row)
         assert got.hex() == seed and got == F.unit_seed_a(salt, leaf, root_b, unit << 32 | row) != C.row_seed(salt, leaf, root_b, unit, row)
-        assert got == keyed(blake3(b"pearl-c4/v0/seed-A"), salt + leaf + root_b + (unit << 32 | row).to_bytes(8, "little"))
+        assert got == _h(b"pearl-c4/v1/seed-A", salt + leaf + root_b + (unit << 32 | row).to_bytes(8, "little"))
     ctx = V.ctx_of("seeds", (16, K, 16), 3, 9)
-    assert F.PearlC4().noise(ctx).seed_a == keyed(blake3(F.LABELS["seed-A"]), ctx.salt + ctx.root_a + ctx.root_b + (3).to_bytes(8, "little"))
+    noise = F.PearlC4().noise(ctx)
+    assert noise.seed_a == _h(F.LABELS["seed-A"], ctx.salt + ctx.root_a + ctx.root_b + (3).to_bytes(8, "little"))
+    assert noise.seed_b == _h(b"pearl-c4/v1/seed-B", ctx.salt + ctx.root_b)
     for unit, row in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0), (0, -1)):
         with pytest.raises(ValueError, match="must each be below 2"):
             F.row_seed(salt, leaf, root_b, unit, row)
@@ -1042,7 +1053,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
     assert SchemeId.parse(s.name).hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"] and W.row_cap(s)
     assert hash_format(h0) is HASH_FORMATS["h0"] and not W.row_cap(h0) and h0.commitment_hash == "sha256"
     assert dict(s.certificate.parameters)["hashing"] == "h3" and "hashing" not in dict(h0.certificate.parameters)
-    assert "cr/sha-512" in s.certificate.claims and "cr/sha-512" not in h0.certificate.claims
+    assert all("cr/sha-512" in x.certificate.claims and not any("blake3" in c for c in x.certificate.claims) for x in (s, h0))
     for bad in ("h1", "h2", "h3s"):
         with pytest.raises(ValueError):
             F.PearlC4(hashing=bad)
@@ -1057,7 +1068,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
     assert ops.e_b == ops0.e_b and ops.b.codes == ops0.b.codes and ops.pb == ops0.pb
     checked = s.checked(ctx, ops)
     assert s.digest(ctx, noise, checked) == C.leaf(checked, "h3") != C.leaf(checked)
-    assert s.tickets(noise, checked) == C.PearlC(hashing="h3").tickets(noise, checked) != h0.tickets(noise, checked)
+    assert s.tickets(noise, checked) == C.PearlC(hashing="h3").tickets(noise, checked) == h0.tickets(noise, checked)
     other = list(a)
     other[5] = a[6]
     e = s.encode(ctx, noise, other, b, tile).e_a
@@ -1176,12 +1187,12 @@ def test_replay_accepts_the_device_transcript(tmp_path):
     s = V.scheme("nvfp4", True)
     device_dump(tmp_path, s)
     (tmp_path / "scales_b.bin").write_bytes(bytes([0x38, 0x01, 0x7E]))
-    t = json.loads(json.dumps(R.prove(tmp_path, "r-test", 8, scheme=s)))
+    t = json.loads(json.dumps(R.prove(tmp_path, "r-test", 12, scheme=s)))
     assert list(t["device_scales"]) == ["b"] and t["device_scales"]["b"]["outside_range"] == 0
     assert t["records"] == [{"real_rows": 20, "k_kept": K, "excluded_a": [3], "excluded_b": []}]
     assert t["host_roots_match"] == {"a": True, "b": True} and [o["tile"] for o in t["openings"]] == [0, 1]
     rep = R.verify(t, scheme=s)
-    assert rep["accepted"] and rep["opened"] == 9 and rep["reason"] == ""
+    assert rep["accepted"] and rep["opened"] == 13 and rep["reason"] == ""
     first = rep["tiles"][0]
     assert first["credited"] in ([15, 16], [4, 16]) and Fraction(first["debit"]["total"]) <= Fraction(first["cap"])
     assert pickle.loads(pickle.dumps(s)).fmt is s.fmt and R.verify(t, workers=2, scheme=s)["tiles"] == rep["tiles"]
@@ -1244,10 +1255,10 @@ def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_
     call = {"scheme": s.name, "shape": [32, K, 16], "index": 3, "weight": 9, "real_rows": 20, "epoch_beacon": b"beacon".hex()}
     R.write_dump(tmp_path, call, b"".join(rows_a), b"".join(rows_b), tr.activation_roots[0], prover.weight_roots[9],
                  b"".join(prover.digest(i) for i in range(2)))
-    serial = R.prove(tmp_path, "r-test", 8, workers=1, scheme=s)
+    serial = R.prove(tmp_path, "r-test", 12, workers=1, scheme=s)
     assert serial["records"] == [{"real_rows": 20, "k_kept": K, "excluded_a": [5], "excluded_b": []}]
     assert [o["tile"] for o in serial["openings"]] == [0, 1]
-    assert R.prove(tmp_path, "r-test", 8, workers=2, scheme=s) == serial
+    assert R.prove(tmp_path, "r-test", 12, workers=2, scheme=s) == serial
     rep = R.verify(json.loads(json.dumps(serial)), scheme=s)
     assert rep["accepted"] and rep["reason"] == ""
 

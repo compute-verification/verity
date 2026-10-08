@@ -26,3 +26,7 @@ markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
     "circuit_suite: one circuit-check target per test, the checks `circuit-check --all` runs; collected only under -m circuit_suite",
 ]
+
+[tool.verity.tests]
+# its passes on vy-nebius-1 took up to an hour (3,634 s, 7 Oct), past suites.py's SUITE_TIMEOUT_S
+timeout_s = 7200

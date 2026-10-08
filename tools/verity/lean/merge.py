@@ -35,7 +35,7 @@ _spec.loader.exec_module(A)
 #: the driver's name in `.gitattributes` and git's config
 NAME = "lean-audit"
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
-SORTED = {"guarantees", "reads", "dependencies", "compile_time"}
+SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`)
 NESTED = {"upstream"}
 MISSING = object()

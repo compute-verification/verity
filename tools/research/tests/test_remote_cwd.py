@@ -50,7 +50,9 @@ def _wait(run_dir: Path) -> dict:
     return R.summarize(run_dir)
 
 
-def test_two_concurrent_runs_of_one_commit_do_not_share_a_cwd(tmp_path):
+def test_two_concurrent_runs_of_one_commit_do_not_share_a_cwd(tmp_path, monkeypatch):
+    # inside a recorded run the outer runner's own prefix would win (`_runner_env` only sets a default)
+    monkeypatch.delenv("PYTHONPYCACHEPREFIX", raising=False)
     root = tmp_path / "root"
     src = _tree(root)
     before = sorted(p.relative_to(src).as_posix() for p in src.rglob("*"))

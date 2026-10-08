@@ -32,9 +32,10 @@ promotion (`G = 0`):
   salt-dead codes per element instead. The screen `x² > 90·ρ²`, about 9.49ρ (`Fp4Dev.screenDead`, `DEAD_RHO_SQ = 90`),
   covers every salt-dead element at the pinned scales (`CodeProofs.saltDead4_screened`), and `Fp4Dev.RowRules4`, D-NF
   with the cap, is kept as `RhoDFp4`'s premise.
-* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `seed_B = keyed(blake3("pearl-c4/v0/seed-B"),
-  salt ‖ root_B)`, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` drawn from `seed_B`. The verifier forms `B̃` itself on
-  every drawn tile and rejects when the checked values differ. It is a condition of the domain.
+* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)`
+  (SHA-512 of the label block and the message, its first 32 bytes; `pearl_c4.labelled`), and `B̃ = form(B, E_B, F_B)`
+  with `E_B`, `F_B` drawn from `seed_B`. The verifier forms `B̃` itself on every drawn tile and rejects when the checked
+  values differ. It is a condition of the domain.
 * **The debit** (`Fp4Sem.tileDebit`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
   units). Its executable reference is #556's `pearl_c4.tile_debit` (`9363e5012`), the rule the assessor's grant of
   6:36 PM PDT names; each term carries #556's name for it:
@@ -702,7 +703,8 @@ structure Lines4 (m n k : ℕ) where
   FB : Matrix (Fin k) (Fin 32) Nib
 
 /-- What Pearl-C4's protocol takes that is not pinned yet, as `PearlCSem` does for FP8: the unit's noise lines from the
-oracle, keyed by the seed tuple (TurboSHAKE128 of the seeds, `pearl_c4.line`); and a row's scale `α` and noise scale `β`
+oracle, keyed by the seed tuple (SHA-512 of the seeds under `pearl-c4/v2/line`, four lines to a block, `pearl_c4.line`);
+and a row's scale `α` and noise scale `β`
 as FP32 values (`pearl_c4.stats`). -/
 structure Fp4Sem (Q R S : Type) where
   lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
@@ -713,12 +715,12 @@ structure Fp4Sem (Q R S : Type) where
 variable {Q R S : Type}
 
 /-- **D-SK: `B̃` is keyed by this job's salt** (theory §1, "D-SK", 11:00Z; `pearl_c4.seed_b`), a domain rule of
-TT_OUT-FP4. `seed_B = keyed(blake3("pearl-c4/v0/seed-B"), salt ‖ root_B)`, with the salt from this job's epoch beacon
-and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
+TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), with the salt from this
+job's epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
 - `seedB s W` is the query `seed_B` at salt `s` and B's committed words `W`, which `root_B` binds. It is injective in
   the salt, so a `B̃` keyed by another salt, or by none, is excluded.
-- `drawB sh r` reads `E_B`'s `n` lines and `F_B`'s `k` lines from the oracle's answer `r` at `seed_B` (TurboSHAKE128 of
-  `seed_B ‖ role ‖ index`, `pearl_c4.line`). So `B̃` is a function of the salt and root_B alone, never of the
+- `drawB sh r` reads `E_B`'s `n` lines and `F_B`'s `k` lines from the oracle's answer `r` at `seed_B` (SHA-512 under
+  `pearl-c4/v2/line` of `seed_B ‖ role ‖ ⌊index/4⌋`, line `index` its quarter `index mod 4`, `pearl_c4.line`). So `B̃` is a function of the salt and root_B alone, never of the
   activations, and never an input fixed before the salt.
 - The ticket, U and the debit read `unitForm`'s `B̃`, never a prover-supplied one, and `Correct` compares a unit's words
   with theirs. So the verifier forms `B̃` itself on every drawn tile, and a transcript whose checked values differ from
