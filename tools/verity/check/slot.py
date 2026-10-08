@@ -251,10 +251,13 @@ def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotoni
 
 def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[dict]:
     """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`) and its `upcoming`
-    windows."""
+    windows. A slot outside this process's cores is blocked for every check started the same way (on node 2, isolcpus keeps
+    120-127 out of every process's affinity, so slot b on 64-127 read `free` for four hours that no check could take it)."""
+    fits = usable(slots)
     return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"], "trains": s.get("trains", False),
              "mem": s.get("mem"), "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
-             "blocked": blocked(s, now), "upcoming": upcoming(s, now)} for s in slots]
+             "blocked": blocked(s, now) or (None if s in fits else f"cores {s['cpus']} are outside this process's cores; {DIRECT_CPUS_FIX}"),
+             "upcoming": upcoming(s, now)} for s in slots]
 
 
 def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc"), before: str | None = None) -> list[str]:

@@ -303,6 +303,14 @@ def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
     assert SLOT.main(["--status"], now=lambda: NOW) == 0
 
 
+def test_status_says_a_slot_outside_this_processs_cores_is_blocked_not_free(tmp_path, monkeypatch):
+    """Node 2's isolcpus kept 120-127 from every process, so slot b on 64-127 read `free` while every check skipped it (8 Oct)."""
+    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(120)) | set(range(128, 192)))
+    a, b = SLOT.status(SLOT.parse("a 0-63\nb 64-127\n"), tmp_path, NOW)
+    assert a == "a  cores 0-63  free"
+    assert b.startswith("b  cores 64-127  free; blocked: cores 64-127 are outside this process's cores; a `research run` starts on")
+
+
 def test_status_lists_a_windowed_slots_windows_open_now_or_within_six_hours(tmp_path):
     """A check slot paused for a timed window nobody saw coming (node 2, 3 Oct: a PR sat about 20 min on the 18:05Z window)."""
     w = tmp_path / "windows"
