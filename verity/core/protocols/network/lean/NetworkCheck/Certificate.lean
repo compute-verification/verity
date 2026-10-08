@@ -5,7 +5,7 @@ import Flock.Canon
 /-!
 # The network certificate's encodings (record v2)
 
-Executable forms of `verity/experimental/protocols/certifier/certificate.py`, whose module docstring is the spec: the
+Executable forms of `verity/core/protocols/certifier/certificate.py`, whose module docstring is the spec: the
 frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
 (`realFrames`), the parameters digest (`parametersDigest`, canonical JSON through `Flock.canon`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), and the message a certificate signs
