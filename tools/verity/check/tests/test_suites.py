@@ -562,11 +562,13 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
-    bin_ = tmp_path / "bin"
-    bin_.mkdir()
+    # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
+    home = tmp_path / "home"
+    bin_ = home / ".elan" / "bin"
+    bin_.mkdir(parents=True)
     (bin_ / "lake").write_text('#!/bin/sh\necho "$PWD $*" >> "$FAKE_LAKE_LOG"\nexit "${FAKE_LAKE_RC:-0}"\n')
     (bin_ / "lake").chmod(0o755)
-    extra = {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "FAKE_LAKE_LOG": str(log)}
+    extra = {"HOME": str(home), "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "FAKE_LAKE_LOG": str(log)}
 
     p = _run_suite(root, tmp_path, "--fresh", "other", extra=extra)
     assert p.returncode == 0 and not log.exists(), p.stdout
