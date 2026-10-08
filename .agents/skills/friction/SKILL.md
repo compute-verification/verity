@@ -101,6 +101,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. It ends in a break tied to the run, such as
+  two distinct inputs the run itself hashed with one SHA-512 digest, and an input condition becomes the verifier's
+  refusal rather than a hypothesis. The form is in `.agents/skills/lean-proofs/SKILL.md`.
 - 2026-10-08 (7:16 AM PDT): research waits on Daniel only for money, keys and claims: spend past a budget line, access
   and keys (a node's root, a credential), and what a guarantee says or rests on. Everything else is its owner's call, or
   the coordinator's when owners disagree, and the owner says what it decided. The clauses below that sent anything else to

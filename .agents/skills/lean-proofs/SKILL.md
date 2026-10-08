@@ -166,6 +166,15 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. Its conclusion is the property or a break
+  tied to the run: for SHA-512, `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`, over the
+  inputs the run itself hashed; for LMS, a signature in the run that verifies on a message missing from the device's
+  signing log; for Merkle binding, a collision among the inputs hashed along the two openings' paths. Every `∃` in the
+  break is bounded by something the run carries. "Some collision exists", or an extractor free to ignore the run, is
+  vacuous: collisions exist by pigeonhole, and `Classical.choice` is an allowed axiom, so the axiom check can't catch it.
+  No advantage bounds, which would need a probability model. An input condition becomes a refusal in the verifier, not a
+  hypothesis (the Lean check refuses NaN-coded noise, as Python's verifier does); that the honest draw never produces
+  such an input is a completeness fact, measured rather than proved.
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
   Daniel gets a DM showing it. Approval may come back for chosen packages (a grant in `tools/verity/check/queue.toml`). "Pin" is
   retired: say guarantee.
@@ -184,7 +193,8 @@ These are Daniel's rulings, newest first.
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
   hard to break, a table, a ledger or a PR cites a guarantee with its assumptions, and proving an assumption removes it
-  from every guarantee that took it.
+  from every guarantee that took it. Since 2026-10-08 a hash or a signature is not an assumption at all: the guarantee
+  ends in a break tied to the run (above).
 - 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
   derived from Lean and the Lean check's output, and no hand-kept ledger is generated alongside.
 - 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not
