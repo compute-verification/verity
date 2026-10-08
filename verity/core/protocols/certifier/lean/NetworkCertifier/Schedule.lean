@@ -3,7 +3,7 @@ import NetworkCertifier.Run
 /-!
 # The certifier program: the logical schedule, the clock-sync advice and the constant-rate Program
 
-The executable forms of `verity/Security/Definitions/NetworkCertifier/Schedule.lean` that the difftest runs, under the same names
+The executable forms of `Security/Definitions/NetworkCertifier/Schedule.lean` that the difftest runs, under the same names
 in `NetworkCertifier`. They mirror `schedule.py` one for one, with each Python name in its docstring. Lean core only:
 `Σ_sync` is two duplicate-free lists, as in Python, where the reference has two `Finset`s.
 -/
