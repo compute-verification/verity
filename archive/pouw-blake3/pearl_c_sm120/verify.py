@@ -1,4 +1,4 @@
-"""The reference replay on pearlc_arm's transcripts: `verity.experimental.protocols.pouw.audit.Verifier(scheme, epoch).audit(prover, transcript,
+"""The reference replay on pearlc_arm's transcripts: `verity.core.protocols.pouw.audit.Verifier(scheme, epoch).audit(prover, transcript,
 Sampled(t), source)`, #449's `pearl_c` audit, unchanged.  The epoch is re-started from the transcript's salt coin and weight
 root (`Epoch.start`: the coin must open against the transcript's coin commitment, as the salt coin, after the weight root;
 the arm is its run's own challenger, a development shortcut); a transcript recorded before epoch coins (v1) carries a beacon
@@ -33,11 +33,11 @@ import multiprocessing
 from pathlib import Path
 
 from verity.ml.commitments import Commitment, Opening
-from verity.experimental.protocols.pouw.audit import Epoch, Sampled, TileOpening, Transcript, Verifier, Workload
-from verity.experimental.protocols.pouw.coins import CoinCommitment, CoinOpening
-from verity.experimental.protocols.pouw.protocol import Matmul, Shape
-from verity.experimental.protocols.pouw.schemes import pearl_c as C
-from verity.experimental.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.core.protocols.pouw.audit import Epoch, Sampled, TileOpening, Transcript, Verifier, Workload
+from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v2"
 #: a transcript recorded before epoch coins, salted from a beacon: read only as a recorded one (``--recorded``)
@@ -61,7 +61,7 @@ def opening(tree: bytes, count: int, pos: int, value: bytes) -> Opening:
 
 
 class Opened:
-    """The prover's side of the audit from a transcript's files: `digest` and `open`, as `verity.experimental.protocols.pouw.audit.Prover` has them."""
+    """The prover's side of the audit from a transcript's files: `digest` and `open`, as `verity.core.protocols.pouw.audit.Prover` has them."""
 
     def __init__(self, files: dict, verifier: Verifier, matmul: Matmul, count: int):
         self.f, self.refs, self.mm, self.count = files, verifier.refs, matmul, count
@@ -138,7 +138,7 @@ def verify(path: Path, draws: int, commit: str, run: str = "", recorded: bool = 
                    profile=audit.profile.to_json() if audit.profile else None)
         tiles = ", ".join(str(t) for t in audit.selected)
         bad = "; ".join(f"tile {v.tile}: {v.reason}" for v in audit.verdicts if not v.ok)
-        out["line"] = (f"{'ACCEPT' if audit.accepted else 'REJECT'} {tag}{scheme.name} {s['label']}: verity.experimental.protocols.pouw.audit.Verifier, "
+        out["line"] = (f"{'ACCEPT' if audit.accepted else 'REJECT'} {tag}{scheme.name} {s['label']}: verity.core.protocols.pouw.audit.Verifier, "
                        f"Sampled({draws}) drew tiles {tiles} of {c['count']}{'' if audit.accepted else ' (' + bad + ')'}; "
                        f"root_A {man['activation_root'][:16]}, tile root {c['root'][:16]}, source {source.hex()[:16]}{tail}")
     except Exception as ex:  # noqa: BLE001 - a transcript that can't be checked is rejected, with the reason

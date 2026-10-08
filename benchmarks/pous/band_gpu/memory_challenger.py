@@ -1,5 +1,5 @@
 """The verifier process of the harness's timed audit: a client of the responder (`pous_native.cu`'s wire format, or the
-harness's `ControlResponder`) and `verity.experimental.protocols.pous.protocol.TimedAudit`'s audits against it.
+harness's `ControlResponder`) and `verity.core.protocols.pous.protocol.TimedAudit`'s audits against it.
 
     python benchmarks/pous/band_gpu/memory_challenger.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
@@ -71,8 +71,8 @@ def params_of(name: str, manifest: dict[str, Any]) -> Any:
     that is not registered is P2 at another width (a `p2` manifest), else the band at another in-degree."""
     import dataclasses
 
-    from verity.experimental.protocols.pous import schemes
-    from verity.experimental.protocols.pous.band import BandParams
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.band import BandParams
 
     if name in schemes.REGISTRY:
         cls = type(schemes.get(name).params)
@@ -89,7 +89,7 @@ def scheme_of(name: str, params: Any) -> Any:
     """The scheme `name` at `params`: a registered one, the band at another in-degree `d` (`band-chain/d{d}/v1`), or P2 at
     another width (`p2-{w}/v3`, the CPU tests'): the registered class at those parameters, with no byte-format name
     registered for it and no certificate."""
-    from verity.experimental.protocols.pous import schemes
+    from verity.core.protocols.pous import schemes
 
     if name in schemes.REGISTRY:
         return schemes.get(name, params=params)
@@ -227,8 +227,8 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
     collector frozen and off, on core `cpu` when given, since the memory challenger's own stalls count against the server.
     With `research=False` (`--strict`) the memory challenger refuses an audit its certificate does not cover: no challenge is
     sent, and the record says why (`refused`)."""
-    from verity.experimental.protocols.pous import audit as pous_audit
-    from verity.experimental.protocols.pous import protocol
+    from verity.core.protocols.pous import audit as pous_audit
+    from verity.core.protocols.pous import protocol
 
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
@@ -307,9 +307,9 @@ def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: i
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.experimental.protocols.pous import audit as pous_audit
-    from verity.experimental.protocols.pous import schemes
-    from verity.experimental.protocols.pous.verifier import VerifierKey
+    from verity.core.protocols.pous import audit as pous_audit
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.verifier import VerifierKey
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)
