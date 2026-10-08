@@ -842,7 +842,7 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 #: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-core-evaluate", "verity-core-firewall", "verity/experimental/core/service/vstar", "verity-core-sampled-proofs",
-              "verity-pouw-window-difftest", "verity-pouw-check-difftest")
+              "verity/experimental/core/protocols/network", "verity-pouw-window-difftest", "verity-pouw-check-difftest")
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
@@ -857,7 +857,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
+    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:
