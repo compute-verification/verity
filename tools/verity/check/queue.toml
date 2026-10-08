@@ -1,23 +1,5 @@
-# The merge queue's admission rules (`research queue`, tools/research/src/research/queue.py): the grants a change needs before it
-# enters `next`. A grant is a `grant = {role}` label on `pr:{number}@{head sha}` in the evidence store
-# (`research data label pr:{n}@{sha} grant {role} --by {lane}`); the roles are research.store.vocab.GRANT_ROLES. `paths` use
-# `merge_requires`' syntax: path prefixes, and `!` patterns leaving files out (a pattern without `/` matches a file's name).
-# `by` says who gives the grant; `research queue status` prints it, with that label command, to a PR waiting on it.
-# The research coordinator owns this file: these are the gates it applies by hand today.
+# The merge queue's admission rules (`research queue`, tools/research/src/research/queue.py). No change waits on a per-head grant
+# (Daniel, 8 Oct): a PR is admitted once it is marked ready at its head, and `check` is the gate.
+# The research coordinator owns this file.
 
 hold_label = "hold"
-
-# The vLLM coordinator's verdict on changes to the integration.
-[[grant]]
-role = "vllm-coordinator"
-paths = ["integrations/vllm/", "!README.md"]
-by = "the vLLM coordinator"
-
-# A change to what a guarantee says waits on nobody: Daniel gets a DM when it lands (AGENTS.md "Lean").
-
-# The red team for changes to what C-Flock proves: the prover's circuits, the verifier of record, and its proofs (soundness,
-# level3 and the verifier's, under the security analysis's proofs since the Lean move).
-[[grant]]
-role = "red-team"
-paths = ["verity/ml/flock/", "verity/core/service/flock/", "Security/Proofs/Flock/", "Security/Proofs/Flock.lean", "!README.md", "!PROTOCOL.md", "!*/tests/*"]
-by = "a red-team lane (proofs spawns one per PR: ask @proofs)"

@@ -20,7 +20,7 @@ class FakeLinear:
 
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
-        self.subscribers, self.authors, self.comments = {}, {}, []
+        self.subscribers, self.authors, self.comments, self.moved = {}, {}, [], []
 
     @staticmethod
     def _author(user: str, i: dict, field: str) -> dict:
@@ -63,9 +63,11 @@ class FakeLinear:
         if "subscribers" in q:
             return {"data": {"issue": {"subscribers": {"nodes": [{"name": n} for n in self.subscribers[v["id"]]]}}}}
         if "states" in q:
-            return {"data": {"issue": {"team": {"states": {"nodes": [{"id": "S1", "name": "Todo", "type": "unstarted"},
+            return {"data": {"issue": {"id": "I1", "team": {"states": {"nodes": [{"id": "S1", "name": "Todo", "type": "unstarted"},
+                                                                    {"id": "S5", "name": "Done", "type": "completed"},
                                                                     {"id": "S9", "name": "Canceled", "type": "canceled"}]}}}}}
         if "issueUpdate" in q:
+            self.moved.append((v["id"], v["s"]))
             return {"data": {"issueUpdate": {"success": True}}}
         if "webhooks" in q:
             raise urllib.error.HTTPError(url, 403, "Forbidden", {}, io.BytesIO(b'{"errors": [{"message": "Invalid scope: `admin` required"}]}'))
@@ -142,15 +144,68 @@ def test_check_with_the_app_names_a_team_by_key_and_shows_the_sender_as_the_auth
                           "commented as compute-accounting (via Verity Asks) (subscribers: none)"]
 
 
-def test_an_ask_with_linear_links_its_issue_and_still_goes_out_when_linear_fails(fake, registry, capsys, monkeypatch):
-    lin = FakeLinear()
-    monkeypatch.setattr(linear, "_http", lin)
+LINKED = "\nLinear: <https://linear.app/x/issue/INF-1|INF-1>"
+
+
+@pytest.fixture
+def lin(monkeypatch):
+    fake_linear = FakeLinear()
+    monkeypatch.setattr(linear, "_http", fake_linear)
     monkeypatch.setenv("LINEAR_API_KEY", KEY["LINEAR_API_KEY"])
-    rc, out, _ = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--linear", "--text", "4 GPUs on node 2")
+    return fake_linear
+
+
+def test_an_ask_files_in_its_owners_team_and_still_goes_out_when_linear_fails(fake, registry, capsys, lin):
+    assert slack.ASKS_ON_LINEAR
+    rc, out, _ = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "4 GPUs on node 2")
     assert rc == 0 and out.startswith("linear: INF-1 https://linear.app/x/issue/INF-1")
-    assert fake.messages[COORD][-1]["text"].endswith("4 GPUs on node 2\nLinear: <https://linear.app/x/issue/INF-1|INF-1>")
+    assert fake.messages[COORD][-1]["text"].endswith("4 GPUs on node 2" + LINKED)
+    assert lin.sent("teams(filter")[0][1] == {"n": "INF"}                                      # the registry's key, not the handle
     lin.teams = []
-    rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--linear", "--text", "again")
-    assert rc == 0 and "not filed on Linear (no Linear team named 'infra')" in err
+    rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "again")
+    assert rc == 0 and "not filed on Linear (no Linear team named 'INF')" in err
     assert fake.messages[COORD][-1]["text"].endswith("again")
-    assert not slack.ASKS_ON_LINEAR                                                            # asks stay on Slack until the cutover
+    n = len(lin.calls)
+    assert run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "no team")[0] == 0
+    assert len(lin.calls) == n and fake.messages[COORD][-1]["text"].endswith("no team")
+
+
+def test_a_top_level_send_to_one_handle_is_an_ask_and_files_but_a_reply_or_a_second_name_does_not(fake, registry, capsys, lin):
+    rc, out, _ = run(capsys, "send", "--as", "compute-accounting", "--to", "@infra", "--text", "4 GPUs on node 2")
+    assert rc == 0 and slack.plain(fake.messages[COORD][0]["text"]) == "@infra 4 GPUs on node 2\nLinear: INF-1 (https://linear.app/x/issue/INF-1)"
+    root = fake.messages[COORD][0]["ts"]
+    n = len(lin.sent("issueCreate"))
+    for argv in (["--thread", root, "--to", "@infra"], ["--to", "@infra", "--to", "@ci"], ["--to", "@infra", "--kind", "fyi"]):
+        assert run(capsys, "send", "--as", "compute-accounting", *argv, "--text", "more")[0] == 0
+    assert len(lin.sent("issueCreate")) == n
+
+
+def test_closing_or_declining_an_ask_moves_its_issue_to_done_or_canceled(fake, registry, capsys, lin):
+    done = fake.add(COORD, text="@infra 4 GPUs" + LINKED, username="compute-accounting", bot_id=slack_bot(registry))
+    declined, refused = (fake.add(COORD, text="@infra again" + LINKED, username="compute-accounting", bot_id=slack_bot(registry))
+                         for _ in range(2))
+    plain = fake.add(COORD, text="@infra no issue", username="compute-accounting", bot_id=slack_bot(registry))
+    rc, out, _ = run(capsys, "close", "--as", "infra", "--thread", done["ts"], "--note", "granted")
+    assert rc == 0 and "linear: INF-1 Done" in out and lin.moved == [("I1", "S5")]
+    rc, out, _ = run(capsys, "close", "--as", "infra", "--thread", declined["ts"], "--declined", "node 2 is busy")
+    assert rc == 0 and "linear: INF-1 Canceled" in out and lin.moved[-1] == ("I1", "S9")
+    lin.refuse.add(KEY["LINEAR_API_KEY"])
+    rc, _, err = run(capsys, "close", "--as", "infra", "--thread", refused["ts"])
+    assert rc == 0 and "INF-1 stays open on Linear" in err
+    n = len(lin.calls)
+    assert run(capsys, "close", "--as", "infra", "--thread", plain["ts"])[0] == 0 and len(lin.calls) == n
+
+
+def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_shared_key(registry, capsys):
+    rc, out, _ = run(capsys, "subscriptions", "--as", "comms")
+    assert rc == 0 and 'subscribe_linear_comment(options={"scope": "team", "teamId": "COMM"}' in out
+    assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "old-accounting")[1]
+    reg = json.loads(registry.read_text())
+    next(h for h in reg["handles"] if h["handle"] == "ci")["linear"] = "COMM"
+    registry.write_text(json.dumps(reg))
+    rc, _, err = run(capsys, "subscriptions", "--as", "comms")
+    assert rc != 0 and "a Linear team key no other handle has" in err
+
+
+def slack_bot(registry) -> str:
+    return json.loads(registry.read_text())["bot_id"]

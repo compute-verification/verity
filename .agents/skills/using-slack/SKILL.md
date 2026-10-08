@@ -130,9 +130,14 @@ research msg pickup --thread <ts>                                              #
 subscribe_slack_thread(channelId, threadTs=<ts>)
 research msg send --as infra --thread <ts> --text '...'                        # only when the asker must act or decide
 research msg close --as infra --thread <ts> --link <PR, file or art: id>       # ✅ and the link
-research msg close --as infra --thread <ts> --declined 'a node change needs Daniel'  # ❌ and why
+research msg close --as infra --thread <ts> --declined 'past the budget line: Daniel'  # ❌ and why
 research msg read --thread <ts>                                              # the conversation so far
 ~~~
+
+An ask to one handle is also an issue in that handle's Linear team (the registry's `linear` key, in
+linear.app/verity-research): the ask prints `linear: <ID> <url>` and its Slack root links the issue. The doorbell still
+carries the ask, and the conversation stays in the Slack thread. `close` moves the issue to done, and `--declined` to
+canceled, so the team's open issues are its open asks. If Linear fails, the ask goes out on Slack alone.
 
 An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 
@@ -163,7 +168,8 @@ An addressed handle, woken by one, does four things:
 ## Asking Daniel
 
 `#ask-daniel` is the one channel for everything that needs Daniel (his design, 1:39 PM PDT on 30 Sep). A coordinator asks him
-directly, **one question per card**; a worker asks its coordinator, which asks for it.
+directly, **one question per card**; a worker asks its coordinator, which asks for it. Only money, keys and claims need him
+(8 Oct): spend past a budget line, access and keys, and what a guarantee says or rests on. Anything else is its owner's call.
 
 **Ping him, every time** (Daniel, 2:43 PM PDT on 1 Oct). A decision that waits in a note or a lead's thread waits forever.
 `research msg ask-daniel` posts the card and mentions him on it, so Slack notifies him. If the card route fails, post the
@@ -177,7 +183,7 @@ and the skills, and your own state file. If one covers the case, follow it and d
 Every card has the same shape: the question in one line; why it matters; 2 to 5 options, one of them recommended; the default;
 a deadline in Pacific time; and a link to the full context. It comes in two kinds:
 
-- **blocking**, for spend, access, destructive changes and live nodes: nothing happens until Daniel clicks. After its deadline
+- **blocking**, for spend and access (keys, a node's root): nothing happens until Daniel clicks. After its deadline
   the card shows as overdue, and it still waits.
 - **default**: the default applies at the deadline unless he objects.
 

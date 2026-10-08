@@ -1,22 +1,24 @@
-"""The verifier process of the harness's P2 v1 timed audit (the spec's "Audit protocol and wire formats", mode 0).
+"""The verifier process of the harness's P2 v4 timed audit (the spec's "Audit protocol and wire formats", mode 0).
 
     python benchmarks/pous/p2_v1/memory_challenger.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k 105] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
 
 `READY.json` names the responder's port, the setup salt, the commitment to `W` and the store's manifest. The verifier keeps
-every leaf (`LEAVES.bin`, `SHA256(0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ block)` in block order), computes the RFC 6962 root and
-the epoch id from them, and draws each audit's indices from its own secret: `audit_id` from `verity/pous/audit-id/v1` at the
-audit's counter, round `j`'s index `uniform(B, j)` of `verity/pous/audit-challenge/v2`. Rounds are revealed one at a time;
-each is timed from the challenge's send to its answer's last byte, correct when the block's leaf is the retained one, on time
-within the limit, and the audit stops at the first failure. `k` is 105, the deployment's.
+every leaf (`LEAVES.bin`, 64 bytes per block in block order: `SHA512(0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R(block))`, `R` the
+block's `sha512/row/v2` digest), computes the RFC 6962 root and the epoch id from them, and draws each audit's indices from
+its own secret: `audit_id` from `verity/pous/p2-audit-id/v4` at the audit's counter, round `j`'s index `uniform(B, j)` of
+`verity/pous/p2-audit-challenge/v4`. Rounds are revealed one at a time; each is timed from the challenge's send to its
+answer's last byte, correct when the block's leaf is the retained one, on time within the limit, and the audit stops at the
+first failure. `k` is 105, the deployment's.
 
 The limit, the calibration, the clocks and the record are the band memory challenger's (`band_gpu/memory_challenger.py`): `--calibrate-only` fixes
-`Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v1.1 caps it
+`Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v4 caps it
 at 354 µs), and every audit's secret source and every answer's time are kept.
 
-The transport is the harness's responder wire, not `p2-audit-wire/v1`'s frames: a v1 RESPONSE also carries the block's
-authentication path (19 siblings at B = 2^19, 664 bytes more), which a verifier that keeps every leaf does not need. Exit 0
-when every audit accepted, 1 otherwise.
+The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames (`wire.py`): a v4 RESPONSE also carries the
+block's authentication path (19 siblings of 64 bytes at B = 2^19, 1,216 bytes more), which a verifier that keeps every leaf
+does not need. Exit 0 when every audit accepted, 1
+otherwise.
 """
 from __future__ import annotations
 
@@ -138,9 +140,9 @@ def main(argv: list[str] | None = None) -> int:
         Path(a.out).write_text(json.dumps({**limit_of(rtt, deadline, a.allowance), "pings_raw_s": rtt, "clock": a.clock},
                                           indent=1) + "\n")
         return 0
-    raw = Path(a.leaves).read_bytes()
+    raw, d = Path(a.leaves).read_bytes(), reference.DIGEST_BYTES
     doc = {"clock": a.clock, **audit("127.0.0.1", ready["port"], params, bytes.fromhex(ready["salt"]), bytes.fromhex(ready["model"]),
-                                     [raw[i:i + 32] for i in range(0, len(raw), 32)], audits=a.audits, pings=a.pings,
+                                     [raw[i:i + d] for i in range(0, len(raw), d)], audits=a.audits, pings=a.pings,
                                      k=a.k or reference.K_AUDIT, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
                                      limit_ns=a.limit_ns or None, clock=clock)}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
