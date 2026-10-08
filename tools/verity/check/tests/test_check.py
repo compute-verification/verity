@@ -361,7 +361,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
         "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['true'], "
         "merge_requires={'lean-agreement': ['verity/ml/flock/', '!README.md']})\n")
     (tmp_path / "verity" / "ml" / "flock").mkdir(parents=True)
-    (tmp_path / "backends" / "flock" / "verify.rs").write_text("fn main() {}\n")
+    (tmp_path / "verity" / "ml" / "flock" / "verify.rs").write_text("fn main() {}\n")
     git("init", "-q", "-b", "main")
     git("add", "-A")
     git("commit", "-q", "-m", "base")
@@ -411,6 +411,7 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -419,6 +420,42 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
+
+
+def test_circuit_check_takes_one_worker_per_its_memory_share(tmp_path, monkeypatch):
+    """A cold `circuit-check --all --jobs 23` on vy-nebius-cpu-1 (755 GB) grew to 610 GiB and took the node down twice (7 Oct):
+    its workers are bounded by memory as well as cores, and never fall to none."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    jobs = lambda gs: (cc := gs[1][1][1])[cc.index("--jobs") + 1]
+    for gb, want in ((600, "4"), (370, "2"), (1400, "10"), (2048, "16"), (40, "1")):
+        monkeypatch.setattr(CHECK, "memory_gb", lambda: gb)
+        assert jobs(CHECK.groups(tmp_path, 32)) == want, gb
+        assert CHECK.groups(tmp_path, 32)[0][0][1][-1] == "16", "pytest keeps its half of the cores"
+
+
+def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
+    """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 caps each at 240 GB); in a pod it is
+    the namespace's root; MemAvailable bounds both."""
+    scope = tmp_path / "sys/fs/cgroup/user.slice/user-1001.slice/session-9.scope"
+    scope.mkdir(parents=True)
+    (tmp_path / "proc/self").mkdir(parents=True)
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice/user-1001.slice/session-9.scope\n")
+    (tmp_path / "proc/meminfo").write_text(f"MemTotal: {755 << 20} kB\nMemAvailable: {600 << 20} kB\n")
+    assert CHECK.memory_gb(tmp_path) == 600
+    (scope / "memory.max").write_text(str(240 << 30))
+    (scope / "memory.current").write_text(str(10 << 30))
+    (scope.parent / "memory.max").write_text(str(560 << 30))
+    (scope.parent / "memory.current").write_text(str(400 << 30))
+    assert CHECK.memory_gb(tmp_path) == 160, "the slice leaves 160 of its 560 GB"
+    (scope.parent / "memory.max").write_text("max")
+    assert CHECK.memory_gb(tmp_path) == 230
+    pod = tmp_path / "pod"
+    (pod / "sys/fs/cgroup").mkdir(parents=True)
+    (pod / "proc/self").mkdir(parents=True)
+    (pod / "proc/self/cgroup").write_text("0::/\n")
+    (pod / "sys/fs/cgroup/memory.max").write_text(str(128 << 30))
+    (pod / "proc/meminfo").write_text(f"MemAvailable: {2000 << 20} kB\n")
+    assert CHECK.memory_gb(pod) == 128
 
 
 def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the_audit(tmp_path, monkeypatch):
@@ -768,7 +805,7 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     git("add", "-A")
     git("commit", "-q", "-m", "base")
     (tmp_path / "verity" / "ml" / "flock").mkdir(parents=True)
-    (tmp_path / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    (tmp_path / "verity" / "ml" / "flock" / "é.py").write_text("x = 1\n")
     git("checkout", "-q", "-b", "pr")
     git("add", "-A")
     git("commit", "-q", "-m", "é")

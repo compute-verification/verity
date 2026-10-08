@@ -80,6 +80,7 @@ SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 REGISTRY_REFS = ("origin/main",)                                  # where a checkout older than the registry finds it
 FRONT_DOOR = "agent-coordination"
+ASKS_ON_LINEAR = False                                            # the Linear trial's cutover turns it on (`linear.py`)
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
 #: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
@@ -1012,8 +1013,29 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    _post(client(ns), ch, h["handle"], f"{tag(owner)} {_body(ns)}", route=_route(ns, reg, ch), urgent=ns.urgent)
+    body = _body(ns)
+    if (ns.linear or ASKS_ON_LINEAR) and not ns.dry_run:
+        from . import linear  # noqa: PLC0415
+
+        issue, why = linear.ask_issue(owner["handle"], h["handle"], body)
+        if issue:
+            body = f"{body}\nLinear: <{issue['url']}|{issue['identifier']}>"
+            print(f"linear: {issue['identifier']} {issue['url']}")
+        else:
+            print(f"research msg ask: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
+    _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
+
+
+def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
+    from . import linear  # noqa: PLC0415
+
+    try:
+        lines, ok = linear.Linear().check(ns.write, name_entry(ns, reg, ns.handle)["handle"])
+    except linear.LinearError as e:
+        raise SlackError(str(e)) from None
+    print("\n".join(lines))
+    return 0 if ok else 1
 
 
 def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: list[str]) -> str:
@@ -1881,6 +1903,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True, url=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
+    p.add_argument("--linear", action="store_true", help="also file it as an issue in the owner's Linear team, linked from the post")
+    p = cmd("linear", "the Linear asks trial: `check` shows what the credentials reach, and is fit for asks (exit 0)")
+    p.add_argument("verb", choices=("check",))
+    p.add_argument("--write", default=None, metavar="TEAM", help="also file, comment on and cancel a test issue in TEAM (a handle)")
+    p.add_argument("--as", dest="handle", default="comms", metavar="HANDLE", help="the test issue's sender (default comms)")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
@@ -1963,7 +1990,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                 "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "inbox": cmd_inbox, "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close, "list": cmd_list,
-                "subscribe": cmd_subscribe, "watch": cmd_watch}[ns.cmd](ns, reg)
+                "subscribe": cmd_subscribe, "watch": cmd_watch, "linear": cmd_linear}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"{prog}: {e}", file=sys.stderr)
         return 2

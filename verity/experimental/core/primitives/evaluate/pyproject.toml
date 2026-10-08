@@ -1,0 +1,31 @@
+[project]
+name = "verity-core-evaluate"
+version = "0.0.0"
+description = "The Lean evaluator of descriptor v1 (`verity-evaluate`, this directory's Lake package), difftested against the Python reference."
+requires-python = ">=3.12"
+# No dependencies: uv finds `verity/experimental/pyproject.toml` above this directory before the workspace's root, so a
+# `verity = { workspace = true }` source here does not resolve. The tests run in the workspace's environment, against the
+# editable `verity`, as that suite's do, and `inputs` keys them on it.
+dependencies = []
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `lake build` reads this package and C-Flock's verifier (verity/core/service/flock), which it requires by path; the Python
+# reference is verity.ml.circuits, with the word primitives the vLLM integration registers (its registry package, and the
+# package's own `__init__`s it imports through), the row primitives' vectors `Security` pins, the vLLM integration's
+# `store_io`, through which the GPU captures held in the evidence store are fetched (and the `research` package of the store
+# CLI it starts), and the L40S captures of SiLU and RoPE the benchmarks hold. The tests build
+# `verity-evaluate` themselves, from those sources, and so declare no `artifacts`; `check` runs them after its Lean steps
+# (`AFTER_LEAN`), since that build writes into the verifier's `.lake`.
+inputs = ["verity", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/program/__init__.py",
+          "integrations/vllm/verity_vllm/program/registry", "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
+          "integrations/vllm/tests/regression/store_io.py", "tools/research/src/research",
+          "benchmarks/numerical/tests/bench/data/captured-101/slices/silumul-v1-i8192",
+          "benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64"]

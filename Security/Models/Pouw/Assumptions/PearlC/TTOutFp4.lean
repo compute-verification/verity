@@ -65,9 +65,9 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   `2⁻¹⁰` allowance, and on the numerical table in `internal/pouw/fp4-forming-lean/review-response.md`. There is no Lean
   lemma about `s5_stats` until `s5_stats` is pinned.
 - **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are drawn from
-  `seed_B = keyed(blake3("pearl-c4/v0/seed-B"), salt ‖ root_B)`, so `B̃` is a function of the salt and root_B, and the
-  ticket, U and the debit compare against the `B̃` the verifier forms itself. A variant that fixes `B̃` before A's salt
-  is outside D₄ and needs the per-salt split debit.
+  `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), so `B̃` is a function of the salt
+  and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. A variant that fixes
+  `B̃` before A's salt is outside D₄ and needs the per-salt split debit.
 - **The shared definitions it reads.** The ticket is `Fp4.cTilde` at `Fp4.sm120Nvf4`, U is `Fp4Dev.peelFp4` (the FP4
   chains feeding `PeelExact`'s BF16 peel), the forming is `Fp4Dev.formRow`, and the salt-dead predicate is
   `Fp4Dev.saltDead4`.
