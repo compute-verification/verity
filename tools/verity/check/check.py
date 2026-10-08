@@ -817,7 +817,8 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 #: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
 #: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
-AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-pouw-window-difftest")
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-pouw-window-difftest",
+              "verity/experimental/core/protocols/network")
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
