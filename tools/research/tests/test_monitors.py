@@ -799,9 +799,9 @@ def test_a_source_that_cant_be_read_is_logged_and_the_next_source_still_posts():
     assert posted == ["node-heartbeat|stale"] and len(logged) == 2 and logged[0].startswith("node1 unread: RuntimeError: node1: exited 255")
 
 
-def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None) -> list:
+def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None, handles=()) -> list:
     """slack_post's Slack: `_post` records (channel, the text's first line, thread) unless `fail(channel, thread)` returns an
-    error to raise; chat.getPermalink raises `permalink` when given."""
+    error to raise; chat.getPermalink raises `permalink` when given. The registry holds `handles`."""
     from research import slack as S
     posts = []
 
@@ -823,7 +823,7 @@ def fake_slack(monkeypatch, fail=lambda ch, thread: None, permalink=None) -> lis
         return f"ts{len(posts)}"
 
     monkeypatch.setattr(S, "registry_path", lambda *a: Path("registry.json"))
-    monkeypatch.setattr(S, "load_registry", lambda p: {"handles": [], "channels": {}})
+    monkeypatch.setattr(S, "load_registry", lambda p: {"handles": list(handles), "channels": {}})
     monkeypatch.setattr(S, "channel_id_for", lambda reg, key: {"agent-alerts": "CALERTS", S.FRONT_DOOR: "CFRONT"}[key])
     monkeypatch.setattr(S, "Routes", lambda *a, **kw: None)
     monkeypatch.setattr(S, "Slack", Api)
@@ -850,6 +850,21 @@ def test_an_alert_whose_pointer_fails_is_posted_once_and_its_pointer_once_slack_
     assert [(ch, thread) for ch, _, thread in posts] == [("CALERTS", None), ("CFRONT", None)]
     assert posts[1][1] == "@proofs open stalls-n1|blocked (alert: #agent-alerts)"
     assert rstate["threads"]["node1|stalls-n1|blocked"] == {"t": T0 + 60, "ts": "ts1", "pointer": "ts2", "done": True}
+
+
+def test_an_alert_about_a_run_tags_the_handle_of_the_agent_that_sent_it_and_points_it_at_the_alert(monkeypatch):
+    posts = fake_slack(monkeypatch, handles=[
+        {"handle": "infra", "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)"},
+        {"handle": "proofs", "holder": "the proofs coordinator (bc-8416bc72-c4cc); the research coordinator (bc-8ece7cde) too"},
+        {"handle": "circuits", "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)"}])
+    src, rstate = FakeSource("node1"), {}
+    M.relay_pass(rstate, [src], M.slack_post(False), T0)
+    src.all += [ev("event", "oom-kills|1", text="*n1: the OOM killer took lake of run r1, sent by "
+                                                "https://cursor.com/agents/bc-8ece7cde-1111-2222*"),
+                ev("event", "oom-kills|2", text="*n1: the OOM killer took lake of run r2, sent by https://cursor.com/agents/bc-00000000*")]
+    M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60)
+    assert [(ch, " ".join(w for w in text.split() if w.startswith("@"))) for ch, text, _ in posts] == [("CALERTS", "@infra @proofs"), ("CFRONT", "@proofs"),
+                                                                    ("CALERTS", "@infra")]
 
 
 def test_a_clear_into_a_deleted_thread_is_a_post_of_its_own(monkeypatch, capsys):
