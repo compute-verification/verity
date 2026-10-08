@@ -175,7 +175,7 @@ Every `(segment,block,purpose)` is distinct. Masks must be full-width uniform ou
 
 5. Encode C and bind the audit verification root. Derive audit challenges only after that root is fixed.
 
-Counter-mode SHA-512 with this v4 framing is the conforming realization of the separate **SHA-512-CTR/P2-EXP-IO** assumption (F4 as amended by v4, §13). Its cost on the deployment device is not yet measured (§11); v1's SHAKE256 measurement does not carry over. ChaCha8 would add a weaker reduced-round assumption and is nonconforming.
+Counter-mode SHA-512 with this v4 framing is the conforming realization of the separate **SHA-512-CTR/P2-EXP-IO** assumption (F4 as amended by v4, §13). Its cost on the deployment device is measured in §11; v1's SHAKE256 measurement does not carry over. ChaCha8 would add a weaker reduced-round assumption and is nonconforming.
 
 ## Audit protocol and wire formats
 
@@ -666,7 +666,7 @@ Every item below is normative. A policy choice is not a substitute for the corre
 ## 11. Remaining before deployment
 
 - Migrate the MVP to v4 as listed in §8.
-- Measure counter-mode SHA-512 key derivation on the deployment device.
+- Counter-mode SHA-512 key derivation on the deployment device, measured: on an NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120, vy-nebius-1 GPU 3), `p2-2054B` (n = 2,056) at B = 2^19, with `p2keys4.cuh` (`-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA`), every block's `K` and `t` are derived at 1.136 × 10^8 blocks/s (4.62 ms per store, the median of 10), and the setup's first derivation for the whole store takes 5.39 ms of wall time. All 2^19 blocks' `K` and `t` equal hashlib's, as do the 59 reference blocks and the pinned `p2-v4-keys.json` entry (`p2-v4/w16448/0`). Run r20261008-152508-ff34, art:07d65cea4534caaa8f92e364455fd4b998632b4e020302ce6f38525a50617dfa (`decode_bench.py --keys-all`).
 - Accept P2–M1-SGI.
 - Synchronize the trusted-layer pins into the repository after PRs #162/#183.
 

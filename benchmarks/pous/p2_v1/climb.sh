@@ -4,8 +4,11 @@
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign pous --declared-output 'out/*' -- \
 #     env MAXMIN=M taskset -c 0-119 bash benchmarks/pous/p2_v1/climb.sh 'base=p2v1.cu:' 'tpb128=p2v1.cu:-DP2_TPB=128' ...
-#   research run --queue --on vy-nebius-1 --gpus 1 --cpus C --mem-gb G --max-min M ... -- bash -c \
-#     'e=$(mktemp -d /workspace/tmp/p2climb.XXXXXX); trap "rm -rf $e" EXIT; ENV_DIR=$e WORK=$e bash benchmarks/pous/p2_v1/climb.sh ...'
+# On vy-nebius-1, which has no ENV_DIR, through node 1's lease pool (r20261008-152508-ff34):
+#   research run --on vy-nebius-1 --project verity --lane L --source . --cwd source --campaign pous --mem-gb 48 -- bash -c \
+#     'e=$(mktemp -d /workspace/tmp/p2climb.XXXXXX); trap "rm -rf $e" EXIT; env GPU_LEASE_DIR=/run/gpu-lease \
+#      GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus PATH=/workspace/verity-guest/bin:$PATH ENV_DIR=$e WORK=$e \
+#      taskset -c 96-111 bash benchmarks/pous/p2_v1/climb.sh ...'
 #
 # The variants build in parallel before the GPU is leased (gpu-lease 1 --wait --max-min MAXMIN, from GPU's indices when it is
 # set), which only the bench holds; a job that already holds its GPU (`research run --queue --gpus 1`, which sets
