@@ -6,7 +6,10 @@ hash) and every definition the statements read (its hash, under `reads`). Betwee
 pushed, the guarantees added, removed or restated, and the definitions whose hash changed under the same name, are found
 across every record that changed, not record by record: a guarantee or a definition that moved from one package's record
 to another's under its name is no change, nor is a guarantee renamed with the same type hash, one that only prints
-differently, or a record that moved with its package, and a push of only these sends nothing. The DM opens with each
+differently, or a record that moved with its package, and a push of only these sends nothing. Nor is a definition whose
+hash changed in a push that changed no Lean input (a `.lean` file, a lakefile, a manifest or a toolchain, outside the
+audit's own `tools/verity/lean/`, or a dependency bundle newly pinned in its `lean-deps.json`): what a definition says
+comes from those alone, so its record was only rehashed or regrouped by the audit, and it is tallied as `rehashed`. The DM opens with each
 package's tally (with the guarantees that moved into it), then lists what existing guarantees and definitions now say
 before the new guarantees. A DM that fails is
 printed and posted to #agent-alerts, so a spec change never lands unseen.
@@ -26,6 +29,11 @@ LIMIT = 12000
 #: lines of one signature shown; a longer one ends with a line saying how many more there are
 SIGNATURE_LINES = 40
 READERS_SHOWN = 4
+#: the files a definition's meaning is elaborated from, by suffix or name; the audit's own directory writes records, says nothing
+LEAN_INPUTS = (".lean", "lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain")
+AUDIT_DIR = "tools/verity/lean/"
+#: the dependency bundles every package with fetched dependencies is built against, pinned by content (`sha256`)
+DEPS_PINS = AUDIT_DIR + "lean-deps.json"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -75,13 +83,14 @@ def _package(path: str) -> str:
     return path.rpartition("/")[0] or "."
 
 
-def _across(olds: dict[str, dict], news: dict[str, dict]) -> list[tuple[str, str, str]]:
+def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) -> list[tuple[str, str, str]]:
     """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
     The kinds are `changed`, `removed`, `definition` and `new`, in that order (what an existing guarantee says comes first,
     so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
     another package's record under its name, counted in that package's tally. A guarantee under another name with its type
-    hash is a rename, and no change."""
+    hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's changed hash is
+    `rehashed` (text ""), counted in its package's tally."""
     a = {n: (_package(p), r) for p, d in olds.items() for n, r in _guarantees(d).items()}
     b = {n: (_package(p), r) for p, d in news.items() for n, r in _guarantees(d).items()}
     gone = {n: r for n, (_, r) in a.items() if n not in b}
@@ -98,6 +107,9 @@ def _across(olds: dict[str, dict], news: dict[str, dict]) -> list[tuple[str, str
         for name, (h1, readers) in sorted(_definitions(d).items()):
             before = {h for h in da.get(name, ()) if h is not None}
             if h1 is not None and before and h1 not in before and all(len(h) == len(h1) for h in before):
+                if not sources:
+                    out.append((_package(p), "rehashed", ""))
+                    continue
                 shown = ", ".join(f"`{r}`" for r in readers[:READERS_SHOWN])
                 more = f" and {len(readers) - READERS_SHOWN} more" if len(readers) > READERS_SHOWN else ""
                 out.append((_package(p), "definition", f"• definition `{name}` changed; read by {shown or 'no guarantee'}{more}"))
@@ -122,8 +134,8 @@ def _tally(kinds: list[str]) -> str:
     """`guarantees: 1 changed, 19 new, 1691 moved here; definitions: 2 changed` for one package's entries."""
     g = ", ".join(f"{kinds.count(k)} {k}" for k in ("changed", "removed", "new") if k in kinds)
     g = ", ".join(([g] if g else []) + ([f"{kinds.count('moved')} moved here"] if "moved" in kinds else []))
-    d = kinds.count("definition")
-    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d} changed"] if d else []))
+    d = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("definition", "changed"), ("rehashed", "rehashed")) if k in kinds)
+    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else []))
 
 
 def web(repo: Path, remote: str) -> str | None:
@@ -150,11 +162,21 @@ def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:
     return out
 
 
+def _sources(repo: Path, old: str, new: str) -> bool:
+    """Whether the push from ``old`` to ``new`` changed a Lean input: a file under `LEAN_INPUTS` outside the audit's own
+    directory, or a dependency bundle pinned that ``old`` didn't pin (re-keying or dropping a pin builds against no new tree)."""
+    if any(p.endswith(LEAN_INPUTS) and not p.startswith(AUDIT_DIR) for p in _git(repo, "diff", "--name-only", old, new).splitlines()):
+        return True
+    bundles = [{d.get("sha256") for d in (_record(repo, rev, DEPS_PINS).get("deps") or {}).values()} for rev in (old, new)]
+    return bool(bundles[1] - bundles[0])
+
+
 def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[int] | None = None) -> str | None:
     """The DM for main moving from ``old`` to ``new``, or None when no guarantee says anything new.  ``prs``, the pull requests
     it landed, default to the numbers in its first-parent subjects (`Merge #12 #34 (…)`)."""
     pairs = _records_changed(repo, old, new)
-    entries = _across({b: _record(repo, old, b) for b, _ in pairs}, {p: _record(repo, new, p) for _, p in pairs})
+    entries = _across({b: _record(repo, old, b) for b, _ in pairs}, {p: _record(repo, new, p) for _, p in pairs},
+                     _sources(repo, old, new))
     if not any(text for _, _, text in entries):
         return None
     tallies, blocks = [], []

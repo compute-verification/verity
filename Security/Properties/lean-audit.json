@@ -1,7 +1,9 @@
 {
  "roots": [
   "Properties.Pouw",
+  "Properties.Pouw.Check",
   "Properties.Proofs.Pouw",
+  "Properties.Proofs.Pouw.Check",
   "Properties.Nci",
   "Properties.Proofs.Nci",
   "Properties.CertifierDevice",
@@ -12,6 +14,15 @@
   "PouwWindow.Grid",
   "PouwWindow.Draw",
   "PouwWindow.Public",
+  "Properties.Pouw.Check",
+  "PouwWindow.Json",
+  "PouwCheck.Json",
+  "PouwCheck.Inputs",
+  "PouwCheck.Check",
+  "PouwCheck.Protocol",
+  "CoreProtocol.Ratio",
+  "CoreProtocol.Profile",
+  "CoreProtocol.Protocol",
   "Properties.Nci",
   "Definitions.Core",
   "Definitions.Nci",
@@ -25,500 +36,518 @@
  ],
  "layers": {
   "Properties.Pouw": {
-   "imports": ["PouwWindow"],
+   "imports": [
+    "PouwWindow",
+    "PouwCheck"
+   ],
    "except": [],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Nci": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "NciCheck.Check", "Properties.Nci"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "NciCheck.Check",
+    "Properties.Nci"
+   ],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.CertifierDevice": {
-   "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
+   "imports": [
+    "CertifierDevice.Device",
+    "CertifierDevice.Issuer"
+   ],
    "except": [],
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); the NCI check decodes its Program with C-Flock's decoder"
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): the check reads its `V`, `canon`, `hexOf` and `Sha512.hash`"
  },
  "guarantees": {
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.AcceptsExactly : NciCheck.Properties.AcceptsExactly"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.AcceptsExactly : NciCheck.Properties.AcceptsExactly"
+   ],
    "assumptions": [],
    "type_hash": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61"
   },
   "NciCheck.Properties.SecurityProofs.CheckAccepts": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.CheckAccepts : NciCheck.Properties.CheckAccepts"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.CheckAccepts : NciCheck.Properties.CheckAccepts"
+   ],
    "assumptions": [],
    "type_hash": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5"
   },
   "NciCheck.Properties.SecurityProofs.CheckRefuses": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.CheckRefuses : NciCheck.Properties.CheckRefuses"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.CheckRefuses : NciCheck.Properties.CheckRefuses"
+   ],
    "assumptions": [],
    "type_hash": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a"
   },
   "NciCheck.Properties.SecurityProofs.Decodes": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"
+   ],
    "assumptions": [],
    "type_hash": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"
+   ],
    "assumptions": [],
    "type_hash": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea"
   },
   "NciCheck.Properties.SecurityProofs.Reports": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.Reports : NciCheck.Properties.Reports"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.Reports : NciCheck.Properties.Reports"
+   ],
    "assumptions": [],
    "type_hash": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8"
   },
   "NciCheck.Properties.SecurityProofs.Witnesses": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"
+   ],
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
-  "Properties.CertifierDevice.completeRows": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.completeRows : Properties.CertifierDevice.CompleteRows"],
+  "Properties.Pouw.Check.acceptMeans": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"
+   ],
    "assumptions": [],
-   "type_hash": "28bc8acc17dd7535643026874267be8fb71cdc347f655c135d3c613215a5b6a6"
+   "type_hash": "545ca67099062d0dd1c98c4469e8dc936d2200557cb1cf253be4196afe8f360e"
   },
-  "Properties.CertifierDevice.contentIndependent": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.contentIndependent : Properties.CertifierDevice.ContentIndependent"],
+  "Properties.Pouw.Check.acceptedDraw": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.acceptedDraw : Properties.Pouw.Check.AcceptedDraw"
+   ],
    "assumptions": [],
-   "type_hash": "e32ef7570ad04c7311ce08530135353d14d625dc479aa68095255fb29fb04ba3"
+   "type_hash": "5f9f29337f12c4f3ebedddade268afd4f5256e64f1177e1ee333437f0cefae9e"
   },
-  "Properties.CertifierDevice.failClosed": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.failClosed : Properties.CertifierDevice.FailClosed"],
+  "Properties.Pouw.Check.acceptedInRange": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.acceptedInRange : Properties.Pouw.Check.AcceptedInRange"
+   ],
    "assumptions": [],
-   "type_hash": "e21f4f333b07742207112c7c3b3129dfbf940b434ec1c2e4273f54e572b4571a"
+   "type_hash": "278636f5197f185a387db819593f8554ba9bf66cdfabbfe82122f96236923355"
   },
-  "Properties.CertifierDevice.issuerSigns": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.issuerSigns : Properties.CertifierDevice.IssuerSigns"],
+  "Properties.Pouw.Check.acceptedIsTheService's": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.acceptedIsTheService's : Properties.Pouw.Check.AcceptedIsTheService's"
+   ],
    "assumptions": [],
-   "type_hash": "613fb12cc329b7d473eea2acf5e1127e5c59cee678c1237c37e60a7ea3192ed7"
+   "type_hash": "4bbb525fc1112475ad5ad614cb28e55a2d79ac80ab513db40f6e3e1da768db7f"
   },
-  "Properties.CertifierDevice.issuerVerifies": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.issuerVerifies : Properties.CertifierDevice.IssuerVerifies"],
+  "Properties.Pouw.Check.commitmentKeepsBytes": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.commitmentKeepsBytes : Properties.Pouw.Check.CommitmentKeepsBytes"
+   ],
    "assumptions": [],
-   "type_hash": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b"
+   "type_hash": "ac05a786e1a5c2a3c155575f091a80cf244aa534361f3b3133e47b7808a17090"
   },
-  "Properties.CertifierDevice.linkSchedule": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.linkSchedule : Properties.CertifierDevice.LinkSchedule"],
+  "Properties.Pouw.Check.digestIsOneStage's": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.digestIsOneStage's : Properties.Pouw.Check.DigestIsOneStage's"
+   ],
    "assumptions": [],
-   "type_hash": "ebc61df5d4bcea9f8a6698bb3499a497c7d0a575af8cf6c540359d19347d83e8"
+   "type_hash": "7f35fb22b84c04ee517a37f3a246486f5a3fc4dc0736958050ae088fdc45acd7"
   },
-  "Properties.CertifierDevice.lmsCorrect": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.lmsCorrect : Properties.CertifierDevice.LmsCorrect"],
+  "Properties.Pouw.Check.neverNull": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.neverNull : Properties.Pouw.Check.NeverNull"
+   ],
    "assumptions": [],
-   "type_hash": "c0fc2bd002f025f6fc11e5fad51844c70fa58a9235d817cb0e5cb9450f2b35ec"
+   "type_hash": "4d3318d61bae44d61571509ec5bb2c448b2439bff3c26001f1ab41f31c262925"
   },
-  "Properties.CertifierDevice.records": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.records : Properties.CertifierDevice.Records"],
+  "Properties.Pouw.Check.publishesPublic": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.publishesPublic : Properties.Pouw.Check.PublishesPublic"
+   ],
    "assumptions": [],
-   "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3"
+   "type_hash": "b22f72c2d2c45d769ab42ef353eba48b1591ce8e5176ec877a9fcfa0269a9056"
+  },
+  "Properties.Pouw.Check.serviceRejectRejects": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.serviceRejectRejects : Properties.Pouw.Check.ServiceRejectRejects"
+   ],
+   "assumptions": [],
+   "type_hash": "54d7c904edc0a25147226057321cfcfd82a73f4491233f9ab5d32b2e1be021ac"
+  },
+  "Properties.Pouw.Check.undecidedOnlyFromService": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Check.undecidedOnlyFromService : Properties.Pouw.Check.UndecidedOnlyFromService"
+   ],
+   "assumptions": [],
+   "type_hash": "bc2e50263838b4ba091dd8a089002f4fb04f5a55999dee3790fe39b0a015502e"
   },
   "Properties.Pouw.Window.bucket8192": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"],
+   "signature": [
+    "Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"
+   ],
    "assumptions": [],
    "type_hash": "a971ebacf2a6b71e55ab2a526e26476b22f0308d3ca9236f97a374fc4e807c84"
   },
   "Properties.Pouw.Window.bucketCost": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCost : Properties.Pouw.Window.BucketCost"],
+   "signature": [
+    "Properties.Pouw.Window.bucketCost : Properties.Pouw.Window.BucketCost"
+   ],
    "assumptions": [],
    "type_hash": "d8d24f0d8121d7c9d0c53aaa3197391b2491522ee3c3498598ba7f64330b6be4"
   },
   "Properties.Pouw.Window.bucketCost3": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCost3 : Properties.Pouw.Window.BucketCost3"],
+   "signature": [
+    "Properties.Pouw.Window.bucketCost3 : Properties.Pouw.Window.BucketCost3"
+   ],
    "assumptions": [],
    "type_hash": "d576553bc5479500276cb0a46dc9f2c1e7b7df255d7222456baa0fc54834001a"
   },
   "Properties.Pouw.Window.bucketCredits": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCredits : Properties.Pouw.Window.BucketCredits"],
+   "signature": [
+    "Properties.Pouw.Window.bucketCredits : Properties.Pouw.Window.BucketCredits"
+   ],
    "assumptions": [],
    "type_hash": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f"
   },
   "Properties.Pouw.Window.drawMisses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"],
+   "signature": [
+    "Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"
+   ],
    "assumptions": [],
    "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389"
   },
   "Properties.Pouw.Window.floorPointGreatest": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.floorPointGreatest : Properties.Pouw.Window.FloorPointGreatest"],
+   "signature": [
+    "Properties.Pouw.Window.floorPointGreatest : Properties.Pouw.Window.FloorPointGreatest"
+   ],
    "assumptions": [],
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1"
   },
   "Properties.Pouw.Window.gridRefusals": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.gridRefusals : Properties.Pouw.Window.GridRefusals"],
+   "signature": [
+    "Properties.Pouw.Window.gridRefusals : Properties.Pouw.Window.GridRefusals"
+   ],
    "assumptions": [],
    "type_hash": "29629fcf6b815b0f2fa6a3d22b2c018918a742db59c94e1a11a11113d8d40d6f"
   },
   "Properties.Pouw.Window.kPrimeExactAtEquality": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeExactAtEquality : Properties.Pouw.Window.KPrimeExactAtEquality"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeExactAtEquality : Properties.Pouw.Window.KPrimeExactAtEquality"
+   ],
    "assumptions": [],
    "type_hash": "56ee09302db5e8a3b601c900ae373a34da3dc327d9738d74c2664dd4ee304cdf"
   },
   "Properties.Pouw.Window.kPrimeLeast": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeLeast : Properties.Pouw.Window.KPrimeLeast"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeLeast : Properties.Pouw.Window.KPrimeLeast"
+   ],
    "assumptions": [],
    "type_hash": "5490be2a87fb8935e8d06c8e5adf1656ae9203186a8aa1fb02f9aa650d865aa9"
   },
   "Properties.Pouw.Window.kPrimeRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"
+   ],
    "assumptions": [],
    "type_hash": "39670eae87e2d8d90b32f391473aba88a7b1652ed97adb56987e0410d318ef78"
   },
   "Properties.Pouw.Window.kPrimeServed": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeServed : Properties.Pouw.Window.KPrimeServed"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeServed : Properties.Pouw.Window.KPrimeServed"
+   ],
    "assumptions": [],
    "type_hash": "f120ede9251754e80c0b6b3850b115c640e1c4877d13c9d0f59894818d41849a"
   },
   "Properties.Pouw.Window.levelsCount": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"],
+   "signature": [
+    "Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"
+   ],
    "assumptions": [],
    "type_hash": "adead606c9dfc7cebaa2c7f141e8009da48e039db74a6250f919b14e30a3a510"
   },
   "Properties.Pouw.Window.levelsServed": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.levelsServed : Properties.Pouw.Window.LevelsServed"],
+   "signature": [
+    "Properties.Pouw.Window.levelsServed : Properties.Pouw.Window.LevelsServed"
+   ],
    "assumptions": [],
    "type_hash": "81826586ebf66577b8a53753af52918a2b7b66261cc3bb493d92787b40d2b915"
   },
   "Properties.Pouw.Window.onGridMeans": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.onGridMeans : Properties.Pouw.Window.OnGridMeans"],
+   "signature": [
+    "Properties.Pouw.Window.onGridMeans : Properties.Pouw.Window.OnGridMeans"
+   ],
    "assumptions": [],
    "type_hash": "c774ffd575db03c83208a6b6480039108dab5eb26b77655d6cc41028efa3ef68"
   },
   "Properties.Pouw.Window.padLeast": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.padLeast : Properties.Pouw.Window.PadLeast"],
+   "signature": [
+    "Properties.Pouw.Window.padLeast : Properties.Pouw.Window.PadLeast"
+   ],
    "assumptions": [],
    "type_hash": "79d2f7f93dc38938fe0a7c43e793bb9480c21422210ec02f198f40d585f99b5e"
   },
   "Properties.Pouw.Window.pointEnumerates": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"],
+   "signature": [
+    "Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"
+   ],
    "assumptions": [],
    "type_hash": "0f6f4da17e2495b903d233db371fd0e01c4da3c9f0d31e5b77da417317a9f20f"
   },
   "Properties.Pouw.Window.publicItems_eq": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
+   "signature": [
+    "Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"
+   ],
    "assumptions": [],
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
+  },
+  "Properties.CertifierDevice.completeRows": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.completeRows : Properties.CertifierDevice.CompleteRows"
+   ],
+   "assumptions": [],
+   "type_hash": "28bc8acc17dd7535643026874267be8fb71cdc347f655c135d3c613215a5b6a6"
+  },
+  "Properties.CertifierDevice.contentIndependent": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.contentIndependent : Properties.CertifierDevice.ContentIndependent"
+   ],
+   "assumptions": [],
+   "type_hash": "e32ef7570ad04c7311ce08530135353d14d625dc479aa68095255fb29fb04ba3"
+  },
+  "Properties.CertifierDevice.failClosed": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.failClosed : Properties.CertifierDevice.FailClosed"
+   ],
+   "assumptions": [],
+   "type_hash": "e21f4f333b07742207112c7c3b3129dfbf940b434ec1c2e4273f54e572b4571a"
+  },
+  "Properties.CertifierDevice.issuerSigns": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.issuerSigns : Properties.CertifierDevice.IssuerSigns"
+   ],
+   "assumptions": [],
+   "type_hash": "613fb12cc329b7d473eea2acf5e1127e5c59cee678c1237c37e60a7ea3192ed7"
+  },
+  "Properties.CertifierDevice.issuerVerifies": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.issuerVerifies : Properties.CertifierDevice.IssuerVerifies"
+   ],
+   "assumptions": [],
+   "type_hash": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b"
+  },
+  "Properties.CertifierDevice.linkSchedule": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.linkSchedule : Properties.CertifierDevice.LinkSchedule"
+   ],
+   "assumptions": [],
+   "type_hash": "ebc61df5d4bcea9f8a6698bb3499a497c7d0a575af8cf6c540359d19347d83e8"
+  },
+  "Properties.CertifierDevice.lmsCorrect": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.lmsCorrect : Properties.CertifierDevice.LmsCorrect"
+   ],
+   "assumptions": [],
+   "type_hash": "c0fc2bd002f025f6fc11e5fad51844c70fa58a9235d817cb0e5cb9450f2b35ec"
+  },
+  "Properties.CertifierDevice.records": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.CertifierDevice.records : Properties.CertifierDevice.Records"
+   ],
+   "assumptions": [],
+   "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3"
   }
  },
  "reads": {
-  "CertifierDevice.Certifier": {
-   "digest": "a7223a59cdfaeb84288c5aeb28d141a5657664909a3fdc827f6baa079552ce54",
+  "CoreProtocol.Profile": {
+   "digest": "57a2650e841fd38e788a338824bddbe0981991aa914cd04d1e70e4adfa3aa64f",
    "definitions": {
-    "CertifierDevice.Certifier": "1ba33eb721cbdae7114754a43739e9cc2ce133bb36a06cdc1dde86077fb7abdb",
-    "CertifierDevice.Certifier.closeWindow": "a67a59e92f5932c574f69e8ce657380734f6c0fb0e660f4433511b0183de486f",
-    "CertifierDevice.Certifier.doFault": "38ec4e41d63a4f182748d6c2351225c28c43016a03d6261f8a24429165f4da25",
-    "CertifierDevice.Certifier.enqueue": "e8abc28941139ad46e2db23155bb715ecbac409132cd16a18ee56bb7d5ee0f67",
-    "CertifierDevice.Certifier.fault": "62df009d4ca306f54e787550e42b7d36e26f03c490c29473c53cb0ec06833503",
-    "CertifierDevice.Certifier.link": "09e009d61a222daedd8c70de96ff24cfd119cb6ba3bdfafafb39b36d052e380f",
-    "CertifierDevice.Certifier.params": "54fe6fceb9099328dd696cabf700df28340c780441b38819521c663b37ad6a6a",
-    "CertifierDevice.Certifier.queue": "c57339ae66bc0d471b89460960d0cd8214743aefee46508f25d7da17ed29c8be",
-    "CertifierDevice.Certifier.rows": "815fde1f08f18a2be2e8bffdfac11229b36b04c04e2b15130ce685903560bb3d",
-    "CertifierDevice.Certifier.tick": "94bcea33995fe76dd082625f70353700bff6237727117df5cf8775b3d4099fac",
-    "CertifierDevice.Certifier.window": "46ceadc981245368b58bf34c1519480de03d589b180e0cbec0c95a7a67312cf2",
-    "CertifierDevice.Params": "f3a67d20d1e5db1df9aea9f72c84d6e5c33308b3ed545f8b62413c3053f1bdc7",
-    "CertifierDevice.Record": "d4e7526667e84134bb44c48cbd92507a40a118d5e440b6e668a04d05ec7d4113",
-    "CertifierDevice.Record.grid": "f01a24d5e071e0becb745bd709226a9f36453944ede79b7905aed46ef86685ca",
-    "CertifierDevice.Record.link": "db9924fb77138fcee5f1718c4f2534127e261aca7fbd50d83951c93ec2dc2962",
-    "CertifierDevice.Record.status": "e081c6d3a17283e8658effeb4445e8c80d1117c4cba2ee7ebed68845f5e7b959",
-    "CertifierDevice.Record.window": "c6f999b20301a87dae7d23224c89a2facd896948388f18f1e78400a1aaaa4b3a",
-    "CertifierDevice.Slots": "4ff68b38003827a6e30681adb1ef3e8a1580f545c664d3e1576cd86c93f57d51",
-    "CertifierDevice.Status.reason?": "a42a03dcce1c99cb064e897520ce72f0a6367fe22089ef2eb1a0f37329de6d08",
-    "CertifierDevice.reasonValue": "8ddd4cc4f66ed6cfe34bb9552496999ddef11ff87a557c58309a9addbe4f3312",
-    "CertifierDevice.rowCount": "d434ef4810eb1efe77e95a68fc4c85d622704c7749cc3e38a4e50a4da298d563"
+    "Core.Draw": "63bd5fc8cb5ba70cab5d5a3789f60ea0efa8ac6bea3ef09b6f0d36bb05bc9259",
+    "Core.Draw.bernoulli": "79ff4efbbfa3ce939d7c3fa39dbaa9686ce7a76d8b63369924227c3abd0cf74f",
+    "Core.Draw.casesOn": "30fab3f381d85258525bbcdf795bfd281ac3381c2bdf6a4eb2a90e85b76f2147",
+    "Core.Draw.ofJson": "b2277d2d4a38fd7379717d08c3ed4d92019ac78dff845c757034ae7d0b0f7d80",
+    "Core.Draw.rec": "d12e751c269e730229e2f705d58152337c71618e3d3ead8a73c44d7bc1ae40d6",
+    "Core.Draw.stratified": "6bf508b1d8acc9dc0dac42677f1b076c33683ca24d1ec670a91d85df404a7dce",
+    "Core.Draw.subset": "aba3878bddc00f6cd95ca51ce0826e6a95318992a23c6b76f4c34db62a9cb534",
+    "Core.Draw.toJson": "e24b45870fba1364b3629ad19575f2f5a1759a3e31b027d038874cee8e0187b5",
+    "Core.Integrity": "0727c826facf67aa78ecef833adbd25166324156b8e2d0db0d05dfa5438a3368",
+    "Core.Integrity.covered": "a5d4700669f875b25a94758663ff6f6f58d01700b24d752cc197e3a0b55c4e49",
+    "Core.Integrity.delta": "6e273b9535d4fd4c22b7faedca097d5ebf35abaff95b184bbbbe68a45189cd9a",
+    "Core.Integrity.drawn": "f6b60be7277e1268d51a2c096b7fd7d84d33d85a0d974e81224cab3dd8f57bc1",
+    "Core.Integrity.levels": "e7f04ee6657057472ae486a7f2af843690e921b0d751525a44b863a4b4a4c544",
+    "Core.Integrity.linked": "01de397d570399886c310ac5baa07e96cb77be1b29018ec5f911c604db26fa17",
+    "Core.Integrity.ofJson": "57f0b1afa3cdf3efecdfba00238d93b1f29f80356c72d884b1616ef2770f4bbe",
+    "Core.Integrity.prescribed": "86a654a82f1c8ecb41a582206699955fb3f023638d8e481eacce51f34a611d2a",
+    "Core.Integrity.programs": "ae011a24b03a28e6762f1be7ca71f093fe714b242f371eafa7514c2be649ca20",
+    "Core.Integrity.toJson": "77c310a504f28744b9729eb8cb9fb8b141e15f28504a2f9fa8df63b953f4e356",
+    "Core.Level": "c1acdacf2d9aed35d46a401177b6dcc8bdc3683b45648d2fc08dcc0c2ec72d37",
+    "Core.Level.casesOn": "b610f444e33bab591b4ce990afb9d5a6366470f5c32988eeaa9957b4f89f1eb3",
+    "Core.Level.draw": "24e82d90a3979c802a4bcc605c1d5f20f166e50edbcb90f380e78035ad21bed6",
+    "Core.Level.name": "9359fbcc849865a68a348d97393a66fc6977ba27f0f918a8cec3354e7b63d608",
+    "Core.Level.ofJson": "8f58a81e34450ea0fbe04499ee7c0e6fe32253459a2ecca0a5cf06e5ddf008cf",
+    "Core.Level.query": "5717cc628de65d2c0c299af94e3228a762cf8512a3973609cf3c5fc7d7487054",
+    "Core.Level.rec": "15ec6c3d389e34b369c411c2ec314c896bf63cc1ffc37a2a0b77ac7ef9d01131",
+    "Core.Level.size": "214f06ac010ffebc42ffe79c952530d914f7b922eb1584df7c5336007d8f907f",
+    "Core.Level.toJson": "a54cad442fad1064cc966be1742bd40cc05b4e8963adcef83e9e5575c3727e87",
+    "Core.Stratum": "85dbb9fb8ac3fd4948cbe24596611827d9d75ba523a813fb85212eca347af4a4",
+    "Core.Stratum.casesOn": "e81b9c46dbd21dcfe83e4eca8f0fec6c49b817882da2ad04755ceb6ef5ff9a94",
+    "Core.Stratum.k": "4dc07bf0f8b58fb53db0826f376e293dc884587911f9815dd2a47b5851e87c74",
+    "Core.Stratum.name": "6099388f83d6705cb9d8545d9b001010ab8cefc39be10e07ad7852133df46e06",
+    "Core.Stratum.rec": "27e10df8792445efba583dd8fd74f46a71a579dfa470b8ec63882e1b8c8b50fe",
+    "Core.Stratum.size": "e52d5d0752fb25a35522939729e45d51186110b5f428a1efb3553cb2b02f62ee",
+    "Core.instDecidableEqDraw": "e37b627d1bd863f44c20e4a99ccf862476814683aaa4149ce78511ea8dd127e3",
+    "Core.instDecidableEqDraw.decEq": "06248b307135eee205a07e3a7ae08c438ef6c04a5cc83a21de5f7ef083db7057",
+    "Core.instDecidableEqLevel": "9aece4dcb1058f67600789d1d03232393a7e254c25cc1de6690049baa1d23d51",
+    "Core.instDecidableEqLevel.decEq": "469dd1de9d20988f33ce5c1129c0bfcfd73c1a6eb4bc063c05906520e521dd81",
+    "Core.instDecidableEqStratum": "552b4be652661499a7160887229404e48d309243c9e9ce61fa6a753df0afec05",
+    "Core.instDecidableEqStratum.decEq": "a3863ff7c0bc846332187a58731737c1319d2528340c6b2db9e023ce4ae17a41",
+    "Core.instReprDraw.repr.match_1": "ce3c23dc7d2ba207ab1444b0a105e963f735a8b76dbb7dee8d0b8348ef8fd8f9",
+    "_private.CoreProtocol.Profile.0.Core.exactly": "1c8dac094f58253f826b2a2967e8823fcce8f646befb7422b6207e26ef823438",
+    "_private.CoreProtocol.Profile.0.Core.nullOr": "c19b24ef95584f1df6b1297b2954a39bc17acda70efe5850b2ef7cd0ac6619ca",
+    "_private.CoreProtocol.Profile.0.Core.nullOr._sparseCasesOn_1": "e98ddb13b289aff53671a5e7556e3ddadf555535df9670c0e20a5b8875a66c3c",
+    "_private.CoreProtocol.Profile.0.Core.sorted": "a95c8bdf00df44588829f8b4d07f2163af5d3b88e3d13de800ce5d1e5bcac7da",
+    "_private.CoreProtocol.Profile.0.Core.strs": "bbca2243bbc14ebf08d9b82f9d2b820ffd41c0ce2440cf00060323e6fa62b68c"
    },
    "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
-  "CertifierDevice.Device": {
-   "digest": "685f2e8d5e10c032d989946076a0ce773e334c1e60a0899b02c08144620e9c60",
+  "CoreProtocol.Protocol": {
+   "digest": "a8e1cb79e60f32bdbb0ef59437aab41367967b1c01ee2e84c73343b0f376f44d",
    "definitions": {
-    "CertifierDevice.Action": "c40c3561907c9f246b0d33a7178a6a863c36ae83243eaf9edb4b4ded29c8e8a1",
-    "CertifierDevice.Action.connect": "34d3b0b2af9cb97ac43f6942e39671cac75eff07a5a371c21afdfdf59d5ae58a",
-    "CertifierDevice.Action.publish": "c9aea8e224e22d56d822a33466e2cb243f7adeee50f91dbb9a5aad1b30e5fd95",
-    "CertifierDevice.Action.writeLink": "5049ab92e2c37a22dd3509a32dfcc4325d7ad28ac6a2a7ac7e2d36b190a639ae",
-    "CertifierDevice.Action.writeUpstream": "e629d6a297a1a710be0ccff68cc33f8af2a0b031e8d36cd39d18c338f9bee7e2",
-    "CertifierDevice.Config": "9d8ab8c68a6eeb542e65a8ab74c6ddffdde2e477eba9fa5e6a1a320f5917632d",
-    "CertifierDevice.Config.check": "0791145aee91402d0a451cf3bc428fe2f0c96919c1f111cc949a466c99598fde",
-    "CertifierDevice.Config.egress": "02a35549c386eaca54dddba29745d28dcb4b4dc0581424eec48e010dc81f7c9b",
-    "CertifierDevice.Config.egressLink": "e75e0a7a5eaa38d6dfcb68b9aaf30add3356c17bab31698eb764ea95f1eab1b5",
-    "CertifierDevice.Config.ingress": "6ef1f70adb40b63afdf2069d9c2585308d74cd1f05e0136c71fe46e2213c8a10",
-    "CertifierDevice.Config.ingressLink": "aa9a4f4258c122046205eb9bc67d7f9bd279cf57eb770bcdaf3ddc6fc429c221",
-    "CertifierDevice.Config.origin": "d71011f05fe305be02360e8b6d2a6fe8fd0eab60ffac889b4f00b0d4bf5fd54b",
-    "CertifierDevice.Config.prover": "363cf0c675b93c36794903b4f1db46ea66c244b60f43cefb195ffd7585dd0fa0",
-    "CertifierDevice.Config.slack": "955ce6be74b28a05366a7857639c94ac11b01660805bdb011511c8c65c1b9c7d",
-    "CertifierDevice.Config.syncSet": "dc6a96c8da1271d8d98103fbbe1b490784caeef0f8f9cf9123db9034fc6b99d9",
-    "CertifierDevice.Config.syncs": "a1eb5e40844539be6073c4cff26daef7d9b46f0657e392556e23b2662b6b0a63",
-    "CertifierDevice.Config.windows": "f7a4792509eb178161b736ed9c12bcaaa5b485b8842820cb2194e40f034fba57",
-    "CertifierDevice.Event": "2df5d6e512bec72d633f88352a7e483f7401f065723dfbc570642209ef260306",
-    "CertifierDevice.Event.connected": "c273bb91357a7eb3f254570443a00774a534c5c6a78d61975f89f64d9233ffb1",
-    "CertifierDevice.Event.delivered": "177d6aeb3a1776991b07d56aea3c6139f8683b495822b0d198a675f80ba23c7b",
-    "CertifierDevice.Event.link": "be05bb056c52be5ee84a3de2b38d2b94513635ff14c3bddfd25f96a09af0ae4c",
-    "CertifierDevice.Event.refused": "913e28f37080f3edf78774fa5ac4c3b51bf3d289c10c415e5976608fb44cda10",
-    "CertifierDevice.Event.tick": "bd6fcaee087b6cbda8508a296dbb44953ea27c0eb390a8d5c238ef5fbb469fd4",
-    "CertifierDevice.Event.upstream": "af8601e3ccc2022bb41e699cd563633316b24b22a00946386e3ce0dad86d3250",
-    "CertifierDevice.GridKind": "40a5d597c1bbf38f29e0ec8e69994320be7592f9ae01652eea709dddb735bb96",
-    "CertifierDevice.GridKind.egress": "a91c6596f04eb5d7ecf319805c67f132c77a4c0039ec6647a567d4173a914361",
-    "CertifierDevice.GridKind.ingress": "c5728bba2359596b218120af80cac2bc99894079738a0cf828b4d8875ac062ae",
-    "CertifierDevice.Phase": "e655a48fa3170038b824ac6e19c25888a5dcaa04b1f8a9030f1e9d6d21c1f6c0",
-    "CertifierDevice.Phase.closed": "68f0c9b1dbf385307eec125e2abf94ba84fac97023b08e996886538cf48ae999",
-    "CertifierDevice.Phase.connecting": "705f3d486a56cd19519370ebfdfa8d8a36a14166e48666408a5c8cdbd6970007",
-    "CertifierDevice.Phase.open": "21369ced7132f6eed1033d782b16977ece2c00282691fb63b1a0f0df3cf4bf58",
-    "CertifierDevice.ProverConfig": "b29f629ffea4f6c00935815f16281f5852992ff6617b151970e7c2242a708d9a",
-    "CertifierDevice.ProverConfig.envelope": "2544020877b7d0d8ead2f2bfa64f7c59b9a0a5adda3d691a59f4b6b4ee348f21",
-    "CertifierDevice.ProverConfig.lag": "13f348d528003d4cd0c183314a67a8a8584040890998460ddd3ad12fef9bc9aa",
-    "CertifierDevice.ProverConfig.prior": "cbcd59a38c5b5c7155130f22ddb8824798317948bac710c67c745edf08b9259b",
-    "CertifierDevice.ProverConfig.rule": "a66c1e52c2fa1f58ffd7510731aa4aa0f5a7e72b673011c79dab49403e43a847",
-    "CertifierDevice.State": "ea9ac3e75f0ecf601e4f2e5163bb683fb647c331b6f0bd0fe281f264e6617100",
-    "CertifierDevice.State.Started": "28ce257aa2091b5dc890da8522d09205bc4b7a6255dcac8f6c53be86959469f3",
-    "CertifierDevice.State.Started.connect": "472dce0b2a896efb188ea6eff4e33940f608673d89d360121ff4662875f57bf2",
-    "CertifierDevice.State.Started.pump": "974ca066b567a08c7cfccd4ceee879dd64f59e37ecb572bf42dfae50e00af4c9",
-    "CertifierDevice.State.bucketIn": "eed39268112d4c4227f8b42c8b83f152721a58ca51d240831035227d391f01b2",
-    "CertifierDevice.State.bucketReady": "3f7e7f8d53aa33e6156efff7b5230750e3464cac9e862ae269740d1b00918dd3",
-    "CertifierDevice.State.bucketer": "372b4bf869d5fe52272d0333b4a05cb1fda0cecd1d48207f95259cee72959eea",
-    "CertifierDevice.State.checkForwarding": "b51990be75b5d28c19b8fe1d66515621b802429b49c1c7d2efe67c2b3b0fb72d",
-    "CertifierDevice.State.config": "cd03c47576a6c9f72c23cba09d4cea6b2964a3600713c15d9b481bd5be61c025",
-    "CertifierDevice.State.done": "e92279b63fc034e08017bdf2a882e9b98032c45648eafe6d1e5535dc231c046f",
-    "CertifierDevice.State.egressEvent": "e2a54783473e5055b5f45d142bd4a4fdddb24bce58b32404d16d777a614ca772",
-    "CertifierDevice.State.egressTick": "30d253b9fcb0277eb4c4dc42153042e4b587895ac74bd504998303e683ae7b89",
-    "CertifierDevice.State.frames": "ea4f05ed44e515a04f702df6dee88212e8ed947a2a068e7e2abb1ce7f5bcf856",
-    "CertifierDevice.State.ingressTick": "48027e1ecf3e827854f8623b0f314f8e69ac6dcbf08850cbcd0546f4ae8a5ad5",
-    "CertifierDevice.State.isLate": "17586c615d63e8428fe79afa8acdb477d35dd4549371a0471f2dfefc697163d2",
-    "CertifierDevice.State.late": "c69ee845de72ada1d4b35028cc843fecf57784a5a56a8d9e203d0d521ffdb337",
-    "CertifierDevice.State.linkBuffer": "86b3711bb9e84432c7aa437d9d78869bdb88c6fd05e57247606a5c114bcf1e65",
-    "CertifierDevice.State.linkFramesRead": "a520c14af42e9aaf602a0f481e8fafa6e77f2ece7f1f0dfd3f395cf4eff92e47",
-    "CertifierDevice.State.linkOpen": "01ab572544bb4d8c2b79fac67a70e4b74f264e77a6b811f31b9f304575a7d685",
-    "CertifierDevice.State.linkRead": "1250c6cae379c9c7751af200b01df34349465ef8a80d0c5416f73428a700d0ab",
-    "CertifierDevice.State.pump": "052ab38f3d93d045876ee366396ba23b98e4ee857f667ab21923090ff056e186",
-    "CertifierDevice.State.released": "9032c9725227bb46d30b475c6c419a219db5c8a5ec18cdabd35b36823c82dd78",
-    "CertifierDevice.State.requestsReleased": "a3f18cd1b57460ea8a87f5ded514919db1e2770b8148944230ef6bec171c226b",
-    "CertifierDevice.State.setStream": "b0b38e890f51242c5cda26f8cc008c5c3350eefee7ac7e9cc738a7425b187c4d",
-    "CertifierDevice.State.settled": "b6943a7302c4076f7ecc20af6bad3165dcccd481ee4ed3c491bf4b39ed1e8590",
-    "CertifierDevice.State.shaper": "6aa6dc08582f81d98beef788bbd520d744cbb36f1ee34bff834d2bfbc8f14540",
-    "CertifierDevice.State.stream": "49028f29eb5ec2553e6cfaffb09be01ae097c43489b1f848836a7413b320b0fd",
-    "CertifierDevice.State.streams": "b610e3baccaa0db80deccbea44f1e8adce2447ffeb9be990b3d4135a4207d8dc",
-    "CertifierDevice.State.ticks": "d3dec99612bc7ced7a5f573ea0c0dc5d50d46065a2e690c4bd2f57c716c0f5fc",
-    "CertifierDevice.State.upstreamEnd": "ca17e022ea98da5a45b4efb35229cc69ca294b9cdb7d438c9648750c012a4afa",
-    "CertifierDevice.State.upstreamRead": "14d1ce0cd73bf9e6552140b46e1770ed099be7e864ac2d87960de01fb3c7f1dd",
-    "CertifierDevice.Stream": "fb103bf5989a792ce871fe5115911ee7edfc1c70f367845c141782f68e26c54f",
-    "CertifierDevice.Stream.anchor": "62a318e1f3b778a50ce6dd16c234bbea421f46121ecbf04c24d908010cb2744c",
-    "CertifierDevice.Stream.count": "2829dc7d381711df2dfc6e96d970d5d763ac5b699adfce3f682e079962540e37",
-    "CertifierDevice.Stream.deadline": "0f26183a96a31d08269078273c8a8af7604613f456027b04e2503a64316856b3",
-    "CertifierDevice.Stream.delivered": "12a59460a5ed2423dbdfa359a8b64ad1f167c205b4a145882dd9ad0ba29f0c4e",
-    "CertifierDevice.Stream.draining": "889aa7e3a6fcb4e7ff16c44ddd0339a58171eeb5dc4313e0f73c4b3d3da715f5",
-    "CertifierDevice.Stream.ended": "7c88d78a94384013876a35db4fa11f3db17a7235dacb780cc3fd828b4d72c343",
-    "CertifierDevice.Stream.events": "b51204aae4468b8b343ae94046634b63ec7294d4d2e3d7e37d2842fee7626e76",
-    "CertifierDevice.Stream.out": "9fbdb664bc0c6d70b4765015e8a0ba643c2c35ff88fab48d027ea04c2114d040",
-    "CertifierDevice.Stream.phase": "387b60cdbfee55a776c2d868566d6bfcac870001786c3e0419b910b7ccd3d5a1",
-    "CertifierDevice.Stream.window": "1949b43dcb023fe582ae7cc6032492ff32610cd71ee3b676e0b0c3d456777983",
-    "CertifierDevice.init": "b39ff0ab5a409adac066014bde4cb4510a9abb726a6ee9f4919cf0a28e257112",
-    "CertifierDevice.instBEqPhase": "89c501e2eba649b5ca8f1eaa10705c98cee4f9786b3be6d95e76d624b56ec711",
-    "CertifierDevice.instBEqPhase.beq": "f4f0ca205395150cd72db6329d229ce21c4f10dae6e5d50f2a0243694e9c25df",
-    "CertifierDevice.instDecidableEqGridKind": "2778639d9a2a59bc59f485c25ac13dcfe120bba5d7b9b2c262d6d02248cb56b2",
-    "CertifierDevice.nsPerMs": "7b3885e44c76b69e5c28eeb4a0a2f683f51f6ac6d3dfdef531422ecd99bb9bac",
-    "CertifierDevice.step": "4069055db4c60ffbfe0227d7224f0d5b2e2276aec33226eb5ad963caf1cb9253"
+    "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
+    "Core.Answer.digest": "d836aa67c9938f2a8b2b90aa9072dee781ea1e90129eca96845002ccbcb3e2b0",
+    "Core.Answer.ofJson": "feb5e534f563229265b30bbe1d13da3b1c7a0ae762a083366bb437fbe80d5351",
+    "Core.Answer.ofJson._sparseCasesOn_1": "0304a4bbf5d52c8a95addc32c55827db03a1c1d13f3da1f7de5fa284eae36d8f",
+    "Core.Answer.ofJson._sparseCasesOn_4": "73b187c6719d04f710de80e4b47c73e9a68af13e962e545b503891df206d1bde",
+    "Core.Answer.ofJson._sparseCasesOn_5": "ae84cbcff2259f14ddcbe1075fac42f50df610257d6e7c709e615fdc5e740321",
+    "Core.Answer.profile": "17b8901d5bda1fd4a2ab0e7fc72b8b0b3e963fcfd182b7d94a50188cfb091361",
+    "Core.Answer.protocol": "09dd9f4feac92ce04e80bd05d17363e020b97c658c83913a86ee7274a1d75756",
+    "Core.Answer.published": "65fbcdad2c96fc63cc29535358d627dc4d4302dceed38b517f69226bc403b651",
+    "Core.Answer.reason": "7610aff14f8586465b30e740322b13f818371f611bec29f43398aa7f0d3b0b1a",
+    "Core.Answer.toJson": "e2f8f1764eb4ebbaabcf34e0b848e01e557af143a8a5fdcb1f8e8bdd4ef6783c",
+    "Core.Answer.verdict": "72ccc7783e24b9354dfcfa5d04d7cad1defa6c9bc3dde1698abb1ff6dfddaa8e",
+    "Core.Outcome": "abece4d183c6b9b15957a800f2ab41c5108d91aaa07f4f21469861b571f2530a",
+    "Core.Outcome.accept": "c7abb779538d29e9f792761a8db7ae69719dfc763a2da95599f7af28377e9763",
+    "Core.Outcome.reject": "8cf498f977979244f1b1a1a8224b94a3e8bb47643e847eff355c3f21607df392",
+    "Core.Outcome.undecided": "8359cac763fe5a40dbe821be9591d7cf56eac4cc956a368b18978f8b8e7b45d1",
+    "Core.Protocol": "2ea8c13cb206c09d0ff20922ee762db9d0bc3eb278f76dfbe8ba400b084a11dd",
+    "Core.Protocol.Commitment": "1779266dc5689084ea02a25a199cf52300deb941e7d50b8af8a3802067f25548",
+    "Core.Protocol.Evidence": "71caff6ec7dec3a6238123fae52547a15a169e03da8d2976d0ae4dbc41f687e8",
+    "Core.Protocol.Params": "d4495a529a3712b0ae55cdc4bab81ca7a96c0204c2d89e9370f5514551c0bc6a",
+    "Core.Protocol.Profile": "93c6424ab66c0606c3a4742f24e72dc44aa110749360473256dc7eca020a15d2",
+    "Core.Protocol.Public": "31795b800fbc90a092a881f6085261492fdf43a97347e35dce35717ea922da34",
+    "Core.Protocol.check": "3fd83c8e26ff8fb0f97bbaaa808a6a80b84577053625dd6d2a30609364e20422",
+    "Core.Protocol.commitment": "02d3e375a4b4e36f87a449063ee7daf6ed8e46b2f415eeb0beedf2c299990ee8",
+    "Core.Protocol.digest": "0d17988b66fd6086cb78a2fd832aceed63485388facaaad096938f13b575c3d2",
+    "Core.Protocol.profileJson": "199984f72573982fe8a9f5d922a14c5692ec8f87f6843d6f00735939c8150657",
+    "Core.Protocol.publicJson": "87fd7d040926056f5ec9f03b376506b0065ade709f0db5ad772c7d9a774be1c3",
+    "Core.Verdict": "ef73764db4779bb9cc649adda3080045d4b7f599582c9ccdd9823a3326012756",
+    "Core.Verdict.accept": "9f9a4017c4784ae8a12cd0921ca11b10c0daba0056b070b49206ab19b146bbe4",
+    "Core.Verdict.casesOn": "0744214c8732e4e6642e056ad302d726a56f1418069fe0cf49261579914749c9",
+    "Core.Verdict.ctorIdx": "1bfb740eb0e7b8d0de37cd5c083dc27419461dfd6c65e1b42b23d1ed7e45fd5c",
+    "Core.Verdict.name": "d6c120499758fb236e33e46ef761d9ee2c38f65e374fdc9152d56388356e0e67",
+    "Core.Verdict.ofName": "3fe9f53fd48566191b5089469d1dc06c8801c9e858855941a03b8f1b7a00e563",
+    "Core.Verdict.rec": "95fcc45ffe00868cea717c9aeb8f804a76a79ade52403c90c3c140d84e39ba13",
+    "Core.Verdict.reject": "51a3f6946f282bd4c992323d0eddaa4101c87759f7eb96f348ef4195e69d3dd3",
+    "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
+    "Core.canonicalJson": "248f540589e66dcee3fed2d3a1b6dfc238132c311c5694875a67c6ab98bff35c",
+    "Core.canonicalJson._sparseCasesOn_3": "636006752adbd5a614a0be69f18609f0783764283355527f05cc5159d5172c06",
+    "Core.instReprVerdict.repr.match_1": "512a9ee16b4e82345f3343510c022654d75d82c2a8b0218985a2e4bf3cb23d3d",
+    "_private.CoreProtocol.Protocol.0.Core.opt": "7720a69b388da12990009ab9c126a25370b5ea8b036100358463e2813c7a0710"
    },
    "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
-  "CertifierDevice.Frame": {
-   "digest": "731709a2f95739b50260d482953cb93acf7e45c5a0e224233c98ca2ad32ba422",
+  "CoreProtocol.Ratio": {
+   "digest": "d94d68e88bf4370de7834896aedaa2b776162dbdd4ebc84fa80c60a44ae674cc",
    "definitions": {
-    "CertifierDevice.Events": "c4e0a94b879f004014e26e2d68c31ddffe24d1843660a354d452bb77a4bddd7a",
-    "CertifierDevice.Events.buffer": "5f524bf58f66869a6fc9467a57d1048909444ff276af2d7281637506ebd988d8",
-    "CertifierDevice.Events.feed": "28e743f07d4d520efc02a198a467922a808c3b152048418dbd3bcaf80c42e053",
-    "CertifierDevice.be32At": "9cea5a7f014276877d831234bd73412cfac12504a314a4e3d392e080e8b80461",
-    "CertifierDevice.bitsOf": "9ca775fb867d936f8b45ae1da8ce0b46ebfb430525895d3e89ed883a5b27be03",
-    "CertifierDevice.decodeFrame": "d1e606c5fa62d7ef860d48581b5ba4fd25b403b3651ec7e66c722237c63b841a",
-    "CertifierDevice.encodeFrame": "7e75198ed4a134f9f6c0844d83a009db575ea5a8115204d44905c3de44548a4e",
-    "CertifierDevice.eventPosition": "56d73a181f113b70df518abf8e201aec3f2ffff8f33f2be4152436c01dab4a00",
-    "CertifierDevice.headerSize": "ba2d3304601a1a579cb629d26d4b5e7c8a8378030cd90d0005fc3a186ac7c8d0",
-    "CertifierDevice.idPrefix": "58e72e3178d08b65246eae2be10a3066a906b8fb6ea541703dd7e1a8a98ccd4d",
-    "CertifierDevice.isDigit": "6abbfaa7e6a5a44affb5d5d1768ecb989c9f83bdfa89aa15c462d1910c034c1c",
-    "CertifierDevice.isSpace": "93b84d956bccc5cafe6de34b8ecc2e1878b09212bd74f9690d3a44a34b8cc81b",
-    "CertifierDevice.kindData": "448c996e91c88b26060ff68791999a9029cd6df5bca2524be29c4cffc7319ce1",
-    "CertifierDevice.kindLast": "59dde740df50b6e9c4c45af433f37e3934b72f120995bfa0a8a2bbddaf4f248c",
-    "CertifierDevice.lines": "f0609b9604db85353d88f9a3de632f5a482d5e055a156538dad83eaec1462ffc",
-    "CertifierDevice.strip": "0081488e509ea6591c2c37f54d8c82a22ee43d0676cbb901a9b5851a79447700"
+    "Core.Ratio": "7c8d146908a79f0b204e2877c04bdf5371a1a591b5fdb155207eaa0027919ef3",
+    "Core.Ratio.casesOn": "79348311fc1d9500e7f88cdb99bf1b35e21a32315d58c361f3e5c30a5eca5a19",
+    "Core.Ratio.den": "e55382b2df911a759d66e34c02b29457aa68dabe2390543da0957cc16104fd8b",
+    "Core.Ratio.num": "8de2230df9d9cd0e696d8fce6f4718e084cb7e460cc1cb186b2f10077859d462",
+    "Core.Ratio.ofString": "bed9e621224d6ad9b586fbed7c4afc7e82f03047316c39af0f709763b37b1383",
+    "Core.Ratio.ofString._sparseCasesOn_1": "72e6aceb097c1267c3698644ae7b08a21474170fa274d9c6fa99f3987878d7cf",
+    "Core.Ratio.ofString._sparseCasesOn_2": "eee8c49750c3112936c953c5f974e542255d7185c8bec2a1aea13becc1760a14",
+    "Core.Ratio.rec": "9a4caa7d17753c09d8fbfcf06940914f812cf241903ecdfd29f8ebe477c860ae",
+    "Core.Ratio.toString": "7b9dc99348b88f5e0759b76017bd16cfe9769e5092decb03492c48f65bfc3d0a",
+    "Core.instDecidableEqRatio": "bc51f0b5c4dd506ef50006646c7746db57e4f015af3d440526ee2dfd2b3c4af9",
+    "Core.instDecidableEqRatio.decEq": "0be5fa0c0797997681288f05a00ab8d240d4c7d10219770a8e3bac422a86a7a7",
+    "_private.CoreProtocol.Ratio.0.Core.natOf": "dd52a4d0265fa019fb204c0a90430954dc053bef4f8e47df1eaa149eed83a970"
    },
    "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
-   ]
-  },
-  "CertifierDevice.Issuer": {
-   "digest": "a62abffbef7c7588f5f074292f45b8344ebaad8cd2abdb073b71413c2bad91b4",
-   "definitions": {
-    "CertifierDevice.Certificate": "146b0570158b6385464c1ae979d0a2dd05f1032aaebeda84490df2145d37559a",
-    "CertifierDevice.Certificate.digest": "8c257990b4777074e2cbc2e41497c568cd2ebdb97711a862479981bcefde3f9f",
-    "CertifierDevice.Certificate.direction": "041e28c157239198a7bf6641092c19e3b8210b1c4609e6ba6eb5f947a3b8c398",
-    "CertifierDevice.Certificate.keyId": "6f6e3eee2a326d35f4a7e25812ccbb156107a93a3358bb47531b8a7754c0aa0b",
-    "CertifierDevice.Certificate.link": "dcf8a1a4d4f6118d9812c345973f8ed67f90e1b8de06d85919112772c648d915",
-    "CertifierDevice.Certificate.signature": "2f6eeb194784022cb8cae6f238ce430856d8ed791fa54f03432d975e5daacf8e",
-    "CertifierDevice.Certificate.window": "2ed7e556754579db0aedd27ae6d9a2661d60aa398a33187064ff2fb7a43ff198",
-    "CertifierDevice.CertifiedRecord": "8324f28aa9c40c0ab8362abc98cab26bb2111422b91a0894720acc3e342da818",
-    "CertifierDevice.CertifiedRecord.certificate": "7569ce01cfc6a3ef214a68c347140d77c7bf21965913af3e04143b4948b61a20",
-    "CertifierDevice.CertifiedRecord.head": "b3cea42352bb70de59875f499c1994d8b2a1054ef54f00b246b3c50340bd6571",
-    "CertifierDevice.CertifiedRecord.verify": "10e3a422910d48c93a44ee5b01dfbb2f3f6e6a0ad15c747efe8f2fc81a3a1f8d",
-    "CertifierDevice.Issuer": "b8f58dd9e9187b4d1d0a4ca5d67567c3d18278804b490e00049d995198c85489",
-    "CertifierDevice.Issuer.certify": "0a44e2ace9115994a9f40caf3b41a4f5843f7dc1a1e6e0bd3c6f5b236dcab948",
-    "CertifierDevice.Issuer.finish": "b2c18a6fc6a46d6a6c388939e47f4f41ab9ce80a97c5d52f3dbdb6d70742189e",
-    "CertifierDevice.Issuer.key": "472ef3df6f7e6c75dfc9e7f99e7936753afbea64578a2e0915a5fe28d4f01081",
-    "CertifierDevice.Issuer.prepare": "226b01dca411e1d38046d8f293a8dac571dc27ab787173945bade13195d93006",
-    "CertifierDevice.Issuer.refused": "dd554bd2cc015964d2b2d75d16a307756b1ce8eda34b7e2960a0caaa516aeec8"
-   },
-   "guarantees": ["Properties.CertifierDevice.issuerSigns", "Properties.CertifierDevice.issuerVerifies"]
-  },
-  "CertifierDevice.Online": {
-   "digest": "82a6ab47bb0af2d40332cab40b1803cf4e17ea64c9b0f497b840e0508ec62e57",
-   "definitions": {
-    "CertifierDevice.Link": "9c94a76ad2ab5b3fdae5fe8bdbf298b2c407fb855b8cd7f1b0c394567476c7b9",
-    "CertifierDevice.Link.T": "d7ebd6c6f00109053d5a5626da9cc14eaa8c2f179a4c78c2dd448414fb963000",
-    "CertifierDevice.Link.anchor": "0ee808cba3c0c8383d305d297dec5522416b8e87d8a93e25b5a9d34f4bba356b",
-    "CertifierDevice.Link.arrive": "b7d407b57b9b9f192d1d65f4c1cb7e9d81b97f21a1f9eaad2324e894acc721c5",
-    "CertifierDevice.Link.cost": "bbf0c4d1818f9cd1ffe4ce7d8e78488f60d709a4cee93a3142c8f9d5fa3bcf7c",
-    "CertifierDevice.Link.count": "b817aafc3a6bf7ccd1d7ca5e6944a0f7a683e918d212b2c5cc8ab10d55640835",
-    "CertifierDevice.Link.early": "c18363cda88c11ec870daf53bbebb3a33c4fc8ecafdacf58a8a6d0306349064c",
-    "CertifierDevice.Link.hBefore": "526e01ded14f6ff1d7f76496d20167758c694c5f638c48de799f723edf20fe25",
-    "CertifierDevice.Link.index": "7b2b4f4d2d1e02c51ef019065c9fdfbad90edcb54b2c4d719b19634529a64d62",
-    "CertifierDevice.Link.positions": "323f7b035ce34d63dd8836dc120285994db263d9c89c2cfd8dbc33fdeb6daa48",
-    "CertifierDevice.Link.ready": "7417e3a90f68a3a808e5b292d72339d145ab1230eb661c0d6e8bf2a60ad680c3",
-    "CertifierDevice.Link.see": "7e2b2af314834715e52732293b5e194ce2363739b4ecaebd58f6eeb62bbbc09c",
-    "CertifierDevice.Link.seen": "697b9ed3985301b97120f451ed62f1181d9e0e2e05f64f599f0e17747bd4767f",
-    "CertifierDevice.Past": "fc811e12c481dbd338746a0712f82274ea52c427acb3ddebd34cbb6a2e701acb",
-    "CertifierDevice.Past.frames": "9cd80d7adde121484b42717955068c714887e71ffdb42d120384a250b64f5cdc",
-    "CertifierDevice.Past.frontier": "45e08c72819fb2bbad72e4a53ac1141290f7d0e4b3367fcb598169b1fd5c95b7",
-    "CertifierDevice.Past.late": "929b9d7670af8820c966fa2f9becf28ce5d11bc1b93c4b410cdc27b5ab7319c1",
-    "CertifierDevice.Prover": "2ee0c92dbd254a31b27812cefb4fa86cf009ddfcf1aef2ddfc5743f08ca104d9",
-    "CertifierDevice.Prover.T": "0ccd50561e8141579a09bccc0f9539d60487315bd76cb51d1352f10d9f64b7bc",
-    "CertifierDevice.Prover.arrive": "a65f794c067333b51adfe30aabceb9ce5cb49ea9937784c14c994dedf0cad66e",
-    "CertifierDevice.Prover.choose": "ff55dda45688554b87aae36c6a58d47699b4801b2286e33cf19c4bf9935fb902",
-    "CertifierDevice.Prover.declare": "ddb410e5e609282be44cfcdb62b5be3d12ae3847053851050269d920d150f415",
-    "CertifierDevice.Prover.envelope": "9c3bded6d5f07a0cfd3a6baa3405b1c8ec35acb2603b30d442a1f0bfecb4c459",
-    "CertifierDevice.Prover.lag": "8ef9be70498636640e0e3180de1c59d31100bae4edcc2497494674add17f8a3b",
-    "CertifierDevice.Prover.link": "545fe05159ae77921e5f9d35b32faf1738cf34aec85c8418e9591f25f6532bde",
-    "CertifierDevice.Prover.make": "9535f3ca4b1a724e5974340e99132a3c4f8ccc1a85e6c1d3380e93547a6c1ec7",
-    "CertifierDevice.Prover.prior": "31ab6ef4c09a366ca3ba146c9b6ae15856407dfc17f0a86d624348db7f8dcdb9",
-    "CertifierDevice.Prover.rule": "bb099a192061de2437e7299567d1553d6acedd527c9baa3d1788b8bd47e90bfd",
-    "CertifierDevice.Prover.summarize": "be4e6120f01a4add1cd9ca0944a6f6d0c6ae7b2dfd6eff29bc4194682f88b79d",
-    "CertifierDevice.Prover.syncSet": "b0b31d79712b95c6b6996aed7af5cc781b7f34cb20e2a7da40840c18fb3c0081",
-    "CertifierDevice.Prover.syncs": "4511a4dd43502d989032558fdfa8525c333a5c1eabcfefcb11d821fbde5f4068",
-    "CertifierDevice.Rule": "903c432546de3f83a63b8cde8a8c92356aef9b09f632c3a1751827a15478f846",
-    "CertifierDevice.Rule.choose": "58e2ada8cd93c81013b4a40f5be69d260d62df2f0f2a2a2e5fe58bd2bd6220ec",
-    "CertifierDevice.Rule.fallback": "bc985b26f939711bf0313465e578d844534ce7514100a72a151d84499605e8b7",
-    "CertifierDevice.Rule.k": "c7e5aa4f40f4c171f8cef98911b4668a467f2371c987564ef64ffb561abe854b",
-    "CertifierDevice.Rule.margin": "e75a83f5c420babc54285efc79f820d216abd3e776ce406b9e890ea09a6a1d79",
-    "CertifierDevice.eligibleAt": "58b910cbdf7eb8e7e4ddca1281c576fde4e455237190109ef18c7a61269c2be3",
-    "CertifierDevice.inSet": "01369ba62f3808a7110779859ca9c0ca454c73133fc3e485737562179ab3c101",
-    "CertifierDevice.lastN": "b4544c81beb32a088ca375c6cd91fe7115395e5ca9f068226a890cb35f0deb91",
-    "CertifierDevice.mkSync": "fac1805ddb8796d903cf4864c05daa2ce74a5f918460f132a8742b8e06f878cc",
-    "CertifierDevice.sortedDeltas": "2bfe1c771b6d4a76b0ab025d245e42e4060fe351f48a1f9a3dffbd9d696eb5bc",
-    "CertifierDevice.sortedRhos": "1657660d5150394b0c1a3e599f827b8bc3ce29d96463a0bcd17021f66e311649"
-   },
-   "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
-   ]
-  },
-  "CertifierDevice.Shaper": {
-   "digest": "49a66b5e50bfd1edb6887983a872b2abddfa71a8a84c68226fc60e2df4dbc967",
-   "definitions": {
-    "CertifierDevice.Bucketer": "269b9d5dec080fed93915d985086b668528331d32c813b6005fa52213d1f9fad",
-    "CertifierDevice.Bucketer.arrive": "ad8c1db2b448c437f8546c8ea8635c38f9bd163837c76d76419f523904e8e30b",
-    "CertifierDevice.Bucketer.certifier": "e9e854e61df943fb537a93da9e1c7803b57178fc9bb1cf5031b0c0c19d5a52ce",
-    "CertifierDevice.Bucketer.t": "3a42fbdce76119503f22b6d88af5508fbc6b3a7fcb48b289e0a88fc6894a60a6",
-    "CertifierDevice.Bucketer.tick": "87d8fb9c1e0d674c38b281387713fe9297deae1d9a233aeefee46b73f1d9a98d",
-    "CertifierDevice.Bucketer.waiting": "40e37e1917ca90466c1738a9e67c17a9f3a6f323b0e4c44a2726abe84c431670",
-    "CertifierDevice.Frame": "c0c6148e12ba5b347aab4bc7b152a095e82cae8f862c3c77e6787fe5a833f91b",
-    "CertifierDevice.Frame.anchor": "9e77b046a7c21d304e73d483250441d109565d92de88d77b23943aebaa85444b",
-    "CertifierDevice.Frame.bytes": "905340defaa0af819fdb9e3b2d5b2f48d2690e3415e501ff4111bfeebb0a838c",
-    "CertifierDevice.Frame.index": "8d46496f6c82c747a040046557fb9a17079d8bac30606261a295ea739d79d2a7",
-    "CertifierDevice.LaggedChoices": "67fd83c4e2e5d909123fda4e0ab14171ec6274495b6444a044dd3d27d5e58b33",
-    "CertifierDevice.LaggedChoices.arrive": "829e106806b69b3e766a263cd55f8e1fe980e639358711c45bba69b40ea27e33",
-    "CertifierDevice.LaggedChoices.declare": "9c0cbb241fe35bc3140816b855d71f5a44089d63ecd313ec28191e8494f5e6bc",
-    "CertifierDevice.LaggedChoices.next": "f84df3e7e2e77ab63bf5053e8a77ee0ff0edbfe7dc3443b6309c60cd0ee28675",
-    "CertifierDevice.LaggedChoices.prover": "f2a561a01b872e0c64ad542a8ada1149a31290f7c8e8754779dc591cab5a8b2b",
-    "CertifierDevice.LaggedChoices.refused": "7d5a6e9c6a9c3363dc61eb94fd726e911c9a7acdc3ec52e74d82add7aee2c8f3",
-    "CertifierDevice.LaggedChoices.start": "69f9fc8a2bca0ecc3aed46073bedd7ef1a857957c79b1dca976c36c4efc9f499",
-    "CertifierDevice.Shaper": "9913aca6089a4a3f64258f4ef8814c7539f75f960809197faab9c5e5f2f8d1fe",
-    "CertifierDevice.Shaper.arrive": "cab779f10619b63d4ddaabe3b6d9178bf77175699be03181bda054cc7532e444",
-    "CertifierDevice.Shaper.certifier": "44e43a8dcec7baa27ca3a05b8500508db5b05bf45636aae1388dd6c380eb5772",
-    "CertifierDevice.Shaper.checkAdvice": "01bbc2473536ab047a6ff514cc7521190ccd5059cd5cb8aa6758017516f2d130",
-    "CertifierDevice.Shaper.fault": "8907c4fc23b16a92e725a4f055e58c4671bfa59c92be2c040ce5ceebd91a2f52",
-    "CertifierDevice.Shaper.h": "8ca37781edcff06e3fedc8e5481a1e34d7313aca7b9723fde609b4dd9e6b6079",
-    "CertifierDevice.Shaper.hands": "51ba539aa8d55e5db1e0ccdae1008308587e1f2e9cf43e834d372da2a7aae38a",
-    "CertifierDevice.Shaper.last": "c4f9b733645228719472e5e329e6cb69afd3bc6ac3dbddaae84fc377c99bf023",
-    "CertifierDevice.Shaper.make": "73a666822200593341c8248b5c3b854340e8ba91601fbb0e2fd7af7d6b617583",
-    "CertifierDevice.Shaper.next": "7559ac31a749b2df89d3a6b56f7ca422d85bc9a81491967a3c6d4b8458ec830a",
-    "CertifierDevice.Shaper.pending": "b9879fbdbe939e6e76aac7400c8cb708f890fafbab0bf6a7a286e92502667e7a",
-    "CertifierDevice.Shaper.prover": "33f3b98e645e53ed1e9f5cf6b5900c567f54afa3413d6d3da241d40db8cf1dc1",
-    "CertifierDevice.Shaper.queued": "43a4b765261431374ee0672442aa039dd92eac114fe070d6df5fcae53e11ceec",
-    "CertifierDevice.Shaper.syncSet": "4b247b0a0dc11b7266aca681e492480f06e3257236191295f6277ca243dca371",
-    "CertifierDevice.Shaper.syncs": "1129756b7a773c4286591a72e982979b52c34a0f4cc5cc32652a7eec228ed584",
-    "CertifierDevice.Shaper.t": "d3bd6acc46f4d9cf908db6071ca59e3558d989328ebb0c4849d8e569eb9a1ac0",
-    "CertifierDevice.Shaper.tick": "d0abe55f2d88a3a83b9bbd2c89f8bc01fb765f6e8ccca7bfcafc98758783bd74",
-    "CertifierDevice.Shaper.windows": "50a1fdf1ff533a264928bcd66b40c2bac7e4e3ad11060515151228eb2ff8a5ed"
-   },
-   "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
   "Definitions.Core.Circuit": {
@@ -546,7 +575,10 @@
     "Verity.Declaration.D": "4796f04f2ae9193027263ff5a3e82a079e0104c069845088e0b6666b007fc552",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
-   "guarantees": ["NciCheck.Properties.SecurityProofs.Reports", "NciCheck.Properties.SecurityProofs.Witnesses"]
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Witnesses"
+   ]
   },
   "Definitions.Core.Partition": {
    "digest": "a61efe7bc07bac847495f338197cdbd33a863ef3f0523f100bcb46ef3da67298",
@@ -568,14 +600,18 @@
     "Nci.Policy": "a81cff6c812131f35e8b34e7d21b6fe0cdfc05c26075c9806d0b45ca908d872c",
     "Nci.novelReads": "f9a643aedf8a9ffa1542961e8c8a249e4e9954abe74c705a91d60d6565a6cf79"
    },
-   "guarantees": ["NciCheck.Properties.SecurityProofs.Reports", "NciCheck.Properties.SecurityProofs.Witnesses"]
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Witnesses"
+   ]
   },
   "Flock.Bytes": {
-   "digest": "d0fd0121668a10aec9694bbb20b851019369d6d12a64450257fed47d166985a6",
+   "digest": "6e6095eec3949aa0537b096bd01c636d1a56339b6b79c3650fd7829d0833610f",
    "definitions": {
     "Flock.V": "9a2fbe4642d5cc5cadfef0c823bb3b77ffe1f0a9ec677602dad8a142eeb4f4ee",
-    "Flock.be32": "851cf97622c41660202d5e44f768a86d5721ade4ad9466a725555a580f9da652",
-    "Flock.be64": "b57f46169edd9c5c42ec456f4139fad51d62b5eb56e7a9ea0137e6909c196e13"
+    "Flock.hexOf": "af7629f7cce9d3332331bd5e6d2bb198d21f9fd3f90298c5a57c5e704a04fc61",
+    "Flock.unhex": "a0a0e6fc12acba945d0040b0472350264b198316683185f534afeec2fedac5e8",
+    "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
@@ -585,19 +621,30 @@
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.lmsCorrect",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
   "Flock.Canon": {
-   "digest": "cbdc90b26c9c38b69b6535f142edb4e9cb11e575372582a2cb2d10af8027c6f5",
+   "digest": "cff07bd5e7e3c3b8bdf747b3f465634474da235d2f6a24e413ed7db7e40e8672",
    "definitions": {
+    "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
+    "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
+    "Flock.J.asBool": "5e94e60c61cd97c9256e837ceef03e1c86ea1b3d92a35d6f977b1a56fe26ce1e",
+    "Flock.J.asNat": "b2bb333e2ead86afa350e700ce020b00506fa75b672f7eef4753f1a8c71595a5",
+    "Flock.J.asStr": "791157c5ecc4f6a140378e575b030661c8cca532c1e232153200c3c3f238fc90",
+    "Flock.J.bool": "01c1b65eadfc01b66eb3afc9124f813eb0754bd3d65251a27850fc94b6ff8ae5",
+    "Flock.J.get": "b9713926f46759187e8644c994f413c55b938954c67e17c896bc28271d5b02ef",
+    "Flock.J.has": "ca6982e3c1614babecc5c8ac4f8e0dbe6d84112fb997d55371d9644449b9d208",
+    "Flock.J.nat": "14651f660693f11c7c802159f9ef5dd00e9d1ab41c9994d1475731cc4fec6aa0",
+    "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
     "Flock.canon": "93dbf8cf653d16c809b10196ae319b382c9029b69aef49a3395c51de57ae1519"
    },
    "guarantees": [
@@ -607,7 +654,16 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
-    "NciCheck.Properties.SecurityProofs.Witnesses"
+    "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
   "Flock.Hash": {
@@ -628,9 +684,15 @@
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
   "Flock.Program": {
@@ -717,72 +779,6 @@
     "NciCheck.Properties.SecurityProofs.Witnesses"
    ]
   },
-  "Lms.Sign": {
-   "digest": "96eb58a389918cfc649eb17256720f6099c039b007aec02d4602bb3ab2523fd6",
-   "definitions": {
-    "Lms.PrivateKey": "610ab62a51e32cfa20ed698c418c68534ac34dca46b720a0bb0825984c3908a4",
-    "Lms.PrivateKey.I": "341233069ea8e1618ff0a033ab088477387913dcb80fba9c2b56c2ff11774d0e",
-    "Lms.PrivateKey.params": "8a475ad6b4306b23ea71fe265c10c8bad109b2e5df2be9efec24189951933d39",
-    "Lms.PrivateKey.publicKey": "99f2842bca185979daf020b67c959bee68235eb735447daffd48ac773e112860",
-    "Lms.PrivateKey.seed": "2521137ae7fe1bba27226657d127be225dea42b71f3b40ff2c87bbf772e1c535",
-    "Lms.PrivateKey.tree": "79ad5937c23216b87306d5882473d160a1071120812699517915251818ee07a9",
-    "Lms.Signature.encode": "af378b331eb5e1720515539aeda39d39a4bb28e5fe0831bee6be5e3b5da644c0",
-    "Lms.key": "3e2bf9383c8fcabed31a2c1809f9fb40eb4f55eecab15f6cd50b74f1ae846234",
-    "Lms.leaves": "bc88fcd12f78f2d0de245dcf171e48240194be4911324b99f6418917208fef8d",
-    "Lms.secret": "9a1da7b4c316ba2ca43100102095dd447d344070d90383de37ae74d4c191c504",
-    "Lms.signAt": "013e60d1e8eb98aa9cfcd9569309b9601fd53dee8fad48b90c5afb7632463676"
-   },
-   "guarantees": [
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect"
-   ]
-  },
-  "Lms.Verify": {
-   "digest": "ecea46a17a19d5b5dbafa4e486a7fbed70a29fe7dc4120e547426be5967e0ead",
-   "definitions": {
-    "Lms.E": "d759af36d2c420633b2d56f9888eb0310de1770e732f1f9cabb03d7f8909aff5",
-    "Lms.Params": "679cc9176cd9f6a49a9e47845678e7b4818de31de71e90cb81daaffb42b767b7",
-    "Lms.Params.H": "1a37e38b4de72e323faa28b3e037207fece9c7e7860f9a5e653b113ab109cb1b",
-    "Lms.Params.LS": "eb450361fedbc69edfffd8ed6a5e9c8cb78673d6a5fcc67ca3be8ae806f9ee42",
-    "Lms.Params.N": "72455802b585ebc9716dc52e8f5462a65436f3216f8f07d5f81c91bc9309055f",
-    "Lms.Params.P": "77839a971cbf05e187cb0ba023e0eec3a082e9b966b63d8c9be7b4b67d042184",
-    "Lms.Params.U": "42f908918978a5fc6837dc93db222ff561367f77750cd5fd858703b960dd1972",
-    "Lms.Params.V": "38bd1668be3b7a93f879a4f6a49846b3534608bf3325922923d5becfaccd3e71",
-    "Lms.Params.W": "a6d8afcc6743d4191508dc76adc0c1d5231c5732b9e8efbc027c67b20be61fd3",
-    "Lms.Params.hash": "a8703b5997f9d4f97c3dd79b9e1d5da0f39c1870e457ab5616345f4f69273597",
-    "Lms.Params.make": "9583650c4eb31563b0a81ff4856ef22d5755ce75d5c299e16e54dada415ce469",
-    "Lms.Params.signatureBytes": "003dc91c18f0d30559a20d2d74e2171440afa31f8170b840626bd478a5f6006d",
-    "Lms.Signature": "1476534fe3846fc4c09e6b4edf5165d8a7c4165386173315e2203b8150f25d12",
-    "Lms.Signature.C": "170c942614f8da2aa06801423c88851a0166deb094c7b70f289e25bc95c36fa4",
-    "Lms.Signature.decode": "cf02cea7ddb21c2cf7de8aed785f6517eaf88e95fc5f4af5c6d38753ae49e5ad",
-    "Lms.Signature.path": "817862c85ef0cbc8cf4e854489be6353948ae9669c34ab31a57f05c1058f41cf",
-    "Lms.Signature.q": "190bb0313f73e043c6d567f1476d4d426ee169c331d6ffbe4f7db0aca0baa7e7",
-    "Lms.Signature.y": "858288d8d403f2b389572a620dbca4f54a36c760a6949477e9b896b108434570",
-    "Lms.bitLength": "70ec91b18447a735d549b6f0e0ca8ed394205eb1e5d5515ab9812762d486a53c",
-    "Lms.chain": "b01b1cde5fd3c2b7f6663d4c667cbc3522ef0dbda3b1e78eea8ed82cdcb3ed43",
-    "Lms.coef": "a7e345f267aa0a9ffba10e4605ded567c52fc0929dbc157a829e1275238c2c04",
-    "Lms.dIntr": "ca702caf8b468dc309684397e713648024d1d0ee41e8cc80f4fbd80d942973aa",
-    "Lms.dLeaf": "0cbeb3ccbd5c278a556c3dffbec194882211945a5791b9bf8f218d82957c4458",
-    "Lms.dMesg": "b087849603a3e679b43ba5dfad1669dda11455b9deeb118b5da042d4a9868122",
-    "Lms.dPblc": "93ddd28c0b5b2d8f52ff7606d4a971cf34de4b959f2ffc8774fe34e247b7d7fb",
-    "Lms.digits": "016f389a178f2f84019c4807a8dc07ee43c45b3054548f7e7dd1827402862fb8",
-    "Lms.interior": "2d018c0c23f3a97715300f29196a14d15189ed618c5b88ca258153e414ae517c",
-    "Lms.leaf": "2f3edc3a7fc0861c03c16cc4e891bbb70206d536fbc03ad0be52e8a1932f9a46",
-    "Lms.messageHash": "c7280dd38f49cc8f2d77c5bbe1f497ce4f065fdecc7ddd5d00265b9e6a6b4820",
-    "Lms.otsPublic": "710a3e78ceca6a37aa7e97675a0f5b01ce4bc1cccc4fe72e926fd04d89f29721",
-    "Lms.rootOf": "c91a3e0995f595a4c0c491852effe22ce948bd71349ea7c73c27287f03826a88",
-    "Lms.toyN": "0fa3cb8010b130413de3e768c144dfb5851c3a23428fb43a32d8ff02c49e03c6",
-    "Lms.u16": "9be01d43b2ae7059f446e079d5349367dd312b8139aa317859b02529484baa27",
-    "Lms.u32": "9bc3ba2f006e3f411b8870f342c6902f6298960a31ec356ee755019d6858e918",
-    "Lms.verify": "e4b8065fd9ecda3f72f3a8d9cbd35b348ad16e89e96084e1cd081a7dd37b58de"
-   },
-   "guarantees": [
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect"
-   ]
-  },
   "NciCheck.Check": {
    "digest": "3ffe1409522df38a22541b7c11b297eee0a2aba09933788283211ff08280fed5",
    "definitions": {
@@ -832,140 +828,201 @@
     "NciCheck.Properties.SecurityProofs.Witnesses"
    ]
   },
-  "NetworkCertifier.Grid": {
-   "digest": "2820ed149c9f5c25aab1a13fe34e16774250801c8bbaaca88b61e263b417b53c",
+  "PouwCheck.Check": {
+   "digest": "df377d4eaf204a413a7091be02887a82c122fd50f020bd648ca65f4f23575997",
    "definitions": {
-    "NetworkCertifier.Grid": "939aa34897c384bdd15f2d1e0bb266d1dc92f9e35d98d3403b0f20a3991c6b3e",
-    "NetworkCertifier.Row": "14521db588c4829f702c6f7cf34c99033c801a2660ed7ad54a1f7faebfb4a98b",
-    "NetworkCertifier.fifoGrid": "574b595afcaabdac77acfc9720518f6597271129daa1c19ed3f5e78d6e76fe22",
-    "NetworkCertifier.fill": "b5916e72da63790badda0683273411e7a37cef6befda1ac0f8983dd6ed6651d1",
-    "NetworkCertifier.offset": "11936ffbcf3bd56fef77f2cb72c860aa3b2191f8026b04a96ae49b14650d9ee8",
-    "NetworkCertifier.queue": "9cb5b90d40cf61fa0fe209000555ca6d7a77bff64bf92390464c83961656d5ae",
-    "NetworkCertifier.released": "1fdcf4e8c44f44d33b8544e62b77d34595b04ef42157d1d719e9d1e656fdd80a"
-   },
-   "guarantees": ["Properties.CertifierDevice.completeRows"]
-  },
-  "NetworkCertifier.Run": {
-   "digest": "6f18e757f429484ea8d1113d157daea0df7db7579c5c7c6528275c268674465c",
-   "definitions": {
-    "NetworkCertifier.Reason": "ab97ef852873bbd61b3648b239e39e99af283c1ded9371faa6361adaf28167f7",
-    "NetworkCertifier.Reason.coverageNeverEstablished": "1960b1121a0121e2ca17b5c1384e468265063d2ffba04016545c76f529ecf217",
-    "NetworkCertifier.Reason.deliveryRefused": "3b27517e3926ba6dd88b6827481cf3cc5b2fb93879b70c069beafd9576c455e4",
-    "NetworkCertifier.Reason.dropped": "73b267ad1dd3e7a59a03780f1d4642b00c7f6f4a83d7179c3f3c0ecc6f75bedd",
-    "NetworkCertifier.Reason.malformed": "830c23ec8d4178d582f542242fd589ed40679496d5c68eef6b12c446e0049f8a",
-    "NetworkCertifier.Reason.monitorUnavailable": "43b996dd274789b1e0715982af54d4fcb5a2a5aa6c7cb10fce00af685532c46c",
-    "NetworkCertifier.Reason.overflow": "de77221c3d08688a959feffd1e758171ee5361cd5be03488857861511df05cb7",
-    "NetworkCertifier.Status": "e2f2f92c502420425ce3b32ed33a5059777ea1e8dc82b6893fa136957b4c81a0",
-    "NetworkCertifier.Status.complete": "1ebcb08fec7677c6badaf7556270acb74c3628dd443041a20f6602a2e3f7ca92",
-    "NetworkCertifier.Status.notEstablished": "9dcb5749ef14b8cee367ce7b5a3d1539ba97f6dff00e2c7de4f89e2a25a82d02"
+    "PouwCheck.Ascending": "5b24f399fc5f235318482805b82195fcd9be209ce00f792764266c5d6b990d75",
+    "PouwCheck.Ascending._sparseCasesOn_1": "0c39ffd45af4e037eade16be68e5fa6788d2bbe70b8d526e16bcd2e57c0da613",
+    "PouwCheck.Fixed": "fae80a497f2811eb30e81de8a6e395f427a58b3cb9c523285af150ebeab9feab",
+    "PouwCheck.Fixed.rootW": "d421261c51b43d285fee374e6f04bf4fff8ed5e2745faa979919ea8b8848e046",
+    "PouwCheck.Fixed.sampling": "f74d2d76c77a1ed04007729d97a078ea8b172f42ac9811676ed1c58f03cbdc0f",
+    "PouwCheck.Fixed.work": "c2353da100ecbbd5c7d2a6b55b5be85300b2185cc1cd6b1c51439d3f469cbe4a",
+    "PouwCheck.Public": "8031d6310f1139882a84b4a201f292e85036fc700e5f81e53a33506fa345b14a",
+    "PouwCheck.Public.check": "79c2f4b4deef5309f001f478122e320e4ba652f072f85d875d8f83f481ea63b7",
+    "PouwCheck.Public.drawn": "7ca135d1f68fe2fa8b19a012ff0e6d04a7c395d020cd130969ab4c401c0ab908",
+    "PouwCheck.Public.entries": "72d786677f35b1a308f037b848f76df5bca2313df939e9b5d160b82257fc9dff",
+    "PouwCheck.Public.rootW": "aad6cdbd5132a1a34776f479ce733329bfbfb571e2d1472644ed5b4410211901",
+    "PouwCheck.Public.sampling": "db3f09cd21317c396acdfa8022ecf61a1abe351a0458fddb6c6eaf12b123d115",
+    "PouwCheck.Public.toJson": "efd35449511f701f5b4685464ccd243a86e4ec186ab98df7313eb3de5721a693",
+    "PouwCheck.Public.work": "b0cd6695aa01dd789cef623f10e00acaf022c281a40a4f1fa6a6cd2d38976648",
+    "PouwCheck.UnitsOk": "c6172338ca8b58f942a9340ee88124822d1339c12c13d0f196c29c021af75af6",
+    "PouwCheck.check": "94ac973007eeb56f054a375a8139269a16aed72c72399b8e5372640986f82530",
+    "PouwCheck.drawnJson": "fade66408d23b0b0eab5778a7f1ad5cf199e20c673111609fbefbf4ba450f5d5",
+    "PouwCheck.expected": "2eb99e27bfe0777853a566cf505b6217fef2e5531786341cef63c27a38698130",
+    "PouwCheck.instDecidableAscending": "46c5087c95395e4218b98a5650531f479f0a8dc6f800c8581cf88743db3afefe",
+    "PouwCheck.instDecidableUnitsOk": "2a8dbd2fbbb04ddf0b8880c9ae0eeae7403a09dc56765e94c57ad0038a3871a8",
+    "PouwCheck.levelOf": "48f5e3917b350202b7eac92f3d54572ce99d84524251aeb9ae909a94f33bfa4c",
+    "PouwCheck.oneStage": "7c719a8a358542840a7addee323c893bd08649baf8394bc21abdc81c1da2b026",
+    "PouwCheck.outcome": "cbb3e3711c2d4ecfa3807acf7297fee5b0a4da8dc0ee1f16c8f64a3b3049d24c",
+    "PouwCheck.registered": "b7188a0c032df9f1dca518e1908f79f264f6c3eaf9205a06383d220f2024edc5",
+    "PouwCheck.registeredSorted": "f3f3a15aa0a16dd4cffc22b3339539e97103a4defb099402d8529770c8ee58f4",
+    "PouwCheck.rootWJson": "59a1924b50d1366c4da946502953c90fb8130f0ef9a79bb0e1d93705c7787fb6",
+    "PouwCheck.subsetLaw": "55ca9133ec253a0ade5266bff2c39d16213c5ab5821cf83854ad3ad9fdf492d0",
+    "PouwCheck.toRat": "00ebf143e79a844ab45084a02fceac137d3c32b877fdc89f1818a9e6f798330e",
+    "PouwCheck.unitLevel": "272be5cfa3f3dab555b8fed68212f5e76a99f4c15b67630baa22a4796ce0d3a6",
+    "PouwCheck.wrongItems": "b21fbbbd00797cffb6602f73c045f76d5a2f57badad60a041340556db20810c5"
    },
    "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
-  "NetworkCertifier.Schedule": {
-   "digest": "10b75eff80f51975152b81e490b68cc124f454bb31b433aa47280ba3fca29940",
+  "PouwCheck.Inputs": {
+   "digest": "4f6e2342bc2c6248425de61cf74e08900e49a5d3c5823bbfeaa37172e3f29c72",
    "definitions": {
-    "NetworkCertifier.ClockSync": "c65c0e7cb9c83e7b0a7a8ca262b6cfaa2959b34fdb0f2ba9317dc3aa2c0a2c13",
-    "NetworkCertifier.ClockSync.delta": "86eec444cd545a1d85fabe3294e6d8d1ad0317ba8f779d4b458c25312841e4f6",
-    "NetworkCertifier.ClockSync.rho": "7e6e456765a79bfaf59593ab6c93fabcc7cf4252be1debfe91ca51da1bb504f4",
-    "NetworkCertifier.LogicalFrame": "b9d6b58441ba2a73c4a60bb7a4260115620ad85e4c19f3ea530bba8660d33a82",
-    "NetworkCertifier.LogicalFrame.anchor": "d6cecba982b5c6c8141acedbd4cf3ab976bcc9cb6d20b0ac60079f06c769c7ea",
-    "NetworkCertifier.LogicalFrame.index": "48e796acfe38187ca74ec70d82bc1476a934c705bce545887b305a784622ed68",
-    "NetworkCertifier.LogicalFrame.payload": "42aa8712d0ccb631f59d979c903441fad5b922b371b21fad13bb341a686fc917",
-    "NetworkCertifier.SyncSet": "21cf1ad406dba9cd9be13c0656651e05e642abc979e47203f5af2cf24180d912",
-    "NetworkCertifier.SyncSet.deltas": "56708863c9fcf25adc8e5fb0a6162c58127ffe5a2d22a7e71e2a0191a11aac72",
-    "NetworkCertifier.SyncSet.rhos": "fef6aa011f5487fd349faefb86188d6eda2bf41651d86986675e9cb95488024d",
-    "NetworkCertifier.eligible": "5c93c34d91320ae8bb10f2e951ad3e20c0eeffc48ac55a93facf690718bf14a8",
-    "NetworkCertifier.enqueued": "c5962f6ff2f6f48a6f7cda2076821d019eedf7a5c03ce1a00606d938646bd5a5",
-    "NetworkCertifier.expectedRow": "be6e22ea3b91730480d7177b7976e3a936ec946cda45e29f8802fac91b41c160",
-    "NetworkCertifier.handingBuckets": "7ccdd90843ff22d3d6b87b0f753e87d2080cd995e86ddcc133a36713350ccc1d",
-    "NetworkCertifier.handingFrom": "d263adc51325a2256ff9f4a5be03da6f16184be44644f1c0c4fec3656f18978b",
-    "NetworkCertifier.payloads": "eabf67a4741af4f3d31371a37212653f5039c29c32180a31458c90cfb52f6a95"
+    "PouwCheck.CheckItem": "9384ef0ba0c61cdfc46e1ff5f90926b1aaca1e4c4edb074b5811f24947bf9360",
+    "PouwCheck.CheckItem.entries": "365e8e5800b4923474c9bba5cc3cf33f8f27451d35271fd7f0debb854fadb0e3",
+    "PouwCheck.CheckItem.scheme": "1eb7ea25d4d4416fd0b8dd8867017918f119c49361f2dc9fab9b7879c8dd4d59",
+    "PouwCheck.CheckItem.template": "cca198bd38b17050c5bfc84d9e64e9aa4bd5f129883bfb5d32d16967b3c63c2e",
+    "PouwCheck.CheckItem.tileWork": "be95d31b6d52b9e2f5fe9d4b38b6b60f81ede754dc76fa7189463df5dcfdbaf1",
+    "PouwCheck.CheckItem.toJson": "8d56e276eaa520279064728d848a9c06f1a82bf770054d58a60a835db0a46d48",
+    "PouwCheck.DrawStratum": "0808eee02ce604fe95dc00efe0e46eef5a37392f7432dcceec6383683c9568e4",
+    "PouwCheck.DrawStratum.casesOn": "a843ef390b62c26d4a0c10e1502840da3174f656cdbe7327681178f022e4891b",
+    "PouwCheck.DrawStratum.rec": "57f1aaf2c5ee4523c0934ac4e1b5ef4b4cac2391d693f09e6bd445073a5d5123",
+    "PouwCheck.Evidence": "73eb17faa1f2036a4ae23e7a8ac9bba37556d137c8ffa2f08674401a8d7c6dd1",
+    "PouwCheck.Evidence.commitment": "919efcd508a9bc70f85aff602aecd2ed6851c4d4ac88cbe7e51c898d3e682778",
+    "PouwCheck.Evidence.protocol": "cef4d6c424ff77fa2fe72802035786e8cfbfb50be010572b473c1401b5ac144c",
+    "PouwCheck.Evidence.said": "120d9bbfb88192148b5a4f5fb7c669b4f1fb427d9154919eace620fce159e0d3",
+    "PouwCheck.Law": "b71b9d310989a2d8253805b3d78aa998de6cab4e19872e808a812643ecebc733",
+    "PouwCheck.Law.bernoulli": "ce5981cb8912702d9968fd9fad7c5342d76298d331ddcae7440c3876137d3d33",
+    "PouwCheck.Law.casesOn": "9f3c78940bcd1da47ae033743fbe679c181fc9488eea05d69afe4b022873f4b2",
+    "PouwCheck.Law.name": "52dd6b4b2ee1a9fe753ac1a26b6bbee5dda67287f1b680bf17e24907f8ef138d",
+    "PouwCheck.Law.rec": "464bb2ba502cf8226f7df99c51c5d6a0bcdc63a2301af5d835d2086655627b69",
+    "PouwCheck.Law.stratified": "6f1c912a21fa7b05f71b6a2068699dbd26b4d241263427e8282e1013fc492420",
+    "PouwCheck.Law.subset": "37fdb78813f4f36425e7e79b6c7d6a0cd2d47e06b9639be1aa26e2b7166b9892",
+    "PouwCheck.Law.work": "186a6fe860080638e99a2b6b527ac73cb9b70e1bd77de575d59a13e983d69efb",
+    "PouwCheck.Params": "4496227105d280ac5a22166612c498d282f3ba977ef4e9320fc725b55adc30ba",
+    "PouwCheck.Params.check": "4cad12ba9a459653bbb205ede041c453f1f9b9b86429e04a1ce37d898f7407c3",
+    "PouwCheck.Params.context": "720a412e36e9fe4d9289b34f29edc68ad6522602a216fb39ebcc8af3903c9c15",
+    "PouwCheck.Params.delta": "9bb405fc90f81942b54e6e8980d7d409a12635a5aaef14923ef11e4aaa01305a",
+    "PouwCheck.Params.eps": "9f8dfa4a0e899a4abbeb1f24c361979938fdac8b106cffcd78e54518f56deac5",
+    "PouwCheck.Params.gridBits": "7f54c735b1efba2394c1033adb0a9e82224a8c6a45dc6a53fb71bcc7a4430c60",
+    "PouwCheck.Params.hi": "4357f276b6ba115d0c5cb87107469f83d98e218c55ab29c0b00007f607823f1e",
+    "PouwCheck.Params.lo": "56d918d0f77567d0b0b0a1f309f802b6a24e4c7dc5be9e1896a7d2d41c80bed3",
+    "PouwCheck.Params.query": "6dce4e5cd974597d0bb7233fd0dd8aed2e9e0678277ee73c4266cb155e54b50f",
+    "PouwCheck.Registration": "033283f2919d0350646a0302eefb1f2bb975611831ca749028abef5181b2c3c6",
+    "PouwCheck.Registration.bytes": "baeff8fe91acf5297042e6c9221f1cfcbc8aa7d4af1b66929363679ccaa5e023",
+    "PouwCheck.Registration.digest": "e7bdab24b3c934c55af62291756caee362c454315e96cb431aba8ff33a6633a5",
+    "PouwCheck.Registration.format": "04247820bd84289e937d29fbb93bb2c6e21d5d65c776fa53ae3b7f2d46187264",
+    "PouwCheck.Registration.law": "b9af16fd4ebcb6780e3fdc403569181671ffd3b97541f723d573d8c75c5d88c6",
+    "PouwCheck.Registration.partition": "adab3c77b7021bd1ae4ca6c0eb0b704729075dc56ad2104364f35066402c9bcf",
+    "PouwCheck.Registration.population": "e55b17955db291d52ef55b74668a7b01175d501bcac964181af3057d44a55b89",
+    "PouwCheck.Registration.program": "bd3d679a9afd48c75fce4231a1288bd70d51e79a6b978e47f4aaf8ddfc5e5129",
+    "PouwCheck.Registration.query": "cea0c55c52410100ec28d74574558a0857196b7a4d734fae068b840fce799492",
+    "PouwCheck.Registration.roots": "0766f411c3c8d8a12d27889db3daca646c218ac11288a4f87f9d53e17ed0bceb",
+    "PouwCheck.Registration.scheme": "a7c8008e4dfe1c99d38a1c0140580292f7779a0788750f78786dc15e54dc7e86",
+    "PouwCheck.Registration.window": "6d5643873efb301049a06660062d770375023786c69fc944f1ac71afc048a912",
+    "PouwCheck.Root": "35bccbcd7104a542530a8ffc2a93e0c93bf41b6187e85011e650a5467959812f",
+    "PouwCheck.Root.port": "618bd1f5e78ab7861425e2405f7513d02c79e4117455b628247fa4f85c0830be",
+    "PouwCheck.Root.root": "4c4e8d6334d5c963547fb94bf4e94cc72fca5428af91383848f9c0c9bfc49019",
+    "PouwCheck.Said": "abefb47d4f028e171cfa3bb774ef9cb4b41d5cc7c3b0f0d36ef60d52621f6bca",
+    "PouwCheck.Said.accept": "3342b8f1e3c3d47d940d1495aa0e15119a2eb1d931e0dbe7a1f71d0bf98a2a54",
+    "PouwCheck.Said.casesOn": "d74858a54e38435e056617a63bef56a47712d81c178e9a76fdfd3c36400a9dd7",
+    "PouwCheck.Said.rec": "57e495cb85c9f22c4625779cd1e6c828c07199c4ca72348fe3293d193845af32",
+    "PouwCheck.Said.reject": "cd39fdf98549b9cc1e8c3bd455860489a186cb5caf457599ac8bf12a0ed65da7",
+    "PouwCheck.Said.undecided": "c9ed287c9367f4104372414bf81f9de15567924ba66bf891e2452ff1ff3087e3",
+    "PouwCheck.UnitDraw": "ba6722066b685ebe31d2477b223fe3f78ecdaf9649cc20d6d5971dca83d924a9",
+    "PouwCheck.UnitDraw.law": "708efa178ad65ce74f7bdf44243a43da8c973895774259368d454d60f699f69e",
+    "PouwCheck.UnitDraw.population": "f3b22b25224bfc48cd6f2eb7e008ec3288c2706504aece879b5435f60acf0c2c",
+    "PouwCheck.UnitDraw.units": "dd5b3c0a797ec4a857cd085222ca31331c71c9bb25a75b7a433208f40df9f5c2",
+    "PouwCheck.Window": "aa38af5927a3f3ddcabbdb5df42db3217117303f5e0c1b42822e389eacd7606e",
+    "PouwCheck.Window.context": "7072687b5f02d7607afc41e56630f028850fe6999da38a69773cff22d15b0a19",
+    "PouwCheck.Window.items": "7595f9995e585f0f0c852d4874c50fe44f1da5eaf31c27bb3696f926e39cb7e1",
+    "PouwCheck.Window.kind": "b49fc25453ad2dd2f07e72d57454ad3b7cca051bca6a9cc882a37f859f3b77a4",
+    "PouwCheck.checkKeys": "5e738912d6d9936bdc435a505ba74131bf4efbaab51c20f5ebd93fa970be10fa",
+    "PouwCheck.drawOf": "406ed37d317cc1cac9cb176a2eda558acfab903aec47ac6c2d1e5f268ac15c24",
+    "PouwCheck.evidenceOf": "939d7c8a7995b9bf9d6178d15b7a2e06e9f7927eaa88c2c08b20cc3cdef024de",
+    "PouwCheck.formats": "705f37f4bc100320c7f567b00356229adf9276db4f2afe5a9f52e56557d94369",
+    "PouwCheck.instDecidableEqDrawStratum": "f1bb6d6856a3a7e739322b85e68d66c33efefdce48c1644f8d8bdd38d8fa5f04",
+    "PouwCheck.instDecidableEqDrawStratum.decEq": "bad3500e89c3516fa895d16bc3e73e147abc5405d70ddbe80df1c74c16e10125",
+    "PouwCheck.instDecidableEqLaw": "ebd54212824ca96b1435f57b03329f4afac352879950b862e1ed74733558b825",
+    "PouwCheck.instDecidableEqLaw.decEq": "af100f9f51cf401b9793af20544318de0aa5e0f1a4ca23acb354cb2e8befeba5",
+    "PouwCheck.instReprLaw.repr.match_1": "cb541438d26c52458c68b04a6761131272d7cbf3b8eca5b0bebb813ff495b9e3",
+    "PouwCheck.isHexDigest": "b27908bdfbf27941f0383ace88b27f7e6247432af5ed4e99f35a7176fa1e1ede",
+    "PouwCheck.keysAre": "cb93ff04a951880d60b405350432cf4af10b762f9d98db0fb1e76c1c5d14d044",
+    "PouwCheck.natsOf": "8b06720885c182b44f9fcfe3dbf1ff3b95437357a2e672169bb2275cb912a731",
+    "PouwCheck.paramsKeys": "73e3985c6f8c6abec7298fe9f5f8fc79bf182f93fb49f68c327e54a349eeb444",
+    "PouwCheck.paramsOf": "f4be3826c410d37544b151d98f26edcb7b97c198d599fcb8bdcb1c9d1d59dd17",
+    "PouwCheck.paramsOf._sparseCasesOn_1": "f300954bd7b905bd5470f869f61601141446465b36703e5b824ec718f029c1f4",
+    "PouwCheck.rangeOf": "8eac1d5ece15a51be7970a3093d973f145955f81adf716202fa76f0c8bff74fc",
+    "PouwCheck.ratioField": "fbe08744ccfadc8920d70bae2d203c1892927538c395ea279081c209ec005acc",
+    "PouwCheck.ratioField._sparseCasesOn_1": "6b14fb22bf6a44b230e8ca60b8a77910dcba107a7e80cad48f643b1fb18c2e86",
+    "PouwCheck.registrationOf": "282e5be1ad4cb8c1a29d46d8a0efb4c23e7e43b5fb500dc3ca103bdc8e26d0aa",
+    "PouwCheck.rootOf?": "7b0cddacb4a5f93ab1971d436fe5e52b097baeb015a1be59b5ef1fa782fb8c2a",
+    "PouwCheck.scheme": "c21179b23322516caea0dbb602dda5df958eee98fa9739db17e2961e11e0d4ab",
+    "PouwCheck.strataOf": "25d1c61b52a2b4d495e007ef0e12e1abbd6524b7f64f46818eee95ce5db733e9",
+    "PouwCheck.stratumOf": "c7690943bded0dedfe4b8e12e9f2302ee58200ed2749e5c7b9d84bb6cfdd0953"
    },
    "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
-  "NetworkCheck.Certificate": {
-   "digest": "ce80e1ec8801c58cd0f5b275afcf953b901f96791d4f8b83953d1d412936a38a",
+  "PouwCheck.Json": {
+   "digest": "fca450d11a1ad291528cc6867568daea9db665678f8e43363cb5ec6c885ad35e",
    "definitions": {
-    "NetworkCheck.Direction": "519d7b238a6a7010b74ce176b9114a84f1e6327776152e4351350a34b5f07020",
-    "NetworkCheck.Direction.code": "17a155e16edf27c81450471abc2f0d639a973c4091e1834e299db41ea109e68e",
-    "NetworkCheck.Direction.egress": "4019c5197fc3f76038c6193749d43e548a00c69a457ecc946c151d04cfd08cec",
-    "NetworkCheck.Direction.ingress": "eafe3ffa8094a10a73cce695f68d9798b6d6988fec450fe125ea191a494eb590",
-    "NetworkCheck.Direction.value": "fb7a422154abbfa9da218fb5e12c7253a7b94718612947963e8501599ad1079c",
-    "NetworkCheck.E": "4ad734c58aaee5cbdb240fabce9d2e283dfd075068bc1195f333df1da7b15ef8",
-    "NetworkCheck.Params": "bfdf4cf8ed1764be3aed3b01ee66c0a48b01bb79cff171baf53fcb5a840322ae",
-    "NetworkCheck.Params.allocation": "1474079561c3cfa50494ce3561c2ba6a49e46e140a4ecf0ac30f936485f972bf",
-    "NetworkCheck.Params.bucketMs": "4bcfafa924754bd99f07a303f0a5310eac1da76231285233acef00adee16d16e",
-    "NetworkCheck.Params.buckets": "1139cd7109acd90f05e1a270fde46f369d6ee3d4b09be892123182d11d09bccd",
-    "NetworkCheck.Params.frameBytes": "029c023db0ec022f3d6eecdba74a1b078e285871b082dc6e8cefb29049cc377b",
-    "NetworkCheck.Params.queueCapacity": "9f36ea05772d43f28453758c5f3a1816ce617f24cca29569c3d2f3087fa73a9d",
-    "NetworkCheck.RecordHead": "885982243b79cfb022211ef37d4a4d462ee9d11eede6800572679456efad1505",
-    "NetworkCheck.RecordHead.allocation": "9969d115ffc89c80c94a0a699633ad64821c23b627c80e07dcf01d0cdc185b13",
-    "NetworkCheck.RecordHead.bucketMs": "f073d3c87b51234351b9036ac6c32084fb10a0e1608564526a2d38c5d21c5f8f",
-    "NetworkCheck.RecordHead.buckets": "adaf966be2048eee2106c4f05c195d8d776b7d00a6b47adbd038dc0209b969e0",
-    "NetworkCheck.RecordHead.counts": "941b6a44414c433a208a042a53e5942348e0524afe251132bedac3ea9edad8ad",
-    "NetworkCheck.RecordHead.deadline": "40dd91c2a6e35a90e26c563038f4e377bddda56b88cdeb4fe4d33d75be7d6175",
-    "NetworkCheck.RecordHead.digest": "de17360dae5d4f2c4943db42f710c3411b8a67610a76ac7ea64d5a9d53d59e17",
-    "NetworkCheck.RecordHead.direction": "01466055546d165314d5736f1d15a1c86b8e6d8b87fa8fa2263f2903ecb181e0",
-    "NetworkCheck.RecordHead.encode": "71ad93c28e00d96ffba2ca63faaaf2ddc7ff180f48723162e1b1ea5b791e460f",
-    "NetworkCheck.RecordHead.frameBytes": "6c1a29b3396d7bf7f60dca548e160e8bbc02ed6dd178aa6d1358a3540f0945e1",
-    "NetworkCheck.RecordHead.link": "60126c0fcd8c70fceaa1d9c65b63f93c31d8a5cdd4d079ddaa537271a30417ec",
-    "NetworkCheck.RecordHead.parameters": "6978caf44f0a61cf616058e67ffa59b4913528a605a8d0f4c1b4994f861ac96b",
-    "NetworkCheck.RecordHead.root": "9e3afa6b9b5ffb7c8b9f5f9d01388b89c8cafd4354f5ac509f25a11be038f3f6",
-    "NetworkCheck.RecordHead.status": "79f3b49eaf69f2a879c5a042835266c7f223d8b9852797253c6e99fa6ac8b14e",
-    "NetworkCheck.RecordHead.window": "2f5920160ba5db3424b3a157ea18367072f97395be85d3d20edb0d60f89ea53e",
-    "NetworkCheck.bitLength": "de16bfb450e4b0047070a242763f3d52739f8e5f0b5c8d1c76090ff2479b6fbe",
-    "NetworkCheck.block": "ad2e856d986609a7075d66d6ac463bbeba3fd2cf838d25bb167b4485d0df8eb3",
-    "NetworkCheck.certificateMessage": "284e599da9619c32921f4d3c7d7266d3bc6a707de52d823a21f10d71d371e316",
-    "NetworkCheck.depth": "292a8ae4fa00cffe3e3e0da41a478e8638cdab835086693a6b5a612cda249485",
-    "NetworkCheck.digestBytes": "9e96e2d93df6c73e5e3af40dcfb3bf843f8d99f947a2017ee9f712058c6e6bf1",
-    "NetworkCheck.empty": "f08effc99a6c0fc1d78e0b597a7d45c9bfe4675d530b9429418b705ed193b1ff",
-    "NetworkCheck.emptyTag": "a589235318b4acb2ae38cbd45381b4a6679bced47c0259f6e60de1fe2b1c9883",
-    "NetworkCheck.field": "c9ed4f8a032e4cea279c4829e429669597349984b1ac08b21958a590938ca4c3",
-    "NetworkCheck.frameLeaf": "342e28e403f18d73227d35a3538d8b614e82b960d3c90f237757795086a46b34",
-    "NetworkCheck.frameTag": "d0c52f28785b60b932cb9346786559d1e1ff6e0b18027f5fe0a2236ff2a51fb3",
-    "NetworkCheck.framesRoot": "a0b58b1476d2b2f6c0a23de832327045fabc253d6d2afab04bb1230af7497edd",
-    "NetworkCheck.instBEqDirection": "2ab72c10c55fbe4fffbd6ea200308ac23ebc922f20bf35c032c95d7b07981da0",
-    "NetworkCheck.instBEqDirection.beq": "8066bf4b8332707fa58011a2e96fcd5ecfb74b77d268fca9e951eee1a5af98cc",
-    "NetworkCheck.levels": "e43caf179c785eefc4e29b561df4b0587d9926587274c27e463228871fbd27b7",
-    "NetworkCheck.node": "e38f922b99b95ea5b3cdc04851297a7fa188dd5f1afd657d7d72a35bd8138c97",
-    "NetworkCheck.nodeBlock": "f8c97565db3956dc230555fdb73cb14fd354fce0a5e6660f05a5229acffb1262",
-    "NetworkCheck.nodeTag": "b05bf51ad2c5b46f3a24e554c31ac5eff984d276c3b9c7c8930de9a485dc93c9",
-    "NetworkCheck.realFrames": "f4a0fa921fea0764d39d00a12a576c0eeb97f34d41471493a4c0132e4c74cd91",
-    "NetworkCheck.recordHead": "0b3df7af80a56c76c2b14867e92d828bfbd1372d728ea7781fccf68e157bea8a",
-    "NetworkCheck.recordTag": "0233d3679c307ada2487f83358426b7207918e41a7daa355dd99c0567f344053",
-    "NetworkCheck.statusCode": "a0af986e4a740012cf8101ec1017725efb5addfe9b42db247a5249b84906fd2b",
-    "NetworkCheck.taggedSha512": "b8ddf2fea397fb7127a68f90e8a5a096eba11134e4a44703100aac4fe57bb0dd",
-    "NetworkCheck.text": "286c98c6a1d53c1800199c68914196e6bc48de720610d69011aa11a7fca6fce0",
-    "NetworkCheck.uBE": "38d77111405981b7e835cb0fa472f2901f09c7cfd17c15cb472df79452673164"
+    "PouwCheck.cs": "eb750acdf2624f6861a0fc78c7bd28003c22fa2ae10d40ea15e5b04e539c97fd",
+    "PouwCheck.get": "702b99cc434045e733b595732ca451d5529cd043ce91d6a7e897c7b51d4a8c8a",
+    "PouwCheck.keys": "e912cc736f85af6a87ab60ce5da076f8e755863a7217ef3740001826b532d7eb",
+    "PouwCheck.keys._sparseCasesOn_1": "93c1f6e6af16155c3b3ac7e97dd62a92633f84f15be3743bca419f8114f916e3",
+    "PouwCheck.nat?": "2e5fdc9e485c4768409fea8c3dc492d8cc94f351f82b672743fb43ffd46ad66d",
+    "PouwCheck.str?": "c6ae145919a03644cdccffda7369ed8b4642169bbf52d1f6932351d995ac5427",
+    "PouwCheck.str?._sparseCasesOn_1": "0dcb1635b1fc7740c0b324bfe8d608dd943443a82e1fff3fb791bc293d3fd9dc"
    },
    "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
+  "PouwCheck.Protocol": {
+   "digest": "7846a3105fd2f3e8741ab74d912727a749bcefbe4c4f9c4f1127260f7aced9c4",
+   "definitions": {
+    "PouwCheck.protocol": "961c984bdfe303e63ea917e4070736c65a07c1eb0988d939985c5745847cf547"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
   "PouwWindow.Draw": {
-   "digest": "398da41a7cd5c10e4cf2f56bf539050b67cd72c1627eaa0f34e02f2828def686",
+   "digest": "c2b6739b590ef057879ef5e995ae7fe17362bb2fe19708729bf3e90246ca1143",
    "definitions": {
     "PouwWindow.KPrimeDomain": "c4582abdc25a851e94e7fac6a2d7b1b5ab0ffd668e33d58019b1f8aa2a8e7c58",
+    "PouwWindow.Sampling": "591ade9d4036802bfcb4735be332bb109aea1a96f40268a10841b8b8aebf9ba5",
+    "PouwWindow.Sampling.delta": "65910a4289c98c94f4e133c6d4adec57a9c67690989b566800f31479b20b9d3b",
+    "PouwWindow.Sampling.eps": "857ae34a4ac74102a825ac61b9149866e25d5b71651ddbdf270c28a5db8634f1",
+    "PouwWindow.Sampling.gridBits": "2ffe69122631b3a78c36d1b9b56356c53bd41bef835fae90bbc2dd937984b635",
+    "PouwWindow.Sampling.k": "07d957958d4a1238af1f046066b54ad1199621323aa623955f863eb318f3b0c0",
     "PouwWindow.ceilDiv": "9c21b83b23ccaa271c280217bce6f4390ead5e081f8e5708c07f5a9d084e7beb",
     "PouwWindow.exactBits": "874847990decb3689333781f9e8be59f1d16f021dd7e62abf5a4573f9d251855",
     "PouwWindow.fixedPow": "3546bb63b7b220e9925285cbb9723bafb9f774cf8721bc0628ad0c81de98ea38",
@@ -977,9 +1034,20 @@
     "PouwWindow.missAtMost": "87fc9b9968da8ebf89ad40afae49a1fe33e6a48395e026719bf3b8daf0aa6db2",
     "PouwWindow.missAtMostExact": "155d860d3dfd7e576b049ef6ee6198deb1fda1fc8c95ca55d2b1a6dad47c93c8",
     "PouwWindow.missAtMostGo": "01adeca9036206220ad6ea4fd34052ff1a104c869ce24ca859f2f9b30e659dc7",
-    "PouwWindow.missShare": "6e007f3d3a3bf81825460d2f17c550de6eae7ad21ae0e5d108aa8baed764ca0e"
+    "PouwWindow.missShare": "6e007f3d3a3bf81825460d2f17c550de6eae7ad21ae0e5d108aa8baed764ca0e",
+    "PouwWindow.sampling": "89386ffeda49657977d3575bdea94b69d6db731d239dc5ce0ac247f28ae8166f"
    },
    "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeLeast",
@@ -1015,6 +1083,16 @@
     "PouwWindow.shift": "02023ba5d741609365f3d7bfc1c8ef4a9c97b2e5b9ab33f1524cf9174e8fefd0"
    },
    "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Window.bucket8192",
     "Properties.Pouw.Window.bucketCost",
     "Properties.Pouw.Window.bucketCost3",
@@ -1033,6 +1111,30 @@
     "Properties.Pouw.Window.pointEnumerates"
    ]
   },
+  "PouwWindow.Json": {
+   "digest": "ec1f9e98562fb359c08088c277f158f93807e81b2fa9f7fc535cd33d216f1073",
+   "definitions": {
+    "PouwWindow.Sampling.toJson": "ef89afb47afe210cca5c3968c16b7562025ffb1264c1b6a2afc586dc5df7532b",
+    "PouwWindow.Work.itemJson": "449d42c6b4a58111cb5410d64b83a3af8e280210bd96b1734a09f9a86542602f",
+    "PouwWindow.field?": "cd42d62b2f82aa746ca0bb2f8cb436128a0013a1a3a51d237e0ce5b7ab1b6186",
+    "PouwWindow.field?._sparseCasesOn_1": "a609d2d77bcf22c79c25da97046003b8a7aff7b5e8e52fb756bf2f9e159798b2",
+    "PouwWindow.intOf?": "11268ba3a87356587d76aff3cb28e94353f6ea78ef3db3b85da393233c9d69fc",
+    "PouwWindow.intOf?._sparseCasesOn_1": "e0f901fcd46c07bdc8418cf49767949bc7756244d7d840cf2b4e63772f635563",
+    "PouwWindow.natOf?": "aac6e072a42e1ec1123bb1d03d27b84050dd2c0923562dd7c95ed8837d68d67a"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
   "PouwWindow.Public": {
    "digest": "2825d5cdbe0ce31d630ee26fce7b54a23a0ffd7adf58553fe1bb193a4705f6d6",
    "definitions": {
@@ -1043,45 +1145,18 @@
     "PouwWindow.publicItems": "090dd4c35195c3962815b165da93c2a95c39d4b0cc915c6906a58893acb9c9d7",
     "PouwWindow.registered": "ad7aa246bb486dc7a2a8c0d55eb07c65df3307b1cab0042e8a98da25421b55ba"
    },
-   "guarantees": ["Properties.Pouw.Window.publicItems_eq"]
-  },
-  "Properties.CertifierDevice": {
-   "digest": "b6e34ce7420caf3c4843fd501f6aa56debc8977e153d64bb9c610df2c62a98aa",
-   "definitions": {
-    "Properties.CertifierDevice.CompleteRows": "957f921d416def25e258206e8dfaede6bff0ab493982d2da00d4bbfa6bbde6cc",
-    "Properties.CertifierDevice.ContentIndependent": "a50415aa8ec9328c420653df996e134047b7a12fdc5c55a607766525747156cf",
-    "Properties.CertifierDevice.EgressAt": "9875f2a1bff110ab91746a1a19f1a7c47eddc2afceaf151787133aba61b2f072",
-    "Properties.CertifierDevice.FailClosed": "3174d10ec8a4e142a05bb1880a4f77fcfc08398393e67e51bd2a3952bc6ba5ce",
-    "Properties.CertifierDevice.IssuerSigns": "83ec15dc5367e21b417b81cf5e177a70cc4301f839a4dbd9aab0fd90d1807af7",
-    "Properties.CertifierDevice.IssuerVerifies": "0599341d496f390423f5a403f8f8abb9e24f428c9cc7b004849381b264398f23",
-    "Properties.CertifierDevice.LinkSchedule": "3a940ea36d36c08a19671ab8a8071c5742d8bd0bfbf814187db09c39c1642db1",
-    "Properties.CertifierDevice.LmsCorrect": "d0d00bc0d4edb2ea249340560314de72855cf980099b6272b7dc9ca5c7961bef",
-    "Properties.CertifierDevice.Packed": "9ea91c7d79b3e40e2297151339dbe4583239f041959f8165f0590d17ec29cbf8",
-    "Properties.CertifierDevice.Records": "88f7dbe94167edfc5071d054042ce3c103f5058255082eb295ab6b7bc4503cac",
-    "Properties.CertifierDevice.ValidKey": "b6038b9cc32fcffd84ba1af8ccdd46c452de1a2fe1596f7b8f960c0c22ec7c8a",
-    "Properties.CertifierDevice.after": "7afce07e8a8c97642ce967aed00187311b16fe0b6cab8ea7209f3eaead9b4482",
-    "Properties.CertifierDevice.bucketBytes": "85fbc1f2aabc219325c629d44f8634a235d6973b935f2a4ebde4a41af26c2836",
-    "Properties.CertifierDevice.egressActions": "1ec8699468c670336d5296b9a3d12128142a1ae0c3925db08beade1c3d86e7d6",
-    "Properties.CertifierDevice.egressRun": "1036688bd8ab3c8240658cbd230bcd488b2c9b7a9dd4ab6bd87aa03b541434b9",
-    "Properties.CertifierDevice.handed": "994ce9c83cc1d242d675fbb191d30756acc14089b437aab26dc6d375bd1ee43b",
-    "Properties.CertifierDevice.handedAt": "a26c37ae3be69c53bbc878f3b92983264e39c5188eeccc176eae8e1ec2ccc1cd",
-    "Properties.CertifierDevice.horizon": "b21f47041f962ee8fc89a4b3047a9b91af43b29417346c074b104c940d8f0dff",
-    "Properties.CertifierDevice.linkWrites": "a3849253083642221ea5e01782fd7f1ff420838ce57ebb42d30b72b8b1e7fb66",
-    "Properties.CertifierDevice.outputs": "37084ea6bbec61aca6b6431b4c610adc602d50ab094e3f5ae9d8f6aab3711502",
-    "Properties.CertifierDevice.tickView": "1d61ad4ff2b65d34a173953d5d16303b39cb9608092d92aa622e03b2d2c461bd",
-    "Properties.CertifierDevice.wire": "192403bd416d5b7b227392687ec523f44c3d134af5a2090c418f4ec1d32463e9",
-    "Properties.CertifierDevice.writeSchedule": "90525ca621cc9ba7a51b20d4269f3da799c1328958b7693e1fe2fa3c47be34cd",
-    "Properties.CertifierDevice.writesAt": "22f6f0fb23fc266c073e685ae9174f1e5f002b531b2489eb3d7956e4a8361a7d"
-   },
    "guarantees": [
-    "Properties.CertifierDevice.completeRows",
-    "Properties.CertifierDevice.contentIndependent",
-    "Properties.CertifierDevice.failClosed",
-    "Properties.CertifierDevice.issuerSigns",
-    "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.lmsCorrect",
-    "Properties.CertifierDevice.records"
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Window.publicItems_eq"
    ]
   },
   "Properties.Nci": {
@@ -1167,17 +1242,46 @@
     "Properties.Pouw.Window.pointEnumerates",
     "Properties.Pouw.Window.publicItems_eq"
    ]
+  },
+  "Properties.Pouw.Check": {
+   "digest": "1134784cd702dbfccd58ae62cfd6dcf6d3967429be624b9116401e63f909ca64",
+   "definitions": {
+    "Properties.Pouw.Check.AcceptMeans": "6871564b46b628d1f1e2bb19a96a775a89c415c684ed9922be06b6e879ec1c31",
+    "Properties.Pouw.Check.AcceptedDraw": "5ac2c07d99f9cb69d7ce9d3bf887ed7b7b6411d527d6939f295d5f6b4fe0abeb",
+    "Properties.Pouw.Check.AcceptedInRange": "7c0fe3df638d7fa751a681e5cb263374fc562e36f879c2a6a57a8c5274a7ceef",
+    "Properties.Pouw.Check.AcceptedIsTheService's": "90aa467aab795767f7cab61befd96d2a43597456da505c27759d8c41f216d8c8",
+    "Properties.Pouw.Check.CommitmentKeepsBytes": "3c56a26763063bbf4b395ecbef781e4c6381a92eb8e7c9da3192e34a8ddf61a9",
+    "Properties.Pouw.Check.DigestIsOneStage's": "c4be20a809c980008db941198b45b0d6f204a5bb4f0223687e2848b50e0f5dbe",
+    "Properties.Pouw.Check.NeverNull": "5b5530557f2e1764808d796fc9d377cd785dccbf9f897f03c18696ca5ea9a217",
+    "Properties.Pouw.Check.PublishesPublic": "6107e69cb7a5f60b2a42765dea6a9132389076fefd46c8be72b078077fd601a3",
+    "Properties.Pouw.Check.RegistrationKeeps": "a4672edf1af3375d6ae2c91c675edfb6adf6c7b161f0289788baa7a705328f5f",
+    "Properties.Pouw.Check.ServiceAccepted": "ee2036b4cc1d90ede5484bc1ddac66259b92d768dcf270f332fbaf4cbd081aa7",
+    "Properties.Pouw.Check.ServiceRejectRejects": "d9492c5900d209e0eb438b9799f894341bd6fc305174c497e794d0d758446c32",
+    "Properties.Pouw.Check.UndecidedOnlyFromService": "e047bfde57ad6a81c306573894df65fb73e1453ca4e6558868be2f27b089c050"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.publishesPublic",
+    "Properties.Pouw.Check.serviceRejectRejects",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
   }
  },
  "dependencies": {
   "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
   "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
-  "batteries": "83d6487a6f41072714347b765ec3e233bad10d8b25d822e8543ab47531f610be",
+  "batteries": "e9e561b49d9e3617af98a0d9ee9c657a6004398a2ffbee5f02653ac7df17f0e8",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "4b2e37339cdaa30627ba7f4ee6e6e866f14180ea06b549d7e9a386ea89e52601",
+  "mathlib": "a51f2377fe7001cb6c77809232b35a655f5f717776dd5e832e551bac858e6c3e",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
-  "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+  "toolchain": "1b28c5abf48b3bc892843aaa9f35aa4d4fc987b549b4bfe2e4b5d37391416bf1"
  }
 }

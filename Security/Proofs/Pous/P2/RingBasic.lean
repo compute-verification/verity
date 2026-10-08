@@ -5,7 +5,7 @@ import Proofs.Pous.P2.Domain
 /-!
 # P2 in the ring model: the cost bound, the labels, and correctness
 
-The cost model is `Pous/Protocol/P2/Cost.lean`. This file proves:
+The cost model is `Security/Definitions/Pous/P2/Cost.lean`. This file proves:
 
 * `ringBounded_of_bounded`: `Bounded D Q → RingBounded D Q Q` (every round counts at most once, every query at most
   once in each count), so `MeetsOn` at `(D, Q, Q)` implies `Meets` at `(D, Q)` (`meets_of_meetsOn`);

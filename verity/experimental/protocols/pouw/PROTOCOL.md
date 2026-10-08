@@ -863,7 +863,8 @@ stats     s, ρ as pearl-c-h100-v1; σ = ρ/4; α = 2688/max(s + 4σ, 2^−32) (
           β_row = (σ·α)·f32(16/√2346.125), a_E = ue4m3(β_row)
 seeds     seed_A = H_"seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE);  seed_B = H_"seed-B"(salt ‖ root_B);
           H_ℓ = SHA-512 of pearl-c4/v1/ℓ ‖ \0 (zero-padded to one 128-byte block) ‖ x, its first 32 bytes (`labelled`)
-lines     32 uniform E2M1 codes: TurboSHAKE128(seed ‖ role ‖ index u32, D = 0x24), 16 bytes
+lines     32 uniform E2M1 codes, 16 bytes low nibble first: quarter index mod 4 of SHA-512(pearl-c4/v2/line ‖ \0
+          zero-padded to one 128-byte block ‖ seed ‖ role ‖ ⌊index/4⌋ u32 LE), all 64 bytes (`line_block`)
 forming   D_t = NVF4.step(C = α·x_t, E ‖ 0 at a_E, F_t ‖ 0 at 2^−4); per scale block s_b from amax|D|/6 (nvfp4: UE4M3
           nearest even, at least 2^−9; mxfp4: UE8M0 rounded up); code = e2m1(D·(1/s_b))
 chain     C̃ = the scheme's atom chained from +0 over k/64 steps, no promotion
@@ -895,8 +896,9 @@ useful    U/(α_A·α_B), glue
     tile cap.
   - The `test-16-nvfp4-h3` vector pins a call end to end, its roots 64 bytes. -h0 keeps its names, circuit
     (`circuit.pc4`) and kernels, and no device path forms -h3 yet.
-  - At every hashing the seeds are SHA-512 (`pearl-c4/v1`) and the tickets -h3's, so Pearl-C4 claims `cr/sha-512` and
-    reaches no BLAKE3. The device's seeds (`pearl_c4.cu`'s `commit_rows`) hash with `pearl_c/sha512.cuh`.
+  - At every hashing the seeds (`pearl-c4/v1`) and the noise lines (`pearl-c4/v2/line`) are SHA-512 and the tickets
+    -h3's, so Pearl-C4 claims `cr/sha-512` and reaches no BLAKE3. The device's seeds (`pearl_c4.cu`'s `commit_rows`) and
+    lines (`line_block`) hash with `pearl_c/sha512.cuh`.
 - **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
   floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
 - **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at
@@ -1054,14 +1056,14 @@ useful    U/(α_A·α_B), glue
     No row check sees a hidden row's bits, C-Flock's and Lean's included, so this is what gives one admission value
     one leaf; the reference refuses any other word (`leaves.ok_of`).
   - The noise lines and G are verifier-derived public inputs, built as `ncp-v2`'s anchors are (`anchors.TileAnchors`,
-    from the scheme's `noise(ctx)`): the lines are TurboSHAKE128 of seeds that read public values alone (seed_A the
+    from the scheme's `noise(ctx)`): the lines are SHA-512 of seeds that read public values alone (seed_A the
     salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), and G = F_Bᵀ·F_A (`gram`)
     is a function of them. `check_inputs` refuses any other. Both Programs read F_A and F_B; E_A is the call's, E_B and
     G the weight's.
   - In a unit's proof each anchored input is a C-Flock public input region (`In`), costing no gate: `pc4.PORTS` names
     each row unit's regions, and each region names its recomputation (`pc4.DERIVATIONS`: the rule, the seed, the domain
     and the derivation function; as C-Flock's circuit names them, `anchors.public_ports`: the seed by the scheme's label,
-    `pc4.SEEDS`, and the rule by its versioned id, `verity/pouw/anchor/pearl-c4/<anchor>/v1`, never the function's
+    `pc4.SEEDS`, and the rule by its versioned id, `verity/pouw/anchor/pearl-c4/<anchor>/v2`, never the function's
     Python name, since both strings are in C-Flock's circuit pin). The verifier values them from its own `--public-inputs` file
     (`TileAnchors.public_inputs`, C-Flock's `verity/flock-public-inputs/v1`: a header line naming the ports, then each
     instance's regions), whose content for one unit is `TileAnchors.regions`: every value unpacked into u16 words (one
