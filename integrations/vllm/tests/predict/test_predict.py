@@ -43,8 +43,8 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
     ("qwen25-05b", "452681af0e5f7cdd4003098f333d0c588d0128d98bccdef377d89fa8ef42524823045490ce7e6d3b7f435a6362c7603c7637eae57c1709299e27084826874b94"),
     ("phi3-mini", "ecd84c104c7ae0368a596d0f47e83f9eda564ef88c5ca692c8226a24a7783eaf5c264f8f1e21fb638db052c99d24ab8ceb8f9c4e762dc0f668f6314822eaa394"),
     ("qwen3-4b", "21acad0cea8011bce8e3a83844f57645a04d6fa9ef9c6c1ff30640e868c340368705a11e7e405c6fca870a583a9b1aba74367e316f234a017a7cb3cc6a799fb8"),
-    ("olmoe-1b-7b", "99d789b704be9c42bdb429d5e45baa71380de3226b622b2c37dc9d521ebf1887"),
-    ("qwen3-30b-a3b", "e3655459083291eafb440a562e38ed9b5ae5addfbde2f0e39114e89277021d78"),
+    ("olmoe-1b-7b", "60982699f17e47e048ea3ac7d3dc6c28bec57a74f0c6002f4e4d89a4e776b047e010ba772125d21bf9afa39cefe9e8c4152d4952e87056169e458de826c517e7"),
+    ("qwen3-30b-a3b", "98a180a562abf1d603951ed135a1e26a084cc48cb53cdbfbb7b0e26ca2139244cfc036bdb8ab8af0e9a9a4786ef8372ce478a365253791ba35479a5b2bf0717c"),
     ("gemma2-2b", "b0688044e6a562d2cbb7a6fa6995deb9025d08d134b331236dc4c16ffedf8e38cb093a5e521052cb8c19d5d1641b0c8bb725eddb50e1a0f480149354bbab15c7"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
@@ -72,10 +72,10 @@ def test_request_and_workload_programs_equal_the_traced_build():
     ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "3343270c8e008ad0106a174bad32c6a23c428c7d821e8a2aa251e8edbdcf0b9d77972761c98e5203ad50c0977dd11546ff10c20f566920a72b833ad61efbff90"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "15bf71465c58172b07dbd848f434f886274de57e88d30fe8d41075b08cc45c8cfedc7a5164343af904af3cc7f47227cdc51725704a1f28e6e82c3bdef4425b8e"),
     ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "8c4abf0f43e41613ab749374f38aaade322cf7a2cc8e692c68de5b7c28840aa1c77933a18c89db9a55f741895621d0d7679e1e6d7201b485211ecec09511e6b8"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 0, "de6d9f143bc8a485a3ec4dcdeb6ecbe43013ea87d444dfa167cb1143921e8ef3"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={3f2e2f30d60d}}", 1, "40da70bce2941f84f5d149ca70f69194b24e60240e998e5ca4cb0e17fc7356e0"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 0, "c4ebc70a471394983db8ba424cbb2ce35851bd9dc71a485fb6f4187865bb3626"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={32f6bda2809e}}", 1, "3e9c7925d46c5b0d2748762abe840b802e8a741cb1a3194ec8aedc06ffd89dcd"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "0605dc64bd0076b31c8a1363c4d3443a07a09fc7dabcd2734bf521d544f96c3dc1a24db315b928ee8b42fd690230e85c2f07345156da73610a486300f72f366d"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "c2a420cc21022518f94f0e6cf7e06a6066049cd1a48d3bc6506324c51722d6ec01ae9b10bc7d658b518ab01ceb949160f4ce86eed72ae134748a0f40f3e5cd96"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "25068910fdb6ab3bde8890d77c58d85d05b2833098ef4b1701b6c84318683ea79722e26b31e41255f03e29ddfe806241fce1aa93e0a299ec2415ee029e90b4e6"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "5c9905db914095dd2e587b3c48dc004d6037a274b6d3f274381e765e44afa8bc9ab165e8f35ebcb417ffb9def35d3425ff752c94bc0c1a464d3f3951f81a4cf4"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
     """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
@@ -98,8 +98,8 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "68a5d8274937c6d89c63bcb509ee5c97818485af19cbf13d99a6577bc8241493"),
-    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "902f910d8ad69adf3c2dec4f88f17e53b25833be68043c664c5de5cf8eaa770f"),
+    ({**STOCH}, 8, "740d7f22434aa56824d598e4b66f8223c45546ca6e1428639951e5299b7f1968f209b61903452be424a6f407d6d2197658d39073b97bcdf7539c0a923c38ccda"),
+    ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49"),
 ])
 def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
     """SmolLM2-135M under the seeded top-p policy: a B8 row's step (the split count a `splits` Input, cov-g230) and a B1 row's (the
