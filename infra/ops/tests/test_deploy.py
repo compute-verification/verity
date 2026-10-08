@@ -141,6 +141,28 @@ def test_a_process_that_started_before_its_file_was_installed_needs_a_restart(wo
         assert e["state"] == "ok" and "restart systemd:a" in e["restart"]
 
 
+def test_a_file_installed_from_a_commit_main_has_since_merged_and_changed_is_stale_not_ahead(world, monkeypatch):
+    """Node 1's custody tree ran a store/local.py from 6 Oct that drift called `ahead` (its record named the commit) for two days
+    after main had merged that commit and changed the file (#1402), because the stale search reads only main's last HISTORY
+    commits and the record was taken at its word."""
+    node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
+    deploy.install(n, "origin/fix", "lane-x", [str(node / "bin" / "c.py")], local, apply=True, repo=repo)
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge fix", "origin/fix")
+    _commit(repo, {"src/c.py": "c3\n"}, "main changes c.py")
+    _commit(repo, {"src/b.sh": "b2\n"}, "and moves on")
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "push", "-q", "origin", "--delete", "fix")
+    _git(repo, "fetch", "-q", "--prune", "origin")
+    monkeypatch.setattr(deploy, "HISTORY", 1)
+    c = next(e for e in deploy.drift(n, "origin/main", local, repo)["entries"] if e["path"].endswith("c.py"))
+    assert c["state"] == "stale" and "which origin/main holds" in c["detail"]
+
+    (node / "bin" / "c.py").write_text("c-fix\n")
+    (node / "research" / "deploy" / "record.jsonl").unlink()
+    c = next(e for e in deploy.drift(n, "origin/main", local, repo)["entries"] if e["path"].endswith("c.py"))
+    assert c["state"] == "stale", "no record: the recent search finds the blob in main's own history"
+
+
 def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically_with_a_record(world, capsys):
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
     b = node / "bin" / "b"
