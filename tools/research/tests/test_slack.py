@@ -1132,6 +1132,25 @@ def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys)
     assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
+def test_a_handle_named_past_the_start_is_refused_since_nothing_rings_it(registry, capsys):
+    reply = ["reply", "--as", "top", "--thread", "1700000000.000001", "--dry-run", "--text"]
+    rc, _, err = run(capsys, *reply, "@proofs stack point is 4. @lean, rebase onto it")
+    assert rc == 2 and "names @lean past its start" in err and "Move them to the start" in err
+    rc, _, err = run(capsys, *reply, "@proofs two things:\ncompute-accounting: your ask is open\n- @lean: rebase")
+    assert rc == 2 and "names @lean @compute-accounting past its start" in err
+    for bad in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
+        assert run(capsys, *reply, bad)[0] == 2, bad
+    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")[0] == 2
+    for ok in ("@proofs @lean stack point is 4", "@proofs stack point is 4; lean rebases onto it",
+               "@proofs run `research msg read --as @lean`", "@proofs\n> @lean said 4\nagreed", "top: @top is me",
+               "@proofs mail a@lean.example", "@proofs @lean stack point is 4. @lean, rebase", "lean: stack point is 4",
+               "@proofs note: the slot is 4"):
+        assert run(capsys, *reply, ok)[0] == 0, ok
+    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild?")[0] == 0
+    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "@ci, can you rebuild")[0] == 0
+    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")[0] == 2
+
+
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
     circuits, lean = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "lean")
     root = fake.add(COORD, text="@circuits @lean the move starts at 7", username="top", bot_id=BOT)
