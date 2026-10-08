@@ -33,8 +33,12 @@ environment extension loaded, so none of the package's code runs), and replays t
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
                  `imports` prefixes
+    assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
+                 as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
+                 definition no longer has the digest its record holds; or the policy still lists assumption modules,
+                 which `--update` converts into the definitions the guarantees read there
     guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
-                 hypothesis that is not a constant of an `assumptions` module, or no longer says what its record says:
+                 hypothesis that is not a listed assumption, or no longer says what its record says:
                  signature, named assumptions, type hash, and (under `reads`, per module) the definitions the guarantees
                  read, the guarantees that read them and the digest of those definitions; the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
@@ -857,6 +861,11 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
         fails.append(f"moved: under the old names, {clash}{more}: the map cannot tell them apart, so the review compares "
                      f"nothing under the old names; map only the declarations that moved")
+    assumed = policy.get("assumptions", {})
+    prefixes = assumed if isinstance(assumed, list) else []
+    if prefixes and not update:
+        fails.append(f"assumptions: the policy lists assumption modules ({', '.join(prefixes)}); list the assumptions by "
+                     f"name instead, each with its record: `audit.py --update` converts the list")
     kept = {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
@@ -879,11 +888,11 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         for h in f["hypotheses"]:
             if not h["closed"]:
                 continue
-            if h["named"] and under(policy.get("assumptions", []), h["module"] or ""):
+            if h["named"] and (h["named"] in assumed if not prefixes else under(prefixes, h["module"] or "")):
                 named.append(h["named"])
             else:
-                fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named assumption "
-                             f"(a Prop constant of {', '.join(policy.get('assumptions', [])) or 'an `assumptions` module'})")
+                fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named "
+                             f"assumption: a Prop constant listed under `assumptions`")
         if name.split(".")[0] in policy.get("four_names", []) and not four_named(name, f):
             fails.append(f"four names: {name} is a guarantee of {name.split('.')[0]}, which `four_names` lists, so it is "
                          f"stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a definition of a `Guarantees` module "
@@ -925,10 +934,54 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             elif a.get("digest") != b["digest"]:
                 fails.append(f"guarantees: the digest recorded for {m} is not the SHA-256 of its definitions; "
                              f"`python tools/verity/lean/merge.py --normalize` recomputes it")
+    records, why = assumption_records(policy, now_reads, update, owner)
+    fails += why
     out = dict(policy)
     if kept:
         out["guarantees"], out["reads"] = kept, now_reads
+    if update and (records or "assumptions" in policy):
+        out["assumptions"] = records
     return fails, out
+
+
+def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None) -> tuple[dict, list[str]]:
+    """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
+    stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and the digest its
+    `reads` record holds, so a changed assumption shows as its own record, and an entry no guarantee reads fails.  An
+    update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
+    definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``)."""
+    assumed, fails, out = policy.get("assumptions", {}), [], {}
+    read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
+    owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
+    if isinstance(assumed, list):
+        if not update:
+            return {}, []
+        assumed = {}
+        for d, (m, _, by) in sorted(read.items()):
+            if under(policy["assumptions"], m):
+                who = {owners.get(g) for g in by} - {None}
+                assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
+    for a, rec in sorted(assumed.items()):
+        who = (rec or {}).get("owner") or owner
+        if a not in read:
+            if not update:
+                fails.append(f"assumptions: {a} is listed, but no guarantee reads it; remove the entry")
+            continue
+        m, h, _ = read[a]
+        if not who:
+            fails.append(f"assumptions: {a} has no owner: write \"owner\": \"@lane\" in its entry, or run "
+                         f"`audit.py --update --owner @lane`")
+        elif not OWNER.fullmatch(who):
+            fails.append(f"assumptions: {a}'s owner {who!r} is not a handle such as @proofs")
+        out[a] = ({"owner": who} if who else {}) | {"digest": h}
+        if update:
+            continue
+        if "digest" not in (rec or {}):
+            fails.append(f"assumptions: {a} has no record; run `audit.py --update` and commit the record")
+        elif rec["digest"] != h:
+            fails.append(f"assumptions: {a}'s definition in {m} changed; run `audit.py --update` and commit the record "
+                         f"(Daniel's DM shows the change when it lands)")
+    return out, fails
 
 
 def unowned(rec: dict | None) -> dict:
