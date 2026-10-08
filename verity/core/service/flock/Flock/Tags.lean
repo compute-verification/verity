@@ -348,7 +348,7 @@ def withPlainLeaves (t : Tags) : Tags :=
 until a soundness headline covers plain leaves; upstream's --zk refuses it too. -/
 def plainLeaves (t : Tags) : Bool := t.pinnedLeafScheme == some leafSchemePlain
 
-/-- A recursive session's inner statement (PROTOCOL.md §16.15): the default statement with plain SHA-512 leaves. -/
+/-- A recursive session's inner statement (PROTOCOL.md §16.16): the default statement with plain SHA-512 leaves. -/
 def circuitPlainLeaves : Tags := { circuit.withPlainLeaves with name := "verity/flock-circuit+plain-leaves" }
 
 /-- The versions this verifier knows, by name. -/

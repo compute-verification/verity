@@ -1,7 +1,9 @@
 """M0 on per-round OS coins (`FC_COINS=os`): a proving build's identity then names the coin mode and no coin commitment or
-derivation, and the identity is in the statement digest, so the Lean verifier accepts such a session only under `--coins os`
-(`Tags.withCoins`), and a seeded one only under `--coins seed`. The sessions are the fixture's: one live session per coin mode,
-recorded from a proving build of main (`record.sh`, run r20261002-055711-3607), both accepted by its server."""
+derivation, and the identity is in the statement digest, so such a session passes the Lean verifier's checks only under
+`--coins os` (`Tags.withCoins`), and a seeded one only under `--coins seed`. The sessions are the fixture's: one live session
+per coin mode, recorded from a proving build of main (`record.sh`, run r20261002-055711-3607), both accepted by its server.
+Neither has a draw, which `verify` refuses after every check has passed (§16.15, D12), so passing is that refusal
+(`DRAWLESS`)."""
 from __future__ import annotations
 
 import hashlib
@@ -21,6 +23,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 FIXTURE = "art:12f95e2a"
 CIRCUIT = "art:425f6860/stage/circuit.txt"
 STATEMENT = "verity/flock-circuit@967b8d06"
+DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 
 
 def _os_identity_rust() -> dict[str, str]:
@@ -97,9 +100,9 @@ def test_the_fixture_is_one_session_per_coin_mode(sessions):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("mode", ["seed", "os"])
-def test_a_session_is_accepted_on_its_own_coins(verdicts, mode):
+def test_a_session_passes_every_check_on_its_own_coins(verdicts, mode):
     v = verdicts[(mode, mode)]
-    assert v["accepted"], v["why"]
+    assert (v["accepted"], v["why"]) == (False, DRAWLESS), v["why"]
 
 
 @pytest.mark.slow
