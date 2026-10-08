@@ -44,7 +44,7 @@ STATUS = ("2026-10-03T19:39:59Z free GPUs 7/8, kept free -, waiters -, timed Fal
           "queued 0 (gpu 0, cpu 0), done 1033, failed 30, held for an unknown exit 0")
 N2_FILES = {f"{policy.FILL}/windows": "# start UTC, minutes\n2026-10-03T18:25Z 10 # merge checks off\n",
             f"{policy.FILL}/cpu-sets": "bc-e6a46970-b6ef-5738-af64-182b143075d4 0-47 4 40  # verifies\n",
-            policy.CHECK_SLOTS: "d 0-47 windows=/workspace/pouw/fill/windows lead=30 only=trains\ne 48-79 windows=/workspace/pouw/fill/windows lead=30\n",
+            policy.CHECK_SLOTS: "a 0-63 mem=560  # one full check\nb 64-119 mem=560\n",
             "/etc/vy/direct-gpus": None, "/etc/vy/direct-cpus": None,
             policy.USER_CPUSET: "[Service]\nDelegate=cpu cpuset memory pids\n"}
 
@@ -230,6 +230,16 @@ def test_a_live_value_that_doesnt_parse_is_drift(capsys):
     rc, rows = diff(capsys, "nebius-1", files=dump({**FILES, policy.LEAN_SLOTS: "check 2\naudit lots\n"}))
     assert rc == 1 and rows[f"{N1}.lean-slots.audit"]["status"] == "drift"
     assert "the live value doesn't parse" in rows[f"{N1}.lean-slots.audit"]["why"]
+
+
+def test_a_check_slot_on_isolcpus_is_drift_though_its_file_is_as_declared(capsys):
+    """Node 2's slot b was 64-127 under isolcpus=120-127 (8 Oct 05:55-09:58Z): slot.py skipped it, and nothing said why."""
+    cmdline = "BOOT_IMAGE=/vmlinuz nohz_full=112-127 isolcpus=managed_irq,domain,112-127 rcu_nocbs=112-127 irqaffinity=0-111\n"
+    rc, rows = diff(capsys, "nebius-2", n2=f"status {STATUS}\n" + dump({**N2_FILES, policy.CMDLINE: cmdline}))
+    a, b = rows[f"{N2}.check-slots.a"], rows[f"{N2}.check-slots.b"]
+    assert rc == 1 and b["status"] == "drift" and b["live"] == b["declared"] and a["status"] == "ok"
+    assert b["why"].startswith("cores 112-119 are isolcpus (/proc/cmdline), in no run's affinity")
+    assert policy.isolcpus("isolcpus=1,3-4") == {1, 3, 4} and policy.isolcpus("nohz_full=1-3 quiet") == frozenset()
 
 
 def test_a_hold_by_a_declared_writer_is_as_declared_and_any_other_is_drift(capsys):
@@ -577,7 +587,8 @@ def test_the_files_commands_mark_absent_files_and_read_one_line_of_the_dispatch_
     _put(tmp_path, {policy.LEAN_SLOTS: "check 2\naudit 2", policy.DISPATCH_ENV: "HF_TOKEN=dummy\nVY_PROVER_CPUS=160-191\n"})
     files = policy._files(_sh(policy.COMMANDS["files"], tmp_path))
     assert files == {policy.LEAN_SLOTS: "check 2\naudit 2\n", policy.CHECK_SLOTS: None, "/etc/vy/direct-gpus": None,
-                     "/etc/vy/direct-cpus": None, policy.USER_CPUSET: None, policy.DISPATCH_ENV: "VY_PROVER_CPUS=160-191\n"}
+                     "/etc/vy/direct-cpus": None, policy.USER_CPUSET: None, policy.CMDLINE: None,
+                     policy.DISPATCH_ENV: "VY_PROVER_CPUS=160-191\n"}
     _put(tmp_path, {policy.DISPATCH_ENV: "HF_TOKEN=dummy\n"})
     assert policy._files(_sh(policy.COMMANDS["files"], tmp_path))[policy.DISPATCH_ENV] == ""
     _put(tmp_path, {QUIET: "provers\n"})

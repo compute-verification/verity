@@ -155,9 +155,9 @@ memory = { nominal = 0 }
 [policy.vy-nebius-2]
 owner = "infra"
 user-cpuset = { delegate = "cpu cpuset memory pids" }
-# merge-check slots d and e pause through every booked window but those marked slot-d=runs (infra, 1 Oct); d is the lander's
-# train checks' alone (only=trains), so a lane's quick tier never holds the slot a train waits for (top, 6 Oct)
-check-slots = { d = "0-47 windows=/workspace/pouw/fill/windows lead=30 only=trains", e = "48-79 windows=/workspace/pouw/fill/windows lead=30" }
+# restarted for check capacity (Daniel 8 Oct 05:29Z via top), deadline 2026-10-09T05:30Z: no GPU work and the fill runner off,
+# so no windows; one full check per slot (peak ~551G). b stops at 119: 120-127 are isolcpus (/proc/cmdline), in no run's affinity
+check-slots = { a = "0-63 mem=560", b = "64-119 mem=560" }
 # /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on slot d's cores
 fill.cpu-sets = { bc-e6a46970-b6ef-5738-af64-182b143075d4 = "0-47 4 40" }
 # /workspace/pouw/fill/windows: the booked timed windows, as `fill.window."START" = MINUTES` (START in UTC, to the minute).

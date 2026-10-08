@@ -53,6 +53,7 @@ NODES = status.NODES
 HOSTS = status.HOSTS
 LEAN_SLOTS = "/workspace/research/locks/lean-slots"
 CHECK_SLOTS = "/workspace/research/locks/slots"
+CMDLINE = "/proc/cmdline"     # its isolcpus are in no process's affinity, so slot.py never hands out a slot that has one
 DIRECT = {"direct-gpus": "/etc/vy/direct-gpus", "direct-cpus": "/etc/vy/direct-cpus"}
 USER_CPUSET = "/etc/systemd/system/user@.service.d/vy-cpuset.conf"
 DISPATCH_ENV = "/workspace/jobs/dispatch/dispatch.env"
@@ -436,9 +437,10 @@ COMMANDS = {
     "lease": _LEASE,
     "kueue": shlex.join([*nebius1.KUBECTL, "get", "clusterqueues", "-o", "json"]),
     "holds": _dump(sorted(HOLDERS.values())),
-    "files": _dump([LEAN_SLOTS, CHECK_SLOTS, *DIRECT.values(), USER_CPUSET]) + " && " + _DISPATCH,
+    "files": _dump([LEAN_SLOTS, CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, CMDLINE]) + " && " + _DISPATCH,
     "overrides": _dump([OVERRIDES]),
-    "n2": _N2_GATE + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES]),
+    "n2": _N2_GATE + _dump([f"{FILL}/windows", f"{FILL}/cpu-sets", CHECK_SLOTS, *DIRECT.values(), USER_CPUSET, OVERRIDES,
+                            CMDLINE]),
 }
 READS = {nebius1.NODE: ("lease", "kueue", "holds", "files", "overrides"), nebius2.NODE: ("n2",)}
 
@@ -477,20 +479,41 @@ def _slots(text: str) -> list[list[str]]:
     return [f for f in (line.split("#")[0].split() for line in text.splitlines()) if f]
 
 
+def isolcpus(cmdline: str) -> frozenset[int]:
+    """The CPUs of the kernel command line's last `isolcpus=[flag,...,]LIST`; none without one."""
+    words = [w[len("isolcpus="):] for w in cmdline.split() if w.startswith("isolcpus=")]
+    if not words:
+        return frozenset()
+    parts = words[-1].split(",")
+    while parts and not parts[0][:1].isdigit():
+        parts.pop(0)
+    return cpuset.parse(",".join(parts)) if parts else frozenset()
+
+
 def _read_files(node: str, files: dict[str, str | None], live: Live, *, pools: bool) -> None:
     v = live.values
     if files.get(LEAN_SLOTS) is not None:
         for f in _slots(files[LEAN_SLOTS]):
             v[f"{node}.lean-slots.{f[0]}"] = " ".join(f[1:])
     checks: set[int] = set()
+    try:
+        isolated = isolcpus(files.get(CMDLINE) or "")
+    except cpuset.CpuSetError:
+        isolated, live.unknown[f"{node}.check-slots"] = frozenset(), f"{CMDLINE}'s isolcpus don't parse"
     if files.get(CHECK_SLOTS) is not None:
         for f in _slots(files[CHECK_SLOTS]):
             v[f"{node}.check-slots.{f[0]}"] = " ".join(f[1:])
             if len(f) > 1:
                 try:
-                    checks |= cpuset.parse(f[1])
+                    cpus = cpuset.parse(f[1])
                 except cpuset.CpuSetError:
                     live.unknown[f"{node}.pools.checks"] = f"{CHECK_SLOTS}: slot {f[0]}'s CPUs {f[1]!r} don't parse"
+                    continue
+                checks |= cpus
+                if cpus & isolated:
+                    live.faults[f"{node}.check-slots.{f[0]}"] = (
+                        f"cores {cpuset.format(cpus & isolated)} are isolcpus ({CMDLINE}), in no run's affinity: slot.py never "
+                        "hands this slot out")
     if pools:
         v[f"{node}.pools.checks"] = cpuset.format(checks)
         env = files.get(DISPATCH_ENV) or ""
