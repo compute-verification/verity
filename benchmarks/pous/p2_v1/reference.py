@@ -66,6 +66,8 @@ class Params:
             raise ValueError("P2 needs w a multiple of 32 bits and c0 = 1 mod 4 with p = 2^w - c0 = 3 mod 4")
         if not 0 < self.payload_bytes < self.width_bytes:
             raise ValueError("a payload is fewer bytes than a block")
+        if self.p <= 1 << 8 * self.payload_bytes:
+            raise ValueError("every payload is below p")
 
     @property
     def p(self) -> int:
