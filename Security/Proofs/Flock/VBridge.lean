@@ -11,6 +11,7 @@ import Proofs.Flock.VBridge.Inputs
 import Proofs.Flock.VBridge.Verifier
 import Proofs.Flock.VBridge.OfVStar
 import Proofs.Flock.VBridge.InnerUnit
+import Proofs.Flock.VBridge.Pinned
 import Proofs.Flock.VBridge.Algebra.Structure
 import Proofs.Flock.VBridge.Algebra.Sim
 import Proofs.Flock.VBridge.Algebra.Build
