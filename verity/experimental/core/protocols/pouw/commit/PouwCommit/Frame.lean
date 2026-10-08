@@ -48,9 +48,11 @@ end Hash
 
 def FRAME : ByteArray := "veritor/protocol/merkle/frame/v3".toUTF8.push 0
 
-def frameHash (h : Hash) (tag : String) (parts : List ByteArray) : ByteArray :=
-  h.run (parts.foldl (fun acc p => acc ++ be8 p.size ++ p)
-    (FRAME ++ be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8))
+/-- The message a frame hashes: `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)`. -/
+def frameBytes (tag : String) (parts : List ByteArray) : ByteArray :=
+  parts.foldl (fun acc p => acc ++ be8 p.size ++ p) (FRAME ++ be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8)
+
+def frameHash (h : Hash) (tag : String) (parts : List ByteArray) : ByteArray := h.run (frameBytes tag parts)
 
 /-- `RangeIndexedDomain(count)`'s identity: its canonical manifest `{"start":0,"step":1,"stop":count}` under the frame's
 tagged hash, tag `veritor/indexed-domain/range/v1`. -/

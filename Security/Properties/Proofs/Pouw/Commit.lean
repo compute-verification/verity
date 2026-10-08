@@ -5,7 +5,8 @@ import Properties.Pouw.Commit
 
 The sizes and numbers by unfolding and evaluation in the kernel, the refusals and the accepted coins by unfolding the
 port's definitions case by case, and the draws' shape from `Flock.Draw.uniform`'s range and the tickets' running sums.
-`CoinBinding` and `FrameInjective` are open.
+The binding statements from the frame's injectivity (its lengths are big-endian, so a frame parses back to its tag and
+parts) and, down an accepted coin's path, one step per hash: each pair of hashed messages is equal, or it is the collision.
 -/
 
 namespace Properties.Pouw.Commit
@@ -356,5 +357,230 @@ theorem drawShape : DrawShape := by
       simp at hsize
       simpa [hsize] using this
     · cases hj
+
+/-! ## Binding -/
+
+theorem be8_data (x : Nat) : (be8 x).data.toList =
+    [(x >>> 56).toUInt8, (x >>> 48).toUInt8, (x >>> 40).toUInt8, (x >>> 32).toUInt8,
+     (x >>> 24).toUInt8, (x >>> 16).toUInt8, (x >>> 8).toUInt8, (x >>> 0).toUInt8] := by
+  simp [be8, List.range_succ]
+
+theorem be32_data (x : UInt32) : (be32 x).data.toList =
+    [(x >>> 24).toUInt8, (x >>> 16).toUInt8, (x >>> 8).toUInt8, (x >>> 0).toUInt8] := by
+  simp only [be32, Id.run]
+  simp [List.range', List.foldl]
+  rfl
+
+theorem be8_inj (x y : Nat) (hx : x < 2 ^ 64) (hy : y < 2 ^ 64)
+    (h : (be8 x).data.toList = (be8 y).data.toList) : x = y := by
+  simp only [be8_data, List.cons.injEq] at h
+  obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, -⟩ := h
+  simp only [← UInt8.toNat_inj] at h0 h1 h2 h3 h4 h5 h6 h7
+  simp [Nat.shiftRight_eq_div_pow] at h0 h1 h2 h3 h4 h5 h6 h7
+  omega
+
+theorem be32_inj (x y : Nat) (hx : x < 2 ^ 32) (hy : y < 2 ^ 32)
+    (h : (be32 x.toUInt32).data.toList = (be32 y.toUInt32).data.toList) : x = y := by
+  simp only [be32_data, List.cons.injEq] at h
+  obtain ⟨h0, h1, h2, h3, -⟩ := h
+  simp only [← UInt8.toNat_inj] at h0 h1 h2 h3
+  simp [Nat.shiftRight_eq_div_pow] at h0 h1 h2 h3
+  omega
+
+/-- The framed parts, as bytes. -/
+def framed (parts : List ByteArray) : List UInt8 :=
+  parts.flatMap fun p => (be8 p.size).data.toList ++ p.data.toList
+
+theorem foldl_frame (parts : List ByteArray) (acc : ByteArray) :
+    (parts.foldl (fun acc p => acc ++ be8 p.size ++ p) acc).data.toList = acc.data.toList ++ framed parts := by
+  induction parts generalizing acc with
+  | nil => simp [framed]
+  | cons p ps ih => simp [ih, framed, List.append_assoc]
+
+theorem frameBytes_data (tag : String) (parts : List ByteArray) :
+    (frameBytes tag parts).data.toList = FRAME.data.toList ++ (be32 tag.toUTF8.size.toUInt32).data.toList ++
+      tag.toUTF8.data.toList ++ framed parts := by
+  simp [frameBytes, foldl_frame, List.append_assoc]
+
+theorem be8_length (x : Nat) : (be8 x).data.toList.length = 8 := by simp [be8_data]
+
+theorem be32_length (x : UInt32) : (be32 x).data.toList.length = 4 := by simp [be32_data]
+
+theorem framed_inj : ∀ (ps ps' : List ByteArray), (∀ p ∈ ps, p.size < 2 ^ 64) → (∀ p ∈ ps', p.size < 2 ^ 64) →
+    framed ps = framed ps' → ps = ps'
+  | [], [], _, _, _ => rfl
+  | [], p' :: ps', _, _, h => by
+    have := congrArg List.length h
+    simp only [framed, List.flatMap_nil, List.flatMap_cons, List.length_append, be8_length, List.length_nil] at this
+    omega
+  | p :: ps, [], _, _, h => by
+    have := congrArg List.length h
+    simp only [framed, List.flatMap_nil, List.flatMap_cons, List.length_append, be8_length, List.length_nil] at this
+    omega
+  | p :: ps, p' :: ps', hb, hb', h => by
+    simp only [framed, List.flatMap_cons, List.append_assoc] at h
+    obtain ⟨h8, h⟩ := List.append_inj h (by rw [be8_length, be8_length])
+    have hs := be8_inj _ _ (hb p (by simp)) (hb' p' (by simp)) h8
+    obtain ⟨hp, h⟩ := List.append_inj h (by simp [hs])
+    have hp : p = p' := ByteArray.ext (Array.toList_inj.1 hp)
+    rw [hp, framed_inj ps ps' (fun q hq => hb q (by simp [hq])) (fun q hq => hb' q (by simp [hq])) h]
+
+/-- A frame-v3 message determines its tag and parts. -/
+theorem frameBytes_inj (tag tag' : String) (parts parts' : List ByteArray) (ht : tag.toUTF8.size < 2 ^ 32)
+    (ht' : tag'.toUTF8.size < 2 ^ 32) (hb : ∀ p ∈ parts, p.size < 2 ^ 64) (hb' : ∀ p ∈ parts', p.size < 2 ^ 64)
+    (h : frameBytes tag parts = frameBytes tag' parts') : tag = tag' ∧ parts = parts' := by
+  have h := congrArg (fun b => b.data.toList) h
+  simp only [frameBytes_data, List.append_assoc] at h
+  obtain ⟨-, h⟩ := List.append_inj h rfl
+  obtain ⟨h4, h⟩ := List.append_inj h (by rw [be32_length, be32_length])
+  have hs := be32_inj _ _ ht ht' h4
+  obtain ⟨htag, h⟩ := List.append_inj h (by simp only [Array.length_toList, ByteArray.size_data]; exact hs)
+  have htag : tag = tag' := String.toByteArray_inj.1 (ByteArray.ext (Array.toList_inj.1 htag))
+  exact ⟨htag, framed_inj parts parts' hb hb' h⟩
+
+theorem frameInjective : FrameInjective := by
+  intro h tag tag' parts parts' ht ht' hb hb' hf
+  by_cases he : frameBytes tag parts = frameBytes tag' parts'
+  · exact .inl (frameBytes_inj tag tag' parts parts' ht ht' hb hb' he)
+  · exact .inr ⟨he, hf⟩
+
+/-- Two lists of messages hash two different messages, one from each, to one SHA-512 digest. -/
+def Break (L L' : List ByteArray) : Prop := ∃ x ∈ L, ∃ y ∈ L', x ≠ y ∧ Sha512.hash x = Sha512.hash y
+
+theorem step {L L' : List ByteArray} {x y : ByteArray} (hx : x ∈ L) (hy : y ∈ L')
+    (h : Sha512.hash x = Sha512.hash y) : x = y ∨ Break L L' := by
+  by_cases e : x = y
+  · exact .inl e
+  · exact .inr ⟨x, hx, y, hy, e, h⟩
+
+theorem framed_sizes : ∀ (ps ps' : List ByteArray), ps.map ByteArray.size = ps'.map ByteArray.size →
+    framed ps = framed ps' → ps = ps'
+  | [], [], _, _ => rfl
+  | [], _ :: _, hs, _ => by simp at hs
+  | _ :: _, [], hs, _ => by simp at hs
+  | p :: ps, p' :: ps', hs, h => by
+    simp only [List.map_cons, List.cons.injEq] at hs
+    simp only [framed, List.flatMap_cons, List.append_assoc, hs.1] at h
+    obtain ⟨-, h⟩ := List.append_inj h rfl
+    obtain ⟨hp, h⟩ := List.append_inj h (by simp [hs.1])
+    rw [ByteArray.ext (Array.toList_inj.1 hp), framed_sizes ps ps' hs.2 h]
+
+/-- One tag, and parts of one size each: the frame determines the parts, with no bound on the sizes. -/
+theorem frameBytes_sizes (tag : String) (parts parts' : List ByteArray)
+    (hs : parts.map ByteArray.size = parts'.map ByteArray.size) (h : frameBytes tag parts = frameBytes tag parts') :
+    parts = parts' := by
+  have h := congrArg (fun b => b.data.toList) h
+  simp only [frameBytes_data, List.append_assoc] at h
+  exact framed_sizes parts parts' hs (List.append_cancel_left (List.append_cancel_left (List.append_cancel_left h)))
+
+theorem commitString_size (x salt : ByteArray) :
+    (ByteArray.mk ((Array.range 64).map fun i => x.get! i ^^^ (Hm96.Default512.mask salt).get! i)).size = 64 := by
+  simp only [ByteArray.size, Array.size_map, Array.size_range]
+
+theorem xor_cancel (a b m : UInt8) (h : a ^^^ m = b ^^^ m) : a = b := by
+  have := congrArg (· ^^^ m) h
+  simpa [UInt8.xor_assoc] using this
+
+/-- Two 64-byte strings that agree under one mask agree. -/
+theorem masked_inj (x x' m : ByteArray) (hx : x.size = 64) (hx' : x'.size = 64)
+    (h : ByteArray.mk ((Array.range 64).map fun i => x.get! i ^^^ m.get! i) =
+      ByteArray.mk ((Array.range 64).map fun i => x'.get! i ^^^ m.get! i)) : x = x' := by
+  rcases x with ⟨xs⟩
+  rcases x' with ⟨xs'⟩
+  have hx : xs.size = 64 := hx
+  have hx' : xs'.size = 64 := hx'
+  congr 1
+  apply Array.ext (hx.trans hx'.symm)
+  intro i hi hi'
+  have hi64 : i < 64 := hx ▸ hi
+  have e := (Array.ext_iff.1 (congrArg ByteArray.data h)).2 i (by simp [hi64]) (by simp [hi64])
+  simp only [Array.getElem_map, Array.getElem_range] at e
+  have e := xor_cancel _ _ _ e
+  simpa [ByteArray.get!, getElem!_pos, hi, hi'] using e
+
+/-- An hm96 leaf binds its coin: equal leaf values give the same coin, or a collision among the coin-tag, salt-digest and
+leaf inputs. -/
+theorem leafValue_binding (L L' : List ByteArray) (coin salt coin' salt' : ByteArray)
+    (h1 : COIN_TAG ++ coin ∈ L) (h1' : COIN_TAG ++ coin' ∈ L')
+    (h2 : Hm96.Default512.saltPrefix ++ salt ∈ L) (h2' : Hm96.Default512.saltPrefix ++ salt' ∈ L')
+    (h3 : Hm96.Default512.leafPrefix ++ Hm96.Default512.commitString (Sha512.hash (COIN_TAG ++ coin)) salt ∈ L)
+    (h3' : Hm96.Default512.leafPrefix ++ Hm96.Default512.commitString (Sha512.hash (COIN_TAG ++ coin')) salt' ∈ L')
+    (hv : leafValue coin salt = leafValue coin' salt') : coin = coin' ∨ Break L L' := by
+  rcases step h3 h3' hv with e | b
+  case inr => exact .inr b
+  have e := (ByteArray.append_right_inj _).1 e
+  simp only [Hm96.Default512.commitString] at e
+  have hb := ByteArray.append_inj_left e (by rw [commitString_size, commitString_size])
+  rw [hb, ByteArray.append_right_inj] at e
+  rcases step h2 h2' e with e | b
+  case inr => exact .inr b
+  have hs := (ByteArray.append_right_inj _).1 e
+  rw [hs] at hb
+  have hx := masked_inj _ _ _ (sha512_size _) (sha512_size _) hb
+  rcases step h1 h1' hx with e | b
+  case inr => exact .inr b
+  exact .inl ((ByteArray.append_right_inj _).1 e)
+
+theorem pathFrames_one (d : Domain) (rank : Nat) (leaf sib : ByteArray) :
+    pathFrames d rank leaf [sib] =
+      [if rank % 2 == 0 then frameBytes "node" [d.id, natBytes 0, natBytes (rank / 2), leaf, sib]
+        else frameBytes "node" [d.id, natBytes 0, natBytes (rank / 2), sib, leaf]] := rfl
+
+theorem coinBinding : CoinBinding := by
+  intro c o o' label after after' h h'
+  obtain ⟨rank, sib, hl, -, -, -, -, hp, hsib, -, hroot, -⟩ := (coinAccepts c o label after).1 h
+  obtain ⟨rank', sib', hl', -, -, -, -, hp', hsib', -, hroot', -⟩ := (coinAccepts c o' label after').1 h'
+  rw [hl] at hl'
+  cases hl'
+  have hidx : LABELS.idxOf label = rank := by
+    rcases (idx_labels label rank).1 hl with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> decide
+  rw [hidx]
+  have hd : (coinDomain c.epoch).hash = .sha512 := rfl
+  have hlf : ∀ v, ((coinDomain c.epoch).leaf rank SCHEME v).size = 64 := fun _ => frameHash_size ..
+  have mem : ∀ (o : CoinOpening) x, x ∈ [COIN_TAG ++ o.coin, Hm96.Default512.saltPrefix ++ o.salt,
+      Hm96.Default512.leafPrefix ++ Hm96.Default512.commitString (Sha512.hash (COIN_TAG ++ o.coin)) o.salt,
+      frameBytes "leaf" [(coinDomain c.epoch).id, natBytes rank, natBytes rank, SCHEME.toUTF8,
+        leafValue o.coin o.salt]] → x ∈ coinHashed c.epoch rank o :=
+    fun _ _ hx => List.mem_append_left _ hx
+  have memN : ∀ (o : CoinOpening) sib x, o.path = [sib] →
+      x ∈ pathFrames (coinDomain c.epoch) rank ((coinDomain c.epoch).leaf rank SCHEME (leafValue o.coin o.salt)) [sib] →
+      x ∈ coinHashed c.epoch rank o := by
+    intro o sib x hp hx
+    unfold coinHashed
+    rw [hp]
+    exact List.mem_append_right _ hx
+  have leaves : (coinDomain c.epoch).leaf rank SCHEME (leafValue o.coin o.salt) =
+      (coinDomain c.epoch).leaf rank SCHEME (leafValue o'.coin o'.salt) →
+      o.coin = o'.coin ∨ Break (coinHashed c.epoch rank o) (coinHashed c.epoch rank o') := by
+    intro e
+    rcases step (mem o _ (.tail _ (.tail _ (.tail _ (.head _)))))
+      (mem o' _ (.tail _ (.tail _ (.tail _ (.head _))))) e with e | b
+    case inr => exact .inr b
+    have e := frameBytes_sizes _ _ _ (by simp only [List.map_cons, List.map_nil, leafValue, leaf_size]) e
+    simp only [List.cons.injEq, and_true, true_and] at e
+    exact leafValue_binding _ _ _ _ _ _ (mem o _ (.head _)) (mem o' _ (.head _)) (mem o _ (.tail _ (.head _)))
+      (mem o' _ (.tail _ (.head _))) (mem o _ (.tail _ (.tail _ (.head _)))) (mem o' _ (.tail _ (.tail _ (.head _)))) e
+  have node : ∀ x y, x ∈ coinHashed c.epoch rank o → y ∈ coinHashed c.epoch rank o' →
+      Sha512.hash x = c.root → Sha512.hash y = c.root →
+        x = y ∨ Break (coinHashed c.epoch rank o) (coinHashed c.epoch rank o') :=
+    fun x y hx hy e e' => step hx hy (e.trans e'.symm)
+  by_cases hr : rank % 2 = 0
+  · simp only [coinRoot, hr, ite_true, Domain.node, frameHash, hd, Hash.run] at hroot hroot'
+    rcases node _ _ (memN o sib _ hp (by simp only [pathFrames_one, hr]; exact List.mem_singleton_self _))
+      (memN o' sib' _ hp' (by simp only [pathFrames_one, hr]; exact List.mem_singleton_self _))
+      hroot.symm hroot'.symm with e | b
+    case inr => exact .inr b
+    have e := frameBytes_sizes _ _ _ (by simp only [List.map_cons, List.map_nil, hlf, hsib, hsib']) e
+    simp only [List.cons.injEq, and_true, true_and] at e
+    exact leaves e.1
+  · simp only [coinRoot, hr, ite_false, Domain.node, frameHash, hd, Hash.run] at hroot hroot'
+    rcases node _ _
+      (memN o sib _ hp (by simp only [pathFrames_one, hr, beq_iff_eq, ite_false]; exact List.mem_singleton_self _))
+      (memN o' sib' _ hp' (by simp only [pathFrames_one, hr, beq_iff_eq, ite_false]; exact List.mem_singleton_self _))
+      hroot.symm hroot'.symm with e | b
+    case inr => exact .inr b
+    have e := frameBytes_sizes _ _ _ (by simp only [List.map_cons, List.map_nil, hlf, hsib, hsib']) e
+    simp only [List.cons.injEq, and_true, true_and] at e
+    exact leaves e.2
 
 end Properties.Pouw.Commit

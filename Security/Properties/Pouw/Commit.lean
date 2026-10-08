@@ -7,9 +7,10 @@ import PouwCommit.Rows
 
 What the executable Lean of PoUW's commitments does, stated against its own functions, for every input. The numbers are
 the protocol's: digests of 64 bytes (SHA-512) or 32 (SHA-256), hm96 salts of 192 bytes, coins of 32, two coins an epoch
-and so a one-sibling path, and derived keys and epoch salts of 32. A collision of SHA-512 is written in where binding rests on it (`Sha512Collision`): the binding
-statements say that two different openings accepted against one commitment give one, which is the assumption's content,
-taken as a disjunct rather than assumed away.
+and so a one-sibling path, and derived keys and epoch salts of 32. Where binding rests on SHA-512, the statement's other
+disjunct is a collision among the messages actually hashed: two different ones, one from each opening's check (or the two
+framed messages), with one digest. That is collision resistance's content, taken as a disjunct rather than assumed away, and
+bounded to the inputs, since some collision of SHA-512 exists outright.
 -/
 
 namespace Properties.Pouw.Commit
@@ -122,21 +123,40 @@ def DrawShape : Prop :=
 
 /-! ## Binding -/
 
-/-- Two different messages with one SHA-512 digest. -/
-def Sha512Collision : Prop := ∃ m m' : ByteArray, m ≠ m' ∧ Sha512.hash m = Sha512.hash m'
+/-- The node frames `Domain.verify` hashes climbing from the leaf digest `leaf` at `rank` along `path`, bottom first. -/
+def pathFrames (d : Domain) (rank : Nat) (leaf : ByteArray) (path : List ByteArray) : List ByteArray :=
+  (path.zipIdx.foldl (fun (acc : List ByteArray × ByteArray × Nat) (sib, lv) =>
+    let (ms, dg, cur) := acc
+    let m := if cur % 2 == 0 then frameBytes "node" [d.id, natBytes lv, natBytes (cur / 2), dg, sib]
+      else frameBytes "node" [d.id, natBytes lv, natBytes (cur / 2), sib, dg]
+    (ms ++ [m], d.hash.run m, cur / 2)) ([], leaf, rank)).1
+
+/-- What SHA-512 hashes when `coin_reason` checks the opening `o` of epoch `epoch`'s coin at `rank`, from the coin up: the
+coin's inner digest's input, the hm96 leaf's salt-digest and leaf inputs, the tree leaf's frame, and the frame of each node
+on its path. The domain's id, the hm96 key and the prefixes are the same for every opening of one commitment's coin. -/
+def coinHashed (epoch rank : Nat) (o : CoinOpening) : List ByteArray :=
+  let d := coinDomain epoch
+  let value := leafValue o.coin o.salt
+  [COIN_TAG ++ o.coin, Hm96.Default512.saltPrefix ++ o.salt,
+    Hm96.Default512.leafPrefix ++ Hm96.Default512.commitString (Sha512.hash (COIN_TAG ++ o.coin)) o.salt,
+    frameBytes "leaf" [d.id, natBytes rank, natBytes rank, SCHEME.toUTF8, value]] ++
+    pathFrames d rank (d.leaf rank SCHEME value) o.path
 
 /-- A commitment opens to one coin per label: two openings of the same label accepted against one commitment carry the
-same coin, or SHA-512 has a collision. -/
+same coin, or two different messages, one hashed in checking each opening, have one SHA-512 digest. -/
 def CoinBinding : Prop :=
   ∀ c o o' label after after', coinReason c o label after = .ok none → coinReason c o' label after' = .ok none →
-    o.coin = o'.coin ∨ Sha512Collision
+    o.coin = o'.coin ∨
+      ∃ x ∈ coinHashed c.epoch (LABELS.idxOf label) o, ∃ y ∈ coinHashed c.epoch (LABELS.idxOf label) o',
+        x ≠ y ∧ Sha512.hash x = Sha512.hash y
 
-/-- The trees' framing separates them: two frame-v3 messages with different tags or parts differ, so equal digests of
-different domain ids, leaves, nodes, pads or empty roots are a collision of the frame's hash. A tag's length is framed in 32
-bits and a part's in 64, which bound them (Python's frame refuses longer ones). -/
+/-- The trees' framing separates them: frame-v3 messages with different tags or parts differ, so equal digests of
+different domain ids, leaves, nodes, pads or empty roots are a collision of the frame's hash on the two framed messages. A
+tag's length is framed in 32 bits and a part's in 64, which bound them (Python's frame refuses longer ones). -/
 def FrameInjective : Prop :=
   ∀ h tag tag' (parts parts' : List ByteArray), tag.toUTF8.size < 2 ^ 32 → tag'.toUTF8.size < 2 ^ 32 →
     (∀ p ∈ parts, p.size < 2 ^ 64) → (∀ p ∈ parts', p.size < 2 ^ 64) → frameHash h tag parts = frameHash h tag' parts' →
-    (tag = tag' ∧ parts = parts') ∨ ∃ m m' : ByteArray, m ≠ m' ∧ h.run m = h.run m'
+    (tag = tag' ∧ parts = parts') ∨
+      (frameBytes tag parts ≠ frameBytes tag' parts' ∧ h.run (frameBytes tag parts) = h.run (frameBytes tag' parts'))
 
 end Properties.Pouw.Commit
