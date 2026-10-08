@@ -15,7 +15,7 @@ def load():
         import importlib
         import pkgutil
 
-        from verity.primitives.circuits.defs import REGISTRY
+        from verity.ml.circuits.defs import REGISTRY
         errors = []
         package = importlib.import_module(__name__.rsplit(".", 1)[0])
         for m in sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name):

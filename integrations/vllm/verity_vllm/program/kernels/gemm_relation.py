@@ -8,7 +8,7 @@ measured in this lane:
 
 * per instruction: Ampere ``mma.sync.m16n8k16`` BF16 x BF16 -> FP32 semantics
   (``veritor.core.silicon.AMPERE_BF16_M16N8K16`` == ``verity_vllm.program.kernels.mma.AMPERE_BF16``;
-  Ada's BF16 instruction is parameter-identical, ``verity_catalog.silicon.models.ADA_BF16_M16N8K16``);
+  Ada's BF16 instruction is parameter-identical, ``verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16``);
 * across K: one chain over the K/16 tiles in ascending k order from a zero FP32 accumulator
   (vLLM's batch-invariant ``matmul_kernel_persistent``) -- or the slice/split-K description the
   node carries for a cuBLAS kernel that needs one;
@@ -79,8 +79,8 @@ from verity_vllm.program.kernels.mma import AMPERE_BF16, TCModel, tc_dot_chain
 
 
 def _f32_to_bf16(bits):
-    """FP32 words -> BF16 words, nearest-even, NaN -> 0x7FC0: the vectorised form of `verity_catalog.silicon.cast.f32_to_bf16_word`
-    (veritor's `core.silicon.f32_to_bf16`, kept here because verity_catalog.definitions is stdlib-only)."""
+    """FP32 words -> BF16 words, nearest-even, NaN -> 0x7FC0: the vectorised form of `verity.ml.circuits.silicon.cast.f32_to_bf16_word`
+    (veritor's `core.silicon.f32_to_bf16`, kept here because verity.ml.circuits.ops is stdlib-only)."""
     bits = np.asarray(bits).astype(np.uint32, copy=False)
     with np.errstate(over="ignore"):
         rounded = (bits + np.uint32(0x7FFF) + ((bits >> 16) & np.uint32(1))) >> 16
@@ -247,7 +247,7 @@ def per_instruction_model(node_or_inst: Any, inputs: Mapping[str, Any]) -> TCMod
     arch = _const(node, inputs, "arch") or "sm_80"
     if arch not in ("sm_80", "sm_86", "sm_89"):
         raise GemmRelationError(f"no validated per-instruction model for arch {arch!r} in this relation")
-    # Ada BF16 mma.sync is parameter-identical to Ampere's (verity_catalog.silicon.models.ADA_BF16_M16N8K16), so the
+    # Ada BF16 mma.sync is parameter-identical to Ampere's (verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16), so the
     # same chain model applies on sm_89; the arch is recorded in the row, not in the arithmetic.
     return AMPERE_BF16
 
@@ -328,7 +328,7 @@ VALIDATED_BI_FAMILIES: dict[tuple[int, int], dict[str, Any]] = {
 BI_KERNEL_MARKERS = ("matmul_kernel_persistent", "matmul_persistent", "batch_invariant", "verity.bi_mm")
 BI_RUNTIME_OPS = ("verity.bi_mm", "aten.mm", "aten.addmm", "aten.linear", "aten.matmul")
 VALIDATED_ARCHS = ("sm_80",)  # where the production GEMM itself was measured
-ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity_catalog.silicon.models.ADA_BF16_M16N8K16); production GEMM not measured by this lane
+ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16); production GEMM not measured by this lane
 
 
 def _runtime_impl_of(node: Any) -> str:
