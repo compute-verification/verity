@@ -101,6 +101,9 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
+  or a statement reviewer's: `research merge` and `research queue` read none. This retires the grant rulings of 6 and 7
+  Oct below.
 - 2026-10-07 (3:54 PM PDT; 3:25 PM PDT: "skip check more", revert what breaks): `main` always passes the whole `check`,
   kept fast by reusing each part's verdict while its declared inputs, the base image and the check's code are unchanged;
   the merge queue runs it on the queued group, and a nightly uncached check must agree (the CI page in Notion). Until

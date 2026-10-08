@@ -167,8 +167,7 @@ simp with that.
 These are Daniel's rulings, newest first.
 
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
-  Daniel gets a DM showing it. Approval may come back for chosen packages (a grant in `tools/verity/check/queue.toml`). "Pin" is
-  retired: say guarantee.
+  Daniel gets a DM showing it. "Pin" is retired: say guarantee. (Since 8 Oct no change waits on a per-head grant at all.)
 - 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
   conclusion, where an assumption is a named `Prop` (README "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer

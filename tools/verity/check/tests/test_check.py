@@ -869,11 +869,10 @@ def test_a_verifier_without_its_lean_package_fails_rather_than_skips(tmp_path, m
 
 
 def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agreements_cache():
-    """A file of the Lean verifier's own package, wherever the layout puts it (`FLOCK_LEAN`), needs the agreement and the
-    red-team grant to merge and is read by the agreement (so a change to it misses a cached pass): a rule that still named
-    the package's old place would pass such a change unchecked."""
+    """A file of the Lean verifier's own package, wherever the layout puts it (`FLOCK_LEAN`), needs the agreement to merge and
+    is read by the agreement (so a change to it misses a cached pass): a rule that still named the package's old place would
+    pass such a change unchecked."""
     from research.merge import rule_touches
-    from research.queue import Rules
 
     rel = CHECK.FLOCK_LEAN.relative_to(ROOT).as_posix()
     changed = [f"{rel}/Flock/Gate.lean"]
@@ -881,6 +880,4 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     assert rule_touches(list(tool.CHECK.merge_requires["lean-agreement"]), changed)
-    rules = Rules.parse((ROOT / "tools" / "verity" / "check" / "queue.toml").read_text())
-    assert rule_touches(list(next(r for r in rules.grants if r.role == "red-team").paths), changed)
     assert CHECK.agreement_closure(changed) == changed

@@ -181,7 +181,7 @@ Until reuse and the merge queue exist:
 - PRs land in trains: ci stacks the tips, and the lander lands the merged tree once every part its members touch passes.
 - A train member needs its owner's `ready` label at its head, written by hand if need be:
   `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass.
-- A grant carries to a head whose own patch is byte-identical.
+- No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
 - A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
   the tip; a push to the PR would refuse every tip that pins its old head.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies goes first, alone in
