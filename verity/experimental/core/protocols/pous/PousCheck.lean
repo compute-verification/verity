@@ -7,4 +7,10 @@ import PousCheck.Setup
 import PousCheck.SetupProtocol
 import PousCheck.SetupDifftest
 import PousCheck.Merkle
+import PousCheck.Randomness
+import PousCheck.Challenge
+import PousCheck.Wire.Codec
+import PousCheck.Wire
+import PousCheck.Certificate
+import PousCheck.Audit
 import PousCheck.Difftest
