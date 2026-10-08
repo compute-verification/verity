@@ -478,9 +478,15 @@ def test_groups_sync_plans_through_the_broker_but_applies_only_with_the_token(br
 @pytest.fixture
 def identity_socket(monkeypatch):
     """A fake cursor-agent socket: answers POST /v1/tokens/oidc with `answer` (status, body) and records each request's body."""
-    state = {"answer": (200, {"token": OIDC}), "seen": []}
+    state = {"answer": (200, {"token": OIDC}), "seen": [], "drop": 0}
 
     class Handler(http.server.BaseHTTPRequestHandler):
+        def handle(self):
+            if state["drop"]:
+                state["drop"] -= 1
+                return
+            super().handle()
+
         def do_POST(self):
             state["seen"].append((self.path, json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
             status, body = state["answer"]
@@ -517,6 +523,22 @@ def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_soc
         identity_socket["answer"] = answer
         with pytest.raises(slack.SlackError, match=re.escape(says)):
             slack.oidc_token(slack.BROKER)
+
+
+def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch, tmp_path):
+    waits: list[float] = []
+    identity_socket["drop"] = 2
+    assert slack.oidc_token(slack.BROKER, sleep=waits.append) == OIDC
+    assert waits == list(slack.OIDC_RETRY_S) and len(identity_socket["seen"]) == 1
+    identity_socket["drop"] = len(slack.OIDC_RETRY_S) + 1
+    with pytest.raises(slack.SlackError, match="identity socket the Slack broker needs is unavailable"):
+        slack.oidc_token(slack.BROKER, sleep=waits.append)
+    assert len(identity_socket["seen"]) == 1 and identity_socket["drop"] == 0
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path / "absent.sock"))
+    waits.clear()
+    with pytest.raises(slack.SlackError, match="not a Cursor agent"):
+        slack.oidc_token(slack.BROKER, sleep=waits.append)
+    assert not waits
 
 
 def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
