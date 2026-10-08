@@ -220,10 +220,10 @@ def test_refusals():
         signer.sign(SESSION, b"c")
 
 
-def test_the_certificate_covers_p2_v3_at_the_cap():
+def test_the_certificate_covers_p2_v4_at_the_cap():
     from verity.experimental.protocols.pous.schemes import p2
 
-    scheme = schemes.get("p2-16448/v3")
+    scheme = schemes.get("p2-16448/v4")
     limit = 500_000 + p2.RTT_ALLOWANCE_CAP_NS
     assert limit == 854_000 < p2.ROOT_CALL_NS
     cert = mc.covering_certificate(scheme, p2.CERT_K, limit, experimental=True)
