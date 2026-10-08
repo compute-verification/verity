@@ -6,7 +6,10 @@ import asyncio
 import json
 import math
 import random
+import resource
 from collections import defaultdict
+from concurrent.futures import Executor, Future
+from pathlib import Path
 
 import pytest
 from verity.experimental.protocols.certifier import active, online
@@ -110,7 +113,7 @@ def test_the_shaper_is_run_shapers_rule():
         assert shaper.hands == [h for h in hands if h < len(syncs) * P.buckets]
 
 
-@pytest.mark.parametrize("name", ["last", "cover-2-1", "cover-2-0-fallback"])
+@pytest.mark.parametrize("name", ["last", "cover-2-1", "cover-2-0-fallback", "sticky-2-1-2"])
 def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
     """Frames arriving in any order at their ready buckets: the shaper's prover declares each window's sync at its
     first tick, the values `online.declare` gives on the whole run, and the records are `run_shaper`'s under them."""
@@ -125,7 +128,7 @@ def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
         frames, ready = [frames[j] for j in order], [ready[j] for j in order]
         prover = online.Prover(sync_set, P.buckets, online.rule(name), envelope)
         shaper, records, _ = feed_shaper(frames, ready, [], P, sync_set, prover=prover, windows=4)
-        want, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
+        want, _, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
         assert shaper.syncs == want
         assert records == run_shaper(frames, ready, want, Certifier("responses", P))
 
@@ -260,16 +263,19 @@ def honest() -> dict[int, int]:
     return {p: r - 1 for p, r in enumerate(READY)}
 
 
-async def replay(write_buckets: dict[int, int]):
+async def replay(write_buckets: dict[int, int], prover=None, executor=None):
     """One run of the Program through a proxy on real sockets, its clock injected: the peer sends each request in the
-    middle of its send bucket, and the server writes frame p in the middle of bucket `write_buckets[p]`. Returns the
-    proxy and the wire's bytes as the peer read them."""
-    frames, syncs, rows = FRAMES, SYNCS, ROWS
+    middle of its send bucket, and the server writes frame p in the middle of bucket `write_buckets[p]`. The syncs are
+    the honest prover's, or an online `prover`'s on `executor`. Returns the proxy and the wire's bytes as the peer read
+    them."""
+    rows = ROWS
+    advice = {"syncs": SYNCS} if prover is None else {"syncs": [], "prover": prover, "windows": WINDOWS,
+                                                      "executor": executor}
     clock = VirtualClock(-TAU / 2)
     server = Server()
     srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
-    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, syncs, origin=0.0, clock=clock,
-                  sleep=clock.sleep)
+    proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, advice.pop("syncs"), origin=0.0,
+                  clock=clock, sleep=clock.sleep, **advice)
     accepted: asyncio.Future = asyncio.get_running_loop().create_future()
     link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
                                       "127.0.0.1", 0)
@@ -399,6 +405,98 @@ def test_a_frame_late_past_every_sync_is_rejected(honest_run):
     assert late_wire != wire
 
 
+ENVELOPE = ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))
+
+
+def read_prover(name: str, lag: int) -> online.Prover:
+    """A prover that has read the honest run's every frame at its ready bucket."""
+    prover = online.Prover(SYNC_SET, EGRESS.buckets, online.rule(name), ENVELOPE, lag=lag)
+    for k, (f, r) in enumerate(zip(FRAMES, READY, strict=True)):
+        prover.arrive(0, k, f, r)
+    return prover
+
+
+class Held(Executor):
+    """Runs each choice at once, except those of the windows in `held`, which never finish: a choice slower than the
+    proxy's run."""
+
+    def __init__(self, held) -> None:
+        self.held, self.windows = set(held), []
+
+    def submit(self, fn, /, *args, **kwargs) -> Future:
+        self.windows.append(w := len(args[0].syncs))
+        return Future() if w in self.held else active.InlineExecutor().submit(fn, *args, **kwargs)
+
+
+def test_a_choice_not_ready_at_its_window_declares_the_envelope():
+    """Window 1's choice never finishes. Its tick doesn't wait: no tick is late, window 1 declares the envelope and
+    logs it unready, and window 2's choice, started at its tick less the lag, reads that declaration. The audit
+    accepts every link-window, raw and committed, since the envelope is in Σ_sync. The proxy refuses a prover that
+    would choose at its tick (lag 0)."""
+    lag = 2
+    held = Held({1})
+    proxy, _ = asyncio.run(replay(honest(), online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ENVELOPE,
+                                                          lag=lag), held))
+    assert held.windows == [0, 1, 2] and proxy.choices.log["unready"] == [1]
+    assert max(proxy.lateness["egress"]) == max(proxy.lateness["ingress"]) == 0
+    ready = read_prover("last", lag)
+    assert ready.declare() == ENVELOPE and ready.choose() != ENVELOPE
+    ready.declare(ENVELOPE)
+    ready.declare()
+    assert proxy.shaper.syncs == ready.syncs
+    assert [r for r in proxy.records if r.link == "responses"] == \
+        run_shaper(FRAMES, READY, ready.syncs, Certifier("responses", EGRESS))
+    raw, committed = audit(proxy, FRAMES, ready.syncs)
+    assert raw == committed == [(link, w, None) for link in ("responses", "requests") for w in range(WINDOWS)]
+    with pytest.raises(ValueError, match="off its tick"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, [], origin=0.0, windows=WINDOWS,
+              prover=online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ENVELOPE), executor=held)
+
+
+@pytest.mark.parametrize("name", ["last", "cover-2-1", "sticky-2-1-2"])
+def test_with_every_choice_ready_the_proxy_declares_what_online_declare_does(name):
+    """On the injected clock every choice is ready by its tick (`InlineExecutor`): under each lag the proxy declares
+    `online.declare`'s syncs with the same lag on the frames as read, and its records are `run_shaper`'s under them.
+    Some lag declares other than the choice at the tick would."""
+    rule = online.rule(name)
+    at_tick, _, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE)
+    differs = False
+    for lag in range(1, EGRESS.buckets):
+        prover = online.Prover(SYNC_SET, EGRESS.buckets, rule, ENVELOPE, lag=lag)
+        proxy, _ = asyncio.run(replay(honest(), prover, active.InlineExecutor()))
+        want, _, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE, lag=lag)
+        assert proxy.shaper.syncs == want and proxy.choices.log["unready"] == []
+        assert len(proxy.choices.log["choose_ms"]) == WINDOWS
+        assert [r for r in proxy.records if r.link == "responses"] == \
+            run_shaper(FRAMES, READY, want, Certifier("responses", EGRESS))
+        differs |= want != at_tick
+    assert differs
+
+
+def test_the_worker_process_chooses_what_the_prover_does():
+    """A snapshot pickles into the spawned worker (`active.worker()`), and the choice made there is the prover's."""
+    prover = read_prover("cover-2-1", 2)
+    prover.declare()
+    prover.declare()
+    pool = active.worker()
+    try:
+        sync, _ = pool.submit(active._choose, prover.snapshot()).result()
+    finally:
+        pool.shutdown()
+    assert sync == prover.choose()
+
+
+def test_reserve_fds_grows_the_fd_table_to_the_open_files_limit():
+    """The proxy grows its fd table before its clock starts (`active.reserve_fds`), so no socket of a burst waits for the
+    kernel to grow it under a second thread."""
+    soft = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+    want = 1 << 14 if soft == resource.RLIM_INFINITY else min(soft, 1 << 14)
+    active.reserve_fds(1 << 14)
+    status = Path("/proc/self/status").read_text().splitlines()
+    size = next(int(line.split()[1]) for line in status if line.startswith("FDSize:"))
+    assert size >= want
+
+
 def test_a_late_tick_fails_closed_and_does_not_slip():
     """The clock jumps past bucket 8's boundary by more than the slack: window 1 is padding from there on, its status
     is monitor-unavailable on both links, it still has its T rows, and the other windows are unaffected."""
@@ -426,9 +524,9 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
 def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
     """The ingress ticker wakes 0.3τ before bucket 2's boundary and releases a's request, read in bucket 1 and so
     anchored at 2; the server answers at once, so its event is ready at bucket 2, no later than its anchor. The online
-    prover refuses window 1's declaration, which reads that frame (the proxy used to raise its `ValueError` and stop):
-    egress window 1 is monitor-unavailable, padding with its T rows, its sync is the prover's next declaration, and
-    windows 0 and 2 and every ingress window are accepted."""
+    prover refuses window 1's declaration, whose snapshot at bucket T − lag reads that frame (the proxy used to raise
+    its `ValueError` and stop): egress window 1 is monitor-unavailable, padding with its T rows, its sync is the
+    choice made on what the snapshot read, and windows 0 and 2 and every ingress window are accepted."""
     early = 2
 
     async def run():
@@ -440,9 +538,9 @@ def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
             ingress = asyncio.current_task().get_coro().__name__ == "_ingress"
             await clock.sleep(delay - (0.3 * TAU if ingress and abs(clock() + delay - early * TAU) < 1e-9 else 0))
 
-        prover = online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(1, 1))
+        prover = online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(1, 1), lag=1)
         proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, [], origin=0.0, clock=clock,
-                      sleep=sleep, prover=prover, windows=WINDOWS)
+                      sleep=sleep, prover=prover, windows=WINDOWS, executor=active.InlineExecutor())
         link, writer = LinkReader(), NullWriter()
         running = asyncio.create_task(proxy.run(link, writer))
 
@@ -479,7 +577,7 @@ def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
     assert sorted((r.link, r.window) for r in proxy.records) == \
         sorted((link, w) for link in ("responses", "requests") for w in range(WINDOWS))
     assert all(len(r.grid) == EGRESS.buckets for r in proxy.records)
-    assert len(proxy.shaper.syncs) == WINDOWS and proxy.shaper.syncs == proxy.shaper.prover.syncs
+    assert len(proxy.shaper.syncs) == WINDOWS and proxy.shaper.syncs == proxy.choices.prover.syncs
     assert proxy.shaper.hands == [early + 1]
     assert len(writer.data) == WINDOWS * EGRESS.buckets * EGRESS.allocation * B
 
