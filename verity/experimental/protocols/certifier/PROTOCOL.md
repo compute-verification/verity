@@ -330,18 +330,29 @@ docstring) and sizes:
   While a window is chosen, later windows take their most eager value; that only lowers hand times, so a window found
   met stays met.
 - **The online prover** (`online.Prover`): that choice is in hindsight, from all of a window's frames. A live prover
-  declares window w's sync at its first bucket, w·T, from the frames ready by then (the canonical prefix it has read,
-  each anchored earlier) and the earlier declarations, and nothing else. A rule (`online.rule`) sees, for each recent
-  window, the least δ per ρ that would have met the frames seen of it with the other windows as declared. `cover-K-M`
-  takes the value of least estimated hand time whose δ is M buckets past every one of the last K windows' least δ at its
-  ρ, `-fallback` declares the envelope (the largest δ and smallest ρ the calibration's prover declared) while one of
-  them was late under its own declaration, and `last` is `cover-1-0`. A window with no history declares the envelope.
-  A configuration cut from one run at a dropped window may start from the previous one's history
-  (`Prover(prior=…)`). The bound charges log2 #Σ_sync bits per window whatever chose the value, so it holds under
-  any rule. What changes is who can use those bits: a sync chosen before the run, or from the trace's model, doesn't
-  depend on the sender, but an online prover reads the sender's timing, so the sender steers every declaration after
-  its first (in the injected-clock replay, the burst, spread and bits senders each move the declared δ, and the wire
-  differs from honest's in every window but the first).
+  declares window w's sync at its first bucket, w·T: the rule on the frames ready by w·T − lag (the canonical prefix
+  it has read, each anchored earlier) and the earlier declarations, and nothing else. A rule (`online.rule`) sees, for
+  each recent window, the least δ per ρ that would have met the frames seen of it with the other windows as declared.
+  `cover-K-M` takes the value of least estimated hand time whose δ is M buckets past every one of the last K windows'
+  least δ at its ρ, `-fallback` declares the envelope (the largest δ and smallest ρ the calibration's prover declared)
+  while one of them was late under its own declaration, `-rhoR` declares the chosen δ at the ρ R steps slower, and
+  `last` is `cover-1-0`. `sticky-K-M-N[-rhoR]` declares `cover-K-M[-rhoR]` only in windows 0, 1, 1+N, ...; in between
+  it keeps its value while that still has M buckets to spare, and otherwise escalates to a value fixed by the kept one.
+  A window with no history declares the envelope. A configuration cut from one run at a dropped window may start from
+  the previous one's history (`Prover(prior=…)`).
+- **The lag:** live, 1 … T − 1 buckets. It lets the choice be made off the proxy's tick, since from bucket w·T − lag on
+  nothing changes it, and a choice not ready at w·T is declared as the envelope. `online.declare(lag=…)` replays the
+  declarations with every choice ready, so it gives a live run's wherever its choices were ready; lag 0, the choice at
+  the tick itself, is the reference replay's.
+- **What the prover's choice changes:** the bound charges log2 #Σ_sync bits per window whatever chose the value, so it
+  holds under any rule, any lag, and an unready choice: the envelope is in Σ_sync, and the audit checks a
+  declaration, as advice, only for membership in Σ_sync. What changes is who can use those bits: a sync chosen before
+  the run, or from the trace's model, doesn't depend on the sender, but an online prover reads the sender's timing, so
+  the sender steers every declaration after its first (in the injected-clock replay, the burst, spread and bits
+  senders each move the declared δ, and the wire differs from honest's in every window but the first). Live, whether
+  a choice is ready by its tick depends on the proxy's load as well, which the sender can move too, and the same
+  bits are charged for it. `Rule.choices` bounds how many values a sender could make a rule declare in a window:
+  about #Σ_sync for `cover`, at most 2 between a `sticky` rule's free windows.
 - **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
   larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
   link. A window is the configuration's, so the rate is the configurations' missed windows over their windows
@@ -385,8 +396,12 @@ them.
     frames follow them on the wire.
 - **Ingress:** a frame read at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Certifier` at r_in
   (`Bucketer`, `calibration.size_ingress_ms`'s model).
-- **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Shaper(prover=…)`)
-  declares each at its window's first tick, before anything is handed, from the frames the shaper has taken.
+- **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
+  lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
+  taken. The proxy never chooses on a tick: right after tick w·T − lag (window 0's before the first tick) it hands
+  `Prover.snapshot()` to a worker process (`active.worker()`, off its event loop and GIL), and the tick at w·T
+  declares the result if it is done, else the envelope, logged as unready (`LaggedChoices`). The proxy shuts the
+  worker down when its run ends.
 - **Faults fail closed** (W6). Each one maps to a status:
 
   | Fault | Status |
@@ -474,8 +489,8 @@ horizons, so they check the Lean statements on examples and prove nothing. By na
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
   - senders that burst, spread, or pick their write times at random or by bits give the same wire, byte for byte;
   - a frame held past every sync is a mismatch;
-  - a late tick, an overrun, a refused stream, a request forwarded a bucket late, a fault that drops a carried queue
-    and out-of-set advice each fail closed;
+  - a late tick, an ingress tick read early (the online prover's refusal), an overrun, a refused stream, a request
+    forwarded a bucket late, a fault that drops a carried queue and out-of-set advice each fail closed;
 
 No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,

@@ -96,6 +96,8 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     elif remote_rec and not status:
         phase = remote_rec.get("phase")
         state = {"launched": "submitted", "refused": "refused", "unknown": "unknown"}.get(phase, "submitted")
+    elif remote_rec and status.get("state") not in TERMINAL and remote_rec.get("runner_gone"):
+        state = "runner-gone"                    # its status says active, but the machine has no runner for it (remote.json says why)
     else:
         state = status.get("state", "unknown" if not raw_job else "submitted")
     if remote_rec and not raw_job:

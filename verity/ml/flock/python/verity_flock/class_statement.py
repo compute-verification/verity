@@ -83,6 +83,10 @@ PACK_WORDS = os.environ.get("FLOCK_PACK_WORDS") == "1"
 #: FLOCK_CORE_ROWS=1: an FP GEMM coordinate's rows are core's bit rows (`element_rows`); packed, and a different circuit and
 #: statement from both other layouts'
 CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
+#: FLOCK_PLAIN_LEAVES=1: the proof's own Merkle leaves are plain SHA-512 (`circuit.LEAF_SCHEME_PLAIN`, a recursive session's
+#: inner statement, ZK off); another statement from the default's
+PLAIN_LEAVES = os.environ.get("FLOCK_PLAIN_LEAVES") == "1"
+LEAF_SCHEME = FC.LEAF_SCHEME_PLAIN if PLAIN_LEAVES else None
 #: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
 ELEMENT_ROWS = {"GemmCoordinateE4m3_v1": (("x",), ("wrow",)),
                 "GemmCoordinateNvf4_v1": (("x", "sx"), ("wrow", "sw")),
@@ -110,18 +114,25 @@ def _slots(widths: Sequence[int], packed: bool = False) -> tuple[list[tuple[int,
 
 @dataclass
 class ClassDefinition:
-    """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array."""
+    """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array, or
+    with ``out_words`` a tuple of them (one output port each, their words ``w_out`` in all)."""
 
     id: str
     port_words: tuple[int, ...]
     w_out: int
+    out_words: tuple[int, ...] = ()
 
     @property
     def w_in(self) -> int:
         return sum(self.port_words)
 
     def signature(self):
-        return tuple((f"p{i}", Array(w, Value(16))) for i, w in enumerate(self.port_words)), Array(self.w_out, Value(16))
+        params = tuple((f"p{i}", Array(w, Value(16))) for i, w in enumerate(self.port_words))
+        if self.out_words:
+            if sum(self.out_words) != self.w_out:
+                raise ValueError(f"{self.id}: output ports of {self.out_words} words are not {self.w_out}")
+            return params, Tuple(*(Array(w, Value(16)) for w in self.out_words))
+        return params, Array(self.w_out, Value(16))
 
 
 def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
@@ -635,7 +646,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
     text = FC.compose(low, sub, partition=partition, program=program, port_bits=bits, seg_ports=seg_ports, seg_out_rows=seg_out_rows,
-                      v2_out_rows=v2_out_rows, links=links or None, definition=definition)
+                      v2_out_rows=v2_out_rows, links=links or None, definition=definition, leaf_scheme=LEAF_SCHEME)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
         raise AssertionError(f"class {name}: the laid-out unit rows disagree with the reference on its lanes")
     if bits is not None:
@@ -765,7 +776,7 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     if not int(ok_t) == (1 << (n * P * C)) - 1 or not np.array_equal(got_t.astype(np.uint16), outs):
         raise AssertionError(f"class {name}: the tile's leaf maps disagree with its units")
     sub, iset = _shims(f"{name}-t{P}x{C}", uc.form.encode() + f"/tile{P}x{C}".encode(), P + C)
-    text = FC.compose(low, sub, partition=partition, program=program)
+    text = FC.compose(low, sub, partition=partition, program=program, leaf_scheme=LEAF_SCHEME)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     meta = json.loads(text.split("\n", 2)[1][5:])
@@ -1184,7 +1195,8 @@ def _stage_cache(s: str) -> Path | None:
         c["source_digest"] = _source_digest()
     a = c["a"]
     ident = [c["source_digest"], c["program_digest"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
-             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else [])
+             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else []) \
+        + (["plain-leaves"] if PLAIN_LEAVES else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 

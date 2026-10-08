@@ -65,15 +65,16 @@ ALLOWED = {
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli",
+FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
                       "benchmarks", "frontends", "infra", "integrations", "tools", "veritor")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, and the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``).
-SEPARATE = ("ml/flock", "ml/kernels/hash_gpu")
+#: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), and the Lean ports' differential test
+#: (``verity_difftest``, which their tests import, on Hypothesis).
+SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "experimental/core/difftest")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "experimental/claims")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
@@ -81,6 +82,11 @@ NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/cir
 #: ``verity/ml/`` that import experimental anyway (globs from ``verity/``), each with why.
 ML_IMPORTS_EXPERIMENTAL = {
     "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against experimental's Python verifiers",
+    "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
+                                             "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
+                                             "use only verity.ml; the follow-up to T2 moves them into ml "
+                                             "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
+                                             "experimental imports them from there, and this entry goes",
 }
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
