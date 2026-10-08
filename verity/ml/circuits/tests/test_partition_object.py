@@ -70,7 +70,7 @@ def test_the_width_rule_counts_bits():
 
 def test_the_object_names_the_query(program):
     obj = PO.build(program)
-    assert obj == {"format": "verity/partition/v1", "program": PO.program_sha512(program),
+    assert obj == {"format": "verity/partition/v1", "program": codec.program_digest(program),
                    "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
     assert PO.digest(obj) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(obj)).hexdigest()
     assert PO.validate(obj).ok and PO.verify(obj, program).ok
@@ -169,7 +169,7 @@ def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
     assert codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"}).decode() == VECTORS["descriptor"]
     D = codec.decode_program(json.loads(VECTORS["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
     assert PO.order_violation(D) is None                                             # topological: every query applies
-    assert PO.program_sha512(D.desc) == VECTORS["program_sha512"] == PO.program_sha512(program)
+    assert codec.program_digest(D.desc) == VECTORS["program_digest"] == codec.program_digest(program)
     obj = PO.build(D)
     assert obj == VECTORS["object"] and PO.digest(obj) == VECTORS["object_digest"]
     part = PO.evaluate(D)
@@ -184,3 +184,31 @@ def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
         assert (c.owner(), c.units, part.committed(p)) == (want["owner"], want["units"], want["committed"])
     assert [[i, list(part.locate(i)[:3]), [list(x) for x in part.locate(i)[3]]] for i in range(part.population)] == VECTORS["locate"]
     assert PO.verify(obj, D).ok
+
+
+#: `partition_object.program_sha512` of each, as main computed it at e7b5caa89 before `codec.program_digest` absorbed it
+PROGRAM_SHA512 = {
+    ("format_vectors.json", "descriptor"): "8217ea3d075b702f23db9e9a2693cedab39091e7d1f6fd09ae82d42b364d37bd90f27df47ecdbd45bfabd7b0b4ecc1bb219e0fab98e190c83d7fc50c0720876e",
+    ("format_vectors.json", "registered_program"): "88ccc55f0fe24f3867b7d668557c042447d688355293adf9a85f283e1376c85a76fbf3cf2bb225d7707b01fe65f9cb99c0be905085cf2597f5705a88b0eca5b6",
+    ("qword_vectors.json", "narrow"): "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
+    ("template_instance_vectors.json", "population"): "543f0b5c4cdc441c066dbb56e1669c99107062b24bab8fcd569bd4e4b5075b603290eb33bed0baa286a1675aae48a2b89dcb9d4319ec783e59d7ce5f849a596e",
+    "Max3": "62d82112d04e10bcd984b812331ba13c2eace59e55613e685a06f0de3ddd092ed6584ea47f8527890dffd45f94fbeee008298a0bf74b7e092550392bcdea88ce",
+    "Pair": "e4c91d2d5b7f4598463d77977f0ce96d34f0ca5c93ee1b91ad0f03b69be1ca3664ab313dc976cc55a8002b5c966880f53545f98a6b7e7ed749541095caf1cf35",
+    "Rows": "c953a14c107cf35cbd209477a8252b53173c2570ad7565239b152d5748eeaedef5990fd6a6d9d57a594866bc3014d50630f0337f0ea351c63f670051d343e070",
+}
+
+
+def _vector_descriptor(file: str, name: str) -> dict:
+    v = json.loads((Path(__file__).parent / file).read_text())
+    raw = v[name]["descriptor"] if name == "registered_program" else v[name] if name in v else v["descriptors"][name]
+    return json.loads(raw)
+
+
+def test_the_program_digest_is_the_program_sha512_registrations_were_made_with():
+    """Same preimage, SHA-512 over it: a program registered by `program_sha512` keeps its digest. A program whose root
+    Definition has dict statics is not among these: its root key `Root[<readable id>]_v1` spells the id's `{12 hex}`,
+    which moved with the hash."""
+    for key, want in PROGRAM_SHA512.items():
+        prog = Program(globals()[key]) if isinstance(key, str) else _vector_descriptor(*key)
+        assert codec.program_digest(prog) == PO.program_sha512(prog) == want, key
+    assert PO.program_sha512(Program(Max3)) == PO.build(Program(Max3))["program"]
