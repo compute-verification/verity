@@ -57,13 +57,14 @@ def arrive (s : Shaper) (position : Nat) (frame : Frame) (ready : Int) : Shaper 
 
 /-- `Shaper.tick`: the prover's declaration at a window's first tick, then the frames due by the handing rule, then the
 certifier's row, with the window's record at its last bucket. A window closing faulted with frames still queued faults
-the next one with the same reason. Refused where the prover's declaration is. -/
-def tick (s : Shaper) : Except String (Shaper × Slots × Option Record) := do
+the next one with the same reason. A declaration the prover refuses faults the window `monitor-unavailable`. -/
+def tick (s : Shaper) : Shaper × Slots × Option Record := Id.run do
   let T := s.certifier.params.buckets
   let mut s := s
   if let some p := s.prover then
     if s.t % T = 0 && s.t / T = s.syncs.size && s.syncs.size < s.windows then
-      let (p, sync) ← p.declare
+      let (p, sync, refused) := p.declare
+      if refused then s := s.fault .monitorUnavailable
       s := checkAdvice { s with prover := some p, syncs := s.syncs.push sync }
   for _ in [0:s.pending.size] do
     match s.pending.get? s.next with

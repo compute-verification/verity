@@ -54,8 +54,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-MANIFEST = Path(__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
-REPO = Path(__file__).resolve().parents[4]
+import research
+
+MANIFEST = Path(research.__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
+REPO = Path(__file__).resolve().parents[3]
 PROJECT = "verity"
 HISTORY = 400                  # REF's commits searched for a stale file's version
 AHEAD_DAYS = 21                # origin's branches searched for an unrecorded file's commit
@@ -326,7 +328,7 @@ def origin_branches(commit: str, repo: Path = REPO, most: int = 3) -> list[str]:
 
 
 def ssh_runner(project: str = PROJECT) -> Runner:
-    from . import remote
+    from research import remote
 
     def run(node: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
         t = remote.ssh_host_target(remote.resolve_machine(node, project))

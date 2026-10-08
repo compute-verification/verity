@@ -474,8 +474,8 @@ horizons, so they check the Lean statements on examples and prove nothing. By na
   - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
   - senders that burst, spread, or pick their write times at random or by bits give the same wire, byte for byte;
   - a frame held past every sync is a mismatch;
-  - a late tick, an overrun, a refused stream, a request forwarded a bucket late, a fault that drops a carried queue
-    and out-of-set advice each fail closed;
+  - a late tick, an ingress tick read early (the online prover's refusal), an overrun, a refused stream, a request
+    forwarded a bucket late, a fault that drops a carried queue and out-of-set advice each fail closed;
 
 No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,

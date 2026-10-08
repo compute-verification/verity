@@ -31,14 +31,14 @@ proxy event by event:
 * **Order.** Within one event, actions are in the order the proxy's tasks take them: an ingress tick's `publish` comes
   before the connections and writes its frames start, which come in the order of the frames that started them (a new
   stream's `connect`, or the writes of a stream whose connection was waiting for a frame).
-* **Crash.** The online prover refuses to declare past a frame ready no later than its anchor's bucket (`online.py`'s
-  `ValueError`, which a request released by an ingress tick read before its due time can lead to). `Proxy.run` raises
-  it from the egress tick that declares, before that tick's row, so the device returns `crash` with its reason and takes
-  no further event.
+* **Refusal.** The online prover refuses a declaration that reads a frame ready no later than its anchor's bucket
+  (`online.Refused`, which a request released by an ingress tick read before its due time can lead to): the egress
+  window that declares is faulted `monitor-unavailable`, as a late tick is, and its sync is the prover's choice on the
+  frames it has read.
 
 Events the proxy couldn't be waiting for (a second `connected`, bytes on a stream not open, a `delivered` with no write
-waiting, anything after both grids' last ticks or a crash) change nothing. Python's floats and Lean's integers agree away
-from the boundaries; the difftest keeps every reading at least 10 µs from one.
+waiting, anything after both grids' last ticks) change nothing. Python's floats and Lean's integers agree away from the
+boundaries; the difftest keeps every reading at least 10 µs from one.
 -/
 
 namespace CertifierDevice
@@ -76,9 +76,6 @@ inductive Action where
   | writeUpstream (s : Nat) (bytes : ByteArray) (drain : Bool)
   /-- A window's record closed, with its grid's parameters. -/
   | publish (record : Record) (params : Params)
-  /-- The proxy stops on an error, as `Proxy.run` raises it (the online prover's `ValueError`): it takes no further
-  event, and its driver closes its connections. -/
-  | crash (reason : String)
 
 /-- The online prover's configuration: its rule, envelope and the history of an earlier run. -/
 structure ProverConfig where
@@ -144,7 +141,6 @@ structure State where
   frames : Array (Nat × Nat × Nat × Nat × Int) := #[]
   linkFramesRead : Nat := 0
   requestsReleased : Nat := 0
-  crashed : Option String := none
 
 def nsPerMs : Nat := 1000000
 
@@ -161,7 +157,7 @@ def ticks (st : State) (p : Params) : Nat := st.config.windows * p.buckets
 
 /-- Both tickers have run all their ticks: the proxy has closed. -/
 def done (st : State) : Bool :=
-  st.crashed.isSome || st.shaper.t ≥ st.ticks st.config.egress && st.bucketer.t ≥ st.ticks st.config.ingress
+  st.shaper.t ≥ st.ticks st.config.egress && st.bucketer.t ≥ st.ticks st.config.ingress
 
 /-- `_bucket_ready`: a frame read at `now` is ready at the first egress bucket that starts after it. -/
 def bucketReady (st : State) (now : Nat) : Int :=
@@ -227,9 +223,7 @@ def egressTick (st : State) (now backlog : Nat) : State × Array Action := Id.ru
   let bucketBytes := p.allocation * p.frameBytes
   if backlog > bucketBytes then st := { st with shaper := st.shaper.fault .deliveryRefused }
   st := st.checkForwarding now
-  let (shaper, row, record) ← match st.shaper.tick with
-    | .ok x => pure x
-    | .error e => return ({ st with crashed := some e }, #[.crash e])
+  let (shaper, row, record) := st.shaper.tick
   st := { st with shaper }
   let mut acts := #[]
   if backlog ≤ 4 * bucketBytes then
