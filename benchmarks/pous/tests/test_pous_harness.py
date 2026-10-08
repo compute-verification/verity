@@ -691,4 +691,7 @@ def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_a
         stop.set()
         t.join()
         for x in os.listdir("/proc/self/task"):
-            os.sched_setaffinity(int(x), here)
+            try:
+                os.sched_setaffinity(int(x), here)
+            except ProcessLookupError:
+                pass

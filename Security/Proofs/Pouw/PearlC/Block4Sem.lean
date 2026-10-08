@@ -236,8 +236,8 @@ clearing the sign bit and `F32Div` of finite words by a nonzero divisor as `f32W
 finite words with the sign bit clear is the one of larger value, `a` at equal values (PTX `max.f32`); `F32ToE2m1Sat` of
 a word that is not NaN is `e2m1Word`'s code (it saturates `±inf` to `±6`, as `e2m1Word` does reading them at `±480`);
 `Bf16ToF32` widens by a 16-bit shift; and `I32Le` (signed 32-bit `a ≤ b`) of two words with bit 31 clear is their
-order, which the running max `s` reads. At core's instance `coreOps` the last two hold (`coreOps_bf16w`, `coreOps_le`),
-so `pc4OpsAgree_coreOps` asks only the others. -/
+order, which the running max `s` reads. At core's instance `coreOps` the last two hold by their definitions
+(`coreOps_bf16w`, `coreOps_le`), and all of them from core's definitions (`CoreOps.pc4OpsAgree_coreOps`). -/
 structure Pc4OpsAgree (ops : RowOps) : Prop extends WholeCircuit.Pc8OpsAgree ops where
   fmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
     signBit a = false → signBit b = false → ops.f32Fmaxf a b % 2 ^ 32 = if x < y then b else a
@@ -263,16 +263,6 @@ theorem coreOps_bf16w : ∀ w < 2 ^ 16, coreOps.bf16ToF32 w = w <<< 16 := by
   intro w hw
   show (w &&& (2 ^ 16 - 1)) <<< 16 = w <<< 16
   rw [Nat.and_two_pow_sub_one_of_lt_two_pow hw]
-
-/-- **Core's instance agrees with `pc4`'s rows** once it agrees with `pc8`'s and on `F32Fmaxf` and `F32ToE2m1Sat`:
-its `Bf16ToF32` and `I32Le` agree by their definitions. -/
-theorem pc4OpsAgree_coreOps (h8 : WholeCircuit.Pc8OpsAgree coreOps)
-    (hfmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 → wordQ a = some x → wordQ b = some y →
-      signBit a = false → signBit b = false → coreOps.f32Fmaxf a b % 2 ^ 32 = if x < y then b else a)
-    (he2m1 : ∀ w < 2 ^ 32, ((w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0) →
-      coreOps.f32ToE2m1Sat w % 2 ^ 4 = (e2m1Word w).val) :
-    Pc4OpsAgree coreOps :=
-  { h8 with fmaxf := hfmaxf, e2m1 := he2m1, bf16w := coreOps_bf16w, le := coreOps_le }
 
 /-! ## A block -/
 
