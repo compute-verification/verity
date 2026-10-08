@@ -39,6 +39,7 @@ members = [
     "verity-native-peak",
     "verity-network-traces",
     "verity-numerical",
+    "verity-ops",
     "verity-pouw-benchmarks",
     "verity-sp1",
     "verity-tc-probe",
@@ -1517,6 +1518,7 @@ dev = [
     { name = "verity-difftest" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
+    { name = "verity-ops" },
     { name = "verity-sp1" },
     { name = "verity-vllm" },
 ]
@@ -1544,6 +1546,7 @@ dev = [
     { name = "verity-difftest", editable = "verity/experimental/core/difftest" },
     { name = "verity-flock", editable = "verity/ml/flock" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
+    { name = "verity-ops", editable = "infra/ops" },
     { name = "verity-sp1", editable = "archive/sp1" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
@@ -1771,6 +1774,17 @@ requires-dist = [
     { name = "verity-vllm", editable = "integrations/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },
 ]
+
+[[package]]
+name = "verity-ops"
+version = "0.1.0"
+source = { editable = "infra/ops" }
+dependencies = [
+    { name = "research" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "research", editable = "tools/research" }]
 
 [[package]]
 name = "verity-pouw-benchmarks"
