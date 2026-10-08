@@ -1,8 +1,8 @@
 # `pouw_check`: PoUW's window check as a core protocol
 
 One `Core.Protocol` (`verity/core/protocols/interface`), `PouwCheck.protocol`, id `verity/pouw/v1`: the port of
-`verity/core/protocols/pouw/core_check.py`, Lean core only, until its properties are proven and it moves to
-`verity/core/`. The Python keeps running until then.
+`verity/core/protocols/pouw/core_check.py`, Lean core only. The Python keeps running until its properties
+are proven.
 
 | field | here |
 | --- | --- |
