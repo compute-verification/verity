@@ -30,9 +30,9 @@ members = [
     "verity-circuit-check",
     "verity-cli",
     "verity-commitments-benchmarks",
+    "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-firewall",
-
     "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-direct",
@@ -1615,6 +1615,17 @@ requires-dist = [
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-core-composition"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/protocols/composition" }
+dependencies = [
+    { name = "verity-difftest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-difftest" }]
 
 [[package]]
 name = "verity-core-evaluate"

@@ -1834,6 +1834,81 @@
    "assumptions": [],
    "type_hash": "2a673d725e2bd227ddbdd8a13eee9fd681ee8a56e8091cdb3de90c3774590fd6"
   },
+  "FlockVBridge.keyProg_parse": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.keyProg_parse {tags : Flock.Tags} {bytes : ByteArray} {tables : List (Prod String ByteArray)}",
+    "  {c : Flock.Circuit} (hc : Eq (Flock.HmRow.parse tags bytes tables) (Except.ok c)) (hU : FlockSoundness.Built c.unit)",
+    "  (n : Nat) (outs : Finset (Fin (FlockVBridge.keyGates hU n))) (X : Fin (FlockVBridge.keyGates hU n) → Bool) (u : Fin n)",
+    "  {j : Nat} (hj : instLTNat.lt j c.upv)",
+    "  (hone :",
+    "    Eq (X (FlockSoundness.Discharge.Const.Prog.oneAt (FlockSoundness.Discharge.Placed.keyProg c hU n) u)) Bool.true)",
+    "  (ms : Flock.MerkleScheme)",
+    "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) {LANES H : Nat}",
+    "  (hp : Eq (Flock.RecOpen.params c.unit.name) (Option.some { fst := LANES, snd := H }))",
+    "  (hu : instLENat.le c.unit.unitLog 32) (r a cf : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray)",
+    "  (hr : Eq r.size LANES) (ha : Eq a.size 2) (hcf : Eq cf.size (instHMul.hMul 2 LANES)) (hrest : Eq rest.size 96)",
+    "  (hss : Eq ss.length H)",
+    "  (hrow :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj) 0",
+    "      (Flock.MerkleScheme.rowBytes r))",
+    "  (haux :",
+    "    ∀ (i : Nat) (hi : instLTNat.lt i ss.length),",
+    "      And (Eq (List.instGetElemNatLtLength.getElem ss i hi).size 64)",
+    "        (FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "          (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 512 i))",
+    "          (List.instGetElemNatLtLength.getElem ss i hi)))",
+    "  (hacc :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
+    "  (hcoef :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "      (Flock.MerkleScheme.rowBytes cf))",
+    "  (hdir :",
+    "    ∀ (h : Nat),",
+    "      instLTNat.lt h H →",
+    "        Eq",
+    "          (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  1024)",
+    "                (instHMul.hMul 256 LANES))",
+    "              h))",
+    "          (idx.testBit h)) :",
+    "  FlockVBridge.ColsHold (FlockVBridge.copyVal (FlockVBridge.keyInst hU n outs u) X hj)",
+    "    (FlockSoundness.Discharge.Hm.outStart",
+    "      (StateT.run (Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)) Flock.HmNets.St.empty).snd",
+    "      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))",
+    "    (instHAppendOfAppend.hAppend",
+    "      (instHAppendOfAppend.hAppend (Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss)",
+    "        { data := Array.replicate 64 0 })",
+    "      (instHAppendOfAppend.hAppend",
+    "        (Flock.MerkleScheme.rowBytes",
+    "          (List.cons (FlockVBridge.consTerm LANES r a cf 0)",
+    "              (List.cons (FlockVBridge.consTerm LANES r a cf 1) List.nil)).toArray)",
+    "        rest))"
+   ],
+   "assumptions": [],
+   "type_hash": "a55b3e41fe477e035ca10986259778229aff8905511790b11204e492d69d50e8"
+  },
+  "FlockVBridge.laidRows_layout_congr": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.laidRows_layout_congr (st : Flock.HmNets.St) {i i' o o' : Array Nat} (outs : Array Flock.HmNets.Lin)",
+    "  (hi : Eq (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 i) (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 i'))",
+    "  (ho : Eq (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 o) (Array.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 o'))",
+    "  (n : Nat) (v : Nat → Bool) :",
+    "  Iff (FlockSoundness.Discharge.Hm.LaidRows (Flock.HmNets.layout st i o outs) n v)",
+    "    (FlockSoundness.Discharge.Hm.LaidRows (Flock.HmNets.layout st i' o' outs) n v)"
+   ],
+   "assumptions": [],
+   "type_hash": "3ab9f7eaf0a2d37f0d8b962d2ec38b0ac5aedf1d29c0e67e7d3e5d32b495d5a8"
+  },
   "FlockVBridge.laid_recOpen": {
    "owner": "@proofs",
    "signature": [
@@ -1879,6 +1954,79 @@
    ],
    "assumptions": [],
    "type_hash": "10d2fa996828bfc74558d32b261f36285313ca143fa3b2c99909b22130c05dfd"
+  },
+  "FlockVBridge.laid_unit": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.laid_unit (ms : Flock.MerkleScheme)",
+    "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r))) (LANES H : Nat)",
+    "  (hH : instLENat.le H 16) (v : Nat → Bool)",
+    "  (h :",
+    "    FlockSoundness.Discharge.Hm.LaidRows (Flock.RecOpen.unitLaid LANES H)",
+    "      (FlockSoundness.Discharge.Hm.inRowsOf (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H))) v)",
+    "  (r a c : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray) (hr : Eq r.size LANES)",
+    "  (ha : Eq a.size 2) (hc : Eq c.size (instHMul.hMul 2 LANES)) (hrest : Eq rest.size 96) (hss : Eq ss.length H)",
+    "  (hrow : FlockVBridge.ColsHold v 0 (Flock.MerkleScheme.rowBytes r))",
+    "  (haux :",
+    "    ∀ (i : Nat) (hi : instLTNat.lt i ss.length),",
+    "      And (Eq (List.instGetElemNatLtLength.getElem ss i hi).size 64)",
+    "        (FlockVBridge.ColsHold v (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 512 i))",
+    "          (List.instGetElemNatLtLength.getElem ss i hi)))",
+    "  (hacc :",
+    "    FlockVBridge.ColsHold v",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
+    "  (hcoef :",
+    "    FlockVBridge.ColsHold v",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "      (Flock.MerkleScheme.rowBytes c))",
+    "  (hdir :",
+    "    ∀ (h : Nat),",
+    "      instLTNat.lt h H →",
+    "        Eq",
+    "          (v",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  1024)",
+    "                (instHMul.hMul 256 LANES))",
+    "              h))",
+    "          (idx.testBit h)) :",
+    "  FlockVBridge.ColsHold v",
+    "    (FlockSoundness.Discharge.Hm.outStart",
+    "      (StateT.run (Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)) Flock.HmNets.St.empty).snd",
+    "      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))",
+    "    (instHAppendOfAppend.hAppend",
+    "      (instHAppendOfAppend.hAppend (Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss)",
+    "        { data := Array.replicate 64 0 })",
+    "      (instHAppendOfAppend.hAppend",
+    "        (Flock.MerkleScheme.rowBytes",
+    "          (List.cons (FlockVBridge.consTerm LANES r a c 0)",
+    "              (List.cons (FlockVBridge.consTerm LANES r a c 1) List.nil)).toArray)",
+    "        rest))"
+   ],
+   "assumptions": [],
+   "type_hash": "68af55879e1e2d41a75ed922f7ae3192990c59de949dd9a3201c33a70f7b8f36"
+  },
+  "FlockVBridge.length_recOpenOuts": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.length_recOpenOuts (LANES H : Nat) (p : FlockVBridge.Ports) (hacc : Eq p.acc 1024) :",
+    "  Eq (FlockVBridge.recOpenOuts LANES H p).length 2048"
+   ],
+   "assumptions": [],
+   "type_hash": "d793402153ae302f5f24f98c990ed4e7a53e662e7ca21482978a63b1b8b3ec3a"
+  },
+  "FlockVBridge.recOpenNet_eq": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.recOpenNet_eq (LANES H : Nat) (p : Flock.RecOpen.Ports) :",
+    "  Eq (Flock.RecOpen.recOpenNet LANES H p) (FlockVBridge.recOpenNet LANES H (FlockVBridge.portsOf p))"
+   ],
+   "assumptions": [],
+   "type_hash": "11657542c8f84cdc029285746852b43b3708b9d181beee2b73e43ab536878edb"
   },
   "FlockVBridge.sound_climbFrom": {
    "owner": "@proofs",
@@ -2013,6 +2161,63 @@
    ],
    "assumptions": [],
    "type_hash": "7751f3655f8a84941af362f27c5e8f46ef3ee5c69389884ff0cb56c247aa7ad4"
+  },
+  "FlockVBridge.unit_check": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.unit_check {C : FlockSoundness.Audit.Circuit} {n : Nat} {P : FlockSoundness.Audit.Partition C n}",
+    "  {u : Fin n} {c : Flock.Circuit} (hB : FlockSoundness.Built c.unit) {k : Nat}",
+    "  (I : P.IsRowsUnit u ((FlockSoundness.Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : Nat} (hj : instLTNat.lt j k)",
+    "  (hone : Eq (X (I.wire ((FlockSoundness.Rows.ofNet hB).stack k).one)) Bool.true) (ms : Flock.MerkleScheme)",
+    "  (hms : ∀ (l r : ByteArray), Eq (ms.node l r) (Flock.Sha512.hash (instHAppendOfAppend.hAppend l r)))",
+    "  (hrec : Eq (Flock.RecOpen.check c) (Except.ok Unit.unit)) {LANES H : Nat}",
+    "  (hp : Eq (Flock.RecOpen.params c.unit.name) (Option.some { fst := LANES, snd := H }))",
+    "  (hu : instLENat.le c.unit.unitLog 32) (r a cf : Array Flock.F128) (rest : ByteArray) (idx : Nat) (ss : List ByteArray)",
+    "  (hr : Eq r.size LANES) (ha : Eq a.size 2) (hcf : Eq cf.size (instHMul.hMul 2 LANES)) (hrest : Eq rest.size 96)",
+    "  (hss : Eq ss.length H) (hrow : FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj) 0 (Flock.MerkleScheme.rowBytes r))",
+    "  (haux :",
+    "    ∀ (i : Nat) (hi : instLTNat.lt i ss.length),",
+    "      And (Eq (List.instGetElemNatLtLength.getElem ss i hi).size 64)",
+    "        (FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "          (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 512 i))",
+    "          (List.instGetElemNatLtLength.getElem ss i hi)))",
+    "  (hacc :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "      (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "      (instHAppendOfAppend.hAppend (Flock.MerkleScheme.rowBytes a) rest))",
+    "  (hcoef :",
+    "    FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2))) 1024)",
+    "      (Flock.MerkleScheme.rowBytes cf))",
+    "  (hdir :",
+    "    ∀ (h : Nat),",
+    "      instLTNat.lt h H →",
+    "        Eq",
+    "          (FlockVBridge.copyVal I X hj",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd",
+    "                  (instHAdd.hAdd (instHMul.hMul 128 LANES) (instHMul.hMul 1024 (instHDiv.hDiv (instHAdd.hAdd H 1) 2)))",
+    "                  1024)",
+    "                (instHMul.hMul 256 LANES))",
+    "              h))",
+    "          (idx.testBit h)) :",
+    "  FlockVBridge.ColsHold (FlockVBridge.copyVal I X hj)",
+    "    (FlockSoundness.Discharge.Hm.outStart",
+    "      (StateT.run (Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)) Flock.HmNets.St.empty).snd",
+    "      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))",
+    "    (instHAppendOfAppend.hAppend",
+    "      (instHAppendOfAppend.hAppend (Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss)",
+    "        { data := Array.replicate 64 0 })",
+    "      (instHAppendOfAppend.hAppend",
+    "        (Flock.MerkleScheme.rowBytes",
+    "          (List.cons (FlockVBridge.consTerm LANES r a cf 0)",
+    "              (List.cons (FlockVBridge.consTerm LANES r a cf 1) List.nil)).toArray)",
+    "        rest))"
+   ],
+   "assumptions": [],
+   "type_hash": "813f73fd31f0f54511835164ae97d598c78cd3349cd31513264cf2727cca2de0"
   },
   "FlockVBridge.unit_recOpen": {
    "owner": "@proofs",
@@ -6770,6 +6975,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -6818,7 +7025,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.Circuit": {
@@ -6942,7 +7150,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.CircuitType": {
@@ -7032,7 +7242,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.CoinTree": {
@@ -7146,6 +7358,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -7183,7 +7397,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.DeriveAll": {
@@ -7288,7 +7504,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.DeriveCheck": {
@@ -7359,7 +7577,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Draw": {
@@ -7600,12 +7820,15 @@
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
     "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -7655,11 +7878,16 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_shaFrom",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -7723,7 +7951,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.HmNets": {
@@ -7862,18 +8091,24 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laidRows_layout_congr",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.sound_shaFrom",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
   "Flock.HmRow": {
-   "digest": "fb34917fe6e755668330bc3540d0fc58d9bbb66e28a6dec609270cc5c040961d",
+   "digest": "0c5f4f4cf4d08e5e39442c691094eb42101bb170fddad4cf7734dbd016f1c638",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -7914,6 +8149,7 @@
     "Flock.HmRow.EVALUABLE": "330c9f10310fe11080b8816408e976c202262b5b86d2a0ec6f92150fccd0c27c",
     "Flock.HmRow.HM_NET": "44cb1b37052af94e1caf5db19e17af968b55993c18d24718cec4a5e23332c598",
     "Flock.HmRow.MAX_COMPS": "1fbd229074e93ecd83e021c9fd63dab04ee5eff59b9e1181ffd53acaa5f3d572",
+    "Flock.HmRow.MAX_K_LOG": "a7e46ef15188b1a12b69db2ddfe5f82780f4f4ea39916d4a3afc381fc420c884",
     "Flock.HmRow.MsgBit": "ba4258e74f8707edc42a408a504e96d628c96e7167ebc8c8afdc557552288c78",
     "Flock.HmRow.MsgBit.const": "58785c995ae76268103f06f14d2c530b24e340c6f1f8d5e3d5b067f015f66dc5",
     "Flock.HmRow.MsgBit.digest": "4259fbedd057bb5b9d26dc6fdaf22d7cf593825b03254e8f2e59678953b0665b",
@@ -7959,11 +8195,12 @@
     "Flock.HmRow.evenRuns": "8765b28ed48180a1441cb56b2b84e098c6b45b99835bd285cfc41977f9e83c49",
     "Flock.HmRow.hex16": "12dc3acaacbb3091b3932a4959ee233f484701d4445c54e9deb5a1cfb15eed6f",
     "Flock.HmRow.isSha512Hex": "d45224822965131f484b3ab4bdf9ab5e2cb311cdb0ff5a8566ff840b77b65734",
+    "Flock.HmRow.kLogOf": "bd442e9a8080ff23304840f041063458c4c0d53e91d659bd6270f5a375a99f4d",
     "Flock.HmRow.loadPublic": "cc11b642fe1e6b67b5869ea4aa7f8cd1d0cde1540210a41c4b92e545e2510a5a",
     "Flock.HmRow.midstateOf": "01ed03cd41bf622f7dd471d066d7e7b9770ae0ade0776195af515fda4d9dca17",
     "Flock.HmRow.msgBit": "a2bd5f0110a4eadb3df19b396c2925fe5e75e3eccda5bbb6027bd3953df7cdf7",
     "Flock.HmRow.padTail": "8d2d799650b1a3f99e3df85f298fc56c9aa1599e97da96c6eeb019bd4cfaa1df",
-    "Flock.HmRow.parse": "2e4d59ed77c954d6e9e505df61507909ebc16e4c422dffac1a4984e930b3b355",
+    "Flock.HmRow.parse": "814a8839f0c06317479c5f4f67701bc9a99f0f90359551d3d0f60ee041101d00",
     "Flock.HmRow.parseTyped": "2f7edac17b0a7946605604ea9bfcc45fbefe472428385f8afa88b15f72c70c17",
     "Flock.HmRow.partitionDigest": "68267df95776ed7534942c1d87d043397a2e561e47ee6112402cfb9254e478c0",
     "Flock.HmRow.pin": "057f4ace5b39af6e790a197a95edf20f8181e0d316196bc3f6ab368fe367a609",
@@ -8027,7 +8264,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.Layout": {
@@ -8134,7 +8372,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Library": {
@@ -8179,7 +8419,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Ligerito": {
@@ -8313,7 +8555,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.Merkle": {
@@ -8371,10 +8614,13 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -8452,7 +8698,11 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laidRows_layout_congr",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -9066,6 +9316,107 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Flock.RecOpen": {
+   "digest": "c90378870c80f69fc750b5c47710b935c81ef73473d8f97d5ed9f27dabfcd49c",
+   "definitions": {
+    "Flock.RecOpen.GfS": "4e758955dfda986b6a5b9d74b5d185d2888099d3df70b16f0076774d6f759a71",
+    "Flock.RecOpen.GfS.ops": "82ad386d68752b6de1339bf39daa6068672737f748f1cbd7306b1f0a062331fe",
+    "Flock.RecOpen.GfS.res": "91bc4b11ca3e96eaca41b94df34488a5892be184a6ec403ed8201eabb106c041",
+    "Flock.RecOpen.Ports": "a7a2dcf93c349575b332ba076e2f021cd86fa11766f3bd5ff792a6bb3243e1d7",
+    "Flock.RecOpen.Ports.acc": "7c7fe827af3a8c7056a57f5448f1a917d75dcac46d32b27ba657483f20f54f0f",
+    "Flock.RecOpen.Ports.aux": "c408627190de533180768f94a75ee87780bf417d872acf995f0039fd2cba85dc",
+    "Flock.RecOpen.Ports.bits": "5e35f6ebf8cc18a54790b69d1e6bfc84220e30485693d103cd95130887701fb1",
+    "Flock.RecOpen.Ports.coef": "96a8d459d905835b3b3a0eae50b6e9cde11746a1a89399cdb2a21ec3772708dc",
+    "Flock.RecOpen.Ports.dirs": "26c44dd1a0a9cb8af4ed35da4ba4029b6e23c65f2bcf2ad51ac4409427da5c07",
+    "Flock.RecOpen.Ports.row": "626240f6c6b5c54d890d5aa7e80b14556451e0ac4a175025ec6751dc32e61fd8",
+    "Flock.RecOpen.Res": "a66efa988cb35643d42a19c899916fd7eb689db33256615ad7d89ff61d17d3b5",
+    "Flock.RecOpen.Res.add": "76c92a6ec5327d3b352ceafe28c8ebd929dd2b60021b2d67875588290624f04e",
+    "Flock.RecOpen.Res.mul": "055fa3e4a086dd1e2cdcad49eeba8ccd609574df9f7a0b0e0cd620e0198286d3",
+    "Flock.RecOpen.Term": "a2e5d10b22130a92dd5bbe59a30efa7adac0573277d036700f237cd6934f7bae",
+    "Flock.RecOpen.Term.v": "0a224b5353bbd4339884d808159edd767febad5b5a054142f4c958fc0ec8496b",
+    "Flock.RecOpen.Term.w": "4cfb6ea69f8ae7628a57e834591db5d14dcfd6adcc9147595a2428895a8d7091",
+    "Flock.RecOpen.Term.wt": "58c41984a713d79ee3443fa495a87bbea584a3533c161500adae8feceeb4edf5",
+    "Flock.RecOpen.addL": "1f03ec5c2e0d8fdb1e01dfc819dcdd1d74c37d627fcd529127a342698fac2d89",
+    "Flock.RecOpen.bitsOf": "809d68b3679db66f270612ab447bca86551c4970e4d8e28c227cc499c634282a",
+    "Flock.RecOpen.blockAt": "a1fd1b10768307eb0fdada811e59255b7256e56241c23c5fb112806b0951aba6",
+    "Flock.RecOpen.byteBit": "994b9593ed9c74dbf9ce3e0e77a659d74b82ff84818b415ea9fa4244d20aa0ce",
+    "Flock.RecOpen.check": "77a8552540a3375052ad76fd6fb136b856c30b992e19553352f2712763947573",
+    "Flock.RecOpen.climbFrom": "58f4cd8efb66ed056bb9928e7f0a967e663773b41c818424ebbb3d5ec9adf5c7",
+    "Flock.RecOpen.climbRow": "b609cef47ff26e6409b177324fe2aad8cb9bd25279c91a07820d9e98b3f89e4a",
+    "Flock.RecOpen.consStructure": "d896d8555c615983e2c9151b833c205e3ea97318fa17e08ed04f5faa1d5f09ab",
+    "Flock.RecOpen.foldG": "5e5e257d0f8e449676e9f2a0c4e8835cf07590870351619f2439d9f79d2bf128",
+    "Flock.RecOpen.inBits": "606a8fd376f372760584a2d4e22f3c73289d9d912597f95a9dc08349b5d56438",
+    "Flock.RecOpen.ivW": "894fc33bc50dca68d8838e8c8a82d4e81a4129a9ed6292ecda22da9ed7fcd3fb",
+    "Flock.RecOpen.leafSums": "c2b5765e5f5f34d3debee3567dc1dbe24ed8bde063e2bfbd0beca843416cf041",
+    "Flock.RecOpen.leaves": "05e0d162a98f4603f58276311457f011362bd68fb3fb98fc70b36486cc7728e0",
+    "Flock.RecOpen.lenBE": "fc9f907cb5661ae1822e0d835fc59ecbc3e03e2463015f9b2dc44ea708339f58",
+    "Flock.RecOpen.mulS": "82b41fbeecb579491a69b7e874f2f9702949f4c42120923e3680a5c28cef0c1c",
+    "Flock.RecOpen.opForms": "2dbfafe1e985f88be2cb25e175ba6f0d2b9c121dceaceba3da8c413a5c48d9b0",
+    "Flock.RecOpen.outBits": "78e142465f46a7cc573d098ee1151e48426efaa27bf212a0e229f96bb6f17842",
+    "Flock.RecOpen.padTail": "1b7f9b3c93c1a1b9db48825e47bd276c434000a5a7fec1bbd4ffae245e1b4118",
+    "Flock.RecOpen.padZeros": "8a9c115a23a50bde5e183133656db30110701c15b504088ab12e902267dfa747",
+    "Flock.RecOpen.params": "b38872b3ea1627f8b723dc2799ff9e4915913eeb6b134c80a13c7069ff1ed7de",
+    "Flock.RecOpen.ports": "c993bd3b8e6a130bcb1b3c62b32ecdf2d3c5fbf5bd9cbd729b0c1cbdea36351b",
+    "Flock.RecOpen.recOpen": "25929ce646b49a59f196edb259adec17b8f2beced90d85c78bf676c449e6364b",
+    "Flock.RecOpen.recOpenNet": "09747d317cb07428f986ef494058e20b386e1828317879ff624f04f91937a626",
+    "Flock.RecOpen.recOpenOuts": "cc6f8b9d2ed539a7ee6e91365940174ca47d6d79aec684b60072d40a1b71efae",
+    "Flock.RecOpen.recomb": "a64bc2b8915c96f701e5da51a3b0f136de79a5bcca6f24a64dc8597e6984cc41",
+    "Flock.RecOpen.reduceG": "910bcde7768fa7aedbe0f915f68c2352b493e87bcc120cef54db7a4e5809eafb",
+    "Flock.RecOpen.residual": "71bc11fd6e26936fec35b461bb0b67d3f640056f79aa1126dbd1bba53a1b1c9f",
+    "Flock.RecOpen.residualForms": "c32ece9005889f979ddc52cee4cb029d27e5d9ee52e3a2379185affbefe80384",
+    "Flock.RecOpen.residualsGo": "2a76252af754acd0f6d3a90f687196195e237b04b3a3aa8e94c4a1f5ed3d1b27",
+    "Flock.RecOpen.shaBlock": "10a85acf9799b3403615b6428299aa16f250e089dc44cc65e09dd4897889ebda",
+    "Flock.RecOpen.shaBlocks": "75caa0d7bc06a2f0efc235eed4f29211e36fb7038d091fe81caab12bcdaaaf0e",
+    "Flock.RecOpen.shaFrom": "22fa907e3fbaa5a5b417ff14ee892fe81eb1b6beb3f237a0575a73e8cf2338e7",
+    "Flock.RecOpen.shaMsg": "a5d0ef6bffc336417953540b1e46b93f5e6704304d61b25dcd53cab251b60ecb",
+    "Flock.RecOpen.shiftL": "a006c60bd00a26e80333342e2eb0740e39fc942111b3bd9f5223517dc95144b7",
+    "Flock.RecOpen.sibForms": "f1f68ee109e10646294a450a02fe5f7b9fedcfd8c9bc0e05e658e20ec98b55b9",
+    "Flock.RecOpen.swap": "2eb5a0a238dafd5724360df985fca794a3c8c0d0d7da3e7c827cb1934639c9e5",
+    "Flock.RecOpen.termForms": "b7947db716c2bf0d20a42fba4646e0e83f1633fcac3ba1c0c8f9c2ab4df20c70",
+    "Flock.RecOpen.unitLaid": "7b29440e214e91d276ae1fcd4a46d57dcd1a5d569680a705a13fe86df02d8d58",
+    "Flock.RecOpen.unitName": "20667d31e2f56b6d30575d65fdeac301403d5a5ca598ada4e521dc238dd7c475",
+    "Flock.RecOpen.unitNet": "3ccadcff55cadb943a9229990c4b6947d44cfa25b0d8ac88c22a83defcf4b2f0",
+    "Flock.RecOpen.valid": "2a6d47bce636befe8e4522067d7c4b0ce268bed4f3bb023540380ec568aaf119",
+    "Flock.RecOpen.wordPorts": "e0286627e96a3b359833aadd2efe3de01cc338999487b6d06d84ee1ee3a6ccc5",
+    "Flock.RecOpen.xorAll": "89c743dc809478a084e99aae65a4d5b9250c2e2c6a6ccfb7f2c283ad87868995",
+    "Flock.RecOpen.xorL": "8935e8f3e98775737ddd63b5d3573af33305eb6ccc1f76b2546e9f2d2cd38b2c"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHidden_refSetup",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEnd_refSetup",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
+    "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
+    "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
+    "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
+    "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
+    "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
+    "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous",
+    "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous",
+    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1",
+    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts",
+    "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
+    "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
+    "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous",
+    "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_json_nonvacuous",
+    "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_nonvacuous",
+    "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
+    "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.recOpenNet_eq",
+    "FlockVBridge.unit_check"
+   ]
+  },
   "Flock.Record": {
    "digest": "9cca9dd1fdcf3176aa439af37e033fa76bd144407b1a8719e39d084616684de7",
    "definitions": {
@@ -9440,7 +9791,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Flock.TemplateQuery": {
@@ -9636,7 +9988,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check"
    ]
   },
   "Flock.Verify": {
@@ -11663,6 +12017,8 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -12159,7 +12515,8 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.RecursiveSound"
+    "Flock.SecurityProofs.RecursiveSound",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Composed.Base": {
@@ -12451,10 +12808,11 @@
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden"]
   },
   "Proofs.Flock.Soundness.Discharge.Const.Inst": {
-   "digest": "4bd8d6860ba3182ff234ce520840cb2ede53acc0b7bd242de5dfddc86aef1284",
+   "digest": "5b67edd1babee2525b70e92e9b4ce438df0ab0a209d32347dd906ce5e2c14ee0",
    "definitions": {
     "FlockSoundness.Discharge.Const.Prog.castW": "854c12b44e6fa85198ad0f4358bddf6393f3b98ac5642ec6d27f0500456a9ecd",
     "FlockSoundness.Discharge.Const.Prog.instC": "51e5b1716e1c68b0be6fd985a25cbb4daef192d982ba59dee0391d42e7e92bf6",
+    "FlockSoundness.Discharge.Const.Prog.oneAt": "4cdbc633c1ff6576686ec0867f1ed22dbcb0bcff942c8d3c932fbd9c73e3cead",
     "FlockSoundness.Discharge.Const.Prog.rowsWireC": "9dbb5b0dddc8b50ee642561ebe6cce113b441334e422181a03da11367d707d7a"
    },
    "guarantees": [
@@ -12464,7 +12822,8 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.RecursiveSound"
+    "Flock.SecurityProofs.RecursiveSound",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZL.LIG": {
@@ -12926,11 +13285,16 @@
    "guarantees": [
     "Flock.SecurityProofs.RecursiveZK",
     "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_shaFrom",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -12943,7 +13307,14 @@
     "FlockSoundness.Discharge.Hm.spanOf": "1c2304c9a5eecd19cb89c0c5320d41986343079479e07213b65853267464cb1b",
     "FlockSoundness.Discharge.Hm.xorRow": "f93cb3d491e3b00761eee66e5a610c8f58540a8f50b23b69d2167988d5705411"
    },
-   "guarantees": ["FlockVBridge.laid_recOpen", "FlockVBridge.unit_recOpen"]
+   "guarantees": [
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laidRows_layout_congr",
+    "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.unit_check",
+    "FlockVBridge.unit_recOpen"
+   ]
   },
   "Proofs.Flock.Soundness.Discharge.Hm.Port": {
    "digest": "4afd1eb70ffb36d4fb4aa3607513250764309c588354a5ae84ee840a0409f1be",
@@ -12968,6 +13339,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
@@ -13285,7 +13658,8 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.RecursiveSound"
+    "Flock.SecurityProofs.RecursiveSound",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Setup": {
@@ -13323,7 +13697,8 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.RecursiveSound"
+    "Flock.SecurityProofs.RecursiveSound",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Placed.Wiring": {
@@ -13343,7 +13718,8 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.RecursiveSound"
+    "Flock.SecurityProofs.RecursiveSound",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Tables.Sim": {
@@ -14525,7 +14901,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.ExecPlacement": {
@@ -14583,6 +14960,8 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -14606,7 +14985,8 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.RecursiveSound"
+    "Flock.SecurityProofs.RecursiveSound",
+    "FlockVBridge.keyProg_parse"
    ]
   },
   "Proofs.Flock.Soundness.Extract": {
@@ -15018,6 +15398,8 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.RecursiveSound",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -15925,6 +16307,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
@@ -15953,11 +16337,21 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_recOpen"
    ]
+  },
+  "Proofs.Flock.VBridge.Keyed": {
+   "digest": "7df06675e0d9f9260040b30fa0e9ab6a5b594460583c177496cd9402b40e2512",
+   "definitions": {
+    "FlockVBridge.keyGates": "49eccba3c3600b87b4b3583d5439c02500e3a4e3d191d967351596e0e3030a15",
+    "FlockVBridge.keyInst": "86b12eb431b2819e98bd75796927b7c592f86e9792418fb81d553a1058b34566"
+   },
+   "guarantees": ["FlockVBridge.keyProg_parse"]
   },
   "Proofs.Flock.VBridge.Net": {
    "digest": "9ce207cb91af9f878f4576a51b69e12c5b3902cdd7ccdd8f23c02ff7fcc90cbe",
@@ -15975,7 +16369,16 @@
     "FlockVBridge.recOpenNet": "20a4b8fb652de3e0d54b261e34b57c216bee8a41b2458af91fb0332e188a4b3a",
     "FlockVBridge.recOpenOuts": "e69879f7325b2faa8e627ae6a3a5646b52eaad009e442880098bb527eb76ecb6"
    },
-   "guarantees": ["FlockVBridge.colsHold_words", "FlockVBridge.laid_recOpen", "FlockVBridge.unit_recOpen"]
+   "guarantees": [
+    "FlockVBridge.colsHold_words",
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
+    "FlockVBridge.unit_check",
+    "FlockVBridge.unit_recOpen"
+   ]
   },
   "Proofs.Flock.VBridge.Open": {
    "digest": "c8ab7d4a905cf0d269bffb58c8b39698f1b7c4f08268d49ab5c97675614e8dc8",
@@ -15985,6 +16388,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.unit_recOpen"
@@ -16000,8 +16405,13 @@
    "guarantees": [
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
+    "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_recOpen",
+    "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
   },
@@ -16036,6 +16446,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_recOpen"
@@ -16056,6 +16468,8 @@
    },
    "guarantees": [
     "FlockVBridge.laid_recOpen",
+    "FlockVBridge.length_recOpenOuts",
+    "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.sound_climbFrom",
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
@@ -16069,7 +16483,20 @@
     "FlockVBridge.colVal": "d9830da71e8dc54d65e1c4ee4b9c3b0a6818535f74313d7ae1a8c93bb1ebf426",
     "FlockVBridge.copyVal": "8c659733be0393be90f2cb4b217f6c0424ebe04a06c282e1cc172ec44afdfdd4"
    },
-   "guarantees": ["FlockVBridge.unit_recOpen"]
+   "guarantees": ["FlockVBridge.keyProg_parse", "FlockVBridge.unit_check", "FlockVBridge.unit_recOpen"]
+  },
+  "Proofs.Flock.VBridge.Verifier": {
+   "digest": "774b13e447c90f041da6dfb70397640664cb353f24fbaab1ac0a4438284a5a44",
+   "definitions": {
+    "FlockVBridge.portsOf": "588c9e2a207469518da236dc8d178ed73e11af86ff84f20b7bcca8988136fc6e",
+    "FlockVBridge.unitIn": "5ec0bf61a4a62189db534c6f28dcbc74373915d42f2e16abbd23b3b6cc316ff1"
+   },
+   "guarantees": [
+    "FlockVBridge.keyProg_parse",
+    "FlockVBridge.laid_unit",
+    "FlockVBridge.recOpenNet_eq",
+    "FlockVBridge.unit_check"
+   ]
   },
   "Proofs.Flock.Verifier.Registered": {
    "digest": "4a01481fa1a2f0303a1976053d2eea1d852a04b6cbe4bc89deaf5abaa239bb5f",

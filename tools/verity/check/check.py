@@ -209,10 +209,7 @@ _sha256 = COMMON.sha256
 tracked_files = COMMON.tracked_files
 
 
-#: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
-ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
-        'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
-        'export PATH="$HOME/.elan/bin:$PATH"; ')
+ELAN = SUITES.ELAN
 
 
 #: upstream's verifier builds and the sets' stored inputs, stored once and pinned by hash (`upstream-build.sh`)
@@ -841,8 +838,8 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 #: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
 #: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
-AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-core-evaluate", "verity-core-firewall", "verity/experimental/core/service/vstar", "verity-core-sampled-proofs",
-              "verity/experimental/core/protocols/network", "verity-pouw-window-difftest", "verity-pouw-check-difftest")
+#: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
+AFTER_LEAN = SUITES.AFTER_LEAN
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
@@ -857,12 +854,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"])]
+    tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
-        lean_suites = [*suites, *AFTER_LEAN, "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
+        lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(circuit_check_jobs(b)), "--out", str(out / "circuit-check.json"),
