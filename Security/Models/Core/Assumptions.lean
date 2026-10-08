@@ -43,25 +43,12 @@ root is SHA-512's (the one-hash rule), so two partitions with one root would be 
 def AdviceBinding {R : Type} (C : Circuit) (advice : (n : ℕ) → Partition C n → R) : Prop :=
   Function.Injective fun x : (n : ℕ) × Partition C n => advice x.1 x.2
 
-/-- **`cr/sha-512`, for one run**: no two of the strings `xs` a run hashes have one SHA-512 digest. Stated, as
-`LmsEufCma` is, for one run and its own strings, which a theorem names: over every string SHA-512 has collisions, over the
-few a run hashes the chance of one is the standard collision-resistance bound, which is not formalized here. -/
-def Sha512CollisionFreeOn {D : Type} (hash : ByteArray → D) (xs : ByteArray → Prop) : Prop :=
-  ∀ x y, xs x → xs y → hash x = hash y → x = y
-
 /-- **`trusted-nebius-host`**: the auditor-trusted `device` (a network certifier, the memory challenger) runs its stated
 `code` on the Nebius host it is deployed to. `run device x` is everything the device does on input `x`: what it emits,
 and how it uses its clock and its keys. The host changes none of it. Nothing attests this, since no attestation hardware
-stands behind the device: it is trust in Nebius. It doesn't say the keys stay secret. A protocol that needs that takes
-an unforgeability assumption, such as `LmsEufCma`, against everyone but the device. -/
+stands behind the device: it is trust in Nebius. It doesn't say the keys stay secret: a protocol that relies on
+the device's signatures proves its claim or finds, from the run, a forgery under the device's key. -/
 def TrustedNebiusHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
   ∀ x, run device x = code x
-
-/-- **`euf-cma/lms-sha512-n64`**: LMS over SHA-512 with n = 64 (the whole output, not truncated) and h = 20 is
-existentially unforgeable under chosen-message attack. Stated for one key and one run: every message and signature that
-`verify` accepts under the key is a message the key's holder signed (`signed`). A theorem taking it holds on the runs in
-which no one forged a signature; the chance of a forgery is the standard EUF-CMA bound, which is not formalized here. -/
-def LmsEufCma {Msg Sig : Type} (verify : Msg → Sig → Bool) (signed : Msg → Prop) : Prop :=
-  ∀ m σ, verify m σ = true → signed m
 
 end Verity.Assumptions
