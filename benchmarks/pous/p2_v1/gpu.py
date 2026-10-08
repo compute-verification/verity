@@ -1,7 +1,8 @@
 """P2's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every block's `K` and `t` expanded on the
-device by the library's `p2v1_keys` with v4's framing (`p2keys4.cuh`: counter-mode SHA-512 over `reference.expand_prefix`'s
-256-byte prefix, which the library compresses once into a midstate; `reference.keys`) just before the kernel that uses
-them, and freed after it. A library must report `p2v1_keys_version() == 4`: v1's SHAKE256 keys are retired."""
+device by the library's `p2v1_keys` with v4's framing (`p2keys4.cuh`: counter-mode SHA-512 over the setup's key prefix,
+whole 128-byte SHA-512 blocks that the library compresses once into a midstate: `reference.expand_prefix`'s 256 bytes, or
+the registered scheme's `schemes.p2.expand_prefix`; `reference.keys_after`) just before the kernel that uses them, and
+freed after it. A library must report `p2v1_keys_version() == 4`: v1's SHAKE256 keys are retired."""
 from __future__ import annotations
 
 import ctypes
@@ -24,10 +25,10 @@ def exponent_split(params: reference.Params) -> tuple[int, int, int]:
 
 
 class Kernels:
-    """The library on the current CUDA device, for one parameter set, salt and model commitment (`build_dir`, where v1's
+    """The library on the current CUDA device, for one parameter set and one setup's key prefix (`build_dir`, where v1's
     SHAKE256 extension was built, is no longer read)."""
 
-    def __init__(self, lib_dir: str, build_dir: str, params: reference.Params, salt: bytes, model: bytes) -> None:
+    def __init__(self, lib_dir: str, build_dir: str, params: reference.Params, prefix: bytes) -> None:
         import torch
 
         self.torch = torch
@@ -50,7 +51,7 @@ class Kernels:
             raise RuntimeError(f"{LIB} expands keys v{self.keys_version}, not v4: build it with FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA'")
         self.params, self.split = params, exponent_split(params)
         self.device = torch.device("cuda", torch.cuda.current_device())
-        self.prefix_bytes = reference.expand_prefix(salt, params, model)
+        self.prefix_bytes = bytes(prefix)
         self.flags = torch.zeros(1, dtype=torch.int32, device=self.device)
 
     def keys(self, first: int, count: int) -> tuple[Any, Any]:

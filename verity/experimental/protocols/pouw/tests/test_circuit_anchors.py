@@ -4,6 +4,7 @@ values unpacked into whole words."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 
 import pytest
@@ -11,7 +12,6 @@ import pytest
 import circuit_fixtures as F
 import pouw_regions_vectors as RV
 from verity.ml.crypto.blake3 import blake3, keyed
-from verity.ml.crypto.turboshake import turboshake128
 from verity.experimental.protocols.pouw.circuit import ncp2, pc4, pc8, traced_as
 from verity.experimental.protocols.pouw.circuit import reference as R
 from verity.experimental.protocols.pouw.circuit.anchors import ANCHORED, Anchors, Ledger, public_ports, region_bytes, region_words
@@ -67,23 +67,33 @@ def test_a_region_is_its_values_unpacked_into_whole_words():
 
 
 def test_pinned_region_vectors():
-    """The regions vectors (`pouw_regions_vectors`) are what `TileAnchors.regions` gives; their seeds are keyed BLAKE3 of the
-    public values under the scheme's labels, and Pearl-C4's E line is TurboSHAKE128's nibbles, each one u16 word."""
+    """The regions vectors (`pouw_regions_vectors`) are what `TileAnchors.regions` gives; their seeds are the public values
+    under the scheme's labels, Pearl-C4's the first 32 bytes of SHA-512 after the label's zero-padded 128-byte block and
+    Pearl-C's (h0, Pearl's) keyed BLAKE3, and Pearl-C4's E line is its quarter of SHA-512 after the line label's block
+    (`pearl_c4.line`), its nibbles each one u16 word."""
     pinned = json.loads(RV.OUT.read_text())
     assert RV.vectors() == pinned
     for c in pinned["cases"]:
-        label = "pearl-c4/v0" if c["circuit"] == "pc4" else "pearl-c/v0"
-        salt, ra, rb = (bytes.fromhex(c[p]) for p in ("salt", "root_a", "root_b"))
-        seed_a = keyed(blake3(f"{label}/seed-A".encode()), salt + ra + rb + c["matmul"].to_bytes(8, "little"))
-        assert (seed_a.hex(), keyed(blake3(f"{label}/seed-B".encode()), salt + rb).hex()) == (c["seed_a"], c["seed_b"])
         if c["circuit"] == "pc4":
-            raw = turboshake128(seed_a + bytes([0]) + c["rows"][1].to_bytes(4, "little"), 0x24, 16)
+            def h(role, msg):
+                return hashlib.sha512(f"pearl-c4/v1/{role}\0".encode().ljust(128, b"\0") + msg).digest()[:32]
+        else:
+            def h(role, msg):
+                return keyed(blake3(f"pearl-c/v0/{role}".encode()), msg)
+        salt, ra, rb = (bytes.fromhex(c[p]) for p in ("salt", "root_a", "root_b"))
+        seed_a = h("seed-A", salt + ra + rb + c["matmul"].to_bytes(8, "little"))
+        assert (seed_a.hex(), h("seed-B", salt + rb).hex()) == (c["seed_a"], c["seed_b"])
+        if c["circuit"] == "pc4":
+            i = c["rows"][1]
+            block = hashlib.sha512(b"pearl-c4/v2/line\0".ljust(128, b"\0") + seed_a + bytes([0])
+                                   + (i // 4).to_bytes(4, "little")).digest()
+            raw = block[16 * (i % 4):16 * (i % 4) + 16]
             e = next(r for r in c["units"][0]["regions"] if r["port"] == "e")
             assert e["bytes"] == bytes(b for x in raw for n in (x & 0xF, x >> 4) for b in (n, 0)).hex()
 
 
 #: each anchor's rule id, as META's ``derivation`` names it: part of C-Flock's circuit pin, so a changed rule is a new version
-RULES = {"pc4": {a: f"verity/pouw/anchor/pearl-c4/{a}/v1" for a in ANCHORED},
+RULES = {"pc4": {a: f"verity/pouw/anchor/pearl-c4/{a}/v2" for a in ANCHORED},
          "pc8": {a: f"verity/pouw/anchor/pearl-c/{a}/v1" for a in ANCHORED}}
 
 
@@ -109,7 +119,7 @@ def test_the_public_inputs_file_is_c_flocks(case):
     port's words, seed (the scheme's label) and derivation function, as META does, then each instance's regions, u16 LE,
     instance-major, the ports in the unit's parameter order; a tile, which has no region, or no instance is refused."""
     t = RV.anchors(*case)
-    label = "pearl-c4/v0" if case[1] == "pc4" else "pearl-c/v0"
+    label = "pearl-c4/v1" if case[1] == "pc4" else "pearl-c/v0"
     for role, indexes in RV.FILES:
         head, body = t.public_inputs(role, indexes).split(b"\n", 1)
         h = json.loads(head)

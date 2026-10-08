@@ -3,8 +3,9 @@ One registry (MONITORS) and one runner. Node 1's service (`vy-monitors.timer`, p
 monitors and writes each incident once when it opens and once when it clears; the relay on infra's VM runs the relay-side ones
 (they need GitHub, the evidence store or Slack) and posts both sets to #agent-alerts. Every Nebius machine runs the `machine`
 monitors (`vy-watchdog.timer`: `run --where machine --machine NAME --peer HOST ...`): memory pressure that holds, each process
-the OOM killer took (named with its run and the run's sender), a peer that stops answering, and yesterday's count of full checks
-lost to infrastructure. The machines watch each other, so one that hangs is reported by one that doesn't.
+the OOM killer took (named with its run and the run's sender), a peer that stops answering, /workspace filling within hours on its
+recent trend (named with the biggest live runs), a unit deploy.toml runs there that was never installed or is off, and
+yesterday's count of full checks lost to infrastructure. The machines watch each other, so one that hangs is reported by one that doesn't.
 
     research monitors list [--where node|relay] [--json]
     research monitors check [ID ...] [--where node|relay] [--json]     evaluate now and write nothing
@@ -692,6 +693,13 @@ EXPECTED_FAILED = {
     "nvidia-fabricmanager.service": "both nodes' GPUs are PCIe, with no NVSwitch to manage, so it fails at every boot",
 }
 UNITS = "systemctl --failed --no-legend --plain; echo ---; systemctl --user --failed --no-legend --plain"
+SESSION_RE = re.compile(r"session-(\d+)\.scope$")
+
+
+#: A timer's oneshot that fails every run is `failed` only between its runs, so its incident stays open until the unit has
+#: been out of `systemctl --failed` this long (vy-custody.service, every 5 minutes, opened and cleared 12 times in an hour on
+#: node 1, 8 Oct).
+UNITS_CLEAR_S = 1800
 
 
 def failed_units(text: str) -> list[tuple[str, str]]:
@@ -719,11 +727,23 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
             if r.returncode and "connect to bus" not in (r.stderr or ""):
                 raise RuntimeError(f"systemctl --user exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
             text += "---\n" + (r.stdout if r.returncode == 0 else "")
-        return [Finding(f"{scope}:{u}", f"*{name}: {'the user unit' if scope == 'user' else 'unit'} `{u}` has failed*")
-                for scope, u in failed_units(text)]
+        failed = failed_units(text)
+        sessions = sorted((u for scope, u in failed if scope == "system" and SESSION_RE.match(u)),
+                          key=lambda u: int(SESSION_RE.match(u)[1]))
+        out = [Finding(f"{scope}:{u}", f"*{name}: {'the user unit' if scope == 'user' else 'unit'} `{u}` has failed*")
+               for scope, u in failed if not (scope == "system" and SESSION_RE.match(u))]
+        if sessions:
+            span = f"`{sessions[0]}`" + (f" to `{sessions[-1]}`" if len(sessions) > 1 else "")
+            out.append(Finding("system:session-*.scope", f"*{name}: {len(sessions)} login session scope"
+                               f"{'s have' if len(sessions) > 1 else ' has'} failed* ({span}): those logins (ssh, and the runs sent "
+                               "over it) got no scope of their own, so no per-run memory cap. `journalctl -u UNIT` names the cause; once it's fixed, "
+                               "`systemctl reset-failed 'session-*.scope'`.",
+                               cleared=f"*Cleared:* no failed login session scope on {name.lower()}."))
+        return out
 
     check.__doc__ = (f"A failed systemd unit on {name.lower()}, system or research's user manager (`systemctl --failed`), less "
-                     "EXPECTED_FAILED: units that fail on this hardware by design, each with its reason.")
+                     "EXPECTED_FAILED: units that fail on this hardware by design, each with its reason. Failed login "
+                     "session scopes are one incident.")
     return check
 
 
@@ -920,6 +940,131 @@ def answering(ctx: Ctx) -> list[Finding]:
     return out
 
 
+WORKSPACE = "/workspace"
+DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line on node 1: no new check starts past it
+INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
+FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
+FIT_S = 3 * 3600            # the readings the line is fitted to
+FIT_MIN_S, FIT_MIN_N = 1800, 4
+DU_S = 60
+
+
+def disk_use(path: Path) -> dict[str, float]:
+    s = os.statvfs(path)
+    used, free = (s.f_blocks - s.f_bfree) * s.f_frsize, s.f_bavail * s.f_frsize
+    return {"pct": 100.0 * used / (used + free) if used + free else 0.0, "size_b": float(used + free),
+            "ipct": 100.0 * (s.f_files - s.f_ffree) / s.f_files if s.f_files else 0.0}
+
+
+def _slope_per_h(pts: list[tuple[float, float]]) -> float:
+    n = len(pts)
+    mt, mv = sum(t for t, _ in pts) / n, sum(v for _, v in pts) / n
+    den = sum((t - mt) ** 2 for t, _ in pts)
+    return 3600 * sum((t - mt) * (v - mv) for t, v in pts) / den if den else 0.0
+
+
+def _run_disk(ctx: Ctx) -> str:
+    """The live runs' directories by size, biggest first (`du`, cut off after DU_S: what it measured by then)."""
+    runs = sorted({v["run"] for v in run_scopes(ctx).values() if v["run"]})
+    dirs = [str(ctx.path(RUNS) / r) for r in runs if (ctx.path(RUNS) / r).is_dir()]
+    if not dirs:
+        return "no live run has a run directory"
+    bound = int(ctx.bound(DU_S))
+    out = ctx.sh(["timeout", str(max(1, bound - 5)), *NICE, "du", "-xsB1G", *dirs], timeout=bound, ok=(0, 1, 124))
+    sizes = sorted(((int(g), Path(p).name) for g, p in (ln.split("\t", 1) for ln in out.splitlines() if "\t" in ln)
+                    if g.isdigit()), reverse=True)[:3]
+    return ", ".join(f"{rid} {g}G" + (f" (sent by {who})" if (who := submitter(ctx, rid)) else "") for g, rid in sizes) or \
+        f"`du` measured none of {len(dirs)} in {bound} s"
+
+
+def disk_forecast(ctx: Ctx) -> list[Finding]:
+    """/workspace's disk or inodes reaching DISK_FULL_PCT / INODES_FULL_PCT within 6 hours on the line fitted to the last 3
+    hours of readings (kept in the memo; at least 4 over 30 minutes), or already there. Names the biggest live runs on disk."""
+    now = disk_use(ctx.path(WORKSPACE))
+    pts = [p for p in ctx.memo.get("readings", []) if ctx.now - FIT_S <= p[0] < ctx.now] + [[ctx.now, now["pct"], now["ipct"]]]
+    ctx.memo["readings"] = pts
+    found, biggest, span = [], None, pts[-1][0] - pts[0][0]
+    for i, (what, full) in enumerate((("disk use", DISK_FULL_PCT), ("inode use", INODES_FULL_PCT)), start=1):
+        pct = pts[-1][i]
+        rate = _slope_per_h([(p[0], p[i]) for p in pts]) if len(pts) >= FIT_MIN_N and span >= FIT_MIN_S else 0.0
+        if pct >= full:
+            when = f"is past {full:.0f}%"
+        elif rate > 0 and (full - pct) / rate * 3600 <= FORECAST_S:
+            when = f"reaches {full:.0f}% in about {(full - pct) / rate:.1f} h"
+        else:
+            continue
+        biggest = biggest or _run_disk(ctx)
+        gain = f"{rate:+.2f} points/h" + (f" ({rate * now['size_b'] / 100 / 2**30:+,.0f} GiB/h)" if i == 1 else "")
+        found.append(Finding(what.split()[0], f"*{ctx.machine or 'This machine'}: /workspace's {what} {when}*: {pct:.1f}% now, "
+                             f"{gain} over the last {span / 3600:.1f} h. Biggest live runs on disk: {biggest}.",
+                             cleared=f"*Cleared:* {ctx.machine}'s /workspace {what} no longer reaches {full:.0f}% within "
+                                     f"{FORECAST_S // 3600} h."))
+    return found
+
+
+MANIFEST = Path(__file__).resolve().parent / "pods/nebius/deploy.toml"     # installed beside this file on every machine
+UNIT_SUFFIX_RE = re.compile(r"\.(service|timer|socket|path|target|mount)$")
+ENABLED = ("enabled", "enabled-runtime", "static", "indirect", "generated", "alias")
+EXPECTED_OFF: dict[tuple[str, str], str] = {     # (machine, `systemd:UNIT`): why a unit deploy.toml runs is off there by design
+    ("vy-nebius-1", "systemd:vy-n2-offload.service"): "node 2 runs checks, not its fill queue, since its restart on 8 Oct, so "
+                                                      "nothing on node 2 would take an offloaded build",
+    ("vy-nebius-1", "systemd:vy-n2-commit-offload.service"): "as vy-n2-offload: no fill runner on node 2 to take a Commit",
+}
+
+
+def expected_units(machine: str, manifest: str) -> list[str]:
+    """`systemd:UNIT` / `user-systemd:UNIT` for each unit a `run` of deploy.toml names on `machine`, less held entries' and
+    EXPECTED_OFF; a unit without a suffix is a service (ops deploy's unit_name)."""
+    import tomllib
+
+    m, out = tomllib.loads(manifest), set()
+    for e in m.get("file", []) + m.get("tree", []):
+        if machine not in e.get("nodes", []) or e.get("hold"):
+            continue
+        for r in e.get("run", []):
+            kind, _, name = r.partition(":")
+            if kind in ("systemd", "user-systemd") and name:
+                out.add(f"{kind}:{name if UNIT_SUFFIX_RE.search(name) else name + '.service'}")
+    return sorted(out - {u for (mm, u) in EXPECTED_OFF if mm == machine})
+
+
+def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, str]]:
+    """`systemctl show`'s load, unit-file and active state of each of `names` in `scope` (`systemd`, or research's user manager)."""
+    argv = ["systemctl", *(["--user"] if scope == "user-systemd" else []), "show", "--no-pager",
+            "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState", "-p", "SubState", *names]
+    env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    r = ctx.run(argv, capture_output=True, text=True, timeout=ctx.bound(30), env=env)
+    if r.returncode:
+        raise RuntimeError(f"`{' '.join(argv[:3])}` exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
+    blocks = [dict(ln.split("=", 1) for ln in b.splitlines() if "=" in ln) for b in r.stdout.strip().split("\n\n")]
+    if len(blocks) != len(names):
+        raise RuntimeError(f"`systemctl show` gave {len(blocks)} units for {len(names)}")
+    return dict(zip(names, blocks))
+
+
+def units_expected(ctx: Ctx) -> list[Finding]:
+    """A unit deploy.toml runs on this machine (its `run`s, beside this file) that was never installed, isn't enabled or isn't
+    active, held for 5 minutes; less EXPECTED_OFF."""
+    want = expected_units(ctx.machine, MANIFEST.read_text())
+    out = []
+    for scope in ("systemd", "user-systemd"):
+        names = [u.split(":", 1)[1] for u in want if u.startswith(scope + ":")]
+        for name, s in (unit_states(ctx, scope, names) if names else {}).items():
+            off = []
+            if s.get("LoadState") == "not-found":
+                off.append("was never installed (systemd doesn't know it)")
+            else:
+                if s.get("UnitFileState") not in ENABLED:
+                    off.append(f"isn't enabled ({s.get('UnitFileState') or '?'}), so it won't start at boot")
+                if s.get("ActiveState") not in ("active", "reloading"):
+                    off.append(f"isn't running ({s.get('ActiveState') or '?'}/{s.get('SubState') or '?'})")
+            if off:
+                what = "the user unit" if scope == "user-systemd" else "unit"
+                out.append(Finding(f"{scope}:{name}", f"*{ctx.machine}: {what} `{name}` {' and '.join(off)}*, though deploy.toml "
+                                   "runs it there.", cleared=f"*Cleared:* {ctx.machine}'s `{name}` is enabled and running."))
+    return out
+
+
 def is_full_check(req: dict) -> bool:
     args, cmd = [str(a) for a in req.get("harness_args") or []], " ".join(str(a) for a in req.get("command") or [])
     return ("--tool" in args[:-1] and args[args.index("--tool") + 1] == "check") or "check/slot.py" in cmd or "check/check.py" in cmd
@@ -968,8 +1113,8 @@ MONITORS: list[Monitor] = [
     Monitor("disk-n2", "infra", "warn", "node", watermarks("n2"), RETENTION, every_s=600, clear_s=1800, n2="probe"),
     Monitor("stalls-n1", "infra", "page", "node", stalls_n1,
             "A blocked pool: stop the process its `blocked` file names (or have its owner stop it), then remove the file. A "
-            "dispatcher that fails or doesn't tick: read its pane and loop.log, fix the cause, restart it in tmux "
-            "`node1-dispatch`.", unread_s=600),
+            "dispatcher that fails or doesn't tick: read loop.log and `systemctl status vy-node1-dispatch`, fix the cause, "
+            "`sudo systemctl restart vy-node1-dispatch`.", unread_s=600),
     Monitor("idle-while-waiting-n1", "infra", "warn", "node", idle_while_waiting_n1,
             "Why isn't the waiter granted? `cat /run/gpu-lease*/n1-lease.json` (mode, pool, waiting), the pool's cap "
             "(VY_POOL_MAX) and its queue's quota (n1_lease.py's grow rule), and the cluster agent's grants when the brain is on. "
@@ -984,8 +1129,8 @@ MONITORS: list[Monitor] = [
             "window it belongs to; ask its owner to end it, or release it once it is dead."),
     Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
     Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
-    Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300),
-    Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, n2="units"),
+    Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S),
+    Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S, n2="units"),
     Monitor("held-idle", "infra", "warn", "node", held_idle,
             "Your held GPUs sat idle above your target: release GPUs between phases, or lease for less. The `held-idle-hourly` "
             "panel on the live console says where the time went.", every_s=300, events=True),
@@ -1001,6 +1146,15 @@ MONITORS: list[Monitor] = [
     Monitor("answering", "infra", "page", "machine", answering,
             "`nebius compute instance get` for its state; preserve what it can (its runs' custody), then restart it "
             "(`nebius compute instance stop` and `start`), and tell the owners of the runs it had.", for_s=180, clear_s=120),
+    Monitor("disk-forecast", "infra", "page", "machine", disk_forecast,
+            "Tell the senders of the runs it names what they are writing; then free space by the retention policy (`research "
+            "retention report` on the machine, `research retention gc --apply`).",
+            every_s=600, clear_s=1800),
+    Monitor("units-expected", "infra", "page", "machine", units_expected,
+            "Never installed: `research deploy install MACHINE --by infra --apply PATH` from deploy.toml, then `systemctl "
+            "daemon-reload`. Off: `systemctl status UNIT` and `journalctl -u UNIT -n 50` on the machine (`--user` for a user "
+            "unit); `systemctl enable --now UNIT` once its cause is fixed. A unit off there by design goes in EXPECTED_OFF in research/monitors.py with "
+            "the reason, or out of that machine's `nodes` in deploy.toml.", every_s=300, for_s=300, clear_s=300),
     Monitor("lost-checks", "infra", "warn", "machine", lost_checks,
             "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
@@ -1425,6 +1579,15 @@ def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict |
     return posted
 
 
+SENT_BY_RE = re.compile(r"sent by https://cursor\.com/agents/bc-([0-9a-f]{8})")
+
+
+def sender_handles(reg: dict, text: str) -> list[str]:
+    """The handles whose holder is the agent an alert says sent the run (holders name agents by at least `bc-` + 8 hex)."""
+    ids = set(SENT_BY_RE.findall(text))
+    return [h["handle"] for h in reg["handles"] if ids & set(re.findall(r"bc-([0-9a-f]{8})", h["holder"]))]
+
+
 def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     from . import slack
 
@@ -1450,6 +1613,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     def post(ev: dict, thread: dict | None) -> dict:
         """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""
         th = {} if thread is None else thread
+        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(reg, ev["text"])]))}
         if ev["event"] == "clear":
             done = th.setdefault("cleared", [])
             for k, ch in (("ts", alerts), ("pointer", front)):

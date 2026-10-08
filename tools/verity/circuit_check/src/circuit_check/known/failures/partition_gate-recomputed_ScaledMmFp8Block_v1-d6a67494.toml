@@ -1,0 +1,6 @@
+key = "partition/gate-recomputed ScaledMmFp8Block_v1"
+reason = """\
+  every coordinate of a 128-column weight block recomputes the block's scale product F32Mul(sx[kb], sw[kb]) \
+  (fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; word.unit_rule partitions the batch's members \
+  one by one and does not see it\
+  """

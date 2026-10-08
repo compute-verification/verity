@@ -1,7 +1,8 @@
 {
  "roots": ["NetworkCheck"],
  "exempt": {
-  "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof"
+  "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
+  "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck"
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
@@ -19,6 +20,11 @@
    "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon"],
    "except": [],
    "why": "the encodings are code: Lean core and C-Flock's hashes, bytes and canonical JSON only, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Check": {
+   "imports": ["NetworkCheck.Certificate", "NetworkCertifier.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
+   "except": [],
+   "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

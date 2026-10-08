@@ -137,8 +137,14 @@ def stream(base: bytes, purpose: bytes, nbytes: int) -> bytes:
 
 def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
     """Block `(segment, block)`'s full-width mask `K`, its tweak `t` (uniform below `p`) and `t`'s candidate index."""
+    return keys_after(expand_prefix(salt, params, model), params, segment, block)
+
+
+def keys_after(prefix: bytes, params: Params, segment: int, block: int) -> tuple[int, int, int]:
+    """`keys` after any framing's `prefix`: the spec's (`expand_prefix`), or the registered scheme's, whose prefix frames
+    the protocol's 24-byte salt and no model commitment (`verity...schemes.p2.expand_prefix`)."""
     n = params.width_bytes
-    base = expand_prefix(salt, params, model) + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
+    base = prefix + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
     k = int.from_bytes(stream(base, b"K", n), "big")
     attempt = 0
     while True:

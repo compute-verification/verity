@@ -209,10 +209,7 @@ _sha256 = COMMON.sha256
 tracked_files = COMMON.tracked_files
 
 
-#: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
-ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
-        'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
-        'export PATH="$HOME/.elan/bin:$PATH"; ')
+ELAN = SUITES.ELAN
 
 
 #: upstream's verifier builds and the sets' stored inputs, stored once and pinned by hash (`upstream-build.sh`)
@@ -527,12 +524,25 @@ def lean_slot(cmd: list[str]) -> list[str]:
     return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd, only) else cmd
 
 
+def requires_outside(lean: Path) -> list[str]:
+    """The packages the Lean package ``lean`` requires from outside its directory, by its manifest or its lakefile: the
+    agreement's pass is kept under that directory's files only, so it would outlive a change to one of them."""
+    import tomllib
+
+    m, lf = lean / "lake-manifest.json", lean / "lakefile.toml"
+    entries = [*(json.loads(m.read_text()).get("packages", []) if m.exists() else []),
+               *(tomllib.loads(lf.read_text()).get("require", []) if lf.exists() else [])]
+    return sorted({e.get("name", "?") for e in entries
+                   if (p := e.get("dir") or e.get("path")) is None or not (lean / p).resolve().is_relative_to(lean.resolve())})
+
+
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
-    `--record` sends it then."""
+    `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
+    directory (`requires_outside`)."""
     lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
         if FLOCK_VERIFIER.is_dir():
@@ -547,6 +557,9 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             agreement = [sys.executable, str(Path(__file__).resolve()), "--lean-agreement", str(out), str(got["upstream"]), str(got["inputs"])]
         elif got:
             agreement = f"only {', '.join(got)} of the pinned upstream build and inputs was sent"
+    if outside := requires_outside(lean):
+        agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
+                     f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
@@ -841,7 +854,8 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 #: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
 #: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
-AFTER_LEAN = ("verity-flock", "verity-lean-audit")
+#: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
+AFTER_LEAN = SUITES.AFTER_LEAN
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
@@ -861,7 +875,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
-        lean_suites = [*suites, *AFTER_LEAN, "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
+        lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(circuit_check_jobs(b)), "--out", str(out / "circuit-check.json"),
