@@ -7,12 +7,12 @@ Two restatements of one set of rules:
   definition, which is its docstring after the first line, and `test_the_oracle_transcribes_the_lean_model` finds that
   text verbatim in the Lean file the first line names. A responder is a `ContMachine` (`rest`, `step`) whose `W`, `pp`,
   `C` and `ω` are fixed for a run and so closed over, and `f` is the primitive that answers its queries.
-* **On the verifier's clock** (`ClockOracle`): the same rules on what `audit.MemoryChallenger` observes, nanoseconds on its
-  own clock. `(D, Q)` becomes `limit = Δ + RTT` and `(D_late, Q_late)` becomes `late_limit = Δ_late + RTT`, or `None`
-  for a verifier without a hard deadline, which waits for every answer.
+* **On the memory challenger's clock** (`ClockOracle`): the same rules on what `audit.UnsignedRounds` observes,
+  nanoseconds on its own clock. `(D, Q)` becomes `limit = Δ + RTT` and `(D_late, Q_late)` becomes
+  `late_limit = Δ_late + RTT`, or `None` for a memory challenger without a hard deadline, which waits for every answer.
 
   1. Challenge `j` is sent no earlier than round `j − 1` closed (`contSend`).
-  2. An answer's delay runs from the verifier's own send of its challenge (`contProg`).
+  2. An answer's delay runs from the memory challenger's own send of its challenge (`contProg`).
   3. A round closes at its answer, or rejected once `late_limit` has passed with none; an answer past `late_limit` is
      rejected too, its block never checked (`contVerdict`'s `.reject`).
   4. Any other answer past `limit` is late, whatever its block; one within `limit` is a hit if it is the challenged
@@ -20,11 +20,11 @@ Two restatements of one set of rules:
   5. With tolerance `f₀` the run accepts iff at most `f₀` rounds are not hits (`contAccepts`): those are the misses.
      The late count is the late and rejected rounds, every round whose answer was not in within `limit`.
 
-  An action Lean's verifier has no step for is refused and changes nothing: a challenge while a round is open within
-  its hard deadline, an answer naming a challenge other than the open one, an answer with no challenge open, closing a
-  round before its hard deadline. A round with no answer closes at the first action past its hard deadline (`expire`,
-  or the next `challenge`, which then sends the next index or refuses because all `n` are sent). Lean closes it at
-  `D_late` units; the code's later close only sends the next challenge later (the model's docstring).
+  An action Lean's memory challenger has no step for is refused and changes nothing: a challenge while a round is open
+  within its hard deadline, an answer naming a challenge other than the open one, an answer with no challenge open,
+  closing a round before its hard deadline. A round with no answer closes at the first action past its hard deadline
+  (`expire`, or the next `challenge`, which then sends the next index or refuses because all `n` are sent). Lean closes
+  it at `D_late` units; the code's later close only sends the next challenge later (the model's docstring).
 
 The bridge between the two: an answer that takes `d` rounds and `w` queries arrives `max(d·call_ns, w·query_ns)` after
 the send, with `D = limit // call_ns`, `Q = limit // query_ns` and likewise `(D_late, Q_late)` from `late_limit`. Then
@@ -288,11 +288,11 @@ class Record:
 
 
 class ClockOracle:
-    """The verifier on its own clock (the module docstring, "On the verifier's clock"): `n` challenges, the `j`th
-    asking for block `index(j)` of `C`. `named` is a verifier whose answers name their challenge
-    (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge. Each action takes
-    the clock reading `t` and returns what the verifier must do: the `(j, index)` it reveals, the `Record` it closes,
-    or a `Refused`."""
+    """The memory challenger on its own clock (the module docstring, "On the memory challenger's clock"): `n`
+    challenges, the `j`th asking for block `index(j)` of `C`. `named` is a memory challenger whose answers name their
+    challenge (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge.
+    Each action takes the clock reading `t` and returns what the memory challenger must do: the `(j, index)` it reveals,
+    the `Record` it closes, or a `Refused`."""
 
     def __init__(self, n: int, index: Callable[[int], int], C: Sequence[bytes], limit: int, late_limit: int | None,
                  named: bool) -> None:

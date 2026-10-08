@@ -24,7 +24,8 @@ label and the rule's versioned id), and the verifier values it from its own `--p
 (`TileAnchors.public_inputs`), whose content for one unit is `TileAnchors.regions`: each region's u16 words
 (`region_words`), every value unpacked, the region whole 128-bit words.  A row unit cut along k (`rowk`) reads F_A and F_B
 one segment at a time: each form's region is its segment's lines (`Derivation.per_segment`), under the anchor's slice
-rule (``verity/pouw/anchor/<scheme>/<anchor>/slice/v1``), which only the cut's shapes name.
+rule (``verity/pouw/anchor/<scheme>/<anchor>/slice/v<n>``, at the anchor's own version), which only the cut's shapes
+name.
 
 A window's `Receipt` lists every call of the window, each with its anchors, shape and commitment, complete and immutable
 before any key exists. `Ledger.open` derives the window's key from it alone, a fresh source under the receipt's digest,

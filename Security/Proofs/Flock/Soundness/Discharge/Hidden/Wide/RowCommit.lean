@@ -103,8 +103,7 @@ theorem chainV_one_rowP {n : ℕ} {data : List UInt8} (hd : data.length = 128 * 
   have h1 : Sha512.compress Sha512.iv (padData (rowMsgP pre data)) 0 = Sha512.compress Sha512.iv pre 0 := by
     refine compress_congr _ fun k hk => ?_
     rw [get!_eq_getD, get!_eq_getD, rowMsgP_pad hpre hd, Nat.zero_add, getD_rowPadP_pre hpre hd hk]
-  rw [chainV, show chain (padData (rowMsgP pre data)) 1 = Sha512.compress Sha512.iv (padData (rowMsgP pre data)) 0
-    from rfl, h1]
+  rw [chainV, chain_succ, show chain (padData (rowMsgP pre data)) 0 = Sha512.iv from rfl, Nat.mul_zero, h1]
 
 /-- Block `k + 1` (`k < n`) is chunk `k` of the data. -/
 theorem blockV_rowP {n : ℕ} {data : List UInt8} (hd : data.length = 128 * n) {k : ℕ} (hk : k < n) :

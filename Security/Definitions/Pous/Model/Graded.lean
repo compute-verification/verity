@@ -3,12 +3,13 @@ import Definitions.Pous.Model.Audit
 /-!
 # The graded sequential audit: up to `t` late rounds, each within a hard bound
 
-Added on 3 Oct 2026, with `Pous.Guarantees.BandGradedMeetsFamily`. Statement reviewer: @lean (PR #905), after the red
-team's hold on unbounded late rounds (`red-team-905`). `GradedMeets` (`Pous/Protocol/Accounting/GradedMeets.lean`) is
-`Meets` with this audit in place of the sequential one.
+Added on 3 Oct 2026, with `Pous.Guarantees.BandGradedMeetsFamily` (PR #905), after the red
+team's hold on unbounded late rounds (`red-team-905`). `GradedMeets`
+(`Security/Definitions/Pous/Accounting/GradedMeets.lean`) is `Meets` with this audit in place of the sequential
+one.
 
-**The game.** It is the sequential audit (`Pous/Protocol/Model/Audit.lean`) with a grace of `t` late rounds, each
-within a hard bound `(D_late, Q_late)` with `D ≤ D_late` and `Q ≤ Q_late`:
+**The game.** It is the sequential audit (`Security/Definitions/Pous/Model/Audit.lean`) with a grace of `t` late
+rounds, each within a hard bound `(D_late, Q_late)` with `D ≤ D_late` and `Q ≤ Q_late`:
 
 1. Setup and preprocessing are as in the sequential audit: `W` arbitrary, `(pp, C) := enc W ω r`, and an `S`-bit state
    `σ := A₁ W pp C ω`.
@@ -24,8 +25,8 @@ within a hard bound `(D_late, Q_late)` with `D ≤ D_late` and `Q ≤ Q_late`:
    rounds are late.
 
 At `t = 0` it is the sequential audit: `PousGraded.gradedAuditSecure_zero_iff`
-(`Pous/SecurityProofs/Graded/Theorem.lean`) proves `GradedAuditSecure … k 0 δ ε ↔ AuditSecure … .sequential … k δ ε`
-whenever `D ≤ D_late` and `Q ≤ Q_late`.
+(`Security/Proofs/Pous/Graded/Theorem.lean`) proves
+`GradedAuditSecure … k 0 δ ε ↔ AuditSecure … .sequential … k δ ε` whenever `D ≤ D_late` and `Q ≤ Q_late`.
 
 **Why late rounds are bounded.** With no bound the game is not a conservative model of a storage server at `t ≥ 1`. A
 server that keeps nothing of `C` at rest spends its one late round re-encoding `C` from the free `W`, then answers
@@ -35,29 +36,30 @@ re-encoding takes (requirement 1). The `S`-bit state at each arrival models stor
 `k − t` rounds within `(D, Q)` and `t` rounds within `(D_late, Q_late)`, is too short to re-encode `C`. That is the
 sequential audit's own link from the `S`-bit state to storage at rest; an instance states it as a condition on its
 parameters (`Pous.Guarantees.BandGradedMeetsFamily`: `D_late ≤ d` and `D_late ≤ 12`, so every row's rounds last under
-`240·6 + 3·13 = 1,479` call-times, and with the verifier's gaps the window stays within the `1,505` that
-`Pous.Guarantees.BackgroundRebuildExcluded` requires the verifier to cap it at, against the `3,057` that re-encoding a
-band segment from `W` takes).
+`240·6 + 3·13 = 1,479` call-times, and with the memory challenger's gaps the window stays within the `1,505`
+that `Pous.Guarantees.BackgroundRebuildExcluded` requires the memory challenger to cap it at, against the `3,057` that
+re-encoding a band segment from `W` takes).
 
 **Requirements on the protocol.** The game assumes each of these, and a bound proved in it says nothing about a
 protocol that breaks one. `PROTOCOL.md` ("The graded audit") states them as requirements of the graded audit.
 
-1. **No pipelining.** The verifier sends challenge `j + 1` only after it receives answer `j`, and each round's deadline
-   runs from its own challenge's send time. The game reveals index `i_{j+1}` only after answer `j`, and times each round
-   alone.
+1. **No pipelining.** The memory challenger sends challenge `j + 1` only after it receives answer `j`, and each round's
+   deadline runs from its own challenge's send time. The game reveals index `i_{j+1}` only after answer `j`, and times
+   each round alone.
 2. **A hard deadline.** An answer past `Δ_late` rejects, and a wrong or missing answer rejects. `(D_late, Q_late)` is
    what the adversary completes within `Δ_late`, as `(D, Q)` is within `Δ`. A responder that runs past
    `(D_late, Q_late)` is rejected; the same responder stopped at `(D_late, Q_late)` (`PousGraded.cut`,
-   `Pous/SecurityProofs/Graded/Theorem.lean`) is a `GradedResponder` and answers as it does on every round the verifier
-   accepts, so `GradedResponder.bounded` is the deadline.
-3. **Every answer past `Δ` is counted late.** A round over `(D, Q)` on its own path answers past `Δ`, so the verifier
-   counts at least the game's late rounds, and accepting with at most `t` counted implies the game's acceptance.
+   `Security/Proofs/Pous/Graded/Theorem.lean`) is a `GradedResponder` and answers as it does on every round the
+   memory challenger accepts, so `GradedResponder.bounded` is the deadline.
+3. **Every answer past `Δ` is counted late.** A round over `(D, Q)` on its own path answers past `Δ`, so the memory
+   challenger counts at least the game's late rounds, and accepting with at most `t` counted implies the game's
+   acceptance.
 
-**What a reviewer checks.** That "late" is measured on the program's own path (`Prog.depth`, `Prog.work` under
+**What to check.** That "late" is measured on the program's own path (`Prog.depth`, `Prog.work` under
 `M.answer ω`), as `Prog.Bounded` is, rather than against every primitive; that the state stays `S` bits across a late
 round (a late round can recompute anything within `(D_late, Q_late)`, but keeps only `S` bits of it); that
-`(D_late, Q_late)` is what the adversary completes within `Δ_late`; and that the verifier's count of late rounds is
-what the implementation's deadline check counts.
+`(D_late, Q_late)` is what the adversary completes within `Δ_late`; and that the memory challenger's count of late
+rounds is what the implementation's deadline check counts.
 -/
 
 namespace Pous

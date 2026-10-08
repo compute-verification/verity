@@ -331,6 +331,12 @@ src = "tools/research/src/research/pods/nebius/n1_alerts.py"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
+[[file]]  # the units-expected monitor reads which units each machine runs from this copy
+path = "/usr/local/lib/vy-monitoring/research/pods/nebius/deploy.toml"
+src = "tools/research/src/research/pods/nebius/deploy.toml"
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+owner = "infra"
+
 [[file]]
 path = "/etc/systemd/system/vy-monitors.service"
 src = "tools/research/src/research/pods/nebius/monitoring/vy-monitors.service"
