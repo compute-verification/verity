@@ -134,7 +134,8 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-core-evaluate", "verity-core-firewall",
-              "verity/experimental/core/service/vstar", "verity-core-sampled-proofs")
+              "verity/experimental/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/experimental/core/protocols/network")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
