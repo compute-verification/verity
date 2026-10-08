@@ -1,5 +1,5 @@
 [Unit]
-Description=this machine's watchdog: one pass of the machine monitors (memory pressure, OOM kills, peers, lost checks; research/monitors.py)
+Description=this machine's watchdog: one pass of the machine monitors (memory pressure, OOM kills, peers, the disk forecast, lost checks; research/monitors.py)
 After=network-online.target
 
 [Service]

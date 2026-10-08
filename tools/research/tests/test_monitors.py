@@ -1006,6 +1006,37 @@ def test_an_oom_kill_is_named_with_the_run_its_scope_held_and_who_sent_it_even_a
         M.oom_kills(mctx(root, blind, memo))
 
 
+def test_disk_forecast_pages_when_the_fitted_line_reaches_the_watermark_within_6_hours_and_names_the_biggest_live_runs(
+        tmp_path, monkeypatch):
+    rid, quiet = "r20261008-000440-0c41", "r20261008-002727-b62e"
+    root = machine_root(tmp_path, {"session-1.scope": (rid, 1), "session-2.scope": (quiet, 1), "session-3.scope": (None, 1)})
+    for r in (rid, quiet):
+        (root / M.RUNS.lstrip("/") / r).mkdir(parents=True)
+    req = root / M.REQUESTS.lstrip("/") / rid
+    req.mkdir(parents=True)
+    (req / "request.json").write_text(json.dumps({"submitted_by": "https://cursor.com/agents/bc-x"}))
+    use = {"pct": 70.0, "ipct": 50.0, "size_b": 5 * 2**40}
+    monkeypatch.setattr(M, "disk_use", lambda path: dict(use))
+    du = Run((has("du"), (124, f"412\t/r/{rid}\n3\t/r/{quiet}\n", "du: cut off")))
+    memo: dict = {}
+    for i in range(3):                                   # 3 readings over 20 minutes: too few for a line
+        use["pct"] = 70.0 + 2 * i
+        assert M.disk_forecast(mctx(root, du, memo, now=T0 + 600 * i)) == []
+    use["pct"] = 76.0                                    # 12 points/h: 85% in 0.75 h
+    (f,) = M.disk_forecast(mctx(root, du, memo, now=T0 + 1800))
+    assert f.key == "disk" and "disk use reaches 85% in about 0.8 h*: 76.0% now" in f.text and "+12.00 points/h (+614 GiB/h)" in f.text
+    assert f.text.index(f"{rid} 412G (sent by https://cursor.com/agents/bc-x)") < f.text.index(f"{quiet} 3G")
+    (argv, _), = [c for c in du.calls if "du" in c[0]]
+    assert argv[:2] == ["timeout", "55"] and "nice" in argv and str(root / M.RUNS.lstrip("/") / rid) in argv
+    use["pct"] = 76.0                                    # flat for 3 hours: the old rise falls out of the fit
+    for k in range(1, 19):
+        found = M.disk_forecast(mctx(root, du, memo, now=T0 + 1800 + 600 * k))
+    assert found == [] and len(memo["readings"]) == 19             # 3 hours of 10-minute readings, both ends kept
+    use["ipct"] = 81.0
+    (f,) = M.disk_forecast(mctx(root, du, memo, now=T0 + 20000))
+    assert f.key == "inode" and "inode use is past 80%" in f.text
+
+
 def test_a_peer_that_doesnt_answer_ssh_is_a_finding_and_one_that_does_isnt(tmp_path):
     run = Run((lambda a, _i: a[0] == "ssh" and "vy-nebius-cpu-1" in a, (255, "", "ssh: connect to host: Connection timed out")),
               (lambda a, _i: a[0] == "ssh", (0, "", "")))
@@ -1048,4 +1079,5 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
     assert "-m research.monitors run --where machine $VY_WATCHDOG_ARGS" in text
     assert "EnvironmentFile=/etc/vy/watchdog.env" in text and "SupplementaryGroups=systemd-journal" in text
     assert re.search(r"^OOMScoreAdjust=-\d+$", text, re.M)
-    assert {m.id for m in M.MONITORS if m.where == "machine"} == {"memory-pressure", "oom-kills", "answering", "lost-checks"}
+    assert {m.id for m in M.MONITORS if m.where == "machine"} == {"memory-pressure", "oom-kills", "answering", "disk-forecast",
+                                                                    "lost-checks"}
