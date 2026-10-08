@@ -22,8 +22,8 @@ from pathlib import Path
 MARKER = Path("/etc/vy/runs-via-slot")
 RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
-#: slot.py from a shipped tree, after the platform move and before it
-SLOT_PATHS = ("tools/verity/check/slot.py", "tools/check/slot.py")
+#: slot.py from a shipped tree
+SLOT_PATHS = ("tools/verity/check/slot.py",)
 
 
 def through_slot(command: object) -> bool:

@@ -11,7 +11,6 @@ from research.pods.nebius import slot_only as S
 def test_only_a_command_that_runs_cmd_in_a_check_slot_counts():
     assert S.through_slot(["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"])
     assert S.through_slot(["python3", "tools/verity/check/slot.py", "--priority", "--by", "x", "--", "true"])
-    assert S.through_slot(["python3", "tools/check/slot.py", "--", "true"]), "a tree from before the platform move"
     for c in (["python3", "tools/verity/check/slot.py", "--status"], ["python3", "tools/verity/check/slot.py", "--by", "x", "--"],
               ["uv", "run", "circuit-check", "--all"], ["bash", "-c", "python3 tools/verity/check/slot.py -- true"],
               ["python", "tools/verity/check/slot.py", "--", "true"], ["python3", "/elsewhere/slot.py", "--", "true"], None, "python3"):
