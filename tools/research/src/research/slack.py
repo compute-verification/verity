@@ -1552,7 +1552,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and not is_quiet(m.get("text") or "")
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and \
+            not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})

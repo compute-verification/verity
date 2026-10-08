@@ -1251,12 +1251,14 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     fake.add(COORD, text="circuits 06:00Z: 3 open", username="circuits", bot_id=BOT, thread_ts=box)   # its own note, no doorbell
     old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
     fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
+    bare = fake.add(COORD, text="@proofs an older client's fyi\n\n_fyi_", username="infra", bot_id=BOT, ts="1600000000.000003")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
     assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
     assert [d["name"] for d in rep["dropped"]] == ["no-such-lane"]
-    assert old["ts"] in [s["ts"] for s in rep["unanswered"]] and fyi["ts"] not in [s["ts"] for s in rep["unanswered"]]
+    stale = [s["ts"] for s in rep["unanswered"]]
+    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
 
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):
