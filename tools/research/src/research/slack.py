@@ -290,23 +290,38 @@ class _UnixHTTP(http.client.HTTPConnection):
         self.sock.connect(self.unix_path)
 
 
-def oidc_token(aud: str) -> str:
-    """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket."""
-    conn = _UnixHTTP(os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock"))
+#: the waits before asking the identity socket again when a connection to it is refused, dropped or times out; a socket that
+#: isn't there is not asked again (this is no Cursor agent)
+OIDC_RETRY_S = (1, 4)
+
+
+def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
+    """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket. Asking again is safe: a token
+    request changes nothing."""
+    path = os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock")
+    for wait in (*OIDC_RETRY_S, None):
+        conn = _UnixHTTP(path)
+        try:
+            conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud}), {"Content-Type": "application/json"})
+            r = conn.getresponse()
+            status, body = r.status, r.read(32768)
+            break
+        except (OSError, http.client.HTTPException) as e:
+            if wait is None or isinstance(e, FileNotFoundError):
+                hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
+                    f"{aud} needs is unavailable (only a Cursor agent has one)"
+                raise SlackError(f"the Cursor identity socket {hint}") from None
+        finally:
+            conn.close()
+        sleep(wait)
+    if status == 403:
+        raise SlackError(f"Cursor refused this agent's identity ({aud} needs a Cursor agent's OIDC token)")
+    if status != 200:
+        raise SlackError(f"the Cursor identity service is unavailable (HTTP {status})")
     try:
-        conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud}), {"Content-Type": "application/json"})
-        r = conn.getresponse()
-        if r.status == 403:
-            raise SlackError(f"Cursor refused this agent's identity ({aud} needs a Cursor agent's OIDC token)")
-        if r.status != 200:
-            raise SlackError(f"the Cursor identity service is unavailable (HTTP {r.status})")
-        token = json.loads(r.read(32768)).get("token")
-    except (OSError, http.client.HTTPException, ValueError, AttributeError):
-        hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
-            f"{aud} needs is unavailable (only a Cursor agent has one)"
-        raise SlackError(f"the Cursor identity socket {hint}") from None
-    finally:
-        conn.close()
+        token = json.loads(body).get("token")
+    except (ValueError, AttributeError):
+        token = None
     if not isinstance(token, str) or not token or any(c.isspace() for c in token):
         raise SlackError("Cursor returned an invalid identity token")
     return token
