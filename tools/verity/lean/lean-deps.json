@@ -12,6 +12,12 @@
    "run": "r20261006-175210-ac32",
    "sha256": "557ade352fdc854e251a53753887eda7da6586ef14575ebbd4b4c3c1c1bae0ae"
   },
+  "936a4958079055b2af1cfcdc4c9fae5a0a91dc9ee5784dae0af9185a7a76b72c": {
+   "bytes": 701909680,
+   "package": "Security/Properties",
+   "run": "r20261003-152421-a7fe",
+   "sha256": "78ebf43752e745c04c962d52f132fb063ea3a0ede75eb2973afabdc5ebd57120"
+  },
   "ffa0705a8465f9a411fd3d909dc363d6663eb036e64a49df98d1aa7d9ae9f682": {
    "bytes": 701909680,
    "package": "Security",
