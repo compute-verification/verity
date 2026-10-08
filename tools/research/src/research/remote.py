@@ -1669,6 +1669,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
+                   **({"submitted_by": by} if (by := os.environ.get("RESEARCH_AGENT_URL")) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
