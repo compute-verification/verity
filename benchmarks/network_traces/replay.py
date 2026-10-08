@@ -171,11 +171,12 @@ def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int,
     return "unexplained", detail
 
 
-def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
-                         prior: Sequence[online.Past] = ()) -> tuple[list[dict], dict, list[online.Past]]:
+def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prior: Sequence[online.Past] = (),
+                         lag: int = 0) -> tuple[list[dict], dict, list[online.Past]]:
     """One configuration through prover, shaper, certifier, records and audit, raw, committed and certified. The prover's
-    syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior`. Returns one row per link-window,
-    the configuration's tallies and the online prover's history (empty for the other policies)."""
+    syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior` and reads the frames ready by `lag`
+    buckets before each window (`online.declare`). Returns one row per link-window, the configuration's tallies and the
+    online prover's history (empty for the other policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     raw, committed, certified = Audit(), Audit(), Audit()
@@ -199,7 +200,7 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
         declared = [setup.envelope] * windows
     else:
         declared, history, choices = online.declare(links, sync_set, T, online.rule(syncs), windows, setup.envelope,
-                                                     prior)
+                                                     prior, lag)
     syncs = declared
     for k, (link, (frames, ready)) in enumerate(zip(egress, links, strict=True)):
         name, params = link["link"], setup.egress[link["link"]]

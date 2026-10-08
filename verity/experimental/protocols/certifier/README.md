@@ -10,7 +10,8 @@ A spec-level reference for network accounting's timing channel:
   certified records, and a host-side verifier of record (no circuit proves the check yet);
 - the capacity counts;
 - the calibration of honest runs;
-- the online prover (`online`): each window's clock sync declared at its first bucket from what it has seen by then;
+- the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
+  buckets before;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
