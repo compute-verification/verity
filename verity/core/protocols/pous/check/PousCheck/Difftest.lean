@@ -18,8 +18,8 @@ a test, not a proof.
   from its name and arguments), and the leaf of each sample block.
 * `randomness`: `Randomness.derive` of a random source, domain and context, its streams and uniforms over random indices,
   and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices (`PousCheck.Challenge`).
-* `audit`: `Audit.check` on a session (frames, measured latencies, the verifier's secret, beacons and seen pairs): its
-  `FINAL` frame, or the fault's code when there is none.
+* `audit`: `Audit.check` on a session (frames, measured latencies, the verifier's secret, beacons, seen pairs, its own
+  root of a private setup and its held `W`): its `FINAL` frame, the fault's code when there is none, or the refusal.
   An accepted `FINAL` also gives the session's `Certificate.assess`: its verdict, coverage and StorageProfile.
 * `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
 * `sha512`: the SHA-512 of labelled bytes, against the pins the spec's §7 states for them.
@@ -144,7 +144,8 @@ def optional {α : Type} (j : Json) (k : String) (f : Json → V α) : V (Option
   | .null => pure none
   | v => some <$> f v
 
-/-- A session's record: its frames, measured latencies, and the verifier's secret, beacons and seen pairs. -/
+/-- A session's record: its frames, measured latencies, and the verifier's secret, beacons, every pair it has used (a
+list, required), and the root it built from `W` and the `W` it holds, when it has them. -/
 def session (inst : Json) : V (Array ByteArray × Array Nat × Wire.Verifier) := do
   let frames ← bytesArr (← J.get inst "frames" "audit") "frames"
   let elapsed ← (← J.arr inst "elapsed_ns" "audit").mapM (J.asNat · "elapsed_ns")
@@ -152,31 +153,40 @@ def session (inst : Json) : V (Array ByteArray × Array Nat × Wire.Verifier) :=
   let beacons ← optional inst "beacons" fun j => do (← J.asArr j "beacons").mapM fun b => do
     let #[r, v] := (← J.asArr b "beacon") | throw "audit: a beacon is [round, value]"
     pure (← J.asNat r "round", ← bytesOf v "beacon")
-  let seen ← optional inst "seen" fun j => do (← J.asArr j "seen").mapM fun p => do
+  let seen ← (← J.arr inst "seen" "audit").mapM fun p => do
     let #[e, a] := (← J.asArr p "pair") | throw "audit: a seen pair is [epoch, audit id]"
     pure (← bytesOf e "epoch", ← bytesOf a "audit id")
-  pure (frames, elapsed, ⟨source, beacons, seen⟩)
+  let privateRoot ← optional inst "private_root" (bytesOf · "private_root")
+  let wBytes ← optional inst "w_bytes" (bytesOf · "w_bytes")
+  pure (frames, elapsed, ⟨source, beacons, seen, privateRoot, wBytes⟩)
 
-/-- An `audit` instance's answer: `Audit.check`'s `FINAL` frame and assessment, or the code of the fault that leaves no
-`FINAL`. -/
+/-- An `audit` instance's answer: `Audit.check`'s `FINAL` frame and assessment, the code of the fault that leaves no
+`FINAL`, or the verifier's refusal of its inputs. -/
 def audit (inst : Json) : V Json := do
   let (frames, elapsed, v) ← session inst
   pure <| match Audit.check frames elapsed v with
     | .ok (final, storage) => Json.mkObj [("final", hex final), ("storage", storage)]
-    | .error e => Json.mkObj [("error", num e.code)]
+    | .error (.fault e) => Json.mkObj [("error", num e.code)]
+    | .error (.refused r) => Json.mkObj [("refused", .str r)]
 
 def fault (e : Wire.Fault) : Json := Json.mkObj [("fault", num e.code), ("message", .str e.message)]
 
-/-- A transcript's outputs for `interop.py`, as the wire's two implementations state them: the setup's (`Wire.parseSetup`:
-the epoch id, the declared root and the identity it binds, how many blocks it carried, whether they authenticate it, and
-where the audit begins) and the audit's (`Audit.check`: the `FINAL` frame, its verdict, code, record count and transcript
-hash), or the fault each stops at. -/
+def stop : Wire.Stop → Json
+  | .fault e => fault e
+  | .refused r => Json.mkObj [("refused", .str r)]
+
+/-- A transcript's outputs for `interop.py`, as the wire's two implementations state them: the setup's (`Wire.parseSetup`,
+`Wire.setupFailure`: the epoch id, the declared root and the identity it binds, how many blocks it carried, its failure
+code, and where the audit begins) and the audit's (`Audit.check`: the `FINAL` frame, its verdict, code, record count and
+transcript hash), or the fault or refusal each stops at. -/
 def transcript (inst : Json) : V Json := do
   let (frames, elapsed, v) ← session inst
   let setup := match Wire.parseSetup frames with
-    | .ok (s, cursor) => Json.mkObj [("authentication_failed", .bool s.authFailed), ("blocks", num s.blocks.size),
-        ("commitment", hex s.commitment), ("cursor", num cursor), ("epoch_id", hex s.epoch), ("manifest", hex s.manifest),
-        ("root", hex s.root), ("salt", hex s.salt)]
+    | .ok (s, cursor) => match Wire.judgeable s v with
+      | .ok () => Json.mkObj [("blocks", num s.blocks.size), ("commitment", hex s.commitment), ("cursor", num cursor),
+          ("epoch_id", hex s.epoch), ("failure", num (Wire.setupFailure s v.privateRoot)), ("manifest", hex s.manifest),
+          ("root", hex s.root), ("salt", hex s.salt)]
+      | .error r => stop r
     | .error e => fault e
   -- The transcript hash follows the envelope's 10 bytes, the epoch id, the audit id, verdict, code, round count, Δ and RTT.
   let o := 10 + Wire.D + Wire.S + 1 + 1 + 2 + 8 + 8
@@ -185,7 +195,7 @@ def transcript (inst : Json) : V Json := do
       | .ok (verdict, code, records) => Json.mkObj [("code", num code), ("final", hex final), ("records", num records),
           ("transcript_hash", hex (final.extract o (o + Wire.D))), ("verdict", .bool verdict)]
       | .error e => fault e
-    | .error e => fault e
+    | .error e => stop e
   pure (Json.mkObj [("audit", audit), ("setup", setup)])
 
 /-- A `storage` instance's answer: the certificate gate and the StorageProfile of an accepted audit of `k` challenges
@@ -193,11 +203,11 @@ within `Δ + RTT` of a store (`Certificate.gate`, `profileJson`), or `null` when
 def storage (inst : Json) : V Json := do
   let n k := J.nat inst k "storage"
   let q : Wire.Params := ⟨← n "w", ← n "c0", ← n "blocks_per_segment", ← n "segments", "", 0⟩
-  let (k, limit) := (← n "k", (← n "delta") + (← n "rtt"))
+  let (k, delta, rtt) := (← n "k", ← n "delta", ← n "rtt")
   pure <| match Certificate.Store.ofParams q with
     | none => .null
-    | some s => Json.mkObj [("covered", .bool (Certificate.gate s k limit).2.1.isEmpty),
-      ("profile", Certificate.profileJson s k limit)]
+    | some s => Json.mkObj [("covered", .bool (Certificate.gate s k delta rtt).2.1.isEmpty),
+      ("profile", Certificate.profileJson s k delta rtt)]
 
 /-- A `sha512` instance's answer: the SHA-512 of each item's bytes, by its label (the spec's §7 pins). -/
 def sha512 (inst : Json) : V Json := do

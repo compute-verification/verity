@@ -3,13 +3,14 @@ import PousCheck.Wire
 /-!
 # What an accepted timed audit establishes: the certificate gate and the StorageProfile
 
-`verity/core/protocols/pous/protocol.py` (`Certificate`, `MemoryChallenger`, `StorageProfile`) at the scheme
+`verity/core/protocols/pous/protocol.py` (`Certificate`, `TimedAudit`, `StorageProfile`) at the scheme
 `schemes/p2.py` names (`P2`, `p2-<w>/v4`). P2 has one certificate, at its registered point `(w, c0, blocks per segment) =
 (16448, 21065, 2^16)`: `Pous.SecurityProofs.P2SlackFamilyUncond`'s `λ = 128` row, `k = 105` challenges each answered
 within no sequential root (`rounds = 0` calls of `ROOT_CALL_NS`), about `W` of 8 segments.
 
 An audit of `k` challenges within `limit = Δ + RTT` is *covered* when the certificate does not refuse it (`refusals`:
-`k` below the certificate's, or `limit` fitting a root); `MemoryChallenger` runs no other audit unless asked for research.
+`k` below the certificate's, or `limit` fitting a root) and neither does the spec (`deadlineRefusals`: `Δ` other than the
+operating point's, an RTT allowance past its cap); `TimedAudit` runs no other audit unless asked for research.
 It is *accepted* when its `FINAL` verdict is success and it is covered. The profile's `gaps` are the refusals and a segment
 count other than the theorem's, and it is `certified` when there is a certificate and no gap.
 
@@ -47,6 +48,18 @@ def P2_CLAIMS : List String := ["m1-ideal-permutations", "sms-m1-instantiation",
 /-- Why P2 is experimental (`p2.EXPERIMENTAL`): every profile of it says so. -/
 def EXPERIMENTAL : String := "abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not " ++
   "accepted, and the XOR-then-reduce compression attack on it is open"
+
+/-- The spec's operating point's `Δ` and its cap on the RTT allowance, in ns (`p2.DELTA_NS`, `p2.RTT_ALLOWANCE_CAP_NS`). -/
+def DELTA_NS : Nat := 500000
+def RTT_ALLOWANCE_CAP_NS : Nat := 354000
+
+/-- `P2.deadline_refusals`: why the spec refuses this `Δ` and RTT allowance apart, beyond what the certificate reads from
+their sum; none when it does not. -/
+def deadlineRefusals (delta rtt : Nat) : List String :=
+  (if delta != DELTA_NS then [s!"the spec's operating point sets Δ = {DELTA_NS} ns, not {delta}"] else []) ++
+  if rtt > RTT_ALLOWANCE_CAP_NS then
+    [s!"the RTT allowance of {rtt} ns is past the spec's cap of {RTT_ALLOWANCE_CAP_NS} ns"]
+  else []
 
 /-- `P2.certificate`: P2's certificate at `(w, c0, blocks per segment)`, only at the registered point. -/
 def p2 (w c0 bps : Nat) : Option Certificate :=
@@ -110,20 +123,21 @@ def Store.manifestRepr (s : Store) : String :=
     | .str x => s!"'{x}'"
     | j => j.compress) ++ "}"
 
-/-- `MemoryChallenger`'s gate at `k` and `limit`, for research (`research=True`, so it always has a profile): the
-certificate it audits under, and its refusals and its other gaps. -/
-def gate (s : Store) (k limit : Nat) : Option Certificate × List String × List String :=
+/-- `TimedAudit`'s gate at `k`, `Δ` and the RTT allowance, for research (`research=True`, so it always has a profile):
+the certificate it audits under, its refusals and the spec's, and its other gaps. -/
+def gate (s : Store) (k delta rtt : Nat) : Option Certificate × List String × List String :=
   match p2 s.w s.c0 s.blocksPerSegment with
-  | none => (none, [s!"{s.name} has no certificate at {s.manifestRepr}"], [])
+  | none => (none, s!"{s.name} has no certificate at {s.manifestRepr}" :: deadlineRefusals delta rtt, [])
   | some c =>
     let uncovered := match c.segments with
       | some n => if s.segments != n then [s!"W has {s.segments} segments; {c.theoremName} is about {n}"] else []
       | none => []
-    (some c, c.refusals k limit, uncovered)
+    (some c, c.refusals k (delta + rtt) ++ deadlineRefusals delta rtt, uncovered)
 
-/-- `StorageProfile.to_json()` of an audit of `k` challenges within `limit` ns of the store. -/
-def profileJson (s : Store) (k limit : Nat) : Json :=
-  let (cert, refused, uncovered) := gate s k limit
+/-- `StorageProfile.to_json()` of an audit of `k` challenges within `Δ + RTT` of the store. -/
+def profileJson (s : Store) (k delta rtt : Nat) : Json :=
+  let limit := delta + rtt
+  let (cert, refused, uncovered) := gate s k delta rtt
   let gaps := refused ++ uncovered
   Json.mkObj [
     ("schema", .str "verity-pous/storage-profile/v1"), ("scheme", .str s.name), ("params", Json.mkObj s.manifest),
@@ -141,10 +155,10 @@ def assess (q : Wire.Params) (final : ByteArray) : Json := Id.run do
   let some s := Store.ofParams q | return Json.mkObj [("verdict", .bool true), ("accepted", .bool false), ("profile", .null)]
   let body := final.extract 10 final.size
   let o := Wire.D + Wire.S + 4
-  let limit := Wire.field body o (o + 8) + Wire.field body (o + 8) (o + 16)
-  let (_, refused, _) := gate s records limit
+  let (delta, rtt) := (Wire.field body o (o + 8), Wire.field body (o + 8) (o + 16))
+  let (_, refused, _) := gate s records delta rtt
   let covered := refused.isEmpty
   return Json.mkObj [("verdict", .bool true), ("covered", .bool covered), ("accepted", .bool covered),
-    ("profile", profileJson s records limit)]
+    ("profile", profileJson s records delta rtt)]
 
 end PousCheck.Certificate

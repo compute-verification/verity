@@ -7,10 +7,11 @@ The transcripts are every vector of §7:
 
 * every transcript of `audit-negative-vectors.json`, `audit-vectors.json`'s two-round end-to-end one, and its full-width
   response in a one-block setup, public and private (`scripts/difftest_vectors.py` builds them, and checks both files against
-  §7's SHA-512). Each side gives its setup's outputs (the epoch id, the declared root and the identity it binds, how many
-  blocks it carried, whether they authenticate it, where the audit begins) and its audit's (the `FINAL` frame, its verdict,
-  code, record count and transcript hash), or the fault where it stops, its code and message: `wire._parse_setup`,
-  `wire.verify_audit` and `wire.parse_final` on one side, `pous-audit-difftest serve` on the other;
+  §7's SHA-512), the verifier holding its own root of the private setup. Each side gives its setup's outputs (the epoch id,
+  the declared root and the identity it binds, how many blocks it carried, its failure code, where the audit begins) and
+  its audit's (the `FINAL` frame, its verdict, code, record count and transcript hash), or the fault where it stops, its
+  code and message, or the refusal of the verifier's inputs: `wire._parse_setup`, `wire.verify_audit` and
+  `wire.parse_final` on one side, `pous-audit-difftest serve` on the other;
 * `vectors.json`'s vectors and σ rejection cases: each entry's hash and whether §7 pins it, and its keys and decode
   (`reference.keys`, `decode`, `sigma` on one side, `pous-setup-difftest`'s `vector` and `sigma` on the other).
 
@@ -48,27 +49,28 @@ def _fault(e) -> dict:
     return {"fault": e.code, "message": str(e)}
 
 
-def transcript(wire, inst: dict) -> dict:
+def transcript(gen, wire, inst: dict) -> dict:
     """`wire.py`'s outputs on a transcript, in the form of `PousCheck.Difftest.transcript`'s."""
     frames = [bytes.fromhex(f) for f in inst["frames"]]
+    held = gen.verifier(inst)
     try:
-        s, cursor = wire._parse_setup(frames)
-        setup = {"authentication_failed": s.authentication_failed, "blocks": len(s.blocks), "commitment": s.commitment.hex(),
-                 "cursor": cursor, "epoch_id": s.epoch_id.hex(), "manifest": s.manifest.hex(), "root": s.root.hex(),
-                 "salt": s.salt.hex()}
+        s, cursor = wire._parse_setup(frames, held["private_root"])
+        setup = {"blocks": len(s.blocks), "commitment": s.commitment.hex(), "cursor": cursor, "epoch_id": s.epoch_id.hex(),
+                 "failure": s.failure, "manifest": s.manifest.hex(), "root": s.root.hex(), "salt": s.salt.hex()}
     except wire.WireError as e:
         setup = _fault(e)
-    source, seen = inst["verifier_source"], inst["seen"]
+    except ValueError as e:
+        setup = {"refused": str(e)}
     try:
-        final = wire.verify_audit(frames, inst["elapsed_ns"], verifier_source=None if source is None else bytes.fromhex(source),
-                                  beacon_inputs=None if inst["beacons"] is None else {j: bytes.fromhex(b) for j, b in inst["beacons"]},
-                                  seen_audits=None if seen is None else {(bytes.fromhex(e), bytes.fromhex(a)) for e, a in seen})
+        final = wire.verify_audit(frames, inst["elapsed_ns"], **held)
         verdict, code, records = wire.parse_final(final)
         o = 10 + wire.D + wire.S + 1 + 1 + 2 + 8 + 8
         audit = {"code": code, "final": final.hex(), "records": records, "transcript_hash": final[o:o + wire.D].hex(),
                  "verdict": verdict}
     except wire.WireError as e:
         audit = _fault(e)
+    except ValueError as e:
+        audit = {"refused": str(e)}
     return {"audit": audit, "setup": setup}
 
 
@@ -129,7 +131,7 @@ def compare() -> tuple[list[dict], int]:
     pins, out = entry_pins(spec), []
     with Server([str(build(HERE, "pous-audit-difftest")), "serve"]) as lean:
         for inst in gen._vector_audits(py):
-            out.append({"id": inst["name"], "kind": "transcript", "python": _python_side(transcript, wire, inst),
+            out.append({"id": inst["name"], "kind": "transcript", "python": _python_side(transcript, gen, wire, inst),
                         "lean": _lean_side(lean, "transcript", inst)})
     with Server([str(build(HERE, "pous-setup-difftest"))]) as lean:
         for v in doc["vectors"]:

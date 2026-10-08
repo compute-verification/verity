@@ -15,15 +15,18 @@ shortened, lengthened, swapped (leaf for sibling), odd-length or misindexed one,
 `randomness` instances are `verity.ml.randomness` derivations, streams and uniforms over random parts, and P2's audit id,
 mode-0 key, indices and nonces and mode-1 round indices (`reference.audit_key`, `round_key`).
 
-`audit` instances are sessions for `wire.verify_audit`, whose answer is its `FINAL` frame or the `WireError` code it raises:
-honest setups (public or private) and audits (mode 0 or 1, decode on or off, some blocks' payloads too wide) at the reduced
-widths of `vectors.POINTS`, each with one adversarial edit (a wrong or non-canonical block, a wrong path or path count, a
-non-derived or outside index, a wrong nonce, round, epoch or audit id, a replayed challenge or response, a late or
-exactly-on-time answer, a flipped, truncated or extended frame, a dropped tail or an extra frame, a wrong verifier secret, a
-seen pair, a bad AUDIT_OPEN field or length, a missing or wrong beacon, a non-canonical or invalid manifest, a broken setup
-frame); deployment-width audits (B = 2^19, k = 105) over one private store; and the spec's audit vectors (§7), each checked
-here against its pinned FINAL. The `sha512` instance is §7's pins of the audit files and frames, its answer the pins as the
-spec states them.
+`audit` instances are sessions for `wire.verify_audit`, whose answer is its `FINAL` frame, the `WireError` code it raises,
+or the `ValueError` it refuses its inputs with: honest setups (public or private, committing to their `W` or not) and
+audits (mode 0 or 1, decode off, on, or on and compared with the held `W`, some blocks' payloads too wide) at the reduced
+widths of `vectors.POINTS`, the verifier holding its own root of a private setup (and sometimes of a public one) and,
+sometimes, `W`; each with one adversarial edit (a wrong or non-canonical block, a wrong path or path count, a non-derived
+or outside index, a wrong nonce, round, epoch or audit id, a replayed challenge or response, a late or exactly-on-time
+answer, a flipped, truncated or extended frame, a dropped tail or an extra frame, a wrong verifier secret, a seen pair, a
+bad AUDIT_OPEN field or length, a missing or wrong beacon, a non-canonical or invalid manifest, a broken setup frame, a
+wrong or missing private root, a wrong, short or missing held `W` under flag bit 1, an elapsed time past u64);
+deployment-width audits (B = 2^19, k = 105) over one private store; and the spec's audit vectors (§7), each checked here
+against its pinned FINAL. The `sha512` instance is §7's pins of the audit files and frames, its answer the pins as the spec
+states them.
 """
 from __future__ import annotations
 
@@ -181,7 +184,7 @@ def _flip(data: bytes, at: int, bit: int = 0) -> bytes:
 
 class _Session:
     """An honest setup and audit, as editable frames: `setup`, `open`, `rounds` (`[challenge, response]` per round),
-    `extra`, `elapsed`, and what the verifier holds (`source`, `beacons`, `seen`)."""
+    `extra`, `elapsed`, and what the verifier holds (`source`, `beacons`, `seen`, `private_root`, `w_bytes`)."""
 
     def __init__(self, py, rng: random.Random, params, commitment: bytes, salt: bytes, root: bytes, block, path,
                  public_blocks, mode: int, k: int, flags: int, delta: int, rtt: int):
@@ -216,7 +219,9 @@ class _Session:
         self.open = self.open_frame()
         self.elapsed = [rng.randint(0, delta + rtt) for _ in range(k)]
         self.extra: list[bytes] = []
-        self.seen = None
+        self.seen: list[tuple[bytes, bytes]] = []
+        self.private_root = None if self.public else root
+        self.w_bytes: bytes | None = None
 
     def root_frame(self, count: int, root: bytes, mode: int) -> bytes:
         Wi = self.py[1]
@@ -240,7 +245,9 @@ class _Session:
         return {"kind": "audit", "name": name, "frames": [f.hex() for f in self.frames()], "elapsed_ns": self.elapsed,
                 "verifier_source": None if self.source is None else self.source.hex(),
                 "beacons": None if self.beacons is None else [[j, b.hex()] for j, b in sorted(self.beacons.items())],
-                "seen": None if self.seen is None else [[e.hex(), a.hex()] for e, a in self.seen]}
+                "seen": [[e.hex(), a.hex()] for e, a in self.seen],
+                "private_root": None if self.private_root is None else self.private_root.hex(),
+                "w_bytes": None if self.w_bytes is None else self.w_bytes.hex()}
 
 
 def _small_session(py, rng: random.Random, **force) -> _Session:
@@ -251,12 +258,14 @@ def _small_session(py, rng: random.Random, **force) -> _Session:
     bits = Wi.payload_bits(profile, w)
     bps = rng.choice([1, 1, 2, 3, 4, 8])
     params = R.Params(w, c0, max(1, bits // 8), bps, rng.randint(1, max(1, 16 // bps)), profile)
-    commitment = rng.randbytes(64)
-    salt = R.setup_salt(rng.randbytes(32), params, commitment)
     bad = force.get("bad_payloads", 0.0)
+    payloads = [rng.randrange(1 << bits, params.p) if rng.random() < bad else rng.randrange(1 << bits)
+                for _ in range(params.blocks)]
+    held = R.pack_payloads([m & ((1 << bits) - 1) for m in payloads], bits)
+    commitment = R.w_commitment(params, held) if rng.random() < 0.9 else rng.randbytes(64)
+    salt = R.setup_salt(rng.randbytes(32), params, commitment)
     blocks = []
-    for i in range(params.blocks):
-        m = rng.randrange(1 << bits, params.p) if rng.random() < bad else rng.randrange(1 << bits)
+    for i, m in enumerate(payloads):
         kv, t, _ = R.keys(salt, params, commitment, i // bps, i % bps)
         blocks.append(R.encode(params, m, kv, t).to_bytes(n, "big"))
     leaves = [R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]
@@ -264,10 +273,16 @@ def _small_session(py, rng: random.Random, **force) -> _Session:
     public = force.get("public", rng.random() < 0.6)
     delta = rng.choice([R.DELTA_NS, rng.randint(0, 10**6)])
     rtt = rng.choice([0, R.MAX_RTT_ALLOWANCE_NS, rng.randint(0, 10**6)])
-    flags = force.get("flags", rng.choice([0, 1, 1]))
-    return _Session(py, rng, params, commitment, salt, R.root(leaves), blocks.__getitem__, paths.__getitem__,
-                    blocks if public else None, force.get("mode", rng.choice([0, 0, 1])),
-                    force.get("k", rng.randint(1, 6)), flags, delta, rtt)
+    flags = force.get("flags", rng.choice([0, 1, 1, 3]))
+    s = _Session(py, rng, params, commitment, salt, R.root(leaves), blocks.__getitem__, paths.__getitem__,
+                 blocks if public else None, force.get("mode", rng.choice([0, 0, 1])),
+                 force.get("k", rng.randint(1, 6)), flags, delta, rtt)
+    s.held = held
+    if flags & 2 or rng.random() < 0.2:
+        s.w_bytes = held
+    if public and rng.random() < 0.3:
+        s.private_root = s.root
+    return s
 
 
 def _manifest_variant(rng: random.Random, s: _Session) -> bytes:
@@ -296,6 +311,8 @@ def _manifest_variant(rng: random.Random, s: _Session) -> bytes:
         lambda: canon(m | {"profile": m["profile"] + "x" * 600}),
         lambda: canon(m).replace(f'"w":{w}'.encode(), f'"w":{w}e0'.encode()),
         lambda: canon(m).replace(f'"w":{w}'.encode(), b'"w":-0'),
+        lambda: canon(m).replace(f'"w":{w}'.encode(), b'"w":1e999'),
+        lambda: canon(m).replace(b'"profile":"', b'"profile":"\\ud800', 1),
     ]
     return rng.choice(edits)()
 
@@ -312,7 +329,8 @@ def _mutate(rng: random.Random, s: _Session) -> str:
                        "path-count", "non-derived-index", "outside-index", "wrong-nonce", "challenge-round",
                        "response-round", "response-index", "response-identity", "challenge-identity", "replay-response",
                        "replay-challenge", "flip-byte", "truncate", "extend", "drop-tail", "extra-frame", "wrong-source",
-                       "seen", "open-field", "open-length", "beacon", "manifest", "manifest", "setup", "setup", "setup"])
+                       "seen", "open-field", "open-length", "beacon", "manifest", "manifest", "setup", "setup", "setup",
+                       "private-root", "no-private-root", "held-w", "held-w", "no-held-w", "elapsed-u64"])
     if name == "late":
         s.elapsed[j] = limit + rng.choice([1, rng.randint(1, 10**6)])
     elif name == "on-deadline":
@@ -399,6 +417,20 @@ def _mutate(rng: random.Random, s: _Session) -> str:
         s.setup[0] = Wi.envelope(Wi.SETUP_COMMIT, len(m).to_bytes(4, "big") + m + s.commitment)
     elif name == "setup":
         name = "setup-" + _setup_mutation(rng, s)
+    elif name == "private-root":
+        s.private_root = rng.choice([_flip(s.root, rng.randrange(64), rng.randrange(8)), rng.randbytes(64), b""])
+    elif name == "no-private-root":
+        s.private_root = None
+    elif name == "held-w":
+        s.open = s.open_frame(flags=3)
+        bits = Wi.payload_bits(q.profile, q.w)
+        at = index * bits + rng.randrange(bits)
+        s.w_bytes = rng.choice([_flip(s.held, at // 8, 7 - at % 8), s.held[:len(s.held) // 2], b""])
+    elif name == "no-held-w":
+        s.open = s.open_frame(flags=3)
+        s.w_bytes = None
+    elif name == "elapsed-u64":
+        s.elapsed[j] = (1 << 64) + rng.choice([0, rng.randrange(1 << 70)])
     else:
         name = "honest"
     return name
@@ -560,18 +592,19 @@ def _vector_audits(py) -> list[dict]:
     out = []
     for case in json.loads(R.NEGATIVE_VECTORS.read_bytes())["cases"]:
         frames = [bytes.fromhex(f) for f in case["frames"]]
-        seen = None
+        seen = []
         if case["seen_audit_pair"]:
             body = next(f for f in frames if f[5] == Wi.AUDIT_OPEN)[10:]
             seen = [[body[:Wi.D].hex(), body[Wi.D:Wi.D + Wi.S].hex()]]
         out.append({"kind": "audit", "name": "vector-" + case["name"], "frames": case["frames"],
                     "elapsed_ns": case["elapsed_ns"], "verifier_source": case["verifier_source"], "beacons": None,
-                    "seen": seen, "expected_final": case["expected_final"]})
+                    "seen": seen, "private_root": None, "w_bytes": None, "expected_final": case["expected_final"]})
     v = json.loads(R.AUDIT_VECTORS.read_bytes())["small_end_to_end"]
     frames = [m["bytes"] for m in v["setup_messages"]] + [v["audit_open"]]
     frames += [f for x in v["exchanges"] for f in (x["challenge"], x["response"])]
     out.append({"kind": "audit", "name": "vector-small-end-to-end", "frames": frames, "elapsed_ns": v["elapsed_ns"],
-                "verifier_source": v["audit_source"], "beacons": None, "seen": None, "expected_final": v["final"]})
+                "verifier_source": v["audit_source"], "beacons": None, "seen": [], "private_root": None, "w_bytes": None,
+                "expected_final": v["final"]})
     full = json.loads(R.AUDIT_VECTORS.read_bytes())["full_width_response"]
     q = R.Params(R.DEPLOYMENT.w, R.DEPLOYMENT.c0, 2054, blocks_per_segment=1, segments=1)
     manifest, commitment = full["manifest"].encode(), bytes.fromhex(full["w_commitment"])
@@ -587,7 +620,8 @@ def _vector_audits(py) -> list[dict]:
                           Wi.challenge_message(epoch, aid, 0, 0, key.stream(("nonce", 0), 32)), bytes.fromhex(full["response"])]
         assert q.blocks == 1
         out.append({"kind": "audit", "name": f"vector-full-width-response-setup-mode-{mode}", "frames": [f.hex() for f in frames],
-                    "elapsed_ns": [400_000], "verifier_source": source.hex(), "beacons": None, "seen": None})
+                    "elapsed_ns": [400_000], "verifier_source": source.hex(), "beacons": None, "seen": [],
+                    "private_root": root.hex() if mode == 0 else None, "w_bytes": None})
     return out
 
 
@@ -621,10 +655,10 @@ def _pins_answers(py, inst: dict) -> dict:
 
 
 def _storage(w: int, c0: int, bps: int, segments: int, k: int, delta: int, rtt: int) -> dict | None:
-    """The generic protocol's gate and profile for P2 at a store: `MemoryChallenger` covers the audit when it runs it
+    """The generic protocol's gate and profile for P2 at a store: `TimedAudit` covers the audit when it runs it
     without `research`, and with `research` its certificate and gaps make the `StorageProfile`. None when `P2Params`
     refuses the store."""
-    from verity.core.protocols.pous.protocol import MemoryChallenger, StorageProfile
+    from verity.core.protocols.pous.protocol import StorageProfile, TimedAudit
     from verity.core.protocols.pous.schemes.p2 import P2, P2Params
     from verity.core.protocols.pous.verifier import VerifierKey
     from verity.ml.randomness import derive
@@ -635,8 +669,8 @@ def _storage(w: int, c0: int, bps: int, segments: int, k: int, delta: int, rtt: 
     scheme = P2(params)
     vk, key = VerifierKey(params, bytes(24), bytes(64), ()), derive(b"difftest", "verity/pous/difftest/v1", {})
 
-    def challenger(research: bool) -> MemoryChallenger:
-        return MemoryChallenger(scheme, vk, key, k=k, deadline_ns=delta, rtt_allowance_ns=rtt, root_only=True,
+    def challenger(research: bool) -> TimedAudit:
+        return TimedAudit(scheme, vk, key, k=k, deadline_ns=delta, rtt_allowance_ns=rtt, root_only=True,
                                 research=research, experimental=True)
 
     try:
@@ -685,17 +719,24 @@ def _storage_answers(py, inst: dict) -> dict | None:
                     inst["rtt"])
 
 
+def verifier(inst: dict) -> dict:
+    """`verify_audit`'s keyword arguments from an instance: what the verifier holds besides the frames."""
+    def raw(key: str) -> bytes | None:
+        return None if inst[key] is None else bytes.fromhex(inst[key])
+    return {"verifier_source": raw("verifier_source"),
+            "beacon_inputs": None if inst["beacons"] is None else {j: bytes.fromhex(b) for j, b in inst["beacons"]},
+            "seen_audits": {(bytes.fromhex(e), bytes.fromhex(a)) for e, a in inst["seen"]},
+            "private_root": raw("private_root"), "w_bytes": raw("w_bytes")}
+
+
 def _audit_answers(py, inst: dict) -> dict:
     Wi = py[1]
-    source = inst["verifier_source"]
-    seen = None if inst["seen"] is None else {(bytes.fromhex(e), bytes.fromhex(a)) for e, a in inst["seen"]}
     try:
-        final = Wi.verify_audit([bytes.fromhex(f) for f in inst["frames"]], inst["elapsed_ns"],
-                                verifier_source=None if source is None else bytes.fromhex(source),
-                                beacon_inputs=None if inst["beacons"] is None else {j: bytes.fromhex(b) for j, b in inst["beacons"]},
-                                seen_audits=seen)
+        final = Wi.verify_audit([bytes.fromhex(f) for f in inst["frames"]], inst["elapsed_ns"], **verifier(inst))
     except Wi.WireError as error:
         return {"error": error.code}
+    except ValueError as error:
+        return {"refused": str(error)}
     if "expected_final" in inst and final.hex() != inst["expected_final"]:
         raise SystemExit(f"{inst['name']}: the reference verifier no longer gives the vector's FINAL")
     return {"final": final.hex(), "storage": _assess(py, [bytes.fromhex(f) for f in inst["frames"]], final)}
