@@ -1276,7 +1276,8 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
     if prs:
         what += f" {'Train' if train_prs(row.get('subjects') or []) else 'PR'} at `{(row.get('sha') or '?')[:9]}`: " + \
             ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in the registry)") for (n, b), h in zip(prs, lanes)) + "."
-    return Finding(f"{machine}:{run}", what + unread, owners=tuple(dict.fromkeys([*(h for h in lanes if h), LANDER])),
+    infra = () if row.get("step") else ("infra",)
+    return Finding(f"{machine}:{run}", what + unread, owners=tuple(dict.fromkeys([*(h for h in lanes if h), LANDER, *infra])),
                    thread=MERGE_THREAD)
 
 
@@ -1379,7 +1380,7 @@ MONITORS: list[Monitor] = [
             every_s=900, unread_s=3 * 3600),
     Monitor("failed-checks", "infra", "warn", "relay", failed_checks,
             "Read the failed step's log in the run's dir on that machine (or `research inspect RUN`): the PR it names fixes it "
-            "and says so in the thread; one the machine failed (killed, out of memory or disk) is @infra's.",
+            "and says so in the thread. A run that ended before any step failed (killed, out of memory or disk) rings infra too.",
             every_s=60, events=True, unread_s=1800),
     Monitor("node-heartbeat", "infra", "page", "relay", node_heartbeat,
             "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`; for "

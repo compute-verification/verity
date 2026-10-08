@@ -1049,7 +1049,7 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
     assert f.text == ("*Check `r1` failed step `pytest` on vy-nebius-1* at 20:20Z (the run goes on): its log's first failing line "
                       "is `FAILED 't'`. Train at `705ca7269`: #1466 `cursor/node-lockout-558b`, #1460 `cursor/kueue-shadow-n1-558b`.")
     f = got["vy-nebius-2:r4"]
-    assert f.owners == ("circuits", M.LANDER)
+    assert f.owners == ("circuits", M.LANDER, "infra")
     assert f.text.startswith("*Check `r4` was killed on vy-nebius-2* at 20:30Z, before any step failed (CGROUP_OOM): the OOM killer")
     assert "PR at `beef`: #1570 `cursor/c4-8c79`." in f.text
     n = len(calls)
