@@ -4,8 +4,8 @@ import PousCheck.Setup
 /-!
 # The setup difftest: `PousCheck`'s functions behind `Difftest.serve`
 
-`pous-setup-difftest` serves `table` to the core difftest harness (`verity/experimental/core/difftest`), whose Python half
-(`tests/test_setup_difftest.py`) draws inputs and holds each function's output to `verity.experimental.protocols.pous`
+`pous-setup-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
+(`tests/test_setup_difftest.py`) draws inputs and holds each function's output to `verity.core.protocols.pous`
 (`schemes/p2.py`, `setup.py`) and `verity.ml.commitments.identity`. The functions:
 
 * `maps`: `P2.d`, `P2.sigma` and `P2.decodeValue` on canonical values (Python's `_Field.sq`, `sigma`);
