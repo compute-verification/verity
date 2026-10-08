@@ -2,6 +2,7 @@ import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheck4Words
 import Proofs.Pouw.PearlC.CoreOps
+import Models.Pouw.Guarantees.PearlCTileCheck
 
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)
@@ -262,3 +263,9 @@ theorem tileCheck4_computesWords_core (ρ : ℚ)
   tileCheck4_computesWords_domain CoreOps.pc4OpsAgree_coreOps ρ lines
 
 end Pouw.PearlC.WholeCircuit
+
+theorem Pouw.SecurityProofs.PearlC.TileCheck8WordsCore : Pouw.Guarantees.PearlC.TileCheck8WordsCore :=
+  @Pouw.PearlC.WholeCircuit.tileCheck8_computesWords_core
+
+theorem Pouw.SecurityProofs.PearlC.TileCheck4WordsCore : Pouw.Guarantees.PearlC.TileCheck4WordsCore :=
+  @Pouw.PearlC.WholeCircuit.tileCheck4_computesWords_core

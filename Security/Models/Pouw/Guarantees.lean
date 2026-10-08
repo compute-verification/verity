@@ -5,6 +5,7 @@ import Models.Pouw.Guarantees.Dimension
 import Models.Pouw.Guarantees.Game
 import Models.Pouw.Guarantees.NCP
 import Models.Pouw.Guarantees.PearlC
+import Models.Pouw.Guarantees.PearlCTileCheck
 import Models.Pouw.Guarantees.TileBound
 
 /-!

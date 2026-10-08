@@ -3494,6 +3494,12 @@
    "assumptions": [],
    "type_hash": "0bcb8659637b845cc57e38ca30dcc285989ec9ad108ddbd6832a23df70d6ede7"
   },
+  "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Theorem1": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Theorem1 : Pouw.Guarantees.Theorem1"],
