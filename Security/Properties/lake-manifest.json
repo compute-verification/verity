@@ -17,6 +17,14 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
+   "name": "core_identity",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir":
+   "../../verity/experimental/core/protocols/pouw/commit/../../../primitives/identity",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "core_randomness",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
@@ -37,7 +45,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/experimental/core/protocols/pouw/window/../../../difftest/lean",
+   "../../verity/experimental/core/protocols/pouw/commit/../../../primitives/identity/../../difftest/lean",
    "configFile": "lakefile.toml"}],
  "name": "security_properties",
  "lakeDir": ".lake",

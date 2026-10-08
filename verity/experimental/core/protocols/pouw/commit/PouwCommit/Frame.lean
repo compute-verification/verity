@@ -1,5 +1,6 @@
 import Flock.Hash
 import Flock.Bytes
+import Identity.Tagged
 import PouwCommit.Tagged
 
 /-!
@@ -33,12 +34,15 @@ def bytes : Hash → Nat
   | .sha256 => 32
   | .sha512 => 64
 
-/-- `identity.tagged_sha256` / `tagged_sha512`: the hash of `prefix ‖ be32 |tag| ‖ tag ‖ be64 |payload| ‖ payload`. -/
+/-- `identity.tagged_sha256` / `tagged_sha512`: the hash of `prefix ‖ be32 |tag| ‖ tag ‖ be64 |payload| ‖ payload`. The
+SHA-512 one is core's `Identity.taggedSha512`, which refuses an empty tag and a payload of `2 ^ 64` bytes or more, as Python
+does; this hash is taken only of a range's manifest under a nonempty constant tag, which it never refuses short of a count of
+`2 ^ 64` decimal digits, so a refusal is the empty string and `tagged` stays total. -/
 def tagged (h : Hash) (tag : String) (payload : ByteArray) : ByteArray :=
-  let pre := match h with
-    | .sha256 => "veritor/tagged-sha256/v1".toUTF8.push 0
-    | .sha512 => "verity/tagged-sha512/v1".toUTF8.push 0
-  h.run (pre ++ be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8 ++ be8 payload.size ++ payload)
+  match h with
+  | .sha256 => Sha256.hash ("veritor/tagged-sha256/v1".toUTF8.push 0 ++ be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8 ++
+      be8 payload.size ++ payload)
+  | .sha512 => (Identity.taggedSha512 tag payload).toOption.getD .empty
 
 end Hash
 
