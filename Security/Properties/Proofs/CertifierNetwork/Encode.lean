@@ -25,7 +25,7 @@ theorem uBE_of {w : Nat} {x : Int} (n : String) (h0 : 0 ≤ x) (h1 : x < 2 ^ (8 
     ∃ b, uBE w x n = .ok b ∧ b.size = w := by
   refine ⟨⟨(List.range w).toArray.map fun i => (x.toNat >>> (8 * (w - 1 - i))).toUInt8⟩, ?_, ?_⟩
   · unfold uBE
-    rw [if_pos ⟨h0, h1⟩]
+    rw [ite_eq_left ⟨h0, h1⟩]
     rfl
   · simp [ByteArray.size]
 
@@ -78,7 +78,7 @@ theorem encode_of {h : RecordHead} (hc : (h.counts.size : Int) = h.buckets)
     (by split <;> omega) (by split <;> norm_num)
   unfold RecordHead.encode at he
   simp only [bind, Except.bind, pure, Except.pure] at he
-  rw [if_neg hc', if_neg hp', hst] at he
+  rw [ite_eq_right hc', ite_eq_right hp', hst] at he
   simp only [hlk, hdir, hwin, hbk, hal, hfb, hbm, NetworkCheck.statusCode, pure, Except.pure, hst', hdl] at he
   rw [← Array.forIn_toList] at he
   split at he
@@ -133,14 +133,14 @@ theorem realFrames_of {g : Params} {grid : Array Slots} (hs : grid.size = g.buck
   obtain ⟨F, hF, hle, hsz⟩ := rowFrames_of g grid.toList (fun r hr => hp r (Array.mem_toList_iff.1 hr))
   refine ⟨F, ?_, by rw [Array.length_toList, hs] at hle; exact hle, hsz⟩
   unfold realFrames
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   exact hF
 
 theorem frameTag_size : frameTag.size = 34 := by decide
 
 theorem block_of {x : ByteArray} (h : x.size ≤ 128) : block x = .ok (x ++ ⟨Array.replicate (128 - x.size) 0⟩) := by
   unfold block
-  rw [if_pos h]
+  rw [ite_eq_left h]
   rfl
 
 theorem frameLeaf_of {f : ByteArray} {B : Nat} (hB : B < 2 ^ 32) (hf : f.size = B) :
@@ -182,7 +182,7 @@ theorem leaves_of {g : Params} {F : Array ByteArray} (hle : F.size ≤ g.buckets
     (fun f hf => frameLeaf_of hB (hs f (Array.mem_toList_iff.1 hf)))
   refine ⟨r.toArray, ?_, fun x hx => hP x (by simpa using hx)⟩
   unfold leaves
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   show Array.mapM (frameLeaf · g.frameBytes) F = _
   rw [Array.mapM_eq_mapM_toList, hr]
   rfl
@@ -268,9 +268,9 @@ theorem messageInput_of {k : ByteArray} {l : String} {d : Direction} {w : Int} {
   obtain ⟨wb, hwb, -⟩ := uBE_of "window" hw.1 hw.2
   unfold messageInput at he
   simp only [bind, Except.bind, pure, Except.pure] at he
-  rw [if_neg (by simp [NetworkCheck.digestBytes, hg])] at he
+  rw [ite_eq_right (by simp [NetworkCheck.digestBytes, hg])] at he
   simp only [hwb] at he
-  rw [if_neg (by simp [hk])] at he
+  rw [ite_eq_right (by simp [hk])] at he
   cases he
 
 theorem certificateMessage_of {k : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray}
