@@ -1,5 +1,4 @@
 import Definitions.Core.TC.Spec
-import Definitions.Core.PrivatePartition
 
 /-!
 # Named assumptions
@@ -37,11 +36,6 @@ is, is the moniker's `arch`; the evidence is `models.AMPERE_BF16_M16N8K16.valida
 and the special-value campaign in `total.py`. -/
 def GemmAmpereStep (step : Nat → List Nat → List Nat → Nat) : Prop :=
   ∀ acc a b, StepInputs AMPERE_BF16_M16N8K16 acc a b → step acc a b = Spec.tcDotTotal AMPERE_BF16_M16N8K16 acc a b
-
-/-- **`cr/sha-512`, as the advice root's binding**: a private partition's advice commits to at most one partition. The
-root is SHA-512's (the one-hash rule), so two partitions with one root would be a collision. -/
-def AdviceBinding {R : Type} (C : Circuit) (advice : (n : ℕ) → Partition C n → R) : Prop :=
-  Function.Injective fun x : (n : ℕ) × Partition C n => advice x.1 x.2
 
 /-- **`trusted-nebius-host`**: the auditor-trusted `device` (a network certifier, the memory challenger) runs its stated
 `code` on the Nebius host it is deployed to. `run device x` is everything the device does on input `x`: what it emits,
