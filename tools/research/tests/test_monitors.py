@@ -668,6 +668,19 @@ def test_units_on_node_1_tolerate_a_user_manager_that_isnt_there_and_node_2_read
     assert M.units("n2")(M.Ctx(now=T0, run=run)) == [] and M.UNITS in run.calls[0][1]
 
 
+def test_failed_login_session_scopes_are_one_incident_spanning_them():
+    scopes = "".join(f"session-{n}.scope loaded failed failed Session {n} of User research\n" for n in (8334, 8212, 8299))
+    run = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (0, "", "")),
+              (lambda a, _: a[0] == "systemctl", (0, FAILED + scopes, "")))
+    other, s = M.units("n1")(M.Ctx(now=T0, run=run))
+    assert other.key == "system:systemd-ask-password-console.path"
+    assert s.key == "system:session-*.scope"
+    assert "3 login session scopes have failed* (`session-8212.scope` to `session-8334.scope`)" in s.text
+    one = Run((lambda a, _: a[:2] == ["systemctl", "--user"], (0, "", "")),
+              (lambda a, _: a[0] == "systemctl", (0, scopes.splitlines()[0] + "\n", "")))
+    assert "1 login session scope has failed* (`session-8334.scope`)" in M.units("n1")(M.Ctx(now=T0, run=one))[0].text
+
+
 # ---- relay-side ----------------------------------------------------------------------------------------------------------------
 
 def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_the_check():
@@ -1037,6 +1050,65 @@ def test_disk_forecast_pages_when_the_fitted_line_reaches_the_watermark_within_6
     assert f.key == "inode" and "inode use is past 80%" in f.text
 
 
+MANIFEST = """
+[[file]]
+path = "/etc/systemd/system/vy-a.service"
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+run = ["systemd:vy-a", "systemd:vy-b.timer"]
+[[file]]
+path = "/home/research/.config/systemd/user/u.service"
+nodes = ["vy-nebius-1"]
+run = ["user-systemd:u", "tmux:x"]
+[[file]]
+path = "/etc/systemd/system/vy-held.service"
+nodes = ["vy-nebius-1"]
+run = ["systemd:vy-held"]
+hold = "waits for its owner"
+[[tree]]
+path = "/opt/t"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-n2-only"]
+"""
+
+
+def show(*units: tuple[str, str, str]) -> str:
+    return "\n\n".join(f"LoadState={load}\nUnitFileState={uf}\nActiveState={act}\nSubState={act}" for load, uf, act in units) + "\n"
+
+
+def test_the_units_deploy_toml_runs_on_a_machine_are_its_run_entries_less_held_ones_tmux_and_expected_off(monkeypatch):
+    assert M.expected_units("vy-nebius-1", MANIFEST) == ["systemd:vy-a.service", "systemd:vy-b.timer", "user-systemd:u.service"]
+    assert M.expected_units("vy-nebius-2", MANIFEST) == ["systemd:vy-n2-only.service"]
+    monkeypatch.setitem(M.EXPECTED_OFF, ("vy-nebius-1", "systemd:vy-b.timer"), "stopped by design")
+    assert M.expected_units("vy-nebius-1", MANIFEST) == ["systemd:vy-a.service", "user-systemd:u.service"]
+    assert M.expected_units("vy-nebius-cpu-1", MANIFEST) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
+    real = set(M.expected_units("vy-nebius-1", M.MANIFEST.read_text()))
+    assert real >= {"systemd:vy-watchdog.timer", "systemd:vy-lease.service", "systemd:vy-monitors.timer"}
+    assert "systemd:vy-n2-offload.service" not in real and all(M.EXPECTED_OFF.values())
+
+
+def test_units_expected_flags_a_unit_disabled_stopped_or_never_installed(tmp_path, monkeypatch):
+    manifest = tmp_path / "deploy.toml"
+    manifest.write_text(MANIFEST)
+    monkeypatch.setattr(M, "MANIFEST", manifest)
+    system = show(("loaded", "disabled", "active"), ("loaded", "enabled", "active"))
+    user = show(("loaded", "enabled", "inactive"))
+    run = Run((lambda a, _i: "--user" in a and a[-1] == "u.service", (0, user, "")),
+              (lambda a, _i: a[:2] == ["systemctl", "show"] and a[-2:] == ["vy-a.service", "vy-b.timer"], (0, system, "")))
+    a, u = M.units_expected(mctx(tmp_path, run))
+    assert a.key == "systemd:vy-a.service" and "unit `vy-a.service` isn't enabled (disabled), so it won't start at boot*" in a.text
+    assert u.key == "user-systemd:u.service" and "the user unit `u.service` isn't running (inactive/inactive)*" in u.text
+    gone = Run((lambda a, _i: "--user" in a, (0, show(("loaded", "enabled", "active")), "")),
+               (has("show"), (0, show(("loaded", "enabled", "active"), ("not-found", "", "inactive")), "")))
+    [g] = M.units_expected(mctx(tmp_path, gone))
+    assert g.key == "systemd:vy-b.timer" and "unit `vy-b.timer` was never installed (systemd doesn't know it)*" in g.text
+    assert "isn't running" not in g.text
+    ok = Run((lambda a, _i: "--user" in a, (0, show(("loaded", "enabled", "active")), "")),
+             (has("show"), (0, show(("loaded", "static", "active"), ("loaded", "enabled", "active")), "")))
+    assert M.units_expected(mctx(tmp_path, ok)) == []
+    with pytest.raises(RuntimeError, match="exited 1"):
+        M.units_expected(mctx(tmp_path, Run((has("show"), (1, "", "Failed to connect to bus")))))
+
+
 def test_a_peer_that_doesnt_answer_ssh_is_a_finding_and_one_that_does_isnt(tmp_path):
     run = Run((lambda a, _i: a[0] == "ssh" and "vy-nebius-cpu-1" in a, (255, "", "ssh: connect to host: Connection timed out")),
               (lambda a, _i: a[0] == "ssh", (0, "", "")))
@@ -1073,11 +1145,12 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
     manifest = tomllib.loads((SRC / "research/pods/nebius/deploy.toml").read_text())
     rows = {e["path"]: e for e in manifest["file"]}
     for path in ("/etc/systemd/system/vy-watchdog.service", "/etc/systemd/system/vy-watchdog.timer",
-                 "/usr/local/lib/vy-monitoring/research/monitors.py", "/usr/local/lib/vy-monitoring/research/__init__.py"):
+                 "/usr/local/lib/vy-monitoring/research/monitors.py", "/usr/local/lib/vy-monitoring/research/__init__.py",
+                 "/usr/local/lib/vy-monitoring/research/pods/nebius/deploy.toml"):
         assert {"vy-nebius-1", "vy-nebius-cpu-1"} <= set(rows[path]["nodes"]), path
     text = (SRC / "research/pods/nebius/monitoring/vy-watchdog.service").read_text()
     assert "-m research.monitors run --where machine $VY_WATCHDOG_ARGS" in text
     assert "EnvironmentFile=/etc/vy/watchdog.env" in text and "SupplementaryGroups=systemd-journal" in text
     assert re.search(r"^OOMScoreAdjust=-\d+$", text, re.M)
     assert {m.id for m in M.MONITORS if m.where == "machine"} == {"memory-pressure", "oom-kills", "answering", "disk-forecast",
-                                                                    "lost-checks"}
+                                                                    "units-expected", "lost-checks"}
