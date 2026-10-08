@@ -1101,7 +1101,7 @@ def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_pat
     _git(repo, "commit", "-q", "-m", "base")
     base = _git(repo, "rev-parse", "HEAD")
     (repo / "verity" / "ml" / "flock").mkdir(parents=True)
-    (repo / "backends" / "flock" / "é.py").write_text("x = 1\n")
+    (repo / "verity" / "ml" / "flock" / "é.py").write_text("x = 1\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "é")
     assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/ml/flock/"]}

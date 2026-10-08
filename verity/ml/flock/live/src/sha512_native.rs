@@ -620,7 +620,7 @@ mod tests {
     /// The `sha512x3` and `hm96` slot circuits as `verity_flock.circuit.compose` writes them (`carry_every` the carry-commit
     /// spacing: 5 is the pinned circuits'), from this repository's builder; `None` without Python and the verity packages.
     fn slot_circuits(carry_every: usize) -> Option<Vec<IrUnitNet>> {
-        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().ok()?.join("../../../../../backends");
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().ok()?.join("../../../..");
         let dir = std::env::temp_dir().join(format!("sha512-native-{}-{carry_every}", std::process::id()));
         std::fs::create_dir_all(&dir).ok()?;
         let py = format!(

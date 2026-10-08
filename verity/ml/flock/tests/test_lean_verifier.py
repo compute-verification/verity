@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 PROOFS = Path(__file__).resolve().parents[4] / "Security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
@@ -51,11 +52,14 @@ def test_no_escape_hatches():
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.)")
+AUDIT_STATEMENTS = PROOFS.parent / "Models" / "Flock" / "Guarantees" / "Audit.lean"
+AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Proofs\.Flock\.Soundness\.Game\.|Proofs\.Flock\.Soundness\.Audit\.|"
+                           r"Models\.Flock\.Guarantees\.Audit$)")
 
 
 def test_audit_layer_is_abstract():
-    """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
+    """The audit theorems import only the interaction model, Mathlib, each other and their lifted statements
+    (`Models.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
@@ -67,6 +71,8 @@ def test_audit_layer_is_abstract():
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
     assert not bad, bad
+    statements = [line for line in AUDIT_STATEMENTS.read_text().splitlines() if line.startswith("import ")]
+    assert statements and all(line.startswith("import Mathlib.") for line in statements), statements
     admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
     assert not admitted, admitted
 
@@ -82,7 +88,7 @@ def _has_unit_cut():
 @pytest.mark.skipif(shutil.which("lake") is None or not _has_unit_cut(), reason="no Lean toolchain or no validate_unit_cut")
 def test_unit_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
@@ -93,7 +99,7 @@ def test_circuit_type_agrees_with_the_reference(tmp_path):
     """`flock-verify circuit-type` gives `verity_flock.circuit_types`' digest and verdict on every type (random types, call
     trees and one mutation per rule; `circuit_type_agree.py`)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "circuit_type_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "circuit_type_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "200"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
@@ -104,7 +110,7 @@ def test_layout_agrees_with_the_reference(tmp_path):
     (random types and call trees, placed and inline calls and reads, nested units, one mutation per rule;
     `layout_agree.py`)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "layout_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "layout_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "150"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
@@ -231,7 +237,7 @@ def _template_vectors():
 
 def _stratified_agree():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("stratified_agree", LEAN.parent / "stratified_agree.py")
+    spec = importlib.util.spec_from_file_location("stratified_agree", Path(__file__).resolve().parent / "stratified_agree.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -572,14 +578,14 @@ def _one_stage_draw():
                     reason="no Lean toolchain or no stratified law in core (PRs #161, #164)")
 def test_stratified_draw_agrees_with_core(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--random", "20", "--os-draws", "100"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
 @pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors (PR #131)")
 def test_template_queries_agree_with_the_vectors(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
@@ -595,7 +601,7 @@ def _has_check_cut():
 @pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ml.circuits.cut (PR #111)")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
@@ -616,7 +622,7 @@ def test_qword_cuts_agree_with_core_verify(tmp_path):
     `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W), under `Q_word` v1 and v2
     (v2's evaluations, refusals, the program it accepts that v1 refuses, and the recompute it reports)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--qword-vectors", str(_qword_vector_file())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     r = json.loads(p.stdout.strip().splitlines()[-1])["qword_vectors"]
@@ -636,7 +642,7 @@ def _qword_vectors():
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
 def test_qword_evaluator_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300", "--vectors", str(_qword_vectors())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
@@ -663,7 +669,7 @@ def test_the_reference_vectors_exist():
 def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--vectors", str(ir / "partition_vectors.json"),
                         "--format", str(ir / "format_vectors.json")]
                        + (["--qword-vectors", str(ir / "qword_vectors.json")] if (ir / "qword_vectors.json").exists() else []),
@@ -675,7 +681,7 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(LEAN.parent / "qcall_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qcall_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--qcall", str(ir / "qcall_vectors.json"), "--format", str(ir / "format_vectors.json")],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -772,6 +778,50 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
         r.clear()
         r.update(saved)
         assert p.returncode == 1 and "a range's slots are smaller than a word or larger than the block" in p.stdout, (change, p.stdout)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
+    """`HmRow.parse` refuses a `k_log` past 27 where it reads it, before `check` computes `2^k_log` and `2^slot_log`, and
+    compares a lookup's `in_bits` with its table's log before computing `2^in_bits`. A RoPE circuit naming `k_log = 2^32 - 1`
+    with 24 more mask ranges of that slot size, or a lookup of `in_bits = 2^32`, is refused at once with its reason under an
+    8 GiB address space; without the bounds the first holds a 512 MiB span per range until it runs out of memory, and the
+    second is a power the runtime refuses to compute."""
+    pytest.importorskip("verity_numerical")
+    import resource
+
+    from verity_flock import circuit as FC
+    from verity_flock.ir_lower import TABLES
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit)
+    FC.stage(low, s, 0, 4, tmp_path / "st")
+    head, meta_line, rest = text.split("\n", 2)
+    meta = json.loads(meta_line[5:])
+
+    def statement(circuit):
+        f = tmp_path / "c.circuit"
+        f.write_text(circuit)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
+                               "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True,
+                              text=True, preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
+
+    p = statement(text)
+    assert p.returncode == 0, p.stdout + p.stderr
+    big = 2**32 - 1
+    mask = next(r for r in meta["ranges"] if r["net"] == "mask")
+    wide = dict(meta, k_log=big, ranges=meta["ranges"] + [dict(mask, slot_log=big, pos0=0)] * 24)
+    lookup = dict(meta, lookups={"rsq": {"table": "rsq", "sha256": TABLES["rsq"], "out_bits": 31, "in_bits": 2**32,
+                                         "lo_bits": 2}})
+    for m, why in [(wide, f"META: k_log {big} is over 27: no fast100 schedule"),
+                   (lookup, "META: lookup rsq's index is not its table's")]:
+        p = statement(f"{head}\nMETA {json.dumps(m)}\n{rest}")
+        assert p.returncode == 1 and why in p.stdout, (why, p.returncode, p.stdout, p.stderr[-400:])
 
 
 def first_and_row(lines: list[str], name: str) -> int:

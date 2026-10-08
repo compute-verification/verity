@@ -1233,6 +1233,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 - **Blocks.** `vus_per_block ≥ 1` (D9, §17.1). Every range's count is `vus_per_block` times its per-VU count, and the
   unit range's power-of-two bound binds only when the unit returns the outputs, so a tail that returns them would otherwise
   pass with no VU in a block.
+- **Header sizes.** A power of a number META chooses is computed only once the number is bounded. `parse` refuses
+  `k_log > 27` where it reads it (`HmRow.kLogOf`), before the layout check computes `2^{k_log}`, or `2^{slot_log}` once
+  `slot_log ≤ k_log`; and it compares a lookup's `in_bits` with its pinned table's `log2` before `2^{in_bits}`. `setupH`
+  refuses `k_log > 27` too, and a pinned table's words are a power of two, so the verifier accepts and refuses what it did
+  before (`kLogOf_ok`, `lookup_index_test`), refusing such a file before spending memory on it.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
@@ -1494,6 +1499,26 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 `verify --zk` (the verifier's setting) checks `flock-circuit --zk` sessions (any `J`, draws, hidden outputs) by the live
 PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
 stays `NON_ZK_PROOF`. **Agreement:** README.
+
+### 16.15 Plain leaves (`verity/flock-circuit+plain-leaves`, a recursive session's inner statement)
+
+§16.13's statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`, §14): a recursive session's inner
+statement, staged under `FLOCK_PLAIN_LEAVES=1`, whose firewall commits every tree top under a salt of its own, so a leaf
+needs none. `Tags.withPlainLeaves` changes three things.
+
+- META `leaf_scheme` is pinned to upstream's `leaf_scheme_plain` object (`verity_flock.circuit.LEAF_SCHEME_PLAIN`):
+  `{"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
+  "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}`.
+- The identity's `leaf_scheme` is that object, and its `hashes.merkle` is `"sha512 (every Ligerito level)"`, as upstream's
+  `identity` writes them for such a statement. Everything else is §16.13's identity, and on `--coins os` its live-OS form.
+- Every opening carries an empty `opened_salts`, as every opening of PR #83's prover does from `2908d078` on
+  (`Setup.openedSalts`, set on every hm96-row statement); `631567f7`'s unsalted openings carry none. Every level's leaf and
+  node are SHA-512 (`merkle_hash` 2).
+
+The verifier identifies the statement (`statement` prints its identity and digest), but `verify` refuses any
+statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without `--zk`, until a soundness headline
+covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
+`--zk` refuses it too.
 
 ## 17. Acceptance, assumptions and trust
 
