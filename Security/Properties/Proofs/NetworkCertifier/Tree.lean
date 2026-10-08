@@ -17,8 +17,8 @@ namespace Properties.NetworkCertifier.Tree
 
 open Properties.NetworkCertifier Properties.NetworkCertifier.Bytes
 
-/-- SHA-512 has no collision on `X`: a hypothesis of these lemmas only. The claims discharge it on the run's strings
-with `findCollision`, which returns a collision wherever it fails (`Extract`). -/
+/-- SHA-512 has no collision on `X`: a hypothesis of these lemmas only. The claims either discharge it on the run's
+strings (`cf_run`) or conclude that two distinct strings of the run have one digest. -/
 abbrev CF (X : ByteArray → Prop) : Prop := ∀ x y, X x → X y → Sha512.hash x = Sha512.hash y → x = y
 
 variable {X : ByteArray → Prop}

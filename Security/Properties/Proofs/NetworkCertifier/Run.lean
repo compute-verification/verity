@@ -4,8 +4,8 @@ import Properties.Proofs.NetworkCertifier.Extract
 /-!
 # An accepted run's rows are the Program's (5a)
 
-Unless `findForgery` finds an LMS forgery, every accepted certificate's message is one the device signed
-(`signed_of_not`); unless `findCollision` finds a SHA-512 collision among the run's strings (`cf_run`), that message
+Unless a certificate of the run is an LMS forgery, every accepted certificate's message is one the device signed
+(`signed_of_not`); unless two distinct strings of the run have one SHA-512 digest (`cf_run`), that message
 names the same link-window and digest (`messageInput_inj`), and the digest the same head (`head_inj`). On egress that
 head is both the one `record_head` makes of the Program's grid and the one the device made of its recorded grid, so the
 grids are one (`recordHead_grid_inj`), and so are their rows (`bytesGrid_inj`).
@@ -62,9 +62,10 @@ theorem zip_index {p : Params} {e : Evidence} (hfit : EvidenceFits p e) (ℓ : F
 
 theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
   intro p c e dev eg ig hacc hpd hhon
-  by_cases hc : IsCollision (findCollision (runStrings p c e dev eg))
+  by_cases hc : ∃ x ∈ runStrings p c e dev eg, ∃ y ∈ runStrings p c e dev eg, x ≠ y ∧ Sha512.hash x = Sha512.hash y
   · exact Or.inr (Or.inl hc)
-  by_cases hf : IsForgery dev (findForgery c dev)
+  by_cases hf : ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies p m r.certificate.signature ∧
+      ¬ Signed dev m
   · exact Or.inr (Or.inr hf)
   refine Or.inl ?_
   have hcr := cf_run hc

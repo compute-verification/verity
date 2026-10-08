@@ -73,7 +73,9 @@ theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
 theorem encardAcceptedObservationsLe : EncardAcceptedObservationsLe := by
   intro p K In Ac _ ss frames op linkOf D hdel hrho hlink
   by_cases hb : ∃ o c e dev eg ig a, AcceptedRun p frames op linkOf o c e dev eg ig a ∧
-      (IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev))
+      ((∃ x ∈ runStrings p c e dev eg, ∃ y ∈ runStrings p c e dev eg, x ≠ y ∧
+          Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
+        ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies p m r.certificate.signature ∧ ¬ Signed dev m)
   · exact Or.inr hb
   refine Or.inl (le_trans (Set.encard_le_encard ?_)
     (NetTiming.encard_accSeqs_le_constantRate (S := p.grid.allocation) p.grid.buckets p.windows ss frames op _ D))

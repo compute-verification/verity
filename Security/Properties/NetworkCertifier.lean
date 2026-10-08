@@ -8,8 +8,8 @@ import Mathlib.Data.Set.Card
 The properties of `NetworkCheck.protocol` (`verity/network-certificate/v2`, the port of `audit.py`'s `Audit`), stated
 against its functions as they run: what `answer` and the check refuse, what an acceptance establishes about each
 link-window and what an undecided outcome means, that the honest transcript is accepted, and what an accepted run is:
-a run of the certifier program under the declared advice, or a run from whose own data a function finds a SHA-512
-collision or an LMS forgery.
+a run of the certifier program under the declared advice, or a run whose own data carries a SHA-512 collision or an
+LMS forgery.
 Each is a `Prop`; `Properties.Proofs.NetworkCertifier` proves the ones about the code, and
 `Proofs.NetworkCertifier.Accepted` (in `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) the
 last two, `AcceptedRunsAreProgramRuns` and the count it gives, `EncardAcceptedObservationsLe`.
@@ -192,10 +192,10 @@ honest (`Honest`, which the deployment's `trusted-nebius-host` is about): an egr
 its recorded rows under its status, an ingress head carries its status, every head names its own link-window, and every
 frame it records is `8·B` bits (W3). It signs, with the key, the `certificateMessage` of each head it issues (`Signed`).
 
-Nothing is assumed of SHA-512 or LMS. Each claim about an accepted run holds, or a function of the run finds a break in
-the run's own data: `findCollision` searches `runStrings`, the strings the check and the device hash, for two distinct
-strings with one SHA-512 digest (`cr/sha-512`), and `findForgery` searches the commitment's certificates for a message
-the device never signed whose signature verifies under the key (`euf-cma/lms-sha512-n64`). -/
+Nothing is assumed of SHA-512 or LMS. Each claim about an accepted run holds, or the run's own data carries a break:
+two distinct strings of `runStrings`, the strings the check and the device hash, with one SHA-512 digest
+(`cr/sha-512`), or a certificate of the commitment whose signature verifies under the key over its message
+(`certMessage`) though the device never signed that message (`euf-cma/lms-sha512-n64`). -/
 
 /-- One head the device issues, for link-window `(direction, link, window)`. -/
 structure Issue where
@@ -229,49 +229,10 @@ def Signed {p : Params} (dev : Device p) (m : ByteArray) : Prop :=
   ∃ i ∈ dev.issued, ∃ dg, i.head.digest = .ok dg ∧
     certificateMessage (p.key.extract 0 16) i.link i.direction i.window dg = .ok m
 
-/-- The LMS verifier, as a test of a message and a signature's bytes under the parameters' key. -/
-def lmsAccepts (p : Params) (m sig : ByteArray) : Bool :=
-  match Lms.Signature.decode p.lms sig with
-  | .ok s => (Lms.verify p.lms p.key m s).toOption == some true
-  | .error _ => false
-
-/-- The messages the device signs (`Signed`), as a list. -/
-def signedMessages {p : Params} (dev : Device p) : List ByteArray :=
-  dev.issued.filterMap fun i =>
-    i.head.digest.toOption.bind fun dg =>
-      (certificateMessage (p.key.extract 0 16) i.link i.direction i.window dg).toOption
-
 /-- The message a record's certificate signs, `certificateMessage` of its own fields. -/
 def certMessage (r : Certified) : Option ByteArray :=
   (certificateMessage r.certificate.keyId r.certificate.link r.certificate.direction r.certificate.window
     r.certificate.digest).toOption
-
-/-- The first certificate of the commitment that is a forgery: its message and signature, where the signature verifies
-under the key over a message the device never signed. -/
-def findForgery {p : Params} (c : Commitment) (dev : Device p) : Option (ByteArray × ByteArray) :=
-  c.records.toList.findSome? fun r => (certMessage r).bind fun m =>
-    if lmsAccepts p m r.certificate.signature && !(signedMessages dev).any (· == m) then
-      some (m, r.certificate.signature)
-    else none
-
-/-- A message and a signature are an LMS forgery under the key: the signature verifies over a message the device never
-signed. -/
-def IsForgery {p : Params} (dev : Device p) : Option (ByteArray × ByteArray) → Prop
-  | some (m, σ) => LmsVerifies p m σ ∧ ¬ Signed dev m
-  | none => False
-
-/-- The first pair of distinct strings of `xs` with one SHA-512 digest. -/
-def findCollision : List ByteArray → Option (ByteArray × ByteArray)
-  | [] => none
-  | x :: xs =>
-    match xs.find? fun y => !(x == y) && Flock.Sha512.hash x == Flock.Sha512.hash y with
-    | some y => some (x, y)
-    | none => findCollision xs
-
-/-- `xy` is a SHA-512 collision: two distinct strings with one digest. -/
-def IsCollision : Option (ByteArray × ByteArray) → Prop
-  | some (x, y) => x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
-  | none => False
 
 /-- What SHA-512 hashes for a record head: `tagged_sha512(RECORD_TAG, encode(h))`'s input. -/
 def headStrings (h : RecordHead) : List ByteArray := (h.encode.toOption.map (taggedInput recordTag)).toList
@@ -324,9 +285,9 @@ def runStrings (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg
 
 /-- **An accepted run's rows are the Program's (5a).** If the check accepts and the device is honest, then on every
 egress link the device recorded, at every bucket of the `W` windows, exactly the row `expectedRow` gives of the link's
-frames under its declared syncs, and it gave every link-window of the unit a complete status; or the run's strings hold
-a SHA-512 collision, which `findCollision` finds, or one of its certificates is an LMS forgery, which `findForgery`
-finds. -/
+frames under its declared syncs, and it gave every link-window of the unit a complete status; or two distinct strings
+the run hashes have one SHA-512 digest, or a certificate of the commitment verifies under the key over a message the
+device never signed. -/
 def AcceptedRowsAreProgramRows : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg ig : ByteArray),
     protocol.Accepts p c e → ParamsDigests p eg ig → Honest p dev eg →
@@ -334,7 +295,8 @@ def AcceptedRowsAreProgramRows : Prop :=
       Declares link syncs → ∀ t < p.windows * p.grid.buckets,
         dev.rows ℓ t = expectedRow p.grid.allocation p.grid.buckets p.windows syncs link.frames t) ∧
       ∀ d, ∀ l ∈ linkNames p d, ∀ w < p.windows, dev.status d l w = none) ∨
-    IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev)
+    (∃ x ∈ runStrings p c e dev eg, ∃ y ∈ runStrings p c e dev eg, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
+    ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies p m r.certificate.signature ∧ ¬ Signed dev m
 
 /-- **An accepted run is a run of the certifier program under the declared advice (5b).** Take an accepted unit, an
 honest device, a reference sync set `ss` with Σ_sync's values, and a reference observation sequence `o` of the `W·T`
@@ -342,8 +304,8 @@ buckets whose rows are the device's and whose statuses are complete exactly wher
 (each boundary link `linkOf κ` one of the unit's). If the opened frames are the reference Program's (`frames` of the
 operator's ingress and content advice `a`, on each egress link), then the reference `Accepted` holds of `o` for the
 constant-rate Program with advice `(a, σ)`, `σ` the declared syncs, so Theorems 1(b) and 3
-(`EncardAccSeqsLeConstantRate` and the rest) count `o`; or, as in `AcceptedRowsAreProgramRows`, `findCollision` finds a
-SHA-512 collision among the run's strings or `findForgery` an LMS forgery among its certificates. -/
+(`EncardAccSeqsLeConstantRate` and the rest) count `o`; or, as in `AcceptedRowsAreProgramRows`, the run's strings hold
+a SHA-512 collision or its certificates an LMS forgery. -/
 def AcceptedRunsAreProgramRuns : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (dev : Device p) (eg ig : ByteArray) {K : Nat} {In Ac : Type}
     (ss : NetTiming.SyncSet) (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame) (a : Ac)
@@ -364,7 +326,8 @@ def AcceptedRunsAreProgramRuns : Prop :=
         ∃ s, link.syncs[w.1]? = some s ∧ (σ w).1.1 = s.delta ∧ (σ w).2.1 = s.rho) ∧
       NetTiming.Accepted (NetTiming.constantRate (S := p.grid.allocation) p.grid.buckets p.windows ss frames) op
         (p.windows * p.grid.buckets) o (a, σ)) ∨
-    IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev)
+    (∃ x ∈ runStrings p c e dev eg, ∃ y ∈ runStrings p c e dev eg, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
+    ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies p m r.certificate.signature ∧ ¬ Signed dev m
 
 /-- `o` is the observation sequence of an accepted run `(c, e, dev, eg, ig)` with advice `a`: the check accepts the
 unit, the device is honest, and `o`'s rows and statuses are the device's, read through `linkOf` as in
@@ -394,9 +357,9 @@ def AcceptedObservations (p : Params) {K : Nat} {In Ac : Type}
 /-- **What accepted runs can carry (Theorem 3 for the check).** Over every accepted run under the hypotheses of
 `AcceptedRunsAreProgramRuns`, the device's content is a function of the frames and the per-window sync advice
 `Fin W → Σ_sync`, so the accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`
-(`ss.size = |Σ_sync|`): `NetTiming.Guarantees.EncardAccSeqsLeConstantRate` with `n = W·T`. Or some accepted run yields
-a break: `findCollision` finds a SHA-512 collision among its strings, or `findForgery` an LMS forgery among its
-certificates. -/
+(`ss.size = |Σ_sync|`): `NetTiming.Guarantees.EncardAccSeqsLeConstantRate` with `n = W·T`. Or some accepted run carries
+a break: two distinct strings it hashes with one SHA-512 digest, or a certificate that verifies under the key over a
+message the device never signed. -/
 def EncardAcceptedObservationsLe : Prop :=
   ∀ (p : Params) {K : Nat} {In Ac : Type} [Fintype Ac] (ss : NetTiming.SyncSet)
     (frames : List In → Ac → Fin p.egress.size → List NetTiming.LogicalFrame)
@@ -407,6 +370,8 @@ def EncardAcceptedObservationsLe : Prop :=
     (AcceptedObservations p frames op linkOf D).encard ≤
       ((Fintype.card Ac * ss.size ^ p.windows * D ^ (p.windows * p.grid.buckets) : ℕ) : ℕ∞) ∨
     ∃ o c e dev eg ig a, AcceptedRun p frames op linkOf o c e dev eg ig a ∧
-      (IsCollision (findCollision (runStrings p c e dev eg)) ∨ IsForgery dev (findForgery c dev))
+      ((∃ x ∈ runStrings p c e dev eg, ∃ y ∈ runStrings p c e dev eg, x ≠ y ∧
+          Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
+        ∃ r ∈ c.records.toList, ∃ m, certMessage r = some m ∧ LmsVerifies p m r.certificate.signature ∧ ¬ Signed dev m)
 
 end Properties.NetworkCertifier
