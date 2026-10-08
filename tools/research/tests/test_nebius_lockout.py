@@ -52,6 +52,7 @@ def run(root: Path, name: str, *, state: str | None = "done", marker: bool = Tru
     """A run dir with status.json (`state`), the `files`, and the `.custody` marker the runner writes, all quiet since T0."""
     d = root / name
     d.mkdir(parents=True)
+    d.chmod(0o755)
     if state:
         (d / "status.json").write_text(json.dumps({"state": state}))
     for rel, body in {"stdout.log": b"y" * 100, **(files or {})}.items():
