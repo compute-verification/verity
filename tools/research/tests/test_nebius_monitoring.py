@@ -151,7 +151,7 @@ def test_the_idle_rules_deliver_to_the_markdown_sink_and_mute_the_quiet_hour():
     assert 'start_time: "12:30"' in a and 'end_time: "13:30"' in a and "location: UTC" in a and "mute_time_intervals: [quiet-hour]" in a
     idle, held = a.split("- uid: nebius-gpu-idle-work-waiting")[1].split("- uid: nebius-gpu-held-at-zero")
     assert "for: 15m" in idle and 'expression: "$B < 5 && $V > 0"' in idle and "DCGM_FI_PROF_GR_ENGINE_ACTIVE" in idle
-    assert "(sum(vy_queue_pending) or vector(0)) + (sum(vy_ready_jobs) or vector(0))" in idle
+    assert '(sum(vy_queue_pending{queue!~"shadow-.*"}) or vector(0)) + (sum(vy_ready_jobs) or vector(0))' in idle
     assert "for: 10m" in held and 'pod!=""' in held and "evaluator: {type: lt, params: [1]}" in held
     assert a.count("datasourceUid: prometheus") == 3 and a.count("noDataState: OK") == 2
     y = (MON / "grafana.yaml").read_text()
