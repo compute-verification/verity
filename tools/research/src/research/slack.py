@@ -197,6 +197,10 @@ def load_registry(path: Path) -> dict:
             if not NAME_RE.match(alias) or alias in names:
                 raise SlackError(f"registry {path}: #{key}'s alias {alias!r} is malformed or names another channel")
             names.add(alias)
+    for ts, t in (chans[FRONT_DOOR].get("threads") or {}).items():
+        if not re.fullmatch(r"\d+\.\d+", ts) or not t.get("name") or not t.get("purpose") or \
+                not t.get("posters") or not set(t["posters"]) <= handles:
+            raise SlackError(f"registry {path}: #{FRONT_DOOR}'s thread {ts!r} needs a name, a purpose and posters (handles)")
     return reg
 
 
@@ -452,6 +456,19 @@ def _footer(tags: tuple[str, ...] = ()) -> str:
     return f"\n\n_{TAG_SEP.join(tags)}_" if tags else ""
 
 
+def kept_thread(reg: dict, thread: str, handle: str, text: str) -> None:
+    """A front-door thread the registry keeps (`threads`): its posters post anything; anyone else only a reply that leads
+    with posters' names, which answers one of them where it asked."""
+    kept = reg["channels"][FRONT_DOOR].get("threads", {}).get(thread)
+    if not kept or handle in kept["posters"]:
+        return
+    lead = lead_names(text, reg)
+    if not lead or not set(lead) <= set(kept["posters"]):
+        names = " or ".join("@" + p for p in kept["posters"])
+        raise SlackError(f"thread {thread} is {kept['name']}: {kept['purpose']} From @{handle}, only a reply that leads with "
+                         f"{names} goes here (led by {', '.join('@' + n for n in lead) or 'no name'})")
+
+
 def plain(text: str) -> str:
     """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes)."""
     text = OLD_FOOTER_RE.sub("", FOOTER_RE.sub("", text or ""))
@@ -487,6 +504,8 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     if thread and not api.dry_run:                       # a reply's ts (a doorbell's `reply R`): its thread
         first = api.call("conversations.replies", channel=ch, ts=thread, limit=1).get("messages", [])
         thread = (first[0].get("thread_ts") or first[0].get("ts") or thread) if first else thread
+    if route and thread:
+        kept_thread(route[0], thread, handle, text)
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=text,
                    unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"

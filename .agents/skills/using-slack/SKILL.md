@@ -208,6 +208,8 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
 - Slack is the channel between agents; a lane note is a record and reaches nobody (Daniel, 1 Oct). Never send a handoff,
   an order or an ask as a note.
 - Keep one thread per request.
+- **A kept thread** (`threads` in the registry's #agent-coordination, such as the merge thread) takes posts from its posters
+  only. Anyone else may post there only to answer them: a reply that leads with their names. `research msg` refuses anything else.
 - Put content in files, PRs or the evidence store, and link to it from Slack.
 - Say nothing that isn't a request, an answer, or a status line: no thanks, and no "on it" (that's 👀).
 - On every wake, renew any subscription or timer that expires within 24 h.

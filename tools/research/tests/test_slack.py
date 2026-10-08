@@ -1034,6 +1034,33 @@ def test_a_reply_to_a_replys_ts_lands_in_its_thread(fake, registry, routes_dirs,
     assert bells(fake, box)[-1]["text"].startswith(f"from infra, thread {root['ts']}, reply ")
 
 
+def test_a_kept_thread_takes_its_posters_and_from_anyone_else_only_an_answer_to_them(fake, registry, capsys):
+    root = fake.add(COORD, text="merge thread", username="top", bot_id=BOT)
+    first = fake.add(COORD, text="@proofs your PR failed its check", username="old-circuits-and-proofs", bot_id=BOT, thread_ts=root["ts"])
+    reg = json.loads(registry.read_text())
+    reg["channels"]["agent-coordination"]["threads"] = {root["ts"]: {
+        "name": "the merge thread", "purpose": "Landing.", "posters": ["old-circuits-and-proofs", "ci", "top"]}}
+    registry.write_text(json.dumps(reg))
+    n = len(fake.messages[COORD])
+    for via in (root["ts"], first["ts"]):
+        rc, _, err = run(capsys, "reply", "--as", "proofs", "--thread", via, "--text", "ready 1234@abc, tier quick")
+        assert rc != 0 and "the merge thread" in err and "@old-circuits-and-proofs or @ci or @top" in err
+    rc, _, err = run(capsys, "send", "--as", "proofs", "--thread", root["ts"], "--to", "@circuits", "--text", "see this")
+    assert rc != 0 and "led by @circuits" in err
+    rc, _, err = run(capsys, "close", "--as", "proofs", "--thread", root["ts"])
+    assert rc != 0 and "led by no name" in err
+    assert len(fake.messages[COORD]) == n
+    for argv in (["reply", "--as", "proofs", "--thread", first["ts"], "--text", "@old-circuits-and-proofs fixed at def456"],
+                 ["send", "--as", "proofs", "--thread", root["ts"], "--to", "@ci", "--text", "rebased"],
+                 ["reply", "--as", "ci", "--thread", root["ts"], "--text", "train 140 is ready"]):
+        rc, out, _ = run(capsys, *argv)
+        assert rc == 0 and posted(fake, out)["thread_ts"] == root["ts"]
+    reg["channels"]["agent-coordination"]["threads"][root["ts"]]["posters"] = ["nobody"]
+    registry.write_text(json.dumps(reg))
+    rc, _, err = run(capsys, "reply", "--as", "ci", "--thread", root["ts"], "--text", "x")
+    assert rc != 0 and "needs a name, a purpose and posters" in err
+
+
 def test_a_doorbell_carries_the_post_so_its_reader_needs_no_second_read(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a question", username="circuits", bot_id=BOT)

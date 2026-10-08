@@ -16,7 +16,14 @@
         "old-accounting",
         "old-circuits-and-proofs"
       ],
-      "routed_by": "the top-level agent (bc-7f347b4b): it reads the channel and forwards each holder in its Project only the posts addressed to it"
+      "routed_by": "the top-level agent (bc-7f347b4b): it reads the channel and forwards each holder in its Project only the posts addressed to it",
+      "threads": {
+        "1790957906.278529": {
+          "name": "the merge thread",
+          "purpose": "Landing: the lander's (@old-circuits-and-proofs) trains, ci preparing them, top's slots. A lane marks its PR ready on GitHub and hears back only if it fails.",
+          "posters": ["old-circuits-and-proofs", "ci", "top"]
+        }
+      }
     },
     "agent-alerts": {
       "id": "C0C5Q30MCNA",
