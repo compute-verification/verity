@@ -291,9 +291,12 @@ theorem egressMid_pending (st : State) (now backlog : Nat) :
   unfold egressMid
   rw [checkForwarding_pending, egressPre_pending]
 
-theorem egressTail_shaper (p : Params) (now backlog : Nat) (st : State) :
-    (egressTail p now backlog st).1.shaper = (st.checkForwarding now).shaper.tick.1 := by
-  unfold egressTail
+theorem egressTail_shaper (p : Params) (now backlog t : Nat) (st : State) :
+    ∃ l, (egressTail p now backlog t st).1.shaper = { (st.checkForwarding now).shaper.tick.1 with prover := l } := by
+  rw [egressTail_eq]
+  obtain ⟨l, hl⟩ := startAt_shaper p t (egressShape p now backlog st).1
+  refine ⟨l, hl.trans ?_⟩
+  unfold egressShape
   dsimp only
   generalize st.checkForwarding now = st1
   generalize st1.shaper.tick = x
@@ -301,20 +304,23 @@ theorem egressTail_shaper (p : Params) (now backlog : Nat) (st : State) :
   dsimp only
   split <;> split <;> rfl
 
-/-- A live egress tick leaves the shaper `egressMid`'s tick leaves. -/
+/-- A live egress tick leaves the shaper `egressMid`'s tick leaves, but for the online prover's choice. -/
 theorem step_egress_shaper {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
     (ht : st.shaper.t < horizon c) :
-    (step st (.tick .egress now backlog)).1.shaper = (egressMid st now backlog).tick.1 := by
+    ∃ l, (step st (.tick .egress now backlog)).1.shaper = { (egressMid st now backlog).tick.1 with prover := l } := by
   rw [step_egress_fst hg ht, egressTick_eq]
-  exact egressTail_shaper _ _ _ _
+  exact egressTail_shaper _ _ _ _ _
 
 /-- The frames a live egress tick hands are `egressMid`'s `handList`. -/
 theorem handedAt_egress {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
     (ht : st.shaper.t < horizon c) :
     handedAt st (.tick .egress now backlog) =
       handList (egressMid st now backlog) (egressMid st now backlog).tick.1.next := by
+  obtain ⟨l, hl⟩ := step_egress_shaper hg ht (now := now) (backlog := backlog)
   unfold handedAt handList
-  rw [step_egress_shaper hg ht, (egressMid_rel st now backlog).2.2.1, egressMid_pending]
+  rw [hl]
+  dsimp only
+  rw [(egressMid_rel st now backlog).2.2.1, egressMid_pending]
 
 theorem handedAt_quiet {st : State} {ev : Event} (h : (step st ev).1.shaper.next = st.shaper.next) :
     handedAt st ev = [] := by
@@ -447,7 +453,10 @@ theorem init_fifo (c : Config) : FifoInv c.egress.allocation [] (init c).shaper 
   dsimp only
   obtain ⟨hr, e⟩ := checkAdvice_rel
     { certifier := { link := c.egressLink, params := c.egress }, syncs := c.syncs, syncSet := c.syncSet,
-      prover := c.prover.map fun p => Prover.make c.syncSet c.egress.buckets p.rule p.envelope p.prior,
+      prover := c.prover.map fun p =>
+        let l : LaggedChoices :=
+          { prover := Prover.make c.syncSet c.egress.buckets p.rule p.envelope p.prior p.lag }
+        if c.windows > 0 then l.start else l,
       windows := c.windows }
   refine ⟨by rw [e]; rfl, by simp, by rw [e]; rfl, by rw [e]; exact le_rfl, fun hf => ?_⟩
   rw [hr.of_none hf]
@@ -462,7 +471,9 @@ theorem step_fifo {c : Config} {st : State} {hp : List (Frame × Nat)} (hg : Goo
     have hr := egressMid_rel st now backlog
     have hgs : ShGood c.egressLink c.egress (egressMid st now backlog) := hg.shaper.rel hr
     have hi' := hi.rel hr
-    rw [handedAt_egress hg ht, step_egress_shaper hg ht, ← hr.2.1]
+    obtain ⟨l, hl⟩ := step_egress_shaper hg ht (now := now) (backlog := backlog)
+    rw [handedAt_egress hg ht, hl, ← hr.2.1]
+    refine FifoInv.rel (s := (egressMid st now backlog).tick.1) ?_ ⟨CertRel.refl _, rfl, rfl, rfl⟩
     have tk := (tick_spec _ hgs).2.1
     obtain ⟨f1, f2, -, f4⟩ := fifo_tick _ hgs
     generalize egressMid st now backlog = s at hr hgs hi' tk f1 f2 f4 ⊢
@@ -630,8 +641,9 @@ theorem completeRows_proof : CompleteRows := by
   have hgm := (prefix_good c tr m).1
   have htm := egressAt_t hEm
   have hth : (pre c tr m).shaper.t < horizon c := htm ▸ hEm.2.2
-  have hpre : (pre c tr (m + 1)).shaper = (egressMid (pre c tr m) now' b').tick.1 := by
-    rw [pre_succ c tr m hm, he', step_egress_shaper hgm hth]
+  obtain ⟨l, hl⟩ := step_egress_shaper hgm hth (now := now') (backlog := b')
+  have hpre : (pre c tr (m + 1)).shaper = { (egressMid (pre c tr m) now' b').tick.1 with prover := l } := by
+    rw [pre_succ c tr m hm, he', hl]
   have ht1 : (pre c tr (m + 1)).shaper.t = t + 1 := by
     rw [hpre, (tick_spec _ (hgm.shaper.rel (egressMid_rel _ now' b'))).2.1, (egressMid_rel _ now' b').2.1, htm]
   rw [rowOf_eq hEm, he']

@@ -100,7 +100,10 @@ theorem init_good (c : Config) : Good c (init c) := by
   dsimp only
   obtain ⟨hr, e⟩ := checkAdvice_rel
     { certifier := { link := c.egressLink, params := c.egress }, syncs := c.syncs, syncSet := c.syncSet,
-      prover := c.prover.map fun p => Prover.make c.syncSet c.egress.buckets p.rule p.envelope p.prior,
+      prover := c.prover.map fun p =>
+        let l : LaggedChoices :=
+          { prover := Prover.make c.syncSet c.egress.buckets p.rule p.envelope p.prior p.lag }
+        if c.windows > 0 then l.start else l,
       windows := c.windows }
   refine ShGood.rel ⟨⟨rfl, rfl, by simp, by simp⟩, by simp, by simp, by simp⟩
     ⟨hr, checkAdvice_t _, by rw [e], by rw [e]⟩
@@ -327,8 +330,24 @@ theorem ingressTick_spec (st : State) (now : Nat) :
 
 /-! ## Egress ticks -/
 
-/-- `egressTick` after its late and backlog checks. -/
-def egressTail (p : Params) (now backlog : Nat) (st : State) : State × Array Action := Id.run do
+/-- `egressTick` after its late and backlog checks, for the tick `t`. -/
+def egressTail (p : Params) (now backlog t : Nat) (st : State) : State × Array Action := Id.run do
+  let mut st := st.checkForwarding now
+  let (shaper, row, record) := st.shaper.tick
+  st := { st with shaper }
+  let mut acts := #[]
+  if backlog ≤ 4 * (p.allocation * p.frameBytes) then
+    let n := rowCount row
+    let bytes := (row.extract 0 n).foldl (fun acc f => acc ++ f.getD ByteArray.empty) ByteArray.empty
+    acts := acts.push (.writeLink (bytes ++ ⟨Array.replicate ((p.allocation - n) * p.frameBytes) 0⟩))
+  if let some l := st.shaper.prover then
+    if (t + l.prover.lag) % p.buckets = 0 && (t + l.prover.lag) / p.buckets < st.config.windows then
+      st := { st with shaper := { st.shaper with prover := some l.start } }
+  if let some r := record then acts := acts.push (.publish r p)
+  return (st, acts)
+
+/-- `egressTail` without the online prover's choice. -/
+def egressShape (p : Params) (now backlog : Nat) (st : State) : State × Array Action := Id.run do
   let mut st := st.checkForwarding now
   let (shaper, row, record) := st.shaper.tick
   st := { st with shaper }
@@ -340,6 +359,53 @@ def egressTail (p : Params) (now backlog : Nat) (st : State) : State × Array Ac
   if let some r := record then acts := acts.push (.publish r p)
   return (st, acts)
 
+/-- The online prover's choice at the end of the egress tick `t`. -/
+def startAt (p : Params) (t : Nat) (st : State) : State :=
+  match st.shaper.prover with
+  | some l =>
+    if (t + l.prover.lag) % p.buckets = 0 && (t + l.prover.lag) / p.buckets < st.config.windows then
+      { st with shaper := { st.shaper with prover := some l.start } }
+    else st
+  | none => st
+
+theorem egressTail_eq (p : Params) (now backlog t : Nat) (st : State) :
+    egressTail p now backlog t st =
+      (startAt p t (egressShape p now backlog st).1, (egressShape p now backlog st).2) := by
+  unfold egressTail egressShape
+  dsimp only
+  generalize st.checkForwarding now = st1
+  generalize st1.shaper.tick = x
+  rcases x with ⟨sh, row, record⟩
+  unfold startAt
+  by_cases hb : backlog ≤ 4 * (p.allocation * p.frameBytes)
+  all_goals simp only [hb, ↓reduceIte]
+  all_goals rcases hp : sh.prover with _ | l
+  all_goals rcases record with _ | r
+  all_goals simp only [Id.run_pure, hp]
+  all_goals try split_ifs
+  all_goals rfl
+
+theorem startAt_shaper (p : Params) (t : Nat) (st : State) :
+    ∃ l, (startAt p t st).shaper = { st.shaper with prover := l } := by
+  unfold startAt
+  split
+  · split
+    · exact ⟨_, rfl⟩
+    · exact ⟨st.shaper.prover, rfl⟩
+  · exact ⟨st.shaper.prover, rfl⟩
+
+theorem startAt_config (p : Params) (t : Nat) (st : State) : (startAt p t st).config = st.config := by
+  unfold startAt
+  split
+  · split <;> rfl
+  · rfl
+
+theorem startAt_quiet (p : Params) (t : Nat) (st : State) : Quiet st (startAt p t st) := by
+  obtain ⟨l, hl⟩ := startAt_shaper p t st
+  refine ⟨startAt_config p t st, by rw [hl]; exact ⟨CertRel.refl _, rfl, rfl, rfl⟩, ?_, ?_⟩
+  all_goals unfold startAt; split
+  all_goals first | rfl | split <;> rfl
+
 /-- `egressTick`'s late and backlog checks. -/
 def egressPre (st : State) (now backlog : Nat) : State :=
   let p := st.config.egress
@@ -349,7 +415,8 @@ def egressPre (st : State) (now backlog : Nat) : State :=
     { st1 with shaper := st1.shaper.fault .deliveryRefused } else st1
 
 theorem egressTick_eq (st : State) (now backlog : Nat) :
-    st.egressTick now backlog = egressTail st.config.egress now backlog (egressPre st now backlog) := by
+    st.egressTick now backlog =
+      egressTail st.config.egress now backlog st.shaper.t (egressPre st now backlog) := by
   unfold State.egressTick egressPre
   by_cases h1 : st.isLate st.config.egress.bucketMs st.shaper.t now = true
   all_goals by_cases h2 : backlog > st.config.egress.allocation * st.config.egress.frameBytes
@@ -387,8 +454,8 @@ def EgressSpec (c : Config) (st : State) (backlog : Nat) (y : Shaper × Slots ×
       ((st.shaper.t + 1) % T ≠ 0 → x.1.shaper.certifier.rows = st.shaper.certifier.rows.push row ∧
         ∀ r, st.shaper.certifier.fault = some r → x.1.shaper.certifier.fault = some r)
 
-theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Quiet st0 st) (now backlog : Nat) :
-    EgressSpec c st0 backlog (st.checkForwarding now).shaper.tick (egressTail c.egress now backlog st) := by
+theorem egressShape_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Quiet st0 st) (now backlog : Nat) :
+    EgressSpec c st0 backlog (st.checkForwarding now).shaper.tick (egressShape c.egress now backlog st) := by
   have hq' := hq.trans (checkForwarding_quiet st now)
   have hg' := hg.quiet hq'
   have hsh := hg'.shaper
@@ -397,7 +464,7 @@ theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Qu
       (st.checkForwarding now).shaper.certifier = st0.shaper.certifier := fun r hr => hq'.2.1.1.of_fault hr
   have ht : (st.checkForwarding now).shaper.t = st0.shaper.t := hq'.2.1.2.1
   have hrows : (st.checkForwarding now).shaper.certifier.rows = st0.shaper.certifier.rows := hq'.2.1.1.rows
-  unfold egressTail
+  unfold egressShape
   dsimp only
   generalize (st.checkForwarding now) = st1 at hg' hsh f1 f2 f3 f4 f5 hof ht hrows ⊢
   rw [ht, hrows] at f5
@@ -447,6 +514,20 @@ theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Qu
     simp only [hb', hb, hc, ↓reduceIte, List.append_nil]
     rfl
 
+theorem EgressSpec.start {c : Config} {st : State} {backlog : Nat} {y : Shaper × Slots × Option Record}
+    {x : State × Array Action} (h : EgressSpec c st backlog y x) (p : Params) (t : Nat) :
+    EgressSpec c st backlog y (startAt p t x.1, x.2) := by
+  obtain ⟨l, hl⟩ := startAt_shaper p t x.1
+  obtain ⟨g, ht, rest⟩ := h
+  refine ⟨g.quiet (startAt_quiet p t x.1), by rw [hl]; exact ht, ?_⟩
+  rw [hl]
+  exact rest
+
+theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Quiet st0 st) (now backlog t : Nat) :
+    EgressSpec c st0 backlog (st.checkForwarding now).shaper.tick (egressTail c.egress now backlog t st) := by
+  rw [egressTail_eq]
+  exact (egressShape_spec hg hq now backlog).start c.egress t
+
 /-! ## Steps -/
 
 theorem done_false {c : Config} {st : State} (hg : Good c st) (ht : st.shaper.t < horizon c) : st.done = false := by
@@ -490,7 +571,7 @@ theorem egress_spec {c : Config} {st : State} (hg : Good c st) (now backlog : Na
     EgressSpec c st backlog (egressMid st now backlog).tick (st.egressTick now backlog) := by
   rw [egressTick_eq, hg.config]
   have := egressPre_quiet st now backlog
-  exact egressTail_spec hg this now backlog
+  exact egressTail_spec hg this now backlog _
 
 /-- **A step other than a live egress tick** is quiet, and its actions are the ingress grid's or the servers'. -/
 theorem step_quiet {c : Config} {st : State} (hg : Good c st) (ev : Event)
