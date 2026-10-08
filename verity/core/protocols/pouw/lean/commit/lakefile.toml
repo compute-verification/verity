@@ -1,0 +1,30 @@
+# PoUW's commitments as executable Lean: the epoch coins' check, the protocol's bindings, the roots of its row and tile
+# trees, and the salts and draw keys it derives (`verity.core.protocols.pouw`: `coins`, `protocol.tagged`, `audit`,
+# `schemes.pearl_c_work`), with the difftest against the Python. It is code, so it requires nothing of `Security/`; it
+# reads C-Flock's SHA-2 and hm96 leaves (`flock_verifier`), core's randomness (`core_randomness`) and core's tagged SHA-512
+# identity (`core_identity`).
+name = "pouw_commit"
+defaultTargets = ["PouwCommit", "pouw-commit-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../../service/flock"
+
+[[require]]
+name = "core_randomness"
+path = "../../../../primitives/randomness"
+
+[[require]]
+name = "core_identity"
+path = "../../../../primitives/identity"
+
+[[lean_lib]]
+name = "PouwCommit"
+
+[[lean_exe]]
+name = "pouw-commit-difftest"
+root = "PouwCommit.DifftestMain"
