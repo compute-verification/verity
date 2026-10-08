@@ -1,5 +1,6 @@
 import Flock.Canon
 import Identity.Tagged
+import PousCheck.Commit
 import PousCheck.Merkle
 import PousCheck.Challenge
 import PousCheck.Wire.Codec
@@ -232,7 +233,8 @@ def parseSetup (frames : Array ByteArray) : W (Setup × Nat) := do
   let (_, body) ← parseEnvelope f (some SETUP_ROOT)
   cursor := cursor + 1
   if body.size != SETUP_ROOT_BYTES then fault MALFORMED "SETUP_ROOT length mismatch"
-  mismatch := bind mismatch (body.extract 0 D == commitment && body.extract D (D + S) == salt) "SETUP_ROOT identity mismatch"
+  mismatch := bind mismatch (body.extract 0 D == commitment && body.extract D (D + S) == salt)
+    "SETUP_ROOT identity mismatch"
   let declared := field body (D + S) (D + S + 8)
   let root := body.extract (D + S + 8) (D + S + 8 + D)
   let mode := (body.get! (body.size - 1)).toNat
@@ -250,13 +252,12 @@ def packPayloads (payloads : Array Nat) (bits : Nat) : ByteArray :=
   let pad := (8 - total % 8) % 8
   be (payloads.foldl (fun acc m => (acc <<< bits) ||| m) 0 <<< pad) ((total + pad) / 8)
 
-def COMMIT_TAG : String := "verity-pous/w-commitment/v2"
-
 /-- The commitment to `W` (`w_commitment`, §4): `tagged_sha512("verity-pous/w-commitment/v2", u64be(len manifest) ‖
-manifest ‖ W)`, the manifest canonical JSON of the store's six fields, which a setup's manifest is (`manifestParams`
-admits no other bytes). A payload too long for the tag's u64 length has no commitment, and matches none. -/
+manifest ‖ W)`, the manifest canonical JSON of the reference's six fields (no `expander`, unlike `Commit.manifest`),
+which a setup's manifest is (`manifestParams` admits no other bytes). A payload too long for the tag's u64 length has
+no commitment, and matches none. -/
 def wCommitment (manifest w : ByteArray) : ByteArray :=
-  match Identity.taggedSha512 COMMIT_TAG (be manifest.size 8 ++ manifest ++ w) with
+  match Identity.taggedSha512 Commit.COMMIT_TAG (be manifest.size 8 ++ manifest ++ w) with
   | .ok h => h
   | .error _ => .empty
 
