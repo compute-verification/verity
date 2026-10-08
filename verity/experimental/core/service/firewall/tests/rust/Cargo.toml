@@ -1,0 +1,17 @@
+# The difftest's Rust reference: flock_live::release (verity/ml/flock/live/src/release.rs), compiled in place, behind the
+# harness's line protocol (`release-reference STATE_DIR`). Built by tests/test_firewall_release_agreement.py with the Rust
+# toolchain verity/ml/flock/check_build.sh pins.
+[package]
+name = "core-firewall-reference"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+serde_json = "1"
+
+[[bin]]
+name = "release-reference"
+path = "src/main.rs"
