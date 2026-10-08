@@ -1,6 +1,6 @@
 """The difftest of `verity.ml.crypto.lms`'s key derivation and signing against the Lean package `lms`: the Python half.
 
-`verity/experimental/core/primitives/lms/lean/scripts/sign_vectors.py` writes 80 instances (keys from seeds at N = 64 and
+`verity/core/primitives/lms/lean/scripts/sign_vectors.py` writes 80 instances (keys from seeds at N = 64 and
 at `TOY_N`, the leaves and messages to sign at) and this module's results on each (`Params`, `public_key` of `keygen`'s
 or `key`'s key, each `sign_at`'s signature and `verify`'s verdict on it). `check` runs the Lean half in its Lean audit
 (`runs` in that package's `lean-audit.json`): `Lms/SignDifftestMain.lean` computes every result with `Lms.Sign` and fails
@@ -18,7 +18,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-LEAN = Path(__file__).resolve().parents[3] / "experimental" / "core" / "primitives" / "lms" / "lean"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "primitives" / "lms" / "lean"
 SCRIPT = LEAN / "scripts" / "sign_vectors.py"
 _spec = importlib.util.spec_from_file_location("lms_sign_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)

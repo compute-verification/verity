@@ -39,8 +39,8 @@ PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("se
 
 def capture(args) -> int:
     import torch
-    from verity.experimental.protocols.pouw.audit import weights_root
-    from verity.experimental.protocols.pouw.coins import Challenger
+    from verity.core.protocols.pouw.audit import weights_root
+    from verity.core.protocols.pouw.coins import Challenger
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     out, dev = Path(args.out), torch.device("cuda")
@@ -93,8 +93,8 @@ def _scheme(man: dict):
 def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
-    from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape
-    from verity.experimental.protocols.pouw.schemes import pearl_c as C
+    from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+    from verity.core.protocols.pouw.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []
@@ -133,9 +133,9 @@ def _tiles(d: Path, jobs: int) -> dict:
     """Every tile of a pass under `Verifier.check_tile`: its openings, then its leaf recomputed by the reference."""
     import verify_run as VR
     from verity.ml.commitments import Commitment
-    from verity.experimental.protocols.pouw.audit import Transcript, Verifier
-    from verity.experimental.protocols.pouw.coins import CoinCommitment
-    from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW
+    from verity.core.protocols.pouw.audit import Transcript, Verifier
+    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
     from verity_vllm.protocol_options import pouw_pearl_c_manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())

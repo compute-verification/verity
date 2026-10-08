@@ -32,7 +32,7 @@ from pathlib import Path
 
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.commitments.merkle import tree_levels
-from verity.experimental.protocols.pouw.schemes import pearl_c
+from verity.core.protocols.pouw.schemes import pearl_c
 
 ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 

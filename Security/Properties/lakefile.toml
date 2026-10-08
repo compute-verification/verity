@@ -17,19 +17,19 @@ path = ".."
 
 [[require]]
 name = "pouw_window"
-path = "../../verity/experimental/core/protocols/pouw/window"
+path = "../../verity/core/protocols/pouw/lean/window"
 
 [[require]]
 name = "pouw_check"
-path = "../../verity/experimental/core/protocols/pouw/check"
+path = "../../verity/core/protocols/pouw/lean/check"
 
 [[require]]
 name = "nci_check"
-path = "../../verity/experimental/core/protocols/network/nci/lean"
+path = "../../verity/core/protocols/network/nci/lean"
 
 [[require]]
 name = "certifier_device"
-path = "../../verity/experimental/core/devices/certifier/lean"
+path = "../../verity/core/devices/certifier/lean"
 
 [[lean_lib]]
 name = "Properties"
