@@ -610,7 +610,7 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
     assert run(capsys, "done", "--as", "compute-accounting", "--thread", t)[0] == 0
-    assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 23:00Z")[0] == 0
+    assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 7 Oct 23:00Z")[0] == 0
     assert run(capsys, "done", "--as", "console", "--thread", t)[0] == 0                   # not addressed: not counted
     assert not [r for r in fake.reactions if r[1] == t]                                    # one bot can't carry many agents' reactions
     fake.add(COORD, text=f"{slack.DONE} done", user="UINTRUDER", thread_ts=t)              # a human's line is no status of a handle
