@@ -4,11 +4,13 @@
     python tools/verity/check/verdicts.py snapshot OUT.json                     every verdict entry here, by path and sha256
     python tools/verity/check/verdicts.py export OUT.tar.gz [--since SNAP.json] the entries (those new or changed since SNAP) as a pack
     python tools/verity/check/verdicts.py import PACK.tar.gz                    add a pack's entries here, never replacing one
+    python tools/verity/check/verdicts.py combine OUT.tar.gz PACK.tar.gz...     one pack of several, the first's entry where two hold one
 
 A verdict is a pass that one step stored under a key of everything it read: a suite's pass and its tests' (`suites.py`, under `$VERITY_TEST_CACHE`),
 and under `$CHECK_CACHE` a circuit-check target's report, a Lean package's audit (`lean_audit.py`) and the agreement's pass
 (`check.py`).  A step looks an entry up by the key it computes from this machine's own inputs, so a pack can answer only for inputs
-identical to the ones that earned it.  It is trusted as far as its source: the merge queue builds packs only from recorded runs.
+identical to the ones that earned it.  It is trusted as far as its source: `check.py --record` gathers packs only from recorded
+runs (`gather_verdicts`).
 Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), the trees steps build in, not even walked since a
 tree holds a package's dependencies, some 170k files (`lean_changed.py`'s `lean-changed/` for check's early Lean step and
 `lean-records/` for the Lean fast path, and `lean_audit.py`'s `lean-audit-scratch-*/`, which another slot may remove while this one
@@ -75,24 +77,31 @@ def snapshot() -> dict[str, str]:
     return {k: hashlib.sha256(data).hexdigest() for k, p in entries().items() if (data := _read(p)) is not None}
 
 
-def export(out: Path, since: dict[str, str] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written."""
+def _write(out: Path, items) -> int:
+    """Write ``items`` ((pack path, bytes), in order) as a pack at `out`; the number written."""
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
     n = 0
     # the same entries always make the same pack: no mtimes in the tar, and no file name or mtime in the gzip header
     with open(tmp, "wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz, \
             tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
-        for k, p in sorted(entries().items()):
-            data = _read(p)
-            if data is None or (since is not None and since.get(k) == hashlib.sha256(data).hexdigest()):
-                continue
+        for k, data in items:
             info = tarfile.TarInfo(k)
             info.size, info.mode, info.mtime = len(data), 0o644, 0
             tar.addfile(info, io.BytesIO(data))
             n += 1
     os.replace(tmp, out)
     return n
+
+
+def export(out: Path, since: dict[str, str] | None = None) -> int:
+    """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written."""
+    def items():
+        for k, p in sorted(entries().items()):
+            data = _read(p)
+            if data is not None and (since is None or since.get(k) != hashlib.sha256(data).hexdigest()):
+                yield k, data
+    return _write(out, items())
 
 
 class BadPack(Exception):
@@ -131,6 +140,18 @@ def import_(pack: Path) -> tuple[int, int]:
     return added, kept
 
 
+def combine(packs: list[Path], out: Path) -> int:
+    """Write one pack at `out` holding every entry of ``packs``, the first pack's where two hold one path (an entry's path is its
+    key, so both say the same); the number written.  A pack `import` would refuse is refused here too, and nothing is written."""
+    found: dict[str, bytes] = {}
+    for pack in packs:
+        with tarfile.open(pack, "r:gz") as tar:
+            for m in _members(tar):
+                if m.name not in found:
+                    found[m.name] = tar.extractfile(m).read()
+    return _write(out, sorted(found.items()))
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="verdicts", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -142,6 +163,9 @@ def main(argv: list[str]) -> int:
     e.add_argument("--since", type=Path)
     i = sub.add_parser("import")
     i.add_argument("pack", type=Path)
+    c = sub.add_parser("combine")
+    c.add_argument("out", type=Path)
+    c.add_argument("packs", type=Path, nargs="+")
     a = ap.parse_args(argv)
     if a.cmd == "list":
         found = entries()
@@ -154,6 +178,14 @@ def main(argv: list[str]) -> int:
     if a.cmd == "export":
         n = export(a.out, json.loads(a.since.read_text()) if a.since else None)
         print(f"verdicts: {n} entries -> {a.out}")
+        return 0
+    if a.cmd == "combine":
+        try:
+            n = combine(a.packs, a.out)
+        except (BadPack, tarfile.TarError) as err:
+            print(f"verdicts: refused: {err}", file=sys.stderr)
+            return 1
+        print(f"verdicts: {n} entries from {len(a.packs)} packs -> {a.out}")
         return 0
     try:
         added, kept = import_(a.pack)
