@@ -37,7 +37,7 @@
    "name": "mathlib",
    "manifestFile": "lake-manifest.json",
    "inputRev": "5ed2965256430c3649e86755f9576b54eca72435",
-   "inherited": true,
+   "inherited": false,
    "configFile": "lakefile.lean"},
   {"type": "path",
    "scope": "",

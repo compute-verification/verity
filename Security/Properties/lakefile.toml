@@ -28,6 +28,13 @@ path = "../../verity/experimental/core/primitives/evaluate"
 name = "security"
 path = ".."
 
+# `security`'s Mathlib, required directly so that the fetched dependencies are `security`'s exactly (one `deps_key`, one
+# pinned bundle); nothing under `Properties.Evaluate` imports it.
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "5ed2965256430c3649e86755f9576b54eca72435"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Proofs.Pouw", "Properties.Proofs.Pouw.Check",
