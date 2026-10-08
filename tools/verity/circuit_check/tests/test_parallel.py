@@ -14,9 +14,51 @@ def test_every_item_is_yielded_once():
     assert sorted(cli.parallel(abs, [-1, -2, -3], jobs=2)) == [1, 2, 3]
 
 
-def test_a_worker_that_dies_fails_the_run_instead_of_hanging_it():
+def _allocate(mb: int) -> float:
+    block = bytearray(mb << 20)
+    block[::4096] = b"x" * len(block[::4096])
+    return cli.peak_gb()
+
+
+def _die_on_7(x: int) -> int:
+    if x == 7:
+        os._exit(9)
+    return x
+
+
+def test_a_target_s_peak_is_its_own():
+    """The peak a worker reports for an item is that item's: a 600 MB allocation shows, and the small item after it in the same
+    worker does not inherit it (`reset_peak`)."""
+    big, small = cli.parallel(_allocate, [600, 1], jobs=1)
+    assert big >= 0.55
+    assert small < big - 0.4
+
+
+def test_a_worker_that_dies_is_named_and_the_rest_still_run():
+    got = list(cli.parallel(_die_on_7, [1, 7, 2, 3], jobs=2))
+    killed = [g for g in got if isinstance(g, cli.Killed)]
+    assert [k["item"] for k in killed] == [7] and killed[0]["peak_gb"] > 0
+    assert sorted(g for g in got if not isinstance(g, cli.Killed)) == [1, 2, 3]
+
+
+def test_a_death_no_status_file_accounts_for_still_fails_the_run(monkeypatch):
+    monkeypatch.setattr(cli, "_tracked", _exit_untracked)
     with pytest.raises(BrokenProcessPool):
-        list(cli.parallel(os._exit, [3, 3], jobs=2))
+        list(cli.parallel(abs, [1, 2], jobs=2))
+
+
+def _exit_untracked(fn, item):
+    os._exit(3)
+
+
+def test_fresh_gives_each_item_a_worker_of_its_own():
+    """The heavy targets' phase: under a budget only one fits, and each runs in a new process."""
+    pids = list(cli.parallel(_pid, [1, 2, 3], jobs=3, weight=lambda _: 3, budget=4, fresh=True))
+    assert len(set(pids)) == 3
+
+
+def _pid(_: int) -> int:
+    return os.getpid()
 
 
 def test_jobs_0_takes_one_worker_per_128_gb_the_tightest_cgroup_leaves(tmp_path):
