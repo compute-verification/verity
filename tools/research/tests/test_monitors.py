@@ -943,6 +943,124 @@ def test_what_a_finding_quotes_cant_mention_anyone_in_slack(monkeypatch):
     assert posts[1][1] == "@proofs a !channel &amp; b (alert: https://slack.example/p)"
 
 
+def test_a_finding_with_a_thread_is_one_reply_in_that_thread_of_the_front_door_tagging_its_owners(monkeypatch, tmp_path):
+    runs, st, alerts = ["r1"], {}, tmp_path / "alerts"
+    m = M.Monitor("failed-checks", "infra", "warn", "relay", lambda ctx: [
+        M.Finding(f"n1:{r}", f"*Check `{r}` failed*", owners=("circuits",), thread="1790.5") for r in runs], "fix it", events=True)
+    M.step(st, [m], lambda memo: M.Ctx(now=T0, memo=memo), T0, M.AlertDir(alerts), by="test")
+    runs.append("r2")
+    M.step(st, [m], lambda memo: M.Ctx(now=T0 + 60, memo=memo), T0 + 60, M.AlertDir(alerts), by="test")
+    (e,) = events(alerts)
+    assert e["thread"] == "1790.5" and e["event"] == "event"
+    posts = fake_slack(monkeypatch)
+    src, rstate = FakeSource("relay"), {}
+    M.relay_pass(rstate, [src], M.slack_post(False), T0)
+    src.all.append(json.dumps(e))
+    M.relay_pass(rstate, [src], M.slack_post(False), T0 + 60)
+    assert posts == [("CFRONT", "@circuits *Check `r2` failed*", "1790.5")]
+
+
+# ---- failed checks ---------------------------------------------------------------------------------------------------------------
+
+LANDER_ID = "bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628"
+REG = {"handles": [{"handle": "infra", "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)"},
+                   {"handle": "circuits", "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)"},
+                   {"handle": M.LANDER, "holder": f"the lander: the research coordinator ({LANDER_ID})"}]}
+
+
+def write_run(root: Path, rid: str, *, command, state="failed", rc=1, steps=(), logs=None, failure=None, by=""):
+    d, req = root / "runs" / rid, root / "requests" / rid
+    d.mkdir(parents=True)
+    req.mkdir(parents=True)
+    (req / "request.json").write_text(json.dumps({"command": command, "submitted_by": by, "cwd": str(root / "src"),
+                                                  "remote": {"source_sha": "abc123"}}))
+    (d / "status.json").write_text(json.dumps({"state": state, "transitions": [
+        {"state": "running"}, {"state": state, "rc": rc, "ended_utc": "2026-10-03T20:30:00.000Z"}]}))
+    (d / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps) + '{"step": "half-writ')
+    for name, text in (logs or {}).items():
+        (d / name).write_text(text)
+    if failure:
+        (d / "failure.json").write_text(json.dumps(failure))
+
+
+def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_ones_first_failing_line(tmp_path):
+    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    log = "collected 3\nE   AssertionError: x\nsomething failed here\nFAILED tests/test_a.py::test_b - AssertionError\n"
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="running", rc=None,
+              steps=[{"step": "lints", "status": "passed"}, {"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log",
+                                                             "ended_utc": "2026-10-03T20:20:00Z"}], logs={"pytest.log": log})
+    write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=143,
+              failure={"class": "CANCELLED_DEADMAN", "why": "no heartbeat for 10 min"})
+    write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="done", rc=0, steps=[{"step": "pytest", "status": "passed"}])
+    write_run(tmp_path, "r20261003-200000-dddd", command=["python3", "tools/verity/check/check.py"], state="failed")
+    write_run(tmp_path, "r20261003-200000-eeee", command=slot, state="running", rc=None,
+              steps=[{"step": "lean-audit", "status": "failed", "log": "lean-audit.log"}],
+              logs={"lean-audit.log": "AUDIT x: FAIL; built\n  lean: failed\n    error: dependency 'p' not in manifest\n"})
+    write_run(tmp_path, "r20261002-100000-ffff", command=slot)                   # a day the reader doesn't list
+    old = tmp_path / "runs" / "r20261003-100000-ffff"
+    write_run(tmp_path, old.name, command=slot)
+    for f in old.iterdir():
+        os.utime(f, (old.stat().st_mtime - M.FAILED_RECENT_S - 60,) * 2)
+    script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"))
+    rows = {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True, text=True,
+                                                                 check=True).stdout)}
+    assert set(rows) == {"aaaa", "bbbb", "eeee"}
+    assert rows["aaaa"]["step"] == "pytest" and rows["aaaa"]["line"] == "FAILED tests/test_a.py::test_b - AssertionError"
+    assert rows["eeee"]["line"] == "error: dependency 'p' not in manifest"
+    assert rows["bbbb"].get("step") is None and rows["bbbb"]["class"] == "CANCELLED_DEADMAN" and rows["bbbb"]["rc"] == 143
+
+
+def test_a_trains_prs_are_its_merges_from_the_head_and_a_merge_of_main_between_them():
+    assert M.train_prs(["Merge main (2546d8362)", "Merge #1497 (7a4b5b0a2)", "Merge #1541 (fbf9d25b2) onto 0928: x",
+                        "Merge 0058fab8ec7f (0058fab8)", "Merge #1462 (c3a6dd31)"]) == [1497, 1541]
+    assert M.train_prs(["fix the test", "Merge #1 (ab)"]) == []
+    assert M.lane_of(REG, "cursor/node-lockout-558b") == "infra" and M.lane_of(REG, "cursor/x-81c4") is None
+    assert M.lane_of(REG, "main") is None
+
+
+def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_merge_thread_once_per_run(monkeypatch):
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    train = ["Merge #1466 (ea2f79691)", "Merge #1460 (759ec3fb2)", "Merge #1561 (c5bb5d4ed)", "Merge 0058fab8ec7f (0058fab8)"]
+    rows = {"n1": [{"run": "r1", "state": "running", "step": "pytest", "step_ended": "2026-10-03T20:20:00Z", "line": "FAILED `t`",
+                    "subjects": train, "sha": "705ca7269313", "by": "someone"},
+                   {"run": "r2", "state": "failed", "rc": 143, "class": "CANCELLED_MANUAL", "subjects": train, "by": LANDER_ID},
+                   {"run": "r3", "state": "failed", "rc": 1, "step": "pytest", "subjects": ["a lane's fix"], "sha": "f00",
+                    "by": "https://cursor.com/agents/bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79"}],
+            "vy-n2": [{"run": "r4", "state": "failed", "rc": 137, "class": "CGROUP_OOM", "why": "the OOM killer took pytest",
+                       "ended": "2026-10-03T20:30:00.000Z", "subjects": ["a PR's head"], "sha": "beef", "by": LANDER_ID}]}
+    prs = {"1466": ("OPEN", "cursor/node-lockout-558b"), "1460": ("OPEN", "cursor/kueue-shadow-n1-558b"),
+           "1561": ("MERGED", "cursor/x-8c79")}
+    calls = []
+
+    def answer(argv, input=None, **kw):
+        calls.append(argv)
+        out = (255, "", "ssh: connect to host cpu1: Connection timed out") if argv[-2] == "vy-nebius-cpu-1" else \
+            (0, rows[argv[-2]] if isinstance(rows[argv[-2]], str) else json.dumps(rows[argv[-2]]), "") if argv[0] == "ssh" else \
+            (0, json.dumps(dict(zip(("state", "headRefName"), prs[argv[5]]))), "") if argv[:5] == ["gh", "-R", M.REPO_SLUG, "pr", "view"] else \
+            (0, json.dumps([{"number": 1570, "headRefName": "cursor/c4-8c79"}]), "")
+        assert argv[0] == "ssh" and argv[-1].endswith("nice -n 19 ionice -c3 python3 -") or argv[:4] == ["gh", "-R", M.REPO_SLUG, "pr"]
+        return subprocess.CompletedProcess(argv, *out)
+
+    memo: dict = {}
+    got = {f.key: f for f in M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer))}
+    assert set(got) == {"vy-nebius-1:r1", "vy-nebius-2:r4"}
+    f = got["vy-nebius-1:r1"]
+    assert f.owners == ("infra", M.LANDER) and f.thread == M.MERGE_THREAD
+    assert f.text == ("*Check `r1` failed step `pytest` on vy-nebius-1* at 20:20Z (the run goes on): its log's first failing line "
+                      "is `FAILED 't'`. Train at `705ca7269`: #1466 `cursor/node-lockout-558b`, #1460 `cursor/kueue-shadow-n1-558b`.")
+    f = got["vy-nebius-2:r4"]
+    assert f.owners == ("circuits", M.LANDER)
+    assert f.text.startswith("*Check `r4` was killed on vy-nebius-2* at 20:30Z, before any step failed (CGROUP_OOM): the OOM killer")
+    assert "PR at `beef`: #1570 `cursor/c4-8c79`." in f.text
+    n = len(calls)
+    assert set(f.key for f in M.failed_checks(M.Ctx(now=T0 + 60, memo=memo, run=answer))) == set(got)
+    assert [c[0] for c in calls[n:]] == ["ssh"] * 3
+    for n in ("n1", "vy-n2"):
+        rows[n] = "not json"
+    with pytest.raises(RuntimeError, match="vy-nebius-cpu-1: RuntimeError"):
+        M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer))
+
+
 # ---- what node 1 runs ---------------------------------------------------------------------------------------------------------
 
 def test_the_files_deploy_toml_installs_on_node_1_run_every_node_side_check(tmp_path):
