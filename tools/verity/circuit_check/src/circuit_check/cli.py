@@ -212,12 +212,42 @@ def update_pins(rep: dict) -> dict:
     return CK.load_pins()
 
 
+#: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two
+#: `--all -j 0` runs, ~130 workers each, took 1.4 TB of node 1's 1.6 TB user slice (8 Oct)
+GB_PER_JOB = 128
+
+
+def memory_gb(root: Path = Path("/")) -> int:
+    """The memory this process may use: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's session
+    scope and the user slice on a VM; a pod's /proc/meminfo is the host's)."""
+    def read(p: Path) -> str:
+        try:
+            return p.read_text().strip()
+        except OSError:
+            return ""
+
+    left = [int(ln.split()[1]) << 10 for ln in read(root / "proc/meminfo").splitlines() if ln.startswith("MemAvailable:")]
+    top = root / "sys/fs/cgroup"
+    for line in read(root / "proc/self/cgroup").splitlines():
+        if line.startswith("0::"):
+            d = top / line[3:].strip("/")
+            for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
+                if (m := read(c / "memory.max")).isdigit():
+                    left.append(int(m) - int(read(c / "memory.current") or 0))
+    return max(0, min(left)) >> 30 if left else 0
+
+
+def auto_jobs(root: Path = Path("/")) -> int:
+    """`--jobs 0`: one worker per core this process may run on, at most one per `GB_PER_JOB` of its memory."""
+    return max(1, min(len(os.sched_getaffinity(0)), memory_gb(root) // GB_PER_JOB))
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="circuit-check", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("targets", nargs="*", help="Definition ids, template or subcircuit ids, request Program paths")
     ap.add_argument("--all", action="store_true", help="every registered Definition and template at the catalog's bindings")
     ap.add_argument("--out", type=Path, help="write the JSON report here")
-    ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: every core)")
+    ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: one per core, at most one per GB_PER_JOB of memory)")
     ap.add_argument("--vectors", type=int, default=CK.Options.vectors)
     ap.add_argument("--seed", type=int, default=CK.Options.seed)
     ap.add_argument("-X", type=int, default=CK.Options.X)
@@ -241,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
         CC.trace(REPO)
     if not a.targets and not a.all:
         ap.error("give a target or --all")
-    jobs = a.jobs or len(os.sched_getaffinity(0))
+    jobs = a.jobs or auto_jobs()
     opts = _options(a)
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
               log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None)

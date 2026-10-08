@@ -32,8 +32,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       code is its `lean/`. NCI is Lean only.
     - `claims`: the ids of security claims.
     - `private_circuits`, and multiproofs (`commitments`).
-    - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake package
-      `verity_difftest`).
+    - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake
+      package `verity_difftest`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
@@ -214,7 +214,8 @@ Until reuse and the merge queue exist:
   (`tools/verity/lean/check.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
-  - an assumption is a named `Prop`, taken as a hypothesis;
+  - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
+    lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
 - **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
