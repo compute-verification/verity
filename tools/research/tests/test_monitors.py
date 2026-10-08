@@ -472,15 +472,27 @@ def test_the_watermarks_key_breaches_as_the_stewards_tick_did_and_hard_ones_page
     assert set(got) == {"HARD root free # GB < # GB: no new check starts", "GPU<3> holds # GiB at #% for # min", "error:idle_gpus"}
     assert got["HARD root free # GB < # GB: no new check starts"].severity == "page"
     assert got["error:idle_gpus"].for_s == 1200 and got["GPU<3> holds # GiB at #% for # min"].severity is None
-    assert ctx.memo["rate_base"]["t"] == T0 and run.calls[0][0][:5] == M.NICE
+    assert run.calls[0][0][:5] == M.NICE
 
 
 def test_the_inode_rate_compares_with_the_base_reading_the_memo_keeps():
     memo: dict = {}
     for t, iused in ((T0, 7_000_000), (T0 + 1000, 7_200_000)):
+        run = session(probe=json.dumps(reading(iused=iused, t=t)))
+        keys = [f.key for f in M.watermarks("n2")(M.Ctx(now=t, memo=memo, run=run))]
+    assert any("inodes/h" in k for k in keys) and memo["rate_base"]["t"] == T0
+
+
+def test_a_check_starting_on_node_1_pages_only_through_its_watchdogs_forecast():
+    memo: dict = {}
+    for t, iused in ((T0, 12_000_000), (T0 + 1200, 12_400_000)):
         run = Run((has("--reading"), (0, json.dumps(reading(iused=iused, t=t)), "")))
         keys = [f.key for f in M.watermarks("n1")(M.Ctx(now=t, memo=memo, run=run))]
-    assert any("inodes/h" in k for k in keys) and memo["rate_base"]["t"] == T0
+    assert not [k for k in keys if "inodes/h" in k] and "rate_base" not in memo
+    manifest = tomllib.loads(M.MANIFEST.read_text())
+    watchdog, = [f for f in manifest["file"] if f["path"] == "/etc/systemd/system/vy-watchdog.service"]
+    assert set(M.FORECAST_NODES.values()) <= set(watchdog["nodes"])
+    assert "disk-forecast" in {m.id for m in M.MONITORS if m.where == "machine"}
 
 
 def test_node_2s_probe_runs_in_its_session_and_its_reading_is_judged_on_node_1():

@@ -403,6 +403,11 @@ def norm(line: str) -> str:
     return re.sub(r"(^|[^<0-9])[0-9][0-9.,]*", r"\1#", re.sub(r"GPU ([0-9]+)", r"GPU<\1>", line))
 
 
+# The probe's inode rate is two readings 15-60 min apart, so one check starting (~1.3M inodes of tree, venv and Lean audit
+# scratch in ~20 min) reads as a HARD page. Where the watchdog runs disk-forecast (a 3-hour fit), that monitor alone pages.
+FORECAST_NODES = {"n1": "vy-nebius-1"}
+
+
 def watermarks(node: str) -> Callable[[Ctx], list[Finding]]:
     name = {"n1": "Node 1", "n2": "Node 2"}[node]
 
@@ -414,15 +419,19 @@ def watermarks(node: str) -> Callable[[Ctx], list[Finding]]:
             out = ctx.n2_part("probe")
         r = json.loads(out)
         lim = {**rp.COMMON, **rp.LIMITS[node]}
-        base = ctx.memo.get("rate_base")
-        lines = rp.evaluate(r, base, lim)
-        ctx.memo["rate_base"] = rp.next_base(r, base, lim)
+        if node in FORECAST_NODES:
+            lines = rp.evaluate(r, None, lim)
+        else:
+            base = ctx.memo.get("rate_base")
+            lines = rp.evaluate(r, base, lim)
+            ctx.memo["rate_base"] = rp.next_base(r, base, lim)
         found = [Finding(norm(ln), f"*{name}: {ln}*", severity="page" if ln.startswith("HARD") else None) for ln in lines]
         return found + [Finding("error:" + e.split(":")[0], f"*{name}'s resource probe can't read {e.split(':')[0]}*: {e}",
                                 for_s=1200) for e in r.get("errors") or []]
 
     check.__doc__ = (f"{name}'s disk, inode, RAM, replay-RAM, idle-GPU-memory and custody-backlog watermarks (resource_probe.py "
-                     "--reading; the inode rate's base reading kept between passes). A HARD line pages.")
+                     "--reading; the inode rate's base reading kept between passes, except where disk-forecast watches "
+                     "inodes). A HARD line pages.")
     return check
 
 
