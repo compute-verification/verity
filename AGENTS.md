@@ -22,22 +22,24 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       (`silicon`, the exact hardware semantics) and `targets`.
     - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
     - `commitments`, shared hash code (`crypto`), and the one challenge derivation (`randomness`).
-    - `flock/` (`verity_flock`, a distribution of its own at `flock/python/`): C-Flock, the proof system. Its patches on
+    - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
+      C-Flock, the proof system. Its patches on
       upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`, `flock-circuit --zk`), and `verifier/`: the
       verifier's specification and the scripts that run it, with upstream's Rust verifier as a cross-check.
   - `verity/experimental/` (`verity.experimental`): work in progress, including today's Python verifiers until their Lean
     versions land in `verity/core/`.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`) and the network certifier (`certifier`). A protocol's Lean
-      code is its `lean/`. NCI is Lean only.
+      code is its `lean/`. NCI is Lean only (`core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
     - `private_circuits`, and multiproofs (`commitments`).
-    - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake
-      package `verity_difftest`).
+    - `core/`: core's Lean ports. A port is held to the Python it replaces by `core/difftest` (`verity_difftest`, with
+      its Lake package `verity_difftest`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
-  builds each served workload's circuit, commits its values while serving, and proves.
+  builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
+  through C-Flock's prover and the Lean verifier.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -54,6 +56,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
   - `control/`: the control pod's boot script and loops.
   - `nebius/`: the console's units.
+  - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
   the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.
 - `fixtures/`: `artifacts.json`, every replicated fixture by `art:` id, and the archived proof systems' fixtures.
@@ -66,13 +69,13 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
 - `verity.experimental` may import `verity.ml`. `verity.ml` never imports `verity.experimental`, apart from the files
-  `ML_IMPORTS_EXPERIMENTAL` names (C-Flock's tests). `verity/core/` never imports
+  `ML_IMPORTS_EXPERIMENTAL` names (C-Flock's tests, and V*'s builders `rec_*.py`). `verity/core/` never imports
   `verity/experimental/`.
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
   `experimental.claims` import no other unit.
 - A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols Daniel has allowed it
-  (PoUW imports sampled proofs). PoUW is the one protocol that reads the primitive circuits' Definitions and silicon
+  (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits' Definitions and silicon
   semantics (`ml.circuits.ops`, `silicon`, `targets`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 
@@ -88,7 +91,7 @@ uv run --extra torch-cpu verity check     # the check a merge requires; --record
 
 ## Design rules
 
-Daniel's, current; the dated lines in `.agents/skills/friction/SKILL.md` say when each was decided.
+Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behind most of them.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
@@ -148,19 +151,19 @@ multi-core CPU pod. It covers:
 - C-Flock's Rust build and tests;
 - the Lean verifier's build and its partition check;
 - the Lean check;
-- `merge_requires` (`tools/verity/check/tool.py`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
+- `merge_requires` (declared per job in `tools/verity/check/ci.toml`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
   against upstream's Rust verifier, for C-Flock (`verity/ml/flock/`, and its Lean verifier in `verity/core/service/flock/`;
   `check.py --record` sends what it needs).
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
 
-Landing (Daniel, 7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check stays fast because a
-part's verdict is reused whenever its inputs haven't changed. Each verdict is keyed on a hash of the part's declared inputs
-(the read guard enforces them), the base image and the check's own code. So a docs-only change reruns nothing, a deleted
-test reruns its suite, and a layout move or a change to the check's own code reruns everything. The merge queue runs the
-check on the queued group. A nightly uncached check must agree; a disagreement means some part reads something it doesn't
-declare, and it is fixed in the check, not by reverting anyone's change.
+Landing, as Daniel set it (7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check is to stay
+fast by reusing a part's verdict whenever its inputs haven't changed. Each verdict is to be keyed on a hash of the part's
+declared inputs (the read guard enforces them), the base image and the check's own code, so that a docs-only change reruns
+nothing, a deleted test reruns its suite, and a layout move or a change to the check's own code reruns everything. The merge
+queue is to run the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
+something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
 
 Until reuse and the merge queue exist:
 
@@ -176,11 +179,12 @@ Until reuse and the merge queue exist:
   node 1's mirror and the post-train regression.
 - A layout move and a change to the check or merge tooling (`tools/verity/check/`, `research merge` and its queue, the
   Lean check) get a full `check` first and land through `research merge --push`.
-- After landings, a full `check` of the newest `main` runs on vy-nebius-1, one at a time. When it fails, the lander finds
+- After landings, the lander runs a full `check` of the newest `main` on vy-nebius-1, one at a time. When it fails, the lander finds
   the landing that broke it and reverts it at once (`git revert -m 1`), and its owner relands with the fix.
 - PRs land in trains: ci stacks the tips, and the lander lands the merged tree once every part its members touch passes.
-- A train member needs its owner's `ready` label at its head, written by hand if need be:
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass.
+- ci takes a PR into a train once its owner marks it ready at its head, by hand if need be:
+  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass. `research merge` itself reads no ready
+  mark, only grants: the train's own check is the gate.
 - A grant carries to a head whose own patch is byte-identical.
 - A PR in a tip that is being checked keeps its head until the tip lands or ci asks for a change. ci fixes a conflict at
   the tip; a push to the PR would refuse every tip that pins its old head.
@@ -189,10 +193,10 @@ Until reuse and the merge queue exist:
 
 ## Lean
 
-- **Soundness is one theorem** over everything the compiled Lean verifier accepts, for arbitrary Boolean circuits, with
-  no hypothesis on the circuit file or the statement's form. The verifier refuses any form the proof doesn't cover, and
-  it gains no new form ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a
-  new workload needs no verifier or proof change.
+- **Soundness is one theorem** (a rule, not a claim that `main` proves it): one theorem over everything the compiled
+  Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form.
+  The verifier must refuse any form the proof doesn't cover, and it gains no new form ahead of its proof. Circuit inputs
+  and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/experimental/protocols/pous/lean/`) and
@@ -200,14 +204,17 @@ Until reuse and the merge queue exist:
     difftest) and the NCI check (`verity/experimental/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
-    `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
+    `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
+    each proved guarantee.
     `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
     (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
     `security_proofs`.
-  - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
+  - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
+    `NetworkCertifier`, `Flock`).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's analysis is all
-    in `Proofs.Flock` until its spec is extracted.
+    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
+    `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
+    until its spec is extracted.
   - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
     PR of their own.
 - **The Lean check.** Every Lake package has a lock, `lean-audit.json` until lean renames it `lean-lock.json`, and `check` runs the Lean check on every declaration
@@ -298,8 +305,7 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
   `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
   (`research notes claim`).
 - **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a tip being checked
-  (Checking and merging). Only the lander moves `main`, through
-  `research merge`.
+  (Checking and merging). Only the lander moves `main`.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`.
