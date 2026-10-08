@@ -132,7 +132,8 @@ def _record(text: str) -> Any:
 
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
-    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers."""
+    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one
+    whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -142,6 +143,8 @@ def definition(spec: str) -> Any:
     fam, body = m[1], m[2]
     statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
     try:
+        if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
+            raise KeyError(spec)
         fn = W.specialization(fam, statics)
     except KeyError:
         fn = suite().get(spec.strip())
@@ -204,8 +207,9 @@ BINDINGS: dict[str, set[str]] = {}
 #: the root functions that run first, in catalog order (each file's in turn, this module first); any other ``_X_roots`` a
 #: binding file defines runs after them, by name (`root_functions`).  ``_X_roots`` holds ``_X_bindings`` beside it as one
 #: binding when the file defines both
-ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_merkle_roots",
-                  "_lms_roots", "_pous_roots", "_kernel_roots", "_vocabulary_roots", "_pouw_roots")
+ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_gf2k_roots",
+                  "_merkle_roots", "_lms_roots", "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots",
+                  "_pouw_roots")
 
 
 def _root_names(ns: dict[str, Any]) -> set[str]:

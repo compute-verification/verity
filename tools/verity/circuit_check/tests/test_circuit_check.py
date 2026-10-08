@@ -130,7 +130,8 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
 
 def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
-    `boolean_gather.gather_bf16(n)` builds), and an id neither knows still raises."""
+    `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
+    an id neither knows still raises."""
     from verity_vllm.query import word as W
 
     real = W.specialization
@@ -144,6 +145,8 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     monkeypatch.setattr(TG, "suite", lambda: SUITE)
     for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
         assert TG.definition(fid) is SUITE[fid]
+    [res] = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
+    assert TG.definition(res) is SUITE[res]
     with pytest.raises(KeyError):
         TG.definition("NoSuchDefinition_v9")
 

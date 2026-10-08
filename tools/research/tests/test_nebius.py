@@ -40,6 +40,7 @@ def reg(tmp_path, monkeypatch) -> Path:
     d = tmp_path / "notes" / "machines.d"
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     monkeypatch.setenv("RESEARCH_MACHINES_D", str(d))
+    monkeypatch.setenv("RESEARCH_NOTES", str(d.parent))
     return d
 
 
