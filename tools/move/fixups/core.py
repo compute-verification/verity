@@ -164,6 +164,9 @@ EDITS = [
      "`verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py`"),
     # the firewall port moved up a level, and its tests count the root from a variable, which the rewrite leaves alone
     ("verity/core/service/firewall/tests/_release.py", "ROOT = PKG.parents[4]", "ROOT = PKG.parents[3]"),
+    # and sampled proofs' tests moved down a level, under the package (`tools/verity/check/anchors.py B M` lists both)
+    ("verity/core/protocols/sampled_proofs/tests/lean/generate.sh", '"${1:-$here/../../../../../Security/Proofs}"',
+     '"${1:-$here/../../../../../../Security/Proofs}"'),
     # the vLLM pod bootstrap checks the verifiers resolve from the shipped tree
     ("integrations/vllm/verity_vllm/ops/pod_bootstrap.sh",
      '[ -d "$CORE/verity/experimental" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/experimental beside $ROOT" >&2; exit 3; }',
