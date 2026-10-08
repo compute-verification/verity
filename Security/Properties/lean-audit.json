@@ -10,10 +10,12 @@
  "proved_in": ["../Proofs"],
  "assumptions": {
   "Verity.Assumptions.LmsEufCma": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "digest": "136b80bd2f2e7ba09973125e577667347b973e0e93eb149e33319e4f071396d3"
   },
   "Verity.Assumptions.Sha512CollisionFreeOn": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "digest": "41074f4ca418472a345656e8b78d637f6dde1f3814c3d62d7a9e0e49fb36f3a1"
   }
  },
  "meaning": [
@@ -27,6 +29,7 @@
   "NciCheck.Check",
   "Flock",
   "Properties.NetworkCertifier",
+  "CoreProtocol.Protocol",
   "NetworkCheck.Certificate",
   "NetworkCheck.Check",
   "Lms.Verify",
@@ -52,8 +55,7 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON",
-  "CoreProtocol": "the core protocol interface (`Core.Answer`, `Core.Outcome`, `Core.canonicalJson`) is code with no spec of its own: the network check's properties are about the executable that `answer` runs"
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON"
  },
  "guarantees": {
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
