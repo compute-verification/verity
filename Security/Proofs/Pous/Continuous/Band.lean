@@ -10,8 +10,8 @@ schedule. The compression certificate is the one `BandChainMeets64` uses, `Timed
 unconditional `chainExPostFactoG_v6`, and its `π` is at most `2·2^-1128` (`chainPiSeg_fam_le`, as
 `seg_union_term_one` uses it). So `ε_proof = 1 − (β − B)/|C| = 3182352/2^28 ≈ 1.1855%` (`band64_epsProof`), and the
 stopped union costs `n·(β + 1)·π ≤ n·2^-1098`. The scope is the continuous audit's
-(`Pous/Protocol/Model/Continuous.lean`): conditional on the arrivals, storage at send times, and `g` normalized by the
-realized number of challenges, never `λT`.
+(`Security/Definitions/Pous/Model/Continuous.lean`): conditional on the arrivals, storage at send times, and `g`
+normalized by the realized number of challenges, never `λT`.
 -/
 
 namespace PousContinuous
@@ -35,7 +35,7 @@ theorem band64_epsProof (d : ℕ) (salt : Bits 256) : epsProof (band64 d salt) 2
   norm_num
 
 /-- **The continuous audit on the 64 KiB band at `D = 5`.** For every machine, arrival schedule, hard deadline
-`(D_late, Q_late)`, `f` and `βe > 0`, over `n` challenges: the verifier accepts with tolerance `f` and
+`(D_late, Q_late)`, `f` and `βe > 0`, over `n` challenges: the memory challenger accepts with tolerance `f` and
 `Σ_j max(ε_j − ε_proof, 0)` exceeds `G(f)` with probability at most `βe + n·2^-1098`, where
 `ε_proof = epsProof (band64 d salt) 265253616 = 3182352/2^28` (`band64_epsProof`). -/
 theorem band64_continuous (d : ℕ) (hd : 5 ≤ d) (salt : Bits 256) (D_late Q_late n : ℕ) (W : Bits (band64 d salt).n)
