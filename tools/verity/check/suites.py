@@ -12,12 +12,15 @@ A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.i
 the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
 `[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
-groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, whether `lake`,
-`cargo` and `nvidia-smi` are on the PATH, and the `VERITY_*` and `FLOCK_*` variables tests switch on. The cache key hashes all
+groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
+os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
+and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the check code that runs the suites (`RUNNER`). The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
-`~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
+`~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged, on this machine or, through a
+verdict pack (`verdicts.py`; a recorded check gathers one from the newest recorded checks), on any other. A pass names the
+recorded run that earned it (`--run`, which check passes), and a reuse prints that run.
 
 The key is content, not location. Whatever is at or under the suite's own directory is keyed by its path from there (`_rel`,
 written `<suite>/...`): the directory's git tree id (which hashes each file's path inside it and its blob, and not the
@@ -121,9 +124,9 @@ GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the runner itself.
-RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
-          "tools/verity/check/guard/child/verity_suite_reads.py")
+#: Files every key includes: the runner itself, and check, which runs it.
+RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/check/guard/verity_suite_guard.py",
+          "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
@@ -499,8 +502,17 @@ def lean_build(log: Path) -> str | None:
     return None if rc == 0 else f"`lake build` in {lean.relative_to(ROOT)} exited {rc}"
 
 
+def base_image() -> dict:
+    """The machine's operating system as the key sees it: its os-release `ID` and `VERSION_ID`, and its C library."""
+    try:
+        release = platform.freedesktop_os_release()
+    except OSError:
+        release = {}
+    return {"os": f"{release.get('ID', '?')} {release.get('VERSION_ID', '?')}", "libc": " ".join(platform.libc_ver())}
+
+
 def environment() -> dict:
-    return {"python": platform.python_version(), "system": platform.system(), "machine": platform.machine(),
+    return {"python": platform.python_version(), "system": platform.system(), "machine": platform.machine(), "image": base_image(),
             "tools": {t: shutil.which(t) is not None for t in TOOLS},
             "variables": {k: v for k, v in sorted(os.environ.items())
                           if k.startswith(ENV_PREFIXES) and k not in UNKEYED and not k.startswith(UNKEYED_PREFIX)}}
@@ -1356,7 +1368,7 @@ def select(suites: list[Suite], names: list[str]) -> list[Suite]:
 def _since(d: dict | None) -> str:
     """The commit and time a kept pass records, or `?` for what it lacks."""
     d = d or {}
-    return f"{(d.get('commit') or '?')[:10]} {d.get('when') or '?'}"
+    return f"{(d.get('commit') or '?')[:10]} {d.get('when') or '?'}" + (f" in run {d['run']}" if d.get("run") else "")
 
 
 def _count(r: Result) -> str:
@@ -1384,6 +1396,8 @@ def main(argv: list[str] | None = None) -> int:
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
+    ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "
+                    "on any machine names the run that earned it")
     ap.add_argument("--per-test-min-s", type=float, default=None, metavar="S",
                     help=f"keep per-test passes only of tests whose call took at least S seconds (default ${MIN_S_ENV}, else 0)")
     ap.add_argument("--no-per-test", action="store_true", help="neither reuse nor keep per-test passes")
@@ -1534,8 +1548,8 @@ def main(argv: list[str] | None = None) -> int:
         if r.status == "passed":
             CACHE.mkdir(parents=True, exist_ok=True)
             (CACHE / f"{k}.json").write_text(json.dumps({"suite": s.name, "path": s.path, "key": k, "commit": head, "dirty": dirty,
-                                                          "when": time.strftime("%Y-%m-%d %H:%M"), "counts": r.counts, "reused": r.reused,
-                                                          "seconds": round(r.seconds, 1), **u,
+                                                          "run": a.run, "when": time.strftime("%Y-%m-%d %H:%M"), "counts": r.counts,
+                                                          "reused": r.reused, "seconds": round(r.seconds, 1), **u,
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
             print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
