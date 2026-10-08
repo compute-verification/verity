@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-watchdog.service a minute after each pass ends
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

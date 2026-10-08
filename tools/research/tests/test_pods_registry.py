@@ -166,6 +166,8 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, monkeypatch):
+    """Without being asked: vy-nebius-cpu-1 was registered at 15:20Z on 7 Oct and invisible to every other agent's `run --on`
+    until a notes sync at 19:25Z."""
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
     seed = tmp_path / "seed"
@@ -184,7 +186,7 @@ def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, mon
             _git(c, "config", k, v)
         clones.append(c)
     monkeypatch.setattr(runpod, "get", pods(POD, OTHER))
-    monkeypatch.setenv(notes_sync.SYNC_ENV, "1")
+    monkeypatch.delenv(notes_sync.SYNC_ENV, raising=False)
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "absent.toml"))
     monkeypatch.delenv("RESEARCH_MACHINES_D")
     for c, (name, pod) in zip(clones, (("vy-lane-a", POD), ("vy-lane-b", OTHER))):
@@ -195,3 +197,8 @@ def test_registrations_on_two_machines_both_reach_the_notes_remote(tmp_path, mon
     assert sorted(p.name for p in (check / "machines.d").glob("*.toml")) == ["vy-lane-a.toml", "vy-lane-b.toml"]
     monkeypatch.setenv("RESEARCH_NOTES", str(check))
     assert remote.resolve_machine("vy-lane-b", "verity")["pod_id"] == OTHER["id"]
+    head = _git(origin, "rev-parse", "main")
+    monkeypatch.setenv(notes_sync.SYNC_ENV, "0")
+    monkeypatch.setenv("RESEARCH_NOTES", str(clones[1]))
+    assert registry.main(["register", "vy-lane-c", "--pod-id", OTHER["id"], "--project", "verity", "--any-name"]) == 0
+    assert (clones[1] / "machines.d" / "vy-lane-c.toml").exists() and _git(origin, "rev-parse", "main") == head, "0 leaves it local"
