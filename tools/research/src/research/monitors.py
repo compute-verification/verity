@@ -199,6 +199,7 @@ class Ctx:
     machine: str = ""                   # where a `machine` monitor runs (its runner's --machine)
     peers: tuple[str, ...] = ()         # the ssh hosts it watches (--peer)
     research: tuple[str, ...] = (sys.executable, "-m", "research")
+    act: bool = False                   # a runner's pass, which may act (failed-checks' cancels), not `check`'s
     pass_: Pass = field(default_factory=Pass)
 
     def path(self, p: str) -> Path:
@@ -1108,6 +1109,7 @@ REPO_SLUG = "danielreuter/verity"
 # nothing they don't already bear (and its guard refuses everything while its fill runner is stopped)
 CHECK_MACHINES = (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
 SLOT_WRAPPER = "check/slot.py"
+CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
 FAILED_RECENT_S = 6 * 3600
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
@@ -1116,9 +1118,10 @@ LANE_RE = re.compile(r"-([0-9a-f]{4})$")
 # a log's first failing line: the first line matching the first of these that any line matches, else its last line
 FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL(?:ED)?\b|\bfailed\b|Error\b|Traceback")
 
-# A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits; it prints a JSON list, one row a run.
+# A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
+# "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
 FAILED_READER = r'''
-import json, os, re, subprocess, time
+import fcntl, json, os, re, subprocess, time
 A = json.loads(__ARGS__)
 PICK = [re.compile(p) for p in A["pick"]]
 
@@ -1192,13 +1195,32 @@ for n in names:
         except (OSError, subprocess.TimeoutExpired):
             pass
     rows.append(row)
-print(json.dumps(rows))
+waiting = []
+try:
+    tickets = sorted(t for t in os.listdir(A["line"]) if not t.startswith("."))
+except OSError:
+    tickets = []
+for t in tickets:
+    try:
+        fd = os.open(os.path.join(A["line"], t), os.O_RDONLY)
+    except OSError:
+        continue
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        continue
+    except BlockingIOError:
+        pass
+    finally:
+        os.close(fd)
+    who = load(os.path.join(A["line"], t))
+    waiting.append({"run": who.get("run"), "by": who.get("by")})
+print(json.dumps({"rows": rows, "waiting": waiting}))
 '''
 
 
-def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS) -> str:
+def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
-    args = {"runs": runs, "requests": requests, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
+    args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
             "pick": list(FAILING), "log_bytes": 8 << 20}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
@@ -1281,25 +1303,51 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
                    thread=MERGE_THREAD)
 
 
+def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
+    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
+    failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled."""
+    if not (ctx.act and waiting and row.get("step") and row.get("state") == "running"):
+        return None
+    who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
+    ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
+            f"failed-checks: step {row['step']} failed while {len(waiting)} waited for a check slot on {machine} ({who})"],
+           timeout=120)
+    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}."
+
+
 def failed_checks(ctx: Ctx) -> list[Finding]:
     """Each check run through slot.py on a Nebius machine with a failed step (while it still runs, under --keep-going), or that
     ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
-    PR it checks (the handle its branch suffix names in the registry) and the lander."""
+    PR it checks (the handle its branch suffix names in the registry) and the lander. One still running whose step failed is
+    cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it comes later)."""
     reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
     for machine, host in CHECK_MACHINES:
         script = failed_reader(ctx.now)
         try:
-            rows = json.loads(ctx.sh([*SSH, host, f"timeout -k 5 50 {' '.join(NICE)} python3 -"], input=script, timeout=60))
+            got = json.loads(ctx.sh([*SSH, host, f"timeout -k 5 50 {' '.join(NICE)} python3 -"], input=script, timeout=60))
+            rows, waiting = got["rows"], got["waiting"]
         except Exception as e:  # noqa: BLE001  (the other machines still post)
             errors.append(f"{machine}: {type(e).__name__}: {e}"[:300])
             continue
         for row in rows:
-            key = f"{machine}:{row['run']}"
-            if key not in memo:
+            key, new = f"{machine}:{row['run']}", f"{machine}:{row['run']}" not in memo
+            if new:
                 f = failed_check(ctx, reg, machine, row)
                 memo[key] = {"t": ctx.now, "f": None if f is None else {"text": f.text, "owners": list(f.owners)}}
-            if got := memo[key]["f"]:
-                out.append(Finding(key, got["text"], owners=tuple(got["owners"]), thread=MERGE_THREAD))
+            if not (got := memo[key]["f"]):
+                continue
+            if "cancelled" not in got:
+                try:
+                    if said := cancel_failed(ctx, machine, row, waiting):
+                        got["cancelled"] = said
+                        if new:
+                            got["text"] += " " + said
+                except Exception as e:  # noqa: BLE001  (tried again next pass, while it still runs)
+                    got["cancel_error"] = f"{type(e).__name__}: {e}"[:300]
+            out.append(Finding(key, got["text"], owners=tuple(got["owners"]), thread=MERGE_THREAD))
+            if got.get("cancelled") and not got["text"].endswith(got["cancelled"]):
+                out.append(Finding(f"{key}:cancelled", f"*Check `{row['run']}` on {machine}*: {got['cancelled']}",
+                                   owners=tuple(got["owners"]), thread=MERGE_THREAD))
     for k in [k for k, v in memo.items() if ctx.now - v["t"] > 2 * FAILED_RECENT_S]:
         del memo[k]
     if errors and len(errors) == len(CHECK_MACHINES):
@@ -1856,8 +1904,8 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
-def _ctx_for(ns: argparse.Namespace, now: float) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, n2_host=os.environ.get("VY_N2", "vy-n2"), node1=getattr(ns, "node1", "n1"),
+def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node1=getattr(ns, "node1", "n1"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -1911,7 +1959,7 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
         return None
     try:
         state = load(state_path)
-        evs = step(state, select(where, ns.only), _ctx_for(ns, now), now, AlertDir(alerts), by=ns.by,
+        evs = step(state, select(where, ns.only), _ctx_for(ns, now, act=True), now, AlertDir(alerts), by=ns.by,
                    webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
                    pass_s=PASS_S if where in ("node", "machine") else None)
         save(state_path, state)

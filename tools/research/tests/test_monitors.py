@@ -4,6 +4,7 @@ guard that fails closed; the relay posts every new event once; and the files dep
 node-side check."""
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
@@ -1001,9 +1002,17 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
     write_run(tmp_path, old.name, command=slot)
     for f in old.iterdir():
         os.utime(f, (old.stat().st_mtime - M.FAILED_RECENT_S - 60,) * 2)
-    script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"))
-    rows = {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True, text=True,
-                                                                 check=True).stdout)}
+    line = tmp_path / "check-line"
+    line.mkdir()
+    (line / "1791-1").write_text(json.dumps({"pid": 1, "run": "r20261003-203000-wait", "by": "lander"}))
+    (line / "1792-2").write_text(json.dumps({"pid": 2, "run": "r20261003-203100-dead"}))      # nobody holds it: it died
+    held = os.open(line / "1791-1", os.O_RDONLY)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(line))
+    got = json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True, text=True, check=True).stdout)
+    os.close(held)
+    assert got["waiting"] == [{"run": "r20261003-203000-wait", "by": "lander"}]
+    rows = {r["run"][-4:]: r for r in got["rows"]}
     assert set(rows) == {"aaaa", "bbbb", "eeee"}
     assert rows["aaaa"]["step"] == "pytest" and rows["aaaa"]["line"] == "FAILED tests/test_a.py::test_b - AssertionError"
     assert rows["eeee"]["line"] == "error: dependency 'p' not in manifest"
@@ -1035,7 +1044,8 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
     def answer(argv, input=None, **kw):
         calls.append(argv)
         out = (255, "", "ssh: connect to host cpu1: Connection timed out") if argv[-2] == "vy-nebius-cpu-1" else \
-            (0, rows[argv[-2]] if isinstance(rows[argv[-2]], str) else json.dumps(rows[argv[-2]]), "") if argv[0] == "ssh" else \
+            (0, rows[argv[-2]] if isinstance(rows[argv[-2]], str) else json.dumps({"rows": rows[argv[-2]], "waiting": []}), "") \
+            if argv[0] == "ssh" else \
             (0, json.dumps(dict(zip(("state", "headRefName"), prs[argv[5]]))), "") if argv[:5] == ["gh", "-R", M.REPO_SLUG, "pr", "view"] else \
             (0, json.dumps([{"number": 1570, "headRefName": "cursor/c4-8c79"}]), "")
         assert argv[0] == "ssh" and argv[-1].endswith("nice -n 19 ionice -c3 python3 -") or argv[:4] == ["gh", "-R", M.REPO_SLUG, "pr"]
@@ -1279,3 +1289,36 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
     assert re.search(r"^OOMScoreAdjust=-\d+$", text, re.M)
     assert {m.id for m in M.MONITORS if m.where == "machine"} == {"memory-pressure", "oom-kills", "answering", "disk-forecast",
                                                                     "units-expected", "lost-checks"}
+
+
+def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_on_its_machine_and_the_post_says_so(monkeypatch):
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    row = {"run": "r1", "state": "running", "step": "lean-audit", "step_ended": "2026-10-03T20:20:00Z", "line": "error: x",
+           "subjects": ["Merge #1466 (ea2f79691)"], "sha": "705ca7269313", "by": LANDER_ID}
+    waiting, calls = [], []
+
+    def answer(argv, input=None, **kw):
+        calls.append(argv)
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row] if argv[-2] == "n1" else [],
+                                                                    "waiting": waiting if argv[-2] == "n1" else []}), "")
+        if argv[:2] == ["gh", "-R"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"state": "OPEN", "headRefName": "cursor/x-558b"}), "")
+        assert argv[3:7] == ["cancel", "r1", "--on", "vy-nebius-1"] and "--by" in argv
+        return subprocess.CompletedProcess(argv, 0, "research cancel: r1: SIGTERM", "")
+
+    memo: dict = {}
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer, act=True))
+    assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
+    waiting.append({"run": "r20261003-203000-5415", "by": "lander"})
+    assert len(M.failed_checks(M.Ctx(now=T0 + 60, memo={**memo}, run=answer))) == 1      # `check` acts on nothing
+    assert not any("cancel" in c for c in calls)
+    got = M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer, act=True))
+    assert [g.key for g in got] == ["vy-nebius-1:r1", "vy-nebius-1:r1:cancelled"] and got[0].text == f.text
+    assert got[1].text == ("*Check `r1` on vy-nebius-1*: Cancelled at 20:42Z, since r20261003-203000-5415 waited for a check slot "
+                           "on vy-nebius-1.") and got[1].owners == ("infra", M.LANDER)
+    assert [c for c in calls if "cancel" in c][0][-1].startswith("failed-checks: step lean-audit failed while 1 waited")
+    n = len(calls)
+    assert len(M.failed_checks(M.Ctx(now=T0 + 180, memo=memo, run=answer, act=True))) == 2 and not any("cancel" in c for c in calls[n:])
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
+    assert f.text.endswith(" Cancelled at 20:40Z, since r20261003-203000-5415 waited for a check slot on vy-nebius-1.")
