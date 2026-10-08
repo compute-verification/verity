@@ -99,7 +99,7 @@ static std::vector<uint32_t> twin_dyn;
 
 def _source() -> str:
     body = (HERE / "hash_h3.cuh").read_text().replace("extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace(
-        "#pragma once", "")
+        '#include "sha512.cuh"', (HERE / "sha512.cuh").read_text()).replace("#pragma once", "")
     runs = "".join(
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
         f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block; gridDim.x = grid;\n"
