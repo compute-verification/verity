@@ -1,14 +1,14 @@
 import PebblingMeets.P3Meets
 
 /-!
-# Lean-evaluated vectors for `verity_pous`
+# Lean-evaluated vectors for `verity.protocols.accounting.space.pous`
 
 Evaluates the model's own definitions on small cases and prints them as JSON (`tests/fixtures/lean_vectors.json`):
-`topLabel'`/`c1'`/`c2'` (`pebbling/ColumnAwareDraft.lean`), `transpose`, `labXor`, `decodeLower` (`Pous.Model.Invertible`),
-`tagOf`, the decoder, `bandGraph`'s parents, and `colRound`.  The primitive is a computable toy `ω = (toyH, toyP)`;
-`tests/test_lean.py` plugs the same toy into the Python.  `decodeW'`, `Wlab'` and `answer'` are `P3Meets.decodeW`,
-`P3Meets.Wlab` and `(p3Model' n wc).answer` for every `n` (checked by `rfl` at `n = 220` below), since those are fixed at
-`220` or noncomputable.  Regenerate with `tests/lean/generate.sh`.
+`topLabel'`/`c1'`/`c2'` (`pebbling/ColumnAwareDraft.lean`), `transpose`, `labXor`, `decodeLower`
+(`Definitions.Pous.Model.Invertible`), `tagOf`, the decoder, `bandGraph`'s parents, and `colRound`.  The primitive is a
+computable toy `ω = (toyH, toyP)`; `tests/test_pous_lean.py` plugs the same toy into the Python.  `decodeW'`, `Wlab'`
+and `answer'` are `P3Meets.decodeW`, `P3Meets.Wlab` and `(p3Model' n wc).answer` for every `n` (checked by `rfl` at
+`n = 220` below), since those are fixed at `220` or noncomputable.  Regenerate with `tests/lean/generate.sh`.
 -/
 
 namespace PousRefCheck

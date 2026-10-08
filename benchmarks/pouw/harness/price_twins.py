@@ -120,10 +120,16 @@ def _statement(name: str, pin: dict, defs: dict[str, str]) -> tuple[str, bool]:
     return sig, False
 
 
+def _short(name: str) -> str:
+    """A pin's name before its lift: `Pouw.SecurityProofs.PearlC.GammaX` and `Pouw.PearlC.pearlCGammaX` are both
+    `pearlCGammaX`."""
+    return re.sub(r"^Pouw\.SecurityProofs\.PearlC\.(?=Gamma|Sampled)", "pearlC", name).removeprefix("Pouw.PearlC.")
+
+
 def parse(name: str, pin: dict, defs: dict[str, str] | None = None) -> dict | None:
     """One pin as a twin, or None when it isn't one; TwinError when its name and its statement disagree, or when it is a
     lifted guarantee whose definition `defs` (`lifted_definitions`) doesn't give or whose statement isn't a twin."""
-    short = re.sub(r"^Pouw\.SecurityProofs\.PearlC\.(?=Gamma|Sampled)", "pearlC", name).removeprefix("Pouw.PearlC.")
+    short = _short(name)
     if not any(r.fullmatch(short) for r in (_FP8, _HOT, _FP4)):
         return None
     sig, lifted = _statement(name, pin, defs or {})
@@ -210,7 +216,7 @@ def guarantees(doc: dict) -> dict[str, dict]:
 
 def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
     """The table from the POUS Project store at `root` and the repository's audit: every twin, one per pin (the Lean
-    store's copy of a pin first, the repository's last)."""
+    store's copy of a pin first, the repository's last, a pin the store holds by its name before its lift included)."""
     files = {rel: root / rel for rel in (LEAN_STORE, *STAGED)} | {REPO_SOURCE: repo_audit}
     pinned: dict[str, str] = {}
     for rel in (REPO_SOURCE, LEAN_STORE):
@@ -222,8 +228,8 @@ def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
         rows = extract(guarantees(json.loads(raw)), rel, pinned, defs)
         sources.append({"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "twins": len(rows)})
         for r in rows:
-            if r["pin"] not in seen:
-                seen.add(r["pin"])
+            if _short(r["pin"]) not in seen:
+                seen.add(_short(r["pin"]))
                 twins.append(_jsonable(r))
     keys = [(t["statement"], t["path"], t["fadd"], t["reading"], t["kind"], t["shape"], t["sizing"], t["cap"]) for t in twins]
     dup = sorted({k for k in keys if keys.count(k) > 1})

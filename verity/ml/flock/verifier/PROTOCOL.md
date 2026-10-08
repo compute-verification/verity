@@ -1217,11 +1217,27 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span. Every range's slots are at least a word, as on the BLAKE3 path, and at most the block
   (`7 ≤ slot_log ≤ k_log`): a slot below 64 bits makes the fold no `αA₀ᵀe + B₀ᵀe` of any matrices, and a packed range of
   no slots would escape the block bound.
+- **The nets the verifier builds.** The `sha512x3` and `hm96` nets must equal the verifier's own, in every field
+  (`Flock.HmNets`, D7). So must a unit net whose name starts with `rec-open/` (V*'s opening, `rec_outer.lowering`):
+  - its name must be `rec-open/l<LANES>-h<H>`, with `LANES` a positive multiple of 8 and `1 ≤ H ≤ 16`;
+  - its input ports must total `384·LANES + 1024·⌈H/2⌉ + 2048` bits and its output ports 2048, compared before the
+    verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's rows
+    allow;
+  - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
+    lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·⌈H/2⌉`, `64`, `16·LANES` and `64` u16 words, and
+    outputs `out` then `acc_out` of 64 words each, one 16-bit port per word.
+
+  Any other unit is not checked against a builder (D12, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
   when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.
 - **Blocks.** `vus_per_block ≥ 1` (D9, §17.1). Every range's count is `vus_per_block` times its per-VU count, and the
   unit range's power-of-two bound binds only when the unit returns the outputs, so a tail that returns them would otherwise
   pass with no VU in a block.
+- **Header sizes.** A power of a number META chooses is computed only once the number is bounded. `parse` refuses
+  `k_log > 27` where it reads it (`HmRow.kLogOf`), before the layout check computes `2^{k_log}`, or `2^{slot_log}` once
+  `slot_log ≤ k_log`; and it compares a lookup's `in_bits` with its pinned table's `log2` before `2^{in_bits}`. `setupH`
+  refuses `k_log > 27` too, and a pinned table's words are a power of two, so the verifier accepts and refuses what it did
+  before (`kLogOf_ok`, `lookup_index_test`), refusing such a file before spending memory on it.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
@@ -1484,6 +1500,26 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
 stays `NON_ZK_PROOF`. **Agreement:** README.
 
+### 16.15 Plain leaves (`verity/flock-circuit+plain-leaves`, a recursive session's inner statement)
+
+§16.13's statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`, §14): a recursive session's inner
+statement, staged under `FLOCK_PLAIN_LEAVES=1`, whose firewall commits every tree top under a salt of its own, so a leaf
+needs none. `Tags.withPlainLeaves` changes three things.
+
+- META `leaf_scheme` is pinned to upstream's `leaf_scheme_plain` object (`verity_flock.circuit.LEAF_SCHEME_PLAIN`):
+  `{"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
+  "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}`.
+- The identity's `leaf_scheme` is that object, and its `hashes.merkle` is `"sha512 (every Ligerito level)"`, as upstream's
+  `identity` writes them for such a statement. Everything else is §16.13's identity, and on `--coins os` its live-OS form.
+- Every opening carries an empty `opened_salts`, as every opening of PR #83's prover does from `2908d078` on
+  (`Setup.openedSalts`, set on every hm96-row statement); `631567f7`'s unsalted openings carry none. Every level's leaf and
+  node are SHA-512 (`merkle_hash` 2).
+
+The verifier identifies the statement (`statement` prints its identity and digest), but `verify` refuses any
+statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without `--zk`, until a soundness headline
+covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
+`--zk` refuses it too.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
@@ -1535,6 +1571,11 @@ expectation):
   writer (`ir_lower.layout`, `derive`, `tail.stage_layout`) closes its output groups before the constant row, so
   `128 · (col + words) ≤ constPos < useful ≤ 2^{unit_log}`. No vector exercises it;
   `verity/ml/flock/tests/test_lean_out_group_slot.py` runs it on the Lean verifier.
+- **D12:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
+  unit's net as the file gives it. The spec refuses a `rec-open/` unit whose name is not `rec-open/l<LANES>-h<H>` at valid
+  parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
+  exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
+  verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

@@ -192,20 +192,23 @@ def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setu
 
 
 def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
-    """`--prover-lag`: window w's sync is the rule's on the frames ready by w·T − lag, chosen at that bucket, so the
-    tick at w·T only takes it. Every window after the first takes the rule's choice, none the envelope for want of
-    it, and the run is accepted and is `run_shaper`'s under what was declared."""
+    """`--prover-lag`: window w's sync is the rule's on the frames ready by w·T − lag, chosen right after that
+    bucket's tick, so the tick at w·T only takes it. Every window takes the rule's choice, none the envelope for want
+    of it; they are what the plan declares on the model's run, and the run is accepted and is `run_shaper`'s under
+    what was declared."""
     from verity.experimental.protocols.certifier import online
 
     doc, report, s = setup
-    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1") | {"prover_lag": 5}
+    plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1", lag=5)
+    assert plan["prover_lag"] == 5
     assert ar.run_virtual(plan, report, tmp_path) == {"server": 0, "proxy": 0, "peer": 0}
     import gzip
     log = json.load(gzip.open(tmp_path / "proxy.json.gz", "rt"))
-    assert log["prover"]["lag"] == 5 and log["prover"]["unready"] == [] and len(log["prover"]["choose_ms"]) == 2
+    assert log["prover"]["lag"] == 5 and log["prover"]["unready"] == [] and len(log["prover"]["choose_ms"]) == 3
     audit = ar.audit_configuration(plan, report, tmp_path)
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"])
     assert audit["comparisons"]["records_are_run_shapers"] and audit["comparisons"]["hands_are_the_rules"]
+    assert audit["comparisons"]["declared_are_planned"]
     # the rule's choice on the model's frames ready by w·T − 5, window by window
     release = {int(k): v for k, v in plan["model_release"].items()}
     frames, ready = ar.model_frames(plan["sessions"], release, plan["windows"] * T)
@@ -220,12 +223,18 @@ def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
     assert log["syncs"] == [[x.delta, str(x.rho)] for x in want]
 
 
-def test_a_lagged_prover_with_no_choice_ready_declares_the_envelope(setup):
-    _, _, s = setup
-    p = ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=5, background=False)
-    assert p.declare() == s.envelope and p.declare() == s.envelope and p.log["unready"] == [1]
-    with pytest.raises(ValueError):
-        ar.LaggedProver(s.sync_set, T, ar.online.rule("last"), s.envelope, lag=T)
+def test_an_online_rule_chooses_off_the_tick(setup, tmp_path):
+    """The proxy never chooses at its tick: an online rule's lag is 1 … T − 1 buckets, in the plan and on the command
+    line."""
+    doc, _, s = setup
+    for lag in (0, T):
+        with pytest.raises(ValueError, match="off its tick"):
+            ar.plan_configuration(doc["configurations"][0], s, syncs="last", lag=lag)
+    assert "prover_lag" not in ar.plan_configuration(doc["configurations"][0], s, syncs="envelope", lag=0)
+    (tmp_path / "c.json").write_text(json.dumps(setup[1]))
+    with pytest.raises(SystemExit, match="--prover-lag"):
+        ar.main(["t.json", "--calibration", str(tmp_path / "c.json"), "--out", str(tmp_path), "--syncs", "last",
+                 "--prover-lag", "0"])
 
 
 def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
@@ -333,19 +342,17 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
     assert c["hindsight"]["misses"] == 0
 
 
-def _live_run(setup, run, syncs: str, strategy: str = "honest", lag: int = 0) -> tuple[dict, dict]:
+def _live_run(setup, run, syncs: str, strategy: str = "honest", lag: int = 1) -> tuple[dict, dict]:
     import asyncio
 
     doc, report, s = setup
     mp = pytest.MonkeyPatch()
     mp.setattr(ar, "live_body", lambda session, model: {"model": model, "prompt": [1, 2, 3], "max_tokens": TOKENS,
                                                         "stream": True})
-    plan = ar.plan_configuration(doc["configurations"][0], s, "served", syncs)
+    plan = ar.plan_configuration(doc["configurations"][0], s, "served", syncs, lag)
     if strategy != "honest":
         plan |= {"strategy": strategy,
                  "writes": ar.adversary_writes(plan, s.sync_set, s.egress_params.buckets, strategy, seed=1)}
-    if lag:
-        plan |= {"prover_lag": lag}
 
     async def go():
         server = await asyncio.start_server(_fake_vllm, "127.0.0.1", 0)

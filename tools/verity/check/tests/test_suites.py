@@ -522,6 +522,67 @@ def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None
                           cwd=root, env=env, capture_output=True, text=True)
 
 
+def _env_workspace(root: Path, members: dict[str, str]) -> None:
+    """A checkout with this runner and a member per (path: test module) in ``members``, each named its path."""
+    import shutil
+
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "pyproject.toml").write_text(f'[tool.uv.workspace]\nmembers = {list(members)!r}\n'.replace("'", '"'))
+    for path, test in members.items():
+        (root / path / "tests").mkdir(parents=True)
+        (root / path / "pyproject.toml").write_text(f'[project]\nname = "{path}"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+        (root / path / "tests" / "test_it.py").write_text(test)
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+
+
+def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_prefix(tmp_path):
+    """Inside a `research run`, the run's RESEARCH_* and the machine's PYTHONPYCACHEPREFIX reached the tests, which check's steps
+    never get: test_remote_cwd's inner run inherited the prefix and wrote no bytecode where it looked (r20261008-010104-2b69,
+    passing with the prefix unset in r20261008-010441-bb7b). A VERITY_ switch still reaches them."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n    assert os.environ.get('VERITY_SWITCH') == '1'\n"
+                                 "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k == 'PYTHONPYCACHEPREFIX']\n"})
+    p = _run_suite(root, tmp_path, "--fresh", extra={"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(tmp_path / "run"),
+                                                     "PYTHONPYCACHEPREFIX": str(tmp_path / "pycache"), "VERITY_SWITCH": "1"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp_path):
+    """check's verity-flock and verity-lean-audit run after its lean-build step, with `lake` on the PATH; run on their own they
+    skipped the Lean tests or found no `flock-verify`. So suites.py builds the verifier first, only for those suites, not when
+    check says it's built (`--lean-built`), and a failed build fails them unrun."""
+    root, log = tmp_path / "tree", tmp_path / "lake.log"
+    _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
+                          "other": "def test_other():\n    pass\n"})
+    (root / "verity" / "core" / "service" / "flock").mkdir(parents=True)
+    (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "verifier")
+    # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
+    home = tmp_path / "home"
+    bin_ = home / ".elan" / "bin"
+    bin_.mkdir(parents=True)
+    (bin_ / "lake").write_text('#!/bin/sh\necho "$PWD $*" >> "$FAKE_LAKE_LOG"\nexit "${FAKE_LAKE_RC:-0}"\n')
+    (bin_ / "lake").chmod(0o755)
+    extra = {"HOME": str(home), "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "FAKE_LAKE_LOG": str(log)}
+
+    p = _run_suite(root, tmp_path, "--fresh", "other", extra=extra)
+    assert p.returncode == 0 and not log.exists(), p.stdout
+    p = _run_suite(root, tmp_path, "--fresh", "--lean-built", "verity-flock", extra=extra)
+    assert p.returncode == 0 and not log.exists(), p.stdout
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
+    assert log.read_text() == f"{root / 'verity' / 'core' / 'service' / 'flock'} build\n"
+
+    p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/core/service/flock exited 1" in p.stdout
+    assert "passed  other" in p.stdout, p.stdout
+
+
 def _reused(tmp_path: Path) -> list[str]:
     import json
 
@@ -550,6 +611,30 @@ def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_
     assert "killed 1 processes its tests left in the suite's process group" in p.stdout, p.stdout
     stat = Path("/proc") / left.read_text() / "stat"
     assert not stat.exists() or stat.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"), stat.read_text()
+
+
+def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
+    """45fe's test_suites.py waited 82 min on a FIFO nobody wrote until it was killed by hand (7 Oct). Here the test blocks the
+    same way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
+    kept."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.5\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts", "--json", str(tmp_path / "out.json"))
+    assert p.returncode == 1 and "TIMED OUT: still running after 0.5 s, so its process group was killed" in p.stdout, p.stdout
+    import json
+
+    [r] = json.loads((tmp_path / "out.json").read_text())
+    assert r["status"] == "failed" and r["timed_out"] == 0.5
+    assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
 
 
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):

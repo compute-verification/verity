@@ -4,10 +4,11 @@ import Proofs.Pous.P2.Domain
 /-!
 # Slack rows: an adversary with `λ` extra state bits per block
 
-`MeetsWithSlack sch reveal λ D Q k ε` (`Pous/Protocol/P2/Cost.lean`) is `Meets` with the state bound `⌊ρ·|C|⌋` raised by `λ·B` bits. At `λ = 0` it is
-`Meets` (`meetsWithSlack_zero`). The route is `meets_m1p_of_row`'s at a state of `⌊ρ·|C|⌋ + λ·B` bits and a target
-error `2^-e` (`P2RowE`, `slack_of_row`). The rows at `B = 2^19` are certified with the largest `g` the exact 1%
-inequality allows (`row_b19_*`), and the families with a uniform `g = ⌊c·B⌋ + 1` (`row_uniform_gen`). -/
+`MeetsWithSlack sch reveal λ D Q k ε` (`Security/Definitions/Pous/P2/Cost.lean`) is `Meets` with the state bound
+`⌊ρ·|C|⌋` raised by `λ·B` bits. At `λ = 0` it is `Meets` (`meetsWithSlack_zero`). The route is `meets_m1p_of_row`'s at a
+state of `⌊ρ·|C|⌋ + λ·B` bits and a target error `2^-e` (`P2RowE`, `slack_of_row`). The rows at `B = 2^19` are certified
+with the largest `g` the exact 1% inequality allows (`row_b19_*`), and the families with a uniform `g = ⌊c·B⌋ + 1`
+(`row_uniform_gen`). -/
 
 namespace PousMargin
 

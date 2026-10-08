@@ -115,7 +115,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
  "runs": {"PkgBulk": {"why": "what it tests", "args": ["{bulk.txt}", "1000"], "data": {"bulk.txt": "…"},
                       "generate": ["python3", "scripts/bulk.py", "{repo}", "--out", "{out}"]}},
  "axioms": ["Classical.choice", "Quot.sound", "propext"],
- "assumptions": ["Pkg.Assumptions"],
+ "assumptions": {"Pkg.Hyp": {"owner": "@lane"}},
  "meaning": ["Pkg"],
  "escapes": {"Pkg.loop": "why compiled code no proof sees is acceptable here"},
  "compile_time": {"Pkg.Tactic": {"why": "why this module must run code while it compiles", "digest": "…"}},
@@ -136,7 +136,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/experimental/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a guarantee: its named assumptions.
+- `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
+  closed hypothesis, or reads in its statement. `--update` writes each one's `digest`, the one its `reads` record holds, so
+  a changed assumption fails under its own name; an entry no guarantee reads fails. A list of modules is the old form:
+  it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
