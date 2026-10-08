@@ -2,7 +2,7 @@
 # Pearl-C4's shipped tree, built off the GPU box:
 #   pearl_c4.cubin   pearl_c4.cu with CUDA 12.9's nvcc for sm_120a (-fmad=false, no -lineinfo), against GPU 2's hashing module
 #                    pinned at HASH_COMMIT (benchmarks/pouw/pouw_hash/pouw_hash.cuh, its sha256 checked) and the tree's
-#                    benchmarks/pouw/pearl_c/sha512.cuh (the seeds' SHA-512); refused unless
+#                    benchmarks/pouw/pearl_c/sha512.cuh (the seeds' and lines' SHA-512); refused unless
 #                    sass.py passes (no warning, spill, stack or local memory; each kernel's OMMA, HMMA and E2M1 counts)
 #   sass.json        registers and those counts per kernel
 #   check/, check2/  fixture.py's buffers for NVFP4 and MXFP4 at 128x128x1024 and 256x384x2048 (needs verity and numpy)

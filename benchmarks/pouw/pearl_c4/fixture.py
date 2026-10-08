@@ -45,8 +45,9 @@ def rows(name: str, count: int, k: int) -> np.ndarray:
 
 
 def raw_lines(seed: bytes, role: int, count: int) -> np.ndarray:
-    return np.frombuffer(b"".join(turboshake128(seed + bytes([role]) + i.to_bytes(4, "little"), F.D_LINE, 16)
-                                  for i in range(count)), np.uint8).reshape(count, 16)
+    blocks = b"".join(hashlib.sha512(F.LABEL_BLOCKS["line"] + seed + bytes([role]) + c.to_bytes(4, "little")).digest()
+                      for c in range(-(-count // 4)))
+    return np.frombuffer(blocks[:16 * count], np.uint8).reshape(count, 16)
 
 
 def nibbles(raw: np.ndarray) -> np.ndarray:

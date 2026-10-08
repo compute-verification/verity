@@ -23,7 +23,6 @@ import pytest
 import epoch_coins as E
 
 import pearl_c4_vectors as V
-from verity.ml.crypto.turboshake import turboshake128
 from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon import fp32
 from verity.experimental.protocols.pouw.audit import Epoch, Prover, Workload
@@ -91,10 +90,16 @@ def test_nvfp4_blocks_keep_the_sign_of_minus_zero():
     assert F.quantize(F.NVFP4, d) == ([8, 7] + [0] * 13 + [8], [0x23])
 
 
-def test_lines_are_turboshake_nibbles():
+def test_lines_are_sha512_nibbles_four_to_a_block():
+    """Line t is quarter t mod 4 of SHA-512 over the padded "pearl-c4/v2/line" block, the seed, the role and ⌊t/4⌋ u32 LE,
+    low nibble first; the pinned bytes are line 5 of role 2 under the seed 0, 1, ..., 31."""
     seed = bytes(range(32))
-    raw = turboshake128(seed + bytes([2]) + (5).to_bytes(4, "little"), F.D_LINE, 16)
+    block = hashlib.sha512(b"pearl-c4/v2/line\0".ljust(128, b"\0") + seed + bytes([2]) + (1).to_bytes(4, "little")).digest()
+    raw = bytes.fromhex("ccba50373990aeaffa1ad59bbf454387")
+    assert block[16:32] == raw and F.line_block(seed, 2, 1) == block
     assert F.line(seed, 2, 5) == [x for b in raw for x in (b & 0xF, b >> 4)]
+    assert [F.line(seed, 2, t) for t in range(4, 8)] == [[x for b in block[16 * q:16 * q + 16] for x in (b & 0xF, b >> 4)]
+                                                         for q in range(4)]
     assert F.line(seed, 1, 5) != F.line(seed, 2, 5) != F.line(seed, 2, 6)
 
 
@@ -360,9 +365,9 @@ def test_row_rules_and_debit(fmt):
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
-    # share; MXFP4 chains hold identity atoms (about 0.21% on Gaussian inputs), NVFP4's here none
+    # share; MXFP4 chains hold identity atoms on some draws (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
-    assert clean.total == clean.forming + clean.identity + clean.split and (clean.identity == 0) == (fmt == "nvfp4")
+    assert clean.total == clean.forming + clean.identity + clean.split and (fmt != "nvfp4" or clean.identity == 0)
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
     # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])

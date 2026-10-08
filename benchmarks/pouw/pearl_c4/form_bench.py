@@ -74,7 +74,7 @@ def shape_run(d: D.Dev, rows: int, k: int, args) -> dict:
     b = pl.buf
     d.write(b["seed_a"], bytes(range(32)))
     d.write(b["seed_b"], bytes(range(32, 64)))
-    d.launch("lines", D.cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fa"]], i=[D.ROLE_FA, k])
+    d.launch("lines", D.cdiv(k, 512), 128, p=[b["seed_b"], b["lines_fa"]], i=[D.ROLE_FA, k])
     _, geo, kw = next(s for s in pl.steps("hash") if s[0] == pl.form)
     smem = {v: pl.form_smem if v == pl.form else 0 for v in VARIANTS}
     bufs = {v: {o: b[o] if v == pl.form else d.alloc(pl.sizes[o]) for o in OUTS} for v in VARIANTS}

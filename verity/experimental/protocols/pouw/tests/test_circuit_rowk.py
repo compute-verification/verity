@@ -422,7 +422,7 @@ def test_a_form_reads_its_segment_of_the_bases(shape):
 
 
 SLICE_RULES = {"pc8": {f"{a}-slice": f"verity/pouw/anchor/pearl-c/{a}/slice/v1" for a in ("fa", "fb")},
-               "pc4": {f"{a}-slice": f"verity/pouw/anchor/pearl-c4/{a}/slice/v1" for a in ("fa", "fb")}}
+               "pc4": {f"{a}-slice": f"verity/pouw/anchor/pearl-c4/{a}/slice/v2" for a in ("fa", "fb")}}
 
 
 def test_slice_rules_exist_only_under_the_cut():

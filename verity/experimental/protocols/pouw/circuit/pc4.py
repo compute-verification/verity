@@ -41,9 +41,9 @@ Three of the scheme's integer operations are written as float operations they eq
 non-negative there).  ``max |x|`` stays the integer maximum, so a non-finite word reaches ``ok``.
 
 The noise lines (E_A, E_B, F_A, F_B) and G = F_Bᵀ·F_A (`pearl_c4.gram`) are verifier-derived public inputs, as `ncp2`'s
-anchored inputs are (`anchors.TileAnchors`, `DERIVATIONS`): the lines are TurboSHAKE128 of the scheme's seeds, which read
-public values alone (seed_A the salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), so
-they carry no row's value, and G is a function of F_A and F_B, so no unit computes it.  In a unit's proof each is a C-Flock
+anchored inputs are (`anchors.TileAnchors`, `DERIVATIONS`): the lines are SHA-512 of the scheme's seeds (`pearl_c4.line`),
+which read public values alone (seed_A the salt, A's root, B's registered root and the matmul index; seed_B the salt and B's
+root), so they carry no row's value, and G is a function of F_A and F_B, so no unit computes it.  In a unit's proof each is a C-Flock
 public input region, its values unpacked one u16 word each (G's FP32 words two, low half first), which the verifier takes
 from its own `--public-inputs` file (`TileAnchors.regions`).
 """
@@ -322,20 +322,21 @@ def gram_g(shape, seed_b: bytes, _i=None) -> list[int]:
     return [w for row in S.gram(S.NVFP4, seed_b, shape.k) for w in row]
 
 
-_LINE = f"TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = {S.D_LINE:#04x}), 16 bytes, low nibble first; role "
+_LINE = (f"bytes 16·(index mod {S.LINES_PER_BLOCK}) to +15 of SHA-512(\"{S.LABELS['line'].decode()}\" ‖ \\0 zero-padded to "
+         f"128 bytes ‖ seed ‖ role ‖ ⌊index/{S.LINES_PER_BLOCK}⌋ u32 LE), low nibble first; role ")
 #: each anchor's recomputation from `pearl_c4`'s seeds (`noise`: seed_A = H_"pearl-c4/v1/seed-A"(salt ‖ root_A ‖ root_B ‖
 #: matmul u64 LE), seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B), H_ℓ `pearl_c4.labelled`'s SHA-512), each under its rule's
 #: versioned id
 DERIVATIONS = {
-    "ea": A.Derivation("verity/pouw/anchor/pearl-c4/ea/v1", "seed_a",
+    "ea": A.Derivation("verity/pouw/anchor/pearl-c4/ea/v2", "seed_a",
                        _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
-    "eb": A.Derivation("verity/pouw/anchor/pearl-c4/eb/v1", "seed_b",
+    "eb": A.Derivation("verity/pouw/anchor/pearl-c4/eb/v2", "seed_b",
                        _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
-    "fa": A.Derivation("verity/pouw/anchor/pearl-c4/fa/v1", "seed_b",
+    "fa": A.Derivation("verity/pouw/anchor/pearl-c4/fa/v2", "seed_b",
                        _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
-    "fb": A.Derivation("verity/pouw/anchor/pearl-c4/fb/v1", "seed_b",
+    "fb": A.Derivation("verity/pouw/anchor/pearl-c4/fb/v2", "seed_b",
                        _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
-    "g": A.Derivation("verity/pouw/anchor/pearl-c4/g/v1", "seed_b",
+    "g": A.Derivation("verity/pouw/anchor/pearl-c4/g/v2", "seed_b",
                       f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
                       f"byte UE4M3 1.0 ({S.NVFP4.one:#04x}); FP32 words", gram_g, 32),
 }
