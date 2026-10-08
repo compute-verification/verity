@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Randomness
+import Randomness
 
 /-!
 # The PoUW window draw, as a Lean spec
