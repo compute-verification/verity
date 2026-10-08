@@ -15,10 +15,13 @@ a refused connection, an unpublished record) is adversarial, and a device fails 
 namespace Core
 
 /-- One byte stream: the boundary link, or a connection to the server for one stream. `read` returns the next bytes as
-they arrive and an empty array once the peer has closed its side; the device frames them itself. `backlog` is the bytes
-written and not yet sent (asyncio's `get_write_buffer_size`), which a device reads to refuse an overrun. -/
+they arrive and an empty array once the peer has closed its side; the device frames them itself. `readUntil t` is the
+same read, but returns `none` once `clock` reads at least `t` with nothing arrived, so a driver waits on a deadline in a
+plain loop. `backlog` is the bytes written and not yet sent (asyncio's `get_write_buffer_size`), which a device reads to
+refuse an overrun. -/
 structure Conn where
   read : IO ByteArray
+  readUntil : Nat → IO (Option ByteArray)
   write : ByteArray → IO Unit
   backlog : IO Nat
   close : IO Unit

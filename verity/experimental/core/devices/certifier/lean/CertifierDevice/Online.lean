@@ -2,13 +2,15 @@ import NetworkCertifier.Schedule
 import Std.Data.HashMap
 
 /-!
-# The online prover: each window's sync declared at its first bucket
+# The online prover: each window's sync chosen `lag` buckets before its first bucket
 
 The executable form of `online.py`'s `Prover` on the one egress link a `Shaper` feeds it (link 0; the shaper never feeds
-another, so a prover's other links hold nothing and change no declaration). The rules are `cover-K-M[-fallback]`
-(`Rule`), `last` being `cover-1-0`. `online.py` caches each window's summary and the hand time before it; both are
-functions of the frames seen and the declarations made by then, so this computes them afresh. Eligibility is
-`NetworkCertifier.eligible`.
+another, so a prover's other links hold nothing and change no declaration). Window w's choice (`choose`) reads the
+frames ready by w·T − lag and the earlier declarations, and declares nothing; `declare` declares a choice made so.
+`snapshot().choose()` is `choose` on what the prover has read by then, so this has no snapshot. The rules are
+`cover-K-M[-fallback]` (`Rule`), `last` being `cover-1-0`, which ignore the earlier declarations. `online.py` caches
+each window's summary and the hand time before it; both are functions of the frames seen and the declarations made by
+then, so this computes them afresh. Eligibility is `NetworkCertifier.eligible`.
 -/
 
 namespace CertifierDevice
@@ -119,13 +121,14 @@ def cost (l : Link) (u : Nat) (sync : ClockSync) (syncs : Array ClockSync) : Opt
 
 end Link
 
-/-- `online.Prover` of one spatial unit, on the shaper's link. `syncs` holds its own declarations so far, `prior` the
-latest `depth` windows of an earlier run. -/
+/-- `online.Prover` of one spatial unit, on the shaper's link. Window w's choice sees the frames ready by w·T − `lag`.
+`syncs` holds its own declarations so far, `prior` the latest `depth` windows of an earlier run. -/
 structure Prover where
   syncSet : SyncSet
   T : Nat
   rule : Rule
   envelope : ClockSync
+  lag : Nat
   link : Link
   syncs : Array ClockSync := #[]
   prior : Array Past := #[]
@@ -160,8 +163,8 @@ def Rule.choose (rule : Rule) (past : Array Past) (ss : SyncSet) (envelope : Clo
 
 namespace Prover
 
-def make (ss : SyncSet) (T : Nat) (rule : Rule) (envelope : ClockSync) (prior : Array Past) : Prover :=
-  { syncSet := ss, T, rule, envelope, link := { T }, prior := lastN prior rule.k }
+def make (ss : SyncSet) (T : Nat) (rule : Rule) (envelope : ClockSync) (prior : Array Past) (lag : Nat) : Prover :=
+  { syncSet := ss, T, rule, envelope, lag, link := { T }, prior := lastN prior rule.k }
 
 /-- `Prover.arrive` on link 0. -/
 def arrive (p : Prover) (position anchor index : Nat) (ready : Int) : Prover :=
@@ -198,19 +201,22 @@ def summarize (p : Prover) (u frames : Nat) : Past := Id.run do
   let own := p.syncs[u]?.getD p.envelope
   return ⟨u, own, frames, (cost own).isNone, frontier⟩
 
-/-- `Prover.declare`: the next window's sync, from the frames ready by its first bucket and the earlier declarations,
-and whether it was refused (`online.Refused`): a frame it reads then is ready no later than its anchor's bucket. Python
-raises, and its next `declare`, on the frames read, is the window's: the sync returned here. -/
-def declare (p : Prover) : Prover × ClockSync × Bool := Id.run do
+/-- `Prover.choose` (and `snapshot`, whose choice it is): the next window's sync, from the frames ready by its first
+bucket less `lag` and the earlier declarations, the prover having read those frames, and whether it was refused
+(`online.Refused`): a frame it reads first then is ready no later than its anchor's bucket. Python raises, and its next
+call, on the frames read, is the window's: the sync returned here. It declares nothing. -/
+def choose (p : Prover) : Prover × ClockSync × Bool := Id.run do
   let w := p.syncs.size
-  let (link, refused) := p.link.see (w * p.T : Nat)
+  let (link, refused) := p.link.see ((w * p.T : Nat) - (p.lag : Int))
   let p := { p with link }
   let mut seen := #[]
   for u in [w - p.rule.k:w] do
     let n := p.link.count u
     if n > 0 then seen := seen.push (p.summarize u n)
-  let sync := p.rule.choose (lastN (p.prior ++ seen) p.rule.k) p.syncSet p.envelope
-  return ({ p with syncs := p.syncs.push sync }, sync, refused)
+  return (p, p.rule.choose (lastN (p.prior ++ seen) p.rule.k) p.syncSet p.envelope, refused)
+
+/-- `Prover.declare(sync)`: declare the next window's sync, a choice made elsewhere. -/
+def declare (p : Prover) (sync : ClockSync) : Prover := { p with syncs := p.syncs.push sync }
 
 end Prover
 

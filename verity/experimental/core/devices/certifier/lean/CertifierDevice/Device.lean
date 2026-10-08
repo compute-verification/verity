@@ -15,10 +15,11 @@ proxy event by event:
 * **Ticks.** Tick t of a grid is due at `origin + t·τ`, and `windows · T` of them run, after which a grid's ticks are
   ignored. A tick read more than `slack` after its due time faults its certifier `monitor-unavailable`. An egress tick
   reads the link's backlog (`Event.tick`'s `backlog`): over a bucket's bytes it is `delivery-refused`, and over four the
-  bucket isn't written at all. It then checks forwarding, ticks the shaper, writes the row and r − n padding frames, and
-  publishes the window's record at its last bucket. An ingress tick ticks the bucketer, hands each released `DATA` or
-  `LAST` frame to its stream (opening the stream's server connection at its first frame), records the stream's anchor at
-  its first `LAST`, and publishes the record at the window's last bucket.
+  bucket isn't written at all. It then checks forwarding, ticks the shaper, writes the row and r − n padding frames,
+  starts window w's online choice if it is tick w·T − lag, and publishes the window's record at its last bucket. An
+  ingress tick ticks the bucketer, hands each released `DATA` or `LAST` frame to its stream (opening the stream's server
+  connection at its first frame), records the stream's anchor at its first `LAST`, and publishes the record at the
+  window's last bucket.
 * **Streams.** A stream's connection is `connect`ed at its first released frame. Until it opens (`connected`), its
   frames wait; then each is written in order (`writeUpstream`), and the first `LAST` written waits for its drain
   (`drain := true`, answered by `delivered`), which is when the request reached the server. A refused connection is
@@ -31,10 +32,13 @@ proxy event by event:
 * **Order.** Within one event, actions are in the order the proxy's tasks take them: an ingress tick's `publish` comes
   before the connections and writes its frames start, which come in the order of the frames that started them (a new
   stream's `connect`, or the writes of a stream whose connection was waiting for a frame).
-* **Refusal.** The online prover refuses a declaration that reads a frame ready no later than its anchor's bucket
+* **Online choices.** The online prover (`LaggedChoices`) chooses window w's sync right after egress tick w·T − lag
+  (window 0's before the first tick, in `init`), on the frames ready by then, and the shaper declares it at tick w·T.
+  Every choice is ready by its tick, as on the proxy's `InlineExecutor`.
+* **Refusal.** The online prover refuses a choice that reads a frame ready no later than its anchor's bucket
   (`online.Refused`, which a request released by an ingress tick read before its due time can lead to): the egress
-  window that declares is faulted `monitor-unavailable`, as a late tick is, and its sync is the prover's choice on the
-  frames it has read.
+  window that declares it is faulted `monitor-unavailable` at its first tick, as a late tick is, and its sync is the
+  choice made on the frames read.
 
 Events the proxy couldn't be waiting for (a second `connected`, bytes on a stream not open, a `delivered` with no write
 waiting, anything after both grids' last ticks) change nothing. Python's floats and Lean's integers agree away from the
@@ -77,14 +81,15 @@ inductive Action where
   /-- A window's record closed, with its grid's parameters. -/
   | publish (record : Record) (params : Params)
 
-/-- The online prover's configuration: its rule, envelope and the history of an earlier run. -/
+/-- The online prover's configuration: its rule, envelope, lag (1 … T − 1 buckets) and the history of an earlier run. -/
 structure ProverConfig where
   rule : Rule
   envelope : ClockSync
+  lag : Nat
   prior : Array Past := #[]
 
 /-- `Proxy`'s parameters: both grids (windows of the same length, frames of at least a header), Σ_sync, the declared
-syncs and how many windows run (the rest declared by the prover), the clock's time of bucket 0 and the slack, in ns. -/
+syncs or else the online prover, how many windows run, the clock's time of bucket 0 and the slack, in ns. -/
 structure Config where
   egress : Params
   ingress : Params
@@ -97,8 +102,8 @@ structure Config where
   egressLink : String := "responses"
   ingressLink : String := "requests"
 
-/-- `Proxy.__init__`'s check, and what the frames need: positive parameters, frames of at least a header, and the two
-grids' windows of one length. -/
+/-- `Proxy.__init__`'s checks, and what the frames need: positive parameters, frames of at least a header, the two
+grids' windows of one length, and an online prover declaring every window's sync, with a lag of 1 … T − 1 buckets. -/
 def Config.check (c : Config) : Except String Unit := do
   for p in [c.egress, c.ingress] do
     if [p.buckets, p.allocation, p.frameBytes, p.bucketMs, p.queueCapacity].any (· = 0) then
@@ -106,6 +111,10 @@ def Config.check (c : Config) : Except String Unit := do
     if p.frameBytes < headerSize then throw s!"a frame holds its {headerSize}-byte header"
   if c.egress.buckets * c.egress.bucketMs ≠ c.ingress.buckets * c.ingress.bucketMs then
     throw "the egress and ingress grids have windows of the same length"
+  if let some p := c.prover then
+    if !c.syncs.isEmpty then throw "an online prover declares every window's sync"
+    if p.lag = 0 || p.lag ≥ c.egress.buckets then
+      throw "the proxy's online prover chooses off its tick: a lag of 1 … T − 1 buckets"
 
 /-- Where a stream's server connection is. -/
 inductive Phase where
@@ -144,9 +153,11 @@ structure State where
 
 def nsPerMs : Nat := 1000000
 
-/-- The state before the first tick. -/
+/-- The state before the first tick, window 0's choice started if any window runs. -/
 def init (c : Config) : State :=
-  let prover := c.prover.map fun p => Prover.make c.syncSet c.egress.buckets p.rule p.envelope p.prior
+  let prover := c.prover.map fun p =>
+    let l : LaggedChoices := { prover := Prover.make c.syncSet c.egress.buckets p.rule p.envelope p.prior p.lag }
+    if c.windows > 0 then l.start else l
   { config := c,
     shaper := Shaper.make { link := c.egressLink, params := c.egress } c.syncs c.syncSet prover c.windows,
     bucketer := { certifier := { link := c.ingressLink, params := c.ingress } } }
@@ -215,9 +226,10 @@ def checkForwarding (st : State) (now : Nat) : State := Id.run do
   if !st.late.isEmpty then st := { st with shaper := st.shaper.fault .deliveryRefused }
   return st
 
-/-- `Proxy._egress`'s body at one tick. -/
+/-- `Proxy._egress`'s body at one tick: after tick w·T − lag it starts window w's choice. -/
 def egressTick (st : State) (now backlog : Nat) : State × Array Action := Id.run do
   let p := st.config.egress
+  let t := st.shaper.t
   let mut st := st
   if st.isLate p.bucketMs st.shaper.t now then st := { st with shaper := st.shaper.fault .monitorUnavailable }
   let bucketBytes := p.allocation * p.frameBytes
@@ -230,6 +242,9 @@ def egressTick (st : State) (now backlog : Nat) : State × Array Action := Id.ru
     let n := rowCount row
     let bytes := (row.extract 0 n).foldl (fun acc f => acc ++ f.getD ByteArray.empty) ByteArray.empty
     acts := acts.push (.writeLink (bytes ++ ⟨Array.replicate ((p.allocation - n) * p.frameBytes) 0⟩))
+  if let some l := st.shaper.prover then
+    if (t + l.prover.lag) % p.buckets = 0 && (t + l.prover.lag) / p.buckets < st.config.windows then
+      st := { st with shaper := { st.shaper with prover := some l.start } }
   if let some r := record then acts := acts.push (.publish r p)
   return (st, acts)
 

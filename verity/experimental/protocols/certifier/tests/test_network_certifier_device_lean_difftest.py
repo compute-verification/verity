@@ -35,6 +35,17 @@ def test_the_data_is_what_the_audit_pins(tmp_path):
     assert RUN["args"] == ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", str(vectors.COUNT)]
 
 
+def read_before_choice(inst: dict) -> bool:
+    """Whether a response is read in bucket w·T − lag before that egress tick, which starts window w's choice: read by
+    then, but ready at w·T − lag + 1, past what the choice reads."""
+    c = inst["config"]
+    T, tau, lag = c["egress"]["T"], c["egress"]["tau"] * vectors.MS, c["prover"]["lag"]
+    ticks = [e[2] for e in inst["events"] if e[0] == "tick" and e[1] == "egress"]
+    reads = [e[2] for e in inst["events"] if e[0] == "upstream" and e[3]]
+    return any((b := (now - c["origin"]) // tau) >= 0 and (b + lag) % T == 0 and b < len(ticks) and now < ticks[b]
+               for now in reads)
+
+
 def test_the_generator_covers_what_it_says():
     insts = [vectors.instance(s) for s in range(300)]
     results = [vectors.python_results(i) for i in insts]
@@ -51,13 +62,15 @@ def test_the_generator_covers_what_it_says():
             refused["monitor-unavailable" in statuses] += 1
     assert {p for p, _ in outcomes} == set(vectors.PATHS)
     assert refused[True] > refused[False]
-    for path in set(vectors.PATHS) - {"honest", "prover", "prover-after-syncs", "link-garbage", "slow-server"}:
+    for path in set(vectors.PATHS) - {"honest", "prover", "link-garbage", "slow-server"}:
         assert outcomes[path, "faulted"] > outcomes[path, "accepted"], path
     reasons = {a[1]["status"] for r in results for a in r["actions"] if a[0] == "publish"}
     assert reasons == {None} | {r.value for r in vectors.Reason} - {"dropped"}
     assert all(r["actions"] for r in results)
     proved = [(i, r) for i, r in zip(insts, results) if i["config"]["prover"] is not None]
-    assert any(len(r["syncs"]) > len(i["config"]["syncs"]) > 0 for i, r in proved)  # the prover after given syncs
+    lags = {(i["config"]["egress"]["T"], i["config"]["prover"]["lag"]) for i, _ in proved}
+    assert {T for T, lag in lags if lag == T - 1} == {3, 4, 5} and {lag for _, lag in lags} == {1, 2, 3, 4}
+    assert any(read_before_choice(i) for i, _ in proved)
     assert any(i["config"]["prover"]["prior"] for i, _ in proved)
     assert any(len({a[1] for a in r["actions"] if a[0] == "connect"}) >= 4 for r in results)  # several streams
     writes = [a for r in results for a in r["actions"] if a[0] == "upstream"]

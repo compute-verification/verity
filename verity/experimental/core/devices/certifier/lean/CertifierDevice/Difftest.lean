@@ -65,7 +65,7 @@ def proverOf : Json → Except String (Option ProverConfig)
   | j => do
     let #[k, margin, fallback] ← arrOf (← j.getObjVal? "rule") | throw s!"not [k, margin, fallback]: {j.compress}"
     pure (some { rule := ⟨← k.getNat?, ← margin.getNat?, ← fallback.getBool?⟩,
-                 envelope := ← syncOf (← j.getObjVal? "envelope"),
+                 envelope := ← syncOf (← j.getObjVal? "envelope"), lag := ← j.getObjValAs? Nat "lag",
                  prior := ← (← arrOf (← j.getObjVal? "prior")).mapM pastOf })
 
 def configOf (j : Json) : Except String Config := do

@@ -23,7 +23,7 @@ def sync : ClockSync := ⟨2, 1, by decide⟩
 def server : IO Core.Conn := do
   let reads ← Std.Channel.new (α := ByteArray)
   let reads := reads.sync
-  return { read := reads.recv, backlog := pure 0, close := pure (),
+  return { read := reads.recv, readUntil := fun _ => some <$> reads.recv, backlog := pure 0, close := pure (),
            write := fun request => do
              let s := (((String.fromUTF8? request).getD "").drop 5).toString.toNat!
              reads.send s!"id: {s - 1}\ndata: hello {s}\n\n".toUTF8
@@ -43,7 +43,8 @@ def main : IO UInt32 := do
                            windows := 2, origin := now + 20 * ms, slack := 15 * ms }
   let world : Core.World Out := {
     coins := Core.World.coinsOS, clock := Core.World.clockOS, sleepUntil := Core.World.sleepUntilOS,
-    link := { read := link.recv, write := fun b => wrote.modify (· ++ b), backlog := pure 0, close := pure () },
+    link := { read := link.recv, readUntil := fun _ => some <$> link.recv, write := fun b => wrote.modify (· ++ b),
+              backlog := pure 0, close := pure () },
     connect := .ok <$> server,
     publish := fun (r, _) => records.modify (·.push r),
     reserve := do
