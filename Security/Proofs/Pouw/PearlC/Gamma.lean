@@ -8,6 +8,7 @@ import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
+import Models.Pouw.Guarantees.PearlC
 
 /-!
 # γ from TT_OUT (the cheap-binding lane's file)
@@ -381,3 +382,7 @@ theorem ttOutPearlCWitness :
     norm_num [creditOf, Params.pi, Costs.adopted, witnessWorkload]
 
 end Pouw.PearlC
+
+theorem Pouw.SecurityProofs.PearlC.Gamma16384 : Pouw.Guarantees.PearlC.Gamma16384 := @Pouw.PearlC.pearlCGamma16384
+
+theorem Pouw.SecurityProofs.PearlC.Gamma8192 : Pouw.Guarantees.PearlC.Gamma8192 := @Pouw.PearlC.pearlCGamma8192

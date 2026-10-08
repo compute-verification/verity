@@ -513,6 +513,25 @@ def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
         SC.discover.cache_clear()
 
 
+def test_a_sidecar_under_two_packages_roots_is_named_once_from_the_deeper(tmp_path, monkeypatch):
+    from circuit_check import sidecars as SC
+
+    (tmp_path / "synouter/src/syninner").mkdir(parents=True)
+    (tmp_path / "synouter/__init__.py").write_text("")
+    (tmp_path / "synouter/src/syninner/__init__.py").write_text("")
+    (tmp_path / "synouter/src/syninner/rec.py").write_text("")
+    (tmp_path / "synouter/src/syninner/rec.circuit-check.json").write_text('{"definitions": {"SynRec_v1": {}}}')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.syspath_prepend(str(tmp_path / "synouter/src"))
+    monkeypatch.setattr(SC, "PACKAGES", ("synouter", "syninner"))
+    SC.discover.cache_clear()
+    try:
+        assert list(SC.discover()) == ["syninner.rec"]
+        assert SC.pin_files()[1:] == [(tmp_path / "synouter/src/syninner/rec.circuit-check.json").resolve()]
+    finally:
+        SC.discover.cache_clear()
+
+
 def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
     """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
     other package is never read, so its bindings would leave the task list without an error."""

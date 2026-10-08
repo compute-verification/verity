@@ -57,6 +57,7 @@ structure Protocol where
   /-- The digest that binds the commitment, which a record or certificate cites. -/
   digest : Commitment → ByteArray
   check : Params → Commitment → Evidence → Outcome Public Profile
+  /-- Never `null`, so that `Answer.ofJson` reads an accepted answer back. -/
   publicJson : Public → Json
   profileJson : Profile → Json
 
@@ -116,5 +117,34 @@ def Answer.toJson (a : Answer) : Json :=
 /-- The outcome's canonical JSON, the only form a caller or a difftest reads. It fails only when a protocol's
 `publicJson` or `profileJson` writes a non-integer number, which the protocol's own tests must rule out. -/
 def Answer.canonical (a : Answer) : V String := Flock.canon a.toJson
+
+def Verdict.ofName : String → Option Verdict
+  | "accept" => some .accept
+  | "reject" => some .reject
+  | "undecided" => some .undecided
+  | _ => none
+
+/-- The inverse of `toJson`, for a protocol that consumes another's answer (the profile is `Integrity.ofJson`'s to
+read). It accepts only what `toJson` writes, and only the shapes `answer` returns: an `accept` has no reason and both its
+public outputs and its profile, which are therefore never `null`; a `reject` or `undecided` has a reason and neither. -/
+def Answer.ofJson (j : Json) (ctx : String := "answer") : V Answer := do
+  let some verdict := Verdict.ofName (← Flock.J.str j "verdict" ctx)
+    | throw s!"{ctx}.verdict: not accept, reject or undecided"
+  let opt (k : String) : V (Option Json) := do
+    match ← Flock.J.get j k ctx with
+    | Json.null => pure none
+    | v => pure (some v)
+  let a : Answer := {
+    protocol := ← Flock.J.str j "protocol" ctx, verdict,
+    reason := ← (← opt "reason").mapM (Flock.J.asStr · s!"{ctx}.reason"),
+    digest := ← (← opt "commitment").mapM fun v => do Flock.unhex (← Flock.J.asStr v s!"{ctx}.commitment"),
+    published := ← opt "public", profile := ← opt "profile" }
+  match verdict, a.reason, a.published, a.profile with
+  | .accept, none, some _, some _ => pure ()
+  | .accept, _, _, _ => throw s!"{ctx}: an accept has no reason, and both its public outputs and its profile"
+  | _, some _, none, none => pure ()
+  | v, _, _, _ => throw s!"{ctx}: a {v.name} has a reason, and neither public outputs nor a profile"
+  if (← Flock.canon a.toJson) != (← Flock.canon j) then throw s!"{ctx}: not in the form Answer.toJson writes"
+  pure a
 
 end Core
