@@ -1425,6 +1425,15 @@ def relay_pass(rstate: dict, sources: list[Source], post: Callable[[dict, dict |
     return posted
 
 
+SENT_BY_RE = re.compile(r"sent by https://cursor\.com/agents/bc-([0-9a-f]{8})")
+
+
+def sender_handles(reg: dict, text: str) -> list[str]:
+    """The handles whose holder is the agent an alert says sent the run (holders name agents by at least `bc-` + 8 hex)."""
+    ids = set(SENT_BY_RE.findall(text))
+    return [h["handle"] for h in reg["handles"] if ids & set(re.findall(r"bc-([0-9a-f]{8})", h["holder"]))]
+
+
 def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     from . import slack
 
@@ -1450,6 +1459,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     def post(ev: dict, thread: dict | None) -> dict:
         """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""
         th = {} if thread is None else thread
+        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(reg, ev["text"])]))}
         if ev["event"] == "clear":
             done = th.setdefault("cleared", [])
             for k, ch in (("ts", alerts), ("pointer", front)):
