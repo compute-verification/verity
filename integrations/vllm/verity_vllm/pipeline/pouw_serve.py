@@ -5,7 +5,7 @@ first call's tiles tampered.
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
-command's own challenger (`verity.protocols.accounting.work.pouw.coins.Challenger`, epoch 0): the command is its run's
+command's own challenger (`verity.experimental.protocols.pouw.coins.Challenger`, epoch 0): the command is its run's
 auditor. Once the engine closes, the circuit replay
 (`check.replay.pouw_circuit.replay`) runs twice, the run's calls as one window under the work law at a budget of K =
 ``--draws``:
@@ -14,7 +14,7 @@ auditor. Once the engine closes, the circuit replay
 - **tampered**: the same calls, except that credited word 7 of every tile of the first call is flipped by its prover,
   committed and opened that way (`check.replay.pouw_circuit.tamper_tiles`), with the calls root recomputed over it.
 
-Each replay's window draws under a fresh source (`verity.protocols.accounting.work.pouw.circuit.anchors.Ledger.open`), which its report records.
+Each replay's window draws under a fresh source (`verity.experimental.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
 
 The command writes ``pouw_serve.json`` under ``--out`` (default ``$RESEARCH_RUN_DIR``), and ``result.json`` beside it
 under a research run (``$RESEARCH_RUN_ID``). They hold
@@ -93,7 +93,7 @@ def main(a: Options) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
-    from verity.protocols.accounting.work.pouw.coins import Challenger
+    from verity.experimental.protocols.pouw.coins import Challenger
     llm = LLM(wl["model"], revision=rev, protocols=ENTRY, protocols_config={"pouw": {"coins": Challenger(0), "draws": a.draws}})
     built = time.monotonic() - t0
     prompts = [{"prompt_token_ids": r["prompt_token_ids"]} for r in wl["requests"]]

@@ -5,8 +5,8 @@
     SiluMulBf16_v4   (g, u: Array<16, Value<1>>) -> Array<16, Value<1>>                      word view: SiluMulBf16_v2
     SiluMul_v4{I}    (gu: Array<2I, Array<16, Value<1>>>) -> Array<I, Array<16, Value<1>>>   word view: SiluMul_v2{I}
 
-`SiluMulBf16_v3` is traced from `silu_mul` (`verity.primitives.circuits.boolean.trace.definition`), so its And gates are that builder's live
-ANDs: ``s = silu_bf16(g)``, then ``bf16_rn(f32(s) * f32(u))`` through `verity_catalog.silicon.fp` (`f32_mul`, then `f32_to_bf16`
+`SiluMulBf16_v3` is traced from `silu_mul` (`verity.ml.circuits.boolean.trace.definition`), so its And gates are that builder's live
+ANDs: ``s = silu_bf16(g)``, then ``bf16_rn(f32(s) * f32(u))`` through `verity.ml.circuits.silicon.fp` (`f32_mul`, then `f32_to_bf16`
 with torch's NaN 0x7FC0). ``s = bf16_rn(silu_f32(f32(g)))`` is a function of the 16-bit g alone (`SiluMulBf16_v1` at u = 1.0).
 Off a band of exponent fields e it is exact arithmetic on g's fields; on the band it reads a constant table of the word
 Definition's own values:
@@ -32,12 +32,12 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from verity.primitives.circuits import boolean as BL
-from verity.primitives.circuits.defs import CompositeDefinition, bind
-from verity.primitives.circuits.types import Array
-from verity_catalog.silicon import fp
-from verity.primitives.circuits.boolean.forms import NOT, ONE, ZERO, OR, add, and_reduce, const_bits, or_reduce, sub
-from verity.primitives.circuits.boolean.trace import definition
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.types import Array
+from verity.ml.circuits.silicon import fp
+from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO, OR, add, and_reduce, const_bits, or_reduce, sub
+from verity.ml.circuits.boolean.trace import definition
 from verity_vllm.program.registry import act, b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.boolean_activation import band

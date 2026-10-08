@@ -8,7 +8,7 @@ SCHEMES = {"frame-v3/sha-256": "frame-v3", "vllm-v1/sha-256": "vllm-v1"}
 
 def supports(subcircuit, scheme):
     if subcircuit.params.get("semantics") != SEMANTICS:
-        return f"the SP1 committed guest evaluates {SEMANTICS} (verity_catalog.silicon AMPERE_BF16_M16N8K16), not {subcircuit.params.get('semantics')}"
+        return f"the SP1 committed guest evaluates {SEMANTICS} (verity.ml.circuits.silicon AMPERE_BF16_M16N8K16), not {subcircuit.params.get('semantics')}"
     if int(subcircuit.params["K"]) != K:
         return f"the SP1 committed guest's statements are built at K = {K}; K = {subcircuit.params['K']} is not"
     if scheme not in SCHEMES:
