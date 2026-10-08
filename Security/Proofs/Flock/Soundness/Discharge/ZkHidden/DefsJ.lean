@@ -164,7 +164,7 @@ variable {n mPts : ℕ} {Reg : Type}
 /-! ## The tables -/
 
 /-- **A hidden-output table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `DrawSetupZKH`'s
-fields at a `DrawSetupH` of `I'`. -/
+fields at a `DrawSetupH` of `I'`, and the statement passes the `--zk` shape check (`Zk.shapeOk`). -/
 structure DrawSetupZHJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
   x : DrawSetupH I' mPts S d
   sch : Flock.Schedule
@@ -180,6 +180,7 @@ structure DrawSetupZHJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean
   hpos : ∀ D : Finset (Fin (innerN (layOf x.st sch))),
     prCoin (fun w => innerPos _ (lt_of_lt_of_le (by simp [Zk.K_PAD]) hL) w ∈ D) ≤
       (D.card : ℝ≥0∞) / innerN (layOf x.st sch)
+  hzk : Flock.Zk.shapeOk x.st = .ok ()
 
 namespace DrawSetupZHJ
 
@@ -265,7 +266,7 @@ theorem drawSetupZHJ_of {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (x : 
     (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZHJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := zk_schedOK x.st _ _ x.wf.1 x.wf.2 x.hm hshape hz
-  exact ⟨⟨x, sch, tPad, hz, h1, h2, h3, h4, h5, h6 _⟩, rfl, rfl, rfl⟩
+  exact ⟨⟨x, sch, tPad, hz, h1, h2, h3, h4, h5, h6 _, hshape⟩, rfl, rfl, rfl⟩
 
 section Shadow
 

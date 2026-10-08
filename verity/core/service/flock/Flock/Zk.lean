@@ -332,14 +332,29 @@ def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs :
     let c1 ← verifyRep spec st sch tPad sess i 1 proofs[2 * i + 1]!
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
+/-- **The statement avoids the mask range `r`** (D12): no pair of Δ (`da`, `db`) has a row or a column in `r`'s words, and
+every region, at each of `r`'s words, fixes an in-block word bit (`i + 7 < k_log`, not free) that the word's index does not
+have. The mask slot's uniform words hide every non-region `ŝ_v` (live PROTOCOL.md §6), so the zero-knowledge proof needs
+them untouched by Δ and by every region; no proof derives it from the verifier's other checks. -/
+def maskFree (st : Stmt) (r : Range) : Bool :=
+  let lo := r.start / 128
+  let off := fun (i : Nat) => !(decide (lo ≤ i / 128) && decide (i / 128 < lo + 2 ^ (r.slotLog - 7)))
+  st.da.all (fun p => off p.1 && off p.2) && st.db.all (fun p => off p.1 && off p.2) &&
+  st.regions.all fun reg => (List.range (2 ^ (r.slotLog - 7))).all fun j =>
+    (List.range (st.c.kLog - 7)).any fun i => !reg.free.contains (i + 7) &&
+      (((reg.mask >>> (i + 7)) % 2 == 1 && (reg.fixed >>> (i + 7)) % 2 == 1) != (lo + j).testBit i)
+
 /-- A statement `--zk` can prove (upstream's `zk_shape_ok`): level 0's query count, and mask words enough for the prover's rank
-check (live PROTOCOL.md §6) to be reachable. Checked when the statement is set up, as upstream does before `Hello`. -/
+check (live PROTOCOL.md §6) to be reachable. Checked when the statement is set up, as upstream does before `Hello`. And,
+which upstream does not check, Δ and the regions avoid the mask slot (`maskFree`, D12). -/
 def shapeOk (st : Stmt) : V Unit := do
   let _ ← queries0 st.m
   let some r := st.c.ranges.find? (·.kind == Kind.mask) | throw "zk: the circuit has no mask slot"
   let words := 2 ^ st.nbl * 2 ^ (r.slotLog - 7)
   if words < 128 * RANK_POINTS + RANK_SLACK then
     throw s!"{words} mask words: the rank check needs {128 * RANK_POINTS} for its {RANK_POINTS} claim points, and {RANK_SLACK} more"
+  if !maskFree st r then
+    throw "zk: a pair of Δ or a region meets the mask slot (D12: the zero-knowledge proof covers no such statement)"
 
 /-- META `mask_log` of a circuit file (14 when absent), which the identity names. -/
 def maskLogOf (circuit : ByteArray) : Nat :=
