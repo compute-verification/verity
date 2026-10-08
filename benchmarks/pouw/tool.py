@@ -18,7 +18,7 @@ from research.store.tool import Tool
 
 TREE = workspace_root(__file__)
 
-CLOSURE = ["benchmarks/pouw/**", "verity/experimental/protocols/pouw/**",
+CLOSURE = ["benchmarks/pouw/**", "verity/core/protocols/pouw/**",
            *package_paths(TREE, "verity.ml.randomness", "**"), *package_paths(TREE, "verity.ml.commitments", "**"),
            *package_paths(TREE, "verity", "errors.py"),
            *package_paths(TREE, "verity.ml.circuits", "silicon/**")]

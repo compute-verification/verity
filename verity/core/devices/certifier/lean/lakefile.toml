@@ -1,0 +1,41 @@
+# The active network certifier device: `active.py`'s proxy as a pure state machine over the reference's certifiers and
+# online prover, in executable Lean, and the issuer that signs its records. It reuses `certifier_program`'s schedule,
+# `network_check`'s grid parameters and encodings, `lms`'s signing and `core_world`'s World; no Mathlib and nothing of
+# Security.
+name = "certifier_device"
+defaultTargets = ["CertifierDevice", "certifier-device-difftest", "certifier-issuer-difftest", "certifier-device-smoke"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "certifier_program"
+path = "../../../protocols/certifier/lean"
+
+[[require]]
+name = "network_check"
+path = "../../../protocols/network/lean"
+
+[[require]]
+name = "core_world"
+path = "../../../primitives/world"
+
+[[require]]
+name = "lms"
+path = "../../../primitives/lms/lean"
+
+[[lean_lib]]
+name = "CertifierDevice"
+
+[[lean_exe]]
+name = "certifier-device-difftest"
+root = "CertifierDevice.DifftestMain"
+
+[[lean_exe]]
+name = "certifier-issuer-difftest"
+root = "CertifierDevice.IssuerDifftestMain"
+
+[[lean_exe]]
+name = "certifier-device-smoke"
+root = "CertifierDevice.SmokeMain"

@@ -1,9 +1,9 @@
 """Pearl-C's GPU check fixture, built off the pod (needs verity and numpy): inputs at a small shape and every buffer the
 kernels write, for both formings and the plain baseline.  Forming, lines and hashes come from
-`verity.experimental.protocols.pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
+`verity.core.protocols.pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
 `verity.ml.kernels.tc.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
 `checked`, `digest`, `tickets`) and must agree.  The hashing is format -h1, the verifier's: BLAKE3 messages and leaves,
-and A's rows and the tile leaves committed as `verity.experimental.protocols.pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
+and A's rows and the tile leaves committed as `verity.core.protocols.pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
 forming's seed_A is its unit's over its own A rows' root (`pearl_c.unit_seed_a`), as the device derives it, so E_A's lines,
 A's forming and the tickets follow A's commitment.
 run.py compares the device's buffers with these bytes before it times anything.
@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "verity" / "experimental" / "protocols" / "pouw" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "pouw" / "tests"))
 
 import pearl_c_vectors as CV  # noqa: E402
 from verity.ml.crypto.blake3 import blake3, keyed  # noqa: E402
@@ -36,11 +36,11 @@ from verity.ml.circuits.silicon import fp32  # noqa: E402
 from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
 from verity.ml.commitments import MerkleTree  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
-from verity.experimental.protocols.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
+from verity.core.protocols.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
                                rows_domain, transcript_domain)
-from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity.experimental.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.experimental.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
 
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 HASHING = "h1"                     # the kernels' hashing format: BLAKE3 messages, leaves and frame-b3 trees
@@ -202,7 +202,7 @@ def tree_bytes(domain, values: list[bytes], schema: str) -> bytes:
 
 
 def a_domain(ctx: Context):
-    """The domain A's rows are committed under (`verity.experimental.protocols.pouw.audit`): the activation binding, frame-b3."""
+    """The domain A's rows are committed under (`verity.core.protocols.pouw.audit`): the activation binding, frame-b3."""
     return rows_domain(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ctx.matmul.shape.m, "blake3")
 
 
@@ -401,7 +401,7 @@ def ieee_coverage(x: np.ndarray, y: np.ndarray, ops: np.ndarray) -> dict[str, in
 
 def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n) -> dict:
     """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme itself: encode, checked, digest, tickets; and the
-    trees' roots as `verity.experimental.protocols.pouw.audit` commits A's rows and the tile leaves."""
+    trees' roots as `verity.core.protocols.pouw.audit` commits A's rows and the tile leaves."""
     s = C.PearlC(forming=forming, hashing=HASHING)
     root_a = commit_rows(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ra, s.commitment_hash).commitment.root
     assert tree_bytes(a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a == ctx.root_a

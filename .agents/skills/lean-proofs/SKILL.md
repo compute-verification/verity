@@ -8,7 +8,7 @@ description: >
   of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
   directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
   them). Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
-  and its Proofs, the PoUS grader in verity/experimental/protocols/pous/lean), when a Lean build or proof is slow,
+  and its Proofs, the PoUS grader in verity/core/protocols/pous/lean), when a Lean build or proof is slow,
   editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -116,7 +116,7 @@ simp with that.
   `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`), and listed by name in the lock's
   `assumptions` with its owner (`check.py --update` writes its record). Its docstring opens with its
-  claim id (`uniform/io-getrandombytes`, from `verity.experimental.claims`) and gives its rationale. Lean is the source of truth for
+  claim id (`uniform/io-getrandombytes`, from `verity.core.claims`) and gives its rationale. Lean is the source of truth for
   what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
   `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an
   assumption, or a theorem in a lane branch, not on `main`.

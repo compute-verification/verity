@@ -108,7 +108,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity.experimental.protocols.pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.core.protocols.pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }
