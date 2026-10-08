@@ -18,7 +18,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the reference, `window.py`, the packages above it and the core it imports (`verity.ml`'s circuits codec, commitments and
 # crypto, and `verity.errors`); what `lake` reads through verity_difftest's path require on C-Flock's verifier (`Flock.Canon`
 # and what it imports, and the package's configuration).
-inputs = ["verity/core/difftest", "verity/__init__.py", "verity/experimental/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
           "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",

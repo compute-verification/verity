@@ -3,9 +3,8 @@ name = "verity-core-evaluate"
 version = "0.0.0"
 description = "The Lean evaluator of descriptor v1 (`verity-evaluate`, this directory's Lake package), difftested against the Python reference."
 requires-python = ">=3.12"
-# No dependencies: uv finds `verity/experimental/pyproject.toml` above this directory before the workspace's root, so a
-# `verity = { workspace = true }` source here does not resolve. The tests run in the workspace's environment, against the
-# editable `verity`, as that suite's do, and `inputs` keys them on it.
+# No dependencies: the tests run in the workspace's environment, against the editable `verity`, and `inputs` keys them
+# on it.
 dependencies = []
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
