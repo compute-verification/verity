@@ -1,6 +1,5 @@
 import CertifierDevice.Device
 import CertifierDevice.Issuer
-import CertifierDevice.Difftest
 
 /-!
 # The certifier device's properties, stated against `step` over traces
@@ -53,7 +52,6 @@ every row from the fault on. The certifier keeps the first fault of a window, so
 namespace Properties.CertifierDevice
 
 open _root_.CertifierDevice
-open _root_.CertifierDevice.Difftest (bitsOf)
 open NetworkCertifier (Reason Status LogicalFrame)
 
 /-! ## A trace -/

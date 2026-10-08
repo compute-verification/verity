@@ -14,7 +14,6 @@ each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`
 namespace Properties.CertifierDevice.Proofs
 
 open _root_.CertifierDevice
-open _root_.CertifierDevice.Difftest (bitsOf)
 open NetworkCertifier (Reason Status)
 
 /-! ## The handing loop -/
