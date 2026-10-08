@@ -28,7 +28,7 @@ def sha(s: str) -> str:
 
 
 def fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n = n", hyps=None, reads=None, axioms=STD, kind="theorem", h="00000000000000aa"):
-    reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+    reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32, "own": ["P.f.match_1"]},
                                              {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}]
     return {"kind": kind, "module": "P.Thms", "signature": signature, "axioms": axioms, "type_hash": h, "type_sha256": sha(h),
@@ -127,7 +127,7 @@ def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
     home = dict.fromkeys(["P", "P.Defs", "P.Assumptions", "P.Proofs", "P.Thms"], A.spec_of(pol)) | \
         dict.fromkeys(["Q.Spec", "Q.Math"], ["Q.Spec"])
     assert A.spec_reads(pol, spec_facts(outside=[("Nat", "Init.Prelude"), ("Q.g", "Q.Spec")]), home) == []
-    extra = [{"name": "P.aux", "module": "P.Proofs", "kind": "def", "hash": "5" * 32},
+    extra = [{"name": "P.aux", "module": "P.Proofs", "kind": "def", "hash": "5" * 32, "own": ["P.aux.match_1"]},
              {"name": "P.aux.match_1", "module": "P.Proofs", "kind": "def", "hash": "6" * 32}]
     assert A.spec_reads(pol, spec_facts(reads=fact()["reads"] + extra), home) == [
         "reads: P.t read P.aux in P.Proofs, outside the spec (P.Assumptions, P.Defs): a guarantee's statement reads only the "
@@ -593,6 +593,26 @@ def test_generated_constants_belong_to_their_declaration():
         "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]
 
 
+def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
+    """A generated constant is part of its declaration's digest only when the declaration reaches it itself (`own`), so
+    removing the guarantee that read `P.Enc.casesOn` through another definition's match leaves `P.Enc`'s record as it was,
+    rather than showing it changed with no change to its source; `P.Enc.casesOn` is a record of its own, which goes."""
+    enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
+    mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
+    cases = {"name": "P.Enc.casesOn", "module": "P.Defs", "kind": "def", "hash": "3" * 32, "own": []}
+    g = {"name": "P.g", "module": "P.Defs", "kind": "def", "hash": "4" * 32, "own": []}
+    f = {"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "5" * 32, "own": ["P.f.match_1"]}
+    m1 = {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "6" * 32, "own": []}
+    both = facts(pins={"P.s": fact(reads=[enc, mk, f, m1]), "P.t": fact(reads=[enc, mk, g, cases])})
+    one = facts(pins={"P.s": fact(reads=[enc, mk, f, m1])})
+    defs = [A.read_groups(A.guarantee_reads(x))["P.Defs"]["definitions"] for x in (both, one)]
+    assert sorted(defs[0]) == ["P.Enc", "P.Enc.casesOn", "P.f", "P.g"] and sorted(defs[1]) == ["P.Enc", "P.f"]
+    hashed = [{**r, "sha256": sha(r["hash"])} for r in (enc, mk, f, m1)]
+    assert defs[0]["P.Enc"] == defs[1]["P.Enc"] == A.digest(hashed[:2]) and defs[0]["P.f"] == A.digest(hashed[2:])
+    alone = facts(pins={"P.t": fact(reads=[g, m1])})
+    assert sorted(A.read_groups(A.guarantee_reads(alone))["P.Defs"]["definitions"]) == ["P.f.match_1", "P.g"]
+
+
 def test_update_prints_each_changed_guarantee_and_definition(tmp_path):
     (tmp_path / "Defs.lean").write_text("namespace P\n\ndef f (n : Nat) : Nat := n\n\nend P\n")
     old = recorded()
@@ -617,7 +637,7 @@ def moved_fact(name="Q.t", was="P.t", h="00000000000000cc", as_was="000000000000
     """A guarantee ``was`` renamed to ``name``, reading `P.f` renamed to `Q.f` (in `Q.Defs`), as `Facts.lean` reports it after
     `--moved`: its statement's text under the old names hashes like ``as_was``, `Q.f`'s like ``f_was``; with ``head``,
     its type is that definition applied to `n`, which unfolded under the old names hashes like ``as_was``."""
-    reads = [{"name": "Q.f", "module": "Q.Defs", "kind": "def", "hash": f, "moved": {"as": "P.f", "sha256": sha(f_was)}},
+    reads = [{"name": "Q.f", "module": "Q.Defs", "kind": "def", "hash": f, "own": ["Q.f.match_1"], "moved": {"as": "P.f", "sha256": sha(f_was)}},
              {"name": "Q.f.match_1", "module": "Q.Defs", "kind": "def", "hash": "2" * 32,
               "moved": {"as": "P.f.match_1", "sha256": sha("2" * 32)}},
              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32,

@@ -777,15 +777,33 @@ def guarantee_reads(facts: dict) -> dict[str, dict[str, dict]]:
 def read_groups(reads: dict[str, dict[str, dict]], old: bool = False) -> dict:
     """The `reads` records: per module, a digest per definition read there (generated constants with their declaration), the
     module's digest of those, and the guarantees that read it; in SHA-256, or (``old``) as records written before it."""
-    out = {}
+    out, key = {}, group_keys(reads)
     for m, es in sorted(reads.items()):
         groups: dict[str, list] = {}
         for n, e in es.items():
-            groups.setdefault(parent(n), []).append(e)
+            groups.setdefault(key[n], []).append(e)
         defs = {p: digest(g, old)[:OLD] if old else digest(g) for p, g in sorted(groups.items())}
         out[m] = {"digest": module_digest(defs), "definitions": defs,
                   "guarantees": sorted(set().union(*(e["guarantees"] for e in es.values())))}
     return out
+
+
+def group_keys(reads: dict[str, dict[str, dict]]) -> dict[str, str]:
+    """{read constant: the definition its `reads` digest is part of}: a generated constant goes with its declaration when the
+    declaration is read in its module and reaches it through its own type, value or constructors (`own`, transitively), so
+    the group is the same whichever guarantees read the declaration; any other read constant (an inductive's `casesOn`
+    another definition's match uses, an equation lemma a statement names) is a definition of its own."""
+    entries = {n: e for es in reads.values() for n, e in es.items()}
+    key = {}
+    for n, e in entries.items():
+        p, seen = parent(n), set()
+        stack = [p] if p != n and entries.get(p, {}).get("module") == e["module"] else []
+        while stack and n not in seen:
+            if (x := stack.pop()) not in seen:
+                seen.add(x)
+                stack += entries.get(x, {}).get("own", [])
+        key[n] = p if n in seen else n
+    return key
 
 
 def parent(name: str) -> str:
@@ -1234,11 +1252,15 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
                 for m, rec in oreads.items() for d, h in definitions(rec).items()}
     now: dict[str, dict] = {}
-    for m, es in guarantee_reads(facts).items():
+    greads = guarantee_reads(facts)
+    key = group_keys(greads)
+    for m, es in greads.items():
         groups: dict[str, list] = {}
         for n, e in es.items():
-            was = moves and e.get("moved") and parent(n) not in recorded
-            groups.setdefault(parent(e["moved"]["as"]) if was else parent(n), []).append(e)
+            d = key[n]
+            if moves and e.get("moved") and d not in recorded:
+                d = e["moved"]["as"].removesuffix(n[len(d):])
+            groups.setdefault(d, []).append(e)
         for d, g in groups.items():
             as_was = digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]}
                              if moves and e.get("moved") else e for e in g])

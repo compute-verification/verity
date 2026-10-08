@@ -19,7 +19,8 @@ judgement; `audit.py` holds the policy.
 - `pins`: for each name in `pins`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
   axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
-  `meaning`, with their source lines (`reads`), and the constants other than theorems outside `meaning` where that walk
+  `meaning`, with their source lines and the constants under each one's name that its own type, value or constructors use
+  (`reads`, `own`: what its record hashes with it), and the constants other than theorems outside `meaning` where that walk
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
@@ -285,8 +286,10 @@ def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
     return out
   let readJson := fun (r : Name × Name × ConstantInfo) =>
     let (c, m, ci) := r
+    let own := (meaningDeps ci).foldl (fun (s : NameSet) d => if d != c && c.isPrefixOf d then s.insert d else s) {}
     Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
       ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
+      ("own", toJson (own.toArray.qsort Name.lt |>.map toString)),
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
