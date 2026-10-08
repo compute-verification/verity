@@ -67,7 +67,8 @@ groups:
             datasourceUid: prometheus
             model:
               refId: W
-              expr: (sum(vy_queue_pending) or vector(0)) + (sum(vy_ready_jobs) or vector(0))
+              # shadow-* queues mirror the real waiters for `cluster kueue-shadow`, and run nothing
+              expr: (sum(vy_queue_pending{queue!~"shadow-.*"}) or vector(0)) + (sum(vy_ready_jobs) or vector(0))
               instant: true
               range: false
           - refId: B
