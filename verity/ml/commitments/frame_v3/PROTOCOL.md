@@ -160,7 +160,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
   them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
   id from its own derivation of the binding, and refuses a root whose recorded domain differs (R3-domain in
-  `verity.experimental.protocols.sampled_proofs.one_stage.registration` does).
+  `verity.core.protocols.sampled_proofs.one_stage.registration` does).
 - **Reference and conformance.** `verity.ml.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
@@ -257,7 +257,7 @@ and `test_rowleaf_bits.py` check them.
 
 A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
 `verity.ml.commitments.merkle`, where the module docstring states the layout. Its first user is Pearl-C's hashing format `-h1`
-(`verity/experimental/protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
+(`verity/core/protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
 B-Ligero do not mirror it, `FrameV3` does not offer it, and `multiproof` refuses it.
 
 ~~~text

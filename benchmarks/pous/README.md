@@ -26,14 +26,14 @@ scheme's certified parameters.
 
 Implementations:
 
-- `reference`: `verity.experimental.protocols.pous` on CPU processes.
+- `reference`: `verity.core.protocols.pous` on CPU processes.
 - `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous` (#172, #188), from their own tree, through its frozen
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
 - `band-gpu`: the same band and dense kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only
   harness `band_gpu/harness.py` (steps and metrics in its docstring). Its whole-chain decode runs on lane pairs
   (`harness.KERNELS`, `dense.CHAIN_PAIRS`); `pod.sh KERNELS='{"chain_pairs": false}'` runs the run of record's kernels:
-  - kernel gates first: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity.experimental.protocols.pous`'s
+  - kernel gates first: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity.core.protocols.pous`'s
     encoding, and the round trip. A failed gate stops the run: nothing is timed and no measurement is published;
   - encode GB/s, with `C` then resident;
   - decode overhead on a synthetic loop of the weight set's GEMMs at T = 1, 8, 32 and 2048 tokens, against the same GEMMs
@@ -51,7 +51,7 @@ Implementations:
   - the `Π₂` step floor, the fastest honest kernel for a whole call, with the SM clock sampled while it runs, the floor
     scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it, against the certificate's
     `call_ns`: 241.5 µs, the 4,830 sequential Keccak-f of a 64 KiB call in a chain at 50 ns each (the rounds' absorbs
-    stream behind the squeezes; `verity/experimental/protocols/pous/PROTOCOL.md`), so in the ideal-permutation model `D = 5` covers
+    stream behind the squeezes; `verity/core/protocols/pous/PROTOCOL.md`), so in the ideal-permutation model `D = 5` covers
     `Δ + RTT < 1.449` ms and the band's cliff at `d = 12` is about 3.14 ms. It is not an upper bound on an attacker's
     floor, and neither are the margins derived from it: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no
     call and rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team,

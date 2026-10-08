@@ -26,7 +26,7 @@
    "name": "certifier_program",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/experimental/protocols/certifier/lean",
+   "dir": "../../verity/core/protocols/certifier/lean",
    "configFile": "lakefile.toml"
   },
   {
@@ -35,7 +35,7 @@
    "name": "core_randomness",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/experimental/core/primitives/randomness",
+   "dir": "../../verity/core/primitives/randomness",
    "configFile": "lakefile.toml"
   },
   {
@@ -44,7 +44,7 @@
    "name": "core_vstar",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/experimental/core/service/vstar",
+   "dir": "../../verity/core/service/vstar",
    "configFile": "lakefile.toml"
   },
   {
@@ -53,7 +53,7 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../verity/experimental/core/service/vstar/../../difftest/lean",
+   "dir": "../../verity/core/difftest/lean",
    "configFile": "lakefile.toml"
   },
   {

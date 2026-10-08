@@ -45,7 +45,7 @@ def _core(name: str) -> bool:
     moved_in = ("verity.experimental", "verity.ml.circuits.ops", "verity.ml.circuits.silicon", "verity.ml.circuits.targets",
                 "verity.ml.kernels", "verity.ml.flock")
     return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.experimental.protocols", "verity.experimental.claims"))))
+                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
 
 def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:

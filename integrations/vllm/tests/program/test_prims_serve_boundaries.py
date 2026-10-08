@@ -21,7 +21,7 @@ THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 #: (module, what it imports outside the rule) -> why it stays
-EXCEPTIONS = {("pouw_rows", "verity.experimental.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
+EXCEPTIONS = {("pouw_rows", "verity.core.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
 
 
 def _imports(name: str) -> list[tuple[int, str]]:
@@ -52,7 +52,7 @@ def _core(name: str) -> bool:
     moved_in = ("verity.experimental", "verity.ml.circuits.ops", "verity.ml.circuits.silicon", "verity.ml.circuits.targets",
                 "verity.ml.kernels", "verity.ml.flock")
     return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.experimental.protocols", "verity.experimental.claims"))))
+                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
 
 def _allowed(mod: str) -> bool:

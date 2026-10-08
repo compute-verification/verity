@@ -1,0 +1,20 @@
+# The interface every core protocol implements: its parameters, commitment and evidence read from canonical bytes, one
+# check, and an outcome (verdict, public outputs, profile) written as canonical JSON. Each protocol's package requires
+# this one and C-Flock's verifier (for its canonical JSON, bytes and hashes); none needs Mathlib.
+name = "core_protocol"
+defaultTargets = ["CoreProtocol", "core-protocol-example"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[lean_lib]]
+name = "CoreProtocol"
+
+[[lean_exe]]
+name = "core-protocol-example"
+root = "CoreProtocol.ExampleMain"
