@@ -148,7 +148,7 @@ def test_a_variant_is_named_by_its_sources_digest_in_any_order_and_a_changed_sou
 def test_the_variant_and_the_groups_are_verity_pouw_serving_s_when_it_is_importable(tmp_path):
     S = L.serving()
     if S is None:
-        pytest.skip("verity.protocols.accounting.work.pouw.serving (#567) isn't on this tree yet")
+        pytest.skip("verity.experimental.protocols.pouw.serving (#567) isn't on this tree yet")
     v = variant(tmp_path)
     kv = S.KernelVariant(family="pearl-c", device="sm120", schemes=frozenset(v["schemes"]), schedules=frozenset(v["schedules"]),
                          shapes=S.ShapeRule(), source_sha256=v["source_sha256"], binary_sha256=v["binary_sha256"],
@@ -280,10 +280,10 @@ end Pouw.Guarantees.PearlC
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
     lean = tmp_path / "Security"
-    (lean / "Specs" / "Pouw" / "Guarantees").mkdir(parents=True)
-    (lean / "Specs" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    (lean / "Models" / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / "Models" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Specs.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "reads": {"Models.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
     return audit, lean
 
 
@@ -309,6 +309,20 @@ def test_a_lifted_twin_without_a_recorded_definition_stating_its_gamma_fails_clo
         P.extract(P.guarantees(audit), "t", {}, P.lifted_definitions(audit, lean))
     with pytest.raises(P.TwinError, match="no Guarantees definition"):
         P.parse(LIFTED, P.guarantees(audit)[LIFTED])
+
+
+def test_a_store_pin_the_repository_holds_lifted_is_one_twin_the_store_s(tmp_path):
+    """The store's pins keep their names from before the lift; the repository's lifted copy of one is the same pin, not
+    a second twin stating it."""
+    old = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+    audit, lean = lifted_audit(tmp_path)
+    (lean / "lean-audit.json").write_text(json.dumps(audit))
+    store = tmp_path / "store"
+    for rel in (P.LEAN_STORE, *P.STAGED):
+        (store / rel).parent.mkdir(parents=True, exist_ok=True)
+        (store / rel).write_text(json.dumps({"pins": {old: PINS[old]} if rel == P.LEAN_STORE else {}}))
+    (twin,) = P.build(store, lean / "lean-audit.json")["twins"]
+    assert (twin["pin"], twin["source"], twin["status"]) == (old, P.LEAN_STORE, "pinned")
 
 
 def test_every_pinned_twin_of_the_repository_is_its_audit_s_pin_and_states_its_gamma():
@@ -371,7 +385,7 @@ def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
     assert g["cap"] == "1/1000" and g["missing"] == [] and g["pins"] == ["pinned"]
     assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
     assert (g["published"], g["published_at"]) == (loop, "1047/125")
-    assert g["by_price"]["8"]["pin"] == f"Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1Cap1000_{n}"
+    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_{n}"
     assert all(P.lookup(t, "pearl-c-sm120/v1", path, n, n)["by_price"] == {} for path in ("cast-8", "cast-16", "cast-32.06"))
     assert P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", n, n)["published"] is not None
 

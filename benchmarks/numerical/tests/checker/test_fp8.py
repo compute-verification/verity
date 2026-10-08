@@ -12,7 +12,7 @@ import random
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity_catalog.silicon.models import (
+from verity.ml.circuits.silicon.models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,

@@ -210,10 +210,10 @@ def test_handles_and_subscriptions(registry, capsys):
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
-                     "catalog/verity_catalog/definitions/tc.py", "verity/primitives/circuits/cut.py", "AGENTS.md", "nowhere/x")
+                     "verity/ml/circuits/ops/tc.py", "verity/ml/circuits/cut.py", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
         ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
-        ["@circuits", "catalog/verity_catalog/definitions/tc.py"], ["@proofs", "verity/primitives/circuits/cut.py"],
+        ["@circuits", "verity/ml/circuits/ops/tc.py"], ["@proofs", "verity/ml/circuits/cut.py"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")
@@ -478,9 +478,15 @@ def test_groups_sync_plans_through_the_broker_but_applies_only_with_the_token(br
 @pytest.fixture
 def identity_socket(monkeypatch):
     """A fake cursor-agent socket: answers POST /v1/tokens/oidc with `answer` (status, body) and records each request's body."""
-    state = {"answer": (200, {"token": OIDC}), "seen": []}
+    state = {"answer": (200, {"token": OIDC}), "seen": [], "drop": 0}
 
     class Handler(http.server.BaseHTTPRequestHandler):
+        def handle(self):
+            if state["drop"]:
+                state["drop"] -= 1
+                return
+            super().handle()
+
         def do_POST(self):
             state["seen"].append((self.path, json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
             status, body = state["answer"]
@@ -517,6 +523,22 @@ def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_soc
         identity_socket["answer"] = answer
         with pytest.raises(slack.SlackError, match=re.escape(says)):
             slack.oidc_token(slack.BROKER)
+
+
+def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch, tmp_path):
+    waits: list[float] = []
+    identity_socket["drop"] = 2
+    assert slack.oidc_token(slack.BROKER, sleep=waits.append) == OIDC
+    assert waits == list(slack.OIDC_RETRY_S) and len(identity_socket["seen"]) == 1
+    identity_socket["drop"] = len(slack.OIDC_RETRY_S) + 1
+    with pytest.raises(slack.SlackError, match="identity socket the Slack broker needs is unavailable"):
+        slack.oidc_token(slack.BROKER, sleep=waits.append)
+    assert len(identity_socket["seen"]) == 1 and identity_socket["drop"] == 0
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path / "absent.sock"))
+    waits.clear()
+    with pytest.raises(slack.SlackError, match="not a Cursor agent"):
+        slack.oidc_token(slack.BROKER, sleep=waits.append)
+    assert not waits
 
 
 def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
@@ -610,7 +632,7 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
     assert run(capsys, "done", "--as", "compute-accounting", "--thread", t)[0] == 0
-    assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 23:00Z")[0] == 0
+    assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 7 Oct 23:00Z")[0] == 0
     assert run(capsys, "done", "--as", "console", "--thread", t)[0] == 0                   # not addressed: not counted
     assert not [r for r in fake.reactions if r[1] == t]                                    # one bot can't carry many agents' reactions
     fake.add(COORD, text=f"{slack.DONE} done", user="UINTRUDER", thread_ts=t)              # a human's line is no status of a handle

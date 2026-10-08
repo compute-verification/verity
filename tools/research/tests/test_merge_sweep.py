@@ -47,7 +47,7 @@ def _world(tmp_path: Path):
     repo.mkdir()
     (repo / "mytools").mkdir()
     (repo / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (repo / "tools" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
     for rel, text in CHECK_FILES.items():
         (repo / rel).write_text(text)
     (repo / ".gitignore").write_text("__pycache__/\n")
@@ -325,6 +325,38 @@ def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_l
     assert _marker(repo) == tip
 
 
+def test_a_spec_dm_that_failed_is_sent_again_by_the_next_sweep_which_fails_until_it_goes(tmp_path, monkeypatch, capsys):
+    """Tip 141 (8 Oct): the DM failed on the Slack broker's socket, the after-landing marker moved anyway, and only a hand retry
+    sent it.  The DM's own marker stays put until `alert` returns True, so the next run resends it, and `--sweep` exits 1 while it
+    lags main; the mirror and `after_land` still run once."""
+    import research.spec_alert as S
+
+    repo, gh, _tips, merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    ran = _steps(monkeypatch)
+    monkeypatch.chdir(repo)
+    assert M.main(["--sweep"]) == 0 and _marker(repo) == merge
+    assert _git(repo, "ls-remote", "origin", M.SPEC_ALERTED_REF).split()[0] == merge
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
+    (other / "x.txt").write_text("x\n")
+    _git(other, "add", "-A")
+    _git(other, "commit", "-q", "-m", "x, pushed by hand")
+    _git(other, "push", "-q", "origin", "main")
+    tip = _git(other, "rev-parse", "HEAD")
+    sent = iter([False, True])
+    monkeypatch.setattr(S, "alert", lambda _repo, old, new, **_k: ran.append(("alert", old, new)) or next(sent))
+    capsys.readouterr()
+    assert M.main(["--sweep"]) == 1
+    err, out = capsys.readouterr()[::-1]
+    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip)] and _marker(repo) == tip
+    assert f"{M.SPEC_ALERTED_REF} stays at {merge[:12]}" in out and f"{M.SPEC_ALERTED_REF} is {merge[:12]}, behind main" in err
+    assert M.main(["--sweep"]) == 0
+    assert ran[3:] == [("alert", merge, tip)], "only the DM is retried"
+    assert _git(repo, "ls-remote", "origin", M.SPEC_ALERTED_REF).split()[0] == tip
+    assert M.main(["--sweep"]) == 0 and len(ran) == 4, "sent once"
+
+
 def test_a_marker_main_does_not_hold_runs_nothing_and_says_how_to_reset_it(tmp_path, monkeypatch, capsys):
     repo, gh, tips, _merge = _world(tmp_path)
     monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
@@ -378,6 +410,23 @@ def test_a_refused_node_1_push_leaves_the_merge_landed_and_names_the_command_tha
     assert f"main ({main[:12]}) not pushed to vy-nebius-1 (git push exited 1: " in line and "rejected" in line
     assert line.endswith(f"; rerun: cd {repo} && research merge --mirror {main}")
     _git(tmp_path, "--git-dir", str(bare), "update-ref", "-d", "refs/heads/main")
+    assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
+
+
+def test_a_hand_landed_main_reaches_node_1_past_the_checkouts_push_guard(tmp_path, monkeypatch, capsys):
+    """The guard judges pushes to origin's main; node 1's copy follows origin, so a main landed by hand, which has no check
+    attempt of its tree, still reaches it (61f64824c and 24aa9a9a4 didn't, 7 Oct)."""
+    repo, _gh, _tips, _merge = _world(tmp_path)
+    bare, _asked = _node1(tmp_path, monkeypatch)
+    _git(repo, "config", "core.hooksPath", str(repo / ".git" / "hooks"))
+    assert M.install_push_guard(repo) == repo / ".git" / "hooks" / "pre-push"
+    (repo / "by-hand.txt").write_text("landed by hand\n")
+    _git(repo, "add", "by-hand.txt")
+    _git(repo, "commit", "-qm", "landed by hand")
+    main = _git(repo, "rev-parse", "HEAD")
+    plain = subprocess.run(["git", "push", "-q", str(bare), f"{main}:refs/heads/main"], cwd=repo, capture_output=True, text=True)
+    assert plain.returncode != 0 and _main_of(bare) is None, "the guard refuses it as a push to main"
+    monkeypatch.chdir(repo)
     assert M.main(["--mirror", main]) == 0 and _main_of(bare) == main
 
 

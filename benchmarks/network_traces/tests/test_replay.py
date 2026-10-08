@@ -11,7 +11,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.communication.certifier import calibration
+from verity.experimental.protocols.certifier import calibration
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60  # buckets per window
@@ -168,7 +168,10 @@ def test_an_online_prover_declares_from_what_it_has_seen_and_carries_a_runs_hist
         assert summary["sync_policy"] == "cover-2-1" and summary["fresh"] == bool(flags)
         assert summary["runs_accepted"] == {"raw": 2, "committed": 2, "certified": 2}
         assert summary["egress"]["calibrator_misses"] is None
-        assert [r["sync"][0] for r in rows if r["direction"] == "egress"] == [3, 4, 4, first, 4, 4]
+        egress = [r for r in rows if r["direction"] == "egress"]
+        assert [r["sync"][0] for r in egress] == [3, 4, 4, first, 4, 4]
+        assert egress[0]["choices"] == 1 and egress[1]["choices"] > 1
+        assert (egress[3]["choices"] == 1) == bool(flags)
     with pytest.raises(SystemExit):
         rep.main([str(tmp_path / "trace.json"), "--calibration", str(tmp_path / "cal.json"), "--out",
                   str(tmp_path / "bad"), "--syncs", "cover-2"])

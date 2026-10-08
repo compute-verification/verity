@@ -27,7 +27,7 @@ failure.  Once the queue lands trains it replaces the
 merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs, read from what merging
+`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs, read from what merging
 it into `main` would land (`main`'s tree against the one `git merge-tree` writes; a head that conflicts needs every grant): a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), and who gives each (`by`, which `status` prints with the label command to a PR waiting on it).  A grant is a
 store label `grant = {role}` on the target `pr:{number}@{head sha}`.  It carries to a new head of the PR that only restacks it or
@@ -90,8 +90,8 @@ from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
-#: where the rules are until the repository move puts `tools/check/` at `ci/`
-RULES_BEFORE_MOVE = "tools/check/queue.toml"
+#: where the rules are until the repository move puts `tools/verity/check/` at `ci/`
+RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
@@ -306,7 +306,7 @@ def rebased(repo: Path, was: tuple[str, ...], now: tuple[str, ...]) -> bool:
     return merged.returncode == 0 and want.returncode == 0 and merged.stdout == want.stdout
 
 
-def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
+def carry(repo: Path, base: str, old: str, new: str, rule: Iterable[str] | None = None) -> tuple[bool, str]:
     """Whether a grant on ``old``, another head of a PR, counts at its head ``new``, and why (Daniel's
     rulings: 2 Oct, one carries across a restack or a merge of `main` when the new head's `lean-audit.json` change is identical to
     the one granted; 6 Oct, 8:03 AM PDT, it carries when the PR's own patch is byte-identical at both heads, even if `main` moved
@@ -322,7 +322,10 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
     whatever its history: with one merge base, a merge commit can hold edits of its own and a rebase rewrites every commit, but
     neither can make two different patches compare equal.  Nothing else carries: a head that changes any file more, less or
     differently, or one git can't compare (``old`` isn't in ``repo``, no merge base, or several, where a merge can drop a change
-    `main` merged without any diff against one of them showing it), needs new grants."""
+    `main` merged without any diff against one of them showing it), needs new grants.
+
+    Given the grant's ``rule`` (its `Rule.paths`), only the paths that rule covers are compared: a change it leaves out (a test,
+    a README) needs no grant of that role, so it doesn't void one either."""
     for h in (old, new):
         if _git(repo, "cat-file", "-e", f"{h}^{{commit}}", check=False).returncode:
             return False, f"{h[:12]} isn't in {repo}, so its change can't be compared (fetch it)"
@@ -336,6 +339,14 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
     was, now = own_change(repo, base, old), own_change(repo, base, new)
     if was is None or now is None:
         return False, f"git can't diff {(old if was is None else new)[:12]} against its merge base with {name}"
+    left_out = ""
+    if rule is not None:
+        from .merge import rule_touches
+
+        rule = list(rule)
+        skip = {p for p in was.keys() | now.keys() if not rule_touches(rule, [p])}
+        was, now = ({p: v for p, v in d.items() if p not in skip} for d in (was, now))
+        left_out = f"; {len(skip)} changed path{'s' * (len(skip) != 1)} its rule leaves out not compared" if skip else ""
     if differ := sorted(p for p in was.keys() | now.keys() if p not in was or p not in now or not rebased(repo, was[p], now[p])):
         if audits := [p for p in differ if _is_audit(p)]:
             return False, f"its lean-audit.json patch isn't byte-identical ({', '.join(map(_shown, audits))})"
@@ -353,7 +364,8 @@ def carry(repo: Path, base: str, old: str, new: str) -> tuple[bool, str]:
         how = "merge of an ancestor of main"
     else:
         how = "commits on top of it that cancel out"
-    return True, f"{how}; lean-audit.json change identical" if any(map(_is_audit, now)) else f"{how}; no lean-audit.json change"
+    audit = "lean-audit.json change identical" if any(map(_is_audit, now)) else "no lean-audit.json change"
+    return True, f"{how}; {audit}{left_out}"
 
 
 class StoreGrants:
@@ -373,28 +385,34 @@ class StoreGrants:
         """Whether someone asserted `ready = true` on `pr:{n}@{head}`."""
         return any(str(lab.value).lower() == "true" for lab in self._labels(pr, head, vocab.READY))
 
-    def carried(self, pr: int, head: str, roles: set[str], onto: str | None = None) -> set[str]:
+    def carried(self, pr: int, head: str, roles: set[str], onto: str | None = None, rules: Rules | None = None) -> set[str]:
         """Which of ``roles`` a `grant` on another head of pull request ``pr`` gives ``head`` (`carry`), each head's change taken
-        against ``onto`` (default the ``base`` it merges onto; for a PR stacked on another in a train, the ref below it there)."""
-        return {str(lab.value) for _, lab in self._carried(pr, head, vocab.GRANT, roles, onto)} if roles else set()
+        against ``onto`` (default the ``base`` it merges onto; for a PR stacked on another in a train, the ref below it there).
+        Given ``rules``, a role with a rule there compares only the paths its rule covers."""
+        paths = {r.role: r.paths for r in rules.grants} if rules else {}
+        return {str(lab.value) for _, lab in self._carried(pr, head, vocab.GRANT, roles, onto, paths)} if roles else set()
 
-    def _carried(self, pr: int, head: str, key: str, values: set[str] | None, onto: str | None = None) -> list[tuple]:
+    def _carried(self, pr: int, head: str, key: str, values: set[str] | None, onto: str | None = None,
+                 rules: dict[str, tuple[str, ...]] | None = None) -> list[tuple]:
         """(the head it's on, the label) for each ``key`` label (whose value is in ``values``, unless None) on another head of pull
-        request ``pr`` from which `carry` onto ``onto`` (default ``base``) says it counts at ``head``; a line for each head with such
-        labels, carried or not."""
+        request ``pr`` from which `carry` onto ``onto`` (default ``base``) says it counts at ``head``, comparing only the paths of
+        ``rules[value]`` when there is one; a line for each head and rule with such labels, carried or not."""
         if self.repo is None:
             return []
         out = []
         for old, labs in self._other_heads(pr, head, key).items():
-            if not (labs := [lab for lab in labs if values is None or str(lab.value) in values]):
-                continue
-            what = ", ".join(sorted({f"{key} {lab.value}" for lab in labs}))
-            ok, why = carry(self.repo, onto or self.base, old, head)
-            if ok:
-                self.log(f"research queue: {what} carried from {grant_target(pr, old)} to {head[:12]} ({why})")
-                out += [(old, lab) for lab in labs]
-            else:
-                self.log(f"research queue: {what} on {grant_target(pr, old)} doesn't carry to {head[:12]}: {why}")
+            by_rule: dict[tuple[str, ...] | None, list] = {}
+            for lab in labs:
+                if values is None or str(lab.value) in values:
+                    by_rule.setdefault((rules or {}).get(str(lab.value)), []).append(lab)
+            for rule, group in by_rule.items():
+                what = ", ".join(sorted({f"{key} {lab.value}" for lab in group}))
+                ok, why = carry(self.repo, onto or self.base, old, head, rule)
+                if ok:
+                    self.log(f"research queue: {what} carried from {grant_target(pr, old)} to {head[:12]} ({why})")
+                    out += [(old, lab) for lab in group]
+                else:
+                    self.log(f"research queue: {what} on {grant_target(pr, old)} doesn't carry to {head[:12]}: {why}")
         return out
 
     def _other_heads(self, pr: int, head: str, key: str) -> dict[str, list]:
@@ -460,7 +478,7 @@ class Queue:
     def __init__(self, workdir: Path, *, remote: str, github, grants: Callable[[int, str], set[str]], ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, notes: Path | None = None, log: Callable[[str], None] = print,
                  auth: tuple[str, ...] = (),
-                 carry: Callable[[int, str, set[str]], set[str]] = lambda n, h, roles: set()):
+                 carry: Callable[..., set[str]] = lambda n, h, roles, **kw: set()):
         self.workdir, self.remote, self.github, self.grants, self.ready, self.store = Path(workdir), remote, github, grants, ready, store
         self.carry = carry
         self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
@@ -573,7 +591,7 @@ class Queue:
         """The roles ``p``'s change needs that no grant gives at its head, on it or carried to it from another (`carry`)."""
         need = rules.needs(self.workdir, "origin/main", p.head, log=self.log)
         missing = need - self.grants(p.number, p.head)
-        return missing - self.carry(p.number, p.head, missing) if missing else missing
+        return missing - self.carry(p.number, p.head, missing, rules=rules) if missing else missing
 
     def order(self, chain: list[Member], entries: dict[int, Entry]) -> list[int]:
         """Members that keep their head keep their order; the rest follow by PR number, each after the PRs it contains."""
@@ -791,7 +809,7 @@ SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("backends/flock/verifier/lean",)
+LEAN_BUILDS = ("verity/core/service/flock",)
 
 
 class QuickTier:
@@ -863,7 +881,10 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
     each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none;
     None when no machine's slots could be read. And why, with each machine skipped."""
-    s = importlib.util.spec_from_file_location("queue_check", repo / "tools" / "check" / "check.py")
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/verity/check/check.py", lambda p: (repo / p).is_file()) or "tools/verity/check/check.py"
+    s = importlib.util.spec_from_file_location("queue_check", repo / path)
     check = importlib.util.module_from_spec(s)
     sys.modules[s.name] = check
     s.loader.exec_module(check)
@@ -881,7 +902,7 @@ class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
     lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On the machine the run waits for a
-    free check slot (`tools/check/slot.py` from the caller's checkout, sent with the run, as `check.py --record --on` takes one) and
+    free check slot (`tools/verity/check/slot.py` from the caller's checkout, sent with the run, as `check.py --record --on` takes one) and
     runs `quick_tier.py` (sent too) in the shipped tree.  The caller polls the run's records (`research fetch`) until it ends and
     judges the facts in its result.json as the local tier's are judged; a run that ends without them, with facts from another run
     or head, or other than `done` with exit 0, is a failure.  A run that waited `wait_s` for a slot and gave up never started
@@ -899,7 +920,7 @@ class RemoteQuickTier(QuickTier):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.poll_s = on, by, project, poll_s
         self.timeout_s, self.wait_s = timeout_s, wait_s
-        self.slot = Path(slot or self.repo / "tools" / "check" / "slot.py")
+        self.slot = Path(slot or self.repo / "tools" / "verity" / "check" / "slot.py")
         self.launch, self.fetch, self.sleep, self.clock, self.place = launch, fetch, sleep, clock, place
 
     def __call__(self, pr: PR) -> str | None:
@@ -956,6 +977,8 @@ class RemoteQuickTier(QuickTier):
                 return status, None
             if gone := rec.get("launcher_exited"):
                 return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
+            if gone := rec.get("runner_gone"):
+                return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
         return status, (f"run {d.name} on {on} didn't end within {bound:g} s (last seen "
                         f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
 

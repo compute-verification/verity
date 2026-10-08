@@ -18,7 +18,7 @@ be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-
 the verdict passed and no step listed twice.  A sharded check (`check.py --shard K/N`, one Attempt per shard, its result a
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
-commit's own `tools/check/`, every part once, every job of its `ci.toml`, no step failed) and the combine's steps theirs; a
+commit's own `tools/verity/check/`, every part once, every job of its `ci.toml`, no step failed) and the combine's steps theirs; a
 shard alone passes nothing.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
@@ -59,7 +59,8 @@ head whose change against the train's base this one repeats file for file and by
 `research.queue.carry`, which prints the head it carried from) (`ungranted`).
 
 A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
-what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts.
+what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts,
+and SPEC_ALERTED_REF stays where it was, so every later `research merge` sends it again and `--sweep` fails until it goes.
 """
 from __future__ import annotations
 
@@ -92,12 +93,12 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 
 
 #: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
-#: `lean-fast/v1` is the Lean fast path's (`tools/lean/lean_changed.py --records`), an audit without the kernel replay,
+#: `lean-fast/v1` is the Lean fast path's (`tools/verity/lean/lean_changed.py --records`), an audit without the kernel replay,
 #: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
 #: `--priority` and `--by NAME` when given, then `--`
-SLOT_WRAP = ("python3", "tools/check/slot.py")
+SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`
 CHECK_FLAGS = ("--no-cache", "--keep-going")
@@ -106,7 +107,7 @@ CHECK_FLAGS = ("--no-cache", "--keep-going")
 def invocation(argv, command) -> tuple[str, object]:
     """What an attempt's ``argv`` ran of the target's declared ``command``: ("check", None), ``command`` itself, in a check slot
     (`SLOT_WRAP`) or not, followed by nothing but check.py's own flags (`CHECK_FLAGS`); ("shard", (K, N)), the same with
-    `--shard K/N` once (`tools/check/check.py`'s sharding); ("combine", [run ids]), ``command`` with `--combine RUN...` and
+    `--shard K/N` once (`tools/verity/check/check.py`'s sharding); ("combine", [run ids]), ``command`` with `--combine RUN...` and
     nothing else; or ("refused", why) for anything else."""
     if not command:
         return "refused", "the target's declaration of the tool names no command to hold it to"
@@ -150,21 +151,25 @@ def unlike(argv, command) -> str | None:
     return arg if mode == "refused" else None
 
 
-#: a sharded check's shard result (`tools/check/check.py --shard`): never a kind the tool produces, read only by `shard_set`
+#: a sharded check's shard result (`tools/verity/check/check.py --shard`): never a kind the tool produces, read only by `shard_set`
 SHARD_KIND = "check-shard/v1"
 
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
-    """The job names ``commit``'s own `tools/check/ci.toml` declares, or why they can't be read."""
+    """The job names ``commit``'s own `tools/verity/check/ci.toml` declares, or why they can't be read."""
     import tomllib
 
-    r = _git(repo, "show", f"{commit}:tools/check/ci.toml", check=False)
+    from .store import tools_registry
+
+    path = tools_registry.resolve("tools/verity/check/ci.toml",
+                                  lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
+    r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
         jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", [])] if r.returncode == 0 else None
     except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
         jobs = None
     if not jobs or not all(isinstance(j, str) for j in jobs):
-        return f"{commit[:12]}'s tools/check/ci.toml can't be read for the jobs a check runs"
+        return f"{commit[:12]}'s tools/verity/check/ci.toml can't be read for the jobs a check runs"
     return jobs
 
 
@@ -195,15 +200,15 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     """(the steps of the one check the shard attempts ``ids`` make, None) when together they are a passing check of the clean
     ``commit``, else (None, why).  Each must be a passing ``tool`` attempt of ``commit`` whose command is the declared
     ``command`` with `--shard K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that shard, ``commit`` and
-    its config (``commit``'s tree of `tools/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
+    its config (``commit``'s tree of `tools/verity/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
     together, one N with K = 1..N once each, one list of every part, which their parts make exactly once and which covers every
     job ``commit``'s `ci.toml` declares, and the same steps outside their parts (the preflight), passed in each.  The steps: those
     once, then each part as its shard's step ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
-    config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/check", check=False).stdout.strip()
+    config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/verity/check", check=False).stdout.strip()
     if not config:
-        return None, f"{commit[:12]} has no tools/check/ to hold the shards' config to"
+        return None, f"{commit[:12]} has no tools/verity/check/ to hold the shards' config to"
     jobs = declared_jobs(repo, commit)
     if isinstance(jobs, str):
         return None, jobs
@@ -233,7 +238,7 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
             return None, f"{rid}: its result is shard {sh.get('k')}/{sh.get('n')}, its command {arg[0]}/{arg[1]}"
         if sh.get("commit") != commit or sh.get("config") != config:
             return None, (f"{rid}: its result checked commit {sh.get('commit')} with config {sh.get('config')}, not {commit[:12]}'s "
-                          f"tools/check/ ({config[:12]})")
+                          f"tools/verity/check/ ({config[:12]})")
         if not all(isinstance(sh.get(f), list) and all(isinstance(p, str) for p in sh[f]) for f in ("parts", "all")):
             return None, f"{rid}: its result doesn't list its parts and every part"
         if bad := [s["step"] for s in steps if s.get("status") not in ("passed", "skipped")]:
@@ -409,7 +414,7 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
         seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}{f' refused: {why[r[0]]}' if why.get(r[0]) else ''}"
                          for r in rows) or "none"
         raise Refused(f"no passing `{tool}` attempt for {commit} in the evidence store (attempts of it: {seen}); "
-                      f"record one: `uv run python tools/check/check.py --record` on that commit")
+                      f"record one: `uv run python tools/verity/check/check.py --record` on that commit")
     need = required_steps(repo, "HEAD", commit, tool)
     if not need:
         return commit, ids[0]
@@ -421,7 +426,7 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
         why.append(f"{rid}: {', '.join(f'{s} {step_status(store, rid, s)}' for s in missing)}")
     raise Refused(f"{commit[:12]} changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must have run "
                   f"{', '.join(need)}; no attempt did ({'; '.join(why)}). Record it with what those steps need (for `check`: "
-                  f"`uv run python tools/check/check.py --record --on MACHINE` sends the agreement inputs)")
+                  f"`uv run python tools/verity/check/check.py --record --on MACHINE` sends the agreement inputs)")
 
 
 ZERO = "0" * 40
@@ -586,7 +591,8 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
 def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
     """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
     changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
-    one with a `/` against its path), so `["backends/flock/", "!README.md"]` leaves out every README.md there."""
+    one with a `/` against its path), so `["verity/ml/flock/", "verity/core/service/flock/", "!README.md"]` leaves out every
+    README.md under either."""
     import fnmatch
 
     prefixes = [r for r in rule if not r.startswith("!")]
@@ -800,7 +806,7 @@ def ungranted(repo: Path, pins: list[tuple[str, str]], base: str, store, log=pri
                            f"name it as N@SHA")
                 continue
             lacking = set(need) - grants(pr, sha) if need else set()
-            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto)):
+            if missing := sorted(lacking - grants.carried(pr, sha, lacking, onto, rules)):
                 target = grant_target(pr, sha)
                 out += [f"{label} needs the {g} grant at {sha[:12]} ({path}: from {by.get(g) or 'its rule, which names no `by`'}); once it has it, "
                         f"`research data label {target} grant {g} --by REVIEWER` (one on an earlier head counts only when this "
@@ -872,7 +878,8 @@ def unstacked(repo: Path, commit: str, base: str, remote: str, log=print) -> tup
                 continue
         ok.append((n, sha, onto))
         for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
-            for m in prs.get(h, []):
+            # a pull request whose head is N's own pinned head lands whole with N: it is no base left behind
+            for m in prs.get(h, []) if h != sha else ():
                 # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
                 if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
                     out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
@@ -895,7 +902,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
         for n, sha, onto in pins:
             need = rules.needs(repo, onto, sha) if rules else set()
             lacking = need - grants(n, sha)
-            if missing := lacking - grants.carried(n, sha, lacking, onto):
+            if missing := lacking - grants.carried(n, sha, lacking, onto, rules):
                 out.append(f"#{n} lacks the {', '.join(sorted(missing))} grant at {sha[:12]}: {rules.asks(n, sha, missing)}")
     except QueueError as e:
         raise Refused(f"the pull requests {commit[:12]} merges can't be judged: {e}") from e
@@ -903,7 +910,7 @@ def unready(repo: Path, commit: str, store, remote: str, log=print) -> list[str]
 
 
 #: what `prepare` runs on a train before pushing it: check's preflight (`uv.lock`, the repository's lints)
-PREFLIGHT = ["tools/check/check.py", "--preflight"]
+PREFLIGHT = ["tools/verity/check/check.py", "--preflight"]
 
 
 def preflight_argv() -> list[str]:
@@ -1025,7 +1032,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         need = required_steps(repo, "HEAD", chain[-1], tool)
         if need and on and not sends:
             raise Refused(f"the train changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must run "
-                          f"{', '.join(need)}: pass what it needs with --send (for `check`: `uv run python tools/check/check.py "
+                          f"{', '.join(need)}: pass what it needs with --send (for `check`: `uv run python tools/verity/check/check.py "
                           f"--agreement-files` prints the flags)")
 
         def passes(k: int) -> bool:
@@ -1168,14 +1175,16 @@ def _mirror_target(name: str) -> tuple[list[str], str]:
 
 
 def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
-    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward. False, after one line naming the
-    failure and the command that reruns it, when it doesn't land."""
+    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward, past this checkout's own pre-push
+    guard, which judges pushes that move origin's main (a hand landing has no check attempt of its tree, and the guard refused
+    node 1's copy of 61f64824c and 24aa9a9a4, 7 Oct). False, after one line naming the failure and the command that reruns it,
+    when it doesn't land."""
     from .remote import git_push_url
 
     rerun = f"cd {shlex.quote(str(repo))} && research merge --mirror {sha}"
     try:
         ssh, bare = (target or _mirror_target)(name)
-        r = run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, bare), f"{sha}:refs/heads/main"],
+        r = run(["git", "-c", "protocol.ext.allow=always", "push", "-q", "--no-verify", git_push_url(ssh, bare), f"{sha}:refs/heads/main"],
                 cwd=repo, capture_output=True, text=True, timeout=MIRROR_TIMEOUT_S)
         why = None if r.returncode == 0 else f"git push exited {r.returncode}: {' '.join((r.stderr or r.stdout).split())[-300:]}"
     except subprocess.TimeoutExpired:
@@ -1215,49 +1224,89 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
 
 #: the remote's ref holding the main commit the after-landing steps last ran for
 AFTER_LAND_REF = "refs/research/after-land"
+#: the remote's ref holding the main commit Daniel was last sent the spec change up to: it moves only when the DM went, so one
+#: that failed is sent again by the next `research merge`, and `--sweep` fails while it lags main
+SPEC_ALERTED_REF = "refs/research/spec-alerted"
+
+
+def _remote_refs(repo: Path, remote: str, *refs: str) -> dict[str, str] | None:
+    r = _git(repo, "ls-remote", remote, *refs, check=False)
+    return None if r.returncode else {ref: sha for sha, ref in (line.split() for line in r.stdout.splitlines())}
+
+
+def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> bool:
+    """Push ``tip`` to ``remote``'s ``ref``, leased on ``was`` (the one read) so two landers don't both advance it."""
+    p = _git(repo, "push", "-q", f"--force-with-lease={ref}:{was}", remote, f"{tip}:{ref}", check=False)
+    if p.returncode:
+        log(f"research merge: {remote}'s {ref} wasn't moved to {tip[:12]} ({(p.stderr or p.stdout).strip()[-200:]}); "
+            "another lander may have caught up first")
+    return not p.returncode
 
 
 def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
-    the caller's own push, when the remote has no marker yet): DM Daniel the spec change over that range (`spec_alert`), push main's
-    tip to node 1's mirror, start ``tool``'s `after_land` on the tip (a later landing's `post_train.py` tests the ones before it
-    too), then move the marker to the tip, leased on the one read so two landers don't both advance it.  Without a marker or
-    ``since`` it only sets the marker.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
+    the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
+    on the tip (a later landing's `post_train.py` tests the ones before it too), then move the marker to the tip.  The spec DM
+    (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
+    when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
+    the markers.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
     from .spec_alert import alert
 
-    r = _git(repo, "ls-remote", remote, "refs/heads/main", AFTER_LAND_REF, check=False)
-    if r.returncode:
-        log(f"research merge: {remote}'s main can't be read ({(r.stderr or r.stdout).strip()[-200:]}); the steps after a landing "
-            "wait for the next `research merge`")
+    refs = _remote_refs(repo, remote, "refs/heads/main", AFTER_LAND_REF, SPEC_ALERTED_REF)
+    if refs is None:
+        log(f"research merge: {remote}'s main can't be read; the steps after a landing wait for the next `research merge`")
         return None
-    refs = {ref: sha for sha, ref in (line.split() for line in r.stdout.splitlines())}
-    tip, mark = refs.get("refs/heads/main", ""), refs.get(AFTER_LAND_REF, "")
-    if not tip or tip == mark:
-        return None
+    tip, mark, alerted = refs.get("refs/heads/main", ""), refs.get(AFTER_LAND_REF, ""), refs.get(SPEC_ALERTED_REF, "")
     start = mark or since
-    lease = f"--force-with-lease={AFTER_LAND_REF}:{mark}"
+    spec_from = alerted or start
+    if not tip or (tip == mark and spec_from in ("", tip)):
+        return None
+    if start or spec_from:
+        fetched = _git(repo, "fetch", "-q", remote, "refs/heads/main", *(r for r, s in ((AFTER_LAND_REF, mark),
+                                                                                         (SPEC_ALERTED_REF, alerted)) if s),
+                       check=False)
+        if fetched.returncode:
+            log(f"research merge: {remote}'s main or its markers can't be fetched; the steps after a landing wait for the next "
+                "`research merge`")
+            return None
+    if spec_from and spec_from != tip:
+        if _git(repo, "merge-base", "--is-ancestor", spec_from, tip, check=False).returncode:
+            log(f"research merge: Daniel was last sent the spec change up to {spec_from[:12]}, which isn't in {remote}'s main "
+                f"({tip[:12]}); no DM was sent: send it by hand, then `git push {remote} {tip}:{SPEC_ALERTED_REF}`")
+        elif alert(repo, spec_from, tip, remote=remote, log=log):
+            _move(repo, remote, SPEC_ALERTED_REF, alerted, tip, log)
+        else:
+            log(f"research merge: the spec DM over {spec_from[:12]}..{tip[:12]} wasn't sent; {SPEC_ALERTED_REF} stays at "
+                f"{spec_from[:12]}, so the next `research merge` or `research merge --sweep` sends it again")
+    elif not alerted:
+        _move(repo, remote, SPEC_ALERTED_REF, "", tip, log)
+    if tip == mark:
+        return None
     if start:
-        fetched = _git(repo, "fetch", "-q", remote, "refs/heads/main", *([AFTER_LAND_REF] if mark else []), check=False)
-        if fetched.returncode or _git(repo, "merge-base", "--is-ancestor", start, tip, check=False).returncode:
-            why = "can't be fetched" if fetched.returncode else f"isn't in {remote}'s main ({tip[:12]})"
-            log(f"research merge: the steps after a landing last ran for {start[:12]}, which {why}; nothing ran: run them by "
-                f"hand, then `git push {remote} {tip}:{AFTER_LAND_REF}`")
+        if _git(repo, "merge-base", "--is-ancestor", start, tip, check=False).returncode:
+            log(f"research merge: the steps after a landing last ran for {start[:12]}, which isn't in {remote}'s main "
+                f"({tip[:12]}); nothing ran: run them by hand, then `git push {remote} {tip}:{AFTER_LAND_REF}`")
             return None
         if mark and mark != since:
             n = len(_git(repo, "rev-list", "--first-parent", f"{mark}..{tip}").stdout.split())
             log(f"research merge: the steps after a landing last ran for {mark[:12]}; catching up {n} commit(s) of main to {tip[:12]}")
-        alert(repo, start, tip, remote=remote, log=log)
         if remote == "origin" and (name := mirror_name()):
             push_mirror(repo, tip, name)
         after_land(repo, tool, tip, log=log)
-    p = _git(repo, "push", "-q", lease, remote, f"{tip}:{AFTER_LAND_REF}", check=False)
-    if p.returncode:
-        log(f"research merge: {remote}'s {AFTER_LAND_REF} wasn't moved to {tip[:12]} ({(p.stderr or p.stdout).strip()[-200:]}); "
-            "another lander may have caught up first")
-    elif not start:
+    if _move(repo, remote, AFTER_LAND_REF, mark, tip, log) and not start:
         log(f"research merge: {remote} had no {AFTER_LAND_REF}; set it to main ({tip[:12]}): the steps after a landing are "
             "caught up from here, and nothing before it was looked at")
     return tip if start else None
+
+
+def spec_alert_lag(repo: Path, remote: str) -> str:
+    """Why the spec DM is behind ``remote``'s main ("" when it isn't, or there is no marker yet to be behind)."""
+    refs = _remote_refs(repo, remote, "refs/heads/main", SPEC_ALERTED_REF) or {}
+    tip, alerted = refs.get("refs/heads/main", ""), refs.get(SPEC_ALERTED_REF, "")
+    if not alerted or alerted == tip:
+        return ""
+    return (f"{remote}'s {SPEC_ALERTED_REF} is {alerted[:12]}, behind main ({tip[:12]}): the spec DM over that range "
+            "hasn't been sent")
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
@@ -1300,11 +1349,11 @@ def main(argv: list[str]) -> int:
                     "unless the target's declared command, with check.py's own flags at most, since the gate takes no other")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="--train --on: ship this file with every run (research run --send)")
     ap.add_argument("--prepare", default=None, metavar="BRANCH", help="--train: record and land nothing; build the train, run --lint "
-                    "on it and push it to --remote as BRANCH (never forced), for `tools/check/train.sh BRANCH MACHINE`")
+                    "on it and push it to --remote as BRANCH (never forced), for `tools/verity/check/train.sh BRANCH MACHINE`")
     ap.add_argument("--onto", default=None, metavar="BASE", help="--prepare: the branch on --remote (or commit) the train starts "
                     "from (default --into; a train ahead's prep branch stacks this one on it)")
     ap.add_argument("--lint", default=None, metavar="CMD", help="--prepare: what must pass on the train before it's pushed "
-                    "(default `python tools/check/check.py --preflight`: under this interpreter when it has pytest, else `uv run --locked`)")
+                    "(default `python tools/verity/check/check.py --preflight`: under this interpreter when it has pytest, else `uv run --locked`)")
     ap.add_argument("--allow-removal", action="append", default=[], metavar="PATH", help="--train: a path where the train may "
                     "lose lines none of its refs removes in a commit of its own (`reverted`; by default the train is refused)")
     ap.add_argument("--into", default="main", help="the branch checked out here that receives the merge (default main)")
@@ -1379,6 +1428,9 @@ def main(argv: list[str]) -> int:
         except (Refused, ValueError, KeyError) as e:
             print(f"research merge: sweep failed: {e}", file=sys.stderr)
             return 1
+        if a.into == "main" and not a.dry_run and (lag := spec_alert_lag(repo, a.remote)):
+            print(f"research merge: {lag}; rerun `research merge --sweep` once Slack is reachable", file=sys.stderr)
+            return 1
         return 0
     if not a.ref:
         ap.error("a ref to merge is required (or --sweep)")
@@ -1392,7 +1444,7 @@ def main(argv: list[str]) -> int:
         except Refused as e:
             return refuse(PROG, str(e))
         print(f"research merge: train {' '.join(a.ref)} on {onto}: pushed {a.remote}/{a.prepare} = {tip[:12]} (tree {tree[:12]}); "
-              f"check it with `tools/check/train.sh {tip[:12]} MACHINE`, land it with `research merge {a.prepare}`")
+              f"check it with `tools/verity/check/train.sh {tip[:12]} MACHINE`, land it with `research merge {a.prepare}`")
         return 0
     if a.train:
         from .store import tools_registry

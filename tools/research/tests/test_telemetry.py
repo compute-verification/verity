@@ -634,6 +634,37 @@ def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tm
     assert st["state"] == "cancelled" and st["timed_out"] is True
 
 
+LEAVES_A_WORKER = """
+import subprocess, sys
+w = subprocess.Popen([sys.executable, "-c", "import threading; threading.Event().wait()"])
+open(sys.argv[1], "w").write(str(w.pid))
+sys.exit(1)
+"""
+
+
+def test_tele_run_kills_what_is_left_of_the_workloads_group_once_its_leader_exits_and_marks_it(tmp_path):
+    import select
+
+    from research.telemetry import run as trun
+    d = tmp_path / "a"
+    d.mkdir()
+    rc = trun.main(["--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify", "--",
+                    sys.executable, "-c", LEAVES_A_WORKER, str(tmp_path / "worker.pid")])
+    assert rc == 1
+    pid = int((tmp_path / "worker.pid").read_text())
+    try:
+        fd = os.pidfd_open(pid)
+    except ProcessLookupError:
+        fd = None
+    if fd is not None:
+        select.select([fd], [], [])                     # readable once the worker has exited
+        os.close(fd)
+    recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
+    (m,) = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "group_outlived_leader"]
+    assert m["n"] == 1 and m["pids"][0].startswith(f"{pid} ")
+    assert json.loads((d / "status.json").read_text())["state"] == "failed"
+
+
 def test_the_timeout_control_file_accepts_a_bare_number_and_ignores_what_it_cannot_parse(tmp_path, capsys):
     """An unparseable control file is reported once and otherwise ignored (never the reason a workload stops); a bare number is a
     timeout_s.  The run loop acts on whatever this returns (test above)."""

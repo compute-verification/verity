@@ -1,0 +1,990 @@
+{
+ "schema": "verity-pouw/regions-vectors/v1",
+ "word_bits": 16,
+ "region_word_bits": 128,
+ "cases": [
+  {
+   "case": "pc4-64",
+   "circuit": "pc4",
+   "k": 64,
+   "dev": null,
+   "salt": "1afe95383f8ea3c98d18500c4dd1235ea6e46bfc2361cdf04e0e1311410d1010",
+   "root_a": "7e5f569c237559f1e44fd1b9b10674f757959161d61c040d6077e3cfa0c60f1e",
+   "root_b": "f0a5caa1e8d9c77cd12837b687e967ed3102f0dc5cde4e27e2dc8985c45fed37",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "d287c6f1812e196a087b00384f60d8ce90c975c44a496da1dd4a389d1b84e67a",
+   "seed_b": "226e56ec961589295096cfd15a49576627943cd70f5450c50bc9468562da4c82",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "units": [
+    {
+     "role": "row_a",
+     "index": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c4/ea/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "b5bbbedc2a037f266d500f6d7f1a68583b338f65059b14a9c7594fed04bfade0",
+       "bytes": "060008000d0005000b000e000f000300030001000a0008000100070005000000090008000c0008000f00060002000500040008000e000200010005000c000a00"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "ae33f47952aff0be006525909298f0f5e94af01f3240227501162ea4956dae78"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "008de94f6099370d435e939e3508e4d95259c1288e5fad03890184b41f523863"
+      }
+     ]
+    },
+    {
+     "role": "row_b",
+     "index": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/eb/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "923c98663f7a3a1eca2bb49fcd2d7666ab66ad75379e63bf648aed7f38848b14",
+       "bytes": "0700060003000c000f000b00050002000300030001000800030002000700020005000300050000000c000200010006000300080006000e000700010002000700"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "008de94f6099370d435e939e3508e4d95259c1288e5fad03890184b41f523863"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "ae33f47952aff0be006525909298f0f5e94af01f3240227501162ea4956dae78"
+      },
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/g/v2",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "91966408e4d632f1d3c1afbb5b04d280d9368ae94663daedf67579f1c2fa5831"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c4/ea/v2\", \"port\": \"e\", \"seed\": \"pearl-c4/v1/seed-A\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fa/v2\", \"port\": \"fa\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fb/v2\", \"port\": \"fb\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "899d2644057617d7873f94990ab4af3df24c1fa5f9e8b86a5cda053ba6a44f81"
+    },
+    {
+     "role": "row_b",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c4/eb/v2\", \"port\": \"e\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fb/v2\", \"port\": \"fb\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fa/v2\", \"port\": \"fa\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/g/v2\", \"port\": \"g\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "95c88e3b76a4ea4cd29bbf73e4a5a2f2ac0c70e0338e6d62ec4103a614587d26"
+    }
+   ]
+  },
+  {
+   "case": "pc8-h100-128",
+   "circuit": "pc8",
+   "k": 128,
+   "dev": "h100",
+   "salt": "d6a65b89bf89d680cdba8ae229239d40f4005db596aab46612b301c8f3c2f8af",
+   "root_a": "e5387ec9e709720dfcc92185e35014a6f090af1499ac0f8e1738be3fc7dbc03f",
+   "root_b": "8b39511d408d8b27509ee89c4dc65a57abc18f51bb857cf86f1135b999e65b06",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "f601fc1c3817d784ade6e9c20368a8fb0f837f9a0986f247c9ca1ad4dd2d0740",
+   "seed_b": "2b876e5f7506be1115a66c1692e0df5c2f8ac4e26acb22c4a6e14209f1a741da",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "units": [
+    {
+     "role": "row_a",
+     "index": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c/ea/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "ed642a1d833573d7b265e2148951a3002b33ab3eb9c070600177b75725175673",
+       "bytes": "6800ce005700e800cd0050006200e8005e005c006000cc00e00063005d00e900e200e500e4005b00610054006800680067006900e800da006200e200e900db00"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9019805fe6f930bdac4a69da6ba80daad2d834492c0e204472b21805071eb867"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "d0c66f8b72560c3b4530fb5e9d2e9274ad1ee7d495707a16b4440bf199cf12b2"
+      }
+     ]
+    },
+    {
+     "role": "row_b",
+     "index": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/eb/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "5a447ba40fd15476b1d411bd444d70598b13b518cdbdec585566778c59f9571d",
+       "bytes": "6600e50050005000e7006600e400c70062006800e4006600630067004a00e4006400580066005a00e400c800e700e2005a00d1006800e700e80068005c00d500"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "d0c66f8b72560c3b4530fb5e9d2e9274ad1ee7d495707a16b4440bf199cf12b2"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9019805fe6f930bdac4a69da6ba80daad2d834492c0e204472b21805071eb867"
+      },
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/g/v1",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "4e959fe411d0120f98ce0a521a237b665998d598526814a520b929cf3625a7ae"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/ea/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-A\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "2a185110b2b5552265ce9e7693afece92e457444aab3afaf53fec1a5a826f45f"
+    },
+    {
+     "role": "row_b",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/eb/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/g/v1\", \"port\": \"g\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "f5ff94a3966e8d06eb4ec77a13aa7a093519c0dbecc4d3e64cde22f65b2be274"
+    }
+   ]
+  },
+  {
+   "case": "pc8-sm120-128",
+   "circuit": "pc8",
+   "k": 128,
+   "dev": "sm120",
+   "salt": "cc72c391c0aedf1fc1484a7210e5dfb0da70d6305b6068841b2bb627a5bd5bb7",
+   "root_a": "c2fa3d768a97f11b163d5c7e5138813660489bb9330111138803e171f8f23810",
+   "root_b": "bbee52453179e05fe6ad332007790b5d76d337496d1426fd673abe8e344b1cbb",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "6bfa7f6d76dcc3db0379680288c4287dd5af927d48518035cb6e89814d08d4ac",
+   "seed_b": "bce74556c90c0b2ddeb9c34abd5e13249aa5aa5c9004bc40692f311abc2ca5d3",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "units": [
+    {
+     "role": "row_a",
+     "index": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c/ea/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "236127211f36f9e38e557672d7f333e7d40a7a4dbba15884b3e852073cf15615",
+       "bytes": "e2004200e300680063005c005d00e4003e006900e8003e00d700e700e500e300ea00e200e900600061005200c2004b0069006200e6006800dc00e7005a005d00"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "14dafca1b3d064c54274cb1dfe37dc5286c744aa13a544a1f4e5ac0eed2fb137"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9b9bbc120f85e61d68dee1284e43baa999f97f10a8b022520f5d0478f8c41e2f"
+      }
+     ]
+    },
+    {
+     "role": "row_b",
+     "index": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/eb/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "7b99d3c4fdd2518ee5a764e886e5aa9f001d7e263e6d99e7dad8aaa79b377685",
+       "bytes": "69005b006a00e500e100de004900530061005b00d100d1006200e6006400bc00d600e9006a00e000e6005e00ea0055005100660063005700d8006400eb006100"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "9b9bbc120f85e61d68dee1284e43baa999f97f10a8b022520f5d0478f8c41e2f"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "14dafca1b3d064c54274cb1dfe37dc5286c744aa13a544a1f4e5ac0eed2fb137"
+      },
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/g/v1",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "e5d3bfbff9579e20c3bb39db7c6c3356dbfc5ff5ded7f0cf63ef40980ef89d1b"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/ea/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-A\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "8ad4663f17f46a91349bd534d1172e5ed752d147bc1fcb0be36f26dbd02728e2"
+    },
+    {
+     "role": "row_b",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/eb/v1\", \"port\": \"e\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/g/v1\", \"port\": \"g\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "fcc7e88924c33f0f49536d74cd4d790af163e1cdec9e12a1f9e90f07d69c8270"
+    }
+   ]
+  }
+ ],
+ "row_k_cases": [
+  {
+   "case": "pc4-rowk-128",
+   "circuit": "pc4",
+   "k": 128,
+   "dev": null,
+   "salt": "618350ad7efec51eff6986240a95dad980bd79dcd03ec68803841bd858b824da",
+   "root_a": "aa6a4bc38ab1e2242d48e8dd63bfed5e950385d467de5d194d0a2020602e7fe7",
+   "root_b": "f882fe50924b39b8fdc8f1ed7bd34e6db1654e0d89ec8dc516b879ea7c5a6a4c",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "92097fbd82f7d571f377e7cc13afc7fc5db557548c3eb017eb4b47f9709dd7eb",
+   "seed_b": "f75dd5f3ca8817cfa33b03ff7c4f06207d0c17724d91d687d36d54954b2a47f8",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "row_k": 64,
+   "units": [
+    {
+     "role": "row_b_first",
+     "index": 0,
+     "segment": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/eb/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "99304ed5d8b2a2daf7c0a3c3b9844ebad405f9e098899a72b5188c3e938b23f3",
+       "bytes": "0e00030004000e000000030000000100020002000a00050009000f000c0000000300000001000700030008000c000400000000000b000f000b00070001000a00"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "c04a5fc61a2b05f35918e8ba3810effab355123faf70d59bc7f36f82f1c6ddd9"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "5bc5db5f86afe1d6204aea3101d3f9d296074d5023b7effb8366c767b9a33069"
+      }
+     ]
+    },
+    {
+     "role": "row_b_form",
+     "index": 0,
+     "segment": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/eb/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "99304ed5d8b2a2daf7c0a3c3b9844ebad405f9e098899a72b5188c3e938b23f3",
+       "bytes": "0e00030004000e000000030000000100020002000a00050009000f000c0000000300000001000700030008000c000400000000000b000f000b00070001000a00"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "5adfd94d9b0cacef4c9feea1e6b5fbf6e46eadd859bdf1faf01e7af7c7c99bbb"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "247051fa2da83bd5eb9cb4e8d6af7de48ac40fcf1a42c2c86ae93fc8399e9275"
+      }
+     ]
+    },
+    {
+     "role": "row_b_tail",
+     "index": 0,
+     "segment": null,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/eb/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "99304ed5d8b2a2daf7c0a3c3b9844ebad405f9e098899a72b5188c3e938b23f3",
+       "bytes": "0e00030004000e000000030000000100020002000a00050009000f000c0000000300000001000700030008000c000400000000000b000f000b00070001000a00"
+      },
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/g/v2",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "f84b7a426640daea7fcbe3dfe3a9cbacd6b582ca2b9fcfab0a140b28bee586ce"
+      }
+     ]
+    },
+    {
+     "role": "row_a_first",
+     "index": 1,
+     "segment": 0,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c4/ea/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "6939326262c3457b550d575b9012ec8b8d3f0ec782129a7b59b9e329b06992f8",
+       "bytes": "0d000f000c000f0000000200030000000f0005000700010003000d000c0002000c00050007000a000d000c0003000700030001000c0005000e00020006000500"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "5bc5db5f86afe1d6204aea3101d3f9d296074d5023b7effb8366c767b9a33069"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "c04a5fc61a2b05f35918e8ba3810effab355123faf70d59bc7f36f82f1c6ddd9"
+      }
+     ]
+    },
+    {
+     "role": "row_a_form",
+     "index": 1,
+     "segment": 1,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c4/ea/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "6939326262c3457b550d575b9012ec8b8d3f0ec782129a7b59b9e329b06992f8",
+       "bytes": "0d000f000c000f0000000200030000000f0005000700010003000d000c0002000c00050007000a000d000c0003000700030001000c0005000e00020006000500"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fa/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "247051fa2da83bd5eb9cb4e8d6af7de48ac40fcf1a42c2c86ae93fc8399e9275"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c4/fb/slice/v2",
+       "bits": 4,
+       "n_words": 2048,
+       "bytes_sha256": "5adfd94d9b0cacef4c9feea1e6b5fbf6e46eadd859bdf1faf01e7af7c7c99bbb"
+      }
+     ]
+    },
+    {
+     "role": "row_a_tail",
+     "index": 1,
+     "segment": null,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c4/ea/v2",
+       "bits": 4,
+       "n_words": 32,
+       "bytes_sha256": "6939326262c3457b550d575b9012ec8b8d3f0ec782129a7b59b9e329b06992f8",
+       "bytes": "0d000f000c000f0000000200030000000f0005000700010003000d000c0002000c00050007000a000d000c0003000700030001000c0005000e00020006000500"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a_form",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c4/ea/v2\", \"port\": \"e\", \"seed\": \"pearl-c4/v1/seed-A\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fa/slice/v2\", \"port\": \"fa\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fb/slice/v2\", \"port\": \"fb\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "e12f6ec060b0fe903316de7727b9f9566359febba97b6a435ce5ab215141894d",
+     "segment": 1
+    },
+    {
+     "role": "row_b_first",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c4/eb/v2\", \"port\": \"e\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 32}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fb/slice/v2\", \"port\": \"fb\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}, {\"derivation\": \"verity/pouw/anchor/pearl-c4/fa/slice/v2\", \"port\": \"fa\", \"seed\": \"pearl-c4/v1/seed-B\", \"words\": 2048}]}",
+     "body_sha256": "788cc23fc76a48d62d3f35fd1898f84f1720136f3628f12b12f500bc58a9bfe7",
+     "segment": 0
+    }
+   ]
+  },
+  {
+   "case": "pc8-h100-rowk-256",
+   "circuit": "pc8",
+   "k": 256,
+   "dev": "h100",
+   "salt": "bab1aa60fecf388097ac8ba99f6c9304a5b311bac146c35b82eed49577f79ef7",
+   "root_a": "404cca8042bf8786631bc60f8e78164ab599d24fe053b0da394a28f965840298",
+   "root_b": "576e0068c175906ff310700806e17ebffbd344a863f46b7406c220982e4eba6f",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "09b0a4231a801d4d411868d8e79cfda41ade4270d7878f31e68a732f0a16a9b1",
+   "seed_b": "efce9c83c45397c84f3c60971ace7751c524d4cbba6b9933007bc1f4c4825d01",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "row_k": 128,
+   "units": [
+    {
+     "role": "row_b_head",
+     "index": 0,
+     "segment": null,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/eb/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "3da96c676d001d6f7c42cbe6902048893359f664f22d39857821429e62c1402b",
+       "bytes": "e900e2006100dd006900e300e300610059005900e80063006600e000dc00e800e5004b00be00dd00e30065005c00e80064005700e900e500e5005c0062006700"
+      }
+     ]
+    },
+    {
+     "role": "row_b_first",
+     "index": 0,
+     "segment": 0,
+     "regions": [
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "419084e03dacf52895ea67faca14107c1eb629758aa80f4315cb069d8166212a"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "a4cb688192f3f99b5e1b762c3f6615481d52758e378cab01fc937d515249b9c3"
+      }
+     ]
+    },
+    {
+     "role": "row_b_form",
+     "index": 0,
+     "segment": 1,
+     "regions": [
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "0b1d008c0e147d6402b9c322293081b40409ff83187c74b5c26a6262da0832db"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "aae5daea1158db971961745fdd2de5863918c350f40633600981026127bf61de"
+      }
+     ]
+    },
+    {
+     "role": "row_b_tail",
+     "index": 0,
+     "segment": null,
+     "regions": [
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/g/v1",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "b441734297b6f146fe5cb0bb07c45f5d1c706ee894f96d98d0be39af82a1e012"
+      }
+     ]
+    },
+    {
+     "role": "row_a_head",
+     "index": 1,
+     "segment": null,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c/ea/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "86aef93ab804617ef37600401b9087a0c3bd222632447e133d9673059a861685",
+       "bytes": "390063006100e000d90039003e00da00e50063005300680066006300db005d00e1006800e800e500e400df00c8005900e900690064006700680069005e00e200"
+      }
+     ]
+    },
+    {
+     "role": "row_a_first",
+     "index": 1,
+     "segment": 0,
+     "regions": [
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "a4cb688192f3f99b5e1b762c3f6615481d52758e378cab01fc937d515249b9c3"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "419084e03dacf52895ea67faca14107c1eb629758aa80f4315cb069d8166212a"
+      }
+     ]
+    },
+    {
+     "role": "row_a_form",
+     "index": 1,
+     "segment": 1,
+     "regions": [
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "aae5daea1158db971961745fdd2de5863918c350f40633600981026127bf61de"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "0b1d008c0e147d6402b9c322293081b40409ff83187c74b5c26a6262da0832db"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a_form",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/fa/slice/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/slice/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "488c480a5d356a9f95ee1133e6c5e45899601dba31fe375e1de6d252cfa046a9",
+     "segment": 1
+    },
+    {
+     "role": "row_b_first",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/fb/slice/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/slice/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "7a101f51ce820c97abce7af33c20713b1c76266577483bf013c54c666f2492ca",
+     "segment": 0
+    }
+   ]
+  },
+  {
+   "case": "pc8-sm120-rowk-256",
+   "circuit": "pc8",
+   "k": 256,
+   "dev": "sm120",
+   "salt": "a3d38b971ba29b2651248dbbb41a4bdcdec9bc14f9296412171b516b539bff47",
+   "root_a": "5c750badc8cd94a22eb0285cb82c8fbdb1de3854bed19d7461381844ae1958de",
+   "root_b": "660b40051efcc8bca569e5d3003228edfe7dd87f15c42477c031d22e5879cbc2",
+   "matmul": 3,
+   "weight": 9,
+   "seed_a": "b2c5ba94fd96c116994ac375dbc8a441d7fdbdc296646241d547406d6136e586",
+   "seed_b": "f347cb76e37918162afe534e6a9b4c635dfbe0013f2a458e93294da255b09e3f",
+   "rows": [
+    7,
+    300
+   ],
+   "cols": [
+    2,
+    41
+   ],
+   "row_k": 128,
+   "units": [
+    {
+     "role": "row_b_head",
+     "index": 0,
+     "segment": null,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "eb",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/eb/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "79acc38c171824f9920a148b8550324ddb6d5d5df3d0423e4d75a332654ea793",
+       "bytes": "5c00db00d7006a00e9006700e200e900e1006900de0058005a005c00d400e900c400de005800e100db004a005f005a00e0006a0069006800db00dc0065006700"
+      }
+     ]
+    },
+    {
+     "role": "row_b_first",
+     "index": 0,
+     "segment": 0,
+     "regions": [
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "c3307f1e55e96b7b143a2cea0af13ca3ea0040d5170d946272d532579af77cc1"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "ad872c75a6b83c4c8e6b4b13875f0622433ab5c26a54e9e583ec59b6072d4115"
+      }
+     ]
+    },
+    {
+     "role": "row_b_form",
+     "index": 0,
+     "segment": 1,
+     "regions": [
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "c6e9586b437ec87696711935964a2be74d8dfede2044067b986a63bef3ae6c24"
+      },
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "44eec3e49c0b273f8f8ee2a39b76e02730163d5d9890b5feba0b2e36a6dd3399"
+      }
+     ]
+    },
+    {
+     "role": "row_b_tail",
+     "index": 0,
+     "segment": null,
+     "regions": [
+      {
+       "port": "g",
+       "anchor": "g",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/g/v1",
+       "bits": 32,
+       "n_words": 2048,
+       "bytes_sha256": "ef8e6409933ddcea64e8d03af6b20cc44515c48f8e2b1a77334ae0744711b908"
+      }
+     ]
+    },
+    {
+     "role": "row_a_head",
+     "index": 1,
+     "segment": null,
+     "regions": [
+      {
+       "port": "e",
+       "anchor": "ea",
+       "seed": "seed_a",
+       "derive": "verity/pouw/anchor/pearl-c/ea/v1",
+       "bits": 8,
+       "n_words": 32,
+       "bytes_sha256": "d55e894c908fd30e22cfb97f148a9c6ed481ec1bdd32d97337c3294699056c32",
+       "bytes": "69006300dd00e900e6006500de00580062005200cd005d0065005a00cc00d400d700ea0069006300e800ea00d8006600e40058005800df006400e800d1005600"
+      }
+     ]
+    },
+    {
+     "role": "row_a_first",
+     "index": 1,
+     "segment": 0,
+     "regions": [
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "ad872c75a6b83c4c8e6b4b13875f0622433ab5c26a54e9e583ec59b6072d4115"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "c3307f1e55e96b7b143a2cea0af13ca3ea0040d5170d946272d532579af77cc1"
+      }
+     ]
+    },
+    {
+     "role": "row_a_form",
+     "index": 1,
+     "segment": 1,
+     "regions": [
+      {
+       "port": "fa",
+       "anchor": "fa-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fa/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "44eec3e49c0b273f8f8ee2a39b76e02730163d5d9890b5feba0b2e36a6dd3399"
+      },
+      {
+       "port": "fb",
+       "anchor": "fb-slice",
+       "seed": "seed_b",
+       "derive": "verity/pouw/anchor/pearl-c/fb/slice/v1",
+       "bits": 8,
+       "n_words": 4096,
+       "bytes_sha256": "c6e9586b437ec87696711935964a2be74d8dfede2044067b986a63bef3ae6c24"
+      }
+     ]
+    }
+   ],
+   "public_inputs": [
+    {
+     "role": "row_a_form",
+     "indexes": [
+      0,
+      1
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/fa/slice/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fb/slice/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "3dc57910ee46d5b13e955a3324cd705f4e3e7d36a0247875fa60478554d4080b",
+     "segment": 1
+    },
+    {
+     "role": "row_b_first",
+     "indexes": [
+      1,
+      0
+     ],
+     "header": "{\"format\": \"verity/flock-public-inputs/v1\", \"instances\": 2, \"ports\": [{\"derivation\": \"verity/pouw/anchor/pearl-c/fb/slice/v1\", \"port\": \"fb\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}, {\"derivation\": \"verity/pouw/anchor/pearl-c/fa/slice/v1\", \"port\": \"fa\", \"seed\": \"pearl-c/v0/seed-B\", \"words\": 4096}]}",
+     "body_sha256": "606721ed97e15a0f31c70863e8b8db7165ba6921cb2f732c8c9f5bf7946e792f",
+     "segment": 0
+    }
+   ]
+  }
+ ]
+}
