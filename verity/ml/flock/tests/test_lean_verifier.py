@@ -900,6 +900,38 @@ def test_row_nets_are_the_verifiers(tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path):
+    """A unit named `rec-open/l<LANES>-h<H>` must be the verifier's opening net at those parameters (`Flock.RecOpen`,
+    PROTOCOL.md §16.10), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
+    before it builds that net. A toy statement is accepted; with its unit renamed `rec-open/l1000000000-h16` it is refused
+    for its bits, in an address space of 8 GiB, far below the net's size."""
+    import resource
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    bits, d = [0, 1, 881, 887, 889, 895], tmp_path / "s"
+    text = _bit_row_toy(bits, d)
+    head = text.index("\n", text.index("CIRCUIT unit ")) + 1
+    end = text.index("\n", head)
+    fields = text[head:end].split(" ")
+    renamed = text[:head] + " ".join([fields[0], "rec-open/l1000000000-h16", *fields[2:]]) + text[end:]
+
+    def statement(circuit):
+        (d / "c.txt").write_text(circuit)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+                               "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin")], capture_output=True, text=True,
+                              preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
+
+    p = statement(text)
+    assert p.returncode == 0, p.stdout + p.stderr
+    p = statement(renamed)
+    ins = 16 * sum(-(-b // 16) for b in bits)
+    opening = 384 * 10**9 + 1024 * 8 + 2048
+    why = f"unit rec-open/l1000000000-h16 has {ins} input and 16 output bits, not rec-open's {opening} and 2048"
+    assert p.returncode == 1 and why in p.stdout, p.stdout + p.stderr
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
     """The message a bit row's Δ constants leave (`HmRow.constBit` past the row's bits: its last byte's fill, then SHA-512's
     padding `tailOf`, placed by `blockBit`), compressed from `midstateOf`, gives core's ``b || c`` over

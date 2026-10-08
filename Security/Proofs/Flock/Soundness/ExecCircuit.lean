@@ -245,6 +245,8 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   check : ∃ ls, HmRow.check c tags ls = .ok ()
   /-- the `sha512x3` and `hm96` nets are the verifier's (`HmNets.check_ok`) -/
   rowNets : HmNets.check c = .ok ()
+  /-- a `rec-open/l<L>-h<H>` unit is the verifier's (`RecOpen.check_ok`) -/
+  recNet : RecOpen.check c = .ok ()
   /-- not a typed template: `parse`'s `tmpl` is `none` -/
   typed : c.typed = none
 
@@ -381,6 +383,7 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w'', hrec, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   have hnetOf : ∀ nm i, netOf nm = .ok i → i < nets2.size := by
@@ -535,7 +538,7 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
             exact this,
           unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩,
-          rowNets := by cases w'; exact hrows, typed := rfl }
+          rowNets := by cases w'; exact hrows, recNet := by cases w''; exact hrec, typed := rfl }
 
 /-- **What `HmRow.parse` accepted, with nets `pre` first**: its nets are `pre`'s, then the file's own, and its unit is
 the first named `unit`. -/
