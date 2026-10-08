@@ -30,4 +30,4 @@ import Definitions.Pous.Model.SecureErasure
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.P2.Cost
 
-/-! `Pous.Protocol`: every module of the Protocol layer, the protocol's definitions (trusted). -/
+/-! `Definitions.Pous`: every module of PoUS's definitions, the protocol's definitions (trusted). -/

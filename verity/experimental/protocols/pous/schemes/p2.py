@@ -110,10 +110,14 @@ art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the c
 and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
 art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
 
+DELTA_NS = 500_000
+"""Δ at the spec's operating point, 0.5 ms with an on-node verifier (`p2/PROTOCOL.md` §6, decision F2)."""
+
 RTT_ALLOWANCE_CAP_NS = 354_000
 """The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12): the
 largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
-it."""
+it, and the verifier any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum
+alone admits up to `ROOT_CALL_NS − 1`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -399,6 +403,14 @@ class P2(Scheme):
                            theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
                            claims=P2_CLAIMS)
 
+    def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
+        out = []
+        if deadline_ns != DELTA_NS:
+            out.append(f"the spec's operating point sets Δ = {DELTA_NS} ns, not {deadline_ns}")
+        if rtt_allowance_ns > RTT_ALLOWANCE_CAP_NS:
+            out.append(f"the RTT allowance of {rtt_allowance_ns} ns is past the spec's cap of {RTT_ALLOWANCE_CAP_NS} ns")
+        return tuple(out)
+
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
         return encode_segment(self.params, self.prims, salt, s, w_seg)
 
@@ -413,7 +425,7 @@ class P2ChaCha(P2):
     expander = CHACHA8
 
 
-__all__ = ["CERT_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "EXPAND_LABEL", "EXPERIMENTAL", "P2_CLAIMS",
+__all__ = ["CERT_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPAND_LABEL", "EXPERIMENTAL", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHAKE256", "P2", "P2ChaCha",
            "P2Params", "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_segment",
            "expand_prefix", "segment_keys", "segment_seed", "shake_keys"]

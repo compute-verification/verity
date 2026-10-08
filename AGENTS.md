@@ -35,7 +35,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake
       package `verity_difftest`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
-  (Lean below). `Properties/` starts empty.
+  (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit, commits its values while serving, and proves.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
@@ -197,10 +197,13 @@ Until reuse and the merge queue exist:
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/experimental/protocols/pous/lean/`) and
     the certifier program (`verity/experimental/protocols/certifier/lean/`, `NetworkCertifier`, with its
-    difftest).
+    difftest) and the NCI check (`verity/experimental/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `SecurityProofs.G : G` for each guarantee.
+    `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
+    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
+    `security_proofs`.
   - Each component has its own area in each tree (`Core`, `Nci`, `Pouw`, `Pous`, `NetworkCertifier`, `Flock`).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's analysis is all
@@ -211,7 +214,8 @@ Until reuse and the merge queue exist:
   (`tools/verity/lean/check.py`):
   - only `propext`, `Classical.choice` and `Quot.sound`;
   - no `sorry`, `axiom`, `native_decide` or kernel bypass;
-  - an assumption is a named `Prop`, taken as a hypothesis;
+  - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
+    lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
 - **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.

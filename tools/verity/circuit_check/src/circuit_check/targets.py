@@ -12,8 +12,9 @@ The catalog (`catalog`) is roots at small statics: every primitive, every static
 silicon references, every vLLM kernel's self-check specialisations, each template, and tiny whole-model configurations; the
 suite checks every specialisation reachable from them (`suite`), and fails by name for a registered Definition family no root
 reaches: a new Definition needs a binding.  A binding lives beside the Definitions it binds, in their module's sidecar
-(`sidecars`), in this module's forms: a root function named in `ROOT_FUNCTIONS`, a `_model_roots` entry, a ``TEMPLATE_PARAMS``
-entry.  This module keeps what no one Definition module owns.
+(`sidecars`), in this module's forms: a root function (``_X_roots``, `root_functions`), a `_model_roots` entry, a
+``TEMPLATE_PARAMS`` entry; a module with a sidecar is one the registries import (`load_registries`).  This module keeps what no
+one Definition module owns.
 """
 from __future__ import annotations
 
@@ -58,42 +59,24 @@ def _authored(d: Any) -> bool:
 
 
 def load_registries() -> None:
-    """Register every Definition and kernel: core's `verity.ml.circuits.ops`, and each module of the vLLM registry and kernel registry."""
+    """Register every Definition and kernel: each module with a circuit-check sidecar (`sidecars.discover`: a Definition module
+    has its bindings, or its pins, beside it), each module of the vLLM registry, and the kernel modules.  The modules with a
+    sidecar are in every target's key (`cache.registries`)."""
     global _LOADED
     if _LOADED:
         return
     from verity.ml.circuits.defs import REGISTRY
 
-    import verity.ml.circuits.ops.boolean.attention  # noqa: F401
-    import verity.ml.circuits.ops.boolean.cast  # noqa: F401
-    import verity.ml.circuits.ops.boolean.elementwise  # noqa: F401
-    import verity.ml.circuits.ops.boolean.gemm  # noqa: F401
-    import verity.ml.circuits.ops.boolean.gf2k  # noqa: F401
-    import verity.ml.commitments.gates.lms  # noqa: F401
-    import verity.ml.commitments.gates.merkle  # noqa: F401
-    import verity.ml.commitments.gates.rowleaf  # noqa: F401
-    import verity.ml.circuits.ops.boolean.mufu  # noqa: F401
-    import verity.ml.circuits.ops.boolean.scalar  # noqa: F401
-    import verity.experimental.private_circuits.universal  # noqa: F401
-    import verity.ml.circuits.ops.gemm  # noqa: F401
-    import verity.ml.kernels.tc  # noqa: F401
-    import verity.ml.circuits.ops.prims  # noqa: F401
+    from . import sidecars as SC
+
+    for mod in SC.discover():
+        importlib.import_module(mod)
     import verity_vllm.program.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
-    import verity.experimental.protocols.pouw.circuit.boolean  # noqa: F401  (PoUW's own primitives on bits: the rows' six, the hiding tiles' four Keccak words, the cap's five window words)
-    import verity.experimental.protocols.pouw.circuit.cap  # noqa: F401  (PoUW's prototype of Pearl-C's per-tile cap)
-    import verity.experimental.protocols.pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
-    import verity.experimental.protocols.pouw.circuit.pc4  # noqa: F401  (PoUW's Pearl-C4 tile check)
-    import verity.experimental.protocols.pouw.circuit.pc8  # noqa: F401  (PoUW's Pearl-C tile check)
-    import verity.experimental.protocols.pouw.circuit.rowk  # noqa: F401  (both tile checks' row units cut along k)
-    import verity.experimental.protocols.pous.circuit  # noqa: F401  (P2's modular squaring on bits)
-    import verity.experimental.protocols.pous.decode_circuit  # noqa: F401  (P2's decode of one block)
-    import verity.experimental.protocols.pous.answer_circuit  # noqa: F401  (PoUS's per-answer opening)
-    import verity_flock.rec_open  # noqa: F401  (V*'s opening check: recursion's inner Ligerito openings)
-    import verity_flock.rec_residuals  # noqa: F401  (V*'s algebra: the inner verifier's checks on one rep)
+    CC.registries(SC.discover())
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
@@ -221,28 +204,41 @@ TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V
 #: this module's by name, a sidecar's as ``<file>#<name>``) whose roots reach each suite target, by Definition id (`suite`) or
 #: template label (`templates`)
 BINDINGS: dict[str, set[str]] = {}
-#: the root functions a binding file may define, in catalog order (each file's in turn, this module first); ``_X_roots`` holds
-#: ``_X_bindings`` beside it as one binding when the file defines both
+#: the root functions that run first, in catalog order (each file's in turn, this module first); any other ``_X_roots`` a
+#: binding file defines runs after them, by name (`root_functions`).  ``_X_roots`` holds ``_X_bindings`` beside it as one
+#: binding when the file defines both
 ROOT_FUNCTIONS = ("_core_roots", "_boolean_roots", "_boolean_gather_roots", "_universal_roots", "_gf2k_roots",
                   "_merkle_roots", "_lms_roots", "_pous_roots", "_rec_roots", "_kernel_roots", "_vocabulary_roots",
                   "_pouw_roots")
 
 
+def _root_names(ns: dict[str, Any]) -> set[str]:
+    return {n for n in ns if n.startswith("_") and n.endswith("_roots") and n != "_model_roots"}
+
+
 def binding_files() -> list[tuple[str, dict[str, Any]]]:
     """(unit prefix, namespace) of each binding file: this module (its units by name) and each sidecar, by its module's name
     (``<module>.circuit-check#``, `cache.SUFFIX`), so a unit's name moves with its module.
-    A sidecar binding function this module does not run is an error."""
+    A sidecar's ``_X_bindings`` without its ``_X_roots`` is an error: no one runs it."""
     from . import sidecars as SC
 
     load_registries()
     out: list[tuple[str, dict[str, Any]]] = [("", globals())]
     for mod, m in SC.binding_modules():
         ns = vars(m)
-        known = {*ROOT_FUNCTIONS, *(n.replace("_roots", "_bindings") for n in ROOT_FUNCTIONS), "_model_roots"}
+        roots = {*ROOT_FUNCTIONS, *_root_names(ns)}
+        known = {*roots, *(n.replace("_roots", "_bindings") for n in roots), "_model_roots"}
         if stray := sorted(n for n in ns if CC._is_binding(n) and n not in known):
-            raise ValueError(f"{m.__file__}: {', '.join(stray)} is no binding circuit-check runs (`targets.ROOT_FUNCTIONS`)")
+            raise ValueError(f"{m.__file__}: {', '.join(stray)} is no binding circuit-check runs (a root function is "
+                             f"``_X_roots``, its bindings ``_X_bindings``)")
         out.append((f"{m.__name__}#", ns))
     return out
+
+
+def root_functions() -> tuple[str, ...]:
+    """The root functions the catalog runs, in order: `ROOT_FUNCTIONS`, then every other one a binding file defines, by name."""
+    more = set().union(*(_root_names(ns) for _prefix, ns in binding_files())) - set(ROOT_FUNCTIONS)
+    return (*ROOT_FUNCTIONS, *sorted(more))
 
 
 def _root_bindings(name: str) -> list[tuple[tuple[str, ...], Callable[[], list[Any]]]]:
@@ -434,7 +430,7 @@ def catalog(by_unit: list | None = None) -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    for name in ROOT_FUNCTIONS:
+    for name in root_functions():
         for units, make in _root_bindings(name):
             roots += _produce(units, make, by_unit)
     for prefix, ns in binding_files():
@@ -518,5 +514,5 @@ def suite() -> dict[str, Any]:
 
 __all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
            "binding_files", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics",
-           "kind_of", "load_registries", "reachable", "select", "subcircuit", "suite", "table_probe", "template_params",
-           "templates"]
+           "kind_of", "load_registries", "reachable", "root_functions", "select", "subcircuit", "suite", "table_probe",
+           "template_params", "templates"]

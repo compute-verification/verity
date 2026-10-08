@@ -325,6 +325,38 @@ def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_l
     assert _marker(repo) == tip
 
 
+def test_a_spec_dm_that_failed_is_sent_again_by_the_next_sweep_which_fails_until_it_goes(tmp_path, monkeypatch, capsys):
+    """Tip 141 (8 Oct): the DM failed on the Slack broker's socket, the after-landing marker moved anyway, and only a hand retry
+    sent it.  The DM's own marker stays put until `alert` returns True, so the next run resends it, and `--sweep` exits 1 while it
+    lags main; the mirror and `after_land` still run once."""
+    import research.spec_alert as S
+
+    repo, gh, _tips, merge = _world(tmp_path)
+    monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
+    ran = _steps(monkeypatch)
+    monkeypatch.chdir(repo)
+    assert M.main(["--sweep"]) == 0 and _marker(repo) == merge
+    assert _git(repo, "ls-remote", "origin", M.SPEC_ALERTED_REF).split()[0] == merge
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(other))
+    (other / "x.txt").write_text("x\n")
+    _git(other, "add", "-A")
+    _git(other, "commit", "-q", "-m", "x, pushed by hand")
+    _git(other, "push", "-q", "origin", "main")
+    tip = _git(other, "rev-parse", "HEAD")
+    sent = iter([False, True])
+    monkeypatch.setattr(S, "alert", lambda _repo, old, new, **_k: ran.append(("alert", old, new)) or next(sent))
+    capsys.readouterr()
+    assert M.main(["--sweep"]) == 1
+    err, out = capsys.readouterr()[::-1]
+    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip)] and _marker(repo) == tip
+    assert f"{M.SPEC_ALERTED_REF} stays at {merge[:12]}" in out and f"{M.SPEC_ALERTED_REF} is {merge[:12]}, behind main" in err
+    assert M.main(["--sweep"]) == 0
+    assert ran[3:] == [("alert", merge, tip)], "only the DM is retried"
+    assert _git(repo, "ls-remote", "origin", M.SPEC_ALERTED_REF).split()[0] == tip
+    assert M.main(["--sweep"]) == 0 and len(ran) == 4, "sent once"
+
+
 def test_a_marker_main_does_not_hold_runs_nothing_and_says_how_to_reset_it(tmp_path, monkeypatch, capsys):
     repo, gh, tips, _merge = _world(tmp_path)
     monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))

@@ -587,7 +587,7 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
           packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
-          seg_out_rows: tuple = (), v2_out_rows: tuple = ()) -> dict:
+          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
@@ -597,7 +597,11 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
     template as the unit class's ``definition``, and every read of another unit's outputs is a link port (`link_ports`, META
     ``links``): its row the writer's output row's words (one word per output, as ``out`` holds them, never packed), one table
-    row per reading instance, committed under the writer's ``out`` salt (and, ``strict``, checked here to be the writer's row)."""
+    row per reading instance, committed under the writer's ``out`` salt (and, ``strict``, checked here to be the writer's row).
+
+    ``pad``: the statement padded to ``pad`` instances (a public cap, `rec_shape`), the lanes its first and the rest fillers:
+    every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
+    and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``)."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -605,6 +609,13 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     suffix = "-core-rows" if core_rows else "-packed" if packed else ""
     name = shape[:16] + suffix
     ins, want, idents = lanes_ if len(lanes_) == 3 else (*lanes_, None)
+    real = None
+    if pad is not None:
+        real, fill = len(ins[0]), pad - len(ins[0])
+        if wiring is not None or not 1 <= real <= pad:
+            raise ValueError(f"class {name}: {real} lanes padded to {pad} instances (a wired statement is not padded)")
+        ins, want = [[*p, *[0] * fill] for p in ins], [[*p, *[0] * fill] for p in want]
+        idents = [[*ids, *[("filler",)] * fill] for ids in idents] if idents is not None else None
     partition, program = partition_binding(units, spec)
     groups = sources(act, uc, owners_of(units, cl.definition.id))
     bits = None
@@ -645,6 +656,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                        (b"/links:" + json.dumps(links).encode() if links else b""), len(groups))
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
+    if real is not None:
+        outs[real:] = got[real:].astype(np.uint16)
     text = FC.compose(low, sub, partition=partition, program=program, port_bits=bits, seg_ports=seg_ports, seg_out_rows=seg_out_rows,
                       v2_out_rows=v2_out_rows, links=links or None, definition=definition, leaf_scheme=LEAF_SCHEME)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
@@ -658,8 +671,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
     cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
     if n * per_instance > cap_bits:                     # a unit whose rows are long pays for their hashing in every instance
-        if wiring is not None:
-            raise ValueError(f"class {name}: a wired statement of {n} instances is past --max-statement-bits")
+        if wiring is not None or real is not None:
+            raise ValueError(f"class {name}: a wired or padded statement of {n} instances is past --max-statement-bits")
         n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
         rows, outs = rows[:n], outs[:n]
         per_port = {k: v[:n] for k, v in per_port.items()}
@@ -701,7 +714,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                     salts[f"p{i}"][r] = salts[out_name][w]
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
                     share_rows=True, tables=tables, refs=refs, salts=salts, indices=list(wiring.indices) if wiring else None)
-    return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
+    return ({} if real is None else {"real": real, "fillers": n - real}) | \
+        {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
@@ -743,12 +757,19 @@ def tile_lowering(low1: IL.Lowering, P: int, C: int, name: str) -> IL.Lowering:
 
 
 def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes, P: int, C: int,
-                n: int) -> dict:
+                n: int, real: int | None = None) -> dict:
     """As `stage`, for ``n`` P x C tiles of a two-port class: every row of every tile a distinct lane's port-0 row (a valid word
     vector; a dot product's two ports are alike), each unit's output the class lowering's own on its pair, checked through the
-    tile's leaf maps."""
+    tile's leaf maps.
+
+    ``real``: the statement padded to ``n`` instances (a public cap, `rec_shape`), its first ``real`` tiles the class's and the
+    rest fillers: every row zero and the output the class lowering's own on them, checked as every tile's is. A filler's rows
+    are equal, so the fillers open one committed row per port; the real tiles' rows and outputs are the unpadded statement's."""
     if PACK_WORDS or CORE_ROWS:
         raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS: a tile is staged in the default layout only")
+    if real is not None and not 1 <= real <= n:
+        raise ValueError(f"--real {real}: between 1 and the statement's {n} instances")
+    lanes_n = n if real is None else real
     act = units.activation(cl.definition)
     uc = cl.representative
     name = shape[:16]
@@ -761,9 +782,11 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
         raise ValueError(f"class {name}: a tile needs two row ports of one width, not {pw}")
     w = pw[0]
     _rows1, _outs1, per1 = pack(uc, ins, want, low1.definition.w_in, w1, groups, pw)
-    if len(per1["p0"]) < n * (P + C):
-        raise ValueError(f"class {name}: {n} tiles need {n * (P + C)} lanes, not {len(per1['p0'])}")
-    R = np.ascontiguousarray(per1["p0"][:n * (P + C)]).reshape(n, P + C, w)
+    if len(per1["p0"]) < lanes_n * (P + C):
+        raise ValueError(f"class {name}: {lanes_n} tiles need {lanes_n * (P + C)} lanes, not {len(per1['p0'])}")
+    R = np.ascontiguousarray(per1["p0"][:lanes_n * (P + C)]).reshape(lanes_n, P + C, w)
+    if real is not None:
+        R = np.concatenate([R, np.zeros((n - real, P + C, w), R.dtype)])
     R0, R1 = R[:, :C], R[:, C:]
     pairs = np.concatenate([np.broadcast_to(R0[:, None, :, :], (n, P, C, w)), np.broadcast_to(R1[:, :, None, :], (n, P, C, w))], axis=3)
     got, _cut, ok = low1.evaluate(pairs.reshape(n * P * C, 2 * w).astype(np.uint64))
@@ -783,11 +806,14 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
     cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
     if n * per_instance > cap_bits:
+        if real is not None:
+            raise ValueError(f"class {name}: a statement padded to {n} instances is past --max-statement-bits")
         n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
         outs, per_port = outs[:n], {k: v[:n] for k, v in per_port.items()}
     FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
              share_rows=True)
-    return {"n": n, "tile": [P, C], "coords_per_instance": P * C, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"],
+    return ({} if real is None else {"real": real, "fillers": n - real}) | \
+        {"n": n, "tile": [P, C], "coords_per_instance": P * C, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"],
             "circuit_bytes": len(text), "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
             "ports": list(low.definition.port_words), "ands": low.layout.counts["ands"] * P * C, "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
@@ -1196,7 +1222,7 @@ def _stage_cache(s: str) -> Path | None:
     a = c["a"]
     ident = [c["source_digest"], c["program_digest"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
              a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else []) \
-        + (["plain-leaves"] if PLAIN_LEAVES else [])
+        + (["plain-leaves"] if PLAIN_LEAVES else []) + ([f"real-{a.real}"] if a.real is not None else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 
@@ -1266,12 +1292,13 @@ def _stage_job_fresh(s: str) -> dict:
                 P, C = tile
                 n = (auto_batch(P * C * cc.counts["ands"], max(1, (c["row_units"].get(s) or cl.units) // (P * C)))
                      if a.batch == "auto" else a.n)
-                lanes_ = class_lanes(units, cl, c["key"], n * (P + C), c["shared"])
-                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"], P, C, n)
+                lanes_ = class_lanes(units, cl, c["key"], (a.real or n) * (P + C), c["shared"])
+                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"], P, C, n, a.real)
             else:
                 n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
-                lanes_ = class_lanes(units, cl, c["key"], n, c["shared"])
-                rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"])
+                lanes_ = class_lanes(units, cl, c["key"], a.real or n, c["shared"])
+                rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"],
+                                     pad=n if a.real is not None else None)
             rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
         except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
             rec.pop("stage", None)
@@ -1423,6 +1450,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--selftest-binary", default=None, help="the flock-circuit build with seed injection, for selftests (a proving "
                     "build never has it; default --binary)")
     ap.add_argument("--n", type=int, default=16, help="instances per class statement (synthetic lanes)")
+    ap.add_argument("--real", type=int, default=int(os.environ["FLOCK_REAL"]) if os.environ.get("FLOCK_REAL") else None,
+                    help="with --batch fixed: the statement's first REAL instances (tiles under FLOCK_GEMM_TILE) the class's, the "
+                    "rest to --n fillers (zero inputs; stage's pad, stage_tiled's real), so its shape is --n's whatever REAL is "
+                    "(default FLOCK_REAL)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--selftest", type=int, default=0, help="also run flock-circuit's selftest (31 cases, negatives included) on every "
                     "Nth provable class and on each flat Definition's largest (0: never)")
@@ -1466,6 +1497,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--protocol", default="sweep-v0", help="the measurement protocol the result is labelled with (sweep-v0: never a "
                     "table cell)")
     a = ap.parse_args(argv)
+    if a.real is not None and (a.batch not in (None, "fixed") or not 1 <= a.real <= a.n):
+        ap.error(f"--real {a.real}: with --batch fixed, between 1 and --n {a.n}")
     calls: dict[str, int] | None = None
     if a.program_graph or a.definitions:
         defs = json.loads(Path(a.definitions).read_text()) if a.definitions else None

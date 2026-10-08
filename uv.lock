@@ -30,9 +30,9 @@ members = [
     "verity-circuit-check",
     "verity-cli",
     "verity-commitments-benchmarks",
+    "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-firewall",
-
     "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-direct",
@@ -44,6 +44,8 @@ members = [
     "verity-numerical",
     "verity-ops",
     "verity-pouw-benchmarks",
+    "verity-pouw-check-difftest",
+    "verity-pouw-window-difftest",
     "verity-sp1",
     "verity-tc-probe",
     "verity-tc-probe-fp4",
@@ -1615,6 +1617,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-core-composition"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/protocols/composition" }
+dependencies = [
+    { name = "verity-difftest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-difftest" }]
+
+[[package]]
 name = "verity-core-evaluate"
 version = "0.0.0"
 source = { virtual = "verity/experimental/core/primitives/evaluate" }
@@ -1831,6 +1844,16 @@ requires-dist = [
     { name = "verity", editable = "." },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-pouw-check-difftest"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/protocols/pouw/check" }
+
+[[package]]
+name = "verity-pouw-window-difftest"
+version = "0.0.0"
+source = { virtual = "verity/experimental/core/protocols/pouw/window" }
 
 [[package]]
 name = "verity-sp1"

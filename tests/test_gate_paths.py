@@ -5,7 +5,8 @@ stops requiring its step or its grant, a Tool's closure glob that matches nothin
 skips a Lean build whose package isn't there. So a directory move that misses one fails here instead.
 
 Paths resolve against `git ls-files`: a tracked file, or a directory holding one. What a gate names that is never tracked
-(build output, a file a shipped tree is given) is in `EXEMPT` with its reason, or is gitignored.
+(build output, a file a shipped tree is given, a directory of entry files that holds none yet) is in `EXEMPT` with its
+reason, or is gitignored.
 """
 from __future__ import annotations
 
@@ -24,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[1]
 #: (file, path as written): never tracked, each with why
 EXEMPT = {
     ("tools/verity/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
+    ("tools/verity/circuit_check/src/circuit_check/known.py", "tools/verity/circuit_check/src/circuit_check/known/pieces"):
+        "KNOWN_PIECES' entry files, none while no lowering piece differs from its primitive; git keeps no empty directory",
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
 TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
@@ -232,7 +235,7 @@ def dangling_constants(files: frozenset[str], read=lambda f: (ROOT / f).read_tex
     for f in sorted(p for p in files if p.endswith(".py") and p.startswith(TOOLING) and "/tests/" not in p):
         here = f.rpartition("/")[0]
         for line, path, how in path_constants(f, read(f), tops):
-            if not resolves(path, files) and not resolves(f"{here}/{path}", files):
+            if (f, path) not in EXEMPT and not resolves(path, files) and not resolves(f"{here}/{path}", files):
                 found.append((f, line, path, how))
     unignored = set(p for _, _, p, _ in found) - (ignored([p for _, _, p, _ in found]) if files is tracked() else set())
     return [f"{f}:{line}: {path} ({how})" for f, line, path, how in found if path in unignored]

@@ -28,7 +28,7 @@ def sha(s: str) -> str:
 
 
 def fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n = n", hyps=None, reads=None, axioms=STD, kind="theorem", h="00000000000000aa"):
-    reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+    reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32, "own": ["P.f.match_1"]},
                                              {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}]
     return {"kind": kind, "module": "P.Thms", "signature": signature, "axioms": axioms, "type_hash": h, "type_sha256": sha(h),
@@ -46,7 +46,7 @@ def facts(**over):
 
 
 FILES = {"P": "P.lean", "P.Assumptions": "P/Assumptions.lean", "P.Defs": "P/Defs.lean", "P.Thms": "P/Thms.lean"}
-POLICY = {"roots": ["P"], "assumptions": ["P.Assumptions"], "guarantees": {"P.t": {"owner": "@lean"}}}
+POLICY = {"roots": ["P"], "assumptions": {"P.Hyp": {"owner": "@lean"}}, "guarantees": {"P.t": {"owner": "@lean"}}}
 
 
 def recorded(f=None):
@@ -80,7 +80,8 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
-    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `audit.py --update` and commit the record"]
+    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `audit.py --update` and commit the record",
+                                                  "assumptions: P.Hyp has no record; run `audit.py --update` and commit the record"]
 
 
 def test_every_field_of_a_reads_record_is_checked():
@@ -127,7 +128,7 @@ def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
     home = dict.fromkeys(["P", "P.Defs", "P.Assumptions", "P.Proofs", "P.Thms"], A.spec_of(pol)) | \
         dict.fromkeys(["Q.Spec", "Q.Math"], ["Q.Spec"])
     assert A.spec_reads(pol, spec_facts(outside=[("Nat", "Init.Prelude"), ("Q.g", "Q.Spec")]), home) == []
-    extra = [{"name": "P.aux", "module": "P.Proofs", "kind": "def", "hash": "5" * 32},
+    extra = [{"name": "P.aux", "module": "P.Proofs", "kind": "def", "hash": "5" * 32, "own": ["P.aux.match_1"]},
              {"name": "P.aux.match_1", "module": "P.Proofs", "kind": "def", "hash": "6" * 32}]
     assert A.spec_reads(pol, spec_facts(reads=fact()["reads"] + extra), home) == [
         "reads: P.t read P.aux in P.Proofs, outside the spec (P.Assumptions, P.Defs): a guarantee's statement reads only the "
@@ -593,6 +594,55 @@ def test_generated_constants_belong_to_their_declaration():
         "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]
 
 
+def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
+    """A generated constant is part of its declaration's digest only when the declaration reaches it itself (`own`), so
+    removing the guarantee that read `P.Enc.casesOn` through another definition's match leaves `P.Enc`'s record as it was,
+    rather than showing it changed with no change to its source; `P.Enc.casesOn` is a record of its own, which goes."""
+    enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
+    mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
+    cases = {"name": "P.Enc.casesOn", "module": "P.Defs", "kind": "def", "hash": "3" * 32, "own": []}
+    g = {"name": "P.g", "module": "P.Defs", "kind": "def", "hash": "4" * 32, "own": []}
+    f = {"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "5" * 32, "own": ["P.f.match_1"]}
+    m1 = {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "6" * 32, "own": []}
+    both = facts(pins={"P.s": fact(reads=[enc, mk, f, m1]), "P.t": fact(reads=[enc, mk, g, cases])})
+    one = facts(pins={"P.s": fact(reads=[enc, mk, f, m1])})
+    defs = [A.read_groups(A.guarantee_reads(x))["P.Defs"]["definitions"] for x in (both, one)]
+    assert sorted(defs[0]) == ["P.Enc", "P.Enc.casesOn", "P.f", "P.g"] and sorted(defs[1]) == ["P.Enc", "P.f"]
+    hashed = [{**r, "sha256": sha(r["hash"])} for r in (enc, mk, f, m1)]
+    assert defs[0]["P.Enc"] == defs[1]["P.Enc"] == A.digest(hashed[:2]) and defs[0]["P.f"] == A.digest(hashed[2:])
+    alone = facts(pins={"P.t": fact(reads=[g, m1])})
+    assert sorted(A.read_groups(A.guarantee_reads(alone))["P.Defs"]["definitions"]) == ["P.f.match_1", "P.g"]
+    walk = {"name": "P.walk", "module": "P.Defs", "kind": "def", "hash": "7" * 32, "own": ["P.walk._f"]}
+    walk_f = {"name": "P.walk._f", "module": "P.Defs", "kind": "def", "hash": "8" * 32, "own": ["P.g", "P.walk.match_1"]}
+    walk_m = {"name": "P.walk.match_1", "module": "P.Defs", "kind": "def", "hash": "9" * 32, "own": []}
+    rec = facts(pins={"P.t": fact(reads=[walk, walk_f, walk_m, g])})
+    assert sorted(A.read_groups(A.guarantee_reads(rec))["P.Defs"]["definitions"]) == ["P.g", "P.walk"]   # through its `_f`
+
+
+def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_out():
+    """A record whose declarations are unchanged but whose generated constants are grouped differently (`group_keys`) is
+    counted on one line that `statement_changes` leaves out, so Daniel's DM lists only real changes; a changed declaration
+    among them is still listed."""
+    enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
+    mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
+    cases = {"name": "P.Enc.casesOn", "module": "P.Defs", "kind": "def", "hash": "3" * 32, "own": []}
+    g = {"name": "P.g", "module": "P.Defs", "kind": "def", "hash": "4" * 32, "own": []}
+    hyp = {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "6" * 32, "own": []}
+    pol = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}}}
+    now = facts(pins={"P.t": fact(reads=[enc, mk, cases, g, hyp])})
+    sha_ = lambda *rs: A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
+    by_parent = {"P.Enc": sha_(enc, mk, cases), "P.g": sha_(g)}
+    first = A.judge(pol, now, FILES, update=True)[1]
+    old = first | {"reads": first["reads"] | {"P.Defs": {"digest": A.module_digest(by_parent), "definitions": by_parent,
+                                                          "guarantees": ["P.t"]}}}
+    new = A.judge(old, now, FILES, update=True)[1]
+    notes = A.review(old, new, now, {})
+    assert notes == [f"reads: 2 {A.REGROUPED_OWN}"] and A.statement_changes(notes) == []
+    now2 = facts(pins={"P.t": fact(reads=[enc, mk, cases, {**g, "hash": "5" * 32}, hyp])})
+    notes = A.review(old, A.judge(old, now2, FILES, update=True)[1], now2, {})
+    assert [n.split(":")[0] for n in A.statement_changes(notes)] == ["definition P.g (P.Defs), read by P.t"]
+
+
 def test_update_prints_each_changed_guarantee_and_definition(tmp_path):
     (tmp_path / "Defs.lean").write_text("namespace P\n\ndef f (n : Nat) : Nat := n\n\nend P\n")
     old = recorded()
@@ -617,7 +667,7 @@ def moved_fact(name="Q.t", was="P.t", h="00000000000000cc", as_was="000000000000
     """A guarantee ``was`` renamed to ``name``, reading `P.f` renamed to `Q.f` (in `Q.Defs`), as `Facts.lean` reports it after
     `--moved`: its statement's text under the old names hashes like ``as_was``, `Q.f`'s like ``f_was``; with ``head``,
     its type is that definition applied to `n`, which unfolded under the old names hashes like ``as_was``."""
-    reads = [{"name": "Q.f", "module": "Q.Defs", "kind": "def", "hash": f, "moved": {"as": "P.f", "sha256": sha(f_was)}},
+    reads = [{"name": "Q.f", "module": "Q.Defs", "kind": "def", "hash": f, "own": ["Q.f.match_1"], "moved": {"as": "P.f", "sha256": sha(f_was)}},
              {"name": "Q.f.match_1", "module": "Q.Defs", "kind": "def", "hash": "2" * 32,
               "moved": {"as": "P.f.match_1", "sha256": sha("2" * 32)}},
              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32,
@@ -748,10 +798,35 @@ def test_a_closed_hypothesis_must_be_a_named_assumption():
     inline = [{"binder": "h", "type": "∀ (m : Nat), m + 0 = m", "closed": True, "named": None, "module": None},
               {"binder": "hn", "type": "n ≠ 0", "closed": False, "named": None, "module": None}]
     fails, _ = A.judge(POLICY, facts(pins={"P.t": fact(hyps=inline)}), FILES, update=True)
-    assert fails == ["guarantees: P.t assumes (h : ∀ (m : Nat), m + 0 = m), a closed Prop that is not a named assumption (a Prop "
-                     "constant of P.Assumptions)"]
+    assert fails == ["guarantees: P.t assumes (h : ∀ (m : Nat), m + 0 = m), a closed Prop that is not a named assumption: a "
+                     "Prop constant listed under `assumptions`"]
     elsewhere = [{"binder": "h", "type": "Q.Hyp", "closed": True, "named": "Q.Hyp", "module": "Q.Stuff"}]
     assert A.judge(POLICY, facts(pins={"P.t": fact(hyps=elsewhere)}), FILES, update=True)[0][0].startswith("guarantees: P.t assumes (h : Q.Hyp)")
+
+
+def test_an_assumption_is_listed_by_name_with_its_record():
+    """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
+    record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
+    there, owned by the owner of the guarantees that read them."""
+    pol = recorded()
+    assert pol["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
+    changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+                                             {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
+    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `audit.py --update` and commit the record " \
+           "(Daniel's DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
+    unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
+    assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
+    assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]
+    unowned = {**pol, "assumptions": {"P.Hyp": {"digest": pol["assumptions"]["P.Hyp"]["digest"]}}}
+    assert A.judge(unowned, facts(), FILES)[0] == ['assumptions: P.Hyp has no owner: write "owner": "@lane" in its entry, or '
+                                                   'run `audit.py --update --owner @lane`']
+    unlisted = {**pol, "assumptions": {}}
+    assert A.judge(unlisted, facts(), FILES)[0][0] == ("guarantees: P.t assumes (h : P.Hyp), a closed Prop that is not a "
+                                                       "named assumption: a Prop constant listed under `assumptions`")
+    modules = {**POLICY, "assumptions": ["P.Assumptions"]}
+    assert A.judge(modules, facts(), FILES)[0][0].startswith("assumptions: the policy lists assumption modules (P.Assumptions)")
+    fails, converted = A.judge(modules, facts(), FILES, update=True)
+    assert fails == [] and converted["assumptions"] == pol["assumptions"]
 
 
 def test_a_guarantee_must_be_a_theorem_with_allowed_axioms():
