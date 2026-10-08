@@ -3,8 +3,8 @@ import PouwWindow
 /-!
 # PoUW's window: what its Lean code (`PouwWindow`) does
 
-The properties of the executable window (`verity/experimental/core/protocols/pouw/window/`, the port of
-`verity/experimental/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
+The properties of the executable window (`verity/core/protocols/pouw/lean/window/`, the port of
+`verity/core/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
 function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and the refusal is
 exactly the inputs off its domain. Each is a `Prop`, and `Properties.Proofs.Pouw` proves
 every one, on Lean core.

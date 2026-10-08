@@ -1,6 +1,6 @@
 """The difftest of the NCI policy's Lean check against its Python reference: the Python half.
 
-`../core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions, and
+`verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions, and
 `scripts/nci_reference.py`'s results on each (per IU its size and novel reads, the verdict and the first failing IU, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
 `lean-audit.json`): `NciCheck/DifftestMain.lean` checks every instance with `NciCheck.check` and fails on any difference.

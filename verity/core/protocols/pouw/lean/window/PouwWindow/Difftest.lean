@@ -5,7 +5,7 @@ import PouwWindow.Json
 # The difftest's functions: the window's Lean behind `Difftest.serve`
 
 One function per ported function of `window.py`, each on a JSON object of its arguments, for the shared harness
-(`verity/experimental/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
+(`verity/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
 suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
 
 * `on_grid`, `floor_point`, `pad`, `level`, `bucket` (`bits`, `n`); `point`, `work_at` (`bits`, `ell`); `levels` (`bits`,

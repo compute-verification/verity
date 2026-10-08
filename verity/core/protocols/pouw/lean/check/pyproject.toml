@@ -18,7 +18,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # core window.py imports: `verity.ml`'s circuits codec, commitments and crypto, and `verity.errors`) with the packages
 # above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean, and C-Flock's
 # verifier modules they import (`Flock.Canon`, `Flock.Hash` and theirs) with its configuration.
-inputs = ["verity/core/difftest", "verity/__init__.py", "verity/experimental/__init__.py",
+inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",
           "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",

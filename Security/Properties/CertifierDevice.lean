@@ -4,7 +4,7 @@ import CertifierDevice.Issuer
 /-!
 # The certifier device's properties, stated against `step` over traces
 
-`CertifierDevice.step` (`verity/experimental/core/devices/certifier/lean/CertifierDevice/Device.lean`, package
+`CertifierDevice.step` (`verity/core/devices/certifier/lean/CertifierDevice/Device.lean`, package
 `certifier_device`) is `active.py`'s proxy on one boundary link as a pure state machine: one event of the world in, the
 state it leaves and the proxy's actions out. The code has no fold of it over a trace, so this module defines one
 (`outputs`, `after`, from `init c`); every statement is about it, for every configuration and every trace, whatever its
