@@ -89,4 +89,6 @@ keep_dotted = ["verity_pouw.ncp_linear"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md",
            "verity/experimental/tests/sampled_proofs/fixtures/exfiltration_lean.json",
            "verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json",
+           "verity/ml/flock/tests/fixtures/randomness_lean.json",
+           "verity/experimental/protocols/pouw/tests/vectors/pearl_c_u.json", "verity/core/protocols/pouw/tests/vectors/pearl_c_u.json",
            "**/lake-manifest.json", "verity/ml/circuits/silicon/captures/README.md"]
