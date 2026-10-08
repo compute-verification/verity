@@ -27,8 +27,9 @@ import Definitions.Pous.Model.Continuous
 # Guarantees
 
 The statements `grade.sh` grades against. A submission proves exactly one of them, as
-`theorem solution : Pous.Guarantees.<Name>`. Named assumptions (`Pous/Assumptions.lean`) appear as hypotheses of the
-pinned `Prop`, never as axioms. "Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
+`theorem solution : Pous.Guarantees.<Name>`. Named assumptions (`Security/Models/Pous/Assumptions.lean`) appear as
+hypotheses of the pinned `Prop`, never as axioms. "Pinned as drafted" means the binders and conclusion are the draft's,
+verbatim.
 -/
 
 namespace Pous.Guarantees
@@ -511,10 +512,10 @@ def DenseMeets : Prop :=
 
 /-! ## The overwrite chain: P3 with a concrete `H`, the band, and the dense chain scheme -/
 
-/-! ### P3 with a concrete `H`: the overwrite chain on `Π₂` (`Pous.Protocol.Model.P3Chain`)
+/-! ### P3 with a concrete `H`: the overwrite chain on `Π₂` (`Definitions.Pous.Model.P3Chain`)
 
-Added on 28 Sep 2026. Accepted on 29 Sep 2026: red team GO; Daniel deferred review to the coordinator. The proofs are in this package (`Pous.SecurityProofs.P3Concrete*`, from
-`Pous/SecurityProofs/Chain/Flat.lean`).
+Added on 28 Sep 2026. Accepted on 29 Sep 2026: red team GO. The proofs are in this package
+(`Pous.SecurityProofs.P3Concrete*`, from `Security/Proofs/Pous/Chain/Flat.lean`).
 
 The model is `Pous.Sponge.p3ChainModel 220 2384`: a tweakable ideal permutation `P` of 64 KB labels (an independent
 uniform permutation per tweak `(tag, layer, node)`) and an untweaked ideal permutation `Π₂` of `2·524480 + 512` bits,
@@ -532,9 +533,9 @@ answer, `k = 106` challenges and `ε = 2^-128`: it is correct, `|C| ≥ |W|`, wi
 `⌊ρ|C|⌋`-bit adversary is accepted with probability at most `δ + 2^-128`. Pinned as drafted
 (`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`, `PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64`).
 It rests on `PousP3Concrete.p3SegCharges` (`lean/submissions/p3-concrete/P3ChainSegCharges.lean`) through the ex post
-facto target `P3ChainEPF`, and on the proved chain certificate `p3ChainCert` (`X = 1` at `D = 10`). Statement
-reviewer: the statement red team, `bc-22298e90-fd61-5062-a836-0b7a423cab8a` (GO, `docs/lean-trusted-layer-review.md`
-§§50–51). Scope: as the section header. -/
+facto target `P3ChainEPF`, and on the proved chain certificate `p3ChainCert` (`X = 1` at `D = 10`). Red team:
+`bc-22298e90-fd61-5062-a836-0b7a423cab8a`, GO (`docs/lean-trusted-layer-review.md` §§50–51). Scope: as the section
+header. -/
 def P3ConcreteMeets64 : Prop :=
   Meets (Pous.P3Concrete.p3SchemeC 2384 (Pous.P3Column.bandGraph 220 12)) .sequential 10 (2 ^ 20) 106
     ((2⁻¹ : ℝ≥0∞) ^ 128)
@@ -546,7 +547,7 @@ bounds do not combine to this (`not_jointClassWeight`). Pinned as drafted
 (`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`,
 `PousP3ConcreteMulti.p3_meets_concrete_multi_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets14GB`). It rests on `p3SegCharges` through
 `P3ChainEPFMulti` and the joint bridge (`PousP3ConcreteMulti.p3ChainEPFMulti_of_segCharges`), and on `p3ChainCert`.
-Statement reviewer: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header. -/
+Red team: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header. -/
 def P3ConcreteMeets14GB : Prop :=
   Meets (Pous.P3Concrete.p3SchemeNC 2384 (Pous.P3Column.bandGraph 220 12) 971) .sequential 10 (2 ^ 20) 106
     ((2⁻¹ : ℝ≥0∞) ^ 128)
@@ -555,17 +556,18 @@ def P3ConcreteMeets14GB : Prop :=
 segment.** `p3SchemeC 2384 B(220, 16)` meets the requirement with sequential reveal, `D = 12`, `Q = 2^20`, `k = 106`
 and `ε = 2^-128`. Pinned as drafted (`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`,
 `PousP3ConcreteMulti.p3_meets_concrete_64_D12_band16_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64D12`), from `P3ChainEPF` and the certificate
-`p3ChainCert_band16`. Statement reviewer: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header. -/
+`p3ChainCert_band16`. Red team: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header. -/
 def P3ConcreteMeets64D12 : Prop :=
   Meets (Pous.P3Concrete.p3SchemeC 2384 (Pous.P3Column.bandGraph 220 16)) .sequential 12 (2 ^ 20) 106
     ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-! ### The band scheme and the dense chain scheme over the overwrite chain (`Pous.Protocol.Model.BandChain`)
+/-! ### The band scheme and the dense chain scheme over the overwrite chain (`Definitions.Pous.Model.BandChain`)
 
-Added on 29 Sep 2026. Statement reviewer: the statement red team (`bc-22298e90-fd61-5062-a836-0b7a423cab8a`), GO
-(`docs/lean-trusted-layer-review.md` §§52–57); Daniel deferred review to the coordinator (29 Sep 2026). The proofs
+Added on 29 Sep 2026. Red team: `bc-22298e90-fd61-5062-a836-0b7a423cab8a`, GO
+(`docs/lean-trusted-layer-review.md` §§52–57). The proofs
 are in this package (`Pous.SecurityProofs.Band*`, `Pous.SecurityProofs.ChainDense*`, from
-`Pous/SecurityProofs/Chain/Flat.lean`), and each was graded PASS (`lean/submissions/sponge-dense/grading/GRADE.txt`).
+`Security/Proofs/Pous/Chain/Flat.lean`), and each was graded PASS
+(`lean/submissions/sponge-dense/grading/GRADE.txt`).
 
 The model is `Pous.Sponge.idealPerm (2·524288 + 512)`: one uniform permutation `Π₂` of `1049088` bits, queried both
 ways, so `D` and `Q` count `Π₂^{±1}` calls. `H` is the overwrite chain on `Π₂` (`Pous.Sponge.ovKey`), labels are 64 KiB
@@ -624,8 +626,8 @@ requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the impl
 (`dom salt`). One advice string covers the whole store. `2^64` is where `u64(s)` stops being injective, and the domains
 must be injective across segments: with a shared domain every `N ≥ 2` breaks (the lane's `shared_domain_breaks_fam`).
 At `N = 448` this is `BandMultiMeets14`, and at `N = 1` its global layout is `BandChainMeets64`. Added on 29 Sep 2026.
-Statement reviewer: the statement red team (`bc-22298e90`), GO (the POUS store's `docs/lean-trusted-layer-review.md`
-§58), on a red-team read (`bc-9e381a9e`, for the band lane), GO (the POUS store's
+Red team: `bc-22298e90`, GO (the POUS store's `docs/lean-trusted-layer-review.md`
+§58), and `bc-9e381a9e`, for the band lane, GO (the POUS store's
 `internal/p3-instantiation/band-family-pin-redteam-verdict.md`). Proof: the POUS store's
 `lean/submissions/band-multi/BandMultiFamilyFinal.lean`, `PousBandMulti.band_meets_family_final` (graded:
 `band-multi/family-pin/GRADE.txt`); here `Pous.SecurityProofs.BandMultiMeetsFamily`. -/
@@ -650,12 +652,12 @@ def ChainDenseMeets64 : Prop :=
 
 /-! ### The band at `D = 2`, `D = 1` and `D = 0` rounds
 
-Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z; `D = 0` approved 3 Oct 2026). Statement reviewer: @lean,
-to be confirmed. Each statement is a band pin above with only the round budget `D`, the challenge count `k` and the
+Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z; `D = 0` approved 3 Oct 2026). Each
+statement is a band pin above with only the round budget `D`, the challenge count `k` and the
 bound on the in-degree `d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there (`D = 0` puts no
 bound on `d`, since the responder makes no `Π₂` call). The proofs are
-`Pous/SecurityProofs/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D` and
-`k` as parameters. -/
+`Security/Proofs/Pous/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D`
+and `k` as parameters. -/
 
 /-- **Unconditional: the band store at `D = 2` rounds and `k = 97`, at every segment count from 1 to 2^64.**
 `BandMultiMeetsFamily` at `D = 2` and `k = 97`, for every `d ≥ 2`: for every `N` with `1 ≤ N ≤ 2^64` and every
@@ -715,10 +717,10 @@ def BandChainMeets64Rounds1 : Prop :=
     Meets (Pous.BandChain.chainBand (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) .sequential 1 (2 ^ 20) 93
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-! ### The band with a public encoder (`Pous.Protocol.Model.PubEncoder`, `Pous.Protocol.Accounting.PubMeets`)
+/-! ### The band with a public encoder (`Definitions.Pous.Model.PubEncoder`, `Definitions.Pous.Accounting.PubMeets`)
 
-Added on 29 Sep 2026, with the band pins. Statement reviewer: the statement red team (`bc-22298e90`), GO
-(`docs/lean-trusted-layer-review.md` §§53, 55); Daniel deferred review to the coordinator (29 Sep 2026). The codeword is
+Added on 29 Sep 2026, with the band pins. Red team: `bc-22298e90`, GO
+(`docs/lean-trusted-layer-review.md` §§53, 55). The codeword is
 produced by an untrusted server and accepted by the exact check. Each holds under the four deployment conditions of the
 review's §48, which are in its docstring. The proofs are in this package (`Pous.SecurityProofs.BandPub*`). -/
 
@@ -757,8 +759,8 @@ def BandPubMeets14Global : Prop :=
 `s` keyed by `salt ‖ u64(s)`, any 192-bit salt) and with one global salt and global indices (`dom salt`). It is
 `BandMultiMeetsFamily` with an untrusted server encoding the data (`PubMeets ↔ Meets` at every `N`: `band_pub_iff_seg`,
 `band_pub_iff_seg_global`), under the same four deployment conditions (§48). At `N = 448` it is `BandPubMeets14` and
-`BandPubMeets14Global`. Added on 3 Oct 2026. Statement reviewer: @lean (to be confirmed). Proof:
-`PousPub.band_pub_meets_family_final` (`Pous/SecurityProofs/Chain/PubFamily.lean`); here
+`BandPubMeets14Global`. Added on 3 Oct 2026. Proof:
+`PousPub.band_pub_meets_family_final` (`Security/Proofs/Pous/Chain/PubFamily.lean`); here
 `Pous.SecurityProofs.BandPubMeetsFamily`. -/
 def BandPubMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
@@ -772,8 +774,8 @@ def BandPubMeetsFamily : Prop :=
 /-- **Unconditional: the band store with a public encoder at `D = 2` rounds and `k = 97`, at every segment count from
 1 to 2^64.** `BandPubMeetsFamily` at `D = 2` and `k = 97`, for every `d ≥ 2`: it is `BandMultiMeetsFamilyD2` with an
 untrusted server encoding the data and the exact check (`PubMeets ↔ Meets` at every `N`), both domain layouts, under
-the same four deployment conditions (§48). Added on 3 Oct 2026. Statement reviewer: @lean (to be confirmed). Proof:
-`PousPub.band_pub_meets_family_d2` (`Pous/SecurityProofs/Chain/PubRounds.lean`); here
+the same four deployment conditions (§48). Added on 3 Oct 2026. Proof:
+`PousPub.band_pub_meets_family_d2` (`Security/Proofs/Pous/Chain/PubRounds.lean`); here
 `Pous.SecurityProofs.BandPubMeetsFamilyD2`. -/
 def BandPubMeetsFamilyD2 : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 2 ≤ d →
@@ -787,7 +789,7 @@ def BandPubMeetsFamilyD2 : Prop :=
 /-- **Unconditional: the band store with a public encoder at `D = 1` round and `k = 93`, at every segment count from
 1 to 2^64.** `BandPubMeetsFamily` at `D = 1` and `k = 93`, for every `d ≥ 1`: `BandMultiMeetsFamilyD1` with a public
 encoder and the exact check, both domain layouts, under the same four deployment conditions (§48). Added on
-3 Oct 2026. Statement reviewer: @lean (to be confirmed). Proof: `PousPub.band_pub_meets_family_d1`; here
+3 Oct 2026. Proof: `PousPub.band_pub_meets_family_d1`; here
 `Pous.SecurityProofs.BandPubMeetsFamilyD1`. -/
 def BandPubMeetsFamilyD1 : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 1 ≤ d →
@@ -802,8 +804,8 @@ def BandPubMeetsFamilyD1 : Prop :=
 
 Re-pinned on 29 Sep 2026 from `k = 107` to `k = 111`: the dense chain scheme at the deployment point was pinned in the
 lane at `k = 107` (`SpongeDense`'s `ChainDenseMeetsPinned`), which the ex post facto argument does not reach, and is
-pinned here at `k = 111`, which is proved. Statement reviewer: the statement red team (`bc-22298e90`), GO
-(`docs/lean-trusted-layer-review.md` §§53–54); Daniel deferred review to the coordinator (29 Sep 2026). -/
+pinned here at `k = 111`, which is proved. Red team: `bc-22298e90`, GO
+(`docs/lean-trusted-layer-review.md` §§53–54). -/
 
 /-- **Unconditional: the dense chain scheme at the deployment point, `k = 111`.** For every salt,
 `chainDense (2^16) 8192 512 (dom salt)` (`2^16` blocks of 1 KiB labels on the complete DAG, `H` the overwrite chain on
@@ -817,10 +819,10 @@ def ChainDenseMeets111 : Prop :=
     Meets (Pous.Sponge.chainDense (2 ^ 16) 8192 512 (Pous.Sponge.dom salt)) .sequential 64 (2 ^ 20) 111
       ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-/-! ### The band with grace `t` (`Pous.Protocol.Model.Graded`, `Pous.Protocol.Accounting.GradedMeets`)
+/-! ### The band with grace `t` (`Definitions.Pous.Model.Graded`, `Definitions.Pous.Accounting.GradedMeets`)
 
-Added on 3 Oct 2026. Statement reviewer: @lean (PR #905; the game's requirements on the protocol are in
-`Pous/Protocol/Model/Graded.lean` and `PROTOCOL.md`, "The graded audit"). -/
+Added on 3 Oct 2026 (PR #905). The game's requirements on the protocol are in
+`Security/Definitions/Pous/Model/Graded.lean` and `PROTOCOL.md`, "The graded audit". -/
 
 /-- **Unconditional: the band store with up to `t` late answers, at every segment count from 1 to 2^64.** For every `N`
 with `1 ≤ N ≤ 2^64`, every `d ≥ 5`, every hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` and
@@ -833,14 +835,14 @@ band `chainBandSeg N (2^9) d` at `D = 5`, `Q = 2^20`, `ε = 2^-128`, both with t
 The hypotheses on `D_late` are the deployment condition, necessary for the game's `S`-bit state to be a model of
 storage at rest: the audit's window must be too short to re-encode `C`. Re-encoding a segment from `W` takes
 `R(d) = Σ_{v < 2^9} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls. Every row's rounds, `k − t` at `D = 5` and
-`t` at `D_late`, last under `240·6 + 3·13 = 1,479` call-times, and the verifier's gaps between them add to the window,
-so it is bounded by the verifier's limit on the audit's duration that `BackgroundRebuildExcluded` requires, `1,505`
-call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps on `D_late` are
-`Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. That window argument and its wall-clock reading count whole `Π₂` calls,
-so they hold in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes nothing,
-rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call (red team, 4 Oct 2026, art:7617c8017e80).
-The statement itself is about the ideal model and is unaffected. Proof:
-`PousGraded.band_graded_meets_family` (`Pous/SecurityProofs/Graded/Band.lean`); here
+`t` at `D_late`, last under `240·6 + 3·13 = 1,479` call-times, and the memory challenger's gaps between them add to
+the window, so it is bounded by the memory challenger's limit on the audit's duration that `BackgroundRebuildExcluded`
+requires, `1,505` call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps
+on `D_late` are `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. That window argument and its wall-clock reading count whole
+`Π₂` calls, so they hold in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes
+nothing, rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call (red team, 4 Oct 2026,
+art:7617c8017e80). The statement itself is about the ideal model and is unaffected. Proof:
+`PousGraded.band_graded_meets_family` (`Security/Proofs/Pous/Graded/Band.lean`); here
 `Pous.SecurityProofs.BandGradedMeetsFamily`. -/
 def BandGradedMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
@@ -853,12 +855,13 @@ def BandGradedMeetsFamily : Prop :=
         GradedMeets (Pous.BandMulti.chainBandSeg N (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) 5 (2 ^ 20) D_late
           Q_late tk.2 tk.1 ((2⁻¹ : ℝ≥0∞) ^ 128))
 
-/-! ### The continuous audit (`Pous.Protocol.Model.Continuous`)
+/-! ### The continuous audit (`Definitions.Pous.Model.Continuous`)
 
-Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier enforces the three timing rules: it
-reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts every
-answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and both
-hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr` (`Pous/Protocol/Model/Continuous.lean`).
+Added on 3 Oct 2026. Red team: needed. The memory challenger enforces the three timing
+rules: it reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts
+every answer past `Δ` as a miss, with every rejected or wrong one. Neither statement takes a hypothesis about them, and
+both hold at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
+(`Security/Definitions/Pous/Model/Continuous.lean`).
 -/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
@@ -879,10 +882,10 @@ def PerAnswer : Prop :=
 
 /-- **The continuous audit's guarantee** (the explorer note, §1). From `TimedINC sch D Q β π`, for every machine,
 every arrival schedule, every hard deadline `(D_late, Q_late)`, every `f` and every `βe > 0` (the explorer's `β`), over
-the setup and `n` uniform indices: the verifier accepts with tolerance `f` and `Σ_j max(ε_j − ε_proof, 0)` exceeds
-`G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + n·(β + 1)·π`. Here `ε_j` is the
-freed fraction of the responder's memory at challenge `j`'s send time. The positive part keeps a memory above `|C|` at
-one challenge (`ε_j < 0`) from offsetting a shortfall at another. Dividing by `n`:
+the setup and `n` uniform indices: the memory challenger accepts with tolerance `f` and `Σ_j max(ε_j − ε_proof, 0)`
+exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + n·(β + 1)·π`. Here `ε_j` is
+the freed fraction of the responder's memory at challenge `j`'s send time. The positive part keeps a memory above `|C|`
+at one challenge (`ε_j < 0`) from offsetting a shortfall at another. Dividing by `n`:
 `Pr[accept(f₀) ∧ ε̄ > g(f₀)] ≤ βe + n·(β + 1)·π`, with `ε̄ = (1/n)·Σ_j max(ε_j − ε_proof, 0)` and `g = G/n`. When
 `ε_proof ≥ 0` (whenever the bound is not vacuous), `max(ε_j − ε_proof, 0) ≥ max(ε_j, 0) − ε_proof`, so the same bound
 holds for the average of `max(ε_j, 0)` exceeding `ε_proof + g(f₀)`. The scope is the module docstring's: conditional
@@ -900,13 +903,12 @@ def ContinuousAudit : Prop :=
               (rs.map fun r => max (contFreed sch r.held - epsProof sch β) 0).sum)
         ≤ ENNReal.ofReal βe + n * (β + 1) * π
 
-/-! ### The background-rebuild exclusion (`Pous.Protocol.Accounting.Rebuild`)
+/-! ### The background-rebuild exclusion (`Definitions.Pous.Accounting.Rebuild`)
 
-Added on 3 Oct 2026. Statement reviewer: @lean (`bc-19c498a8`), granted at `f6aaddc36` on 4 Oct 2026, 06:16Z (Slack
-post ts 1791094669.362169); the red team granted the same head. -/
+Added on 3 Oct 2026. Red team: GO at `f6aaddc36` (4 Oct 2026). -/
 
-/-- **Under the verifier's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole band
-segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
+/-- **Under the memory challenger's cap on an audit's duration: no graded audit lasts long enough to re-encode a whole
+band segment from `W` alone**, with no state about `Π₂`. It is the deployment condition of `BandGradedMeetsFamily`
 (`PROTOCOL.md`, "Isolation over the whole graded window"), as counts and as a bound.
 1. **The counts.** Re-encoding a segment of `chainBand (2^9) d` from `W` costs `R(d) = rebuildCalls (2^9) d` sequential
    `Π₂` calls: `R(5) = 3,057`, `R(12) = 6,578`, and `R(d) ≥ 3,057` for every `d ≥ 5`. The rounds of each row `(t, k)`
@@ -919,21 +921,21 @@ segment from `W` alone**, with no state about `Π₂`. It is the deployment cond
    under the per-segment tags and `j ↦ dom salt (s·2^9 + j)` under one global salt (`Pous.BandMulti.segFaithfulCode`,
    `Pous.BandMulti.segFaithful`).
 
-**The precondition is the verifier's.** A rebuild runs beside the audit on the wall clock, through the rounds and the
-verifier's gaps between them, and no round deadline bounds the gaps. So the bound covers a graded audit only if the
-verifier aborts, without accepting, every audit that lasts more than `auditCap · call_ns` (≈ 363.5 ms at 241.5 µs per
-call) from its first challenge's send to its last answer's receipt. If every round of the worst row answers at its
-deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the cap, which is the
-proof's reach, not on `R(d)`, which exceeds it. The milliseconds read call-times as whole `Π₂` calls of at least
-241.5 µs, which holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover answers from
-1.53% of `C` in 481 Keccak-f without re-encoding anything (red team, 4 Oct 2026, art:7617c8017e80).
+**The precondition is the memory challenger's.** A rebuild runs beside the audit on the wall clock, through the rounds
+and the memory challenger's gaps between them, and no round deadline bounds the gaps. So the bound covers a graded
+audit only if the memory challenger aborts, without accepting, every audit that lasts more than `auditCap · call_ns` (≈
+363.5 ms at 241.5 µs per call) from its first challenge's send to its last answer's receipt. If every round of the worst
+row answers at its deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the
+cap, which is the proof's reach, not on `R(d)`, which exceeds it. The milliseconds read call-times as whole `Π₂` calls
+of at least 241.5 µs, which holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover
+answers from 1.53% of `C` in 481 Keccak-f without re-encoding anything (red team, 4 Oct 2026, art:7617c8017e80).
 
 **What it does not exclude.** It excludes only re-encoding a whole segment from `W` with no state about `Π₂`. Within the
 cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at `d = 12`. `d`
 consecutive held labels restart the chain, so two held runs (10 labels, 2.0% of the segment) at `d = 5`, or four
 (48 labels, 9.4%) at `d = 12`, let a prover re-encode a whole segment within the cap. That gap between the storage held
 at rest and what is present when a challenge arrives is not bounded here. Proof: `PousRebuild.background_rebuild_excluded`
-(`Pous/SecurityProofs/Rebuild/`); here `Pous.SecurityProofs.BackgroundRebuildExcluded`. -/
+(`Security/Proofs/Pous/Rebuild/`); here `Pous.SecurityProofs.BackgroundRebuildExcluded`. -/
 def BackgroundRebuildExcluded : Prop :=
   Pous.Rebuild.rebuildCalls (2 ^ 9) 5 = 3057 ∧ Pous.Rebuild.rebuildCalls (2 ^ 9) 12 = 6578 ∧
   (∀ d : ℕ, 5 ≤ d → 3057 ≤ Pous.Rebuild.rebuildCalls (2 ^ 9) d) ∧
@@ -950,17 +952,18 @@ def BackgroundRebuildExcluded : Prop :=
 
 /-! ### Completeness of the continuous audit
 
-Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. `ContinuousAudit` bounds what the verifier of
-`Pous/Protocol/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same verifier rejects, for a
-responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q` is a parameter.
+Added on 3 Oct 2026. Red team: needed. `ContinuousAudit` bounds what the memory challenger
+of `Security/Definitions/Pous/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same memory
+challenger rejects, for a responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q`
+is a parameter.
 -/
 
 /-- **Completeness of the continuous audit.** Fix a configuration first: the scheme, the data `W`, the machine, the
 number of challenges `n`, the arrival schedule `arr`, the deadline `(D, Q)` and the hard deadline `(D_late, Q_late)`.
 Suppose that in this configuration the machine's rounds miss at rate at most `q`: at every setup and after every
 history `h` of fewer than `n` indices, the round after `h` is not a hit (it is rejected, late or wrong) for at most a
-`q` fraction of its uniform index. Then for every tolerance `f₀`, over the setup and `n` uniform indices, the verifier
-rejects (more than `f₀` rounds are not hits) with probability at most the binomial upper tail
+`q` fraction of its uniform index. Then for every tolerance `f₀`, over the setup and `n` uniform indices, the memory
+challenger rejects (more than `f₀` rounds are not hits) with probability at most the binomial upper tail
 `α = P[Bin(n, q) > f₀] = Σ_{f₀ < m ≤ n} C(n, m)·q^m·(1 − q)^(n − m)`.
 
 `q` is a parameter, not an assumption, and the statement holds for every machine, but a `q` is a rate in one
@@ -980,7 +983,8 @@ valid `q` is about `0.9`. Carrying the tail bound from the index draw to the clo
 rule applied outside the Lean model, and is not proved here.
 
 `1 − q` is truncated at `0`, so above `q = 1` the bound is `q^n ≥ 1` when `f₀ < n`, and `0` otherwise, where the
-verifier cannot reject. Proof: `PousContinuous.continuous_complete`; here `Pous.SecurityProofs.ContinuousComplete`. -/
+memory challenger cannot reject. Proof: `PousContinuous.continuous_complete`; here
+`Pous.SecurityProofs.ContinuousComplete`. -/
 def ContinuousComplete : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late n : ℕ) (q : ℝ≥0∞) (W : Bits sch.n) (mach : ContMachine sch)
     (arr : ℕ → ℕ),
@@ -998,35 +1002,36 @@ def ContinuousComplete : Prop :=
         ≤ ∑ m ∈ (Finset.range (n + 1)).filter (fun m : ℕ => f₀ < m),
             (n.choose m : ℝ≥0∞) * q ^ m * (1 - q) ^ (n - m)
 
-/-! ### The continuous audit, time-averaged, with arrivals drawn by the verifier
+/-! ### The continuous audit, time-averaged, with arrivals drawn by the memory challenger
 
-Added on 3 Oct 2026. Statement reviewer: needed. Red team: needed. The verifier of `ContinuousAudit`, unchanged, run on
-arrivals it draws itself: one coin per slot of one unit (`Pous/Protocol/Model/Continuous.lean`, "Arrivals drawn by
-the verifier"). Arrivals queue behind an open round (rule 1). The memory is read at every idle slot, not only at send
-times, and the bound is normalized by the expected number of challenges `λT`, not the realized one. -/
+Added on 3 Oct 2026. Red team: needed. The memory challenger of `ContinuousAudit`,
+unchanged, run on arrivals it draws itself: one coin per slot of one unit
+(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals drawn by the memory challenger"). Arrivals queue
+behind an open round (rule 1). The memory is read at every idle slot, not only at send times, and the bound is
+normalized by the expected number of challenges `λT`, not the realized one. -/
 
 /-- **The continuous audit's time-averaged bound.** From `TimedINC sch D Q β π`, for every machine, every hard
-deadline `(D_late, Q_late)`, every `f` and every `βe > 0`, over the setup and the verifier's `T` slot draws
+deadline `(D_late, Q_late)`, every `f` and every `βe > 0`, over the setup and the memory challenger's `T` slot draws
 `x t ∈ Fin b × Fin B` (a challenge arrives at slot `t` iff its coin is below `a`, probability `p = a/b`; its index is
-the slot's): the verifier, run on these arrivals, accepts with tolerance `f` and `p·Σ_{t idle} max(ε_t − ε_proof, 0)`
-exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most `βe + T·(β + 1)·π`. Here `ε_t` is
-the freed fraction of the responder's memory at slot `t` (`contHeldAt`), read at every idle slot (`contIdle`: every
-earlier arrival has closed) whether or not a challenge arrives there, and a busy slot counts as `0`. Dividing by
-`pT`, the expected number of challenges (`λ·T` in seconds):
+the slot's): the memory challenger, run on these arrivals, accepts with tolerance `f` and
+`p·Σ_{t idle} max(ε_t − ε_proof, 0)` exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most
+`βe + T·(β + 1)·π`. Here `ε_t` is the freed fraction of the responder's memory at slot `t` (`contHeldAt`), read at every
+idle slot (`contIdle`: every earlier arrival has closed) whether or not a challenge arrives there, and a busy slot
+counts as `0`. Dividing by `pT`, the expected number of challenges (`λ·T` in seconds):
 `Pr[accept(f₀) ∧ (1/T)·Σ_{t idle} max(ε_t − ε_proof, 0) > g(f₀)] ≤ βe + T·(β + 1)·π` with `g = G/(pT)`, the explorer's
 `g` at `n = λT`. In an accepted run off that event, the idle slots with `ε_t > X` are at most a `g/(X − ε_proof)`
 fraction of the `T` slots (Markov).
 
 This is an average over the idle slots, not over the whole period: it does not bound the explorer's
 `ε̄ = (1/T)·Σ_t ε_t`. The memory is not read at a busy slot, and the responder chooses which slots are busy
-(`Pous/Protocol/Model/Continuous.lean`, "The responder chooses the busy slots"). In an accepted run off the
-event, with `0 < a` and `ε_proof ≥ 0`, `ε̄ ≤ ε_proof + g + (busy slots)/T` whatever the memory at a busy slot, and
-a responder that pads every hit to `D` units makes about 2.5% of the slots busy at `D = 2` and 9.9% at `D = 5`
+(`Security/Definitions/Pous/Model/Continuous.lean`, "The responder chooses the busy slots"). In an accepted run
+off the event, with `0 < a` and `ε_proof ≥ 0`, `ε̄ ≤ ε_proof + g + (busy slots)/T` whatever the memory at a busy slot,
+and a responder that pads every hit to `D` units makes about 2.5% of the slots busy at `D = 2` and 9.9% at `D = 5`
 (100 challenges/s on 241.5 µs slots) without a miss. Neither is proved here. `a ≤ b` keeps `a/b` a probability,
 and `0 < b` makes the draw space nonempty. The
-scope is the model's: the arrival coins are the verifier's own randomness, independent of the setup and the answers;
-memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which the
-step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
+scope is the model's: the arrival coins are the memory challenger's own randomness, independent of the setup and the
+answers; memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which
+the step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
 answers from 1.53% of `C` in 481 Keccak-f, under one call: red team, 4 Oct 2026, art:7617c8017e80). Proof:
 `PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
 def ContinuousTimeAverage : Prop :=
