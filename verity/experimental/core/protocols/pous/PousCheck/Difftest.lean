@@ -23,6 +23,9 @@ a test, not a proof.
   An accepted `FINAL` also gives the session's `Certificate.assess`: its verdict, coverage and StorageProfile.
 * `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
 * `sha512`: the SHA-512 of labelled bytes, against the pins the spec's §7 states for them.
+
+`transcript` is not a kind of the run: `pous-audit-difftest serve` answers it for `interop.py`, which holds it to
+`wire.py` on the spec's transcripts.
 -/
 
 namespace PousCheck.Difftest
@@ -141,9 +144,8 @@ def optional {α : Type} (j : Json) (k : String) (f : Json → V α) : V (Option
   | .null => pure none
   | v => some <$> f v
 
-/-- An `audit` instance's answer: `Audit.check`'s `FINAL` frame and assessment, or the code of the fault that leaves no
-`FINAL`. -/
-def audit (inst : Json) : V Json := do
+/-- A session's record: its frames, measured latencies, and the verifier's secret, beacons and seen pairs. -/
+def session (inst : Json) : V (Array ByteArray × Array Nat × Wire.Verifier) := do
   let frames ← bytesArr (← J.get inst "frames" "audit") "frames"
   let elapsed ← (← J.arr inst "elapsed_ns" "audit").mapM (J.asNat · "elapsed_ns")
   let source ← optional inst "verifier_source" (bytesOf · "verifier_source")
@@ -153,9 +155,38 @@ def audit (inst : Json) : V Json := do
   let seen ← optional inst "seen" fun j => do (← J.asArr j "seen").mapM fun p => do
     let #[e, a] := (← J.asArr p "pair") | throw "audit: a seen pair is [epoch, audit id]"
     pure (← bytesOf e "epoch", ← bytesOf a "audit id")
-  pure <| match Audit.check frames elapsed ⟨source, beacons, seen⟩ with
+  pure (frames, elapsed, ⟨source, beacons, seen⟩)
+
+/-- An `audit` instance's answer: `Audit.check`'s `FINAL` frame and assessment, or the code of the fault that leaves no
+`FINAL`. -/
+def audit (inst : Json) : V Json := do
+  let (frames, elapsed, v) ← session inst
+  pure <| match Audit.check frames elapsed v with
     | .ok (final, storage) => Json.mkObj [("final", hex final), ("storage", storage)]
     | .error e => Json.mkObj [("error", num e.code)]
+
+def fault (e : Wire.Fault) : Json := Json.mkObj [("fault", num e.code), ("message", .str e.message)]
+
+/-- A transcript's outputs for `interop.py`, as the wire's two implementations state them: the setup's (`Wire.parseSetup`:
+the epoch id, the declared root and the identity it binds, how many blocks it carried, whether they authenticate it, and
+where the audit begins) and the audit's (`Audit.check`: the `FINAL` frame, its verdict, code, record count and transcript
+hash), or the fault each stops at. -/
+def transcript (inst : Json) : V Json := do
+  let (frames, elapsed, v) ← session inst
+  let setup := match Wire.parseSetup frames with
+    | .ok (s, cursor) => Json.mkObj [("authentication_failed", .bool s.authFailed), ("blocks", num s.blocks.size),
+        ("commitment", hex s.commitment), ("cursor", num cursor), ("epoch_id", hex s.epoch), ("manifest", hex s.manifest),
+        ("root", hex s.root), ("salt", hex s.salt)]
+    | .error e => fault e
+  -- The transcript hash follows the envelope's 10 bytes, the epoch id, the audit id, verdict, code, round count, Δ and RTT.
+  let o := 10 + Wire.D + Wire.S + 1 + 1 + 2 + 8 + 8
+  let audit := match Audit.check frames elapsed v with
+    | .ok (final, _) => match Wire.parseFinal final with
+      | .ok (verdict, code, records) => Json.mkObj [("code", num code), ("final", hex final), ("records", num records),
+          ("transcript_hash", hex (final.extract o (o + Wire.D))), ("verdict", .bool verdict)]
+      | .error e => fault e
+    | .error e => fault e
+  pure (Json.mkObj [("audit", audit), ("setup", setup)])
 
 /-- A `storage` instance's answer: the certificate gate and the StorageProfile of an accepted audit of `k` challenges
 within `Δ + RTT` of a store (`Certificate.gate`, `profileJson`), or `null` when `P2Params` refuses the store. -/

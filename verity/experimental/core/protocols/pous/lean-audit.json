@@ -3,7 +3,7 @@
  "exempt": {
   "PousCheck.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousCheck.SetupProtocol.protocol, audited under PousCheck and CoreProtocol",
   "PousCheck.SetupDifftestMain": "the pous-setup-difftest server's entry point, one line: Difftest.serve of PousCheck.SetupDifftest.table, which tests/test_setup_difftest.py drives against the Python reference; audited under PousCheck",
-  "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof"
+  "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof; with `serve`, Difftest.serve of PousCheck.Difftest.transcript, which interop.py drives against wire.py"
  },
  "runs": {
   "PousCheck.DifftestMain": {
