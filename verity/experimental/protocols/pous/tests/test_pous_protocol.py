@@ -598,11 +598,30 @@ def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_u
     key = protocol.challenge_key(b"\x00" * 32, vk)
     edge = ROOT_CALL_NS - 1 - delta
     assert edge - RTT_ALLOWANCE_CAP_NS == 28
-    assert protocol.TimedAudit(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge).k == 105
+    assert one.certificate.refusals(105, delta + edge) == ()
     with pytest.raises(ValueError, match="must stay under 854029 ns"):
         protocol.TimedAudit(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge + 1)
     cooperating_root = 2 * half
     assert cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS) >= 2 > cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS + 1_000)
+
+
+def test_p2_refuses_an_rtt_past_the_cap_or_a_delta_other_than_the_spec_s_even_inside_the_certificate():
+    """Spec v1.1 sets Δ = 0.5 ms and caps the measured RTT allowance at 354 µs ("Sequential reveal and deadlines", §6).
+    The certificate reads only `Δ + RTT`, so Δ = 0 with RTT = 854,028 ns, the certificate's edge 28 ns past the cap, or
+    a Δ above 0.5 ms are inside it; the verifier refuses each, and `research=True` runs one with the refusal as a gap."""
+    one = schemes.get("p2-16448/v3")
+    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
+    key = protocol.challenge_key(b"\x00" * 32, vk)
+    for delta, rtt, why in ((0, ROOT_CALL_NS - 1, "Δ = 500000 ns, not 0"),
+                            (500_000, ROOT_CALL_NS - 1 - 500_000, "354028 ns is past the spec's cap of 354000 ns"),
+                            (500_028, RTT_ALLOWANCE_CAP_NS, "Δ = 500000 ns, not 500028")):
+        assert one.certificate.refusals(105, delta + rtt) == ()
+        with pytest.raises(ValueError, match=re.escape(why)):
+            protocol.TimedAudit(one, vk, key, deadline_ns=delta, rtt_allowance_ns=rtt, experimental=True)
+    research = protocol.TimedAudit(one, vk, key, deadline_ns=0, rtt_allowance_ns=ROOT_CALL_NS - 1, research=True,
+                                         experimental=True)
+    assert research.gaps[0] == "the spec's operating point sets Δ = 500000 ns, not 0"
+    assert protocol.TimedAudit(one, vk, key, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS, experimental=True).limit_ns == 854_000
 
 
 def test_p2_v3_keys_are_the_specs():
