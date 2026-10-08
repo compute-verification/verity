@@ -8,8 +8,8 @@ across every record that changed, not record by record: a guarantee or a definit
 to another's under its name is no change, nor is a guarantee renamed with the same type hash, one that only prints
 differently, or a record that moved with its package, and a push of only these sends nothing. Nor is a definition whose
 hash changed in a push that changed no Lean input (a `.lean` file, a lakefile, a manifest or a toolchain, outside the
-audit's own `tools/verity/lean/`): what a definition says comes from those alone, so its record was only rehashed or
-regrouped by the audit, and it is tallied as `rehashed`. The DM opens with each
+audit's own `tools/verity/lean/`, or a dependency bundle newly pinned in its `lean-deps.json`): what a definition says
+comes from those alone, so its record was only rehashed or regrouped by the audit, and it is tallied as `rehashed`. The DM opens with each
 package's tally (with the guarantees that moved into it), then lists what existing guarantees and definitions now say
 before the new guarantees. A DM that fails is
 printed and posted to #agent-alerts, so a spec change never lands unseen.
@@ -32,6 +32,8 @@ READERS_SHOWN = 4
 #: the files a definition's meaning is elaborated from, by suffix or name; the audit's own directory writes records, says nothing
 LEAN_INPUTS = (".lean", "lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain")
 AUDIT_DIR = "tools/verity/lean/"
+#: the dependency bundles every package with fetched dependencies is built against, pinned by content (`sha256`)
+DEPS_PINS = AUDIT_DIR + "lean-deps.json"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -160,13 +162,21 @@ def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:
     return out
 
 
+def _sources(repo: Path, old: str, new: str) -> bool:
+    """Whether the push from ``old`` to ``new`` changed a Lean input: a file under `LEAN_INPUTS` outside the audit's own
+    directory, or a dependency bundle pinned that ``old`` didn't pin (re-keying or dropping a pin builds against no new tree)."""
+    if any(p.endswith(LEAN_INPUTS) and not p.startswith(AUDIT_DIR) for p in _git(repo, "diff", "--name-only", old, new).splitlines()):
+        return True
+    bundles = [{d.get("sha256") for d in (_record(repo, rev, DEPS_PINS).get("deps") or {}).values()} for rev in (old, new)]
+    return bool(bundles[1] - bundles[0])
+
+
 def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[int] | None = None) -> str | None:
     """The DM for main moving from ``old`` to ``new``, or None when no guarantee says anything new.  ``prs``, the pull requests
     it landed, default to the numbers in its first-parent subjects (`Merge #12 #34 (…)`)."""
     pairs = _records_changed(repo, old, new)
-    sources = any(p.endswith(LEAN_INPUTS) and not p.startswith(AUDIT_DIR)
-                  for p in _git(repo, "diff", "--name-only", old, new).splitlines())
-    entries = _across({b: _record(repo, old, b) for b, _ in pairs}, {p: _record(repo, new, p) for _, p in pairs}, sources)
+    entries = _across({b: _record(repo, old, b) for b, _ in pairs}, {p: _record(repo, new, p) for _, p in pairs},
+                     _sources(repo, old, new))
     if not any(text for _, _, text in entries):
         return None
     tallies, blocks = [], []

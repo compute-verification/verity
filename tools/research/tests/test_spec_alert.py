@@ -118,6 +118,21 @@ def test_a_definition_rehashed_or_regrouped_with_no_lean_input_changed_is_tallie
         prev = cur
 
 
+def test_a_newly_pinned_dependency_bundle_is_a_lean_input_and_a_rekeyed_or_dropped_one_is_not(tmp_path):
+    """Every definition that reads Mathlib or ArkLib is built against the bundle `lean-deps.json` pins (top, 06:06Z): pinning
+    another one with no manifest change would otherwise show only as `rehashed`. #1544 re-keys two bundles and drops a pin."""
+    repo = _repo(tmp_path)
+    pins = lambda **deps: {"deps": {k: {"package": "pkg", "sha256": s} for k, s in deps.items()}}
+    _commit(repo, spec.DEPS_PINS, pins(k1=H1, k2=H2), "pins")
+    old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1}), "base")
+    _commit(repo, spec.DEPS_PINS, pins(k3=H1), "re-key one bundle, drop the other")
+    rekeyed = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H3}), "m")
+    assert spec.message(repo, old, rekeyed) is None
+    _commit(repo, spec.DEPS_PINS, pins(k3=H1, k4=H3), "a new bundle")
+    pinned = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H2}), "m")
+    assert spec.message(repo, rekeyed, pinned).endswith("*pkg*\n• definition `P.D` changed; read by `P.t`")
+
+
 def test_the_dm_names_the_package_the_pull_requests_and_the_compare_link(tmp_path):
     repo = _repo(tmp_path)
     old = _commit(repo, "pkg/lean/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}), "base")
