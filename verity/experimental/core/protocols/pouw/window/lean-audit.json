@@ -11,18 +11,13 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
-  "PouwWindow.Advice": {
-   "imports": ["PouwWindow.Grid"],
-   "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
-  },
   "PouwWindow.Public": {
    "imports": [],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwWindow.Json": {
-   "imports": ["PouwWindow.Draw", "PouwWindow.Advice", "PouwWindow.Public", "Lean.Data.Json"],
+   "imports": ["PouwWindow.Draw", "PouwWindow.Public", "Lean.Data.Json"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }

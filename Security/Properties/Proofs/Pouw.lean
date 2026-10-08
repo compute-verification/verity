@@ -1,14 +1,12 @@
 import Properties.Pouw
 import Properties.Proofs.Pouw.Grid
 import Properties.Proofs.Pouw.Draw
-import Properties.Proofs.Pouw.Window
 
 /-!
 # Proofs of PoUW's window properties (`Properties.Pouw`)
 
 The served numbers, by evaluation in the kernel (`decide +kernel`: no compiled code, only the kernel's reduction), and
-the refusals, by unfolding. The grid's properties are in `Properties.Proofs.Pouw.Grid`, K′'s in `Properties.Proofs.Pouw.Draw`,
-the window's in `Properties.Proofs.Pouw.Window`.
+the refusals, by unfolding. The grid's properties are in `Properties.Proofs.Pouw.Grid` and K′'s in `Properties.Proofs.Pouw.Draw`.
 -/
 
 namespace Properties.Pouw.Window
