@@ -6,9 +6,10 @@ report (its JSON), and reports what the audit itself decides. Each configuration
 unit, so it gets its own `audit.Audit` and one clock:
 - **the honest prover** declares one sync per window for all the configuration's egress links (`--syncs`): by default
   in hindsight, met on every one, with `calibration.choose_syncs` over the report's Σ_sync; `envelope`, the
-  calibration's envelope in every window; or an online rule of `online` (`last`, `cover-K-M[-fallback]`), declared at
-  each window's first bucket from the frames ready by then, with its history carried across a run's configurations
-  (`--fresh` starts each with none);
+  calibration's envelope in every window; or an online rule of `online` (`last`, `cover-K-M[-rhoR][-fallback]`,
+  `sticky-K-M-N[-rhoR]`), declared at each window's first bucket from the frames ready by then, with its history
+  carried across a run's configurations (`--fresh` starts each with none). An online rule's egress rows carry
+  `choices`, the values a sender timing its writes could have made it declare in the window (`online.Rule.choices`);
 - **the honest sender** is `schedule.run_shaper`, driving a `grid.Certifier` at the report's egress r. A late frame goes
   when ready, so a window that no sync meets deviates from the Program's grid;
 - **the ingress certifier** is a `grid.Certifier` at the report's r_in and τ_in. A frame is enqueued at the first ingress
@@ -188,6 +189,7 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
     links = [([LogicalFrame(payload(k), f["anchor"], f["index"]) for k, f in enumerate(link["frames"])],
               [f["ready"] for f in link["frames"]]) for link in egress]
     history: list[online.Past] = []
+    choices: list[int] | None = None
     hands_per_link = None
     if syncs == "hindsight":
         declared, hands_per_link, misses = choose_syncs(links, sync_set, T)
@@ -196,7 +198,8 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
     elif syncs == "envelope":
         declared = [setup.envelope] * windows
     else:
-        declared, history = online.declare(links, sync_set, T, online.rule(syncs), windows, setup.envelope, prior)
+        declared, history, choices = online.declare(links, sync_set, T, online.rule(syncs), windows, setup.envelope,
+                                                     prior)
     syncs = declared
     for k, (link, (frames, ready)) in enumerate(zip(egress, links, strict=True)):
         name, params = link["link"], setup.egress[link["link"]]
@@ -225,6 +228,8 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight",
                    "raw": a.violation, "committed": b.violation, "certified": c.violation,
                    "sync": [syncs[w].delta, str(syncs[w].rho)],
                    "real_frames": real, "padding_share": 1 - real / slots, "own_late_frames": own_late.get(w, 0)}
+            if choices is not None:
+                row["choices"] = choices[w]
             violation = a.violation or b.violation or c.violation
             if violation == "mismatch":
                 row["cause"], row["detail"] = diagnose(w, T, own_late.get(w, 0), deviating, expected, records[w])
@@ -420,7 +425,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--jobs", type=int, default=1, help="trace files replayed in parallel")
     ap.add_argument("--syncs", type=parse_sync_policy, default="hindsight",
-                    help="the prover's syncs: hindsight, envelope, or an online rule (last, cover-K-M[-fallback])")
+                    help="the prover's syncs: hindsight, envelope, or an online rule "
+                         "(last, cover-K-M[-rhoR][-fallback], sticky-K-M-N[-rhoR])")
     ap.add_argument("--fresh", action="store_true",
                     help="an online rule starts every configuration with no history, even within one run")
     args = ap.parse_args(argv)
