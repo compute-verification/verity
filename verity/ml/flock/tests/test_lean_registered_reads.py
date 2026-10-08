@@ -1,4 +1,4 @@
-"""Registered reads (PROTOCOL.md §16.10, `verity/experimental/protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
+"""Registered reads (PROTOCOL.md §16.10, `verity/core/protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
 rows of a registered value (RoPE's `cs`, rows of the program's `cs_table`, committed once at registration) opens every
 table row against the verifier's own registered root, at the position the verifier's own program reads, with the units
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
@@ -6,7 +6,7 @@ circuit (§16.13, the default `verity/flock-circuit`) composed for the `Register
 v0 partition; the reads come from `reads` on that program (`statement`: setup, no proof; `verify`: setup of each table,
 with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
 set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
-module is slow; it catches what the Python reference (`verity/experimental/protocols/sampled_proofs/tests/test_registered.py`) can't: the
+module is slow; it catches what the Python reference (`verity/core/protocols/sampled_proofs/tests/test_registered.py`) can't: the
 executable verifier's own refusals, on both statements' setup paths."""
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array
 from verity_flock import circuit as FC
-from verity.experimental.protocols.sampled_proofs.one_stage import partition as P, registered as G
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"

@@ -1,4 +1,4 @@
-"""P2 v4 on the CPU, as `verity/experimental/protocols/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
+"""P2 v4 on the CPU, as `verity/core/protocols/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
 (`vectors.py`) are built on.
 
@@ -52,7 +52,7 @@ DELTA_NS = 500_000
 MAX_RTT_ALLOWANCE_NS = 354_000
 """Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, Daniel's ruling of 4 Oct
 2026, so that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
-(`verity.experimental.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
+(`verity.core.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
 
 try:
     import gmpy2

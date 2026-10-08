@@ -181,8 +181,8 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
 def test_the_spec_rtt_cap_is_the_schemes():
     """The arm's Δ and RTT cap are spec v1.1's, as `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
     judges against the cap whose `Δ + RTT` the certificate admits."""
-    from verity.experimental.protocols.pous import audit
-    from verity.experimental.protocols.pous.schemes import p2
+    from verity.core.protocols.pous import audit
+    from verity.core.protocols.pous.schemes import p2
 
     R, _, _ = _p2()
     assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (p2.DELTA_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
@@ -354,8 +354,8 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     """Under `V3` the device's `C` is v3's encoding of `W` (v3's own codec decodes it back), the leaves are `vk`'s, and every
     audit and control is `protocol.TimedAudit`'s.  At the test's 128-bit width P2 has no certificate, so the audit runs as a
     research audit and says so."""
-    from verity.experimental.protocols.pous import protocol, schemes
-    from verity.experimental.protocols.pous.verifier import leaf_hash
+    from verity.core.protocols.pous import protocol, schemes
+    from verity.core.protocols.pous.verifier import leaf_hash
 
     _, harness, _ = _p2()
     body = _bench().P2V3Gpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small(), research=True)
@@ -401,8 +401,8 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
     from band_gpu import harness as H
     from band_gpu import memory_challenger as live
 
-    from verity.experimental.protocols.pous import schemes
-    from verity.experimental.protocols.pous.verifier import VerifierKey, leaf_hash
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
 
     scheme = schemes.get("p2-16448/v4")
     params, salt = scheme.params, b"s" * 24
@@ -420,7 +420,7 @@ def test_protocol_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_
     """The end-to-end claim's memory challenger: `Δ + 354 µs` (spec v1.1's cap) is inside `P2SlackFamilyUncond`'s
     certificate, so 105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the memory challenger
     refuses before sending any challenge."""
-    from verity.experimental.protocols.pous.schemes import p2
+    from verity.core.protocols.pous.schemes import p2
 
     doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert doc["strict"] and "refused" not in doc and doc["audits_accepted"] == doc["audits"] == 2 and answered == 2 * 105
@@ -463,7 +463,7 @@ def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_p
     adds up to its round trip."""
     import itertools
 
-    from verity.experimental.protocols.pous.schemes import p2
+    from verity.core.protocols.pous.schemes import p2
 
     ticks = itertools.count(0, 7)
     doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=lambda: next(ticks))
@@ -553,7 +553,7 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
     from band_gpu import harness as H
     from memory_challenger import live
 
-    from verity.experimental.protocols.pous import schemes
+    from verity.core.protocols.pous import schemes
 
     scheme = schemes.get("p2-16448/v4")
     nb = scheme.params.block_bytes
@@ -571,7 +571,7 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
 def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it():
     """`Δ + 354 µs` is inside `P2SlackFamilyUncond`'s certificate: 105 rounds a session run, the test-signed sessions pass
     under the test signer's mapping and the real verdict rejects them; `Δ + 355 µs` is refused before any round."""
-    from verity.experimental.protocols.pous.schemes import p2
+    from verity.core.protocols.pous.schemes import p2
 
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert doc["strict"] and "refused" not in doc and answered == 2 * 105 and doc["k"] == 105
@@ -584,7 +584,7 @@ def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_pa
 
 def test_the_memory_challenger_catches_a_flipped_bit_in_a_blocks_last_byte():
     """Every block tampered: each round's digest is wrong, each session rejected, and no round is late or retried."""
-    from verity.experimental.protocols.pous.schemes import p2
+    from verity.core.protocols.pous.schemes import p2
 
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, tamper=frozenset(range(1 << 16)))
     assert answered == 2 * 105 and doc["wrong"] == 2 * 105 and doc["late"] == 0
@@ -639,8 +639,8 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
     issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping."""
     from verity.ml.crypto import lms
-    from verity.experimental.protocols.pous import memory_challenger as mc
-    from verity.experimental.protocols.pous.schemes import p2
+    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous.schemes import p2
 
     live = _live()
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
@@ -652,7 +652,7 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     assert answered == 105 and doc["signer"]["scheme"] == mc.LMS and doc["signer"]["test"] is False
     assert doc["audits"] == doc["audits_accepted"] == doc["audits_accepted_under_signer"] == 1
     assert doc["records"][0]["public"]["verdict"] == {"accepted": True} and doc["profile"] is not None
-    from verity.experimental.protocols.pous import schemes
+    from verity.core.protocols.pous import schemes
 
     nb = schemes.get("p2-16448/v4").params.block_bytes
     ctl = live.signature_control(doc, lambda i: mc.block_digest(i.to_bytes(8, "big") * (nb // 8)))

@@ -104,7 +104,7 @@ class V1:
 
 
 class V3(V1):
-    """`p2-16448/v4` (`verity.experimental.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under the
+    """`p2-16448/v4` (`verity.core.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under the
     scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
     leaves, audited by `protocol.TimedAudit` (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
@@ -113,8 +113,8 @@ class V3(V1):
     impl, live = "p2-v3-gpu", HERE.parent / "band_gpu" / "memory_challenger.py"
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
-        from verity.experimental.protocols.pous import protocol, schemes
-        from verity.experimental.protocols.pous.schemes import p2
+        from verity.core.protocols.pous import protocol, schemes
+        from verity.core.protocols.pous.schemes import p2
 
         self.P, self.p2 = P, p2
         self.params = schemes.P2Params(P.w, P.c0, P.blocks_per_segment, P.segments)
@@ -134,7 +134,7 @@ class V3(V1):
         return self.p2.block_keys(self.params, self.salt, *divmod(i, self.P.blocks_per_segment))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.experimental.protocols.pous.verifier import leaf_hash
+        from verity.core.protocols.pous.verifier import leaf_hash
         return leaf_hash(self.params, self.salt, i, block)
 
     def ready(self) -> dict[str, Any]:
@@ -174,7 +174,7 @@ class MC(V3):
         self.memory_challenger_args = (*self.memory_challenger_args, *(("--signer", "lms", "--lms-key", lms_key) if lms_key else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.experimental.protocols.pous.memory_challenger import block_digest
+        from verity.core.protocols.pous.memory_challenger import block_digest
         return block_digest(block)
 
 
@@ -251,7 +251,7 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-KEYS = Path(__file__).resolve().parents[3] / "verity/experimental/protocols/pous/tests/fixtures/p2-v4-keys.json"
+KEYS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
 """The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
 
 

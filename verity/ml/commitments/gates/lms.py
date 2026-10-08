@@ -10,7 +10,7 @@ a network certificate or a memory challenger's record without revealing it.
 1 iff ``u32(q) || C || y || path`` signs ``message`` under the public key ``I || root`` (`lms.verify`). Every N-byte value,
 the identifier and the message are SHA-512 words as `merkle` lays them out (bytes big-endian, each word's bits LSB first);
 ``q`` is LSB first. An accepted signature means the key's holder signed the message under the claim
-``euf-cma/lms-sha512-n64`` (`verity.experimental.claims`), the scheme's unforgeability, which rests on SHA-512 itself, its whole output.
+``euf-cma/lms-sha512-n64`` (`verity.core.claims`), the scheme's unforgeability, which rests on SHA-512 itself, its whole output.
 
 **A fixed shape.** The circuit is a function of (N, W, H): the digits, the leaf index and the path are values. A chain runs all
 2^W - 1 steps, and step j keeps its input unless the chain's digit a is at most j (`LmsChainStep_v1`), so the proof pays

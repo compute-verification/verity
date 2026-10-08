@@ -192,7 +192,7 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     (`commits_entry`), as V* builds a round's from its two ``c_k``; v is row i of the value the verifier registers itself
     (`verifier_value`, a function of the two v's alone), so the statement has no public input; and, when Lean is built, its
     `statement` under the reads file."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     g = random.Random(11)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)

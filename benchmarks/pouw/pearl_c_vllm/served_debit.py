@@ -80,11 +80,11 @@ import verify_run as VR  # noqa: E402
 from verity.ml.commitments import Commitment  # noqa: E402
 from verity.ml.commitments import verify_opening  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
-from verity.experimental.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
+from verity.core.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
                                opened_value, rows_domain, weight_binding)
-from verity.experimental.protocols.pouw.coins import CoinCommitment  # noqa: E402
-from verity.experimental.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.experimental.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
 
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
