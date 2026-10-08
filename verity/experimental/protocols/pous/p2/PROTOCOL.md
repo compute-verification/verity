@@ -11,7 +11,7 @@
 Status: specification v4, 2026-10-06. It keeps v1.1's mathematics, sizes, k, Δ, RTT cap and framing, and changes only
 the hash (§13). This is not deployment approval: P2 remains experimental because the P2–M1-SGI instantiation assumption is
 not accepted (default, Daniel deferred, 2026-09-29). Its challenge derivation is `verity.ml.randomness` v2
-(Appendix A), and the vectors in §7 are generated under it.
+(Appendix A), and the vectors in §7 are generated under it. The errata of 2026-10-07 (§14) clarify v4 as they do v1.1, without changing meaning.
 
 ## 1. Parameter set
 
@@ -198,7 +198,7 @@ offset  bytes  field
 10      n      body
 ```
 
-The body length excludes the 10-byte header. `p2-audit-wire/v4` accepts only named profiles with w ≤ 16,448, canonical manifests of at most 512 bytes, `blocks_per_segment ≤ 2^16`, `segments < 2^64`, and k ≤ 105. Deployment setup accepts only `p2-2054B`; reduced-width conformance vectors may use a named `p2-nb` or `p2-nB` test profile. Let n = w/8, B be the manifest block count, h(i,B) be the exact RFC 9162 sibling count, and r be the number of FINAL records. Accepted body lengths are:
+The body length excludes the 10-byte header. `p2-audit-wire/v4` accepts only named profiles with w ≤ 16,448, canonical manifests of at most 512 bytes, `blocks_per_segment ≤ 2^16`, `segments < 2^64`, and k ≤ 105. Deployment setup accepts only `p2-2054B`; reduced-width conformance vectors may use a named `p2-nb` or `p2-nB` test profile. A registered scheme's profile is `p2-{payload_bytes}B` at every width; `p2-nb` profiles exist only in reduced-width conformance vectors, and no registered scheme produces them. Let n = w/8, B be the manifest block count, h(i,B) be the exact RFC 9162 sibling count, and r be the number of FINAL records. Accepted body lengths are:
 
 | Type | Code | Accepted body length |
 |---|---|---:|
@@ -315,7 +315,7 @@ Given a recoverable `AUDIT_OPEN`, a setup failure emits a zero-record `FINAL` wh
 - code 5 when a setup block decodes outside the selected payload profile;
 - code 6 only when the transport fails before delivering a required complete setup frame.
 
-The same 1, 2, 3, 5 precedence applies if one setup transcript has multiple faults. When a recorded transcript contains a valid fixed-size `AUDIT_OPEN`, setup transport failure code 6 is recorded as a zero-record `FINAL`: verdict 0, `rounds_completed = record_count = 0`, epoch id, audit id, Δ and RTT copied from `AUDIT_OPEN`, and `transcript_hash = SHA-512("verity/pous/p2/transcript/v4\0" || exact AUDIT_OPEN frame)`. No partial setup bytes enter that hash. If no valid fixed-size `AUDIT_OPEN` is available, no interoperable `FINAL` identity exists and the session fails without a `FINAL`; the transport/evidence layer records the setup failure outside this wire format.
+The same 1, 2, 3, 5 precedence applies if one setup transcript has multiple faults. A setup transcript that ends before `SETUP_ROOT` is transport code 6 unless a frame already read gave code 1 or 2, which it reports instead. When a recorded transcript contains a valid fixed-size `AUDIT_OPEN`, setup transport failure code 6 is recorded as a zero-record `FINAL`: verdict 0, `rounds_completed = record_count = 0`, epoch id, audit id, Δ and RTT copied from `AUDIT_OPEN`, and `transcript_hash = SHA-512("verity/pous/p2/transcript/v4\0" || exact AUDIT_OPEN frame)`. No partial setup bytes enter that hash. If no valid fixed-size `AUDIT_OPEN` is available, no interoperable `FINAL` identity exists and the session fails without a `FINAL`; the transport/evidence layer records the setup failure outside this wire format.
 
 ### Audit and challenge derivation
 
@@ -400,7 +400,7 @@ The on-time condition is:
 elapsed_ns ≤ delta_ns + rtt_allowance_ns
 ```
 
-Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms with an on-node verifier and permits a measured RTT allowance of at most 354 µs (354,000 ns), so `Δ + RTT ≤ 854 µs`, under the hardware/cooperation class in §6 (v1.1, Daniel's ruling, §12; v1: at most 1 ms). A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
+Equality is on time; one nanosecond above the sum is late. The verifier measures the RTT allowance on the same authenticated transport and records the method and samples. The frozen deployment sets Δ = 0.5 ms with an on-node verifier and permits a measured RTT allowance of at most 354 µs (354,000 ns), so `Δ + RTT ≤ 854 µs`, under the hardware/cooperation class in §6 (v1.1, Daniel's ruling, §12; v1: at most 1 ms). Δ and `rtt_allowance_ns` in `AUDIT_OPEN` are the verifier's own: a verifier never opens an audit with Δ ≠ 500,000 ns or an RTT allowance above 354,000 ns. The wire format carries them and assigns no failure code to them. `elapsed_ns` is the verifier's own measurement, recorded as u64; a measurement outside `[0, 2^64)` is the verifier's fault, and the session ends without a `FINAL`. A late, malformed, unauthenticated, replayed, wrong-index, wrong-block or wrong-path response fails the whole audit. There is no partial acceptance.
 
 Only a frame reported as delivered at a transport frame boundary enters the exact frame sequence. A delivered frame whose header declares more or fewer bytes than that delivered frame contains is malformed code 1; its exact delivered bytes are hashed, including the `truncated-response` vector. If the transport ends or reports loss after a challenge without reporting any complete response-frame delivery event, that round fails with transport code 6; unframed partial bytes are not hashed.
 
@@ -791,6 +791,15 @@ SHA-512-CTR/P2-EXP-IO for the keys. Separately, the memory challenger's VM runs 
 hardware, so the deployment cites core's `trusted-nebius-host` assumption (`verity.experimental.claims`; Lean
 `Verity.Assumptions.TrustedNebiusHost`, Daniel's answer of 2026-10-06). Perfect isolation (§4) is about the prover; this
 is about the verifier's host.
+
+## 14. Errata (2026-10-07)
+
+Daniel accepted four clarifications on 7 Oct 2026 (21:39Z). They change no rule, value, vector or pin; the reference verifier already behaved this way. They hold for v1.1 and v4 alike. They came from the Lean port of the timed-audit check, which found the prose silent where the code had to choose.
+
+1. Δ and the RTT allowance in `AUDIT_OPEN` are the verifier's own, and no failure code covers them (§ Sequential reveal and deadlines).
+2. A setup transcript that ends early is transport code 6 unless a frame already read gave code 1 or 2 (§ Setup commitment, salt and verification root).
+3. A registered scheme's profile is `p2-{payload_bytes}B`; `p2-nb` exists only in reduced-width conformance vectors (§ Parties and transport).
+4. An `elapsed_ns` outside u64 is the verifier's fault, and the session ends without a `FINAL` (§ Sequential reveal and deadlines).
 
 ## Appendix A. `verity.ml.randomness` v2
 

@@ -573,6 +573,16 @@ def test_p2_arithmetic(expander):
     assert sch.decode_segment(SALT, 1, c) == w_seg
 
 
+@pytest.mark.parametrize("w,c0", [(24, 20001), (24, 40001), (24, 65533), (128, 173)])
+def test_p2_square_is_exact_for_every_accepted_c0(w, c0):
+    """At a small width the largest accepted c0 leaves the two folds above 2p; the squaring is still a² mod p."""
+    from verity.experimental.protocols.pous.schemes.p2 import _Field
+
+    f, rng = _Field(w, c0), random.Random(w * c0)
+    for a in [0, 1, f.p - 1, *(rng.randrange(f.p) for _ in range(2000))]:
+        assert f.square(a) == a * a % f.p
+
+
 def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_under_it():
     """Spec v1.1 (§12, Daniel's ruling of 4 Oct 2026): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
     from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py` at
