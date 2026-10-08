@@ -28,7 +28,8 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
 #                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
-#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
+#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s; PHASES=1:
+#                then where verify --zk spends each statement's session, VerifyPhases.lean as an executable, the same way)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -336,8 +337,29 @@ elif step == "oprove":
 elif step == "lean":
     s["levels"] = {}
     for f in sorted(d.glob("*.log")):
+        if f.stem.startswith("phases-"):
+            continue
         s["levels"][f.stem] = {"verdict": lean(f), "wall": tv(d / f"time-{f.stem}.txt", r"Elapsed \(wall clock\) time"),
                                "peak_gb": gb(d / f"time-{f.stem}.txt")}
+    # PHASES=1: each statement's phases, then their sums over the honest statements (V*'s, no forgery) beside verify's own
+    ph = {}
+    for f in sorted(d.glob("phases-*.log")):
+        line = next((l[7:] for l in text(f).splitlines() if l.startswith("PHASES ")), None)
+        ph[f.stem[7:]] = {**(json.loads(line) if line else {"error": (text(f) + text(f.with_suffix(".err")))[-600:]}),
+                          "wall": tv(d / f"time-{f.stem}.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / f"time-{f.stem}.txt")}
+    if ph:
+        s["phases"] = ph
+        honest = [k for k in ph if not k.startswith("forged-") and "phases" in ph[k]]
+        by = {}
+        for k in honest:
+            for name, t in ph[k]["phases"]:
+                by[name] = by.get(name, 0) + t
+        verify = [s["levels"].get(k, {}).get("verdict") for k in honest]
+        s["phases_total"] = {"statements": honest, "accepted": all(ph[k].get("accepted") for k in honest),
+                             "total_s": sum(ph[k]["total_s"] for k in honest), "phase_sum_s": sum(by.values()),
+                             "verify_s": sum(v["verify_s"] for v in verify) if all(isinstance(v, dict) and "verify_s" in v for v in verify) else None,
+                             "setup_s": sum(ph[k]["setup_s"] for k in honest),
+                             "phases": dict(sorted(by.items(), key=lambda kv: -kv[1]))}
 (o / f"summary-{step}.json").write_text(json.dumps(s, indent=1))
 print(json.dumps(s))
 EOF
@@ -630,6 +652,28 @@ lean)
     want $l || continue
     echo "/usr/bin/time -v -o $O/lean/time-$l.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/$l.log 2> $O/lean/$l.err; echo $l lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
+  # PHASES=1: verify --zk's steps timed one by one on the same sessions (VerifyPhases.lean, cached by its sources as STEP=vstage
+  # caches inner-fold), against FlockVerify.lean with its main renamed
+  if [ "${PHASES:-0}" = 1 ]; then
+    PSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/VerifyPhases.lean) | sha256sum | cut -c1-16)
+    PH_BIN=$L/phases-$PSHA/verify-phases
+    (
+      export PATH=$HOME/.elan/bin:$PATH
+      command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
+      exec 9>$L/phases.lock; flock 9
+      if [ ! -x $PH_BIN ]; then
+        C=$L/phases-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/VerifyPhases.lean $C/ \
+          && sed 's/^def main (args : List String) : IO UInt32 := do$/def flockVerifyMain (args : List String) : IO UInt32 := do/' \
+            $C/FlockVerify.lean > $C/FlockVerifyLib.lean && grep -q '^def flockVerifyMain' $C/FlockVerifyLib.lean \
+          && printf '\n[[lean_lib]]\nname = "FlockVerifyLib"\n\n[[lean_exe]]\nname = "verify-phases"\nroot = "VerifyPhases"\n' >> $C/lakefile.toml \
+          && (cd $C && lake build verify-phases) && mkdir -p $L/phases-$PSHA && cp $C/.lake/build/bin/verify-phases $PH_BIN
+      fi
+    ) > $O/build-phases.log 2>&1 || { tail -30 $O/build-phases.log; exit 1; }
+    for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::' | sort -V); do l=$(basename $S); C=$(cat $S.stmt)
+      want $l || continue
+      echo "/usr/bin/time -v -o $O/lean/time-phases-$l.txt $PH_BIN --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $S > $O/lean/phases-$l.log 2> $O/lean/phases-$l.err; echo $l phases exit \$?"
+    done | xargs -d '\n' -P ${JOBS:-4} -I{} sh -c "{}"
+  fi
   if [ "${INNER_LEAN:-0}" = 1 ]; then
     /usr/bin/time -v -o $O/lean/time-inner.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $DD/stage/circuit.txt \
       --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json --coins os --session $DD/inner/s$((NS - 1))/session > $O/lean/inner.log 2> $O/lean/inner.err
