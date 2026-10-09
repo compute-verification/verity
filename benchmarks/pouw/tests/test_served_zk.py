@@ -229,6 +229,31 @@ def _held(ch, name, rec, **kw):
 
 
 @LEAN
+def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served, tmp_path, monkeypatch, capsys):
+    """e2e.py's coins under ``POUW_COIN_STATE`` and `served_commit.py challenger --state` on the same file publish one
+    commitment and open the one salt coin; the state file is its owner's alone, and a missing one is refused, never
+    replaced by fresh coins."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    import e2e
+    *_, words = served
+    params, *_ = _window(words)
+    state, after = tmp_path / "state" / "r1", bytes(range(64))
+    monkeypatch.setenv("POUW_COIN_STATE", str(state))
+    controller = e2e.epoch_coins(type("A", (), {"retain": None})(), 0)
+    assert stat.S_IMODE(state.stat().st_mode) == 0o600
+    assert e2e.epoch_coins(type("A", (), {"retain": None})(), 0).commitment == controller.commitment
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"op": "salt", "after": after.hex(), "out": f"{tmp_path}/salt.json"}) + "\n"))
+    (tmp_path / "params.json").write_text(json.dumps(params))
+    capsys.readouterr()
+    assert SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log", "--state", str(state)]) == 0
+    assert capsys.readouterr().out.startswith("OPENED")
+    assert json.loads((tmp_path / "log" / "coins.json").read_text()) == controller.commitment.to_json()
+    assert json.loads((tmp_path / "salt.json").read_text()) == controller.open("salt", after).to_json()
+    with pytest.raises(SystemExit, match="no challenger state"):
+        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log2", "--state", str(tmp_path / "none")])
+
+
+@LEAN
 def test_the_challenger_holds_every_item_to_its_own(served):
     """The challenger's stream registers the honest record and its receipt names it.  An extra public key, a raised level
     (more credit), a K′ other than its own, another request's record (its own context) or a field one-stage doesn't define

@@ -6,7 +6,7 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
-  python served_commit.py challenger PARAMS LOG [--lean F --epoch E]          the challenger: one JSON request a line on stdin
+  python served_commit.py challenger PARAMS LOG [--lean F --epoch E --state S] the challenger: one JSON request a line on stdin
                                                                               (`handle`), one reply a line on stdout
   python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
   (challenger, replay and check take --python-record: PoUW's checks by their Python references alone)
@@ -53,7 +53,8 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  `service.check_public` and
   the stream's own state stay Python's: the record's ``keys`` rule has no Lean form yet.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
-  challenger, whose commitment it publishes before the epoch (``LOG/coins.json``).  A window's registration names its
+  challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
+  serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
   pass, and the challenger re-starts the pass's epoch from the pass's manifest under its own commitment
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
   weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
@@ -1058,7 +1059,14 @@ def cmd_challenger(a) -> int:
     LOG/requests.jsonl and each coin it opened to LOG/openings.jsonl; it ends at end of input or ``{"op": "quit"}``."""
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
-    coins = Coins(a.epoch)
+    if a.state:
+        if not Path(a.state).is_file():
+            raise SystemExit(f"no challenger state at {a.state}")
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+        from e2e import state_entropy
+        coins = Coins(a.epoch, state_entropy(a.state))
+    else:
+        coins = Coins(a.epoch)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
                     record=OR.Record(lean=not a.python_record))
@@ -1248,6 +1256,8 @@ def main(argv=None) -> int:
     p.add_argument("--lean", help="Lean flock-verify, whose draw over the draw coin's key is the challenger's "
                                   "(default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
+    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins drew "
+                                   "from (serve.sh's $WORK/coin-state/<run id>); default: fresh from os.urandom")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):

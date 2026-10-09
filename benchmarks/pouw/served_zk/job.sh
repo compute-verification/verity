@@ -113,8 +113,13 @@ R=$OUT/request/registration.json RP=$OUT/request/params.json
 "$PY" "$SC" edit "$R" "$OUT/registration-extra.json" 'window.public.calls=2'
 "$PY" "$SC" edit "$R" "$OUT/registration-raised.json" "window.public.work.level=$(( $(jq_ "$R" "d['window']['public']['work']['level']") + 1 ))"
 # the challenger: one process holding P1's streams and the epoch's coins from the receipt to the outcomes; ask() is its one channel
-coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" 2> "$OUT/challenger.err"; }
+# A pass salted by epoch coins (manifest v2) was salted by the serving controller's challenger, whose entropy this one holds
 MAN=$PASSES/request/manifest.json
+V1=$("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'] == 'verity-vllm/pouw-pearl-c-run/v1')" "$MAN")
+STATE=${SZ_COIN_STATE:-$WORK/coin-state/$SERVED_RUN}
+if [ "$V1" = True ]; then REC=true STATEARG=(); else REC=false STATEARG=(--state "$STATE"); fi
+log "pass: $("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'])" "$MAN"), the challenger ${STATEARG[*]:-fresh}"
+coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" "${STATEARG[@]}" 2> "$OUT/challenger.err"; }
 ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out, its word in $REPLY
   local line=
   if [ -n "${SVC[1]:-}" ]; then echo "$2" >&"${SVC[1]}" && IFS= read -r line <&"${SVC[0]}"; fi
@@ -124,6 +129,11 @@ ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out
 req() { "$PY" -c "import json, sys; a = sys.argv[1:]; print(json.dumps(dict(zip(a[::2], a[1::2]))))" "$@"; }
 ask coins "$(req op coins)"
 expect coins COINS "$REPLY"
+if [ "$V1" != True ]; then
+  v=$("$PY" -c "import json, sys; print('SAME' if json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])) else 'DIFFERENT')" \
+    "$OUT/challenger/coins.json" "$PASSES/coins.json" 2>/dev/null)
+  expect coins-pass SAME "${v:-ERROR}"
+fi
 WR=$("$PY" -c "import json, sys; from verity.core.protocols.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
@@ -133,17 +143,23 @@ for c in foreign early mislabelled tampered resalted; do
   ask "receive-coin-$c" "$(req op register name "coin-$c" registration "$R" manifest "$W/coin-$c.json")"
   expect "receive-coin-$c" REFUSED "$REPLY"
 done
-ask receive-unrecorded "$(req op register name unrecorded registration "$R" manifest "$MAN")"
+UNREC=$MAN
+if [ "$V1" != True ]; then   # the pass as one recorded before epoch coins would carry it: a beacon's salt, no coin
+  UNREC=$W/beacon.json
+  "$PY" -c "import json, os, sys; m = json.load(open(sys.argv[1])); [m.pop(k, None) for k in ('coins', 'salt_opening')]; \
+m.update(schema='verity-vllm/pouw-pearl-c-run/v1', beacon=os.urandom(32).hex()); json.dump(m, open(sys.argv[2], 'w'))" "$MAN" "$UNREC"
+fi
+ask receive-unrecorded "$(req op register name unrecorded registration "$R" manifest "$UNREC")"
 expect receive-unrecorded REFUSED "$REPLY"
-ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json" manifest "$PASSES/other/manifest.json" recorded true)"
+ask receive-foreign "$(req op register name foreign registration "$OUT/other/registration.json" manifest "$PASSES/other/manifest.json" recorded $REC)"
 expect receive-foreign REFUSED "$REPLY"
-ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json" manifest "$MAN" recorded true)"
+ask receive-extra "$(req op register name extra registration "$OUT/registration-extra.json" manifest "$MAN" recorded $REC)"
 expect receive-extra REFUSED "$REPLY"
-ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json" manifest "$MAN" recorded true)"
+ask receive-raised "$(req op register name raised registration "$OUT/registration-raised.json" manifest "$MAN" recorded $REC)"
 expect receive-raised REFUSED "$REPLY"
-ask receive-honest "$(req op register name honest registration "$R" manifest "$MAN" recorded true out "$OUT/receipt.json")"
+ask receive-honest "$(req op register name honest registration "$R" manifest "$MAN" recorded $REC out "$OUT/receipt.json")"
 expect receive-honest REGISTERED "$REPLY"
-ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded true)"
+ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded $REC)"
 expect receive-open REFUSED "$REPLY"
 [ -f "$OUT/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out")"; exit 3; }
 log "select: the draw coin, opened after the registration, and $LEAN draw over its key"
@@ -268,7 +284,7 @@ expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
 units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$U/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
 control foreign-proof REJECT "$OUT/units-foreign-proof.json"
-ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded true)"
+ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded $REC)"
 expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
