@@ -46,7 +46,7 @@ KINDS = ("served", "stand-in")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
 _ROOT_KEYS = {"port", "root", "leaves", "domain"}
-_HEX = re.compile(r"^[0-9a-f]+$")
+_HEX = re.compile(r"[0-9a-f]+")
 
 
 def query_digest(query: Mapping[str, Any]) -> str:
@@ -164,7 +164,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
             r = got.get(p)
             if r is None:
                 continue
-            if not (isinstance(r["root"], str) and _HEX.match(r["root"])):
+            if not (isinstance(r["root"], str) and _HEX.fullmatch(r["root"])):
                 c.fail("R3-root", p)
             if r["leaves"] != want["leaves"]:
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
@@ -205,7 +205,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         e = by_value.get(v)
         if e is None:
             continue
-        if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.match(e["root"])):
+        if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.fullmatch(e["root"])):
             c.fail("R7-root", v)
         # a count is an int, never a float or bool equal to it, and 16 is named by leaving word_bits out: one record
         # digest per registration
