@@ -39,12 +39,21 @@
    "owner": "@network-accounting",
    "signature": [
     "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.Link)",
-    "  (w : Nat) (hw : instLTNat.lt w W) :",
-    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w)",
-    "    (Option.some (NetworkCheck.Check.expectedGrid g W l w))"
+    "  (w : Fin W) :",
+    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w.val)",
+    "    (Option.some (NetworkCheck.Check.expectedGrid g W l w.val))"
    ],
    "assumptions": [],
-   "type_hash": "11669d14912ebc499140658fa1fd55b024ef18d89160dd87c1ec82f600171aeb"
+   "type_hash": "f01677158fd01ce797e4aeb4ee75e878a6814ba9c555769206aa657521ad7f85"
+  }
+ },
+ "shape": {
+  "premises": [],
+  "properties": {
+   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
+    "function": "NetworkCheck.Records.expectedGrids",
+    "outcome": "none"
+   }
   }
  },
  "reads": {
@@ -116,13 +125,6 @@
     "NetworkCheck.Records.rows": "7c68d0a14f36e9a70c6eeceea2a6c44b984d76e7f397574541d2ac85d164a6d4"
    },
    "guarantees": ["NetworkCheck.RecordsGrid.expectedGrids_eq"]
-  }
- },
- "shape": {
-  "premises": [],
-  "properties": {},
-  "frozen": {
-   "NetworkCheck.RecordsGrid.expectedGrids_eq": "restatable: an equation of expectedGrids with Check.expectedGrid, not a property with an outcome; its bound hw : w < W is a hypothesis that outcome none refuses, and moving it into the conclusion (∀ w < W, …) changes the statement, which the verifier-of-record port leaves as it is"
   }
  },
  "dependencies": {
