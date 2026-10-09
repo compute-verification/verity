@@ -17,7 +17,10 @@ The draws come from the record's custody (`DrawFileZK`):
   under any law. `ZkLink.drawOkZK_of_exec` and `ZkHidden.drawOkZKH_of_exec` give the same at every draw, the failed
   run's (every unit) included, from custody under the live law's own stratified law;
 * `drawOkZKHJ_one`, `drawOkZKHJ_of_exec_one`: at one table, `DrawOkZKHJ` is `DrawOkZKH`, so `runsZCJH_live`'s `hDraw`
-  holds at every draw of the live law.
+  holds at every draw of the live law;
+* `drawOkZKHJ_of_accepts`, at any count: flock-verify `--zk` takes only a subset draw at several tables
+  (`setupTables_subset`), and the live law's is stratified, so an outcome it accepts has one table.
+  `runsZCJH_live_execOS` is `runsZCJH_liveA` at the live law with that draw hypothesis discharged.
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -139,5 +142,66 @@ theorem runsZCJH_liveA (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circu
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by
   intro ω R o hacc
   exact runsZCJH_live I ht hc ho dj y₀ wr ⟨Unit, fun _ => L.draw ω⟩ hT hRec (fun _ => hDraw ω R o hacc) () R o hacc
+
+/-- **Several tables take only a subset draw**: at `count > 1`, `setupTables` accepts a draw only if it decodes to a
+subset law (`Tables.setupTables_parts`, `setupTables_partsH`). -/
+theorem setupTables_subset {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins} {count : ℕ}
+    {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
+    {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))}
+    {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} (hc1 : 1 < count)
+    (h : Flock.Stmt.setupTables tags cf pf coins count tables (some d) partition program work stratified closure =
+      .ok (spec, sts)) :
+    ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧ ∃ k, u.law = .subset k := by
+  cases hh : tags.hiddenOutputs
+  · obtain ⟨-, -, _, _, hd, -⟩ := Tables.setupTables_parts hh hc1 h
+    obtain ⟨u, hu, hk, -⟩ := hd d rfl
+    exact ⟨u, hu, hk⟩
+  · obtain ⟨-, -, _, _, hd, -⟩ := setupTables_partsH hh hc1 h
+    obtain ⟨u, hu, hk, -⟩ := hd d rfl
+    exact ⟨u, hu, hk⟩
+
+/-- **`DrawOkZKHJ` at an accepted outcome of the live law, at any count**: flock-verify `--zk` takes only a subset
+draw at several tables (`setupTables_subset`), and the record's draw is the coin server's (`RecordsLiveZKJ`), which
+custody makes a stratified one (`DrawFileZK`), so an accepted outcome has one table, where `drawOkZKHJ_of_exec_one`
+holds. -/
+theorem drawOkZKHJ_of_accepts (I : Inputs) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop)
+    {Jf : Finset (Fin n) → Reg → ℕ} {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Exec.Transcript}
+    (hRec : RecordsLiveZKJ I dj Jf wr) (ω : Ω) (R : Reg)
+    (o : LiveOutJ (Jf ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
+    (hacc : AcceptsZK I (wr ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
+    DrawOkZKHJ I dj (mPtsOf c.g (∑ s, ks s)) ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+  by_cases h1 : I.count ≤ 1
+  · exact drawOkZKHJ_of_exec_one I h1 hc σs ks hks St hS Kd pop Lb src dj hdj ω
+  · exfalso
+    obtain ⟨hd, -⟩ := hRec _ R o hacc
+    obtain ⟨spec, sts, hs, -⟩ := hacc
+    rw [Exec.setupOf, hd] at hs
+    obtain ⟨u, hu, k, hk⟩ := setupTables_subset (show 1 < (zkInputs I).count from not_le.1 h1) hs
+    rw [hdj _ u hu] at hk
+    simp [drawOf] at hk
+
+/-- **`RunsZC` at the live hidden-output `--zk` tables, at any count, with the draw from custody**: `runsZCJH_liveA`
+at the live law, whose draw hypothesis `drawOkZKHJ_of_accepts` discharges at `mPtsOf c.g (∑ s, ks s)` link points. -/
+theorem runsZCJH_live_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop)
+    (hm : mPts = mPtsOf c.g (∑ s, ks s)) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr) :
+    RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!)
+      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) := by
+  subst hm
+  exact runsZCJH_liveA I ht hc ho dj y₀ wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) hT hRec
+    (drawOkZKHJ_of_accepts I hc σs ks hks St hS Kd pop Lb src dj hdj hRec)
 
 end FlockSoundness.Discharge.ZkHidden
