@@ -4,7 +4,8 @@ openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
 verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
-byte the one V* writes for its statement by the byte it differs at. The honest sessions themselves are replayed on the pod: their statements are
+byte the one V* writes for its statement by the byte it differs at. V*'s parts are as many as the verifier's own groups.
+The honest sessions themselves are replayed on the pod: their statements are
 hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
 from __future__ import annotations
 
@@ -75,6 +76,19 @@ def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
     for f, name, n, why in cases:
         rc, line = _statements(f, "--unit", name, "--instances", str(n))
         assert rc == 1 and line["error"].startswith(why), (name, n, line)
+
+
+def test_v_stars_parts_are_as_many_as_the_verifiers_groups(tmp_path):
+    """V*'s parts at the inner shape (`VStar.parts (spec vsh)`) are as many as the verifier's own packing of its algebra
+    (`RecResiduals.groups (structureOf sh) (portSizes sh)`): both are functions of the shape alone, so the count refuses no
+    shape at which the two agree, and a shape whose packing refuses, where one residual alone reads more than 64 regions
+    (claims 16 at m = 22), is refused, naming V*'s parts."""
+    for shape in SHAPES:
+        rc, line = _statements(_inner(tmp_path / "inner.json", *shape))
+        assert rc == 0 and len([s for s in line["statements"] if s[0].startswith("rec-residuals/")]) == len(
+            RR.parts(RR.spec(A.Shape(*shape)))), line
+    rc, line = _statements(_inner(tmp_path / "wide.json", 22, 6, 16))
+    assert rc == 1 and line["error"] == "V*'s parts: residual 20 alone reads more than 64 regions or 160 sha512x3 slots", line
 
 
 def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off_it(staged, tmp_path):  # noqa: F811

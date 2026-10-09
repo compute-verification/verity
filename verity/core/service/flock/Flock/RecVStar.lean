@@ -46,12 +46,20 @@ def Inner.ofJson (j : Json) : Except String Inner := do
   if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
   pure ⟨← j.getObjValAs? Nat "m", ← j.getObjValAs? Nat "k_log", ← j.getObjValAs? Nat "claims"⟩
 
-/-- V*'s statements at the inner shape (`VStar.statements`), at a shape `RecResiduals.check` accepts a part's name at. -/
+/-- V*'s statements at the inner shape (`VStar.statements`), at a shape `RecResiduals.check` accepts a part's name at,
+where V*'s parts (`VStar.parts (spec vsh)`, `VStar/Parts.lean`) are as many as the verifier's own packing of its algebra
+(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`). -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
-  if (RecResiduals.shape? i.m i.kLog i.claims).isNone then
-    throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
-      "k_log at least 6, claims at least 2")
-  VStar.statements { m := i.m, kLog := i.kLog, claims := i.claims }
+  let some sh := RecResiduals.shape? i.m i.kLog i.claims
+    | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
+        "k_log at least 6, claims at least 2")
+  let vsh : VStar.Algebra.Shape := { m := i.m, kLog := i.kLog, claims := i.claims }
+  let ps ← (do VStar.parts (← VStar.Algebra.spec vsh)).mapError (s!"V*'s parts: " ++ ·)
+  let gs ← (do RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)).mapError
+    (s!"the verifier's groups: " ++ ·)
+  if ps.size != gs.size then
+    throw s!"at the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): V* has {ps.size} parts, the verifier's algebra {gs.size} groups"
+  VStar.statements vsh
 
 def isVStar (name : String) : Bool := name.startsWith "rec-open/" || name.startsWith "rec-residuals/"
 
