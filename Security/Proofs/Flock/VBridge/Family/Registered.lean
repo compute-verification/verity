@@ -21,7 +21,8 @@ family's choice.
 * `ResZeroAtL`, `partCols_of_resZeroAtL`, `algebraHolds_of_decodeL`: `ResZeroAt` with the outputs read in the layer
   (`copyVal`) instead of registered, and `AlgebraHolds` from it as from `ResZeroAt`.
 * `hRowKeys_of`: `HRowKeys` from the part circuits' keys (`RowColKeys`) and the family's registered reads covering the
-  rows `own` names (`RowsRegistered`).
+  rows `own` names (`RowsRegistered`); `hRowsAgree_of`: `HRowsAgree` from those, the two parts' columns keying one bit
+  of rows at one registered root and position (`SameRow`), and one registrant row there (`RowsShared`).
 -/
 
 namespace FlockVBridge.Family
@@ -283,6 +284,59 @@ theorem hRowKeys_of (hreg : F.RowsRegistered dg N k Rw) (hcol : F.RowColKeys dg 
   intro R ω t R₂ τ o ha r p hp q hq
   obtain ⟨hlt, q', k', hk, hkey, hown⟩ := hcol R ω t R₂ τ o ha p hp q hq
   exact ⟨_, hlt, q', k', hk, hkey, hreg R ω t R₂ τ o ha (F.sess p) (F.un p r) q' hown, rfl⟩
+
+/-- **Two parts' columns of one element's bit key one bit of one registered row.** At every accepted outer proof, where
+parts `p` and `p'` hold the same element of `w` at positions `a` and `a'`, the keys of their columns of bit `e` name the
+same bit `b` of rows `q`, `q'` whose registered reads, at rep `r`'s units, are at one registered root and one position.
+V*'s part sessions read element `i` of `w` as row `r` of one registration `regs[nm]` (`rec_vstage.py:356-357`);
+established from the parse of the parts' circuits (the bit, the lane that proves `HStruct`) and the sessions' reads
+files with `OwnReads` (the root and the position, the lane that proves `HFiles`). -/
+def SameRow : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (r : Fin 2) (p p' a a' e : ℕ),
+    p < (partsOf F.sh).size → p' < (partsOf F.sh).size → ∀ (ha : a < (wIOf F.sh p).size)
+    (ha' : a' < (wIOf F.sh p').size), (wIOf F.sh p)[a] = (wIOf F.sh p')[a'] → e < 128 →
+    ∀ (q : Fin (F.Vs (F.sess p)).c.ports.size) (b : ℕ) (q' : Fin (F.Vs (F.sess p')).c.ports.size) (b' : ℕ),
+      Aliased.srcKey (F.Vs (F.sess p)).c (0 * (Rows.ofNet (F.Vs (F.sess p)).hU).nIn + rowColOf F.sh p (128 * a + e)) =
+        .msg q.val (b / 8) (b % 8) →
+      Aliased.srcKey (F.Vs (F.sess p')).c
+          (0 * (Rows.ofNet (F.Vs (F.sess p')).hU).nIn + rowColOf F.sh p' (128 * a' + e)) =
+        .msg q'.val (b' / 8) (b' % 8) →
+      b < Layout.portRowW (F.Vs (F.sess p)).c q → b' < Layout.portRowW (F.Vs (F.sess p')).c q' →
+      b = b' ∧ (F.zs R ω t R₂ (F.sess p)).rd.port (.inl (F.un p r, q)) =
+          (F.zs R ω t R₂ (F.sess p')).rd.port (.inl (F.un p' r, q')) ∧
+        (F.zs R ω t R₂ (F.sess p)).rd.readAt (.inl (F.un p r, q)) =
+          (F.zs R ω t R₂ (F.sess p')).rd.readAt (.inl (F.un p' r, q'))
+
+/-- **One registrant row per registered root and position.** At every accepted outer proof, two sessions' registered
+reads at the same registered root and position carry the same registrant bits. Acceptance does not give it: each
+session's `rd` is its own field, and `Reads.committed` makes both rows open one root at one position, which pins them
+only up to a SHA-512 collision. It says that the family's sessions take the registrant's opening at a registered root
+and position from one choice, the same in every session (as `RowsRegistered` says which rows they read). -/
+def RowsShared : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
+    (u : Fin (F.Vs s).nv) (u' : Fin (F.Vs s').nv) (q : Fin (F.Vs s).c.ports.size) (q' : Fin (F.Vs s').c.ports.size),
+    (F.zs R ω t R₂ s).rd.isRead (.inl (u, q)) → (F.zs R ω t R₂ s').rd.isRead (.inl (u', q')) →
+    (F.zs R ω t R₂ s).rd.port (.inl (u, q)) = (F.zs R ω t R₂ s').rd.port (.inl (u', q')) →
+    (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ s').rd.readAt (.inl (u', q')) →
+    ∀ (b : ℕ) (hb : b < Layout.portRowW (F.Vs s).c q) (hb' : b < Layout.portRowW (F.Vs s').c q'),
+      (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))).2
+          ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
+        (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))).2
+          ⟨b, lt_of_lt_of_le hb' ((Finset.le_sup (Finset.mem_univ q')).trans (Nat.le_succ _))⟩
+
+/-- **`HRowsAgree` from the circuits' keys, the registered reads and one registrant row per root and position**
+(`RowColKeys`, `RowsRegistered`, `SameRow`, `RowsShared`). -/
+theorem hRowsAgree_of (hreg : F.RowsRegistered dg N k Rw) (hcol : F.RowColKeys dg N k Rw) (hsame : F.SameRow dg N k Rw)
+    (hshared : F.RowsShared dg N k Rw) : F.HRowsAgree dg N k Rw := by
+  intro R ω t R₂ τ o ha r p p' a a' e bit hp hp' ha₁ ha₁' heq he hrb
+  obtain ⟨-, q, b, hb, hkey, hread, hval⟩ := hrb
+  have hsz : (wIOf F.sh p').size = (nsOf F.sh p').sum := by rw [wIOf, nsOf, OfVStar.wIdx_size]
+  obtain ⟨hlt', q', b', hb', hkey', hown'⟩ := hcol R ω t R₂ τ o ha p' hp' (128 * a' + e) (by omega)
+  obtain ⟨rfl, hport, hat⟩ := hsame R ω t R₂ τ o ha r p p' a a' e hp hp' ha₁ ha₁' heq he q b q' b' hkey hkey' hb hb'
+  have hread' := hreg R ω t R₂ τ o ha (F.sess p') (F.un p' r) q' hown'
+  refine ⟨hlt', q', b, hb', hkey', hread', ?_⟩
+  rw [← hval]
+  exact (hshared R ω t R₂ τ o ha _ _ _ _ _ _ hread hread' hport hat b hb hb').symm
 
 /-- **`HRes` is false at an accepted outer proof with a part** (`not_resZeroAt`). -/
 theorem hRes_false {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (h : F.HRes dg N k Rw gs) {R ω t R₂ τ o}
