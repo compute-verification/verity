@@ -11,6 +11,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
 
 /-!
 # Hidden outputs: `Stmt.setupHidden`'s soundness at the protocol as Lean defines it
@@ -39,6 +40,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
 * `Wide.Fit`: output rows that fit (`OutRowsF`: unsegmented, their last bytes and SHA-512's padding in their `hm96`
   slot's block), at which `msg_copy` and `sat_flat` hold (`msg_copyF`, `sat_flatF`), and rows of one prefix kind
   (`RowsFit`, `prefixOf_fit`);
+* `Wide.SegChain`: a `sha512/row-seg/v1` segment's chain, its compressions alone hashing its message under any 128-byte
+  first block (`chain_digestP`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
