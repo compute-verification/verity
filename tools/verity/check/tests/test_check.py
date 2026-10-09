@@ -932,3 +932,40 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
     spec2.loader.exec_module(tool)
     assert rule_touches(list(tool.CHECK.merge_requires["lean-agreement"]), changed)
     assert CHECK.agreement_closure(changed) == changed
+
+
+def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_path, monkeypatch, capsys):
+    """`reuse`, at the top of result.json and printed in the log: a flag or input that turns reuse off shows as a low rate there,
+    with each suite run again and the inputs that forced it."""
+    import json
+
+    (tmp_path / "suites.json").write_text(json.dumps([
+        {"suite": "a", "status": "cached", "seconds": 0.0},
+        {"suite": "b", "status": "passed", "seconds": 12.0, "forced_by": {"why": ["input b changed: b/x.py", "python 3.12 -> 3.14", "x", "y"]}},
+        {"suite": "c", "status": "failed", "seconds": 40.0, "forced_by": None},
+        {"suite": "d", "status": "skipped"}]))
+    (tmp_path / "lean-audit").mkdir()
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({"cached": {"P": "k"}, "packages": [{"package": "P"}, {"package": "Q"}]}))
+    done = [{"step": "pytest", "status": "passed"},
+            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": [{}], "errors": [], "changed": ["t"]}},
+            {"step": "flock-rust-tests", "status": "passed", "cache": {"hit": "k"}},
+            {"step": "lean-agreement", "status": "passed", "cache": {"stored": "k"}},
+            {"step": "lean-audit", "status": "passed"}, {"step": "lean-build", "status": "passed"}]
+    r = CHECK.reuse(tmp_path, done)
+    assert r["steps"]["pytest"] == {"of": "suites", "reused": 1, "rerun": 2, "rate": 0.333, "reran": [
+        {"suite": "c", "seconds": 40.0, "forced_by": ["not recorded"]},
+        {"suite": "b", "seconds": 12.0, "forced_by": ["input b changed: b/x.py", "python 3.12 -> 3.14", "x"]}]}
+    assert r["steps"]["circuit-check"]["not_stored"] == {"untraced": 1, "errors": 0, "changed": 1}
+    assert r["steps"]["flock-rust-tests"]["reused"] == 1 and r["steps"]["lean-agreement"]["rerun"] == 1
+    assert r["steps"]["lean-audit"] == {"of": "packages", "reused": 1, "rerun": 1, "reran": ["Q"], "rate": 0.5}
+    assert "lean-build" not in r["steps"] and r["steps"]["circuit-check"]["rate"] == 0.636
+    lines = CHECK.reuse_lines(r)
+    assert lines[0] == ("check: reused pytest 1/3 suites, circuit-check 7/11 targets, flock-rust-tests 1/1 step, "
+                        "lean-agreement 0/1 step, lean-audit 1/2 packages")
+    assert "check: reuse     b (12.0 s): input b changed: b/x.py; python 3.12 -> 3.14; x" in lines
+
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    CHECK.write_result(tmp_path, True, [{**s, "seconds": 1.0} for s in done])
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert list(doc)[:4] == ["schema", "kind", "run_id", "reuse"] and doc["reuse"] == r
+

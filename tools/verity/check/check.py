@@ -1372,6 +1372,55 @@ def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
     return found
 
 
+def reuse(out: Path, done: list[dict]) -> dict:
+    """Per step that can reuse a kept pass, how many of its parts this check reused and how many it ran again: suites
+    (`suites.json`, `suites-lean.json`; each suite run again with the inputs that forced it, `suites.forced_by`), circuit-check
+    targets (its step's cache), Lean packages (`lean-audit/audit.json`'s `cached`), and the steps cached whole (`STEP_KEYS`)."""
+    got: dict[str, dict] = {}
+    for f, step in (("suites.json", "pytest"), ("suites-lean.json", "lean-suites")):
+        try:
+            rows = [r for r in json.loads((out / f).read_text()) if r.get("status") != "skipped"]
+        except (OSError, ValueError):
+            continue
+        ran = sorted((r for r in rows if r.get("status") != "cached"), key=lambda r: -(r.get("seconds") or 0))
+        got[step] = {"of": "suites", "reused": len(rows) - len(ran), "rerun": len(ran),
+                     "reran": [{"suite": r["suite"], "seconds": r.get("seconds"),
+                                "forced_by": ((r.get("forced_by") or {}).get("why") or ["not recorded"])[:3]} for r in ran]}
+    for s in done:
+        c = s.get("cache") or {}
+        if s["step"] == "circuit-check" and "hits" in c:
+            misses = {"untraced": len(c.get("untraced") or []), "errors": len(c.get("errors") or []),
+                      "changed": len(c.get("changed") or [])}
+            got["circuit-check"] = {"of": "targets", "reused": c["hits"], "rerun": c.get("stored", 0) + sum(misses.values()),
+                                    "not_stored": misses}
+        elif s["step"] in STEP_KEYS and s["status"] in ("passed", "failed"):
+            got[s["step"]] = {"of": "step", "reused": int("hit" in c), "rerun": int("hit" not in c)}
+        elif s["step"] == "lean-audit" and s["status"] in ("passed", "failed"):
+            try:
+                a = json.loads((out / "lean-audit" / "audit.json").read_text())
+            except (OSError, ValueError):
+                continue
+            hit = set(a.get("cached") or {})
+            every = hit | {p["package"] for p in a.get("packages") or [] if isinstance(p, dict) and "package" in p}
+            got["lean-audit"] = {"of": "packages", "reused": len(hit), "rerun": len(every - hit), "reran": sorted(every - hit)}
+    for g in got.values():
+        g["rate"] = round(g["reused"] / (g["reused"] + g["rerun"]), 3) if g["reused"] + g["rerun"] else None
+    return {"summary": ", ".join(f"{step} {g['reused']}/{g['reused'] + g['rerun']} {g['of']}" for step, g in got.items()),
+            "steps": got}
+
+
+def reuse_lines(r: dict) -> list[str]:
+    """`reuse` as the log prints it: per step in one line (no rate across steps: thousands of circuit-check targets would hide
+    every suite run again), then each step's, then each suite run again with what forced it."""
+    lines = [f"check: reused {r['summary'] or 'nothing'}"]
+    for step, g in r["steps"].items():
+        lines.append(f"check: reuse   {step}: {g['reused']} {g['of']} reused, {g['rerun']} run again")
+        for x in g.get("reran") or []:
+            if isinstance(x, dict):
+                lines.append(f"check: reuse     {x['suite']} ({x['seconds']} s): {'; '.join(x['forced_by'])[:300]}")
+    return lines
+
+
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
@@ -1381,7 +1430,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
     doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
-           "workload_fingerprint": {"steps": [s["step"] for s in done]},
+           "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
@@ -1491,6 +1540,7 @@ def main(argv: list[str]) -> int:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded)
+    print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1
