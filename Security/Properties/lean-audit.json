@@ -2953,6 +2953,7 @@
     "Properties.CertifierDevice.lmsCorrect",
     "Properties.CertifierDevice.records",
     "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -3067,6 +3068,8 @@
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.lmsCorrect",
     "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.streamIsFlock",
+    "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -3261,6 +3264,8 @@
     "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.streamIsFlock",
+    "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -3294,6 +3299,7 @@
     "Properties.CertifierDevice.issuerSigns",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -4486,13 +4492,17 @@
    ]
   },
   "Properties.Identity": {
-   "digest": "8a0cbfca3a346713ec61ae7d9f67b539311a61ad1f2e04f2b1e0c2cbd8d8e958",
+   "digest": "dc9606657ca9b76d1053f0bf00d086b127839b8959e65a0dd30d5e8c57402b8f",
    "definitions": {
+    "Properties.Identity.StreamIsFlock": "a66cc1a3e8c26467089eef04906707ab3ddd77eb3411b91e9a200c054eb6b851",
+    "Properties.Identity.TaggedIsFlock": "66705479c5929a574c2f15b47a26dd90c5744bbe93b27c8b62afe4ed1fd14723",
     "Properties.Identity.taggedInput": "6e5a58ad26b9bb5ab41d91ee9caceeab889ee235a79cfb34c00922ad1162505c"
    },
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.Identity.streamIsFlock",
+    "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows"
    ]
   },
