@@ -10,7 +10,8 @@
 # as part NAME of the recursive session, --firewall-state), each release decided again by Lean's core-firewall
 # (verity/firewall-release/v0) on the record before it, and each session verified by Lean's flock-verify verify --zk and
 # replayed by the live build. Each of V*'s statements reads registered values, so it is a shared-row public file, a form the
-# soundness proof does not cover: both verifiers refuse it for that last, after every check has passed (every_check_passed).
+# soundness proof does not cover until the shared-row route lands: both verifiers refuse it, and summary.json says "Lean
+# refused: form not covered", a refusal; its lean_of_record accepts the run only when Lean accepted every part.
 # The controls, each refused where it should be, by a check before that:
 #   other        another netlist of the class (the registered one with an unread no-op gate changed: same outputs), proved
 #                against the registered statement: V*'s algebra over the inner's claims at the registered statement's fold

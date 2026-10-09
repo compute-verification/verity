@@ -4,6 +4,7 @@ public file tells two netlists of the class apart only by the salted commitment 
 (`InnerFold.lean`) taking the verifier's program, so that the setup checks a wired statement's cut wires (Linking)."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -42,3 +43,48 @@ def test_universal_staging_hides_the_netlist_but_its_program_row(tmp_path):
     assert r["stage"]["shared_rows"] == {"p0": 4, "p1": 1, "out": 4}
     assert o["header_differing"] == ["frame_v3.roots.p1"]
     assert 0 < o["body_bytes_differing"] <= 64
+
+
+def _summary():
+    spec = importlib.util.spec_from_file_location("rec_private_summary", POD / "rec_private_summary.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _record(o: Path, parts: list[str] | None, verdicts: dict[str, str | None]) -> dict:
+    o.mkdir()
+    if parts is not None:
+        (o / "cap.json").write_text(json.dumps({"parts": parts}))
+    for name, why in verdicts.items():
+        (o / "outer" / name).mkdir(parents=True)
+        v = {"session": "s", "accepted": why == "", "why": why} if why is not None else None
+        (o / "outer" / name / "lean.log").write_text(f"VERDICT {json.dumps(v)}\n" if v else "flock-verify: no session\n")
+    return _summary().main(o)
+
+
+SHARED = "refused: a shared-row public file (header shared_rows): a statement form the soundness proof does not cover"
+
+
+def test_summary_counts_a_form_refusal_as_a_refusal(tmp_path):
+    """rec_private_summary fails closed: Lean's refusal of a form its soundness proof does not cover is "Lean refused: form
+    not covered", never acceptance; the run's Lean of record accepts only when Lean accepted every part cap.json names in the
+    recursive session (NAME-direct, outside it, counts for nothing); and a control refused for its form is not caught, as
+    that refusal comes after every other check."""
+    a, b, c, d = (tmp_path / x for x in "abcd")
+    s = _record(a, ["L1", "alg-p1"], {"L1": SHARED, "L1-direct": "", "alg-p1": "", "forged-top-L2": SHARED,
+                                       "other-alg-p1": "refused: alg/p1: the residuals are not zero", "flipped-top-L1": None})
+    lean = s["outer"]["L1"]["lean"]
+    assert (lean["accepted"], lean["verdict"], lean["why"]) == (False, "Lean refused: form not covered", SHARED)
+    r = s["lean_of_record"]
+    assert (r["accepted"], r["verdict"]) == (False, "not accepted")
+    assert r["refused"] == {"L1": "Lean refused: form not covered"} and r["direct"] == {"L1": "accepted"}
+    assert r["controls"] == {"forged-top-L2": {"verdict": "Lean refused: form not covered", "caught": False},
+                             "other-alg-p1": {"verdict": "Lean refused: alg/p1: the residuals are not zero", "caught": True},
+                             "flipped-top-L1": {"verdict": "Lean: no verdict", "caught": False}}
+    assert s["outer"]["flipped-top-L1"]["lean"]["accepted"] is False
+    assert _record(b, ["L1", "alg-p1"], {"L1": "", "alg-p1": ""})["lean_of_record"]["accepted"] is True
+    assert _record(c, ["L1", "alg-p1"], {"L1-direct": "", "alg-p1-direct": ""})["lean_of_record"]["refused"] == {
+        "L1": "no session in the recursive session", "alg-p1": "no session in the recursive session"}
+    assert _record(d, None, {"L1": ""})["lean_of_record"]["accepted"] is False
+    assert json.loads((a / "summary.json").read_text())["lean_of_record"] == r
