@@ -165,12 +165,13 @@ def checkOpen (inn : Inner) (c : Circuit) (pub : Public) (own : Array Registered
   let [l] := ls
     | throw s!"rec-coins: {unit}: no one level of the inner schedule (m {sh.m}) has {LANES} lanes and {H} siblings below its cap"
   let q := lv[l]!.q
-  let reps ← #[0, 1].mapM (inn.rep sh extras)
-  for r in [0:2] do
-    let lg := reps[r]!.info.lg
+  let r0 ← inn.rep sh extras 0
+  let r1 ← inn.rep sh extras 1
+  for (r, rep) in [(0, r0), (1, r1)] do
+    let lg := rep.info.lg
     if lg.conss.size != lv.size || (lg.conss[l]!).pos.size != q then
       throw s!"rec-coins: {unit}: rep {r}: the verifier's coins give no {q} queries at level {l}"
-  let at_ := fun (i : Nat) => (reps[i / q]!, i % q)
+  let at_ := fun (i : Nat) => (if i < q then r0 else r1, i % q)
   let what := fun (i : Nat) => s!"level {l} rep {i / q} opening {i % q}"
   let coef := (Array.range (2 * q)).map fun i =>
     let (rep, j) := at_ i
