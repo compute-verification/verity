@@ -296,9 +296,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     ``peaks`` lists the heaviest of the targets checked now, and ``progress`` (JSON lines) gets a line per target as it finishes,
     so a run that is itself killed still leaves them.
 
-    Isolated, the checks' memory stays under ``mem_gb`` (default: what `memory_gb` leaves this process) as long as every target
-    that peaks over `HEAVY_GB` is listed in `HEAVY` with its peak: a target starts only while the peaks of those running and its
-    own add up to at most ``mem_gb``, counting an unlisted target as `HEAVY_GB` (one heavier than ``mem_gb`` runs alone); the
+    Isolated, circuit-check's memory stays under ``mem_gb`` GiB (default: what `memory_gb` leaves this process) as long as every
+    target that peaks over `HEAVY_GB` is listed in `HEAVY` with its peak: a target starts only while the peaks of those running
+    and its own add up to at most `budget_gb` (``mem_gb`` less this process's RSS), counting an unlisted target as `HEAVY_GB`;
+    one heavier than that still runs, alone, and the log says it does not fit; the
     listed targets go first, heaviest first.  The sum counts each process's copy of the task list, which they share, so the bound
     is conservative by that much per process.  An unlisted target that peaks well over `HEAVY_GB` can still break it: the process
     it gets killed in is reported as that target's failure (``circuit-check/killed``, with its peak), the other targets run on,
@@ -344,9 +345,13 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 todo.append(i)
     if (jobs > 1 if isolate is None else isolate) and todo:
         init = (specs, opts, everything, as_call, tracing)
-        budget = memory_gb() if mem_gb is None else mem_gb
+        budget = budget_gb(mem_gb)
         peaks = heavy()
         order = sorted(todo, key=lambda i: -peaks.get(tasks[i][1], 0))
+        if log:
+            for i in order:
+                if peaks.get(tasks[i][1], 0) > budget:
+                    log(f"warn {tasks[i][1]} peaked at {peaks[tasks[i][1]]} GiB, over the {budget:.1f} GiB budget: it runs alone")
         for i, got_, peak, start in parallel(_work, order, jobs, _init, init, weight=lambda i: peaks.get(tasks[i][1], HEAVY_GB),
                                              budget=budget):
             if isinstance(got_, Killed):
@@ -385,11 +390,19 @@ def update_pins(rep: dict) -> dict:
     return CK.load_pins()
 
 
-#: the targets that peaked over `HEAVY_GB`, each with its peak in GiB (`run`'s scheduling), from an isolated `--all` run's
-#: report (``peak_gb``, which counts the task list each process is forked with)
+#: the targets that peak over `HEAVY_GB`, each with its peak in GiB (`run`'s scheduling; ``peak_gb``, which counts the 9.6 GiB
+#: task list each process is forked with), from the isolated cold `--all` run r20261009-170758-f674 on vy-cpu-1: its first 239
+#: targets, every one an earlier list held among them, peaked at 125-151 GiB (these six) or at most 10.6 GiB (the rest; the
+#: earlier 29.4 and 104.2 GiB entries were what a long-lived worker kept from a previous target); its other targets confirm it
 HEAVY = Path(__file__).with_name("heavy.json")
 HEAVY_GB = 16
 PEAKS_REPORTED = 50
+
+
+def budget_gb(mem_gb: int | None) -> float:
+    """What the targets' processes may take together, in GiB: ``mem_gb`` (all of circuit-check) less what this process holds
+    now (its own copy of the task list), or by default what `memory_gb` leaves, which has this process's use taken off already."""
+    return memory_gb() if mem_gb is None else mem_gb - (_rss_gb() or 0.0)
 
 
 def heavy() -> dict[str, float]:
@@ -432,8 +445,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--all", action="store_true", help="every registered Definition and template at the catalog's bindings")
     ap.add_argument("--out", type=Path, help="write the JSON report here")
     ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: one per core, at most one per GB_PER_JOB of memory)")
-    ap.add_argument("--mem-gb", type=int, default=None, help="the memory the targets' processes may take together (default: "
-                    "what this process may use, `memory_gb`); see `run`")
+    ap.add_argument("--mem-gb", type=int, default=None, help="the memory circuit-check may take, in GiB, this process included "
+                    "(default: what this process may use, `memory_gb`); see `run`")
     ap.add_argument("--vectors", type=int, default=CK.Options.vectors)
     ap.add_argument("--seed", type=int, default=CK.Options.seed)
     ap.add_argument("-X", type=int, default=CK.Options.X)

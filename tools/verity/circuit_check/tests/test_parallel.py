@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import signal
 
+import pytest
+
 from circuit_check import cli
 
 
@@ -88,3 +90,15 @@ def test_jobs_0_takes_one_worker_per_128_gb_the_tightest_cgroup_leaves(tmp_path)
     assert cli.auto_jobs(tmp_path) == min(2, len(os.sched_getaffinity(0)))
     (scope.parent / "memory.current").write_text(str(1590 << 30))
     assert cli.auto_jobs(tmp_path) == 1
+
+
+def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):
+    """`--mem-gb 149` (a 160 GB worker) with the parent holding its 9.6 GiB task list leaves 139.4 GiB for the targets, so a
+    151 GiB target is over it (run alone, and warned about) and a 137.8 GiB one fits."""
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 9.6)
+    budget = cli.budget_gb(149)
+    assert budget == pytest.approx(139.4)
+    assert cli.admit([151.02, 16], [], jobs=8, budget=budget) == [0]
+    assert cli.admit([137.81], [], jobs=8, budget=budget) == [0] and cli.admit([16], [137.81], jobs=8, budget=budget) == []
+    monkeypatch.setattr(cli, "memory_gb", lambda: 200)
+    assert cli.budget_gb(None) == 200
