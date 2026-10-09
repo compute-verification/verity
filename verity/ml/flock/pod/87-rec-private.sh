@@ -148,8 +148,12 @@ outer() {
     python3 - $D $SID $name <<'EOF'
 import json, sys
 from pathlib import Path
-from verity.ml.circuits.codec import canonical_json
 d, sid, part = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+
+def canonical_json(v):
+    # Lean's Flock.canon: serde_json's escaping, so a non-ASCII character (the transcript's τ) is its UTF-8, not \u
+    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
 ts = sorted((d / "transcript").glob("session-*.json"))
 pubs = sorted((d / "transcript").glob("public-*.json"))
 if len(ts) != 1 or len(pubs) != 1:
@@ -271,7 +275,11 @@ def lean(p):
     if at < 0:
         return {"accepted": None, "why": (t + text(p.with_suffix(".err")))[-500:]}
     v = json.JSONDecoder(strict=False).raw_decode(t[at + 8:])[0]
-    return {k: v.get(k) for k in ("accepted", "why", "registered", "partition")}
+    return {**{k: v.get(k) for k in ("accepted", "why", "registered", "partition")}, "every_check_passed": passed(v)}
+
+def passed(v):
+    """A verdict after every check passed: accepted, or refused for its form only (`ProvedScope.check`, which runs last)."""
+    return bool(v.get("accepted")) or str(v.get("why", "")).endswith(": a statement form the soundness proof does not cover")
 
 def up(p):
     return next((json.loads(l.split("\t", 1)[1]) for l in text(p).splitlines() if l.startswith("UPSTREAM")), text(p)[-400:] or None)
@@ -280,7 +288,8 @@ def live(d):
     rows = [json.loads(l[5:]) for l in text(d / "prove.txt").splitlines() if l.startswith("LIVE")]
     served = [json.loads(l.split("\t", 1)[1]) for l in text(d / "serve.log").splitlines() if l.startswith("SESSION\t")]
     r = rows[0] if rows else {}
-    return {"accepted": r.get("accepted"), "why": r.get("why"), "prove_s": r.get("prove_s"), "prove_total_s": r.get("prove_total_s"),
+    return {"accepted": r.get("accepted"), "why": r.get("why"), "every_check_passed": passed(r) if r else None,
+            "prove_s": r.get("prove_s"), "prove_total_s": r.get("prove_total_s"),
             "e2e_s": r.get("e2e_s"), "proof_bytes": r.get("proof_bytes"), "k_log": r.get("k_log"), "instances": r.get("instances"),
             "serve": [{k: s.get(k) for k in ("accepted", "why", "verify_s")} for s in served],
             "stops": [l for l in text(d / "prove.err").splitlines() if l.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED"))][:4],
