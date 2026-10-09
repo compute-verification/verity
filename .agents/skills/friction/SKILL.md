@@ -127,8 +127,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   on. A ready PR whose head is in a queued or running check, or in a train the lander holds, doesn't count, and counts
   again if that check fails, so a slow check never holds a lane's next PR.
 - 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
-  or a statement reviewer's: `research merge` and `research queue` read none. This retires the grant rulings of 6 and 7
-  Oct below.
+  or a statement reviewer's: `research merge` and `research queue` read none. It retired the grant-carry rulings of 6 and
+  7 Oct.
 - 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. It ends in a break tied to the run, such as
   two distinct inputs the run itself hashed with one SHA-512 digest, and an input condition becomes the verifier's
   refusal rather than a hypothesis. The form is in `.agents/skills/lean-proofs/SKILL.md`.
@@ -140,7 +140,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
     and Daniel approves or edits them in one pass. The coordinator's reports lead with which outcomes moved and what
     blocked the rest, not with landing counts;
   - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
-    back only if the PR fails. A lane holds at most two open PRs;
+    back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
+    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived;
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
@@ -155,9 +156,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   check. Before an expensive step (a full check, a move window), rehearse the cheap one after it: `research merge
   --dry-run` against a scratch `main` would have shown on 7 Oct, ten hours earlier, that main's gate could accept no
   check of the moved tree.
-- 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
-  rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
-  This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
 - 2026-10-06 (8:00 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
   `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
   question.
@@ -184,8 +182,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   definition.
 - 2026-10-06 (8:03 and 8:14 AM PDT): research velocity first, no red tape (`AGENTS.md`, "Working principles"). Its
   applications so far:
-  - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
-    `lean-audit.json` included;
   - a train member needs no quick-tier pass (its own line below);
   - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
   - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
@@ -199,8 +195,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained (BLAKE3 in `schemes/pearl_kw.py`), with
   `cr/blake3` its assumption alone.
 - 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
-  owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).
-  Grants are still required.
+  owner's `ready` label at the PR's head, which a train member still needs (8 Oct, 7:16 AM PDT), may be written by hand
+  (`research data label pr:N@SHA ready true --by LANE`).
 - 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
   to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
   Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than
