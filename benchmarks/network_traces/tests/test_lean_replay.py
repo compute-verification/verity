@@ -95,4 +95,6 @@ def test_a_broken_verifier_is_caught(tmp_path: Path) -> None:
     r = job(tmp_path, RejectsWindowZero)
     assert [(d["direction"], d["window"], d["python"]["raw"], d["lean"]["raw"]) for d in r["diffs"]] == \
         [("egress", 0, None, "advice")]
-    assert r["violations"]["lean"]["certified"] == {"advice": 1} and lr.summarize([r])["runs_same_verdict"] == 0
+    assert r["violations"]["lean"]["certified"] == r["violations"]["lean"]["link_windows"] == {"advice": 1}
+    s = lr.summarize([r])
+    assert s["runs_same_verdict"] == 0 and s["natural_controls"] == {"python": {}, "lean": {"advice": 1}}

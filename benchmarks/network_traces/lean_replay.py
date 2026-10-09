@@ -117,7 +117,10 @@ def recording(base: type, sink: list) -> type:
 
 
 def violation_counts(rows: Sequence[dict], audits: Sequence[str]) -> dict[str, dict[str, int]]:
-    return {k: dict(Counter(r[k] for r in rows if r[k] is not None)) for k in audits}
+    """Per audit kind, its violations; under `link_windows`, the rejected link-windows by their first kind's violation."""
+    first = (next((r[k] for k in audits if r[k] is not None), None) for r in rows)
+    return {k: dict(Counter(r[k] for r in rows if r[k] is not None)) for k in audits} | \
+        {"link_windows": dict(Counter(v for v in first if v is not None))}
 
 
 def row_key(row: dict) -> tuple:
@@ -327,7 +330,10 @@ def active_job(args: tuple) -> dict:
     root, run, controls, other = args
     import active_replay
     root, run = Path(root), Path(run)
-    report = json.loads((root / "inputs" / "calibration.json").read_text())
+    cal = root / "inputs" / "calibration.json"
+    if not cal.exists():
+        cal, = (root / "inputs").glob("*calibration.json")
+    report = json.loads(cal.read_text())
     with gzip.open(run / "plan.json.gz", "rt") as fh:
         plan = json.load(fh)
     calls: list = []
@@ -396,9 +402,7 @@ def summarize(results: Sequence[dict]) -> dict:
             s["recorded_missing"] += p.get("recorded_missing", 0)
             ok &= p["same"] == p["link_windows"] and not p["diffs"]
             for side in ("python", "lean"):
-                for kind, counts in p["violations"][side].items():
-                    for v, n in counts.items():
-                        natural[side][f"{kind}:{v}"] += n
+                natural[side].update(p["violations"][side]["link_windows"])
             for c in p["controls"]:
                 (injected if c["passed"] else failed)[c["control"]] += 1
         same_runs += ok
