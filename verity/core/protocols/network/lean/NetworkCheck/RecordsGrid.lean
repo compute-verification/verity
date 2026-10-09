@@ -110,8 +110,10 @@ theorem expectedRow_eq (S T W : Nat) (syncs : Fin W → ClockSync) (frames : Lis
   split <;> rfl
 
 /-- Window `w`'s grid of `expectedGrids` is `Check.expectedGrid`'s, slot for slot. -/
-theorem expectedGrids_eq (g : Check.Grid) (W : Nat) (l : Check.Link) (w : Nat) (hw : w < W) :
-    (expectedGrids g W l)[w]? = some (Check.expectedGrid g W l w) := by
+theorem expectedGrids_eq (g : Check.Grid) (W : Nat) (l : Check.Link) (w : Fin W) :
+    (expectedGrids g W l)[w.val]? = some (Check.expectedGrid g W l w.val) := by
+  obtain ⟨w, hw⟩ := w
+  dsimp only
   simp only [expectedGrids, enqueueCounts_eq, Array.getElem?_map, Array.getElem?_range, hw, ite_true, Option.map_some]
   congr 1
   simp only [payloads_getD]

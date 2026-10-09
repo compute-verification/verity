@@ -69,17 +69,22 @@
    "owner": "@network-accounting",
    "signature": [
     "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.Link)",
-    "  (w : Nat) (hw : instLTNat.lt w W) :",
-    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w)",
-    "    (Option.some (NetworkCheck.Check.expectedGrid g W l w))"
+    "  (w : Fin W) :",
+    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w.val)",
+    "    (Option.some (NetworkCheck.Check.expectedGrid g W l w.val))"
    ],
    "assumptions": [],
-   "type_hash": "11669d14912ebc499140658fa1fd55b024ef18d89160dd87c1ec82f600171aeb"
+   "type_hash": "f01677158fd01ce797e4aeb4ee75e878a6814ba9c555769206aa657521ad7f85"
   }
  },
  "shape": {
   "premises": [],
-  "properties": {},
+  "properties": {
+   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
+    "function": "NetworkCheck.Records.expectedGrids",
+    "outcome": "none"
+   }
+  },
   "frozen": {
    "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": "lemma: an equation between two of the check's own functions, which the records check's verdicts read, not a property of an outcome",
    "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": "lemma: an equation between two of the check's own functions, which the records check's verdicts read, not a property of an outcome",
