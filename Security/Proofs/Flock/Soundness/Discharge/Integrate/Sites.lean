@@ -186,6 +186,20 @@ theorem refused_unsat (S' : Finset (Fin n)) (z : Witness (x.refused ht S').T.S.m
     ¬ (x.refused ht S').T.S.Satisfies z :=
   contra_unsat (S := (x.refused ht S').T.S) (fun _ hR => List.mem_append_right _ hR) z
 
+/-- **The contra-only table of a refused draw `S'`**: `refused` with `contra`'s two regions alone, so its region count
+is 2 whatever the reference setup's; no witness satisfies it (`refusedC_unsat`). -/
+noncomputable def refusedC (S' : Finset (Fin n)) : Table mPts S' where
+  T := x.specAt ht (contra x.st.c.kLog (x.st.m - x.st.c.kLog)) contra_wf
+  acc := ⟨I.tags, I.circuitFile, I.publicFile, I.coins, I.tables, some d, I.partition, I.program, x.st, ht, x.h,
+    contra x.st.c.kLog (x.st.m - x.st.c.kLog), rfl⟩
+  vu _ _ := 0
+  hvu _ _ := x.hg
+  o _ _ := ⟨0, Nat.two_pow_pos _⟩
+
+theorem refusedC_unsat (S' : Finset (Fin n)) (z : Witness (x.refusedC ht S').T.S.m) :
+    ¬ (x.refusedC ht S').T.S.Satisfies z :=
+  contra_unsat (S := (x.refusedC ht S').T.S) (fun _ hR => hR) z
+
 end DrawSetup
 
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))

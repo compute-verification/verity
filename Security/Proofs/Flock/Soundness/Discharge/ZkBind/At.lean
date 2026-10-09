@@ -46,7 +46,7 @@ open Classical in
 /-- **The public table at the `--zk` table's draw**: the draw's `DrawSetupZK`'s table, or `y₀`'s refused one. -/
 noncomputable def tableSh (S : Finset (Fin n)) : Integrate.Table mPts S :=
   if h : Nonempty (DrawSetupZK I mPts S (dj S)) then (Classical.choice h).x.table (zkTyped ht)
-  else y₀.x.refused (zkTyped ht) S
+  else y₀.x.refusedC (zkTyped ht) S
 
 /-- **The `--zk` table's statement is the accepted model statement** (`stmtOf st` is `Layout.model` of setupH's
 statement at its regions, `Integrate.model_eq_stmtOf`), at every draw. -/
@@ -183,10 +183,10 @@ theorem sitesSh_bcSite :
       unfold tableSh; rw [dite_eq_left_of_eq_true (eq_true hS)]
     rw [e]
     exact table_bcSite (zkTyped ht) dj hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt _ h
-  · have e : tableSh ht dj y₀ S = y₀.x.refused (zkTyped ht) S := by
+  · have e : tableSh ht dj y₀ S = y₀.x.refusedC (zkTyped ht) S := by
       unfold tableSh; rw [dite_eq_right_of_eq_false (eq_false hS)]
     have hns : ∀ z, ¬ (tableSh ht dj y₀ S).T.S.Satisfies z := by
-      rw [e]; exact y₀.x.refused_unsat (zkTyped ht) S
+      rw [e]; exact y₀.x.refusedC_unsat (zkTyped ht) S
     exact absurd hM (hns _)
 
 /-- **`rs` at the `--zk` tables**: e2e-layout's `keyedRowsOuts` at the public sites, its circuit conditions from
