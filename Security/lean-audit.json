@@ -2913,18 +2913,6 @@
    "assumptions": [],
    "type_hash": "0f3301df597483b60a4a1dfaf762f04c0e3dacb66790c8056fd34d0ce82bfb9f"
   },
-  "Pouw.SecurityProofs.PearlC.Gamma16384": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.Gamma16384 : Pouw.Guarantees.PearlC.Gamma16384"],
-   "assumptions": [],
-   "type_hash": "ef8d1fe0a06173448b6b22264ee056e511ec71bdc64f19dbdc6539973c114c75"
-  },
-  "Pouw.SecurityProofs.PearlC.Gamma8192": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.Gamma8192 : Pouw.Guarantees.PearlC.Gamma8192"],
-   "assumptions": [],
-   "type_hash": "6bcd7b250d0f19890a1e64be0673ecc411c9238c9f8287f428627c75b971fed2"
-  },
   "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": {
    "owner": "@compute-accounting",
    "signature": [
@@ -3469,14 +3457,6 @@
    ],
    "assumptions": [],
    "type_hash": "deb5b890bc1086c80bceb2d0694c454dc1c392b09340ad6187d753f71c5e5ee8"
-  },
-  "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfGranted": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfGranted : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfGranted"
-   ],
-   "assumptions": [],
-   "type_hash": "48c2d428242ff77ebd07453c7e2b4f3514977634e9e7de582aec85768d4a0a9f"
   },
   "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfUOnly": {
    "owner": "@compute-accounting",

@@ -300,30 +300,6 @@ def _root_.Pouw.Guarantees.PearlC.DomainDevUnpromoted : Prop :=
 end Pouw.PearlC
 
 namespace Pouw.PearlC
-open Finset Assumptions Pouw.Fp8Atom Matrix
-
-/-- The worst case at 16384³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
-def _root_.Pouw.Guarantees.PearlC.Gamma16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)),
-    Gγ CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh16384)
-    ((536953 / 103540000 : ℚ) : ℝ) εPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Assumptions Pouw.Fp8Atom Matrix
-
-/-- The worst case at 8192³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
-def _root_.Pouw.Guarantees.PearlC.Gamma8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)),
-    Gγ CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh8192)
-    ((281273 / 52340000 : ℚ) : ℝ) εPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **The H100 headline under rev1, 16384³**, worst case under the cap `1/400`: `γ = 89359/17230000` (0.51862%). -/
@@ -926,18 +902,6 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1CapAnti : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDevRev1 CM d sem ρ),
     TTOutPearlCDevRev1 CM d sem ρ'
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
-
-/-- **rev1 asserts less than the granted TT_OUT at the same record**, for non-negative prices and `0 ≤ ρ ≤ 1`. An
-implication only: its premise `TTOutPearlCDev` is falsified by the first-promotion skip (rating D) at the H100 and
-sm_120 records, so it carries no evidence for rev1. -/
-def _root_.Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfGranted : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ),
-    TTOutPearlCDevRev1 CM d sem ρ
 
 end Pouw.PearlC
 
