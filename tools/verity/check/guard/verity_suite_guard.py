@@ -31,12 +31,15 @@ tracer sees into (`untraced`), as `child/verity_suite_reads.py` classifies them;
 """
 from __future__ import annotations
 
+import atexit
 import importlib.metadata
 import importlib.util
 import json
 import os
+import shutil
 import sys
 import sysconfig
+import tempfile
 
 import pytest
 
@@ -156,6 +159,49 @@ def _leave(before: str) -> None:
         os.environ.pop("VERITY_SUITE_MODULE", None)
     else:
         os.environ["VERITY_SUITE_MODULE"] = before
+
+
+#: the machine's own files a test would read in place of its fixtures (variable: what it would read), each pointed at a path in
+#: the test's tmp dir that doesn't exist: cpu-1's run-via-slot rule, a Nebius host's CPU and GPU split, its peers and its lease
+#: deadline, and a slotted machine's slots file
+HOST_FILES = {"RUNS_VIA_SLOT_FILE": "/etc/vy/runs-via-slot", "DIRECT_CPUS_FILE": "/etc/vy/direct-cpus",
+              "GPU_LEASE_ALLOWED_FILE": "/etc/vy/direct-gpus", "CHECK_PEERS": "/etc/vy/peers",
+              "LEASE_DEADLINE_FILE": "/etc/research/deadline", "CHECK_SLOTS": "/workspace/research/locks/slots"}
+#: the check's caches (variable: default), each an empty directory of the test's own, so no test reads a pass, a report or a
+#: build some earlier check on the machine kept (node 1's real caches failed test_placement and test_shards)
+HOST_CACHES = {"CHECK_CACHE": "~/.cache/verity-check", "VERITY_TEST_CACHE": "~/.cache/verity/tests"}
+#: what a check slot gives the processes it runs (slot.py), which a test run inside one would otherwise take as its own
+HOST_SLOT = ("CHECK_SLOT",)
+
+
+def _without_host(d: str, env=os.environ) -> None:
+    for k in HOST_FILES:
+        env[k] = os.path.join(d, f"absent-{k.lower()}")
+    for k in HOST_CACHES:
+        os.makedirs(os.path.join(d, k.lower()), exist_ok=True)
+        env[k] = os.path.join(d, k.lower())
+    for k in HOST_SLOT:
+        env.pop(k, None)
+
+
+if _ACTIVE:
+    # before any test module is imported: a module reads some of these into constants then (slot.py's PEERS, suites.py's CACHE)
+    _host = tempfile.mkdtemp(prefix="verity-suite-host-")
+    atexit.register(shutil.rmtree, _host, True)
+    _without_host(_host)
+
+
+@pytest.fixture(autouse=True)
+def _host_isolated(monkeypatch, tmp_path_factory):
+    """Every test in every suite starts without the machine it runs on: `HOST_FILES` absent, `HOST_CACHES` empty and `HOST_SLOT`
+    unset, here and in every program it starts; a test or conftest that wants one sets its own. Which cores the process may use
+    can't be set here, so the quick tier runs the suites off the lowest one, under a group-writable umask (`quick_tier.confined`)."""
+    env: dict[str, str] = {}
+    _without_host(str(tmp_path_factory.mktemp("host")), env)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    for k in HOST_SLOT:
+        monkeypatch.delenv(k, raising=False)
 
 
 @pytest.hookimpl(hookwrapper=True)

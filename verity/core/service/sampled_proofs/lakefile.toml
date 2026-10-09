@@ -1,8 +1,9 @@
 # Sampled proofs' one-stage audit as a `Core.Protocol` (`verity/sampled-proofs/one-stage/v1`): the registration record and
-# its R1–R6, the partition, the draw's checks, the verdict and the integrity profile, ported from
-# `verity/core/protocols/sampled_proofs/one_stage`. Code, not analysis: Lean core, C-Flock and the interface.
+# its R1–R7 (v1 and v2 records), the partition, the draw's checks, the verdict, the integrity profile and the whole audit
+# record, ported from `verity/core/protocols/sampled_proofs/one_stage`. `sampled-proofs-verifier` is the verifier of record
+# the Python calls (`one_stage.verifier`). Code, not analysis: Lean core, C-Flock and the interface.
 name = "core_sampled_proofs"
-defaultTargets = ["SampledProofs", "sampled-proofs-one-stage", "sampled-proofs-difftest"]
+defaultTargets = ["SampledProofs", "sampled-proofs-one-stage", "sampled-proofs-difftest", "sampled-proofs-verifier"]
 
 [leanOptions]
 autoImplicit = false
@@ -30,3 +31,7 @@ root = "SampledProofs.Main"
 [[lean_exe]]
 name = "sampled-proofs-difftest"
 root = "SampledProofs.DifftestMain"
+
+[[lean_exe]]
+name = "sampled-proofs-verifier"
+root = "SampledProofs.VerifierMain"

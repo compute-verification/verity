@@ -19,7 +19,7 @@ namespace RecResiduals
 open HmNets hiding and
 
 def MAX_REGIONS : Nat := 64
-def MAX_SLOTS : Nat := 128
+def MAX_SLOTS : Nat := 160
 def RES_OUT_WORDS : Nat := 128
 def PER_SLOT : Nat := 3
 

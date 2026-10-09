@@ -161,7 +161,7 @@ theorem vbridge_exec
         AccHolds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r)) →
       (files (layers zs dg N k Rw R ω t R₂ τ)).Runs)
     -- V*'s public files (G item 6)
-    (hcm : VCommits zs Sk cmt) (hdec : VDecodes wmsg (fun _ _ a b => a = b) Sk msg)
+    (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)
     -- `VFull` from U4: V*'s laws, their draws, U4's pass, and each committed position's reads
     (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (own : Fin S → Array Flock.Registered.Port) (dj : Fin S → Lean.Json) (d : Fin S → Flock.Draw.UnitDraw)
@@ -175,7 +175,7 @@ theorem vbridge_exec
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
   vbridge_compiled T CT execArith H512 enc512 leaf512 cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep
     halg hacc (stagesAccept_of_runs T CT cls regs sch zs dg N k Rw sh rep x wmsg files hsch hfiles hruns) hcm hdec
-    (FlockVBridge.Full.vFull_of_checkFull _ Sk hS own dj d hd hlaw hU4 hreads)
+    (vFullR_of_vFull (FlockVBridge.Full.vFull_of_checkFull _ Sk hS own dj d hd hlaw hU4 hreads))
 
 end outer
 

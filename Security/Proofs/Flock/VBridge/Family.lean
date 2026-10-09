@@ -126,7 +126,7 @@ theorem vbridge_of_reps
       (∀ r, AlgebraHolds sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) r) ∧
         AccHolds sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) r)) →
       (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).Runs)
-    (hcm : VCommits zs Sk cmt) (hdec : VDecodes wmsg (fun _ _ a b => a = b) Sk msg) (hfull : VFull (ℐ).r Sk) :
+    (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg) (hfull : VFullR (ℐ).r Sk) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
   ⟨fun R ω t R₂ τ o h =>
     (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).accepts regs (x R ω) T CT sch (hsch R ω t _) _
@@ -356,8 +356,8 @@ def HRuns : Prop :=
 /-- **`hcm`**: V*'s public files register the stages' commitments. -/
 def HCommits : Prop := VCommits F.zs F.Sk F.cmt
 
-/-- **`hdec`**: V*'s circuits decode each stage's message from its commit strings. -/
-def HDecodes : Prop := VDecodes F.wmsg (fun _ _ a b => a = b) F.Sk F.msg
+/-- **`hdec`**: V*'s circuits decode each stage's message from the read wires of its commit strings. -/
+def HDecodes : Prop := VDecodesR F.wmsg (fun _ _ a b => a = b) F.Sk F.msg
 
 /-- **`hks`, `hio`**: V*'s laws draw every stratum whole, and each stage's commit string is a wire of a unit. -/
 def HFull : Prop :=
@@ -398,7 +398,7 @@ theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
     (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw)
     (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
-    (hdec : F.HDecodes) (hfull : VFull (ℐ).r F.Sk) :
+    (hdec : F.HDecodes) (hfull : VFullR (ℐ).r F.Sk) :
     Flock.Assumptions.VBridge (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
   vbridge_of_reps T CT cls regs sch F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg F.sh F.rep hst.1 hst.2 F.sess F.un cp
     (fun R ω t R₂ τ o h r => (hsh R ω t R₂ τ o h r).1) (fun R ω t R₂ τ o h r => (hsh R ω t R₂ τ o h r).2) hres
