@@ -9,8 +9,9 @@ bits, copied from the output bits the circuit computes. Its flat twin `Hidden.fl
 (`flat_layout`) and the unit facts the copy positions read (`flat_unitFacts`), as setupH's statement does.
 
 Every first column of `outPairs` is a message bit of a row's `sha512x3` slot (`deltaMsgCol`), which no unit slot's row
-is (`outPairs_ne_unit`, for `sha512/row/v1` rows). So at every unit slot's row the hidden statement's level-0 matrices
-are its flat twin's (`unitRowsFlat`): the rows that place a template instance and copy its inputs read the same in both.
+is (`outPairs_ne_unit`, for rows unsegmented in whole SHA-512 blocks, as every `sha512/row/v1` row is: `FlatRows`). So
+at every unit slot's row the hidden statement's level-0 matrices are its flat twin's (`unitRowsFlat`): the rows that
+place a template instance and copy its inputs read the same in both.
 -/
 
 set_option Elab.async false
