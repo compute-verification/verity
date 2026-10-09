@@ -26,7 +26,7 @@ REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
-HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
+HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting",
            "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
 
 
@@ -266,8 +266,8 @@ def test_a_post_that_went_out_stands_when_its_permalink_fails(capsys):
 def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_file(fake, registry, capsys, tmp_path):
     body = tmp_path / "ask.md"
     body.write_text("a frontend for the pous panel: spec in PR 12")
-    assert run(capsys, "ask", "--as", "compute-accounting", "--to", "console", "--file", str(body))[0] == 0
-    assert fake.messages[COORD][0]["text"].startswith("@console a frontend")
+    assert run(capsys, "ask", "--as", "compute-accounting", "--to", "memory-accounting", "--file", str(body))[0] == 0
+    assert fake.messages[COORD][0]["text"].startswith("@memory-accounting a frontend")
 
 
 def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(fake, registry, capsys, monkeypatch):
@@ -564,7 +564,7 @@ def test_match_an_ask_only_for_its_owner(fake, registry, capsys):
     assert match(capsys, "infra", ask)[0] == 0
     assert all(match(capsys, h, ask)[0] == 1 for h in HANDLES if h != "infra")
     assert match(capsys, "infra", {"text": "<!subteam^SOTHER|@infra> hi", "ts": "5.0"})[0] == 0
-    assert match(capsys, "console", "ping @console, please")[0] == 0
+    assert match(capsys, "memory-accounting", "ping @memory-accounting, please")[0] == 0
     assert match(capsys, "infra", "email infra@infra.dev or @infra-2")[0] == 1
     assert match(capsys, "infra", {"event": {"type": "message", "text": "@infra hi", "ts": "5.0"}})[0] == 0
     assert match(capsys, "infra", {"text": "@infra note to self", "ts": "5.0", "username": "infra", "bot_id": BOT})[0] == 1
@@ -585,7 +585,7 @@ def test_match_in_threads_participants_and_status_lines(fake, registry, capsys):
     reply = fake.add(COORD, text="node 2", username="compute-accounting", bot_id=BOT, thread_ts=root["ts"])
     rc, why = match(capsys, "infra", {**reply, "channel": COORD})
     assert rc == 0 and "posted in it" in why
-    assert match(capsys, "console", {**reply, "channel": COORD})[0] == 1
+    assert match(capsys, "memory-accounting", {**reply, "channel": COORD})[0] == 1
     human = fake.add(COORD, text="any news?", user="UDANIEL", thread_ts=root["ts"])
     assert match(capsys, "infra", {**human, "channel": COORD})[0] == 0 and match(capsys, "compute-accounting", {**human, "channel": COORD})[0] == 0
 
@@ -633,7 +633,7 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     t = fake.messages[COORD][-1]["ts"]
     assert run(capsys, "done", "--as", "compute-accounting", "--thread", t)[0] == 0
     assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 7 Oct 23:00Z")[0] == 0
-    assert run(capsys, "done", "--as", "console", "--thread", t)[0] == 0                   # not addressed: not counted
+    assert run(capsys, "done", "--as", "memory-accounting", "--thread", t)[0] == 0         # not addressed: not counted
     assert not [r for r in fake.reactions if r[1] == t]                                    # one bot can't carry many agents' reactions
     fake.add(COORD, text=f"{slack.DONE} done", user="UINTRUDER", thread_ts=t)              # a human's line is no status of a handle
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
@@ -686,13 +686,13 @@ def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsy
 
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
     text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
-    assert run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", text)[0] == 0
+    assert run(capsys, "ask", "--as", "infra", "--to", "@memory-accounting", "--text", text)[0] == 0
     posted = fake.messages[COORD][0]["text"]
     assert "freeze <!date^1793525400^{date_short_pretty} {time}|1:30 AM PST (09:30Z)>," in posted
     assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
     fake.messages[COORD][0]["ts"] = "1793525400.000100"
     rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
-    assert rc == 0 and out.startswith("1793525400.000100 @infra: @console freeze 1:30 AM PST (09:30Z), see note:")
+    assert rc == 0 and out.startswith("1793525400.000100 @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
@@ -1174,7 +1174,7 @@ def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
-    for who in ("proofs", "lean", "console", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
+    for who in ("proofs", "lean", "network-accounting", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
         assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
     assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
 

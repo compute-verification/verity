@@ -2,7 +2,7 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, and the
   advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
@@ -19,7 +19,7 @@ description: >
 The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier) and `@console`, plus two advisors,
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
   registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
@@ -205,7 +205,7 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
   before it sends anything, and `--dry-run` prints the request.
 - **The answer** is a button, or a reply in the card's thread. The asker subscribes to its own card's thread; the site posts
   every decision there too (a click, a default applied, a `resolve`). When Daniel answers in the thread, the asker records his
-  answer on the card with `resolve`. Until console deploys that route, it fails with HTTP 404, and the thread reply stands.
+  answer on the card with `resolve`. Until the site deploys that route, it fails with HTTP 404, and the thread reply stands.
 - **A route without the card's fields** (HTTP 400) gets the old Approve/Deny card. The question becomes its title, and the
   rest goes in its text: Approve takes the recommendation. That route never applies a default, so the asker applies it at the
   deadline itself.
