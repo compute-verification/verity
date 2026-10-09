@@ -98,7 +98,7 @@ def spec(sh) -> dict:
     gf, lay = A.structure(sh)
     ports = [[f"m{i}", len(r)] for i, r in enumerate(A.rounds(sh))] + [["acc0", 2], ["acc1", 2]]
     S = {"gf": gf, "ports": ports}
-    _check(S)
+    _check(S, whole=True)
     if lay.w[-4:] != A.ACC_NAMES:
         raise AssertionError("w does not end with the running sums")
     return S
@@ -123,7 +123,7 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
     reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
     w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
     holds exactly when every part does."""
-    _check(S)
+    _check(S, whole=True)
     gf = S["gf"]
     starts = [0]
     for _, n in S["ports"]:
@@ -183,7 +183,9 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
     return out
 
 
-def _check(S: dict) -> None:
+def _check(S: dict, whole: bool = False) -> None:
+    """S is an InnerRepCheck S; one statement's (``whole`` False) also holds at most ``OUT_WORDS / 8`` residuals, which a
+    whole algebra's S (``whole``, `parts`' input) need not."""
     if not isinstance(S, dict) or set(S) != {"gf", "ports"}:
         raise TypeError("InnerRepCheck's S is {'gf': GfResiduals' S, 'ports': [[name, elements], ...]}")
     names = [nm for nm, _ in S["ports"]]
@@ -191,7 +193,7 @@ def _check(S: dict) -> None:
         raise ValueError("InnerRepCheck's row ports are distinct names, not v, each of at least one element")
     if sum(n for _, n in S["ports"]) != S["gf"]["nw"]:
         raise ValueError(f"row ports of {sum(n for _, n in S['ports'])} elements for a w of {S['gf']['nw']}")
-    if F_WORDS * len(S["gf"]["res"]) > OUT_WORDS:
+    if not whole and F_WORDS * len(S["gf"]["res"]) > OUT_WORDS:
         raise ValueError(f"{len(S['gf']['res'])} residuals: more than {OUT_WORDS // F_WORDS}")
 
 
