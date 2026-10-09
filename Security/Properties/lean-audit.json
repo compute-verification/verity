@@ -53,7 +53,10 @@
   "Lms",
   "Properties.NetworkCertifier",
   "Definitions.NetworkCertifier",
-  "Properties.CertifierNetwork"
+  "Properties.CertifierNetwork",
+  "Properties.Pous",
+  "PousCheck.P2",
+  "PousCheck.Params"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -138,6 +141,12 @@
    "signature": ["NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"],
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
+  },
+  "PousCheck.Properties.SecurityProofs.deployed": {
+   "owner": "@memory-accounting",
+   "signature": ["PousCheck.Properties.SecurityProofs.deployed : PousCheck.Properties.Deployed"],
+   "assumptions": [],
+   "type_hash": "f8977ea58504508ed7a1eae3a72cadbc4a36e463c703441b45cddd5d5330cec3"
   },
   "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
    "owner": "@network-accounting",
@@ -1909,6 +1918,32 @@
     "Properties.NetworkCertifier.undigestedParamsReject"
    ]
   },
+  "PousCheck.P2": {
+   "digest": "53ff1417b05a1c6cdc034acb9521f8e8b3336d25dc9ebc15ba40caa23b084eae",
+   "definitions": {
+    "PousCheck.P2.Params": "399bad128231f2f5574272474b195257c3d48852e09e36b2efdd6226489881c0",
+    "PousCheck.P2.Params.blockBytes": "1b473b63a63bfe18baf5f6a6ba42b6fe0f5b285bc0090ccaf22e75d43e5bb9b3",
+    "PousCheck.P2.Params.blocks": "d6b807ae1832c9fbcdc046d80d44b4783ec3be18f7d4304a7de952316f37ecc0",
+    "PousCheck.P2.Params.blocksPerSegment": "e36bd1fa809de3f1551f648ef2a5b14349ef5ee8d81447a6e5a4e4a4f39bf5d3",
+    "PousCheck.P2.Params.c0": "8c68c3bf51b2ca0254834b24c0feb80e657ea7dd2246c98d97f05b56fa8cc3c0",
+    "PousCheck.P2.Params.deployed": "2f984577ea9487bd85232b0a2f9c184d0568634e527ac3d330b2b1b2b41435b1",
+    "PousCheck.P2.Params.p": "15d8b48d2626070f06ccea792eeb236ab3a9c8c76e9fb4f059ee9c755a4ec7e0",
+    "PousCheck.P2.Params.payloadBytes": "98c664902a07dde98e94a1f0ae7b6730b4869ffd67e9fbe5a7a81a9340483149",
+    "PousCheck.P2.Params.segments": "52e208670feb863f3ee97d121bd070504ff822a7b1e327a9cdb157bf5af7cdbb",
+    "PousCheck.P2.Params.validate": "0b0ae898c1975318419b47075f89c1a131a34c00f9974354025f4bad0ffd92be",
+    "PousCheck.P2.Params.w": "7f5351dd69ff4b1dc5167626df1299be3681eede923dc44f2d6f7c31de17bbcc"
+   },
+   "guarantees": ["PousCheck.Properties.SecurityProofs.deployed"]
+  },
+  "PousCheck.Params": {
+   "digest": "07841c3f3162a89aa0e07cfe02a9bbcd2a57770c16c37ab915ef5115bf8cc584",
+   "definitions": {
+    "PousCheck.P": "48dbdf6c58ca800487b5c839bf5a02cedad7a1d261cfaf764e2f656bc7e70568",
+    "PousCheck.W_BITS": "e6fb50911fc6a01898efb39e5406a25fd5f5a06eef8b445aecea96f885b012c3",
+    "PousCheck.W_BYTES": "b2aa7e1660031dc72c628103605c42c9e9958d1ae57378c78923458b5e1c7765"
+   },
+   "guarantees": ["PousCheck.Properties.SecurityProofs.deployed"]
+  },
   "PouwCheck.Check": {
    "digest": "df377d4eaf204a413a7091be02887a82c122fd50f020bd648ca65f4f23575997",
    "definitions": {
@@ -2556,6 +2591,13 @@
     "Properties.NetworkCertifier.undecidedIff",
     "Properties.NetworkCertifier.undigestedParamsReject"
    ]
+  },
+  "Properties.Pous": {
+   "digest": "54ae873c58295ce59d584e679592902b9026c9ec48239d3c5ab18308c3164032",
+   "definitions": {
+    "PousCheck.Properties.Deployed": "64310ef44823daae5664c18e7a537912c42a490dacf9dc239b731d09176d2275"
+   },
+   "guarantees": ["PousCheck.Properties.SecurityProofs.deployed"]
   },
   "Properties.Pouw": {
    "digest": "66423f4118c92ff184a122c1b88e2926f42f01df70de8d3ba866765df679736e",
