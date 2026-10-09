@@ -76,10 +76,11 @@ V_VALUE = "rec-v"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
-# a part's sha512x3 slots per instance, at most (`slots`): 2^25 bits of compressions beside its hm96 slots' 2^24 (at most
-# MAX_REGIONS) leave its unit 2^24 of a 2^26 block, below circuit.K_MAX's 2^27 (`circuit.compose` refuses a larger one); K =
-# 4096's units are 2^22, and without the bound v's compressions (about nv / 8) put its first part at 2^27
-MAX_SLOTS = 128
+# a part's sha512x3 slots per instance, at most (`slots`): 160 slots of 2^18 bits (2^25.32) beside its hm96 slots' 2^24 (at
+# most MAX_REGIONS) leave room for a 2^22 unit in a 2^26 block, below circuit.K_MAX's 2^27 (`circuit.compose` refuses a
+# larger one); K = 4096's units are 2^22, and without the bound v's compressions (about nv / 8) put its first part at 2^27.
+# A shape's widest residual reads about 10.75 slots a claim, so 160 holds up to 14 claims (12 claims: 130)
+MAX_SLOTS = 160
 
 
 def port_words(n: int) -> int:
