@@ -1418,13 +1418,110 @@ def served_window(run: Run) -> Iterator[Case]:
         run.outside.append({"run": run.id, "driver": "served-window", "name": name, "why": why})
 
 
+#: served_zk's first window's registered scheme, law and δ (`served_commit.SCHEME`, `LAW`, `DELTA` before `params.json`)
+SERVED_ZK_V0_SCHEME = "verity/pouw/served-zk/hm96-sha512+frame-v3-sha512/v0"
+SERVED_ZK_V0_LAW = {"k": 1, "law": "subset"}
+SERVED_ZK_V0_DELTA = 0.05
+
+
+def served_audit(run: Run) -> Iterator[Case]:
+    """served_zk's first window (`served_commit.py` and `job.sh` before the verifier's `params.json`): each side's
+    (`request`, `other`) commitment of one served call, its registration received under the verifier's copies of that
+    commitment (the tile template's population over the statement's tiles, `Q_template_instance`, `subset:1`, the scheme,
+    each side's served domain over its row count and the request's run, no leaf layer), one Lean draw (`draw.json`), and
+    `audit-<case>.json`, the audit record of the request's registration (`foreign-commit`: the other's), with one instance,
+    no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
+    domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
+    (`receive-foreign` RECEIVED, the run's failed check)."""
+    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+    commit = run.commit()
+    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],
+                         capture_output=True, text=True) if commit else None
+    if src is None or src.returncode != 0:
+        raise Missing(f"benchmarks/pouw/served_zk/served_commit.py at {commit} (git history)")
+    binding_run = "def run_of" in src.stdout
+    prov0: dict = {"commit": commit, "program": "P.population_program(pc8 tile template, the statement's tiles)",
+                   "scheme": "served_commit's `SCHEME` (v0)", "run": "the served request's binding (`run_of`)" if binding_run
+                   else "the record's own window (before `run_of`)"}
+    forms: dict[str, tuple[str, str]] = {}
+
+    def copies(side: str, rec: dict, run_id: str | None = None) -> tuple[Any, dict, dict, dict]:
+        c = run.json(f"out/{side}/commitment.json")
+        b, (rows, n) = c["binding"], c["statement"]["tiles"]
+        t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True)["tile"]
+        program = P.population_program(t, rows * n)
+        query = P.template_instance_query(t)
+        part = P.partition(program, query)
+        if run_id is None:
+            run_id = f"{b['run']}/{b['manifest_sha256'][:16]}/matmul-{b['matmul']}" if binding_run else rec["window"].get("run", "")
+        layout = {"a": (L.ROW_SCHEMA["fp8-p", ROLE_X], rows), "b": (L.ROW_SCHEMA["fp8-p", ROLE_W], n)}
+        if side not in forms:
+            own = run.json(f"out/{side}/registration.json")
+            forms[side] = next((f for f in SERVED_FORMS if matches(served_ports(f, part, layout, run_id), own)), SERVED_FORMS[0])
+        return program, query, served_ports(forms[side], part, layout, run_id), {"run_id": run_id, "form": forms[side]}
+    audits = sorted(f["path"] for f in run.files if re.fullmatch(r"out/audit-[^/]+\.json", f["path"]))
+    if not audits:
+        raise Missing("out/audit-*.json")
+    base = None
+    for path in audits:
+        name = path[len("out/audit-"):-len(".json")]
+        side = "other" if name == "foreign-commit" else "request"
+        a = run.json(path)
+        rec = a["registration"]
+        if R.digest(rec) != R.digest(run.json(f"out/{side}/registration.json")):
+            raise Gap(f"{path}: not out/{side}/registration.json")
+        program, query, ports, how = copies(side, rec)
+        if PO.program_sha512(program) != rec["program"]:
+            raise Gap(f"out/{side}/commitment.json's tiles give {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
+        p = params(program, query, SERVED_ZK_V0_LAW, ports, None, delta_of(SERVED_ZK_V0_DELTA), scheme=SERVED_ZK_V0_SCHEME)
+        e = evidence(a, instances=1, sessions=[], session_roots=None, served=None)
+        e["session_registered"] = None
+        prov = {**prov0, "copies": f"out/{side}/commitment.json", "ports": f"served_domain {how['form'][0]} {how['form'][1]} "
+                f"(run {how['run_id']})", "evidence": f"{path}; one instance, the draw's unit; no sessions"}
+        c = Case(run.id, "served-audit", rec["format"], f"audit-{name}", "audit" if name in ("honest", "st-honest") else "negative",
+                 program, p, rec, e, recorded_audit(a, path), prov)
+        base = base or (c if name == "honest" else None)
+        yield c
+    if base is None:
+        raise Missing("out/audit-honest.json")
+    checks = run.json("out/summary.json").get("checks") or {}
+    if "receive-foreign" in checks and run.has("out/receive-foreign.out"):
+        other = run.json("out/other/registration.json")
+        out = run.path("out/receive-foreign.out").read_text()
+        got = json.loads(out.split(" ", 1)[1]) if " {" in out else {}
+        received = out.startswith("RECEIVED")
+        rv = recorded("accept", source="out/receive-foreign.out") if received else \
+            recorded("reject", "registration", got.get("codes"), "out/receive-foreign.out")
+        _, _, ports, how = copies("request", other)
+        yield base.but("receive-foreign", "negative", rv, rec=other, params={"ports": ports},
+                       evidence={"receipt": run.json("out/other/receipt.json")} if received else None,
+                       provenance={"change": f"out/other/registration.json under the request's copies, its served domains "
+                                             f"over run {how['run_id']}" + ("; the receipt the verifier writes for it (out/"
+                                                                            "other/receipt.json), the honest audit otherwise"
+                                                                            if received else "")})
+        if not binding_run:
+            _, _, ports_r, how_r = copies("request", other, f"{base.rec['window']['run']}")
+            yield base.but("receive-foreign (the request's run)", "analog", recorded("reject", None, None, "out/summary.json "
+                                                                                     "(receive-foreign expected REFUSED)"),
+                           rec=other, params={"ports": ports_r},
+                           provenance={"change": f"out/other/registration.json under the request's copies over the "
+                                                 f"request's run {how_r['run_id']}, as `run_of` derives them"})
+    for name, v in sorted(checks.items()):
+        if v.get("expected") not in ("REFUSED", "REJECT") or name.startswith("audit-") or name == "receive-foreign":
+            continue
+        why = next((w for pat, w in SERVED_OUTSIDE if re.fullmatch(pat, name)), "UNHANDLED: the replay has no case for it")
+        run.outside.append({"run": run.id, "driver": "served-audit", "name": name, "why": why})
+
+
 def session_digests(run: Run, session: str) -> list[str]:
     return sorted(f["sha256"] and sha512_file(run.path(f["path"])) for f in run.files
                   if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
 
 
 DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a0-lean": a0_lean, "a2": a2, "a3": a3, "a4": a4,
-                                                       "registered-gemm": registered_gemm, "served-window": served_window}
+                                                       "registered-gemm": registered_gemm, "served-audit": served_audit,
+                                                       "served-window": served_window}
 
 
 # --- main --------------------------------------------------------------------------------------------------------------
@@ -1563,6 +1660,9 @@ def classify(run: Run) -> str:
     drivers = run.row.get("drivers") or []
     if formats and all(f == "verity/one-stage/registration/v0" for f in formats):
         return "neither-reads (registration v0)"
+    if run.has("out/request/commitment.json") and not run.has("out/request/params.json") and \
+            any(re.fullmatch(r"out/audit-[^/]+\.json", f["path"]) for f in run.files):
+        return "served-audit"
     if not run.row.get("python_verdicts"):
         return "no-recorded-verdict"
     if len(drivers) == 1 and drivers[0] in DRIVERS:
