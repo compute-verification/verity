@@ -56,15 +56,34 @@ def test_a_table_not_given_is_refused(attn, tmp_path):
     assert p.returncode != 0 and "table ex2: not given" in p.stdout + p.stderr, p.stdout
 
 
+@pytest.fixture(scope="module")
+def part(attn, tmp_path_factory):
+    """`tests/lean/TypedRowsPart.lean` built against the verifier's own build, as a package that requires it by path; run
+    from the verifier's directory, so that it takes the verifier's toolchain."""
+    pkg = tmp_path_factory.mktemp("typed-rows-part")
+    (pkg / "lakefile.toml").write_text(
+        f'name = "typed_rows_part"\ndefaultTargets = ["typed-rows-part"]\n\n[[require]]\nname = "flock_verifier"\n'
+        f'path = "{LEAN}"\n\n[[lean_exe]]\nname = "typed-rows-part"\nroot = "TypedRowsPart"\n')
+    shutil.copy(Path(__file__).resolve().parent / "lean" / "TypedRowsPart.lean", pkg)
+    p = subprocess.run(["lake", "-d", str(pkg), "build"], cwd=LEAN, capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    return pkg / ".lake" / "build" / "bin" / "typed-rows-part"
+
+
 @pytest.mark.slow
-def test_the_verifiers_rows_are_the_writers(attn, tmp_path):
+@pytest.mark.parametrize("which", ["rows", "order0", "order1", "parts"])
+def test_the_verifiers_rows_are_the_writers(attn, part, tmp_path, which):
     """Through `deriveChecked`, the rows are the writer's `rows/` byte for byte: the root, the tensor-core part, each read's
     generated layout with its `READ` line (ex2 k 23, rcp k 24), and `delta.txt`. Deriving and checking the full template
-    takes minutes, so it is marked `slow` (`tools/verity/check/suites.py --quick` leaves it out); GEMM's derivation
-    (`test_lean_typed_template.py`) is not."""
-    p = subprocess.run([str(BIN), "typed-rows", str(attn / "circuit.txt"), "--tables", str(attn / "tables"),
+    takes the verifier about 14 minutes in one process, so `typed-rows` runs here in four parts, side by side
+    (`TypedRowsPart.lean`, whose theorems make them pass exactly when `typed-rows` does): `rows` checks every layout and
+    writes the rows, `order0` and `order1` check the unit's logical order, and `parts` its parts. Each part derives the
+    layouts again, so each still takes minutes and is marked `slow` (`tools/verity/check/suites.py --quick` leaves it out);
+    GEMM's derivation (`test_lean_typed_template.py`) is not."""
+    p = subprocess.run([str(part), which, str(attn / "circuit.txt"), "--tables", str(attn / "tables"),
                         "--out", str(tmp_path / "rows")], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr
-    want = sorted((attn / "rows").iterdir())
-    for f in want:
-        assert (tmp_path / "rows" / f.name).read_bytes() == f.read_bytes(), f.name
+    if which == "rows":
+        want = sorted((attn / "rows").iterdir())
+        for f in want:
+            assert (tmp_path / "rows" / f.name).read_bytes() == f.read_bytes(), f.name
