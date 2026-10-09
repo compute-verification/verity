@@ -1056,7 +1056,9 @@ def answer(ch: Challenger, line: str) -> str | None:
 def cmd_challenger(a) -> int:
     """The challenger's process: the epoch's coins, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
-    LOG/requests.jsonl and each coin it opened to LOG/openings.jsonl; it ends at end of input or ``{"op": "quit"}``."""
+    LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
+    Python's, to LOG/witness.jsonl (a window that ends before its outcome keeps them there); it ends at end of input or
+    ``{"op": "quit"}``."""
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
     if a.state:
@@ -1073,7 +1075,7 @@ def cmd_challenger(a) -> int:
     for line in sys.stdin:
         if not line.strip():
             continue
-        opened = set(ch.openings)
+        opened, at = set(ch.openings), len(ch.record.witness)
         reply = answer(ch, line)
         if reply is None:
             break
@@ -1082,6 +1084,9 @@ def cmd_challenger(a) -> int:
                 f.write(json.dumps(ch.openings[label].to_json(), sort_keys=True) + "\n")
         with open(log / "requests.jsonl", "a") as f:
             f.write(json.dumps({"request": line.strip(), "reply": reply[:4000]}) + "\n")
+        with open(log / "witness.jsonl", "a") as f:
+            f.write(json.dumps({"reply": reply.split(" ", 1)[0], "of_record": ch.record.witness[at:]}, sort_keys=True,
+                               default=str) + "\n")
         print(reply, flush=True)
     return 0
 

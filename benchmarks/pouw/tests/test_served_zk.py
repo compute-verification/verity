@@ -709,6 +709,13 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert audit["sessions"] == [hashlib.sha512((tmp_path / f"s{u}" / "session.json").read_bytes()).hexdigest() for u in drawn]
     assert audit["audit"]["verdicts"]["lean"]["sessions"] == audit["sessions"]
     assert len((log / "requests.jsonl").read_text().splitlines()) == len(reqs) - 2
+    witness = [json.loads(x) for x in (log / "witness.jsonl").read_text().splitlines()]
+    assert [w["reply"] for w in witness] == [x.split(" ", 1)[0] for x in replies]
+    noted = [e for w in witness for e in w["of_record"]]
+    assert {e["check"] for e in noted} >= {"registered", "registration", "pass", "draw", "answer"}
+    assert all(e["same"] and e["of_record"] == "lean" for e in noted)
+    accepted = [e for w in witness if w["reply"] == "ACCEPT" for e in w["of_record"]]
+    assert accepted and all(e in o["of_record"] for e in accepted)
 
     assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean)]) == 0
     assert capsys.readouterr().out.startswith("SAME ")
