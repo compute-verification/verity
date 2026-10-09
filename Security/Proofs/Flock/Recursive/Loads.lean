@@ -111,6 +111,20 @@ theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg :
       (fun b hb => hp (σ.1, ω, t, (s.1, b)) hb) _]
     exact zero_le ..
 
+/-- **Where every session at a history and registration types, the typed sessions accept and pass the statement check
+where the raw ones do**: each is its build (`zsOf_pos`), with the raw session's inputs and own ports. -/
+theorem verifies_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} {dg : ByteArray → ByteArray} {N : ℕ}
+    (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg')
+    (hRec : ∀ R ω t R₂ j, RecordsLiveZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (zr R ω t R₂ j).wr) (h : Typed zr)
+    (R : A) (ω : B) (t : C) (o : D × VRec Vs Reg' dg N) (hall : ∀ j, (zr R ω t o.1 j).Typable)
+    (hacc : AcceptsVR (zr R ω t) o) (hck : ∀ j, ScopeZ (zr R ω t o.1 j).I) :
+    AcceptsV (zsOf zr hRec h R ω t) o ∧ ∀ j, ScopeZ (zsOf zr hRec h R ω t o.1 j).I := by
+  have hz : zsOf zr hRec h R ω t o.1 = fun j => (zr R ω t o.1 j).build (hall j) (hRec R ω t o.1 j) :=
+    funext fun j => zsOf_pos zr hRec h R ω t o.1 j (hall j)
+  unfold AcceptsV Accepts
+  rw [hz]
+  exact ⟨hacc, hck⟩
+
 /-- **At a session that loads `Q`, the law's population is `Q`'s units**: the draw's population is the registered
 population's count (`VStmt.pop_of_session`), the registered population is the inputs' own (`ScopeZ.load`, at `Q`'s
 circuit), and `Loads` gives its count. -/

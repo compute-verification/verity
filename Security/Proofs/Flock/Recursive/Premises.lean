@@ -1,4 +1,5 @@
 import Proofs.Flock.Recursive.Compile
+import Proofs.Flock.Recursive.Raw
 import Proofs.Flock.Soundness.Assumptions.Recursive
 import Proofs.Flock.Soundness.Assumptions.Zk
 
@@ -21,7 +22,8 @@ abbreviates, unchanged.
 * `HashDerivedKeyHm96` (`hash-derived-key`): hm96's salt hash keys its hiding at `2^-193`.
 * `RecordCustody` (`live-verifier`, `Assumptions.Zk.RecordCustodyZK`): the record and the draw file each of V*'s
   sessions reads are the challenger's of the live session and the verifier's own draw, at every history (one premise
-  over V*'s sessions' data `ZkOuterD`, so the shape check reads its head; the property builds the sessions from it).
+  over V*'s sessions as the prover supplies them, `ZkOuterR`, so the shape check reads its head; the property builds the
+  typed sessions from them and it).
 
 The list belongs in `Security/Definitions/` (the same ruling), whose modules import only Mathlib and the spec; C-Flock's
 definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
@@ -63,8 +65,8 @@ abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKey
 /-- **live-verifier** at every one of V*'s sessions: `Assumptions.Zk.RecordCustodyZK` at each session's inputs, draw
 files and record writer, under its law's executable strata over its own population `[0, pop)`. -/
 abbrev RecordCustody {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
-    (zs₀ : A → B → C → D → (j : Fin S) → (Vs j).OuterD Reg') : Prop :=
-  ∀ R ω t R₂ j, FlockSoundness.Assumptions.Zk.RecordCustodyZK (zs₀ R ω t R₂ j).I (zs₀ R ω t R₂ j).dj
-    (zs₀ R ω t R₂ j).wr (.stratified (Vs j).law.Kd (Array.ofFn (Vs j).law.St)) (Vs j).law.pop
+    (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') : Prop :=
+  ∀ R ω t R₂ j, FlockSoundness.Assumptions.Zk.RecordCustodyZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj
+    (zr R ω t R₂ j).wr (.stratified (Vs j).law.Kd (Array.ofFn (Vs j).law.St)) (Vs j).law.pop
 
 end Flock.Premises
