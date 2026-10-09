@@ -21,8 +21,9 @@ against C's leaf).
   first (`--keygen-workers`; about 1.1G SHA-512 hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
   `test/` id), its leaf state in `$TMPDIR`.
 - **The verdict** is `memory_challenger.verdict` under `memory_challenger.SCHEMES`, which accepts S1's scheme alone, so a
-  test-signed session is rejected: it fails closed.  `judge` takes it from one line, which switches to the Lean port's
-  (`lean_verdict`, held to it by `verity/core/devices/memory_challenger/lean/tests/test_verdict.py`).  `accepted_under_signer` is the same verdict under the signer's own
+  test-signed session is rejected: it fails closed.  `judge` computes it with the Lean port's (`lean_verdict`, built with
+  `lake` on first use), held to the Python, which stays the reference, by
+  `verity/core/devices/memory_challenger/lean/tests/test_verdict.py`.  `accepted_under_signer` is the same verdict under the signer's own
   mapping (`memory_challenger.SCHEMES` for `lms`, the test signer's for `test`): for `test`, every check but the scheme's
   acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
@@ -148,7 +149,7 @@ def binding_of(salt: bytes, digests: bytes) -> bytes:
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
           signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Each session's verdict under `memory_challenger.SCHEMES` and under the signer's own mapping."""
-    from verity.core.protocols.pous.memory_challenger import verdict
+    verdict = lean_verdict().verdict
     out = []
     for s in sessions:
         v = verdict(s["signed"], s["commitment"], s["openings"], expected, trusted=trusted)
