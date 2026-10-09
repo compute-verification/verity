@@ -522,7 +522,9 @@ def lean_fast(out: Path) -> str | None:
 
 def lean_slot(cmd: list[str]) -> list[str]:
     """`--lean-slot CMD...`, the lean-audit step: CMD in one of the node's Lean audit slots when it will audit a package, as it
-    is when it only reuses passes, which would otherwise wait behind an hour-long audit for seconds of work."""
+    is when it only reuses passes, which would otherwise wait behind an hour-long audit for seconds of work. CMD runs with
+    LEAN_SLOT_POOL=check, so an audit it runs after all (a pass gone since) takes its slot from the same pool
+    (`tools/verity/lean/check.py --build`)."""
     only = [cmd[i + 1] for i, x in enumerate(cmd[:-1]) if x == "--package"]
     return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd, only) else cmd
 
@@ -1407,7 +1409,7 @@ def main(argv: list[str]) -> int:
         return lean_agreement(*map(Path, argv[1:]))
     if argv[:1] == ["--lean-slot"] and len(argv) > 1:
         cmd = lean_slot(argv[1:])
-        os.execv(cmd[0], cmd)
+        os.execve(cmd[0], cmd, {**os.environ, "LEAN_SLOT_POOL": "check"})
     if argv == ["--preflight"]:
         return preflight_only()
     if argv[:1] == ["--slots"]:
