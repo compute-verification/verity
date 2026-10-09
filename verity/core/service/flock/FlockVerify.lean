@@ -274,7 +274,7 @@ def recInnerInput (args : List String) : IO (Except String (Option RecVStar.Inne
       | .error e => return .error s!"rec-inner: not JSON: {e}"
 
 /-- `rec-inner --circuit F --public F [--partition F] [--program F]`: the shape of V*'s inner session (`RecVStar.innerOf`)
-from the inner statement, as one `verity/rec-inner/v0` line, for `verify --rec-inner`. -/
+from the inner statement, as one `verity/rec-inner/v1` line, for `verify --rec-inner`. -/
 def recInnerCmd (args : List String) : IO UInt32 := do
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F]"; return 2
