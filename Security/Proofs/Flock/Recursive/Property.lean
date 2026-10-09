@@ -68,18 +68,18 @@ noncomputable def regBcCommit (i : ℕ) :
           (Hm96.Default512.treeLeaf op'.2.1) op'.2.2).2.data.toList)
 
 /-- **The verifier of record accepts every one of V*'s sessions**: each session's proof (`AcceptsV`: setup, registered
-reads, `Flock.Zk.shapeOk`, `Flock.Zk.verify`) and its statement's form (`FailClosed.ScopeZ`: `Flock.ProvedScope.check`),
-at the registration the outcome records. -/
+reads, `Flock.Zk.shapeOk`, `Flock.Zk.verify`) and its statement's form as `--registered` checks it
+(`FailClosed.ScopeZR`: `Flock.ProvedScope.check` with the registered reads), at the registration the outcome records. -/
 def VerifiesV {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     {dg : ByteArray → ByteArray} {N : ℕ} (o : Reg₂ × VRec Vs Reg' dg N) : Prop :=
-  AcceptsV zs o ∧ ∀ j, FailClosed.ScopeZ (zs o.1 j).I
+  AcceptsV zs o ∧ ∀ j, FailClosed.ScopeZR (zs o.1 j).I
 
 /-- **The verifier of record accepts every one of V*'s sessions as the prover supplies them** (`VerifiesV` at
-`ZkOuterR`): each session's proof (`AcceptsVR`) and its statement's form (`FailClosed.ScopeZ`), at the registration the
-outcome records. -/
+`ZkOuterR`): each session's proof (`AcceptsVR`) and its statement's form (`FailClosed.ScopeZR`), at the registration
+the outcome records. -/
 def VerifiesVR {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
     {dg : ByteArray → ByteArray} {N : ℕ} (o : Reg₂ × VRec Vs Reg' dg N) : Prop :=
-  AcceptsVR zr o ∧ ∀ j, FailClosed.ScopeZ (zr o.1 j).I
+  AcceptsVR zr o ∧ ∀ j, FailClosed.ScopeZR (zr o.1 j).I
 
 /-- **C-Flock's compiled inner protocol as the executable runs it**: `flockInnerCL` at the executable's arithmetic
 (`execArith`) and its hm96-sha512 Merkle scheme (`Refine.enc512`, `Refine.leaf512` under `Refine.H512`), on the class

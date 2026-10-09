@@ -12,8 +12,9 @@ as the prover supplies them (`ZkOuterR`), and no check the verifier of record ma
 * `VStmt.Loads Q I`: the inputs load `Q`: their circuit is `Q`'s (`circZ I = Q.c`) and their registered population has
   `Q`'s `nv` units (`(pubZ I).n = Q.nv`). If V*'s statements fix only their unit, by name, and what the VBridge reads,
   this definition is what changes.
-* `loads_of_verifies` (open): a session the verifier of record accepts, at inputs that pass the statement check, loads
-  V*'s statement. The verifier's check that a session's circuit and population are V*'s is to prove it.
+* `loads_of_verifies` (open): a session the verifier of record accepts, at inputs that pass the statement check
+  `--registered` runs (`ScopeZR`), loads V*'s statement. The verifier's check that a session's circuit and population
+  are V*'s is to prove it.
 * `typable_of_accepts`: such a session types (`ZkOuterR.Typable`): `Loads` gives its circuit and population, and the
   record's draw sets it up (`setupZ_of_verifiesZK`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
@@ -41,7 +42,7 @@ statement.** The one place `VStmt.Loads` enters the recursive audit's proof. No 
 statement yet, so this is a named gap and not a theorem of the executable; the verifier's check that a session's circuit
 and population are V*'s statement's is to prove it. -/
 theorem loads_of_verifies {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
-    (_hacc : AcceptsZKR x.I x.own t) (_hck : ScopeZ x.I) : Q.Loads x.I := by
+    (_hacc : AcceptsZKR x.I x.own t) (_hck : ScopeZR x.I) : Q.Loads x.I := by
   sorry
 
 /-- **A session the verifier of record accepts types**, where its inputs pass the statement check: they load V*'s
@@ -49,16 +50,17 @@ statement (`loads_of_verifies`), and the record carries the draw (custody), at w
 (`setupZ_of_verifiesZK`). -/
 theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hRec : RecordsLiveZK x.I x.dj x.wr)
     (ω : Q.law.live.Ω) (R : Reg') (o : LiveOut Q.mPts)
-    (hacc : AcceptsZKR x.I x.own (x.wr (Q.law.live.draw ω) R o)) (hck : ScopeZ x.I) : x.Typable := by
+    (hacc : AcceptsZKR x.I x.own (x.wr (Q.law.live.draw ω) R o)) (hck : ScopeZR x.I) : x.Typable := by
   have hL := loads_of_verifies x _ hacc hck
   have hacc' := acceptsZK_of_R hacc
-  exact ⟨hck, hL.1, hL.2, _, setupZ_of_verifiesZK x.I x.hTags.1 x.hTags.2.2.2 x.dj ⟨hacc', hck⟩
+  have hck' := hck.scopeZ x.hTags.1
+  exact ⟨hck', hL.1, hL.2, _, setupZ_of_verifiesZK x.I x.hTags.1 x.hTags.2.2.2 x.dj ⟨hacc', hck'⟩
     (hRec _ R o hacc').1 (x.hDraw ω)⟩
 
 /-- **A session that never types accepts nowhere** where its inputs pass the statement check: an acceptance would type
 it (`typable_of_accepts`). -/
 theorem prob_game_untypable {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hRec : RecordsLiveZK x.I x.dj x.wr)
-    (hx : ¬ x.Typable) (hck : ScopeZ x.I) (dg : ByteArray → ByteArray) (N : ℕ) (τ : Strategy (x.game dg N)) :
+    (hx : ¬ x.Typable) (hck : ScopeZR x.I) (dg : ByteArray → ByteArray) (N : ℕ) (τ : Strategy (x.game dg N)) :
     prob (LiveAcceptsZKR x.I x.own) (x.game dg N) τ = 0 :=
   le_antisymm ((prob_auditLive_liveOf_mono dg N x.wr τ (p := LiveAcceptsZKR x.I x.own) (q := fun _ => False)
     fun ω o' h => hx (typable_of_accepts x hRec ω τ.1 o' h hck)).trans (prob_false _ _).le) (zero_le ..)
@@ -69,9 +71,9 @@ each of the prover's names for `j₀` (`prob_seqC_exists_le`). -/
 theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     (zr : (j : Fin S) → (Vs j).OuterR Reg') (hRec : ∀ j, RecordsLiveZK (zr j).I (zr j).dj (zr j).wr) (j₀ : Fin S)
     (hx : ¬ (zr j₀).Typable) (p : VRec Vs Reg' dg N → Prop)
-    (hp : ∀ b, p b → AcceptsR zr b ∧ ∀ j, ScopeZ (zr j).I) (s : Strategy (sessionsR zr dg N)) :
+    (hp : ∀ b, p b → AcceptsR zr b ∧ ∀ j, ScopeZR (zr j).I) (s : Strategy (sessionsR zr dg N)) :
     prob p (sessionsR zr dg N) s = 0 := by
-  by_cases hck : ScopeZ (zr j₀).I
+  by_cases hck : ScopeZR (zr j₀).I
   · refine le_antisymm (((prob_mono (q := fun b : VRec Vs Reg' dg N =>
         ∃ j, j = j₀ ∧ LiveAcceptsZKR (zr j).I (zr j).own (b j).2) (fun b hb => ⟨j₀, rfl, (hp b hb).1 j₀⟩) _ _).trans
       (prob_seqC_exists_le S _ _ (fun j r => j = j₀ ∧ LiveAcceptsZKR (zr j).I (zr j).own r.2)
@@ -96,7 +98,7 @@ theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg :
     (hRec : ∀ R ω t R₂ j, RecordsLiveZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (zr R ω t R₂ j).wr) (h : Typed zr)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerVR (zr R ω t) dg N))
     (p q : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Prop)
-    (hp : ∀ o, p o → AcceptsVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ∀ j, ScopeZ (zr o.1 o.2.1 o.2.2.1 o.2.2.2.1 j).I)
+    (hp : ∀ o, p o → AcceptsVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ∀ j, ScopeZR (zr o.1 o.2.1 o.2.2.1 o.2.2.2.1 j).I)
     (hq : ∀ o, (∀ j, (zr o.1 o.2.1 o.2.2.1 o.2.2.2.1 j).Typable) → p o → q o) :
     prob p (recGame L Reg I Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
       prob q (recGame L Reg I Cm fun R ω t => outerV (zsOf zr hRec h R ω t) dg N) (recT zr hRec h σ) := by
@@ -117,8 +119,8 @@ theorem verifies_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} {dg
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg')
     (hRec : ∀ R ω t R₂ j, RecordsLiveZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (zr R ω t R₂ j).wr) (h : Typed zr)
     (R : A) (ω : B) (t : C) (o : D × VRec Vs Reg' dg N) (hall : ∀ j, (zr R ω t o.1 j).Typable)
-    (hacc : AcceptsVR (zr R ω t) o) (hck : ∀ j, ScopeZ (zr R ω t o.1 j).I) :
-    AcceptsV (zsOf zr hRec h R ω t) o ∧ ∀ j, ScopeZ (zsOf zr hRec h R ω t o.1 j).I := by
+    (hacc : AcceptsVR (zr R ω t) o) (hck : ∀ j, ScopeZR (zr R ω t o.1 j).I) :
+    AcceptsV (zsOf zr hRec h R ω t) o ∧ ∀ j, ScopeZR (zsOf zr hRec h R ω t o.1 j).I := by
   have hz : zsOf zr hRec h R ω t o.1 = fun j => (zr R ω t o.1 j).build (hall j) (hRec R ω t o.1 j) :=
     funext fun j => zsOf_pos zr hRec h R ω t o.1 j (hall j)
   unfold AcceptsV Accepts
