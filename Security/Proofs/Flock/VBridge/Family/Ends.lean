@@ -48,12 +48,12 @@ def ColKeyed (u : Fin nv) (col k : ℕ) (pa : Flock.Registered.Port) (pos : ℕ)
       (∃ pt ∈ zo.own, pt.name = c.ports[q].name) ∧ zo.rd.port (.inl (u, q)) = pa ∧ zo.rd.readAt (.inl (u, q)) = pos
 
 /-- **A keyed column is a registered bit of the registrant's row**: when the rows `own` names are registered reads at
-`u` and the registrant's rows at `pa` are `row`'s, the column is a registered bit, bit `k` of `row pos`. -/
-theorem regBit_of_colKeyed {u : Fin nv} {col k : ℕ} {pa : Flock.Registered.Port} {pos : ℕ}
+`u` and the registrant's rows at `pa` are `row`'s below bit `K`, the column is a registered bit, bit `k` of `row pos`. -/
+theorem regBit_of_colKeyed {u : Fin nv} {col k : ℕ} {pa : Flock.Registered.Port} {pos : ℕ} {K : ℕ} (hkK : k < K)
     (hread : ∀ q : Fin c.ports.size, (∃ pt ∈ zo.own, pt.name = c.ports[q].name) → zo.rd.isRead (.inl (u, q)))
     (row : ℕ → ℕ → Bool)
     (hval : ∀ q : Fin c.ports.size, zo.rd.isRead (.inl (u, q)) → zo.rd.port (.inl (u, q)) = pa →
-      ∀ (b : ℕ) (hb : b < Layout.portRowW c q),
+      ∀ b < K, ∀ (hb : b < Layout.portRowW c q),
         (Decode.regVal zo (.inl (u, q))).2
             ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
           row (zo.rd.readAt (.inl (u, q))) b)
@@ -61,7 +61,7 @@ theorem regBit_of_colKeyed {u : Fin nv} {col k : ℕ} {pa : Flock.Registered.Por
   obtain ⟨hc, q, hk, hkey, hown, hport, hat⟩ := h
   have hr := hread q hown
   refine ⟨hc, q, k, hk, hkey, hr, ?_⟩
-  rw [hval q hr hport k hk, hat]
+  rw [hval q hr hport k hkK hk, hat]
 
 end Keyed
 
@@ -86,17 +86,70 @@ namespace VStarFamily
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
 /-- **The registrant's rows at `rec-acc`'s root are `V`'s.** At every accepted outer proof, in every session, the
-registrant's row at a registered read at the root `pa` is the bytes of `V`'s row at the read's position
+registrant's row at a registered read at the root `pa`, on its first 256 bits (the two elements the openings and the
+algebra read), is the bytes of `V`'s row at the read's position
 (`rec_outer.Chain`: the rows the prover registers as `rec-acc`, `ACC_VALUE`, rec_outer.py:166-181). It says how the
 family takes `V` from the registration, as `RowsShared` says the sessions share one row per root and position. -/
 def AccRowsAre (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
-      (F.zs R ω t R₂ j).rd.port (.inl (u, q)) = pa R ω t R₂ → ∀ (b : ℕ) (hb : b < Layout.portRowW (F.Vs j).c q),
+      (F.zs R ω t R₂ j).rd.port (.inl (u, q)) = pa R ω t R₂ → ∀ b < 256, ∀ (hb : b < Layout.portRowW (F.Vs j).c q),
         (Decode.regVal (F.zs R ω t R₂ j) (.inl (u, q))).2
             ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
           bitL (MerkleScheme.rowBytes (V R ω t R₂ ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))).data.toList b
+
+/-- A registered read at the root `pa` and position `p`, in some session, whose row has bit `b`. -/
+def AccRead (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) (R : Reg) (ω : L.Ω)
+    (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p b : ℕ)
+    (s : Σ j : Fin F.stmts.size, Fin (F.Vs j).nv × Fin (F.Vs j).c.ports.size) : Prop :=
+  (F.zs R ω t R₂ s.1).rd.isRead (.inl (s.2.1, s.2.2)) ∧ (F.zs R ω t R₂ s.1).rd.port (.inl (s.2.1, s.2.2)) = pa R ω t R₂ ∧
+    (F.zs R ω t R₂ s.1).rd.readAt (.inl (s.2.1, s.2.2)) = p ∧ b < Layout.portRowW (F.Vs s.1).c s.2.2
+
+open Classical in
+/-- Bit `b` of the registrant's row at the root `pa` and position `p`: its bit at some registered read there
+(`AccRead`), `false` if there is none. -/
+noncomputable def accBit (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) (R : Reg) (ω : L.Ω)
+    (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p b : ℕ) : Bool :=
+  if h : ∃ s, F.AccRead pa R ω t R₂ p b s then
+    (Decode.regVal (F.zs R ω t R₂ (Classical.choose h).1)
+      (.inl ((Classical.choose h).2.1, (Classical.choose h).2.2))).2
+        ⟨b, lt_of_lt_of_le (Classical.choose_spec h).2.2.2 ((Finset.le_sup (Finset.mem_univ _)).trans (Nat.le_succ _))⟩
+  else false
+
+/-- **`rec-acc`'s rows as registered**: row `p`'s first two elements are the registrant's at the root `pa` and
+position `p` (`accBit`). -/
+noncomputable def accReg (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) (R : Reg) (ω : L.Ω)
+    (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p : ℕ) : Array F128 :=
+  #[ofBits fun e => F.accBit pa R ω t R₂ p e, ofBits fun e => F.accBit pa R ω t R₂ p (128 + e)]
+
+theorem bitL_accReg (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) (R : Reg) (ω : L.Ω)
+    (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) (p : ℕ) {b : ℕ} (hb : b < 256) :
+    bitL (MerkleScheme.rowBytes (F.accReg pa R ω t R₂ p)).data.toList b = F.accBit pa R ω t R₂ p b := by
+  have hl : (F.accReg pa R ω t R₂ p).toList =
+      [ofBits fun e => F.accBit pa R ω t R₂ p e, ofBits fun e => F.accBit pa R ω t R₂ p (128 + e)] := rfl
+  have hm : b % 128 < 128 := Nat.mod_lt _ (by norm_num)
+  rw [bitL_rowBytes, hl]
+  simp only [FlockVBridge.wbit]
+  rcases (show b / 128 = 0 ∨ b / 128 = 1 by omega) with h0 | h0
+  · simp only [h0, List.getD_cons_zero]
+    rw [bitOf_ofBits _ hm, show b % 128 = b by omega]
+  · simp only [h0, List.getD_cons_succ, List.getD_cons_zero]
+    rw [bitOf_ofBits _ hm, show 128 + b % 128 = b by omega]
+
+/-- **`AccRowsAre` at `rec-acc`'s rows as registered** (`accReg`), from one registrant row per registered root and
+position (`RowsShared`): every registered read at the root and position carries the bits of the one `accBit` reads. -/
+theorem accRowsAre_of_shared (hshared : F.RowsShared dg N k Rw)
+    (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) :
+    F.AccRowsAre dg N k Rw (F.accReg pa) pa := by
+  intro R ω t R₂ τ o h j u q hread hport b hb256 hb
+  rw [F.bitL_accReg pa R ω t R₂ _ hb256]
+  have hex : ∃ s, F.AccRead pa R ω t R₂ ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))) b s :=
+    ⟨⟨j, (u, q)⟩, hread, hport, rfl, hb⟩
+  unfold accBit
+  rw [dite_eq_left hex]
+  have hs := Classical.choose_spec hex
+  exact (hshared R ω t R₂ τ o h _ j _ u _ q hs.1 hread (hs.2.1.trans hport.symm) hs.2.2.1 b hs.2.2.2 hb).symm
 
 /-- **The algebra unit's end columns are keyed by `rec-acc`'s rows at the rep's ends.** At every accepted outer proof,
 bit `b` of `acc0 i` (`col0 r i b`) and of `acc1 i` (`col1 r i b`) at rep `r`'s algebra unit is bit `128 i + b` of a row
@@ -127,11 +180,11 @@ theorem hEnds_of_regs (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     (hreg : F.RowsRegistered dg N k Rw) (hacc : F.AccRowsAre dg N k Rw V pa)
     (hkeys : F.EndKeys dg N k Rw pa sA uA col0 col1) : F.HEnds dg N k Rw V :=
   F.hEnds_of dg N k Rw V sA uA col0 col1 hd0
-    (fun R ω t R₂ τ o h r i hi b hb => regBit_of_colKeyed _ (hreg R ω t R₂ τ o h (sA r) (uA r))
+    (fun R ω t R₂ τ o h r i hi b hb => regBit_of_colKeyed _ (K := 256) (by omega) (hreg R ω t R₂ τ o h (sA r) (uA r))
       (fun p b => bitL (MerkleScheme.rowBytes (V R ω t R₂ p)).data.toList b) (hacc R ω t R₂ τ o h (sA r) (uA r))
       (hkeys R ω t R₂ τ o h r i hi b hb).1)
     hd1
-    (fun R ω t R₂ τ o h r i hi b hb => regBit_of_colKeyed _ (hreg R ω t R₂ τ o h (sA r) (uA r))
+    (fun R ω t R₂ τ o h r i hi b hb => regBit_of_colKeyed _ (K := 256) (by omega) (hreg R ω t R₂ τ o h (sA r) (uA r))
       (fun p b => bitL (MerkleScheme.rowBytes (V R ω t R₂ p)).data.toList b) (hacc R ω t R₂ τ o h (sA r) (uA r))
       (hkeys R ω t R₂ τ o h r i hi b hb).2)
 
@@ -231,7 +284,7 @@ theorem hAccRows_of_keys (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (
     (base := accCol (levelLanes F.sh ℓ) (F.depth ℓ))
     (A := V R ω t R₂ (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j)) (fun b hb => ?_) (fun b hb hc => ?_) i hi,
     hout R ω t R₂ τ o h r ℓ hℓ j hj i hi⟩
-  · exact regBit_of_colKeyed _ (hreg R ω t R₂ τ o h _ _)
+  · exact regBit_of_colKeyed _ (K := 256) hb (hreg R ω t R₂ τ o h _ _)
       (fun p b => bitL (MerkleScheme.rowBytes (V R ω t R₂ p)).data.toList b) (hacc R ω t R₂ τ o h _ _)
       (hk R ω t R₂ τ o h r ℓ hℓ j hj b hb).1
   · obtain ⟨⟨hc', -⟩, hrd⟩ := hk R ω t R₂ τ o h r ℓ hℓ j hj b hb
