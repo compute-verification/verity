@@ -37,6 +37,14 @@ zeros), is refused ``FIREWALL-REFUSED`` before the coin server sees it. A refusa
 is a **stop**: the coin server's record says so (``end``: ``stop``, not why), and `serve` writes that record and counts the
 session.
 
+**Committed coins.** The challenger commits to every coin of the session before it starts (Goldreich–Kahan:
+`CoinServer.commit_coins`, from the schedule alone): one hm96-sha512 commitment a round, the link points as round 0 of stream
+``link``, each to `coin_message` under a fresh salt of the challenger's. The proxy holds those commitments
+(``commitments``) and refuses a session without them at ``Hello``; each coin answer comes with its round's salt, and coins
+that do not open their commitment, or come without an opening, stop the session (`Flock.Firewall.Contract`'s ``coins``
+rule, which decides the same under the public input's ``coins``). `serve` commits as each connection is accepted and writes
+the commitments and openings to ``coins.json``.
+
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
 top), a proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
@@ -87,6 +95,11 @@ RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_DRAW = range(1
 
 #: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
+#: `Flock.Firewall.Contract.COINS_TAG`: the coin message's tag
+COINS_TAG = b"verity/firewall-coins/v0\0"
+#: the stream name of the link points' coins (``Commit``'s answer), round 0, in the challenger's commitments and the transcript
+LINK_COINS = "link"
+COINS_KIND = "rec/inner-coins/v0"
 F_WORDS = 8
 MASK64 = (1 << 64) - 1
 
@@ -341,6 +354,21 @@ def commit_top(cap: bytes, salts: list[bytes]) -> list[bytes]:
     return commit_rows(top_rows(cap), salts)
 
 
+def coin_message(stream: str, k: int, coins: list[int]) -> bytes:
+    """What the challenger commits to for round ``k`` of ``stream``'s coins (`Flock.Firewall.Contract.coinMsg`): the tag,
+    the stream's UTF-8 bytes after their length, the round, the coin count (each 4 bytes big-endian), then each coin's 16
+    bytes (`f128_bytes`)."""
+    s = stream.encode()
+    return COINS_TAG + struct.pack(">I", len(s)) + s + struct.pack(">II", k, len(coins)) + b"".join(f128_bytes(c) for c in coins)
+
+
+def coin_commitment(stream: str, k: int, coins: list[int], salt: bytes) -> bytes:
+    """The challenger's commitment to a round's coins: hm96-sha512's ``b || c`` of SHA-512(`coin_message`) under ``salt``
+    (`Flock.Firewall.Contract.commitBC`, the commit items' commitment); ``salt`` is its opening."""
+    inst = hm96.SHA512
+    return inst.commit_string(inst.default_key, hashlib.sha512(coin_message(stream, k, coins)).digest(), salt)
+
+
 def refused(what: str) -> str:
     return f"FIREWALL-REFUSED: {what}"
 
@@ -454,11 +482,58 @@ class CoinServer:
         self.rounds: list[dict] = []
         #: how the session ended: "finish", or "stop" (a refusal, or a session that ended without Finish)
         self.end: str | None = None
+        #: the coins `commit_coins` drew before the session, by (stream, round), each with the salt that opens its commitment
+        self.committed: dict[tuple[str, int], tuple[list[int], bytes]] | None = None
+        #: `commit_coins`'s answer: the commitments in hex, per stream and round
+        self.commitments: dict[str, list[str]] | None = None
+        #: the opening sent with each round's coins, by (stream, round)
+        self.openings: dict[tuple[str, int], bytes] = {}
 
     def _coins(self, n: int) -> list[int]:
         b = self.rand(16 * n)
         return [int.from_bytes(b[16 * i:16 * i + 8], "little") | (int.from_bytes(b[16 * i + 8:16 * i + 16], "little") << 64)
                 for i in range(n)]
+
+    def commit_coins(self, schedule: dict, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict[str, list[str]]:
+        """Commit to every coin of the session before it starts (Goldreich–Kahan): draw the coins the pinned schedule needs,
+        the link points then each round's in the schedule's order (so ``rand`` is read as the rounds would read it), and
+        commit to each round's under a salt of its own (`coin_commitment`). Returns the commitments in hex, per stream and
+        round in order: the verifier's public input's ``coins`` (`firewall_transcript.public`). Each round's coins then go
+        out with their salt as the opening (``openings``), and a round whose coins were not committed is refused. A
+        schedule's round that is not its stream's next (no session reaches it: the firewall holds its i-th round to the
+        schedule's i-th) gets no commitment."""
+        if self.committed is not None or self.hello is not None:
+            raise ValueError("the challenger commits to its coins once, before Hello")
+        link = check_schedule(schedule)["hello"]["link"]
+        plan = [(LINK_COINS, 0, link["points"] * link["m"])] + [(r["stream"], r["k"], r["n"]) for r in schedule["rounds"]]
+        self.committed, out = {}, {}
+        for stream, k, n in plan:
+            if len(out.setdefault(stream, [])) != k:
+                continue
+            coins, salt = self._coins(n), fresh_salt()
+            self.committed[(stream, k)] = (coins, salt)
+            out[stream].append(coin_commitment(stream, k, coins, salt).hex())
+        self.commitments = out
+        return out
+
+    def commitment_record(self) -> dict:
+        """``coins.json``: the commitments `commit_coins` made (``coins``) and the opening sent with each round's coins
+        (``openings``, per stream in round order; a round the session never reached has none)."""
+        openings: dict[str, list[str]] = {}
+        for (s, _k), y in sorted(self.openings.items()):
+            openings.setdefault(s, []).append(y.hex())
+        return {"kind": COINS_KIND, "coins": self.commitments, "openings": openings}
+
+    def _draw(self, stream: str, k: int, n: int) -> list[int]:
+        """Round ``k`` of ``stream``'s ``n`` coins: the committed ones with their opening, or live ones if nothing was
+        committed."""
+        if self.committed is None:
+            return self._coins(n)
+        got = self.committed.get((stream, k))
+        if got is None or len(got[0]) != n or (stream, k) in self.openings:
+            raise ValueError(f"{stream} round {k}: {n} coins the challenger never committed to")
+        self.openings[(stream, k)] = got[1]
+        return list(got[0])
 
     def start(self, hello: dict) -> None:
         if self.hello is not None:
@@ -473,7 +548,7 @@ class CoinServer:
         if self.hello is None or self.link is not None:
             raise ValueError("the link points are drawn once, after Hello")
         spec = self.hello["link"]
-        pts = self._coins(spec["points"] * spec["m"])
+        pts = self._draw(LINK_COINS, 0, spec["points"] * spec["m"])
         self.link = {"roots": {t: [b.hex() for b in bcs] for t, bcs in sorted(roots.items())}, "points": [f128_hex(c) for c in pts],
                      "y": None}
         return pts
@@ -496,7 +571,7 @@ class CoinServer:
         st = self.streams.get(stream)
         if st is None:
             raise ValueError(f"a round on stream {stream}, never opened")
-        coins = self._coins(n)
+        coins = self._draw(stream, st["rounds"], n)
         self.rounds.append({"stream": stream, "k": st["rounds"], "tops": [[b.hex() for b in t] for t in tops], "level0": level0,
                             "commits": [c.hex() for c in commits], "n": n, "coins": [f128_hex(c) for c in coins]})
         st["rounds"] += 1
@@ -526,12 +601,16 @@ def _opening(cap: bytes, salts: list[bytes]) -> dict:
 class Proxy:
     """The live server's part on the prover's side: answers the unmodified prover, takes every coin from ``coins`` (shown only
     the schedule and salted hashes), holds the session to ``schedule`` (`check_schedule`), and keeps what the session record
-    and V*'s witness need."""
+    and V*'s witness need. ``commitments`` are the challenger's commitments to its coins (`CoinServer.commit_coins`), held
+    before the session starts: every coin answer must come with the salt that opens its round's commitment, and without
+    them the session is refused at Hello, before anything reaches the coin server (`Flock.Firewall.Contract`'s rule)."""
 
-    def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict):
+    def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,
+                 commitments: dict[str, list[str]] | None = None):
         self.coins = coins
         self.fresh_salt = fresh_salt
         self.schedule = check_schedule(schedule)
+        self.commitments = commitments
         self.hello: str | None = None
         self.hello_v: dict | None = None
         self.commit: tuple | None = None
@@ -552,6 +631,17 @@ class Proxy:
     def _pinned(self, what: str, got, want) -> None:
         if canonical(got) != canonical(want):
             raise ValueError(refused(f"{what}: {canonical(got)} where the pinned schedule has {canonical(want)}"))
+
+    def _opened(self, stream: str, k: int, coins: list[int]) -> None:
+        """Round ``k`` of ``stream``'s coins open the challenger's commitment to them under the salt sent with them."""
+        cs = self.commitments.get(stream, [])
+        y = self.coins.openings.get((stream, k))
+        if k >= len(cs):
+            raise ValueError(refused(f"{stream} round {k}: coins the challenger never committed to"))
+        if y is None:
+            raise ValueError(refused(f"{stream} round {k}: coins without the opening of the challenger's commitment"))
+        if len(y) != hm96.SHA512.salt_bytes or coin_commitment(stream, k, coins, y).hex() != cs[k]:
+            raise ValueError(refused(f"{stream} round {k}: coins that do not open the challenger's commitment"))
 
     def stop(self, why: str) -> None:
         """The session stops (its first reason is kept), and the coin server's record says so (``end``: ``stop``)."""
@@ -585,6 +675,8 @@ class Proxy:
         if t == REQ_HELLO:
             if self.hello is not None:
                 raise ValueError("a second Hello")
+            if self.commitments is None:
+                raise ValueError(refused("the schedule needs the challenger's coins, and it committed to none"))
             v = json.loads(r[1])
             if not isinstance(v, dict) or not isinstance(v.get("link"), dict) or not isinstance(v["link"].get("sigma"), str):
                 raise ValueError(refused("Hello: not an object whose link names Σ"))
@@ -612,6 +704,7 @@ class Proxy:
             for t, cap in roots:
                 bcs[t], self.roots[t] = self._salted(cap)
             pts = self.coins.commit(bcs)
+            self._opened(LINK_COINS, 0, pts)
             m = self.hello_v["link"]["m"]
             self.points = [pts[i:i + m] for i in range(0, len(pts), m)]
             return resp_coins(pts)
@@ -666,6 +759,7 @@ class Proxy:
             st["rounds"].append({"content": content, "n": n, "coins": coins})
             self.private.append({"stream": stream, "k": k, "tops": [o for _, o in tops], "elements": [f128_hex(v) for v in s.free],
                                  "rows": rows, "salts": [x.hex() for x in salts], "nonces": [x.hex() for x in s.nonces]})
+            self._opened(stream, k, coins)
             return resp_coins(coins)
         if t == REQ_PROOF:
             _, table, rep, b = r
@@ -711,7 +805,8 @@ class Proxy:
                 "proof_sha512": [{"stream": f"{t}/rep{r}", "bytes": len(b), "sha512": _dg(b)} for (t, r), b in sorted(self.proofs.items())]}
 
     def write(self, out: Path) -> Path:
-        """The session directory (``session.json``, ``<table>.rep<r>.bin``), ``public.json`` and ``private.json``."""
+        """The session directory (``session.json``, ``<table>.rep<r>.bin``), ``public.json``, ``private.json`` and the
+        challenger's commitments and openings, ``coins.json``."""
         out = Path(out)
         sess = out / "session"
         sess.mkdir(parents=True, exist_ok=True)
@@ -719,6 +814,7 @@ class Proxy:
         for (t, r), b in self.proofs.items():
             (sess / f"{t}.rep{r}.bin").write_bytes(b)
         (out / "public.json").write_text(json.dumps(self.coins.record(), indent=1))
+        (out / "coins.json").write_text(json.dumps(self.coins.commitment_record(), indent=1))
         (out / "private.json").write_text(json.dumps({"kind": KIND + "/private", "tops": TOPS, "roots": self.roots, "rounds": self.private}))
         return sess
 
@@ -731,8 +827,9 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
     (`Proxy.write`); one that stops (a refusal, or a connection that ends without ``Finish``: closed, reset, or cut inside a
-    frame) has only the coin server's record, ``public.json``, and counts as one of the ``sessions``. ``ready`` is called
-    with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
+    frame) has only the coin server's record, ``public.json``, and the challenger's ``coins.json``, and counts as one of the
+    ``sessions``. The challenger commits to each session's coins (`CoinServer.commit_coins`) as its connection is
+    accepted. ``ready`` is called with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
     ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
     algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
@@ -772,7 +869,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 except BaseException:
                     conn.close()
                     raise
-            proxy = Proxy(CoinServer(rand), schedule=schedule)
+            coins = CoinServer(rand)
+            proxy = Proxy(coins, schedule=schedule, commitments=coins.commit_coins(schedule))
             try:
                 with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
                     while (req := read_frame(rf)) is not None:
@@ -791,6 +889,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             if proxy.stopped is not None:
                 d.mkdir(parents=True, exist_ok=True)
                 (d / "public.json").write_text(json.dumps(proxy.coins.record(), indent=1))
+                (d / "coins.json").write_text(json.dumps(coins.commitment_record(), indent=1))
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
                 if firewall is not None:
                     firewall.stop(sid, "inner", proxy.stopped)
