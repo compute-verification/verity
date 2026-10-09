@@ -30,7 +30,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 |---|---|---|---|
 | `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, `δ_tree`, and the registered reads' `δ_reg`, and, in `CROnly`, the link finders stopped at `q` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
-| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline) |
+| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline); for zero knowledge, the commitments' salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message; under `--zk`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
 | `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its draw file the one `flock-verify draw` printed for the verifier's own draw (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each draw of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
@@ -92,8 +92,8 @@ sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant 
 - **Why it is plausible:** `assumption-notes/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
-**A3. The verifier's operating-system randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
-unit draw.
+**A3. The operating system's randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
+verifier's unit draw and, for zero knowledge, the commitments' salts.
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
@@ -111,6 +111,16 @@ unit draw.
   bytes `L` the model reads. The live verifier reads as many as its reruns need, and its acceptance probability is the
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption.
+- **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
+  from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads), and the
+  recursive audit's firewall and a registrant read theirs the same way (`os.urandom`). A3 is that those reads, too, are
+  independent uniform bytes. Zero knowledge's hiding theorems are stated at uniform salts; `Discharge/ZkView/OsSalts.lean`
+  reads 192 bytes as one salt, one for one (`saltEquiv`; `leaf_os`: the executable's leaf at those bytes is the model's),
+  and takes them to the OS's salts: `hm96Hiding_os` and `hm96Sha512_os` (one leaf), `ideal_leaves_swap_os` (T1 for `n`
+  leaves), `hides_os` and `hides_leaves_os` (a registration's `PrivateCircuit.Hides`), and, for the recursive audit,
+  `Flock.SecurityProofs.recursiveZK_os` (`Recursive/OsSalts.lean`). So no premise on a stream generator is left on the
+  salts. The masks and the Reed–Solomon padding are still a ChaCha20 expansion of an OS seed (`ProverRng`), which the
+  zero-knowledge theorems draw uniformly; that step is a PRG's, not A3's, and no `Prop` states it.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
@@ -123,7 +133,8 @@ coins.
   hypothesis about, as A3 is about the unit draw's byte source. Stating it as a `Prop` would need the session played on
   a byte source, which the model doesn't have.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
-  coins from `/dev/urandom` when it has no seed. A3 is about Lean's `IO.getRandomBytes`, so it doesn't cover these bytes.
+  coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit draw's and the
+  salts'), so it doesn't cover these bytes, which the model's coin nodes draw.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
@@ -263,6 +274,12 @@ hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, b
 M1's padding constant (`ZK.padNonvanishing40`: `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x` is neither), so zero knowledge
 takes only `hash-derived-key` for the pinned key. `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's
 `ZkView.My` and `ZkView.saltHash` (`Composed.zk_session_composed`).
+Salted SHA-512's hiding is statistical, not computational: `hm96Hiding_gap` reads nothing of SHA-512, and the leftover
+hash lemma only that `c(y) = SHA-512(sp ‖ y)` takes at most `2^512` values, so no reduction to a property of SHA-512 is
+needed, and `cr/sha-512` enters binding, not hiding. The salts' uniformity is A3's (A3, the salts). `hash-derived-key`
+is the common-reference-string step for one public constant, which no reduction can take to a property of SHA-512 (there
+is no secret and no adversary); bounds stated at the gap itself take no premise (`CROnly.hm96Hiding_gap`,
+`Flock.SecurityProofs.recursiveZK_gap`).
 Zero knowledge's coverage (closed by the refusal): `Composed.zk_session_view` holds at every coin vector the honest
 prover doesn't refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank
 `128·k`, `ρ₀, ρ₁` independent over F128, and no zerocheck outer coin `1`; the verifier also checks `β` and `ρ`), and
