@@ -19,13 +19,11 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`)
   population (`RecordCustody`'s `DrawFileZK`), which is V*'s units once the session loads V*'s statement
   (`VStmt.tiles_of_loads`, `VStmt.pop_eq_nv`, `VStmt.exec_execStrata`), and it does (`loads_of_verifies`, open: gap 8);
 * the read commit strings opening the root at an outcome whose sessions all verify (`Recursion.zk_reads_open`, at the
-  reads `readsZ`/`rowZ`/`opZ` read off the outcome);
-* the fifth disjunct from `_hx`'s second case: two runs at one registration and draw that read different strings at a
-  row, whose openings collide.
+  reads `readsZ`/`rowZ`/`opZ` read off the outcome).
 
 Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the run's hidden
-statement being the read strings' unless two runs read one row differently (`_hx`), the law's field `L.nonempty`, and
-in (ii) V*'s sessions' zero knowledge (`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
+statement being the read strings' (`_hx`), the law's field `L.nonempty`, and in (ii) V*'s sessions' zero knowledge
+(`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
 Open in the proof: that each accepted session loads V*'s statement (`loads_of_verifies`), until the verifier checks it.
 -/
 
@@ -77,15 +75,15 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
     k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hacc : AcceptsStmt st
   swap
-  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (((prob_mono_outcome _ σ fun o _ h => absurd h.1 hacc).trans
-      (prob_false _ σ).le).trans (zero_le ..))))))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (((prob_mono_outcome _ σ fun o _ h => absurd h.1 hacc).trans
+      (prob_false _ σ).le).trans (zero_le ..)))))
   have hin := compiledForkSound_execClassAt T CT (classOk_of_accepts hacc)
   by_cases hv : ∃ o, FlockSoundness.Game.Outcome (recGame L Reg (Flock.Guarantees.innerAt T CT st) Cm
       fun R ω t => outerV (Flock.Guarantees.custodied zs₀ hCust R ω t) dg N) σ o ∧
       Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zs₀ hCust o.1 o.2.1 o.2.2.1) o.2.2.2
   swap
-  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (((prob_mono_outcome _ σ fun o hro h =>
-      absurd ⟨o, hro, h.2.1⟩ hv).trans (prob_false _ σ).le).trans (zero_le ..))))))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (((prob_mono_outcome _ σ fun o hro h =>
+      absurd ⟨o, hro, h.2.1⟩ hv).trans (prob_false _ σ).le).trans (zero_le ..)))))
   obtain ⟨ov, -, hvv⟩ := hv
   have hS : ∀ j, Law.ExecStrata (execStmts Vs j).law.σs (execStmts Vs j).law.ks (execStmts Vs j).law.St := fun j =>
     (Vs j).exec_execStrata (VStmt.tiles_of_loads
@@ -107,17 +105,15 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
           FlockSoundness.Binding.Collides ((Flock.Guarantees.regBcCommit i).ext
             (opZ (Flock.Guarantees.custodied zs₀ hCust) rt o i) (op₀ i))
     · exact Or.inr (Or.inr (Or.inr (Or.inl hc)))
-    · refine Or.inr (Or.inr (Or.inr (Or.inr (or_iff_not_imp_left.2 fun hc' =>
-        le_trans (prob_mono_outcome _ σ fun o hro h => ⟨h.2.1.1, fun hh => ?_⟩) hb))))
+    · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_mono_outcome _ σ fun o hro h => ⟨h.2.1.1, fun hh => ?_⟩)
+        hb))))
       have hagree : ∀ i, readsZ (Flock.Guarantees.custodied zs₀ hCust) rt o i →
           p i = rowZ (Flock.Guarantees.custodied zs₀ hCust) rt o i := fun i hi => by
         by_contra hne
         exact hc ⟨o, hro, h.2.1, i, hi, fun he => hne he.symm,
           regBcCommit_binding i rt _ (p i) _ (op₀ i)
             (zk_reads_open (Flock.Guarantees.custodied zs₀ hCust) rt o h.2.1 i hi) (hreg i) fun he => hne he.symm⟩
-      rcases hx o hro h.2.1 p hagree with he | ⟨o', hro', h1, h2, hv', i, hi, hi', hne, hcol⟩
-      · rw [he] at hh
-        exact h.2.2 hh
-      · exact hc' ⟨o, o', hro, hro', h1, h2, h.2.1, hv', i, hi, hi', hne, hcol⟩
+      rw [hx o h.2.1 p hagree] at hh
+      exact h.2.2 hh
 
 end Flock.SecurityProofs
