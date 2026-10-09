@@ -51,6 +51,8 @@ end FlockSoundness.Game
 
 namespace FlockSoundness.StrictCR
 
+open Game
+
 variable {D β : Type} (H : List UInt8 → D)
 
 /-- **A run of `g` against `s` finds a collision of `H`**: some outcome `s` reaches outputs, by `out`, two different
