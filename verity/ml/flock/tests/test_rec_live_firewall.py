@@ -27,8 +27,10 @@ def _schedule(streams=("circuit/rep0",)):
                                                     {"stream": s, "k": 1, "n": 1, "tops": [], "level0": 0, "commits": 1})]}
 
 
-def _proxy(schedule):
-    return RL.Proxy(RL.CoinServer(T._counter_rand()), T._salts(), schedule=schedule)
+def _proxy(schedule, coins=None):
+    """A proxy held to ``schedule``, whose challenger committed to the session's coins before it started."""
+    coins = coins or RL.CoinServer(T._counter_rand())
+    return RL.Proxy(coins, T._salts(), schedule=schedule, commitments=coins.commit_coins(schedule))
 
 
 def _run(proxy, hello=None, y=bytes(32), opens=("circuit/rep0",), streams=("circuit/rep0",)):
@@ -134,7 +136,7 @@ def _coin_calls(reqs, schedule):
     for name in ("start", "commit", "y", "open", "round", "record"):
         f = getattr(coins, name)
         setattr(coins, name, lambda *a, _f=f, _n=name, **kw: (calls.append((_n, a, kw)), _f(*a, **kw))[1])
-    proxy = RL.Proxy(coins, T._salts(), schedule=schedule)
+    proxy = RL.Proxy(coins, T._salts(), schedule=schedule, commitments=coins.commit_coins(schedule))
     for r in reqs:
         proxy.handle(r)
     return calls
@@ -284,7 +286,7 @@ def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(t
         def round(self, *a, **kw):
             raise KeyError("no such coin")
 
-    proxy = RL.Proxy(Broken(T._counter_rand()), T._salts(), schedule=_schedule())
+    proxy = _proxy(_schedule(), Broken(T._counter_rand()))
     why = _refusal(_run(proxy))
     assert why == "rec proxy: FIREWALL-REFUSED: a request the firewall cannot read (KeyError: 'no such coin')"
     assert proxy.coins.record()["end"] == "stop"

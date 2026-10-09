@@ -1236,7 +1236,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     the structure;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
-    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 128 `sha512x3`
+    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
     slots and 16 residuals it fits, and refuses unless the parts hold every residual once; part `j` must exist;
   - part `j`'s S is the whole S's residuals and the operands their products read, each term renumbered into the part's
     `w` (its row ports' elements, in order) and `v` (the elements it reads, ascending); a term outside them, or a
@@ -1544,7 +1544,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    leaves`);
 4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`;
 5. no public input ports: `public input ports (--public-inputs)`;
-6. no shared-row public file: `a shared-row public file (header shared_rows)`;
+6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
+   own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
+   table row): `a shared-row public file (header shared_rows)`;
 7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
    outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
@@ -1563,10 +1565,15 @@ claim for the draw of every unit would cover it; none is proved.
 
 The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
-the one theorem: at every statement, with or without `--zk`, it states the headline of the statement's case (public or
-hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several). The live server refuses the same
-statements with the same reason (`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is
-the refusal, and `without_refusal` keeps the session's verdict otherwise.
+the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
+statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
+`--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, whose
+rows read no `pub.tables = none` and so cover rule 6's shared-row exception), and elsewhere `--registered F` accepts no
+more than the verifier does without it. The live server refuses the same statements with the same reason
+(`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is the refusal, and
+`without_refusal` keeps the session's verdict otherwise. Its rule 6 reads the registered reads off the public header
+(`registered`): the Lean verifier holds `--registered F` exactly when the header names them, refusing either without the
+other at setup.
 `flock-firewall` is a separate executable that accepts no proof, and an accept from `contract` means what
 `Contract.holds_*` states, outside `flock_verify_sound`.
 
