@@ -272,14 +272,16 @@ prove. Zero knowledge's two (`Hm96Hiding`, `PadNonvanishing`) are in `Assumption
 `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
 hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), and `PadNonvanishing` is proved at
 M1's padding constant (`ZK.padNonvanishing40`: `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x` is neither). So zero knowledge's
-guarantees (`Flock.Guarantees.ZeroKnowledgeHidden`, `Flock.Guarantees.RecursiveZK`, and `FailClosed.flock_verify_sound`'s
-views `ViewZ`, `ViewZHJ` and `ViewZHJR`) take no premise on the key: they are stated at the hiding gap of hm96-sha512's
-pinned key `K*`, `hidingGap My saltHash`. Nothing proves that gap small for `K*`: it is below `2^-193` for all but
-`2^-64` of keys (`CROnly.hm96_sha512_tail`), and that `K*` is not one of the others is unproved.
+guarantees (`Flock.Guarantees.ZeroKnowledgeHidden`, `Flock.Guarantees.RecursiveZK`, the recursive audit's circuit privacy
+`RecursiveCircuitPrivate`, `RecursiveCircuitIndist` and `RecursiveCircuitPrivateLeaves`, and
+`FailClosed.flock_verify_sound`'s views `ViewZ`, `ViewZHJ` and `ViewZHJR`) take no premise on the key: they are stated at
+the hiding gap of hm96-sha512's pinned key `K*`, `hidingGap My saltHash`. Nothing proves that gap small for `K*`: it is
+below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and that `K*` is not one of the others is
+unproved.
 `hash-derived-key` is `Assumptions.HashDerivedKey`: `Hm96Hiding` at `2^-193`, instantiated at hm96-sha512's `ZkView.My`
 and `ZkView.saltHash`. The lemmas that state `2^-193` still take it (`Composed.zk_session_composed`,
-`ZkHidden.zk_session_composedHJ`), and so do the recursive audit's circuit-privacy statements (`RecursiveAudit`,
-`RecursiveCircuitPrivate`, `RecursiveCircuitIndist`, `RecursiveCircuitPrivateLeaves`).
+`ZkHidden.zk_session_composedHJ`), and so does the recursive audit's property (`RecursiveAudit`, whose (ii) is
+`recursiveCircuitPrivateLeaves_le` at `2^-193`).
 Salted SHA-512's hiding is statistical, not computational: `hm96Hiding_gap` reads nothing of SHA-512, and the leftover
 hash lemma only that `c(y) = SHA-512(sp ‖ y)` takes at most `2^512` values, so no reduction to a property of SHA-512 is
 needed, and `cr/sha-512` enters binding, not hiding. The salts' uniformity is A3's (A3, the salts). `hash-derived-key`
@@ -495,7 +497,7 @@ The `cr/sha-512` restatements are pinned beside them (`FlockSoundness.CROnly`: `
 discharged (`session_shvzk_gap`, `session_shvzk_le`, `adaptive_prefinal_gap`, `adaptive_prefinal_le`,
 `adaptive_prefinal_key`, `adaptive_prefinal_hm96_sha512`). What zero knowledge's guarantees leave open about the key is
 that the pinned key's gap is small: they are stated at it, and `hash-derived-key` (`hm96/PROTOCOL.md` §2a) bounds it by
-`2^-193` only where a lemma or the recursive audit's privacy states that bound.
+`2^-193` only where a lemma or `RecursiveAudit` states that bound.
 Zero knowledge's Theorem GK is pinned (`ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
 `Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
 `Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and
