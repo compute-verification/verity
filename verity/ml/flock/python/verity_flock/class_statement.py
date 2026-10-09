@@ -1528,7 +1528,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         program = PU._program(a)
     units = PU.partition_units(program, a.partition)
     classes = units.classes()
-    key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": program_digest(program)[:32], "seed": a.seed})
+    key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": program_digest(program), "seed": a.seed})
     salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

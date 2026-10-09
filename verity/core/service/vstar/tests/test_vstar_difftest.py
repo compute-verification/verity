@@ -202,6 +202,15 @@ def statements(v) -> list:
                   for j, p in enumerate(ps)]
 
 
+def verifier_parts(v) -> dict:
+    """Every algebra statement's unit is the Lean verifier's own `rec-residuals/…` net, and it refuses the part past the
+    last."""
+    sh = _shape(v)
+    ps = _algebra(lambda sh: RR.parts(RR.spec(sh)), sh)
+    return {"parts": [{"name": f"rec-residuals/m{sh.m}-k{sh.k_log}-c{sh.claims}-p{j}", "equal": True} for j in range(len(ps))],
+            "past_refused": True}
+
+
 def _lowering(low: IL.Lowering) -> dict:
     return {"sha256": low.sha256, "bytes": len(low.text.encode()), "rows": low.layout.useful}
 
@@ -452,6 +461,17 @@ def test_statements_agree(server):
     assert D.replay(p, {"m": 35, "k_log": 32, "claims": 15}, server)[0] == "reject"
     stats = D.run(p, examples=32, seed=SEED, server=server)
     assert stats.outputs >= 8 and stats.rejects >= 4, stats
+
+
+@pytest.mark.slow
+def test_the_verifiers_part_nets_are_vstars_units(server):
+    """The Lean verifier refuses a `rec-residuals/…` unit unless it is the verifier's own net for that part
+    (`Flock.RecResiduals`, PROTOCOL.md §16.10), which it computes from the shape alone; V*'s units must be those nets, or
+    the verifier refuses honest recursive sessions. At a shape of one part and one of two (about two minutes: each unit's
+    net, built twice, is a few million rows); no cheaper test builds the real parts' nets on both sides."""
+    p = port("verifier_parts", verifier_parts, st.nothing())
+    for shape in ({"m": 22, "k_log": 6, "claims": 2}, {"m": 28, "k_log": 20, "claims": 4}):
+        assert D.replay(p, shape, server)[0] == "output", shape
 
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
