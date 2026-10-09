@@ -1,5 +1,5 @@
 """Staging `UniversalUnit_v1{G, N_IN, N_OUT}` as the recursion's inner statement at the size of a real private circuit
-(``88-rec-stage.sh``).
+(``90-rec-stage.sh``).
 
     python rec_stage.py measure --cls G,N_IN,N_OUT --n N --out DIR [--seed S] [--profile FILE]
         today's path (`rec_inner.universal`'s stage half: bind and trace, the partition's units and class, the lanes,
