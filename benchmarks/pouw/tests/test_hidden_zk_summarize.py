@@ -27,6 +27,8 @@ TILE_FORM = ("refused: rows that are neither all sha512/row/v1 rows of 16 · wor
              "unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of "
              "16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each: a "
              "statement form the soundness proof does not cover")
+#: a hiding tile's verdict when every check has passed: its session has no draw
+NO_DRAW = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 
 
 def _proved(d: Path, verdicts: dict[str, bool | str | None]) -> None:
@@ -65,6 +67,12 @@ def test_each_lean_check_is_held_to_its_verdict(tmp_path):
     s = _summary(tmp_path)
     assert {t: s["lean"][t]["pass"] for t in ("st-output_claim_false", "honest-own")} == {
         "st-output_claim_false": False, "honest-own": False}
+    # a hiding tile's rows are covered, and its loopback session, which has no draw, is refused at the next rule
+    _proved(d, {"honest-own": NO_DRAW, "st-honest": NO_DRAW, "st-output_claim_false": False})
+    s = _summary(tmp_path)
+    assert s["all_pass"] is True and s["lean"]["honest-own"]["verdict"] == "REFUSED"
+    _proved(d, {"st-output_claim_false": NO_DRAW})
+    assert _summary(tmp_path)["lean"]["st-output_claim_false"]["pass"] is False
     _proved(d, {"st-output_claim_false": None})
     s = _summary(tmp_path)
     assert s["all_pass"] is False and s["lean"]["st-output_claim_false"]["verdict"] is None

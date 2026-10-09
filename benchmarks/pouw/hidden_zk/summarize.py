@@ -3,9 +3,10 @@ leaves there: stage.json and the *.time files, the prover's LIVE lines, the self
 VERDICT lines, each Lean check judged against the verdict it must give, and the HZ_LEAN globs that picked the checks run.
 A row unit's checks pass `--public-inputs`, a form flock-verify refuses until its soundness proof covers it (T4): each is
 REFUSED, its anchor controls too (a refused statement is never accepted, so they say nothing of the anchors), and passes
-when not accepted, an honest check only with the refusal as its reason. A tile's rows (row-seg/v1, row/v2) are a form the
-proof does not cover either, refused once every check has passed: an honest tile check passes only with a form's refusal
-as its reason (REFUSED), and every other only when a check rejects it.
+when not accepted, an honest check only with the refusal as its reason. A tile is refused once every check has passed: a
+hiding tile's rows (row-seg/v1, row/v2) are covered, but its loopback session has no draw (D12), and a plain tile's output
+row holds two output ports, a form the proof does not cover. An honest tile check passes only with a refusal as its reason
+(REFUSED), and every other only when a check rejects it.
 Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `all_pass` and `lean_checks` are null."""
 import json
 import os
@@ -16,7 +17,7 @@ from pathlib import Path
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
 REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
-FORM = ": a statement form the soundness proof does not cover"
+REFUSED = "refused: "
 
 
 def load(p: Path):
@@ -87,7 +88,7 @@ def lean(d: Path, refused: bool) -> dict:
             got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why == REFUSAL else "REJECT"
             expect, ok = "REFUSED", got == "REFUSED" or (got == "REJECT" and not EXPECT.get(tag, False))
         else:
-            got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why.endswith(FORM) else "REJECT"
+            got = None if accepted is None else "ACCEPT" if accepted else "REFUSED" if why.startswith(REFUSED) else "REJECT"
             expect = "REFUSED" if EXPECT.get(tag, False) else "REJECT"
             ok = got == expect
         out[tag] = {"expect": expect, "verdict": got, "pass": ok,
