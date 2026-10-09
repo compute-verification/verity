@@ -154,6 +154,20 @@ simp with that.
   `Guarantees` module, prints as "lifted into G" on a plain `--update` when `G` unfolded once is `e` (the same type hash)
   and the theorem keeps its named assumptions as binders (tools/verity/lean/README.md, "A lift is not a change"). Daniel's DM
   still lists the changed record.
+- **One shape.** A property takes its inputs, one hypothesis that its function returned an outcome, and premises; the
+  rest is its conclusion. Each guarantee's entry under `shape.properties` in `lean-audit.json` names its `function` (a
+  constant or several) and that `outcome`: `accept` by default, `undecided` or `reject` where the property is about that
+  outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
+  acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
+  constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
+  and a conjunction as its conjuncts. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
+  with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
+  `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
+  `shape.conjectures` (open with a falsification test that runs, or falsified, with why); a property resting on one
+  lists it under `rests_on`, and a falsified one takes every property resting on it off the list. Every `def G : Prop` of a `Guarantees` module (or a module
+  under `shape.statements`) is the statement of a guarantee the lock lists, or is under `shape.frozen` until it is. Adding an entry is a claims change the
+  landing DM shows Daniel: rather restate the guarantee, or move what isn't a property (an iff's converse, an honest
+  case) to `Proofs/` as completeness.
 
 ## Before the PR
 
@@ -168,6 +182,17 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-08 (5:59 PM PDT): a named conjecture can be a premise, in a section of the list of its own, and a claim that
+  rests on one is listed as conditional, apart from the rest. Sort first: a statement that models how a specific device
+  computes, such as `TTOutPearlC` (falsified by what the hardware does, and dependent on G), is an assumption about the
+  world, scoped by device and checked by measurement. Only genuine math goes in the conjectures section, and a statement
+  that mixes the two is split into the device model and the math that remains. Each conjecture carries a falsification
+  test that runs, not only a status, and one about finite objects is decided by computation instead. Incompressibility
+  of fixed data is false in Lean, since a decompressor can hard-code the data (the trap collision resistance has), so it
+  is stated over random inputs or as a reduction. A claim resting on a falsified premise says nothing: `Gamma16384` and
+  `Gamma8192` come off the guarantee list, and `TTOutPearlCDevRev1OfGranted` is stated for G=0 only, each device setting
+  getting its own claim. Until the shape check unfolds `def G : Prop` bodies, no past "no assumptions" result of the
+  audit counts as checked.
 - 2026-10-08 (5:11 PM PDT): every property in `Properties/` has one shape: for every input, if the function it's about
   accepts, the conclusion holds, given premises from the list. Its only arguments are the input, the acceptance and
   those premises, so the check enforces the premises rule with no judgment call. A premise is an assumption about the

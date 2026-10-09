@@ -144,8 +144,8 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity-core-sampled-proofs",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier",
-              "verity-pouw-benchmarks")
+              "verity-pouw-check-difftest", "memory-challenger-lean", "benchmarks/pous",
+              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -1110,23 +1110,56 @@ def explain(s: Suite, now: dict, keys: list[str], hit: dict | None, per: "PerTes
     out = []
     held = next((c for c in map(cached, keys) if c), None)
     if held:
-        out.append(f"{s.name}: a pass under this key exists but no longer holds: what its tests read beside the key moved (a metadata "
-                   f"file they opened, or a distribution they imported outside their resolved dependencies)")
-    passes = []
+        out.append(f"{s.name}: a pass under this key exists but no longer holds: {HELD}")
+    near = nearest(kept_passes().get(s.name, []), now, s.path)
+    if near is None and not held:
+        out.append(f"{s.name}: missed; {NO_PASS}")
+    elif near is not None:
+        out.append(f"{s.name}: missed; the nearest pass kept here ({_since(near[0])}) differs in:")
+        out += [f"  {line}" for line in near[1]] or [f"  {SAME_KEY}"]
+    return out + (per.explain(lock, provided) if per else [])
+
+
+HELD = ("what its tests read beside the key moved (a metadata file they opened, or a distribution they imported outside their "
+        "resolved dependencies)")
+NO_PASS = "no pass of it kept here records its key's components (passes kept before `--explain` don't)"
+SAME_KEY = "nothing its key reads (a different pytest selection?)"
+
+
+def kept_passes() -> dict[str, list[dict]]:
+    """Every pass kept here that records its key's components (`components`), by suite name."""
+    out: dict[str, list[dict]] = {}
     for f in CACHE.glob("*.json") if CACHE.is_dir() else ():
         try:
             d = json.loads(f.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(d, dict) and d.get("suite") == s.name and "components" in d:
-            passes.append(d)
-    if not passes and not held:
-        out.append(f"{s.name}: missed; no pass of it kept here records its key's components (passes kept before `--explain` don't)")
-    elif passes:
-        best = min(passes, key=lambda d: (len(explain_changes(d["components"], now, s.path)), d.get("when", "")))
-        out.append(f"{s.name}: missed; the nearest pass kept here ({_since(best)}) differs in:")
-        out += [f"  {line}" for line in explain_changes(best["components"], now, s.path)] or ["  nothing its key reads (a different pytest selection?)"]
-    return out + (per.explain(lock, provided) if per else [])
+        if isinstance(d, dict) and isinstance(d.get("suite"), str) and "components" in d:
+            out.setdefault(d["suite"], []).append(d)
+    return out
+
+
+def nearest(passes: list[dict], now: dict, own: str) -> tuple[dict, list[str]] | None:
+    """The pass of ``passes`` whose components differ least from ``now``, with what differs (`explain_changes`)."""
+    if not passes:
+        return None
+    diffs = [(explain_changes(d["components"], now, own), d) for d in passes]
+    lines, best = min(diffs, key=lambda x: (len(x[0]), x[1].get("when", "")))
+    return best, lines
+
+
+def forced_by(s: Suite, now: dict, passes: list[dict], held: bool, fresh: bool) -> dict:
+    """What makes ``s`` run rather than reuse a pass, for `--json` and check's reuse report: the inputs of its key that differ
+    from the nearest pass kept here (``nearest``: that pass's run and commit), or why there is none to compare."""
+    if fresh:
+        return {"why": ["--fresh"]}
+    if held:
+        return {"why": [f"a pass under this key no longer holds: {HELD}"]}
+    near = nearest(passes, now, s.path)
+    if near is None:
+        return {"why": [NO_PASS]}
+    best, lines = near
+    return {"why": lines or [SAME_KEY], "nearest": {k: best.get(k) for k in ("run", "commit", "when")}}
 
 
 def _durations() -> dict[str, float]:
@@ -1478,6 +1511,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"failed  {s.name:28} {why} (log: {logs / 'lean-build.log'})")
                 results.append(Result(s, "failed", log=logs / "lean-build.log"))
         todo = [t for t in todo if t[0].name not in AFTER_LEAN]
+    here = kept_passes() if todo else {}
+    forced = {s: forced_by(s, components(s, ids_of[s], env, args, deps), here.get(s.name, []),
+                           any(map(cached, keys)), a.fresh) for s, _paths, keys, deps in todo}
     known = _durations()
     todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].name, float("inf"))))
     for r in results:
@@ -1518,6 +1554,8 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
+        if s in forced:
+            print(f"        ran because: {'; '.join(forced[s]['why'][:3])}" + (" ..." if len(forced[s]["why"]) > 3 else ""))
         if r.timed_out:
             print(f"        TIMED OUT: still running after {r.timed_out:g} s, so its process group was killed; a suite that needs "
                   f"longer declares [tool.verity.tests] timeout_s in {s.path}/pyproject.toml")
@@ -1601,7 +1639,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "outside": r.outside, "child_outside": r.child_outside, "unguarded": r.unguarded,
                                        "since": r.since, "reused": r.reused,
                                        "contradicts": r.contradicts, "nondeterministic": r.nondeterministic,
-                                       "timed_out": r.timed_out} for r in results]
+                                       "timed_out": r.timed_out, "forced_by": forced.get(r.suite)} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
     return 1 if failed or written else 0
 
