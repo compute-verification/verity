@@ -354,7 +354,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d: None)
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
@@ -363,11 +363,13 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         launched.clear()
 
 
-def test_record_sends_the_verdicts_it_gathers_unless_given_a_pack_or_no_cache(tmp_path, monkeypatch):
+def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_cache(tmp_path, monkeypatch):
+    """`--verdicts-in` adds to the gathered pack, never replaces it: a stale pack given once turned reuse off for every check
+    it rode with, because the gathered pack it replaced held the passes."""
     import subprocess
     import sys
 
-    real, launched = subprocess.run, []
+    real, launched, given_to = subprocess.run, [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
@@ -375,7 +377,8 @@ def test_record_sends_the_verdicts_it_gathers_unless_given_a_pack_or_no_cache(tm
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    def gathered(d: Path) -> Path:
+    def gathered(d: Path, given: Path | None = None) -> Path:
+        given_to.append(given)
         (d / "verdicts-gathered.tar.gz").write_bytes(b"")
         return d / "verdicts-gathered.tar.gz"
 
@@ -388,10 +391,16 @@ def test_record_sends_the_verdicts_it_gathers_unless_given_a_pack_or_no_cache(tm
     [cmd] = launched
     tail = cmd[cmd.index("--") + 1:]
     assert tail[-2] == "--verdicts-in" and tail[-1].endswith("verdicts-gathered.tar.gz") and cmd[cmd.index("--send") + 1] == tail[-1]
-    for given in (["--verdicts-in", str(tmp_path / "mine.tar.gz")], ["--no-cache"]):
-        launched.clear()
-        assert CHECK.record(["--base", "HEAD", *given]) == 0
-        assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    assert given_to == [None]
+    launched.clear()
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", "mine.tar.gz"]) == 0
+    [cmd] = launched
+    tail = cmd[cmd.index("--") + 1:]
+    assert given_to[-1] == Path("mine.tar.gz").resolve() and "mine.tar.gz" not in " ".join(cmd)
+    assert tail[-2:] == ["--verdicts-in", cmd[cmd.index("--send") + 1]] and tail[-1].endswith("verdicts-gathered.tar.gz")
+    launched.clear()
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
+    assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
@@ -923,3 +932,118 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
     spec2.loader.exec_module(tool)
     assert rule_touches(list(tool.CHECK.merge_requires["lean-agreement"]), changed)
     assert CHECK.agreement_closure(changed) == changed
+
+
+def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_path, monkeypatch, capsys):
+    """`reuse`, at the top of result.json and printed in the log: a flag or input that turns reuse off shows as a low rate there,
+    with each suite run again and the inputs that forced it."""
+    import json
+
+    (tmp_path / "suites.json").write_text(json.dumps([
+        {"suite": "a", "status": "cached", "seconds": 0.0},
+        {"suite": "b", "status": "passed", "seconds": 12.0, "forced_by": {"why": ["input b changed: b/x.py", "python 3.12 -> 3.14", "x", "y"]}},
+        {"suite": "c", "status": "failed", "seconds": 40.0, "forced_by": None},
+        {"suite": "d", "status": "skipped"}]))
+    (tmp_path / "lean-audit").mkdir()
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({"cached": {"P": "k"}, "packages": [{"package": "P"}, {"package": "Q"}]}))
+    done = [{"step": "pytest", "status": "passed"},
+            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": [{}], "errors": [], "changed": ["t"]}},
+            {"step": "flock-rust-tests", "status": "passed", "cache": {"hit": "k"}},
+            {"step": "lean-agreement", "status": "passed", "cache": {"stored": "k"}},
+            {"step": "lean-audit", "status": "passed"}, {"step": "lean-build", "status": "passed"}]
+    r = CHECK.reuse(tmp_path, done)
+    assert r["steps"]["pytest"] == {"of": "suites", "reused": 1, "rerun": 2, "rate": 0.333, "reran": [
+        {"suite": "c", "seconds": 40.0, "forced_by": ["not recorded"]},
+        {"suite": "b", "seconds": 12.0, "forced_by": ["input b changed: b/x.py", "python 3.12 -> 3.14", "x"]}]}
+    assert r["steps"]["circuit-check"]["not_stored"] == {"untraced": 1, "errors": 0, "changed": 1}
+    assert r["steps"]["flock-rust-tests"]["reused"] == 1 and r["steps"]["lean-agreement"]["rerun"] == 1
+    assert r["steps"]["lean-audit"] == {"of": "packages", "reused": 1, "rerun": 1, "reran": ["Q"], "rate": 0.5}
+    assert "lean-build" not in r["steps"] and r["steps"]["circuit-check"]["rate"] == 0.636
+    lines = CHECK.reuse_lines(r)
+    assert lines[0] == ("check: reused pytest 1/3 suites, circuit-check 7/11 targets, flock-rust-tests 1/1 step, "
+                        "lean-agreement 0/1 step, lean-audit 1/2 packages")
+    assert "check: reuse     b (12.0 s): input b changed: b/x.py; python 3.12 -> 3.14; x" in lines
+
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    CHECK.write_result(tmp_path, True, [{**s, "seconds": 1.0} for s in done])
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert list(doc)[:4] == ["schema", "kind", "run_id", "reuse"] and doc["reuse"] == r
+
+
+def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
+    """The lander launches checks only through train.sh, which runs the merge queue's command: a flag of its own (`--no-cache`,
+    a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
+    import subprocess
+
+    for flag in ("--no-cache", "--verdicts-in", "--cores"):
+        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
+                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+        assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+
+
+@pytest.mark.parametrize("twins", [False, True])
+def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
+    """With `auto` and no free slot, check.py launches one twin per machine and only one of them runs: train.sh prints every
+    twin's run id, so the lander follows the one that runs rather than the first launched, which may exit 75 not started."""
+    import os
+    import subprocess
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, done = tmp_path / "bin", tmp_path / "launched"
+    bin_.mkdir()
+    lines = (["check: --on: twins 20261009T050000Z-ab12 on vy-nebius-1, vy-nebius-2: the first to take a check slot runs"]
+             if twins else []) + ["research: run r20261009-050001-aaaa launched on vy-nebius-1 (p) pid=1 -> /r"]
+    lines += ["research: run r20261009-050002-bbbb launched on vy-nebius-2 (p) pid=2 -> /r"] if twins else []
+    (bin_ / "uv").write_text("#!/bin/sh\n" + "".join(f"echo '{x}'\n" for x in lines) + f"touch {done}\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")    # waits on the launch, not on a clock
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **GIT_ENV, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "HEAD", "auto"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    want = "RUN r20261009-050001-aaaa r20261009-050002-bbbb" if twins else "RUN r20261009-050001-aaaa"
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
+
+
+def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):
+    """check.py killed before it launches a run (the OOM killer, while it gathers verdicts) prints no traceback: train.sh says
+    how it exited and returns that, at once, rather than polling the log for ten minutes and saying only that nothing launched."""
+    import os
+    import subprocess
+
+    GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, pidf = tmp_path / "bin", tmp_path / "pid"
+    bin_.mkdir()
+    (bin_ / "uv").write_text(f"#!/bin/sh\necho 'check: verdicts: gathering'\necho $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\nexit 137\n")
+    # waits until check.py has exited, not on a clock
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nuntil [ -e {pidf} ]; do :; done\nwhile kill -0 $(cat {pidf}) 2>/dev/null; do :; done\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **GIT_ENV, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "HEAD", "auto"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    assert p.returncode == 137 and "train: check.py exited 137 before launching a run (killed" in p.stderr, (p.stdout, p.stderr)
+    assert "RUN" not in p.stdout

@@ -119,7 +119,9 @@ theorem le_fp_of_isPoint {bits n g : Nat} (hg : IsPoint bits g) (h : g ≤ n) : 
     have hs : shift bits g = shift bits n := by unfold shift; rw [hb]
     exact le_fp (hs ▸ ((isPoint_iff bits g).1 hg).2) h
 
-theorem floorPointGreatest : FloorPointGreatest := fun _ _ h =>
+/-- `floorPoint n` is the largest point at most `n ≥ 1`. -/
+theorem floorPoint_greatest (bits n : Nat) (h : 1 ≤ n) :
+    IsPoint bits (floorPoint bits n) ∧ floorPoint bits n ≤ n ∧ ∀ g, IsPoint bits g → g ≤ n → g ≤ floorPoint bits n :=
   ⟨isPoint_fp h, fp_le _ _, fun _ hg hle => le_fp_of_isPoint hg hle⟩
 
 theorem fp_of_isPoint {bits g : Nat} (hg : IsPoint bits g) : floorPoint bits g = g :=
@@ -289,8 +291,9 @@ theorem next_le {bits g h : Nat} (hg : IsPoint bits g) (hh : IsPoint bits h) (hl
 theorem lt_next {bits g : Nat} (hg : IsPoint bits g) : g < point bits (level bits g + 1) := by
   have := point_lt_succ bits (level bits g); rwa [point_level hg] at this
 
-theorem padLeast : PadLeast := by
-  intro bits n hn
+/-- `pad n` is the least point at least `n ≥ 1`. -/
+theorem pad_least (bits n : Nat) (hn : 1 ≤ n) :
+    IsPoint bits (pad bits n) ∧ n ≤ pad bits n ∧ ∀ g, IsPoint bits g → n ≤ g → pad bits n ≤ g := by
   have hfp := isPoint_fp (bits := bits) hn
   have hle := fp_le bits n
   unfold pad
@@ -305,14 +308,17 @@ theorem padLeast : PadLeast := by
     refine ⟨hp, ?_, fun g hg hng => next_le hfp hg (by omega)⟩
     exact Nat.le_of_not_lt fun h => Nat.lt_irrefl _ (Nat.lt_of_lt_of_le hgt (le_fp_of_isPoint hp (Nat.le_of_lt h)))
 
-theorem bucketCredits : BucketCredits := by
-  intro bits real hr
+/-- A window of `real ≥ 1` real tiles is credited the largest point at most `real` and pads to the least point above it. -/
+theorem bucket_credits (bits real : Nat) (hr : 1 ≤ real) :
+    let w := bucket bits real
+    w = Work.at bits w.level ∧ w.credited = floorPoint bits real ∧ w.credited ≤ real ∧ real < w.n ∧
+      w.n = pad bits (real + 1) := by
   have hfp := isPoint_fp (bits := bits) hr
   have hp := isPoint_point bits (level bits (floorPoint bits real) + 1)
   have hgt := lt_next hfp
   have hn : real < point bits (level bits (floorPoint bits real) + 1) :=
     Nat.lt_of_not_le fun h => Nat.lt_irrefl _ (Nat.lt_of_lt_of_le hgt (le_fp_of_isPoint hp h))
-  obtain ⟨hpad, hpad1, hpad2⟩ := padLeast bits (real + 1) (by omega)
+  obtain ⟨hpad, hpad1, hpad2⟩ := pad_least bits (real + 1) (by omega)
   dsimp only [bucket, Work.at]
   refine ⟨rfl, point_level hfp, by rw [point_level hfp]; exact fp_le _ _, hn, Nat.le_antisymm ?_ (hpad2 _ hp hn)⟩
   exact next_le hfp hpad (by have := fp_le bits real; omega)
@@ -329,8 +335,8 @@ theorem cost_arith {R F Y X : Nat} (hX : 0 < X) (hR : R < F + Y) (hF : Y * X ≤
       rw [Nat.add_mul] at h1; rw [Nat.mul_succ]; omega
   · rw [Nat.add_mul, Nat.mul_succ]; omega
 
-theorem bucketCost : BucketCost := by
-  intro bits real hr
+theorem bucket_cost (bits real : Nat) : CostBounded bits real (bucket bits real) := by
+  intro hr
   have hX := pow_pos' bits
   have h0 : 0 < real := by omega
   have hfp := isPoint_fp (bits := bits) h0
@@ -349,9 +355,9 @@ theorem bucketCost : BucketCost := by
   rw [hc, hn]
   exact cost_arith hX (lt_fp_add bits real) hF (fp_pos h0)
 
-theorem bucketCost3 : BucketCost3 := by
-  intro real hr
-  have := bucketCost gridBits real (by simpa [gridBits] using hr)
+theorem bucket_cost3 (real : Nat) : CostBounded3 real (bucket gridBits real) := by
+  intro hr
+  have := bucket_cost gridBits real (by simpa [gridBits] using hr)
   simp only [gridBits, Nat.reducePow, Nat.reduceSub, Nat.reduceAdd] at this ⊢
   omega
 
@@ -364,8 +370,8 @@ theorem level_mono {bits g h : Nat} (hg : IsPoint bits g) (hh : IsPoint bits h) 
     have := point_strictMono (bits := bits) hlt
     rw [point_level hg, point_level hh] at this; omega
 
-theorem levelsCount : LevelsCount := by
-  intro bits lo hi hlo hle
+theorem levels_count (bits lo hi : Nat) (hlo : 1 ≤ lo) : LevelsCounted bits lo hi (levels bits lo hi) := by
+  intro hle
   have hhi : 0 < hi := by omega
   have hm := level_mono (isPoint_fp (bits := bits) hlo) (isPoint_fp hhi) (fp_mono hlo hle)
   simp only [levels, bucket, Work.at]

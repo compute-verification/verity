@@ -1110,6 +1110,7 @@ REPO_SLUG = "danielreuter/verity"
 CHECK_MACHINES = (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
 SLOT_WRAPPER = "check/slot.py"
 CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
+NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
 FAILED_RECENT_S = 6 * 3600
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
@@ -1178,7 +1179,7 @@ for n in names:
     last = (st.get("transitions") or [{}])[-1]
     bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped")), None)
     state = st.get("state") or last.get("state")
-    if bad is None and state not in ("failed", "cancelled"):
+    if bad is None and (state not in ("failed", "cancelled") or last.get("rc") == A["not_started"]):
         continue
     fail = load(os.path.join(d, "failure.json"))
     sha, cwd = (req.get("remote") or {}).get("source_sha"), req.get("cwd") or ""
@@ -1221,7 +1222,7 @@ print(json.dumps({"rows": rows, "waiting": waiting}))
 def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
     args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
-            "pick": list(FAILING), "log_bytes": 8 << 20}
+            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
 
