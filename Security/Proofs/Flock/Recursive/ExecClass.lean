@@ -24,9 +24,7 @@ function of it (`execClassAt`), so the class's fields are no hypotheses and the 
   schedule (`execClassAt_sch`) are functions of `shapeOf st`, and so is each region's place in the block, its free and
   fixed bits (`regionsOf_layout`); two statements of one shape differ only in the regions' bytes (`execClassAt_shape`).
 * `VStmt.exec`, `execStmts`: a statement with its model read off its executable strata where they tile its units (its
-  live law unchanged), and `VStmt.exec_execStrata`, `_hS` there. `nonempty_reg₂`: any prover of the recursive audit
-  sends some registration of V*'s sessions, so there is a session of each of V*'s statements whose draw file
-  (`VStmt.tiles_of_session`) gives the tiling.
+  live law unchanged), and `VStmt.exec_execStrata`, `_hS` there.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -237,29 +235,5 @@ theorem VStmt.exec_execStrata (Q : VStmt) (h : Law.Tiles Q.exec.law.St Q.exec.nv
   · show (if Law.Tiles Q.law.St Q.nv then fun s => (Q.law.St s).k else Q.law.ks) = _
     rw [if_pos h']
     exact rfl
-
-/-- A strategy of the rounds reaches a leaf. -/
-theorem rounds_leaf {M C β : Type} [Fintype C] [Nonempty C] :
-    ∀ (r : ℕ) (f : List (M × C) → Game β), Strategy (rounds M C r f) → ∃ t, Nonempty (Strategy (f t))
-  | 0, _, s => ⟨[], ⟨s⟩⟩
-  | r + 1, f, s => by
-      obtain ⟨t, ht⟩ := rounds_leaf r (fun t => f ((s.1, Classical.arbitrary C) :: t)) (s.2 (Classical.arbitrary C))
-      exact ⟨_, ht⟩
-
-/-- **A prover of the recursive audit reaches an outer session**: at some draw and transcript, it has a strategy
-there. -/
-theorem exists_outer {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm β : Type}
-    {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β} (σ : Strategy (recGame L Reg I Cm outer)) :
-    ∃ ω t, Nonempty (Strategy (outer σ.1 ω t)) := by
-  obtain ⟨t, ⟨s⟩⟩ := rounds_leaf I.r _ (σ.2 (Classical.arbitrary L.Ω))
-  exact ⟨_, t, ⟨Strategy.ofMap _ _ s⟩⟩
-
-/-- **A prover of the recursive audit sends a registration of V*'s sessions.** -/
-theorem nonempty_reg₂ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
-    {Reg' Reg₂ : Type} {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-    {dg : ByteArray → ByteArray} {N : ℕ}
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Nonempty Reg₂ := by
-  obtain ⟨_, _, ⟨s⟩⟩ := exists_outer σ
-  exact ⟨s.1⟩
 
 end FlockSoundness.Discharge.Recursion

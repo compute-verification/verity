@@ -1,6 +1,7 @@
 import Proofs.Flock.Recursive.Property
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.ReadsOpen
+import Proofs.Flock.Recursive.Loads
 
 /-!
 # The recursive audit's property: its proof and what it rests on
@@ -13,9 +14,10 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`)
 * at a statement Lean's verifier refuses, the event is empty (`AcceptsStmt` is its first conjunct);
 * at one it accepts, the class checks pass (`classOk_of_accepts`), and the compile premise holds at `execClassAt st`
   (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
-* `_hS` at V*'s statements with their models read off their strata (`execStmts`), from one session of each
-  (`nonempty_reg₂`: the prover sends a registration) whose draw file custody ties to the strata over `[0, nv)`
-  (`RecordCustody`'s `DrawFileZK`, `VStmt.tiles_of_session`, `VStmt.exec_execStrata`);
+* at an outcome σ reaches whose sessions all verify (else the event is empty), `_hS` at V*'s statements with their
+  models read off their strata (`execStmts`): each session's draw file custody ties to the strata over the law's own
+  population (`RecordCustody`'s `DrawFileZK`), which is V*'s units once the session loads V*'s statement
+  (`VStmt.tiles_of_loads`, `VStmt.pop_eq_nv`, `VStmt.exec_execStrata`), and it does (`loads_of_verifies`, open: gap 8);
 * the read commit strings opening the root at an outcome whose sessions all verify (`Recursion.zk_reads_open`, at the
   reads `readsZ`/`rowZ`/`opZ` read off the outcome);
 * the fifth disjunct from `_hx`'s second case: two runs at one registration and draw that read different strings at a
@@ -24,6 +26,7 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`)
 Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the run's hidden
 statement being the read strings' unless two runs read one row differently (`_hx`), the law's field `L.nonempty`, and
 in (ii) V*'s sessions' zero knowledge (`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
+Open in the proof: that each accepted session loads V*'s statement (`loads_of_verifies`), until the verifier checks it.
 -/
 
 namespace Flock.SecurityProofs
@@ -77,11 +80,18 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (((prob_mono_outcome _ σ fun o _ h => absurd h.1 hacc).trans
       (prob_false _ σ).le).trans (zero_le ..))))))
   have hin := compiledForkSound_execClassAt T CT (classOk_of_accepts hacc)
-  obtain ⟨R₂₀⟩ := nonempty_reg₂ σ
-  have hS : ∀ j, Law.ExecStrata (execStmts Vs j).law.σs (execStmts Vs j).law.ks (execStmts Vs j).law.St :=
-    fun j => (Vs j).exec_execStrata (VStmt.tiles_of_session
-      (Flock.Guarantees.custodied zs₀ hCust σ.1 (Classical.arbitrary L.Ω) [] R₂₀ j)
-      (hCust σ.1 (Classical.arbitrary L.Ω) [] R₂₀ j).2)
+  by_cases hv : ∃ o, FlockSoundness.Game.Outcome (recGame L Reg (Flock.Guarantees.innerAt T CT st) Cm
+      fun R ω t => outerV (Flock.Guarantees.custodied zs₀ hCust R ω t) dg N) σ o ∧
+      Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zs₀ hCust o.1 o.2.1 o.2.2.1) o.2.2.2
+  swap
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (((prob_mono_outcome _ σ fun o hro h =>
+      absurd ⟨o, hro, h.2.1⟩ hv).trans (prob_false _ σ).le).trans (zero_le ..))))))
+  obtain ⟨ov, -, hvv⟩ := hv
+  have hS : ∀ j, Law.ExecStrata (execStmts Vs j).law.σs (execStmts Vs j).law.ks (execStmts Vs j).law.St := fun j =>
+    (Vs j).exec_execStrata (VStmt.tiles_of_loads
+      (Flock.Guarantees.custodied zs₀ hCust ov.1 ov.2.1 ov.2.2.1 ov.2.2.2.1 j)
+      (hCust ov.1 ov.2.1 ov.2.2.1 ov.2.2.2.1 j).2 (hvv.2 j)
+      (loads_of_verifies (Flock.Guarantees.custodied zs₀ hCust ov.1 ov.2.1 ov.2.2.1) ov.2.2.2 hvv.1 hvv.2 j))
   rcases zk_sessions_recursive_fork_inner hS hA3
     (Flock.Guarantees.custodied zs₀ hCust) dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr Refine.H512
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls (execClassAt st).regs
