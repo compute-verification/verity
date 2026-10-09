@@ -21,12 +21,13 @@ namespace RecVStar
 
 open Lean
 
-/-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), and its claims, two and one per region and
-link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`). -/
+/-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), its claims, two and one per region and
+link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), and its table's regions (`Stmt.regions`). -/
 structure Inner where
   m : Nat
   kLog : Nat
   claims : Nat
+  regions : Nat
   deriving Repr, BEq, Inhabited
 
 /-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
@@ -36,24 +37,29 @@ def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) : V Inner := do
   let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
-  pure ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size⟩
+  pure ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size, st.regions.size⟩
 
-def FORMAT : String := "verity/rec-inner/v0"
+def FORMAT : String := "verity/rec-inner/v1"
 
 def Inner.toJson (i : Inner) : Json :=
-  Json.mkObj [("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog), ("claims", Lean.toJson i.claims)]
+  Json.mkObj [("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog), ("claims", Lean.toJson i.claims),
+    ("regions", Lean.toJson i.regions)]
 
 def Inner.ofJson (j : Json) : Except String Inner := do
   if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
-  pure ⟨← j.getObjValAs? Nat "m", ← j.getObjValAs? Nat "k_log", ← j.getObjValAs? Nat "claims"⟩
+  pure ⟨← j.getObjValAs? Nat "m", ← j.getObjValAs? Nat "k_log", ← j.getObjValAs? Nat "claims",
+    ← j.getObjValAs? Nat "regions"⟩
 
 /-- V*'s statements at the inner shape (`VStar.statements`), at a shape `RecResiduals.check` accepts a part's name at,
+whose claims are two and two per region of the inner statement (an extra claim per region at each of two link points), and
 where V*'s parts (`VStar.parts (spec vsh)`, `VStar/Parts.lean`) are as many as the verifier's own packing of its algebra
 (`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`). -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   let some sh := RecResiduals.shape? i.m i.kLog i.claims
     | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
         "k_log at least 6, claims at least 2")
+  if i.claims != 2 + 2 * i.regions then
+    throw s!"the inner session's claims {i.claims}, not two and two per region of its {i.regions} ({2 + 2 * i.regions})"
   let vsh : VStar.Algebra.Shape := { m := i.m, kLog := i.kLog, claims := i.claims }
   let ps ← (do VStar.parts (← VStar.Algebra.spec vsh)).mapError (s!"V*'s parts: " ++ ·)
   let gs ← (do RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)).mapError
