@@ -27,12 +27,16 @@ passes when both verifiers give the same verdict on every link-window and reject
 which they differ, fails.
 
     python lean_replay.py traces --calibration REPORT [--recorded VERDICTS.jsonl] --out DIR [--jobs N] TRACE ...
-    python lean_replay.py active --out DIR [--jobs N] RUN_DIR ...
+    python lean_replay.py active --out DIR [--jobs N] [--max-frames F] [--budget-gb G] RUN_DIR ...
 
-The injected controls of an active run are made on its configuration with the fewest response-record bytes. A RUN_DIR
+Each task (a trace, an active configuration) runs in a process of its own. The Lean check holds each frame's payload as
+a list of bits, about 1 MB of memory per 4 KiB frame, so a real active configuration's audit peaks at tens to hundreds of
+GB: `--budget-gb` bounds the estimate of what runs at once, and `--max-frames` leaves out (and lists) the larger ones.
+The injected controls of an active run are made on its configuration with the fewest Program frames. A RUN_DIR
 is an active run's record tree: `inputs/calibration.json`, and `out/[CELL/]runs/CONFIG/STRATEGY/` with the
-recorded `out/[CELL/]verdicts.jsonl`. It writes `runs.jsonl` (one line per run), `diffs.jsonl` (one line per link-window
-whose verdicts differ anywhere) and `summary.json`, and prints the summary line.
+recorded `out/[CELL/]verdicts.jsonl`. It writes `progress.jsonl` (each task's result as it ends), `runs.jsonl` (one
+line per task), `diffs.jsonl` (one line per link-window whose verdicts differ anywhere) and `summary.json`, and prints
+the summary line.
 """
 
 from __future__ import annotations
@@ -41,12 +45,16 @@ import argparse
 import dataclasses
 import gzip
 import importlib
+import itertools
 import json
-import multiprocessing
+import os
+import pickle
+import subprocess
 import sys
+import tempfile
 import time
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -55,7 +63,7 @@ import replay  # noqa: E402
 from verity.core.protocols.certifier import audit as py_audit  # noqa: E402
 from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, Issuer,  # noqa: E402
                                                           LmsKey, certificate_message, parameters_digest)
-from verity.core.protocols.certifier.commitment import CommittedRecord, commit  # noqa: E402
+from verity.core.protocols.certifier.commitment import commit  # noqa: E402
 from verity.core.protocols.certifier.grid import Reason, Record, Status  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
@@ -100,18 +108,32 @@ class ReplaySigner:
         return LmsKey(self.PARAMS, lms.public_key(self.key))
 
 
-def recording(base: type, sink: list) -> type:
-    """`base` with every check's arguments and verdicts appended to `sink`, keyed by the audit object."""
+class AuditDone(Exception):
+    """The audit path's audits are done; what it computes after them isn't the verifier's."""
+
+
+_serial = itertools.count()
+
+
+def recording(base: type, sink: list, stop_after_ingress: int = 0) -> type:
+    """`base` with every check's arguments and verdicts (a copy: the caller may extend the list) appended to `sink`, keyed
+    by the audit object (a serial, since a freed audit's `id` is reused); with `stop_after_ingress` n, `AuditDone` is raised once the n-th
+    `check_ingress_link` has returned."""
+
+    def tag(audit) -> int:
+        return audit.__dict__.setdefault("_recording", next(_serial))
 
     class Recording(base):
         def check_link(self, link, records, frames, syncs, sync_set, params, key=None):
             v = super().check_link(link, records, frames, syncs, sync_set, params, key)
-            sink.append((id(self), "egress", (link, list(records), frames, list(syncs), sync_set, params, key), v))
+            sink.append((tag(self), "egress", (link, list(records), frames, list(syncs), sync_set, params, key), list(v)))
             return v
 
         def check_ingress_link(self, link, records, windows, key=None, params=None):
             v = super().check_ingress_link(link, records, windows, key, params)
-            sink.append((id(self), "ingress", (link, list(records), windows, key, params), v))
+            sink.append((tag(self), "ingress", (link, list(records), windows, key, params), list(v)))
+            if stop_after_ingress and sum(c[1] == "ingress" for c in sink) == stop_after_ingress:
+                raise AuditDone
             return v
 
     return Recording
@@ -327,9 +349,35 @@ def _recorded_active(root: Path, run: Path) -> dict[tuple, dict] | None:
     return out
 
 
+def _audited_rows(plan: dict, report: dict, run: Path, audit: type, calls: list) -> list[dict]:
+    """`active_replay.audit_configuration`'s rows with `audit` as the verifier, read off its two audits (raw, then
+    committed) as they return; it is stopped there, before the comparisons that don't read a verdict."""
+    import active_replay
+    try:
+        active_replay.audit_configuration(plan, report, run, audit=recording(audit, calls, stop_after_ingress=2))
+    except AuditDone:
+        pass
+    audits = list(dict.fromkeys(c[0] for c in calls))
+    if len(audits) != 2:
+        raise AssertionError(f"audit_configuration ran {len(audits)} audits, not raw and committed")
+    egress = next(c[2][0] for c in calls if c[1] == "egress")
+    raw, committed = ([v for c in calls if c[0] == a for v in c[3]] for a in audits)
+    return [{"config": plan["name"], "link": a.link, "window": a.window,
+             "direction": "egress" if a.link == egress else "ingress", "raw": a.violation, "committed": b.violation}
+            for a, b in zip(raw, committed, strict=True)]
+
+
+def active_frames(run: Path) -> int:
+    """The Program frames an active configuration's audit reads: the live shim's events, else the plan's frames."""
+    if (run / "server.events.gz").exists():
+        with gzip.open(run / "server.events.gz", "rb") as fh:
+            return sum(1 for _ in fh)
+    with gzip.open(run / "plan.json.gz", "rt") as fh:
+        return sum(len(ds) for _, _, ds in json.load(fh)["sessions"])
+
+
 def active_job(args: tuple) -> dict:
     root, run, controls, other = args
-    import active_replay
     root, run = Path(root), Path(run)
     cal = root / "inputs" / "calibration.json"
     if not cal.exists():
@@ -339,10 +387,10 @@ def active_job(args: tuple) -> dict:
         plan = json.load(fh)
     calls: list = []
     t0 = time.monotonic()
-    py = active_replay.audit_configuration(plan, report, run, audit=recording(py_audit.Audit, calls))["rows"]
+    py = _audited_rows(plan, report, run, py_audit.Audit, calls)
     t1 = time.monotonic()
     lean = verifier(other)
-    le = active_replay.audit_configuration(plan, report, run, audit=lean)["rows"]
+    le = _audited_rows(plan, report, run, lean, [])
     t2 = time.monotonic()
     rec = _recorded_active(root, run)
     if rec is not None:
@@ -351,28 +399,27 @@ def active_job(args: tuple) -> dict:
     diffs, stats = compare_rows(py, le, rec, ACTIVE_AUDITS)
     for d in diffs:
         d["strategy"] = run.name
-    return {"run": root.name, "kind": "active", "configuration": str(run.relative_to(root)), **stats,
+    return {"run": root.name, "kind": "active", "configuration": str(run.relative_to(root)),
+            "frames": len(calls[0][2][2]), **stats,
             "violations": {"python": violation_counts(py, ACTIVE_AUDITS), "lean": violation_counts(le, ACTIVE_AUDITS)},
             "seconds": {"python_path": round(t1 - t0, 2), "lean_path": round(t2 - t1, 2)},
             "controls": injected_controls(calls, lean) if controls else [], "diffs": diffs}
 
 
-def _safe(job: Callable[[tuple], dict]) -> Callable[[tuple], dict]:
-    def run(args: tuple) -> dict:
-        try:
-            return job(args)
-        except Exception as e:  # a run that can't be replayed is reported, never dropped
-            return {"run": str(args[1] if job is active_job else args[0]), "kind": job.__name__.split("_")[0],
-                    "error": f"{type(e).__name__}: {e}"[:2000]}
-    return run
+JOBS = {"trace": trace_job, "active": active_job}
 
 
-def _safe_trace(args):
-    return _safe(trace_job)(args)
+def _label(kind: str, args: tuple) -> dict:
+    if kind == "active":
+        return {"run": Path(args[0]).name, "kind": kind, "configuration": str(Path(args[1]).relative_to(args[0]))}
+    return {"run": str(args[0]), "kind": kind}
 
 
-def _safe_active(args):
-    return _safe(active_job)(args)
+def safe_job(kind: str, args: tuple) -> dict:
+    try:
+        return JOBS[kind](args)
+    except Exception as e:  # a run that can't be replayed is reported, never dropped
+        return _label(kind, args) | {"error": f"{type(e).__name__}: {e}"[:2000]}
 
 
 # -- the sweep ---------------------------------------------------------------------------------------------------------
@@ -386,9 +433,15 @@ def summarize(results: Sequence[dict]) -> dict:
     s = Counter()
     natural: dict[str, Counter] = {"python": Counter(), "lean": Counter()}
     injected, failed = Counter(), Counter()
-    errors = []
+    errors, left_out = [], []
     same_runs = 0
-    for run, parts in by_run.items():
+    for run, parts in list(by_run.items()):
+        left_out += [{"run": run, "configuration": p.get("configuration"), "why": p["left_out"]}
+                     for p in parts if "left_out" in p]
+        parts = [p for p in parts if "left_out" not in p]
+        if not parts:
+            del by_run[run]
+            continue
         ok = True
         for p in parts:
             if "error" in p:
@@ -412,7 +465,8 @@ def summarize(results: Sequence[dict]) -> dict:
             "natural_controls": {k: dict(v) for k, v in natural.items()},
             "injected_controls": dict(injected), "injected_failed": dict(failed),
             "K": {"natural": k_natural, "injected": sum(injected.values()), "failed": sum(failed.values())},
-            "errors": errors}
+            "errors": errors, "left_out": left_out,
+            "runs_left_out": sorted({x["run"] for x in left_out} - set(by_run))}
 
 
 def write(out: Path, results: Sequence[dict]) -> dict:
@@ -432,15 +486,54 @@ def active_configurations(root: Path) -> list[Path]:
     return sorted(p.parent for p in root.glob("out/**/runs/*/*/plan.json.gz"))
 
 
-def run_pool(fn, tasks: list, jobs: int):
-    if jobs > 1 and len(tasks) > 1:
-        with multiprocessing.get_context("spawn").Pool(jobs, maxtasksperchild=1) as pool:
-            yield from pool.imap_unordered(fn, tasks, chunksize=1)
-    else:
-        yield from map(fn, tasks)
+def run_tasks(kind: str, tasks: Sequence[tuple], jobs: int, costs: Sequence[float] | None = None,
+              budget: float | None = None):
+    """Each task's `safe_job` in a process of its own (`lean_replay.py task`, its arguments pickled to a file), in the
+    order given, at most `jobs` at once and, with `budget`, at most that much of `costs` (estimated peak GB) at once,
+    though one task always runs. A process that dies without its result (the OOM killer's) is that task's error."""
+    costs = costs or [0.0] * len(tasks)
+    pending, running = list(range(len(tasks))), {}
+    with tempfile.TemporaryDirectory(prefix="lean-replay-") as tmp:
+        while pending or running:
+            used = sum(costs[i] for i, _ in running.values())
+            for i in list(pending):
+                if len(running) >= jobs:
+                    break
+                if running and budget is not None and used + costs[i] > budget:
+                    continue
+                pending.remove(i)
+                used += costs[i]
+                src, dst = Path(tmp) / f"{i}.in", Path(tmp) / f"{i}.out"
+                src.write_bytes(pickle.dumps((kind, tasks[i])))
+                p = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "task", str(src), str(dst)])
+                running[p.pid] = (i, p)
+            pid, status = os.wait()
+            if pid not in running:
+                continue
+            i, p = running.pop(pid)
+            p.returncode = os.waitstatus_to_exitcode(status)
+            dst = Path(tmp) / f"{i}.out"
+            if dst.exists():
+                yield json.loads(dst.read_text())
+            else:
+                yield _label(kind, tasks[i]) | {"error": f"its process exited {p.returncode} without a result"}
+
+
+def _task(src: str, dst: str) -> int:
+    kind, args = pickle.loads(Path(src).read_bytes())
+    result = safe_job(kind, args)
+    Path(dst + ".part").write_text(json.dumps(result))
+    os.replace(dst + ".part", dst)
+    return 0
+
+
+LEAN_GB_PER_FRAME = 1.2e-3
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["task"]:
+        return _task(*argv[1:])
     ap = argparse.ArgumentParser(prog="lean_replay.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="kind", required=True)
     t = sub.add_parser("traces")
@@ -451,6 +544,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     t.add_argument("--fresh", action="store_true")
     a = sub.add_parser("active")
     a.add_argument("runs", nargs="+", type=Path)
+    a.add_argument("--max-frames", type=int,
+                   help="leave out (and list) the configurations whose audit reads more Program frames than this")
+    a.add_argument("--each-run-up-to", type=int, default=0, metavar="FRAMES",
+                   help="keep each run's smallest configuration over --max-frames when it reads at most this many")
+    a.add_argument("--budget-gb", type=float,
+                   help=f"run configurations at once only while their estimated peak memory ({LEAN_GB_PER_FRAME * 1e3:g} "
+                        "MB per frame, the Lean check's evidence) stays under this")
     for p in (t, a):
         p.add_argument("--out", required=True, type=Path)
         p.add_argument("--jobs", type=int, default=1)
@@ -473,26 +573,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 run = (p if p.is_dir() else p.parent).name
             tasks.append((p, report, replay.parse_sync_policy(args.syncs), args.fresh,
                           None if recorded is None else recorded.get(run, []), controls, args.verifier))
-        fn = _safe_trace
+        kind, costs, budget, results = "trace", None, None, []
     else:
-        tasks = []
+        sized, results = [], []
         for root in args.runs:
-            configurations = active_configurations(root)
-            smallest = min(configurations, key=lambda c: (c / "responses.records").stat().st_size, default=None)
-            tasks += [(root, run, controls and run == smallest, args.verifier) for run in configurations]
-        fn = _safe_active
-    results = []
+            configurations = {c: active_frames(c) for c in active_configurations(root)}
+            kept = {c: n for c, n in configurations.items() if args.max_frames is None or n <= args.max_frames}
+            least = min(configurations, key=configurations.get, default=None)
+            if least is not None and not kept and configurations[least] <= args.each_run_up_to:
+                kept[least] = configurations[least]
+            results += [_label("active", (root, c)) | {"frames": n, "left_out": f"{n} frames, over --max-frames"}
+                        for c, n in configurations.items() if c not in kept]
+            smallest = min(kept, key=kept.get, default=None)
+            sized += [(n, (root, c, controls and c == smallest, args.verifier)) for c, n in kept.items()]
+        sized.sort(key=lambda x: -x[0])
+        tasks = [t for _, t in sized]
+        kind, costs, budget = "active", [2 + n * LEAN_GB_PER_FRAME for n, _ in sized], args.budget_gb
     args.out.mkdir(parents=True, exist_ok=True)
     with open(args.out / "progress.jsonl", "w", encoding="utf-8") as fh:
-        for r in run_pool(fn, tasks, args.jobs):
+        for r in results:
+            fh.write(json.dumps(r, separators=(",", ":")) + "\n")
+        for r in run_tasks(kind, tasks, args.jobs, costs, budget):
             results.append(r)
-            fh.write(json.dumps({k: r.get(k) for k in ("run", "kind", "configuration", "link_windows", "same",
-                                                       "seconds", "error")}) + "\n")
+            fh.write(json.dumps(r, separators=(",", ":")) + "\n")
             fh.flush()
+            print(json.dumps({k: r.get(k) for k in ("run", "configuration", "frames", "link_windows", "same", "seconds",
+                                                    "error") if k in r}), flush=True)
     s = write(args.out, results)
     print(f"{s['runs']} runs, {s['runs_same_verdict']} same verdict, {s['K']['natural'] + s['K']['injected']} negative "
           f"controls ({s['K']['natural']} natural, {s['K']['injected']} injected, {s['K']['failed']} failed); "
-          f"{s.get('link_windows', 0)} link-windows compared, {s.get('same', 0)} same; errors {len(s['errors'])}")
+          f"{s.get('link_windows', 0)} link-windows compared, {s.get('same', 0)} same; errors {len(s['errors'])}; "
+          f"{len(s['left_out'])} configurations left out")
     return 0 if s["runs"] == s["runs_same_verdict"] and not s["K"]["failed"] and not s["errors"] else 1
 
 

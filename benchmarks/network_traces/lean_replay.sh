@@ -7,7 +7,8 @@
 # runs.json: {"traces": {"verdicts": ART, "calibration": ART, "calibration_path": P, "bundles": [ART, ...],
 #             "runs": [RUN, ...]}, "active": {RUN: RUN_RECORD_ART, ...}}. A trace RUN is a bundle's RUN/trace.json, its
 # recorded rows those of `labels.run` RUN in the verdicts artifact's out/all@plaintext/verdicts.jsonl. JOBS (default
-# nproc) runs in parallel; ACTIVE_JOBS (default 8) for the active runs, whose live configurations are large.
+# nproc) traces run at once; active configurations at most ACTIVE_JOBS (8) at once within ACTIVE_GB (400) of estimated
+# peak memory, those over MAX_FRAMES (100000) Program frames left out but each run's smallest up to EACH_RUN_UP_TO (220000).
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}/out}
 IN=${IN:-$RESEARCH_RUN_DIR/inputs}
@@ -50,7 +51,8 @@ for kind in "${kinds[@]}"; do
       for r in $(q '" ".join(d["active"])'); do
         fetch "$(q "d['active']['$r']")" --to "$s/runs/$r" --path 'out/*' --path 'inputs/*calibration.json'
       done
-      py benchmarks/network_traces/lean_replay.py active --out "$OUT/active" --jobs "${ACTIVE_JOBS:-8}" "$@" "$s"/runs/* \
-        2>&1 | tee "$OUT/active.log" || true ;;
+      py benchmarks/network_traces/lean_replay.py active --out "$OUT/active" --jobs "${ACTIVE_JOBS:-8}" \
+        --budget-gb "${ACTIVE_GB:-400}" --max-frames "${MAX_FRAMES:-100000}" --each-run-up-to "${EACH_RUN_UP_TO:-220000}" \
+        "$@" "$s"/runs/* 2>&1 | tee "$OUT/active.log" || true ;;
   esac
 done

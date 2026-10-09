@@ -4,6 +4,7 @@ verifier is caught, as failed controls or as differing verdicts."""
 
 from __future__ import annotations
 
+import gzip
 import importlib.util
 import json
 import sys
@@ -98,3 +99,52 @@ def test_a_broken_verifier_is_caught(tmp_path: Path) -> None:
     assert r["violations"]["lean"]["certified"] == r["violations"]["lean"]["link_windows"] == {"advice": 1}
     s = lr.summarize([r])
     assert s["runs_same_verdict"] == 0 and s["natural_controls"] == {"python": {}, "lean": {"advice": 1}}
+
+
+def active_run(root: Path) -> None:
+    """An active run's record tree: two configurations of the synthetic trace on the injected clock, honest and one
+    that holds a session past every sync, with the verdicts the run recorded."""
+    ar = _load("active_replay")
+    doc = trace()
+    report = calibration.calibrate(doc)
+    (root / "inputs").mkdir(parents=True)
+    (root / "inputs" / "calibration.json").write_text(json.dumps(report))
+    setup = ar.Setup(report)
+    plan = ar.plan_configuration(doc["configurations"][0], setup)
+    rows = []
+    for strategy in ("honest", "late"):
+        run = root / "out" / "runs" / "synthetic" / strategy
+        mine = plan if strategy == "honest" else ar.adversary_plan(plan, setup, strategy, seed=1)
+        assert ar.run_virtual(mine, report, run) == {"server": 0, "proxy": 0, "peer": 0}
+        with gzip.open(run / "plan.json.gz", "wt") as fh:
+            json.dump(mine, fh)
+        rows += [r | {"strategy": strategy} for r in ar.audit_configuration(mine, report, run, audit=audit.Audit)["rows"]]
+    (root / "out" / "verdicts.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_an_active_run_is_replayed_from_its_records_each_configuration_in_a_process_of_its_own(tmp_path: Path) -> None:
+    root = tmp_path / "r1"
+    active_run(root)
+    assert lr.main(["active", "--out", str(tmp_path / "out"), "--jobs", "2", "--budget-gb", "1", "--verifier", PYTHON,
+                    str(root)]) == 0
+    s = json.loads((tmp_path / "out" / "summary.json").read_text())
+    assert s["runs"] == s["runs_same_verdict"] == 1 and not s["errors"] and not s["left_out"]
+    assert s["link_windows"] == s["same"] == s["recorded_compared"] == s["recorded_same_lean"] == 12
+    assert s["natural_controls"]["python"] == s["natural_controls"]["lean"] and s["K"]["natural"] >= 1
+    assert s["K"]["injected"] == 11 and s["K"]["failed"] == 0  # on one configuration of the run
+    assert lr.main(["active", "--out", str(tmp_path / "none"), "--max-frames", "0", "--verifier", PYTHON,
+                    str(root)]) == 0
+    s = json.loads((tmp_path / "none" / "summary.json").read_text())
+    assert s["runs"] == 0 and s["runs_left_out"] == ["r1"] and len(s["left_out"]) == 2
+
+
+def test_a_task_whose_process_dies_is_its_error(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "dies.py").write_text("import os\nos._exit(137)\n")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    doc = trace()
+    (tmp_path / "trace.json").write_text(json.dumps(doc))
+    report = calibration.calibrate(doc)
+    task = (tmp_path / "trace.json", report, "hindsight", False, None, False)
+    out = list(lr.run_tasks("trace", [task + ("dies:Audit",), task + (PYTHON,)], jobs=2))
+    assert sorted("error" in r for r in out) == [False, True]
+    assert next(r for r in out if "error" in r)["error"] == "its process exited 137 without a result"
