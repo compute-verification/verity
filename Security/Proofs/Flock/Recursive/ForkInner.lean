@@ -1,4 +1,4 @@
-import Proofs.Flock.Recursive.Stage
+import Proofs.Flock.Recursive.StageRead
 import Proofs.Flock.Recursive.ForkRuns
 
 /-!
@@ -404,7 +404,7 @@ theorem zk_sessions_recursive_upto_on
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
     exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le
 
-/-- **`zk_sessions_recursive_full` with the inner term at the prover's own leaves.** -/
+/-- **`zk_sessions_recursive_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_full_on
     -- V*'s laws: their strata and A3
     (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
@@ -429,7 +429,7 @@ theorem zk_sessions_recursive_full_on
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
-    (hcmt : VCommits zs Sk cmt) (hdec : VDecodes wmsg same Sk msg) (hfull : VFull I.r Sk)
+    (hcmt : VCommits zs Sk cmt) (hdec : VDecodesR wmsg same Sk msg) (hfull : VFullR I.r Sk)
     (q : ℕ → ℝ)
     (hCR : ∀ i < I.r, ∀ ω pos,
       (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
@@ -447,7 +447,7 @@ theorem zk_sessions_recursive_full_on
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
-  refine (outerV_stage_le hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
+  refine (outerV_stage_le_read hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
     (fun j pos => cmt j e.1 pos) (fun R₂ j hacc pos hp R' => hcmt i σ.1 ω t e he R₂ j hacc pos hp R')
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
@@ -456,7 +456,7 @@ theorem zk_sessions_recursive_full_on
   exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
     mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
 
-/-- **`zk_sessions_recursive_fork` with the inner term at the prover's own leaves.** -/
+/-- **`zk_sessions_recursive_fork_read` with the inner term at the prover's own leaves.** -/
 theorem zk_sessions_recursive_fork_on
     (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
@@ -472,7 +472,7 @@ theorem zk_sessions_recursive_fork_on
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
-    (hcmt : VCommits zs Sk cmt) (hdec : VDecodes wmsg same Sk msg) (hfull : VFull I.r Sk)
+    (hcmt : VCommits zs Sk cmt) (hdec : VDecodesR wmsg same Sk msg) (hfull : VFullR I.r Sk)
     {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesV zs dg N k Rw σ x wmsg ref εin) :
     RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))

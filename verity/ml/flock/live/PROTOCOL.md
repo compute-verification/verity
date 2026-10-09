@@ -116,7 +116,7 @@ Streams 1–3 belong to M0: mask, padding, and the injected-seed salt tape. None
 
 **Several tables** (`--session-tables J`, the CPU prover). Table `j` reads every stream above at ChaCha20 stream
 `purpose | j << 32` (`ProverRng::for_table`). Its salt trees are ids `j << 32` (its level-0 tree) and up, below the next
-table's (`LeafSalts::table`, the session's one salt key). So no two tables share a pad, a mask word, a padding coefficient or
+table's (`LeafSalts::table`, every tree's salts read from the OS). So no two tables share a pad, a mask word, a padding coefficient or
 a salt. Table 0's addresses are a one-table session's, and a one-table session's bytes are unchanged.
 
 ## 3. The pads commitment
@@ -124,8 +124,8 @@ a salt. Table 0's addresses are a one-table session's, and a one-table session's
 The code is Reed–Solomon over GF(2^128). The message is `(h ‖ pad_h)` of length `L_h = s + 192`, read as coefficients
 of `Σ m_i X^i`. The code is evaluated at the `N = 8 · next_pow2(L_h)` points `x_j = F128(lo = j + 1, hi = 0)`, which
 gives RoPE `N = 4096`. There are two rows, `C(h ‖ pad_h)` and `C(mu ‖ pad_mu)`. Leaf `j` is the `hm96-sha512/v1` leaf of
-`x = SHA-512(bytes(C_h[j]) ‖ bytes(C_mu[j]))`. Its salt is leaf `j` of a fresh tree id from the proof's `LeafSalts`
-(ChaCha20 blocks `3j..3j+2` under the salt key, nonce `id`). The id comes from `next_id()`, so it is never 0 and never
+`x = SHA-512(bytes(C_h[j]) ‖ bytes(C_mu[j]))`. Its salt is leaf `j` of a fresh tree from the proof's `LeafSalts`: 192
+bytes read from the OS (`getrandom`), as every leaf salt is. The tree's id comes from `next_id()`, so it is never 0 and never
 reused. Nodes are `SHA-512(left ‖ right)`. The 64-byte root is the item after `verity-flock-zk-pads-v0`.
 
 ## 4. The constraints
@@ -296,7 +296,8 @@ is the minimum.
 - **hm96-sha512 hiding is statistical, in the standard model** (`verity/ml/commitments/hm96/PROTOCOL.md` §3: a
   leftover-hash-lemma argument over the Hankel family, which uses no property of SHA-512). Caps, paths and roots are
   functions of the leaves, so they inherit the bound. It needs:
-  - uniform, independent salts, never reused: leaf `j` of tree `id` takes ChaCha20 blocks `3j … 3j+2` under nonce `id`, and
+  - uniform, independent salts, never reused: every leaf's 192 bytes are read from the OS (`getrandom`), each tree's once
+    (`LeafSalts`: level 0's are kept for the session, and a tree the firewall's shadow builds too is kept until it does), and
     `next_id()` is never 0 and never repeats (level 0 is the one tree both reps share, each leaf salted once); the pads
     trees and τ's commitment have their own salts;
   - the pinned key outside the `2^-64` fraction of bad keys: the common-reference-string step under `hash-derived-key`.
@@ -305,10 +306,12 @@ is the minimum.
 - **So M1 is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
   with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
   No random oracle is involved.
-- **The one caveat is the randomness source.** Every pad, mask, padding coefficient, extra lane and leaf salt is ChaCha20
-  output under the session's 32-byte seed from the OS (`ProverRng`, `LeafSalts`). The claim is statistical when that output
-  is treated as uniform, as hm96 §3 treats such streams (and `os.urandom`); otherwise it is computational, under ChaCha20
-  as a PRG.
+- **The one caveat is the randomness source.** Every pad, mask, padding coefficient and extra lane is ChaCha20 output
+  under the session's 32-byte seed from the OS (`ProverRng`). The claim is statistical when that output is treated as
+  uniform, as hm96 §3 treats such streams; otherwise it is computational, under ChaCha20 as a PRG. The leaf salts carry no
+  such premise: they are the OS's own bytes (`LeafSalts`; Daniel, 9 Oct, decision 4(a)), so hm96's hiding rests on the OS
+  generator alone. (A test harness's injected seed expands its salts with ChaCha20, so its proofs repeat; a proving build
+  has no injected seed.)
 - **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
   verifier's coin commitment (§9), not M1's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
@@ -498,7 +501,7 @@ goes out).
 - **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is drawn once per session and
   belongs to its one tree, and the pads trees take `next_id() ≥ 1`.
 - **GPU.** `--zk` is CPU-only. The mask slot fill, §7's padding and extra lanes, and `commit_zk` belong on the device,
-  expanded from ChaCha20 like the hm96 salts.
+  expanded from `ProverRng`'s ChaCha20 streams (the hm96 salts are the host's OS reads, handed to the device tree by tree).
 - **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
   - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
     table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
@@ -555,9 +558,9 @@ Where the boundary runs:
   of `flock-circuit` (the masking challenger, the live stream, `zk_finish`, and the send check between them) is the firewall. The
   device reaches the firewall through three channels: each round's frames (`rounds(content, n)`, at its squeeze), the
   level-0 root (`hook(root)`, at the session's `Commit`), and the returned `(R1csProofLigerito, Commitment)`. The firewall
-  checks all three. The device holds the witness, the level-0 hiding (`Level0Zk`: padding and extra lanes) and the whole
-  `LeafSalts` key (32 bytes, from which every tree's salts expand: level 0's, levels 1+'s and the pads tree's), but never the
-  pads `h`, `mu` or the inner proof's randomness. Holding the key fixes nothing it sends: every salted leaf and path that
+  checks all three. The device holds the witness, the level-0 hiding (`Level0Zk`: padding and extra lanes) and the salts of
+  the trees it builds (level 0's and levels 1+'s, which the host reads from the OS and hands it tree by tree), but never the
+  pads tree's salts, the pads `h`, `mu` or the inner proof's randomness. Holding those salts fixes nothing it sends: every salted leaf and path that
   leaves is the recheck's or a recomputed tree's (§10.1), and the pads tree is the firewall's own.
 
 ### 10.1 The rule, outer phase (one rep, in §1's order)
@@ -601,7 +604,7 @@ message leaves) is not in this rule; the network certifier covers it.
 Before the session's `Commit` the firewall recomputes the level-0 commitment itself: `commit_zk(z, params, level0)` over the
 host witness (`FC_HOST_WITNESS=1`: the firewall assembles the witness on the host and uploads it whole, so the witness the
 recheck commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is
-without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0_id`), with the `Level0Zk` the host
+without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0`), with the `Level0Zk` the host
 drew. It refuses `FIREWALL-REFUSED: level-0 root` when the device's root differs, before anything leaves. It keeps the tree, so
 the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `FIREWALL` lines
 (`t.firewall_recheck` wall seconds, `cpu.firewall_recheck` the process's CPU seconds over it), beside the device's
