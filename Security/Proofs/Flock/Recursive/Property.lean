@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Statements
 import Proofs.Flock.Recursive.Premises
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+import Flock.RecResiduals
 
 /-!
 # The recursive audit's property (trusted)
@@ -69,10 +70,25 @@ noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r �
     (sch : Accounting.Schedule) : Inner :=
   flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch
 
+/-- **The number of V*'s outer statements** over an inner session of a table of `m` variables, `k_log` and `claims`
+claims, as V*'s staging lays them out (`rec_vstage.stage`, `VStar.statements`) and the verifier of record groups the
+algebra's residuals (`Flock.RecResiduals.groups`, `rec_residuals.parts`): one `RecOpen` per Ligerito level of
+`fast100 m`, then one `InnerRepCheck` per part of the rep's algebra, each residual in S's order in the first part that
+stays within `Flock.RecResiduals.MAX_SLOTS` sha512x3 slots, `MAX_REGIONS` regions and 16 residuals. Zero at a shape the
+verifier refuses, where V* stages nothing. -/
+def outerParts (m kLog claims : ℕ) : ℕ :=
+  match Flock.RecResiduals.shape? m kLog claims with
+  | none => 0
+  | some sh =>
+    match Flock.RecAlgebra.structureOf sh >>= fun S => Flock.RecResiduals.groups S (Flock.RecResiduals.portSizes sh) with
+    | .ok gs => sh.sched.levels.size + gs.size
+    | .error _ => 0
+
 /-- **The recursive audit, as the verifier of record runs it.**
 
 (i) For every prover `σ` of the recursive audit with C-Flock's compiled table as its inner protocol (`innerExec`): V*'s
-sessions
+statements `Vs`, as many as V*'s staging lays out over the class and its regions (`outerParts` at `2 + 2·|regs|`
+claims), and V*'s sessions
 `zs R ω t R₂ j` under their laws, the hidden statement `x`, the messages V*'s layers hold and the rounds' commitments
 (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root `rt`. On an outcome `o` whose sessions
 all verify, `reads o i` says a session read row `i`, `row o i` is the commit string it read there and `op o i` its
@@ -94,12 +110,14 @@ commitments, under `hash-derived-key`, the auditor's whole view and the simulate
 owed outputs) give every event probabilities within `2 n_r·2^-193 + ε_o + n_h·2^-193` both ways. -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
-    {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    {n : ℕ} {L : Law n} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the class of the compiled table, its regions and schedule
     (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
     (sch : Accounting.Schedule)
-    -- V*'s sessions at each history and registration `R₂`
-    (zs : Reg → L.Ω → List (Cm × (innerExec T CT cls regs sch).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    -- V*'s statements over the class, and V*'s sessions at each history and registration `R₂`
+    {Vs : Fin (outerParts cls.m cls.kLog (2 + 2 * regs.length)) → VStmt}
+    (zs : Reg → L.Ω → List (Cm × (innerExec T CT cls regs sch).Coin) → Reg₂ →
+      (j : Fin (outerParts cls.m cls.kLog (2 + 2 * regs.length))) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg (innerExec T CT cls regs sch) Cm fun R ω t => outerV (zs R ω t) dg N))

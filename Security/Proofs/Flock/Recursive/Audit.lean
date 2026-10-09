@@ -56,7 +56,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   swap
   · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
     exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter hKey p₀ o P w hw E
-  intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ cls regs sch zs dg N σ x wmsg Sk cmt msg rt stmt reads row op hS _ hA3
+  intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ cls regs sch Vs zs dg N σ x wmsg Sk cmt msg rt stmt reads row op hS _ hA3
     hin hop hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
   rcases zk_sessions_recursive_fork_inner hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr Refine.H512
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch) hin with hf | hf | hf | hb
