@@ -63,7 +63,8 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
 
 A session whose record carries a `unit_draw` is verified against the drawn units' statement, which the verifier derives
-from the population's public file and the draw (§7.3, §16.10).
+from the population's public file and the draw (§7.3, §16.10). Its draw must draw in full every unit that reads a
+round's commitment (`rec-c<i>`, `rec-top-L<l>`) by the verifier's `--registered` reads (U4, D14).
 
 `--tables` names the directory of the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots. Each `DIR` holds `session.json` (the
 `flock-live-session/v1` record) and `<table>.rep0.bin`, `<table>.rep1.bin` (the proofs the server received; the table is
