@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import sys
 import types
 from pathlib import Path
@@ -635,7 +636,7 @@ def test_a_disagreement_between_the_verdicts_rejects_the_session(forced, record,
         monkeypatch.setattr(mc, "verdict", flipped(mc.verdict))
     else:
         lean = live.lean_verdict().verdict
-        monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=flipped(lean)))
+        monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=flipped(lean), server=lambda: None))
     other = "python" if forced == "lean" else "lean"
     doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
     assert doc["audits"] == 1 and doc["audits_accepted"] == doc["audits_accepted_under_signer"] == 0
@@ -654,6 +655,52 @@ def _live():
     from memory_challenger import live
 
     return live
+
+
+def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monkeypatch):
+    """A verdict that fails after the sessions signed (r20261009-034919-c88c: `judge` could not import the Lean's server)
+    takes nothing with it: every signed session is in `sessions_out` first, whole, and still verifies under its signer."""
+    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.schemes import p2
+
+    live = _live()
+
+    def failing(*_a, **_k):
+        raise RuntimeError("the verdict failed")
+
+    monkeypatch.setattr(live, "judge", failing)
+    with pytest.raises(RuntimeError, match="the verdict failed"):
+        _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=2, sessions_out=tmp_path / "sessions.json")
+    doc = json.loads((tmp_path / "sessions.json").read_text())
+    assert doc["signer"]["scheme"].startswith(mc.TEST_PREFIX) and len(doc["sessions"]) == 2
+    nb = schemes.get("p2-16448/v4").params.block_bytes
+    leaf = lambda i: _p2()[1].MC.leaf(None, i, i.to_bytes(8, "big") * (nb // 8))  # noqa: E731
+    for s in doc["sessions"]:
+        signed = mc.SignedSession.from_json(s["signed"])
+        assert len(s["reports"]) == len(signed.rounds) == 105
+        v = mc.verdict(signed, mc.SessionCommitment.from_json(s["commitment"]),
+                       [mc.CoinOpening.from_json(o) for o in s["openings"]], leaf,
+                       trusted={bytes.fromhex(doc["signer"]["public_key"])}, schemes=live.signer_schemes(signed.scheme))
+        assert v.accepted, v.reasons
+
+
+def test_a_lean_verdict_that_cannot_load_stops_the_audit_before_any_signer_opens(tmp_path, monkeypatch):
+    """The Lean verdict is loaded, built and serving before the first session signs: where it can't be, the audit raises
+    before the signer's key, and so its leaf state, is opened, and no session file is written."""
+    from verity.core.protocols.pous.schemes import p2
+
+    live = _live()
+
+    def missing():
+        raise ModuleNotFoundError("No module named 'verity_difftest'")
+
+    monkeypatch.setattr(live, "lean_verdict", missing)
+    monkeypatch.setattr(live, "lms_signer", lambda *_a, **_k: pytest.fail("the signer was opened"))
+    with pytest.raises(ModuleNotFoundError, match="verity_difftest"):
+        _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms", lms_key=tmp_path / "key",
+                            sessions_out=tmp_path / "sessions.json")
+    assert not (tmp_path / "key").exists() and not (tmp_path / "sessions.json").exists()
 
 
 def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused(tmp_path, monkeypatch):

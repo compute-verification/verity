@@ -3,7 +3,7 @@ memory_challenger` against the responder, over the harness's responder wire (`ba
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
-        [--signer lms --lms-key DIR [--keygen-workers N] | --signer test]
+        [--signer lms --lms-key DIR [--keygen-workers N] | --signer test] [--sessions FILE]
 
 `READY.json` names the responder's port, the scheme, its manifest and the setup salt.  `DIGESTS.bin` is the `sha512/row/v2`
 digest of every block of `C` (`memory_challenger.block_digest`), in block order: what `memory_challenger.verdict` checks
@@ -32,6 +32,9 @@ against C's leaf).
   (`witness`: the signed session, the record's reasons, both verdicts, C's digests at the blocks the rounds revealed,
   per-round on-time and digest bits), and keeps the responder's reports beside: with the signer's public key, every input
   of the verdict, so a record replays.
+- **The signed sessions** go to `--sessions` (`sessions-<--out's name>` beside it) as the session loop ends, however it
+  ends, before any verdict runs, and the Lean verdict is built and serving before the first session signs: a verdict that
+  fails never takes signed sessions, or the key's leaves they spent, with it.
 
 Exit 0 when every session passes under the signer the run used, 1 otherwise.
 """
@@ -95,6 +98,28 @@ def lean_verdict() -> Any:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def lean_ready() -> None:
+    """The Lean verdict loaded, its executable built (or found built: `pod.sh PREPARE=1`) and serving, before any session
+    signs: where it can't run, the audit stops here and no leaf of the key is spent."""
+    lean_verdict().server()
+
+
+def write_sessions(path: str | os.PathLike, sig: Any, sessions: list[dict[str, Any]]) -> None:
+    """The signed sessions as they left the session loop, on disk before any verdict runs: each one's commitment, signed
+    session, coin openings, the responder's reports and its signing time, with the signer's scheme and public key."""
+    doc = {"signer": {"scheme": sig.scheme, "public_key": sig.public_key.hex()},
+           "sessions": [{"commitment": s["commitment"].to_json(), "signed": s["signed"].to_json(),
+                         "openings": [o.to_json() for o in s["openings"]], "reports": [list(r) for r in s["reports"]],
+                         "sign_ns": s["sign_ns"]} for s in sessions]}
+    p = Path(path)
+    tmp = p.with_name(p.name + ".tmp")
+    with open(tmp, "w") as f:
+        f.write(json.dumps(doc, indent=1) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, p)
 
 
 def rtt_cap_ns() -> int:
@@ -236,9 +261,12 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
 def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, audits: int, pings: int, k: int | None = None,
           cpu: int | None = None, allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
           clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test",
-          lms_key: str | os.PathLike | None = None, keygen_workers: int = 1) -> dict[str, Any]:
+          lms_key: str | os.PathLike | None = None, keygen_workers: int = 1,
+          sessions_out: str | os.PathLike | None = None) -> dict[str, Any]:
     """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
-    ran, off the timed path."""
+    ran, off the timed path.  The Lean verdict is made ready before any session signs (`lean_ready`), and the signed
+    sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
+    verdict runs."""
     from verity.core.protocols.pous import audit as pous_audit
     from verity.core.protocols.pous import memory_challenger as mc
     from verity.core.protocols.pous.protocol import StorageProfile
@@ -269,6 +297,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
             return {**base, "refused": str(e), "audits": 0, "audits_accepted": 0, "audits_accepted_under_signer": 0,
                     "answers": 0, "late": 0, "wrong": 0, "records": []}
         cert, gaps = None, (str(e),)
+    lean_ready()
     t0 = time.perf_counter_ns()
     sig = (lms_signer(lms_key, keygen_workers) if signer == "lms"
            else test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length())))
@@ -305,6 +334,8 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     finally:
         r.close()
         gc.enable()
+        if sessions_out is not None:
+            write_sessions(sessions_out, sig, sessions)
     expected = lambda i: digests[64 * i:64 * (i + 1)]  # noqa: E731
     sig.state.close()
     records = judge(sessions, expected, {sig.public_key}, signer_schemes(sig.scheme))
@@ -362,6 +393,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--signer", default="test", choices=["lms", "test"])
     ap.add_argument("--lms-key", default=None, help="the S1 key's directory (--signer lms), made there when absent")
     ap.add_argument("--keygen-workers", type=int, default=len(os.sched_getaffinity(0)))
+    ap.add_argument("--sessions", default=None,
+                    help="where the signed sessions go before any verdict runs (default: sessions-<--out's name> beside it)")
     a = ap.parse_args(argv)
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
@@ -380,7 +413,8 @@ def main(argv: list[str] | None = None) -> int:
            **audit("127.0.0.1", ready["port"], scheme, bytes.fromhex(ready["salt"]), Path(a.leaves).read_bytes(),
                    audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
                    limit_ns=a.limit_ns or None, clock=clock, strict=a.strict, signer=a.signer, lms_key=a.lms_key,
-                   keygen_workers=a.keygen_workers)}
+                   keygen_workers=a.keygen_workers,
+                   sessions_out=a.sessions or Path(a.out).with_name("sessions-" + Path(a.out).name))}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["audits"] and doc["audits_accepted_under_signer"] == doc["audits"] else 1
 
