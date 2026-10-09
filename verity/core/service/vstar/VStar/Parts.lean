@@ -4,8 +4,8 @@ import VStar.Compose
 /-!
 # V*'s algebra cut into statements (`verity_flock.rec_residuals.parts`)
 
-A rep's `InnerRepCheck` S is cut into parts of at most `MAX_REGIONS` public regions, `MAX_SLOTS` sha512x3 slots and 16
-residuals each, each residual in the first part it fits, in S's order. A part reads the row ports its residuals touch (in
+A rep's `InnerRepCheck` S, of any number of residuals, is cut into parts of at most `MAX_REGIONS` public regions,
+`MAX_SLOTS` sha512x3 slots and 16 residuals each, each residual in the first part it fits, in S's order. A part reads the row ports its residuals touch (in
 S's order) and the v elements they touch (in v's order), w and v renumbered. `parts` reads S's terms through their ports
 without checking them, so its domain is a checked S (`checkS`): past it, Python's slices and lookups fail.
 -/
@@ -13,7 +13,7 @@ without checking them, so its domain is a checked S (`checkS`): past it, Python'
 namespace VStar
 
 def MAX_REGIONS : Nat := 64
-def MAX_SLOTS : Nat := 128
+def MAX_SLOTS : Nat := 160
 
 /-- `rec_residuals.regions`: a digest region per row port, `v`'s and `out`'s. -/
 def regions (ports : Nat) : Nat := ports + 2
@@ -49,7 +49,7 @@ def touched (S : RepS) (starts : Array Nat) (r : Res) : Array Nat × Array Nat :
 
 /-- `rec_residuals.parts(S, maxRegions, maxSlots)`. -/
 def parts (S : RepS) (maxRegions := MAX_REGIONS) (maxSlots := MAX_SLOTS) : Except String (Array Part) := do
-  checkRepS S
+  checkRepS S (whole := true)
   checkS S.gf
   let ports := S.ports.toArray
   let mut starts : Array Nat := #[0]

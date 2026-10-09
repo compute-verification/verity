@@ -9808,10 +9808,10 @@
    ]
   },
   "Flock.RecResiduals": {
-   "digest": "f38b5518e12ad0fa803bc817caa6537ff6c44b186b1785bf609ae89e5a6601b8",
+   "digest": "0349649c4bc1bc35b67eec8d75f4d2701ff8b8aff76e2b7eddb26706a0e24695",
    "definitions": {
     "Flock.RecResiduals.MAX_REGIONS": "f9593ff468c01d7c7c5b3836d119f7c7a7a66dd0cc29e6babbfd0048f7b95a4a",
-    "Flock.RecResiduals.MAX_SLOTS": "3eb17a14aba29fe943b17839505c8b0c3bdf0e200d3d997e1889cbfad768f7b6",
+    "Flock.RecResiduals.MAX_SLOTS": "894c81e69c7e8c28b0a886e4ba8e84efe82848604c571897eab57783163050f6",
     "Flock.RecResiduals.PER_SLOT": "2841b70e4a3c8022032eb27208bd938d8eabaa861ae9069852f2e56b0d8fc790",
     "Flock.RecResiduals.RES_OUT_WORDS": "c240e3cd935653015a23a51d3312cd1c6a19fd5555bb5844a3c5a8f0ac79dbf8",
     "Flock.RecResiduals.check": "8a82116bf86d9141828eaead29599f2a727ba209d831726881d1036f39a7c43a",
