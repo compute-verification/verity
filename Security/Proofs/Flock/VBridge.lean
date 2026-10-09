@@ -23,6 +23,7 @@ import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 import Proofs.Flock.VBridge.Algebra.Lincheck
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.Ligerito
+import Proofs.Flock.VBridge.Algebra.LigeritoConverse
 import Proofs.Flock.VBridge.Algebra.ToVStar
 import Proofs.Flock.VBridge.Compiled
 import Proofs.Flock.VBridge.AccChain
