@@ -131,4 +131,3 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
                         str(tmp_path / "program.json")], capture_output=True, text=True)
     assert p.returncode == 1 and p.stdout.startswith(
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape"), p.stdout
-
