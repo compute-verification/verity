@@ -1,4 +1,4 @@
-import Proofs.Flock.VBridge.Algebra.Structure
+import Flock.RecAlgebra
 import Proofs.Flock.VBridge.OfVStar
 
 /-!
@@ -15,7 +15,9 @@ computes `resVal (gfS S) (termVal w v)` over V*'s S (`VStar.GfS`, lists) and the
 * `residuals_toV`: when `Algebra.residuals S w v = .ok rs`, the ports have S's sizes and `rs[r]` is V*'s residual `r`.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
+
+open FlockVBridge
 
 open Flock
 
@@ -138,4 +140,4 @@ theorem residuals_toV {S : GfS} {w v rs : Array F128} (hS : S.BitsOk) (h : resid
     simp only [Array.getElem_map, GfS.toV, List.getElem_map, Array.getElem_toList]
     exact resValue_toV S w v hS.1 _ (hS.2 _ (Array.getElem_mem hr'))
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

@@ -36,7 +36,7 @@ namespace FlockVBridge.Compiled
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
-open FlockVBridge.Algebra (verifierRows structureOf residuals valOf kapSum)
+open Flock.RecAlgebra (verifierRows structureOf residuals valOf kapSum)
 
 /-! ## What V*'s layers hold for one rep -/
 
