@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Refine.Frames
   and `α`, `β`, each round's two messages and its challenge, `z_partial` and `r'`; the chunks of
   `Discharge.Exec.lcFrames`, which `lincheck_emitted` shows an accepting run consumes);
 * its rounds (Piop.lean:134–142), on those rounds' coins, end at `dot comb z_partial` with challenges `ts`: the fold of
-  `lStep` from `α·v_A + v_B + β` (`FlockVBridge.Algebra.lcFold`), which is the check of Piop.lean:148;
+  `lStep` from `α·v_A + v_B + β` (`Flock.RecAlgebra.lcFold`), which is the check of Piop.lean:148;
 * the statement's circuit fold at `α`, `β` and `ts` is `comb` (Piop.lean:143–145), of the width Piop.lean:146 checks.
 
 `lincheck_plays_of_checks` feeds it to `lincheck_refines`: the model's lincheck plays the proof's messages on those
@@ -136,7 +136,7 @@ end Run
 /-- **The lincheck accepts when its checks hold** (`lincheck_refines`' converse, Piop.lean:126–151). From a
 transcript `t` whose rounds answer the lincheck's frames (`LcAnswered`), with `α`, `β`, the rounds' coins `C j` and `r'`
 the first coins of rounds `t.k`, `t.k + 1`, `t.k + 2 + j` and `t.k + 2 + (k_log − 6)`: when the rounds (the fold
-of `lStep` on `p`'s round messages and `C`, `FlockVBridge.Algebra.lcFold`) from `α·v_A + v_B + β` end at
+of `lStep` on `p`'s round messages and `C`, `Flock.RecAlgebra.lcFold`) from `α·v_A + v_B + β` end at
 `dot comb z_partial` with challenges `ts` (Piop.lean:148), and the circuit fold at `α`, `β`, `ts` is `comb` of width
 64 (Piop.lean:143–146), the verifier's lincheck returns `w = dot (skipWeights r') z_partial`, `r'` and `ts`
 reversed, having consumed its `k_log − 3` rounds with nothing left pending. -/

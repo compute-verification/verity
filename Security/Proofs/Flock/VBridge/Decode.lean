@@ -377,12 +377,12 @@ theorem sub_ge {idx : Array ℕ} (x : ℕ → Flock.F128) {m : ℕ} (h : idx.siz
 the verifier refuses). -/
 def vOf (sh : Flock.Shape) (rounds : Array (Array Flock.F128)) (extras : Array Flock.Claim) (comb : Array Flock.F128) :
     ℕ → Flock.F128 :=
-  match FlockVBridge.Algebra.verifierRows sh rounds extras comb with
+  match Flock.RecAlgebra.verifierRows sh rounds extras comb with
   | .ok (v, _, _) => fun k => v.getD k 0
   | .error _ => fun _ => 0
 
 theorem vOf_eq {sh : Flock.Shape} {rounds : Array (Array Flock.F128)} {extras : Array Flock.Claim}
-    {comb : Array Flock.F128} {v : Array Flock.F128} {info} {kappa} (h : FlockVBridge.Algebra.verifierRows sh rounds extras comb = .ok (v, info, kappa)) :
+    {comb : Array Flock.F128} {v : Array Flock.F128} {info} {kappa} (h : Flock.RecAlgebra.verifierRows sh rounds extras comb = .ok (v, info, kappa)) :
     vOf sh rounds extras comb = fun k => v.getD k 0 := by
   unfold vOf
   rw [h]

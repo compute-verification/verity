@@ -32,7 +32,7 @@ namespace FlockVBridge.AccChain
 
 open Flock
 open FlockSoundness.Refine (fOf fOf_add fOf_mul fOf_injective)
-open FlockVBridge.Algebra
+open Flock.RecAlgebra
 open FlockVBridge.Compiled (RepData AccHolds)
 
 /-! ## `kappa`'s shape -/

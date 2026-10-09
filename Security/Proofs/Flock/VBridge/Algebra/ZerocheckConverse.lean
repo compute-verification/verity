@@ -16,7 +16,7 @@ The steps run forward one at a time: `bind_of_ok`, each absorb's state (`label_e
 every step does (`forIn_rounds_of`).
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine Transcript
 
@@ -264,4 +264,4 @@ theorem zerocheck_plays_of_checks (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteAr
     ha₂ har hr hz hC hpc hfold
   exact ⟨t', h, hrt, hkt, hpt, (zerocheck_refines m hm digest cap p t t' _ hwf h).2.2⟩
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra
