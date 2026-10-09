@@ -9,7 +9,8 @@
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
-the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
+the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
+transitively without their dependency groups, which are their own tests' tooling), the paths it lists under
 `[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
 tests read a little of a large dependency), the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
@@ -222,11 +223,13 @@ def _pyproject(path: str) -> dict:
     return tomllib.loads((ROOT / path / "pyproject.toml").read_text())
 
 
-def _requires(project: dict, data: dict) -> tuple[str, ...]:
+def _requires(project: dict, data: dict, groups: bool = True) -> tuple[str, ...]:
+    """The distributions a member names: its dependencies and extras, and with ``groups`` its dependency groups (its own tests'
+    tooling, which code that imports it never reads)."""
     reqs = list(project.get("dependencies", []))
     for extra in project.get("optional-dependencies", {}).values():
         reqs += extra
-    for group in data.get("dependency-groups", {}).values():
+    for group in data.get("dependency-groups", {}).values() if groups else ():
         reqs += [r for r in group if isinstance(r, str)]
     return tuple(sorted({_requirement_name(r) for r in reqs}))
 
@@ -355,7 +358,8 @@ def artifact_ids(suite: Suite) -> dict[str, str]:
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Directories of the workspace packages `suite` depends on, directly or through another."""
+    """Directories of the workspace packages `suite` depends on, directly (its dependencies, extras and dependency groups) or
+    through another's dependencies and extras: a dependency's groups are its own tests' tooling, not what code importing it reads."""
     seen: dict[str, str] = {}
     todo = [r for r in suite.requires if r in pkgs]
     while todo:
@@ -364,7 +368,7 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
             continue
         seen[name] = pkgs[name]
         data = _pyproject(pkgs[name])
-        todo += [r for r in _requires(data["project"], data) if r in pkgs]
+        todo += [r for r in _requires(data["project"], data, groups=False) if r in pkgs]
     return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 

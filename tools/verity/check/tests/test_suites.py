@@ -336,6 +336,26 @@ def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch)
     assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
 
 
+def test_a_dependencys_dependency_group_is_not_in_its_dependents_closure(tmp_path, monkeypatch):
+    """`b`'s dev group (its own tests' tooling, `a`) keys `b`'s suite but not `c`'s, which depends on `b`: code importing `b`
+    never reads `a`, so a change there need not run `c`."""
+    _workspace(tmp_path)
+    (tmp_path / "pyproject.toml").write_text((tmp_path / "pyproject.toml").read_text().replace('["a", "b"]', '["a", "b", "c"]'))
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\n\n[dependency-groups]\ndev = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "c" / "tests").mkdir(parents=True)
+    (tmp_path / "c" / "pyproject.toml").write_text('[project]\nname = "c"\ndependencies = ["b"]\n\n[tool.uv.sources]\n'
+                                                   'b = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert S.inputs_of(by["b"], pkgs) == ["a", "b"] and S.inputs_of(by["c"], pkgs) == ["b", "c"]
+    (tmp_path / "a" / "mod.py").write_text("X = 1\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
+
+
 def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, monkeypatch):
     """A test that reads a declared package's dependency fails the guard, which allows only `inputs_of`, so a change there
     need not run the suite that declared the package."""
