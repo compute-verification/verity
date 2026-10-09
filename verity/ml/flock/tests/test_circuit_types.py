@@ -1,5 +1,6 @@
 """Circuit types (`verity_flock.circuit_types`): a two-level adder evaluates to the sum and equals its expansion; the digest is
-RFC 8785 JSON under SHA-512 and ignores names; table reads read their table; and `validate` refuses each broken rule."""
+RFC 8785 JSON under SHA-512 and ignores names; table reads read their table; `validate` refuses each broken rule; and the
+universal unit's type has the digests Lean's builder of it pins."""
 from __future__ import annotations
 
 import hashlib
