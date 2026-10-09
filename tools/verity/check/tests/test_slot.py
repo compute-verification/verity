@@ -641,6 +641,13 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert SLOT.main(["--twin", "p2@vy-nebius-1", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
     assert (f"slot: not started: twin p2@vy-nebius-1 can't be claimed (vy-nebius-1 isn't in {tmp_path / 'absent-peers'}), "
             "so its twin there runs instead; exit 75") in capsys.readouterr().err
+    monkeypatch.setattr(SLOT, "twin_here", lambda *a: ("unreachable", {"why": "PermissionError: twins"}))
+    assert SLOT.main(["--twin", "p2", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
+    assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
+            in capsys.readouterr().err)
+    monkeypatch.undo()
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
     assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
     t = [NOW]
     peeks = []

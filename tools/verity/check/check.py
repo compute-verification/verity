@@ -21,7 +21,8 @@
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
                                                             refuses when no machine's slots can be read; with no slot free on
-                                                            any, twins: the check on each machine it can run on (`twins`)
+                                                            any, twins: the check on each machine it can run on (`twins`),
+                                                            the first to take a slot runs; exit 75 when none ran: rerun
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -784,7 +785,8 @@ def record(argv: list[str]) -> int:
     REF (default origin/main, fetched first), or whenever --agreement is given, and the newest recorded checks' verdicts
     (`gather_verdicts`) unless it is given a pack or --no-cache. A commit that can't land on REF as it is
     (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
-    launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed)."""
+    launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
+    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it)."""
     on = base = None
     agreement = priority = False
     rest = []

@@ -41,7 +41,8 @@ free slot (`check.py --record --on auto`), so it takes the first slot that frees
 claims PAIR first: `mkdir TWINS/PAIR` beside SLOTS on this machine (`--twin PAIR`) or on HOME, over the ssh PEERS names for it.
 Its twins, finding the claim (each poll here, every TWIN_PEEK_S from another machine, and whenever one holds a slot), leave
 their line and exit NOT_STARTED. A claim that can't be made (HOME unreachable or not in PEERS) also exits NOT_STARTED, so a
-pair never runs twice: the twin on HOME still runs.
+pair never runs twice: the twin on HOME still runs. It fails closed: when HOME's own claim can't be written, or HOME is gone,
+no twin runs, and every one exits NOT_STARTED, which `check.py --record` returns as "rerun".
 
 `python3 tools/verity/check/slot.py --status [--json]`: one line per slot, with who holds its lock (the pid in /proc/locks, when that
 process started, its command) or `free`, and the window that blocks it, if any, then a line for each of its windows open now or
@@ -556,7 +557,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             if state != "claimed":
                 os.close(got[1])
                 return leave(ticket, tfd, f"its twin took a slot first ({describe(info) or 'claimed'})" if state == "taken" else
-                             f"twin {pair} can't be claimed ({info.get('why')}), so its twin there runs instead")
+                             f"twin {pair} can't be claimed ({info.get('why')}), so its twin there runs instead" if "@" in pair else
+                             f"twin {pair}'s claim can't be written here ({info.get('why')}), and no twin runs without it: "
+                             "rerun the check")
         if got:
             break
         why = f"{n} check(s) ahead in line" if n else \
