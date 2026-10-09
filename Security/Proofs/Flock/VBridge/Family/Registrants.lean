@@ -13,8 +13,10 @@ SHA-512 collision, in a pair fixed by the two records rather than by a run:
   openings collide (`TwoOpenings.collides`), or hm96's leaves do (`hm96Pair_spec`);
 * `rowEnc_get_eq`: one row's bytes (`rowEnc`, what `sha512/row/v1` hashes) fix its bits at every width, so two
   sessions' values agree at each bit both widths hold;
-* `NoRegistrantCollision`, `rowsShared_of`: `RowsShared` where no two sessions' registrant records at one root and
-  position give either collision.
+* `SharedRows`, `rowsShared_of_sharedRows`: `RowsShared` where two sessions' registrant records at one root and
+  position hold one row's bytes, as they do when the family takes them from one choice;
+* `NoRegistrantCollision`, `sharedRows_of`, `rowsShared_of`: `SharedRows`, and so `RowsShared`, where no two such
+  records give either collision.
 -/
 
 namespace FlockVBridge.Family
@@ -151,16 +153,35 @@ def NoRegistrantCollision : Prop :=
         ((F.zs R ω t R₂ s).rd.ws (.inl (u, q))) (rowEnc (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
         ((F.zs R ω t R₂ s').rd.ws (.inl (u', q'))))
 
-/-- **`RowsShared` where no two registrant records collide** (`registrants_eq_or_collides`, `rowEnc_get_eq`). -/
-theorem rowsShared_of (h : F.NoRegistrantCollision dg N k Rw) : F.RowsShared dg N k Rw := by
-  intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat b hb hb'
+/-- **Two sessions' registrant records at one registered root and position hold one row's bytes.** At every accepted
+outer proof, where two sessions' registered reads name one root and one position, the registrants' values there have
+one `rowEnc`. It holds where the family's sessions take the registrant's opening at a root and position from one
+choice, the same in every session; `sharedRows_of` gives it from `NoRegistrantCollision` otherwise. -/
+def SharedRows : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
+    (u : Fin (F.Vs s).nv) (u' : Fin (F.Vs s').nv) (q : Fin (F.Vs s).c.ports.size) (q' : Fin (F.Vs s').c.ports.size),
+    (F.zs R ω t R₂ s).rd.isRead (.inl (u, q)) → (F.zs R ω t R₂ s').rd.isRead (.inl (u', q')) →
+    (F.zs R ω t R₂ s).rd.port (.inl (u, q)) = (F.zs R ω t R₂ s').rd.port (.inl (u', q')) →
+    (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ s').rd.readAt (.inl (u', q')) →
+    rowEnc (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) = rowEnc (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
+
+/-- **`SharedRows` where no two registrant records collide** (`registrants_eq_or_collides`). -/
+theorem sharedRows_of (h : F.NoRegistrantCollision dg N k Rw) : F.SharedRows dg N k Rw := by
+  intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat
   obtain ⟨h1, h2⟩ := h R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat
   rcases registrants_eq_or_collides (F.zs R ω t R₂ s).rd (F.zs R ω t R₂ s').rd hr hr' hport hat with he | hc | hc
-  · have he' : rowEnc (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) =
-        rowEnc (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))) := he
-    exact rowEnc_get_eq he' b _ _
+  · exact he
   · exact absurd hc h1
   · exact absurd hc h2
+
+/-- **`RowsShared` from one row's bytes** (`SharedRows`, `rowEnc_get_eq`). -/
+theorem rowsShared_of_sharedRows (h : F.SharedRows dg N k Rw) : F.RowsShared dg N k Rw := by
+  intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat b hb hb'
+  exact rowEnc_get_eq (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat) b _ _
+
+/-- **`RowsShared` where no two registrant records collide**. -/
+theorem rowsShared_of (h : F.NoRegistrantCollision dg N k Rw) : F.RowsShared dg N k Rw :=
+  F.rowsShared_of_sharedRows dg N k Rw (F.sharedRows_of dg N k Rw h)
 
 end VStarFamily
 

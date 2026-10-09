@@ -5,9 +5,9 @@ import Proofs.Flock.Verifier.Registered
 /-!
 # The family's public files at accepting sessions: `PubCommits` up to a SHA-512 collision
 
-The prover writes each session's `pub.bin` (`rec_residuals.write`, `rec_residuals.py:464`); the verifier builds the
+The prover writes each session's `pub.bin` (`rec_residuals.write`, `rec_residuals.py:468`); the verifier builds the
 reads file's `rec-c<k>` entries from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:156-168`;
-`rec_residuals.commits_entry`, `rec_residuals.py:398-406`): two leaves, the frame-v3 tree over the `c_k`'s `b ‖ c`.
+`rec_residuals.commits_entry`, `rec_residuals.py:402-410`): two leaves, the frame-v3 tree over the `c_k`'s `b ‖ c`.
 At an accepting session `Registered.check` opens each drawn instance's table row against that root, so the row's leaf is
 the `c_k`'s, or the verifier's opening and the honest one collide:
 
@@ -175,8 +175,8 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 `j`'s reads file registering `rec-c<k>` has two leaves and the root `commitsRoot` over two `b ‖ c`, row `x`'s the `b ‖ c`
 (`cOf`) of the commitment of `t`'s round `x · n₀ + kc k` (rep `x`'s message round `k`, `sel`'s row `x`) where `t` has
 that round. V* builds them
-from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:162`; `rec_residuals.commits_entry`,
-`rec_residuals.py:398-406`). The check that establishes it: the verifier computes its reads file's `rec-c<k>` entries
+from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:164`; `rec_residuals.commits_entry`,
+`rec_residuals.py:402-410`). The check that establishes it: the verifier computes its reads file's `rec-c<k>` entries
 itself from the round commitments it holds, by `commitsRoot` (no file the prover sends carries them). -/
 def HOwnRoots (cOf : Cm → List UInt8) : Prop :=
   ∀ R ω t R₂ j, ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ k, cIndex reg.value = some k → reg.leaves = 2 ∧
@@ -255,7 +255,7 @@ theorem pubCommits_or_collides (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs
 /-- **The public file's round-commitment rows are the `c_k`'s**: at every history `t`, where session `j`'s circuit port
 `q` is a port of its reads file registering `rec-c<k>` and unit `u` reads it at row `x`, the public file's `b ‖ c` of
 `u`'s row `q` is the `b ‖ c` (`cOf`) of the commitment of `t`'s round `x · n₀ + kc k`. The check that establishes it:
-the verifier compares `pub.bin`'s rows at its `rec-c<k>` reads with the `c_k` it holds (`rec_vstage.py:162`), rather
+the verifier compares `pub.bin`'s rows at its `rec-c<k>` reads with the `c_k` it holds (`rec_vstage.py:164`), rather
 than opening them against `commits_entry`'s root (`Flock.Registered.check`), which binds them only up to a SHA-512
 collision (`pubCommits_or_collides`). -/
 def HPubRows (cOf : Cm → List UInt8) : Prop :=
@@ -264,10 +264,10 @@ def HPubRows (cOf : Cm → List UInt8) : Prop :=
       reg.reads[u.val]? = some (some x) → ∀ e : Cm × (ℐ).Coin, t[x * F.n₀ + F.kc k]? = some e →
         (F.zs R ω t R₂ j).pub.digest u.val q.val (F.Vs j).c.ports.size = ⟨(cOf e.1).toArray⟩
 
-/-- **`PubCommits` from the verifier's checks** (`HOwn`, `HPubRows`), at every history, accepted or not. -/
+/-- **`PubCommits` from the verifier's checks** (`HOwn`, `HPubRows`), at every accepting session (and at every other). -/
 theorem pubCommits_of_pubRows (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs F.own F.sel) (hown : F.HOwn)
     (hrows : F.HPubRows cOf) : F.PubCommits (F.bc cOf) := by
-  intro i R ω t e he R₂ j u q hpos
+  intro i R ω t e he R₂ j _ u q hpos
   rw [hSk, mem_skOf_inl] at hpos
   obtain ⟨p, hp, hname, x, hx, hsel⟩ := hpos
   obtain ⟨-, k, hk, -, rfl⟩ := hsel
