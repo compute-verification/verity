@@ -17,7 +17,8 @@ computes.
   ascending wire lists `forms` makes, all with constant `0` (the fill is `0`, and nothing negates a form).
 * **What it computes** (`eval_uuType`): on any input bits, the type's outputs are `Desc.eval` of the description those bits
   hold on the data they hold, for every `p`. Each source and each output is the gather lemma at `cur = Desc.wiresTo`.
-* **Its rows** (`uu_sound`, `uu_rows_iff`): whenever `derive` lays the type out (the verifier's own check), column values
+* **Its rows** (`uu_sound`, `uu_rows_iff`): whenever `derive` lays the type out (the verifier's own check; `accepted`
+  runs it, with the format's rules, at the classes the digests pin), column values
   that satisfy the rows with the constant at 1 carry `Desc.eval` of their description columns on their data columns; and
   outputs `y` are carried by some satisfying assignment with description `d` and data `x` exactly when `y = d.eval x`.
 * **The tie to Python** (the `#guard`s at the end): the type's digest is the one `circuit_types.from_gf2` gives for
