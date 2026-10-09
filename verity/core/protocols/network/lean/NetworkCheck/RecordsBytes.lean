@@ -8,6 +8,8 @@ import NetworkCheck.RecordsGrid
 of the evidence agree, and so do the grids, the clock and the frame-size check the verdicts read from them:
 
 - `bytesOfBits_bitsOfBytes`: a payload's bits, read back as bytes, are the payload;
+- `unhex_eq`: the records check's hex decoder, which reads a string's characters into an array with no list between, is
+  C-Flock's `Flock.unhex`;
 - `evidenceOf_toEvidence`: `Check.evidenceOf` is `Records.evidenceOf` with each payload read as its bits;
 - `expectedGridsOfBytes_eq`: window `w`'s grid of `expectedGridsOfBytes` is `Check.expectedGrid`'s of the link as v2 reads it
   (through `expectedGrids` and `RecordsGrid.expectedGrids_eq`);
@@ -73,6 +75,17 @@ private theorem arrayMapM_map {ε α β γ} (f : α → Except ε β) (g : β �
   rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList, listMapM_map]
   cases xs.toList.mapM f <;> simp [Functor.map, Except.map]
 
+private theorem unhex_flock (s : String) : Flock.unhex s = unhexChars s.toList.toArray := rfl
+
+private theorem foldl_push (l : List Char) (a : Array Char) : l.foldl Array.push a = a ++ l.toArray := by
+  induction l generalizing a with
+  | nil => simp
+  | cons c l ih => simp [ih]
+
+/-- The records check's hex decoder is C-Flock's: the same bytes and the same refusals. -/
+theorem unhex_eq (s : String) : unhex s = Flock.unhex s := by
+  rw [unhex_flock, unhex, String.foldl_eq_foldl_toList, foldl_push, Array.emptyWithCapacity_eq, Array.empty_append]
+
 /-- `Check.frameOf` is `byteFrameOf` with the payload read as its bits. -/
 theorem frameOf_toLogical (j : Lean.Json) : Check.frameOf j = ByteFrame.toLogical <$> byteFrameOf j := by
   unfold Check.frameOf byteFrameOf
@@ -87,8 +100,9 @@ theorem frameOf_toLogical (j : Lean.Json) : Check.frameOf j = ByteFrame.toLogica
           Except.bind (Flock.J.asNat q "an anchor") fun y => Except.bind (Flock.J.asNat r "an index") fun z =>
           Except.pure (⟨Check.bitsOfBytes x, y, z⟩ : NetworkCertifier.LogicalFrame)) =
         ByteFrame.toLogical <$> (Except.bind (Flock.J.asStr p "a frame's payload") fun x =>
-          Except.bind (Flock.unhex x) fun x => Except.bind (Flock.J.asNat q "an anchor") fun y =>
+          Except.bind (unhex x) fun x => Except.bind (Flock.J.asNat q "an anchor") fun y =>
           Except.bind (Flock.J.asNat r "an index") fun z => Except.pure (⟨x, y, z⟩ : ByteFrame))
+      simp only [unhex_eq]
       rcases Flock.J.asStr p "a frame's payload" with _ | x <;> try rfl
       dsimp only [Except.bind]
       rcases Flock.unhex x with _ | b <;> try rfl

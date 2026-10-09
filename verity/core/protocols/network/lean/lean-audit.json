@@ -59,6 +59,12 @@
    "assumptions": [],
    "type_hash": "00c82b79aefc9344a9cdbc07ca643cd8d1ff5c100322f4bcd7320bd764b32a67"
   },
+  "NetworkCheck.RecordsBytes.unhex_eq": {
+   "owner": "@network-accounting",
+   "signature": ["NetworkCheck.RecordsBytes.unhex_eq (s : String) : Eq (NetworkCheck.Records.unhex s) (Flock.unhex s)"],
+   "assumptions": [],
+   "type_hash": "47004c441f361d7380e6a9c49d91ceb2bc2b4739ca315db785465a279eeeb248"
+  },
   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
    "owner": "@network-accounting",
    "signature": [
@@ -77,6 +83,7 @@
   "frozen": {
    "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": "lemma: an equation between two of the check's own functions, which the records check's verdicts read, not a property of an outcome",
    "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": "lemma: an equation between two of the check's own functions, which the records check's verdicts read, not a property of an outcome",
+   "NetworkCheck.RecordsBytes.unhex_eq": "lemma: an equation between two of the check's own functions, which the records check's verdicts read, not a property of an outcome",
    "NetworkCheck.RecordsGrid.expectedGrids_eq": "lemma: an equation between two of the check's own functions, which the records check's verdicts read, not a property of an outcome"
   }
  },
@@ -153,7 +160,7 @@
    ]
   },
   "NetworkCheck.Records": {
-   "digest": "d78835e2b759c7eedf28182804b66ae2a0be4113e7dd0d94da4941bd84579376",
+   "digest": "aa42518ee159e0ee9c3bf5f6095f57f5b304f5063898ee2a2d39f79a3b9da8c7",
    "definitions": {
     "NetworkCheck.Records.ByteEvidence": "aa580ff61f821fabe5e248a95383f2dd41c8feb9df229aa23b945432e9a56338",
     "NetworkCheck.Records.ByteEvidence.links": "b73e6b3cbefa0c40337c3be09433789a9542fdfc99d418eb20158be63520c062",
@@ -169,18 +176,22 @@
     "NetworkCheck.Records.ByteLink.syncs": "ef3add28ec5bd9f2122ee57915ae48cb2d8701c6f90d5c64c68104ce4c19e77f",
     "NetworkCheck.Records.ByteLink.toLink": "f922f97469c5e5424cb2fc541f68e772cc63eb1c5a159ab092a7e70f390e0e13",
     "NetworkCheck.Records.RawGrid": "e83f00f4eacd8a1ff0d0d7d44838f9fe1601e5c2cec5e9b5fc9ea6e4d7114ca4",
-    "NetworkCheck.Records.byteFrameOf": "10df70146cddc2945243f55f3b265de89ed5564c3b21048c87a4d98d5d78a8fe",
+    "NetworkCheck.Records.byteFrameOf": "a9cb5f7f12a0d66df4a463623cc0deb4f83be34db4769b35ebd34c9ced308a93",
     "NetworkCheck.Records.enqueueCounts": "f93ce2c8694803daf1a089d881b7969bd87bac809122a2afe373fa0096ee4b66",
     "NetworkCheck.Records.evidenceOf": "1c7b4d0aa93d56b977ef99caa2d9e38c146c4155e9f3a84af1db4f57becf110c",
     "NetworkCheck.Records.expectedGrids": "237a9804ac98ec77a7635c70ea9612702aa0097650e4293b834b7144932fd38e",
     "NetworkCheck.Records.expectedGridsOfBytes": "8f74648cb8761964d8896248caf4ea5b2ba58e3687ea239d3d701de56329c9b0",
     "NetworkCheck.Records.handingRev": "c5df6ce481ea80fb9a47d56d4e7f79375eac4dd0655a0c10e94cdae9faf20c74",
     "NetworkCheck.Records.releases": "a604b1b0bc9bdf31a6735db6b0147b3928f9bd02eb59349444e87dd8f7b12d3b",
-    "NetworkCheck.Records.rows": "7c68d0a14f36e9a70c6eeceea2a6c44b984d76e7f397574541d2ac85d164a6d4"
+    "NetworkCheck.Records.rows": "7c68d0a14f36e9a70c6eeceea2a6c44b984d76e7f397574541d2ac85d164a6d4",
+    "NetworkCheck.Records.unhex": "6208d9f35c6b6ca3e1030618e0a9ca1f54ba5265a849233f8c711761470530cd",
+    "NetworkCheck.Records.unhexChars": "d4859f71f162b192288e075f35895d06d1bb740654702b58938b5c64a1c3b9b5",
+    "NetworkCheck.Records.unhexChars._sparseCasesOn_1": "6b11bc5abff59df46dbf88223d83e02779a22838d5bd8d75b3d872b759ff07a1"
    },
    "guarantees": [
     "NetworkCheck.RecordsBytes.evidenceOf_toEvidence",
     "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq",
+    "NetworkCheck.RecordsBytes.unhex_eq",
     "NetworkCheck.RecordsGrid.expectedGrids_eq"
    ]
   }

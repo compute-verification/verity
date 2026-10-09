@@ -159,10 +159,26 @@ def commitmentOf (b : ByteArray) : Flock.V Commitment := do
   if r.pos ≠ b.size then throw "bytes left after the records"
   pure ⟨rs, b⟩
 
+/-- `Flock.unhex` of the characters `cs`, there `s.toList.toArray`. -/
+def unhexChars (cs : Array Char) : Flock.V ByteArray := do
+  if cs.size % 2 != 0 then throw s!"odd-length hex"
+  let v := fun (c : Char) =>
+    if c.isDigit then some (c.toNat - 48) else if 'a' ≤ c && c ≤ 'f' then some (c.toNat - 87) else none
+  let mut b := ByteArray.emptyWithCapacity (cs.size / 2)
+  for i in [0:cs.size / 2] do
+    match v (cs.getD (2 * i) ' '), v (cs.getD (2 * i + 1) ' ') with
+    | some h, some l => b := b.push (h * 16 + l).toUInt8
+    | _, _ => throw "not lowercase hex"
+  return b
+
+/-- `Flock.unhex` (`RecordsBytes.unhex_eq`), its characters read into an array with no list between, 8 bytes a character
+rather than 32: the evidence a case carries is hex of hex. -/
+def unhex (s : String) : Flock.V ByteArray := unhexChars (s.foldl Array.push (Array.emptyWithCapacity s.length))
+
 /-- `Check.evidenceOf`'s frame, its payload's bytes as they are. -/
 def byteFrameOf (j : Json) : Flock.V ByteFrame := do
   let #[p, a, i] ← Flock.J.asArr j "a frame" | throw "a frame is [payload, anchor, index]"
-  pure ⟨← Flock.unhex (← Flock.J.asStr p "a frame's payload"), ← Flock.J.asNat a "an anchor",
+  pure ⟨← unhex (← Flock.J.asStr p "a frame's payload"), ← Flock.J.asNat a "an anchor",
     ← Flock.J.asNat i "an index"⟩
 
 /-- `Check.evidenceOf`, each payload's bytes as they are. -/
@@ -361,8 +377,8 @@ def linkWindowJson (v : LinkWindow) : Json :=
 named as `Core.Protocol.answer` names it (`case: `, `params: `, `commitment: `, `evidence: `). -/
 def verdictsFn (j : Json) : Except String Json := do
   let parsed : Flock.V (Json × ByteArray × ByteArray) := do
-    pure (← Flock.J.get j "params" "the case", ← Flock.unhex (← Flock.J.str j "commitment" "the case"),
-      ← Flock.unhex (← Flock.J.str j "evidence" "the case"))
+    pure (← Flock.J.get j "params" "the case", ← unhex (← Flock.J.str j "commitment" "the case"),
+      ← unhex (← Flock.J.str j "evidence" "the case"))
   let (pj, cb, eb) ← parsed.mapError (s!"case: {·}")
   let p ← (Check.paramsOf pj).mapError (s!"params: {·}")
   let c ← (commitmentOf cb).mapError (s!"commitment: {·}")
