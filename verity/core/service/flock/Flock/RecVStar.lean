@@ -71,7 +71,7 @@ def check (i : Inner) (name : String) (n : Nat) : V VStar.Stmt := do
   | ss => throw s!"{name}: {ss.length} of V*'s statements have this name"
 
 /-- **V*'s circuit file of a statement**: the bytes `vstar stage` writes to `<dir>/circuit.txt` (`VStar.Cli.write`,
-`VStar/Cli.lean:43-53`): the statement's unit, laid out, emitted with its subcircuit and the statement's bindings
+`VStar/Cli.lean:38-47`): the statement's unit, laid out, emitted with its subcircuit and the statement's bindings
 (`VStar.emitCircuit`). -/
 def circuitFile (s : VStar.Stmt) (b : VStar.Bindings) : Except String ByteArray := do
   let u ← s.unit
@@ -98,7 +98,7 @@ def checkFile (s : VStar.Stmt) (b : VStar.Bindings) (circuitB : ByteArray) : V U
 /-- A statement's population: the registered population's instances for a drawn session, else its own. -/
 def population (st : Stmt) : Nat := (st.pub.population.map (·.1)).getD st.n
 
-/-- META's bindings (`VStar.Bindings`, `VStar/Compose.lean:50-55`, written at `Compose.lean:228-229`): the
+/-- META's bindings (`VStar.Bindings`, `VStar/Compose.lean:52-55`, written at `Compose.lean:228-229`): the
 `verity/partition/v1` digest, `program_sha512` and `program_digests`. -/
 def bindingsOf (c : Circuit) : V VStar.Bindings := do
   let name := c.unit.name
