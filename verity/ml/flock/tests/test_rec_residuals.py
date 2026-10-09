@@ -175,6 +175,17 @@ def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
     assert [RR.slots(p.S["ports"], p.S["gf"]["nv"]) for p in RR.parts(big, max_slots=10 ** 9)] == [171, 40]
 
 
+def test_an_algebra_of_more_residuals_than_one_statement_holds_is_cut_into_parts():
+    """A whole algebra may have more than ``OUT_WORDS / 8`` residuals (a universal unit's inner session has 17, run
+    r20261009-065336-108b); `parts` cuts it into statements that each hold at most that many, and a statement alone still may
+    not."""
+    many = dict(SMALL, res=[{"mul": [], "add": [["w", 129]]}] * 17)
+    S = {"gf": many, "ports": S_SMALL["ports"]}
+    with pytest.raises(ValueError, match="17 residuals"):
+        RR._check(S)
+    assert [p.res for p in RR.parts(S)] == [list(range(16)), [16]]
+
+
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
     """Ports on which SMALL's residuals are zero: the added terms set to the residuals they cancel."""
     w = [g.getrandbits(128) for _ in range(SMALL["nw"])]
