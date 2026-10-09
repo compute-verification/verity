@@ -1,9 +1,10 @@
 """Replay recorded served_zk windows through PoUW's check: the Python reference (`core_check`) and its Lean port
 (`pouw-check serve`, and `pouw-check-difftest`'s `opening`), each case against the verdict the run recorded.
 
-  python replay_core.py OUT [--runs DIR ...] [--v2 DIR|TAR]    OUT/replay.json and one line on stdout
+  python replay_core.py OUT [--runs DIR ...] [--add DIR ...] [--v2 DIR|TAR]    OUT/replay.json and one line on stdout
 
-Without ``--runs`` it selects every `job.sh` attempt in the evidence store and fetches its run record's ``out/``; without
+Without ``--runs`` it selects every `job.sh` attempt in the evidence store and fetches its run record's ``out/``
+(``--add`` names more, such as runs the store has not indexed yet); without
 ``--v2`` (A4's tree, or a tarball of it) it fetches A4's v2 run (`V2_ART`).  For each run with a summary:
 
 * **core cases** are the checks `core_check.case` decides, mapped to (params, registration, the service's answer):
@@ -366,6 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("out", type=Path)
     ap.add_argument("--runs", type=Path, nargs="*")
+    ap.add_argument("--add", type=Path, nargs="*", default=[], metavar="RUN",
+                    help="run records beside the store's (or --runs'), such as runs the store has not indexed yet")
     ap.add_argument("--v2", type=Path)
     ap.add_argument("--pass", dest="passes", action="append", default=[], metavar="RUN=MANIFEST",
                     help="a served run's retained pass manifest, for its windows' pass checks")
@@ -374,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         runs = a.runs if a.runs is not None else store_runs(Path(tmp) / "runs")
+        runs = [*runs, *(r for r in a.add if r.name not in {x.name for x in runs})]
         v2 = a.v2
         if v2 is None:
             research("data", "fetch", V2_ART, "--to", str(Path(tmp) / "v2"))
