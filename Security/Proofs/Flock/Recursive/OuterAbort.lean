@@ -41,8 +41,7 @@ end Stops
 
 section Leaves
 
-variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B]
-  (T : Table F K W Salt (B × Salt) D Hi VL) [CharP F 2]
+variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt (B × Salt) D Hi VL) [CharP F 2]
 
 /-- `viewWith` changes only the hidden leaves: its messages before `τ` are `view`'s. -/
 theorem viewWith_pre (w : W) (ω : T.Rand) (L : T.Hid → D) : (T.viewWith w ω L).pre = (T.view w ω).pre := rfl
