@@ -4,7 +4,7 @@ openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
 verifier's own inner shape (`--rec-inner`). The honest sessions themselves are replayed on the pod: their statements are
-hundreds of MB."""
+hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
 from __future__ import annotations
 
 import json
@@ -17,7 +17,8 @@ from test_rec_outer import BIN, staged  # noqa: F401
 from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 
-pytestmark = pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+pytestmark = [pytest.mark.slow,
+              pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")]
 
 # the fixture session's table shape (`test_rec_shape`'s cap) and the 16,16,8 class's (`87-rec-private.sh`, n64)
 SHAPES = [(25, 22, 8), (27, 22, 8)]
@@ -75,7 +76,6 @@ def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
         assert rc == 1 and line["error"].startswith(why), (name, n, line)
 
 
-@pytest.mark.slow
 def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off_it(staged, tmp_path):  # noqa: F811
     """`rec_outer`'s staged level (`rec-open/l8-h1`, four openings: no shape's V* has eight lanes) through the verifier's own
     files: `verify` refuses it at setup without `--rec-inner`, and `statement --rec-inner` refuses it as no statement of V*'s

@@ -70,11 +70,52 @@ def check (i : Inner) (name : String) (n : Nat) : V Unit := do
 /-- A statement's population: the registered population's instances for a drawn session, else its own. -/
 def population (st : Stmt) : Nat := (st.pub.population.map (·.1)).getD st.n
 
-/-- `check` on a statement's unit and population, with the verifier's own inner shape `inner`; a statement of V*'s needs
-one, and with one, the statement must be V*'s. -/
-def checkStmt (inner : Option Inner) (st : Stmt) : V Unit :=
+/-- META's bindings (`VStar.Bindings`, `vstar/VStar/Compose.lean:50-55`, written at `Compose.lean:228-229`): the
+`verity/partition/v1` digest, `program_sha512` and `program_digests`. -/
+def bindingsOf (c : Circuit) : V (String × String × Json) := do
+  let name := c.unit.name
+  let part := (c.metaJ.getObjVal? "partition").toOption.getD Json.null
+  let (some "verity/partition/v1", some digest) := ((part.getObjValAs? String "rule").toOption,
+      (part.getObjValAs? String "digest").toOption)
+    | throw s!"{name}: META partition is not a verity/partition/v1 digest"
+  let some program := (c.metaJ.getObjValAs? String "program_sha512").toOption
+    | throw s!"{name}: META names no program_sha512"
+  let some pd := (c.metaJ.getObjVal? "program_digests").toOption | throw s!"{name}: META names no program_digests"
+  pure (digest, program, pd)
+
+/-- A statement of V*'s binds the verifier's own partition object and program: META's partition digest is the object's
+(`HmRow.partitionDigest`), META's `program_sha512` and the object's `program` are the program's SHA-512, and
+`program_digests` names one Definition, the template the object's query names. Its digest is not recomputed: that is
+core's codec's digest of the one-Definition program, which this verifier does not encode. -/
+def checkBindings (c : Circuit) (partition : Option Json) (program : Option ByteArray) : V Unit := do
+  let name := c.unit.name
+  let (some obj, some prog) := (partition, program)
+    | throw s!"{name}: one of V*'s statements; pass the verifier's own partition object and program (--partition F, --program F)"
+  let (digest, sha, pd) ← bindingsOf c
+  let own := hexOf (← HmRow.partitionDigest obj)
+  if digest != own then throw s!"{name}: META partition digest {digest}, the verifier's partition object's {own}"
+  let ps := hexOf (Sha512.hash prog)
+  if sha != ps then throw s!"{name}: META program_sha512 {sha}, the verifier's program's {ps}"
+  let op := (obj.getObjValAs? String "program").toOption.getD ""
+  if op != ps then throw s!"{name}: the partition object's program {op}, the verifier's program's {ps}"
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let t := ((q.getObjVal? "params").toOption.getD Json.null |>.getObjValAs? String "template").toOption.getD ""
+  match pd with
+  | .obj kvs =>
+    match kvs.toArray.map (·.1) with
+    | #[k] => if k != t then throw s!"{name}: META program_digests names {k}, the partition's template {t}"
+    | ks => throw s!"{name}: META program_digests names {ks.size} Definitions, not the partition's template {t} alone"
+  | _ => throw s!"{name}: META program_digests is not an object"
+
+/-- `check` on a statement's unit and population, with the verifier's own inner shape `inner`, then `checkBindings` against
+its own partition object and program; a statement of V*'s needs all three, and with an inner shape, the statement must be
+V*'s. -/
+def checkStmt (inner : Option Inner) (st : Stmt) (partition : Option Json := none) (program : Option ByteArray := none) :
+    V Unit :=
   match inner with
-  | some i => check i st.c.unit.name (population st)
+  | some i => do
+    check i st.c.unit.name (population st)
+    checkBindings st.c partition program
   | none =>
     if isVStar st.c.unit.name then
       throw s!"{st.c.unit.name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
