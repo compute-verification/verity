@@ -187,6 +187,13 @@ def rowsOf (c : Circuit) (pub : Public) (reg : Port) (r : Nat) : ByteArray :=
   | some p, some t => tableRow pub t p r
   | _, _ => ByteArray.empty
 
+/-- The path the statement's header gives registered row `r` of `reg` (`entry`), the one `rowsOf c pub reg r` opens the
+registered root through. -/
+def pathOf (pub : Public) (reg : Port) (r : Nat) : ByteArray :=
+  match entry pub reg with
+  | .ok (_, paths) => paths.getD r ByteArray.empty
+  | .error _ => ByteArray.empty
+
 /-- The first of `rows` table rows whose stated position is not its own index. -/
 def badPosition (positions : Array Nat) (rows : Nat) : Option Nat :=
   (List.range rows).find? fun r => positions.getD r 0 != r
@@ -214,16 +221,24 @@ def checkDescriptionPort (c : Circuit) (pub : Public) (t : Tables) (reg : Port) 
   let rows := t.counts.getD p 0
   if rows != reg.leaves then
     throw s!"registered reads: port {reg.name}: its table has {rows} rows, and {reg.value}'s registration {reg.leaves}: an inner statement's description is its registered rows, each once, in order"
-  if positions.size != rows || paths.size != rows then
+  else if positions.size != rows || paths.size != rows then
     throw s!"registered reads: port {reg.name}: one position and one path per table row"
-  if let some r := badPosition positions rows then
+  else match badPosition positions rows with
+  | some r =>
     throw s!"registered reads: port {reg.name}: table row {r} states position {positions.getD r 0}, and an inner statement's description table is its registration in order (row {r} at position {r})"
-  if let some r := badRow reg pub t p rows positions paths then
-    throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {r}"
-  if let some i := badRef t np p rows pub.n then
-    throw s!"registered reads: port {reg.name}: instance {i}'s ref {ref t np p i} names no row of its {rows}-row table"
-  if let some r := unread t np p rows pub.n then
-    throw s!"registered reads: port {reg.name}: none of the {pub.n} instances reads table row {r}, registered row {r} of {reg.value}'s {reg.leaves}: an inner statement reads its whole description"
+  | none =>
+    match badRow reg pub t p rows positions paths with
+    | some r =>
+      throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {r}"
+    | none =>
+      match badRef t np p rows pub.n with
+      | some i =>
+        throw s!"registered reads: port {reg.name}: instance {i}'s ref {ref t np p i} names no row of its {rows}-row table"
+      | none =>
+        match unread t np p rows pub.n with
+        | some r =>
+          throw s!"registered reads: port {reg.name}: none of the {pub.n} instances reads table row {r}, registered row {r} of {reg.value}'s {reg.leaves}: an inner statement reads its whole description"
+        | none => pure ()
 
 /-- **A recursive session's inner statement's description, read from the developer's registration** (PROTOCOL.md §16.16):
 the header's `registered` names exactly the verifier's own ports (`own`, `--registered`), each a table of a shared-row file
