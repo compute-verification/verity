@@ -111,7 +111,7 @@ theorem selfCheckSilent_exe
   obtain ⟨-, -, -, hT⟩ := hC
   obtain ⟨-, -, -, -, -, -, -, hinner⟩ := hT c hA
   unfold proverExe
-  exact if_neg ((C.T c).tab.not_stops (hinner w hv (hreg c)) p.1)
+  exact ite_eq_right ((C.T c).tab.not_stops (hinner w hv (hreg c)) p.1)
 
 /-- **One table at its coins, in fixed randomness types** (`coin_close`): at any coin vector, through any encoding
 `enc` of the table's output and any equivalences `eR`, `eS` of `Fin NR` and `Fin NS` with the prover's and the
