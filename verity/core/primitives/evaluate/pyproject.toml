@@ -28,3 +28,5 @@ inputs = ["verity", "integrations/vllm/verity_vllm/__init__.py", "integrations/v
           "integrations/vllm/tests/regression/store_io.py", "tools/research/src/research",
           "benchmarks/numerical/tests/bench/data/captured-101/slices/silumul-v1-i8192",
           "benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64"]
+# Each xdist worker starts its own evaluator; `verity_difftest.build` takes its lock, so the workers build one at a time.
+parallel = true
