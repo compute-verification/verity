@@ -10,6 +10,7 @@ import Proofs.Flock.Recursive.Target
 import Proofs.Flock.Recursive.Transfer
 import Proofs.Flock.Recursive.Stage
 import Proofs.Flock.Recursive.Guarantees
+import Proofs.Flock.Recursive.Compile
 
-/-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), and the proofs of its two guarantees
-(`Guarantees`). -/
+/-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its two guarantees
+(`Guarantees`), and its soundness at the compiled inner protocol with the compile lemma open (`Compile`). -/
