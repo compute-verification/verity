@@ -1,10 +1,10 @@
 """Replay recorded served_zk windows through PoUW's check: the Python reference (`core_check`) and its Lean port
 (`pouw-check serve`, and `pouw-check-difftest`'s `opening`), each case against the verdict the run recorded.
 
-  python replay_core.py OUT [--runs DIR ...] [--v2 DIR]    OUT/replay.json and one line on stdout
+  python replay_core.py OUT [--runs DIR ...] [--v2 DIR|TAR]    OUT/replay.json and one line on stdout
 
 Without ``--runs`` it selects every `job.sh` attempt in the evidence store and fetches its run record's ``out/``; without
-``--v2`` it fetches A4's v2 run (`V2_ART`).  For each run with a summary:
+``--v2`` (A4's tree, or a tarball of it) it fetches A4's v2 run (`V2_ART`).  For each run with a summary:
 
 * **core cases** are the checks `core_check.case` decides, mapped to (params, registration, the service's answer):
   ``receive-honest`` and the registration controls ``receive-foreign``, ``receive-extra``, ``receive-raised`` and
@@ -28,6 +28,7 @@ import copy
 import json
 import subprocess
 import sys
+import tarfile
 import tempfile
 from collections import Counter
 from fractions import Fraction
@@ -47,7 +48,10 @@ CONTROLS = {"receive-foreign": "other/registration.json", "receive-extra": "regi
 
 
 def research(*args: str) -> str:
-    return subprocess.run(["research", *args], check=True, capture_output=True, text=True).stdout
+    r = subprocess.run(["research", *args], capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit(f"research {' '.join(args)}: exit {r.returncode}\n{r.stderr[-2000:]}")
+    return r.stdout
 
 
 def store_runs(into: Path) -> list[Path]:
@@ -251,6 +255,10 @@ def main(argv: list[str] | None = None) -> int:
         v2 = a.v2
         if v2 is None:
             research("data", "fetch", V2_ART, "--to", str(Path(tmp) / "v2"))
+            v2 = Path(tmp) / "v2"
+        elif v2.is_file():
+            with tarfile.open(v2) as tf:
+                tf.extractall(Path(tmp) / "v2", filter="data")
             v2 = Path(tmp) / "v2"
         sides = Sides()
         report: dict[str, Any] = {"runs": {}, "v2": {"art": V2_ART, "registrations": replay_v2(sides, v2)}}
