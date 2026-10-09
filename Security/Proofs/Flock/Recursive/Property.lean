@@ -58,7 +58,7 @@ noncomputable def regBcCommit (i : ℕ) :
 /-- **The verifier of record accepts every one of V*'s sessions**: each session's proof (`AcceptsV`: setup, registered
 reads, `Flock.Zk.shapeOk`, `Flock.Zk.verify`) and its statement's form (`FailClosed.ScopeZ`: `Flock.ProvedScope.check`),
 at the registration the outcome records. -/
-def VerifiesV {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+def VerifiesV {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zs : Reg₂ → (j : Fin (outerStatements cls regs)) → (Vs j).Outer Reg')
     {dg : ByteArray → ByteArray} {N : ℕ} (o : Reg₂ × VRec Vs Reg' dg N) : Prop :=
   AcceptsV zs o ∧ ∀ j, FailClosed.ScopeZ (zs o.1 j).I
 
@@ -80,15 +80,20 @@ def outerParts (m kLog claims : ℕ) : ℕ :=
   match Flock.RecResiduals.shape? m kLog claims with
   | none => 0
   | some sh =>
-    match Flock.RecAlgebra.structureOf sh >>= fun S => Flock.RecResiduals.groups S (Flock.RecResiduals.portSizes sh) with
+    match Flock.RecAlgebra.structureOf sh >>= fun S =>
+        Flock.RecResiduals.groups S (Flock.RecResiduals.portSizes sh) with
     | .ok gs => sh.sched.levels.size + gs.size
     | .error _ => 0
+
+/-- **The number of V*'s outer statements over the class `cls` and its regions `regs`**: `outerParts` at the class's
+`m` and `k_log`, and the inner session's claims, two of the protocol's and two a region (`Flock.Stmt.extraClaims`). -/
+abbrev outerStatements (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog))) : ℕ :=
+  outerParts cls.m cls.kLog (2 + 2 * regs.length)
 
 /-- **The recursive audit, as the verifier of record runs it.**
 
 (i) For every prover `σ` of the recursive audit with C-Flock's compiled table as its inner protocol (`innerExec`): V*'s
-statements `Vs`, as many as V*'s staging lays out over the class and its regions (`outerParts` at `2 + 2·|regs|`
-claims), and V*'s sessions
+statements `Vs`, as many as V*'s staging lays out over the class and its regions (`outerStatements`), and V*'s sessions
 `zs R ω t R₂ j` under their laws, the hidden statement `x`, the messages V*'s layers hold and the rounds' commitments
 (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root `rt`. On an outcome `o` whose sessions
 all verify, `reads o i` says a session read row `i`, `row o i` is the commit string it read there and `op o i` its
@@ -115,18 +120,20 @@ def RecursiveAudit : Prop :=
     (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
     (sch : Accounting.Schedule)
     -- V*'s statements over the class, and V*'s sessions at each history and registration `R₂`
-    {Vs : Fin (outerParts cls.m cls.kLog (2 + 2 * regs.length)) → VStmt}
+    {Vs : Fin (outerStatements cls regs) → VStmt}
     (zs : Reg → L.Ω → List (Cm × (innerExec T CT cls regs sch).Coin) → Reg₂ →
-      (j : Fin (outerParts cls.m cls.kLog (2 + 2 * regs.length))) → (Vs j).Outer Reg')
+      (j : Fin (outerStatements cls regs)) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg (innerExec T CT cls regs sch) Cm fun R ω t => outerV (zs R ω t) dg N))
     -- the hidden statement, the messages V*'s layers hold, the rounds' commit strings and commitments
     (x : Reg → L.Ω → Hidden cls)
-    (wmsg : ((j : Fin S) → (Vs j).Bits) → List (innerExec T CT cls regs sch).Msg)
-    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
-    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → (innerExec T CT cls regs sch).Msg)
+    (wmsg : ((j : Fin (outerStatements cls regs)) → (Vs j).Bits) → List (innerExec T CT cls regs sch).Msg)
+    (Sk : ℕ → (j : Fin (outerStatements cls regs)) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin (outerStatements cls regs)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv →
+      (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin (outerStatements cls regs)) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
+      (innerExec T CT cls regs sch).Msg)
     -- the registration's root; a netlist's statement by its rows' commit strings; the rows a run read, and the commit
     -- strings and openings of `rt` it carries
     (rt : Flock.Registered.Port) (stmt : (ℕ → ByteArray) → L.Ω → Hidden cls)
