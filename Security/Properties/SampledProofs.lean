@@ -170,7 +170,7 @@ def drawKeys (kind : String) (closure : Bool) : Array String :=
 def Ascending (xs : Array Int) : Prop := ∀ i (h : i + 1 < xs.size), xs[i] < xs[i + 1]
 
 /-- The draw's units of stratum `s`: those in one of its ranges. -/
-def countIn (units : Array Int) (s : Json) : Nat :=
+def countIn (units : Array Int) (s : Json) : Int :=
   let rs := (Draw.ranges? (getD s "units")).getD #[]
   units.foldl (fun acc u => if rs.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
 
@@ -195,7 +195,7 @@ def Drawn (draw population law : Json) : Prop :=
     ((kind = "stratified" ∨ kind = "work") →
       ∃ n, int? (getD draw "population") = some n ∧ Draw.strataMessage draw n = none ∧
         ∀ ss, getD draw "strata" = .arr ss → ∀ s ∈ ss, ∀ t, getD s "template" = .str t →
-          int? (getD s "k") = some (countIn units s : Int)) ∧
+          int? (getD s "k") = some (countIn units s)) ∧
     (closure → ∃ cs ys, getD draw "closure" = .arr cs ∧ cs.mapM int? = some ys ∧ ∃ (h : 0 < ys.size),
       Ascending ys ∧ 0 ≤ ys[0] ∧ (∃ n, int? (getD draw "population") = some n ∧ ys[ys.size - 1] < n) ∧
       ∀ y ∈ ys, y ∉ units)
