@@ -15,8 +15,9 @@ Soundness rests on three: SHA-512's collision resistance in two forms, each a hy
 verifier's randomness. `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case number of evaluations: the
 compiled and knowledge terms' collision finders and `δ_tree`'s. `SHA512CRExpected` (`ecr/sha-512`, Assumption 2) bounds
 a finder by its expected number: the link term's. Assumption 3 is a hypothesis about the byte source the verifier draws its
-units from, the operating system's, which is also the source of the commitments' salts. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here: the session game draws its
-coins itself, so the model embodies it (`ASSUMPTIONS.md`).
+units from, the operating system's, which is also the source of the commitments' salts. The round coins' uniformity (A6,
+`uniform/flock-coin-server`) is not a `Prop` here: the session game draws its coins itself, so the model embodies it
+(`ASSUMPTIONS.md`).
 
 The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of `verity.randomness`'s
 keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret. `HmRowComputes` is not
