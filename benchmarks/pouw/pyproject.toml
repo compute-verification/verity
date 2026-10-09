@@ -21,6 +21,10 @@ verity-difftest = { workspace = true }
 # in Proofs (`reads_exempt` in the lock).
 inputs = ["verity/ml/flock/python", "Security/Models/Pouw/Guarantees", "Security/Proofs/Pouw/PearlC/FlockTile/Statement.lean",
           "Security/lean-audit.json"]
+# Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
+artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
+             "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",
+             "verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
