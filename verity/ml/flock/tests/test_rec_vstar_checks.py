@@ -99,9 +99,10 @@ def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off
 
 
 def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_program(staged, tmp_path):  # noqa: F811
-    """META's bindings are checked against the verifier's own files before the statement is matched to V*'s: without the
-    verifier's program `verify --rec-inner` refuses, and a partition object naming another template, or another program,
-    is refused by the digest it changes; the same descriptor written another way (indented) binds as the canonical one."""
+    """META's bindings are the verifier's own files' before the statement is matched to V*'s. Without the verifier's program
+    the registered reads' check refuses first; a partition object naming another template, or another program, is refused
+    by the partition checks that run before `RecVStar.checkBindings` (`HmRow.checkPartition`, `deriveTemplateUnits`); the
+    same descriptor written another way (indented) passes the bindings and reaches the shape check."""
     d = staged[0]
     inner = _inner(tmp_path / "inner.json", 25, 22, 8)
     base = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
