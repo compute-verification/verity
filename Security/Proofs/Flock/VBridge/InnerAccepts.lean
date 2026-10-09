@@ -16,6 +16,8 @@ openings with their salts (`tableTape`).
   messages (`repMsgs`) and the stream's coin arrays (`coinArr`). A rep's messages and coins alone do not fix its tape;
   the spine places the coins among the messages (`Spine.tape`).
 * `playsT_of_tape`: a rep's run on its messages and coins (`Plays`) is a run on any such tape (`PlaysT`).
+* `flockInnerCL_rejects_short`: `flockInnerCL` accepts no transcript of at most `r` rounds, the rounds `Inner.game`
+  plays: each of them ends with a coin, and the table ends with the openings' message.
 -/
 
 namespace FlockVBridge.InnerAccepts
@@ -191,5 +193,85 @@ theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.
     exact ⟨hok₀, hok₁⟩
 
 end target
+
+/-! ## The round count -/
+
+section rounds
+
+variable {α β : Type}
+
+/-- A run of `g.bind f` is a run of `g`, then a run of `f` at its output. -/
+theorem playsT_bind_inv {g : Game α} {f : α → Game β} {ts : List Game.Step} {b : β} (h : PlaysT (g.bind f) ts b) :
+    ∃ ts₁ ts₂ a, ts = ts₁ ++ ts₂ ∧ PlaysT g ts₁ a ∧ PlaysT (f a) ts₂ b := by
+  induction g generalizing ts with
+  | ret a => exact ⟨[], ts, a, rfl, .ret a, h⟩
+  | send M k ih =>
+      cases ts with
+      | nil => cases h.nil_inv
+      | cons s ts =>
+          obtain ⟨m, rfl, hk⟩ := PlaysT.send_inv h
+          obtain ⟨ts₁, ts₂, a, rfl, h₁, h₂⟩ := ih m hk
+          exact ⟨_ :: ts₁, ts₂, a, rfl, .send m h₁, h₂⟩
+  | @coin C iF iN k ih =>
+      cases ts with
+      | nil => cases h.nil_inv
+      | cons s ts =>
+          obtain ⟨x, rfl, hk⟩ := PlaysT.coin_inv h
+          obtain ⟨ts₁, ts₂, a, rfl, h₁, h₂⟩ := ih x hk
+          exact ⟨_ :: ts₁, ts₂, a, rfl, .coin x h₁, h₂⟩
+
+variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
+
+omit [Fintype K] in
+/-- Every run of `tableAfterL` ends with the openings' message. -/
+theorem tableAfterL_last (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+    (ptLocal mPts : ℕ) (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) {ts : List Game.Step} {out : OutCL F D Sl}
+    (h : PlaysT (tableAfterL A H E Lf S sch hm ptLocal mPts cap₀ pts) ts out) :
+    ∃ l os, ts = l ++ [.inl ⟨Opens F D × Salts Sl, os⟩] := by
+  unfold tableAfterL at h
+  obtain ⟨ts₁, ts₂, a, rfl, -, h₂⟩ := playsT_bind_inv h
+  cases ts₂ with
+  | nil => cases h₂.nil_inv
+  | cons s ts₂ =>
+      obtain ⟨os, rfl, h₃⟩ := h₂.send_inv
+      obtain ⟨rfl, -⟩ := h₃.ret_inv
+      exact ⟨ts₁, os, rfl⟩
+
+variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+
+omit [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] in
+/-- On a nonempty transcript of rounds `j, …` that all draw coins, the schedule's last step is a coin. -/
+theorem schedSteps_last : ∀ (j : ℕ) (t : List (List (SMsg T) × ((k : Fin r) → CT k))), t ≠ [] →
+    j + t.length ≤ r → ∃ l x, schedSteps T CT j t = l ++ [.inr x]
+  | _, [], h, _ => absurd rfl h
+  | j, [(ms, ρ)], _, hl => by
+      have hj : j < r := by simp at hl; omega
+      exact ⟨ms.map (fun e => Sum.inl ⟨T e.1, e.2⟩), ⟨CT ⟨j, hj⟩, ρ ⟨j, hj⟩⟩, by simp [schedSteps, hj]⟩
+  | j, (ms, ρ) :: e :: t, _, hl => by
+      have hj : j < r := by simp at hl; omega
+      obtain ⟨l, x, hx⟩ := schedSteps_last (j + 1) (e :: t) (by simp) (by simp at hl ⊢; omega)
+      refine ⟨ms.map (fun e => Sum.inl ⟨T e.1, e.2⟩) ++ (Sum.inr ⟨CT ⟨j, hj⟩, ρ ⟨j, hj⟩⟩ :: l), x, ?_⟩
+      rw [schedSteps, hx]
+      simp [hj]
+
+/-- **`flockInnerCL` accepts no transcript of at most `r` rounds.** On such a transcript the schedule's last step is a
+coin, and every run of the table after the link points ends with the openings' message. -/
+theorem flockInnerCL_rejects_short (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
+    (sch : Accounting.Schedule) (M : Hidden cls) (t : List (List (SMsg T) × ((k : Fin r) → CT k)))
+    (ht : t.length ≤ r) : ¬ (flockInnerCL T CT A H E Lf cls regs sch).accepts M t := by
+  rw [flockInnerCL_accepts]
+  rintro ⟨cap₀, pts, ts, out, hs, hp, -⟩
+  obtain ⟨l, os, rfl⟩ := tableAfterL_last A H E Lf _ sch cls.hm cls.ptLocal cls.mPts cap₀ pts hp
+  have hne : t ≠ [] := by
+    rintro rfl
+    simp [schedSteps] at hs
+  obtain ⟨l', x, hx⟩ := schedSteps_last T CT 0 t hne (by omega)
+  rw [hx] at hs
+  have h := congrArg List.reverse hs
+  simp at h
+
+end rounds
 
 end FlockVBridge.InnerAccepts
