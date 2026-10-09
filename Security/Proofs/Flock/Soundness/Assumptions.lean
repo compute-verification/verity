@@ -15,14 +15,16 @@ Soundness rests on three: SHA-512's collision resistance in two forms, each a hy
 verifier's randomness. `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case number of evaluations: the
 compiled and knowledge terms' collision finders and `δ_tree`'s. `SHA512CRExpected` (`ecr/sha-512`, Assumption 2) bounds
 a finder by its expected number: the link term's. Assumption 3 is a hypothesis about the byte source the verifier draws its
-units from. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here: the session game draws its
+units from, the operating system's, which is also the source of the commitments' salts. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here: the session game draws its
 coins itself, so the model embodies it (`ASSUMPTIONS.md`).
 
 The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of `verity.randomness`'s
 keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret. `HmRowComputes` is not
 cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
-(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`).
+(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`), with A3 for the salts' bytes. None of
+them is a computational property of SHA-512: hm96's hiding is statistical (`CROnly.hm96Hiding_gap`), and the one premise
+left on it, `hash-derived-key`, is about the pinned key, not about SHA-512.
 
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved (`mcaError_le_bchks25`, from DKT26).
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
