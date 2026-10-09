@@ -3,9 +3,8 @@ smallest level of a recorded recursive session (`r20261009-111638-6720`, class (
 `rec-open/l16-h4`, 106 openings), restaged here by `rec_vstage.stage` from the fetched fixture `rec-coins/16-16-8-n64` (the
 inner statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
 recorded `pub.bin` and `registered.json`, and its recorded outer session). The honest level is accepted at the honest inner
-session; at another inner session of the same statement (the run's other-coins control) its coefficients are not the
-verifier's, and a level whose `rec-coef` V* registered one bit off is refused at that opening, though its registration is
-consistent. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the module is slow; it
+session and refused without it, and a level whose `rec-coef` V* registered one bit off is refused at that opening, though
+its registration is consistent. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the module is slow; it
 catches what no test before it can: the Lean verifier's coefficients, positions and salts at real coins, against the ones
 V*'s Python registers."""
 from __future__ import annotations
@@ -59,15 +58,15 @@ def forged(tmp_path_factory) -> Path:
     return out
 
 
-def _verify(level: Path, public: Path, registered: Path, inner: str) -> dict:
+def _verify(level: Path, public: Path, registered: Path, inner: str | None) -> dict:
+    u = SET / "u" / "stage"
+    rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
+                                    "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
+                                    str(SET / inner / "session")]
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
-                        str(level / "program.json"), "--registered", str(registered),
-                        "--rec-inner-circuit", str(SET / "u" / "stage" / "circuit.txt"),
-                        "--rec-inner-public", str(SET / "u" / "stage" / "pub-64.bin"),
-                        "--rec-inner-partition", str(SET / "u" / "stage" / "partition.json"),
-                        "--rec-inner-session", str(SET / inner / "session"), "--session", str(SET / "outer-L3" / "session")],
-                       capture_output=True, text=True, check=False)
+                        str(level / "program.json"), "--registered", str(registered), *rec,
+                        "--session", str(SET / "outer-L3" / "session")], capture_output=True, text=True, check=False)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
 
@@ -77,11 +76,9 @@ def test_the_honest_level_is_accepted_at_the_honest_inner_session(forged):
     assert v["accepted"], v.get("why")
 
 
-def test_the_level_is_refused_at_another_inner_sessions_coins(forged):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", "inner-other-coins")
-    assert not v["accepted"]
-    assert v["why"].startswith(f"setup: rec-coins: {UNIT}: level {LEVEL} rep "), v["why"]
-    assert "the statement's coef row is not the verifier's rec-coef row" in v["why"]
+def test_the_honest_level_is_refused_without_the_inner_session(forged):
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", None)
+    assert v["why"].startswith(f"setup: rec-coins: {UNIT}: the verifier holds no inner session"), v["why"]
 
 
 def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged):
