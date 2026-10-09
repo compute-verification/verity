@@ -234,7 +234,7 @@ section VStar
 
 variable {A : Type} {src : Coins}
 
-theorem vbind_ok {x : Algebra.LM F128 α} {f : α → Algebra.LM F128 β} {st : LSt F128} {k : ℕ}
+theorem vbind_ok {x : RecAlgebra.LM F128 α} {f : α → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ}
     {r : (β × LSt F128) × ℕ} (h : (x >>= f) st k src = .ok r) :
     ∃ a st₁ k₁, x st k src = .ok ((a, st₁), k₁) ∧ f a st₁ k₁ src = .ok r := by
   have e : (x >>= f) st k src = (x st >>= fun p => f p.1 p.2) k src := rfl
@@ -242,50 +242,50 @@ theorem vbind_ok {x : Algebra.LM F128 α} {f : α → Algebra.LM F128 β} {st : 
   obtain ⟨⟨a, st₁⟩, k₁, h₁, h₂⟩ := cm_bind h
   exact ⟨a, st₁, k₁, h₁, h₂⟩
 
-theorem vlift_bind {x : CM α} {f : α → Algebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((StateT.lift x : Algebra.LM F128 α) >>= f) st k src = .ok r) :
+theorem vlift_bind {x : CM α} {f : α → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
+    (h : ((StateT.lift x : RecAlgebra.LM F128 α) >>= f) st k src = .ok r) :
     ∃ a k₁, x k src = .ok (a, k₁) ∧ f a st k₁ src = .ok r := by
   obtain ⟨a, st₁, k₁, h₁, h₂⟩ := vbind_ok h
-  have e : (StateT.lift x : Algebra.LM F128 α) st k src = (x >>= fun a => pure (a, st)) k src := rfl
+  have e : (StateT.lift x : RecAlgebra.LM F128 α) st k src = (x >>= fun a => pure (a, st)) k src := rfl
   rw [e] at h₁
   obtain ⟨a', k₂, h₃, h₄⟩ := cm_bind h₁
   cases cm_pure h₄
   exact ⟨_, _, h₃, h₂⟩
 
-theorem vget_bind {f : LSt F128 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((get : Algebra.LM F128 (LSt F128)) >>= f) st k src = .ok r) : f st st k src = .ok r := by
+theorem vget_bind {f : LSt F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
+    (h : ((get : RecAlgebra.LM F128 (LSt F128)) >>= f) st k src = .ok r) : f st st k src = .ok r := by
   obtain ⟨a, st₁, k₁, h₁, h₂⟩ := vbind_ok h
   cases h₁
   exact h₂
 
-theorem vset_bind {s : LSt F128} {f : PUnit → Algebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((set s : Algebra.LM F128 PUnit) >>= f) st k src = .ok r) : f () s k src = .ok r := by
+theorem vset_bind {s : LSt F128} {f : PUnit → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
+    (h : ((set s : RecAlgebra.LM F128 PUnit) >>= f) st k src = .ok r) : f () s k src = .ok r := by
   obtain ⟨a, st₁, k₁, h₁, h₂⟩ := vbind_ok h
   cases h₁
   exact h₂
 
-theorem vmodify_bind {g : LSt F128 → LSt F128} {f : PUnit → Algebra.LM F128 β} {st : LSt F128} {k : ℕ}
-    {r : (β × LSt F128) × ℕ} (h : ((modify g : Algebra.LM F128 PUnit) >>= f) st k src = .ok r) :
+theorem vmodify_bind {g : LSt F128 → LSt F128} {f : PUnit → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ}
+    {r : (β × LSt F128) × ℕ} (h : ((modify g : RecAlgebra.LM F128 PUnit) >>= f) st k src = .ok r) :
     f () (g st) k src = .ok r := by
   obtain ⟨a, st₁, k₁, h₁, h₂⟩ := vbind_ok h
   cases h₁
   exact h₂
 
 theorem vmodify_ok {g : LSt F128 → LSt F128} {st st' : LSt F128} {k k' : ℕ} {u : PUnit}
-    (h : (modify g : Algebra.LM F128 PUnit) st k src = .ok ((u, st'), k')) : st' = g st ∧ k' = k := by
+    (h : (modify g : RecAlgebra.LM F128 PUnit) st k src = .ok ((u, st'), k')) : st' = g st ∧ k' = k := by
   cases h
   exact ⟨rfl, rfl⟩
 
 theorem vpure {a a' : α} {st st' : LSt F128} {k k' : ℕ}
-    (h : (pure a : Algebra.LM F128 α) st k src = .ok ((a', st'), k')) : a' = a ∧ st' = st ∧ k' = k := by
+    (h : (pure a : RecAlgebra.LM F128 α) st k src = .ok ((a', st'), k')) : a' = a ∧ st' = st ∧ k' = k := by
   cases h
   exact ⟨rfl, rfl, rfl⟩
 
-theorem vnextMsg_bind {M : Messages F128} {f : KV F128 × KV F128 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ}
-    {r : (β × LSt F128) × ℕ} (h : (Algebra.nextMsg M >>= f) st k src = .ok r) :
+theorem vnextMsg_bind {M : Messages F128} {f : KV F128 × KV F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ}
+    {r : (β × LSt F128) × ℕ} (h : (RecAlgebra.nextMsg M >>= f) st k src = .ok r) :
     ∃ mm, M.msgs[st.msg]? = some mm ∧ f mm { st with msg := st.msg + 1 } k src = .ok r := by
   obtain ⟨a, st₁, k₁, h₁, h₂⟩ := vbind_ok h
-  unfold Algebra.nextMsg at h₁
+  unfold RecAlgebra.nextMsg at h₁
   have h₁ := vget_bind h₁
   cases hm : M.msgs[st.msg]? with
   | none => simp only [hm] at h₁; cases h₁
@@ -295,11 +295,11 @@ theorem vnextMsg_bind {M : Messages F128} {f : KV F128 × KV F128 → Algebra.LM
     cases h₁
     exact ⟨_, rfl, h₂⟩
 
-theorem vnextOod_bind {M : Messages F128} {f : F128 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ}
-    {r : (β × LSt F128) × ℕ} (h : (Algebra.nextOod M >>= f) st k src = .ok r) :
+theorem vnextOod_bind {M : Messages F128} {f : F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ}
+    {r : (β × LSt F128) × ℕ} (h : (RecAlgebra.nextOod M >>= f) st k src = .ok r) :
     ∃ y, M.ood[st.ood]? = some y ∧ f y { st with ood := st.ood + 1 } k src = .ok r := by
   obtain ⟨a, st₁, k₁, h₁, h₂⟩ := vbind_ok h
-  unfold Algebra.nextOod at h₁
+  unfold RecAlgebra.nextOod at h₁
   have h₁ := vget_bind h₁
   cases hy : M.ood[st.ood]? with
   | none => simp only [hy] at h₁; cases h₁
@@ -334,16 +334,16 @@ theorem vcoinVec {n k k' : ℕ} {v : Array F128} (hn : n ≠ 0) (h : coinVec n k
     subst e
     exact ⟨rfl, hs, rfl⟩
 
-theorem vcoinVec_bind {n : ℕ} {f : Array F128 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ}
+theorem vcoinVec_bind {n : ℕ} {f : Array F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ}
     {r : (β × LSt F128) × ℕ} (hn : n ≠ 0)
-    (h : ((StateT.lift (coinVec n) : Algebra.LM F128 (Array F128)) >>= f) st k (Coins.ofRounds c) = .ok r) :
+    (h : ((StateT.lift (coinVec n) : RecAlgebra.LM F128 (Array F128)) >>= f) st k (Coins.ofRounds c) = .ok r) :
     (c[k]!).size = n ∧ f (c[k]!) st (k + 1) (Coins.ofRounds c) = .ok r := by
   obtain ⟨v, k₁, h₁, h₂⟩ := vlift_bind h
   obtain ⟨rfl, hs, rfl⟩ := vcoinVec hn h₁
   exact ⟨hs, h₂⟩
 
-theorem vcoinOne_bind {f : F128 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((StateT.lift coinOne : Algebra.LM F128 F128) >>= f) st k (Coins.ofRounds c) = .ok r) :
+theorem vcoinOne_bind {f : F128 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
+    (h : ((StateT.lift coinOne : RecAlgebra.LM F128 F128) >>= f) st k (Coins.ofRounds c) = .ok r) :
     (c[k]!).size = 1 ∧ f ((c[k]!).getD 0 0) st (k + 1) (Coins.ofRounds c) = .ok r := by
   obtain ⟨x, k₁, h₁, h₂⟩ := vlift_bind h
   obtain ⟨v, hr, rfl, rfl⟩ := coinOne_ok h₁
@@ -351,8 +351,8 @@ theorem vcoinOne_bind {f : F128 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ
   rw [getElem!_eq_getD] at h₂
   exact ⟨hs, h₂⟩
 
-theorem vcoinK2_bind {f : F256 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((StateT.lift coinK2 : Algebra.LM F128 F256) >>= f) st k (Coins.ofRounds c) = .ok r) :
+theorem vcoinK2_bind {f : F256 → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
+    (h : ((StateT.lift coinK2 : RecAlgebra.LM F128 F256) >>= f) st k (Coins.ofRounds c) = .ok r) :
     (c[k]!).size = 2 ∧ f ⟨(c[k]!).getD 0 0, (c[k]!).getD 1 0⟩ st (k + 1) (Coins.ofRounds c) = .ok r := by
   obtain ⟨x, k₁, h₁, h₂⟩ := vlift_bind h
   obtain ⟨v, k₂, h₃, h₄⟩ := cm_bind h₁
@@ -361,8 +361,8 @@ theorem vcoinK2_bind {f : F256 → Algebra.LM F128 β} {st : LSt F128} {k : ℕ}
   rw [getElem!_eq_getD, getElem!_eq_getD] at h₂
   exact ⟨hs, h₂⟩
 
-theorem vthrow {e : String} {f : α → Algebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
-    (h : ((throw e : Algebra.LM F128 α) >>= f) st k (Coins.ofRounds c) = .ok r) : False := by
+theorem vthrow {e : String} {f : α → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
+    (h : ((throw e : RecAlgebra.LM F128 α) >>= f) st k (Coins.ofRounds c) = .ok r) : False := by
   cases h
 
 /-! ## V*'s state as the verifier's -/
@@ -469,12 +469,12 @@ section Conv
 variable {M : Messages F128} {p : LigeritoProof}
 
 theorem challenge_conv {st st' : LSt F128} {k k' : ℕ} {rk : F256}
-    (h : Algebra.challenge M st k (Coins.ofRounds c) = .ok ((rk, st'), k')) :
+    (h : RecAlgebra.challenge M st k (Coins.ofRounds c) = .ok ((rk, st'), k')) :
     k' = k + 1 ∧ st'.msg = st.msg + 1 ∧ st'.ood = st.ood ∧ st'.oods = st.oods ∧ st'.conss = st.conss ∧
       (p.messages = M.msgs.map (fun mm => (kv mm.1, kv mm.2)) →
         RunsL c (Flock.challenge p) (toL st) k k' rk (toL st')) := by
   obtain ⟨s, ⟨a0, a1, a2⟩, msg, ood, oods, conss⟩ := st
-  unfold Algebra.challenge at h
+  unfold RecAlgebra.challenge at h
   obtain ⟨hc, h⟩ := vcoinK2_bind h
   have h := vget_bind h
   dsimp only at h
@@ -487,20 +487,20 @@ theorem challenge_conv {st st' : LSt F128} {k k' : ℕ} {rk : F256}
   apply toL_eq <;> dsimp only [toL] <;> simp only [kv_challenge, polyOf_ofMsg]
 
 theorem challenges_conv : ∀ (n j : ℕ) (acc : Array F256) (st st' : LSt F128) (k k' : ℕ) (chs : Array F256),
-    Algebra.challenges M n st k (Coins.ofRounds c) = .ok ((chs, st'), k') →
+    RecAlgebra.challenges M n st k (Coins.ofRounds c) = .ok ((chs, st'), k') →
     k' = k + n ∧ chs.size = n ∧ st'.msg = st.msg + n ∧ st'.ood = st.ood ∧ st'.oods = st.oods ∧
       st'.conss = st.conss ∧
       (p.messages = M.msgs.map (fun mm => (kv mm.1, kv mm.2)) →
         RunsL c (forIn (List.range' j n) acc fun _ chs =>
           Flock.challenge p >>= fun x => pure (ForInStep.yield (chs.push x))) (toL st) k k' (acc ++ chs) (toL st'))
   | 0, j, acc, st, st', k, k', chs, h => by
-    simp only [Algebra.challenges] at h
+    simp only [RecAlgebra.challenges] at h
     obtain ⟨rfl, rfl, rfl⟩ := vpure h
     refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, fun _ => ?_⟩
     simp only [List.range'_zero, List.forIn_nil, Array.append_empty]
     exact RunsL.pure _
   | n + 1, j, acc, st, st', k, k', chs, h => by
-    simp only [Algebra.challenges] at h
+    simp only [RecAlgebra.challenges] at h
     obtain ⟨rk, st₁, k₁, h₁, h⟩ := vbind_ok h
     obtain ⟨rest, st₂, k₂, h₂, h⟩ := vbind_ok h
     obtain ⟨rfl, rfl, rfl⟩ := vpure h
@@ -512,17 +512,17 @@ theorem challenges_conv : ∀ (n j : ℕ) (acc : Array F256) (st st' : LSt F128)
     simp
 
 theorem oodIntro_conv {dim split : ℕ} {st st' : LSt F128} {k k' : ℕ} {u : PUnit} (hd : dim ≠ 0)
-    (h : Algebra.oodIntro M dim split st k (Coins.ofRounds c) = .ok ((u, st'), k')) :
+    (h : RecAlgebra.oodIntro M dim split st k (Coins.ofRounds c) = .ok ((u, st'), k')) :
     k' = k + 1 + 1 ∧ st'.msg = st.msg + 1 ∧ st'.ood = st.ood + 1 ∧ st'.conss = st.conss ∧
       (p.messages = M.msgs.map (fun mm => (kv mm.1, kv mm.2)) → p.oodValues = M.ood →
         st.ood + st.conss.size < p.claimNonces.size →
         RunsL c (Flock.oodIntro p dim split) (toL st) k k' () (toL st')) := by
-  unfold Algebra.oodIntro at h
+  unfold RecAlgebra.oodIntro at h
   obtain ⟨hz, h⟩ := vcoinVec_bind hd h
   obtain ⟨y, hy, h⟩ := vnextOod_bind h
   obtain ⟨mm, hmm, h⟩ := vnextMsg_bind h
   obtain ⟨hb, h⟩ := vcoinOne_bind h
-  unfold Algebra.addScaled at h
+  unfold RecAlgebra.addScaled at h
   obtain ⟨rfl, rfl⟩ := vmodify_ok (vmodify_bind h)
   refine ⟨rfl, rfl, rfl, rfl, fun hp hpo hcb => ?_⟩
   refine RunsL.cast (oodIntro_runs (vs := toL st) hd hz hb (by rw [hpo]; exact hy) (msg_of hp hmm) hcb) rfl rfl ?_
@@ -534,12 +534,12 @@ theorem oodIntro_conv {dim split : ℕ} {st st' : LSt F128} {k k' : ℕ} {u : PU
 
 theorem vquery {sch : Flock.Schedule} {i : ℕ} {fold : Array F256} {st st' : LSt F128} {k k' : ℕ}
     {r : Array ℕ × Array F128 × KV F128} (hq : (sch.levels.getD i default).q ≠ 0)
-    (h : Algebra.query sch M i fold st k (Coins.ofRounds c) = .ok ((r, st'), k')) :
+    (h : RecAlgebra.query sch M i fold st k (Coins.ofRounds c) = .ok ((r, st'), k')) :
     st' = st ∧ k' = k + 1 + 1 ∧ (c[k]!).size = (sch.levels.getD i default).q ∧
       (c[k + 1]!).size = Nat.log2 ((sch.levels.getD i default).q - 1) + 1 ∧
       r = (positions (sch.levels.getD i default) c[k]!, c[k + 1]!,
         qE M i (sch.levels.getD i default) fold c[k + 1]!) := by
-  unfold Algebra.query at h
+  unfold RecAlgebra.query at h
   rw [getElem!_getD] at h
   obtain ⟨hz, h⟩ := vcoinVec_bind hq h
   obtain ⟨ha, h⟩ := vcoinVec_bind (by omega) h
@@ -548,7 +548,7 @@ theorem vquery {sch : Flock.Schedule} {i : ℕ} {fold : Array F256} {st st' : LS
 
 theorem vqueryFold {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {st st' : LSt F128} {k k' : ℕ}
     {u : PUnit} (hq : (sch.levels.getD i default).q ≠ 0)
-    (h : Algebra.queryFold sch M i cols fold st k (Coins.ofRounds c) = .ok ((u, st'), k')) :
+    (h : RecAlgebra.queryFold sch M i cols fold st k (Coins.ofRounds c) = .ok ((u, st'), k')) :
     k' = k + 1 + 1 + 1 ∧ (c[k]!).size = (sch.levels.getD i default).q ∧
       (c[k + 1]!).size = Nat.log2 ((sch.levels.getD i default).q - 1) + 1 ∧ (c[k + 1 + 1]!).size = 1 ∧
       ∃ mm, M.msgs[st.msg]? = some mm ∧ st'.msg = st.msg + 1 ∧ st'.ood = st.ood ∧ st'.oods = st.oods ∧
@@ -558,13 +558,13 @@ theorem vqueryFold {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {st
         polyOf st'.q = (polyOf st.q).addScaled
           (Poly.ofMsg (kv mm.1, kv mm.2) (kv (qE M i (sch.levels.getD i default) fold c[k + 1]!)))
           ((c[k + 1 + 1]!).getD 0 0) := by
-  unfold Algebra.queryFold at h
+  unfold RecAlgebra.queryFold at h
   obtain ⟨r, st₁, k₁, h₁, h⟩ := vbind_ok h
   obtain ⟨rfl, rfl, hz, ha, rfl⟩ := vquery hq h₁
   dsimp only at h
   obtain ⟨mm, hmm, h⟩ := vnextMsg_bind h
   obtain ⟨hb, h⟩ := vcoinOne_bind h
-  unfold Algebra.addScaled at h
+  unfold RecAlgebra.addScaled at h
   obtain ⟨rfl, rfl⟩ := vmodify_ok (vmodify_bind h)
   refine ⟨rfl, hz, ha, hb, mm, hmm, rfl, rfl, rfl, rfl, kv_query _ _ _, ?_⟩
   dsimp only
@@ -573,13 +573,13 @@ theorem vqueryFold {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {st
 theorem levelsLoop_le {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : LSt F128) (k' : ℕ), i + fuel ≤ R →
-      Algebra.levelsLoop sch M R fuel i split levels e st k (Coins.ofRounds c) = .ok ((out, st'), k') → Le st st'
+      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Coins.ofRounds c) = .ok ((out, st'), k') → Le st st'
   | 0, _, _, _, _, st, k, out, st', k', _, h => by
-    simp only [Algebra.levelsLoop] at h
+    simp only [RecAlgebra.levelsLoop] at h
     obtain ⟨-, rfl, -⟩ := vpure h
     exact Le.refl _
   | fuel + 1, i, split, levels, e, st, k, out, st', k', hi, h => by
-    simp only [Algebra.levelsLoop] at h
+    simp only [RecAlgebra.levelsLoop] at h
     by_cases hs : split < 4
     · rw [ite_eq_left hs] at h
       exact (vthrow h).elim
@@ -628,29 +628,29 @@ theorem loop_runs {M : Messages F128} {p : LigeritoProof} {ms : MerkleScheme} {s
     (hstep : ∀ (i : ℕ) (s : σ) (split : ℕ) (levels : Array (Array F256)) (st : LSt F128) (k : ℕ) (chs : Array F256)
       (st₁ : LSt F128) (k₁ : ℕ) (st₂ : LSt F128) (k₂ : ℕ) (st₃ : LSt F128) (k₃ : ℕ) (st₄ : LSt F128) (k₄ : ℕ),
       i + 1 < R → Inv i s split levels → ¬ split < 4 →
-      Algebra.challenges M 4 st k (Coins.ofRounds c) = .ok ((chs, st₁), k₁) →
-      Algebra.oodIntro M (split - 4 + 1) (i + 1) st₁ k₁ (Coins.ofRounds c) = .ok (((), st₂), k₂) →
-      Algebra.oodIntro M (split - 4 + 1) (i + 1) st₂ k₂ (Coins.ofRounds c) = .ok (((), st₃), k₃) →
-      Algebra.queryFold sch M (i + 1) (split - 4) chs st₃ k₃ (Coins.ofRounds c) = .ok (((), st₄), k₄) →
+      RecAlgebra.challenges M 4 st k (Coins.ofRounds c) = .ok ((chs, st₁), k₁) →
+      RecAlgebra.oodIntro M (split - 4 + 1) (i + 1) st₁ k₁ (Coins.ofRounds c) = .ok (((), st₂), k₂) →
+      RecAlgebra.oodIntro M (split - 4 + 1) (i + 1) st₂ k₂ (Coins.ofRounds c) = .ok (((), st₃), k₃) →
+      RecAlgebra.queryFold sch M (i + 1) (split - 4) chs st₃ k₃ (Coins.ofRounds c) = .ok (((), st₄), k₄) →
       Good ms sch cap p M st₄ →
       ∃ s', RunsL c (body i s) (toL st) k k₄ (.yield s') (toL st₄) ∧ Inv (i + 1) s' (split - 4 + 1) (levels.push chs))
     (hlast : ∀ (i : ℕ) (s : σ) (split : ℕ) (levels : Array (Array F256)) (st : LSt F128) (k : ℕ) (chs : Array F256)
       (st₁ : LSt F128) (k₁ : ℕ) (pos : Array ℕ) (al : Array F128) (e : KV F128) (st₂ : LSt F128) (k₂ : ℕ),
       i + 1 = R → Inv i s split levels → ¬ split < 4 →
-      Algebra.challenges M 4 st k (Coins.ofRounds c) = .ok ((chs, st₁), k₁) →
-      Algebra.query sch M R chs st₁ k₁ (Coins.ofRounds c) = .ok (((pos, al, e), st₂), k₂) → (c[k₂]!).size = 1 →
+      RecAlgebra.challenges M 4 st k (Coins.ofRounds c) = .ok ((chs, st₁), k₁) →
+      RecAlgebra.query sch M R chs st₁ k₁ (Coins.ofRounds c) = .ok (((pos, al, e), st₂), k₂) → (c[k₂]!).size = 1 →
       Hf (levels.push chs, split - 4) (qPush st₂ ((c[k₂]!).getD 0 0) e ⟨split - 4, pos, al, (c[k₂]!).getD 0 0, R⟩) →
       Good ms sch cap p M (qPush st₂ ((c[k₂]!).getD 0 0) e ⟨split - 4, pos, al, (c[k₂]!).getD 0 0, R⟩) →
       RunsL c (body i s) (toL st) k (k₂ + 1) (.yield (fOut (levels.push chs, split - 4)))
         (toL (qPush st₂ ((c[k₂]!).getD 0 0) e ⟨split - 4, pos, al, (c[k₂]!).getD 0 0, R⟩))) :
     ∀ (fuel i : ℕ) (s : σ) (split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : LSt F128) (k' : ℕ), i + fuel = R → 0 < fuel → Inv i s split levels →
-      Algebra.levelsLoop sch M R fuel i split levels e st k (Coins.ofRounds c) = .ok ((out, st'), k') →
+      RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Coins.ofRounds c) = .ok ((out, st'), k') →
       Hf out st' → Good ms sch cap p M st' →
       RunsL c (forIn (List.range' i fuel) s body) (toL st) k k' (fOut out) (toL st')
   | 0, _, _, _, _, _, _, _, _, _, _, _, h0, _, _, _, _ => absurd h0 (lt_irrefl 0)
   | 1, i, s, split, levels, e, st, k, out, st', k', hR, _, hinv, h, hf, hg => by
-    simp only [Algebra.levelsLoop] at h
+    simp only [RecAlgebra.levelsLoop] at h
     by_cases hs : split < 4
     · rw [ite_eq_left hs] at h
       exact (vthrow h).elim
@@ -662,14 +662,14 @@ theorem loop_runs {M : Messages F128} {p : LigeritoProof} {ms : MerkleScheme} {s
     try dsimp only at h
     obtain ⟨hb, h⟩ := vcoinOne_bind h
     have h := vmodify_bind h
-    try simp only [Algebra.levelsLoop] at h
+    try simp only [RecAlgebra.levelsLoop] at h
     obtain ⟨rfl, rfl, rfl⟩ := vpure h
     rw [List.range'_succ, List.forIn_cons]
     refine RunsL.bind (hlast i s split levels st k chs st₁ k₁ pos al e' st₂ k₂ hR hinv hs h₁ h₂ hb hf hg) ?_
     simp only [List.range'_zero, List.forIn_nil]
     exact RunsL.pure _
   | fuel + 2, i, s, split, levels, e, st, k, out, st', k', hR, _, hinv, h, hf, hg => by
-    rw [Algebra.levelsLoop] at h
+    rw [RecAlgebra.levelsLoop] at h
     by_cases hs : split < 4
     · rw [ite_eq_left hs] at h
       exact (vthrow h).elim
