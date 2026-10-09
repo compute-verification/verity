@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.Audit
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
 import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Proofs.Flock.Recursive.OuterAbort
 
 /-!
 # Recursion: V*'s outer sessions are zero knowledge, (ii)'s `_hOuter`
@@ -21,6 +22,9 @@ sessions at every honest context. Here that view, its simulator and `ε_o`.
   `SelfCheckSilent` is the abort interface `Recursive/OuterAbort.lean` meets: at a table that passes `CoinedOK`, coins
   the prover doesn't refuse and a valid witness whose registered values are the public ones, the code sends its view
   (the self-check never stops it there). `honestOut_eq`: then the honest prover is `outExe`.
+* `proverExe`, `selfCheckSilent_exe`: the prover's code, which sends what a stopped run sends when its self-check stops
+  (`Table.Stops`) and its view otherwise, meets the abort interface whatever a stopped run sends (`Table.not_stops`
+  at `CoinedOK`'s inner relation, `OuterAbort`).
 * `table_close`: one table at its coins, in fixed randomness types (`coin_close`, which covers refused coins with
   `Table.table_abort_hm96`).
 * `Sessions.close`: the auditor's view of `R₂` and the sessions (`view`) and the simulator's (`sim`: ideal commit
@@ -32,7 +36,8 @@ sessions at every honest context. Here that view, its simulator and `ε_o`.
   session's data at a draw it sets up (`coinedOf_setup`; every `--zk` setup avoids the mask slot,
   `FailClosed.DrawSetupZK.avoidsMask`).
 * `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = err`; `vstar_private`: (ii)'s
-  conclusion there (`RecursiveCircuitPrivateLeaves`).
+  conclusion there (`RecursiveCircuitPrivateLeaves`); `vstar_private_exe`: the same at `proverExe`, with no hypothesis
+  on the abort.
 
 Left to the instance at V*'s staging: that each session's table is `coinedOf` at its data and draw (with a
 `DrawSetupZK` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses (`Honest`, which
@@ -86,6 +91,27 @@ theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : C
   split_ifs with hA
   · exact hP C c w hC hA hv hreg p
   · rfl
+
+open Classical in
+/-- **The honest prover's code at one table** (`zk_veil.rs`'s `prove_inner` under `SelfCheck::Stop`): what a stopped
+run sends (`stopped`, any function of the table, the coins, the witness and the randomness) if its self-check stops
+(`Table.Stops`), else its view. -/
+noncomputable def proverExe
+    (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut) :
+    TableProver := fun C c w p =>
+  if (C.T c).tab.Stops w p.1 then Sum.inr (stopped C c w p) else Sum.inl ((C.T c).viewExe w p.1 p.2)
+
+/-- **The prover's code meets the abort interface**, whatever a stopped run sends: at coins it doesn't refuse,
+`CoinedOK`'s inner relation holds at a valid witness with public registered values, so the self-check never stops
+(`Table.not_stops`). -/
+theorem selfCheckSilent_exe
+    (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut) :
+    SelfCheckSilent (proverExe stopped) := by
+  intro C c w hC hA hv hreg p
+  obtain ⟨-, -, -, hT⟩ := hC
+  obtain ⟨-, -, -, -, -, -, -, hinner⟩ := hT c hA
+  unfold proverExe
+  exact if_neg ((C.T c).tab.not_stops (hinner w hv (hreg c)) p.1)
 
 /-- **One table at its coins, in fixed randomness types** (`coin_close`): at any coin vector, through any encoding
 `enc` of the table's output and any equivalences `eR`, `eS` of `Fin NR` and `Fin NS` with the prover's and the
@@ -375,5 +401,31 @@ theorem vstar_private {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Nonemp
   exact Flock.SecurityProofs.RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs
     (fun P w r a h p y q => V.view prover (P, w, r, a, h, p, y) q) (fun o v a h s => V.sim (pubS o v a h) s)
     (vstar_outer_zk rows pub honest msgs V pubS hpub hOK hP hH hKey) hKey p₀ o P w hw E
+
+/-- **(ii) at V*'s sessions, the honest prover's code in them** (`vstar_private` at `proverExe`, `selfCheckSilent_exe`):
+whatever a stopped run sends, the auditor's whole view and the simulated one give every event probabilities within
+`2 n_r·2^-193 + err + n_h·2^-193`, both ways, with no hypothesis on the self-check. -/
+theorem vstar_private_exe {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp]
+    {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
+    (honest : Out → Prog → Wit → Prop) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    (V : Sessions (HCtx Prog Wit Ωa Ωp nr nh) Pub) (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub)
+    (hpub : ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (hctxAt msgs P w r a p y) =
+      pubS o (Flock.Guarantees.regLeaves rows pub P r) a
+        (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)))
+    (hOK : V.TablesOK)
+    (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut)
+    (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
+    (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
+    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w)
+    (E : Rv × Ωa × (Fin nh → ByteArray) × V.View → Prop) :
+    Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs
+        (fun P w r a h p y q => V.view (proverExe stopped) (P, w, r, a, h, p, y) q) P w E
+      ≤ Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh (fun o v a h s => V.sim (pubS o v a h) s)
+          o p₀ E + (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
+    Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh (fun o v a h s => V.sim (pubS o v a h) s) o p₀ E
+      ≤ Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs
+          (fun P w r a h p y q => V.view (proverExe stopped) (P, w, r, a, h, p, y) q) P w E
+        + (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
+  vstar_private rows pub honest msgs V pubS hpub hOK (selfCheckSilent_exe stopped) hH hKey p₀ o P w hw E
 
 end FlockSoundness.Discharge.Recursion.OuterZK

@@ -32,4 +32,4 @@ strata's tiling from the verifier's U2 check (`VStarU2`), the compile premise at
 (`UniversalClass`), the class, regions and schedule of an executable statement (`ExecClass`), the registered reads read
 off an outcome, whose commit strings open the registration's root when every session verifies (`Reads`, `ReadsOpen`),
 V*'s outer sessions with the honest prover's self-check in them, which never stops (`OuterAbort`), and V*'s outer
-sessions' zero knowledge, (ii)'s `_hOuter`, at the honest prover's executable code (`OuterZK`). -/
+sessions' zero knowledge, (ii)'s `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`). -/
