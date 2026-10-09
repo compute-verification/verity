@@ -16,6 +16,12 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   recorded ``outcome.json``'s.
 * **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening`
   and Lean's: every recorded window predates the 336-byte entry rows, so these compare Python with Lean only.
+* **coin cases** go to `core_check.pass_epoch` and `core_check.draw` and Lean's (`of_record`): ``select`` (the recorded
+  draw from the challenger's coin commitment, its draw coin's opening, the stream's digest, the receipt and draw.json),
+  with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
+  receipt, one unit fewer), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
+  ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
+  `job.sh` made them.  A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.
 * the other checks (coins, the stream's state, the firewall, Lean's tile verifier, replays, shapes) are not core_check's.
 
 A run of an older record version (no registration, or another scheme) and the v2 registrations run through both sides
@@ -25,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import subprocess
 import sys
@@ -37,7 +44,11 @@ from typing import Any
 
 import verity_difftest as D
 
+from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import of_record as OR  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/core/protocols/pouw/lean/check"
@@ -84,12 +95,8 @@ def ratio_of(x: Any, want: str) -> str:
 def answer_of(outcome_dir: Path, delta: str) -> dict:
     """The service's answer (`Core.Answer`) one ``outcome-*`` directory records."""
     o, a = load(outcome_dir / "outcome.json"), load(outcome_dir / "audit.json")
-    base = {"protocol": CC.ONE_STAGE, "commitment": a["registration"]}
-    if o["accepted"]:
-        prof = {**o["profile"], "delta": ratio_of(o["profile"]["delta"], delta)}
-        return {**base, "verdict": "accept", "reason": None, "public": {"draw": a["audit"]["draw"]}, "profile": prof}
-    codes = (o.get("verdict") or {}).get("codes") or ["reject"]
-    return {**base, "verdict": "reject", "reason": ", ".join(codes), "public": None, "profile": None}
+    return OR.service_answer(o["accepted"], (o.get("verdict") or {}).get("codes") or [], o["profile"], a["registration"],
+                             (a.get("audit") or {}).get("draw"), delta)
 
 
 def params_of(out: Path, reg: dict) -> dict:
@@ -150,6 +157,77 @@ def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, di
     return got
 
 
+COIN_CONTROLS = ("foreign", "early", "mislabelled", "tampered", "resalted")
+
+
+def _variant(man: dict, coins: dict, opening: dict, case: str) -> dict:
+    """`served_commit.coin_variant`: the pass carrying a control's salt coin made of the genuine one."""
+    o = dict(opening)
+    if case == "foreign":
+        o = Co.Challenger(coins["epoch"]).open("salt", bytes.fromhex(o["after"])).to_json()
+    elif case == "early":
+        o["after"] = "00" * (len(o["after"]) // 2)
+    elif case == "mislabelled":
+        o["label"] = "draw"
+    elif case == "tampered":
+        o["coin"] = f"{int(o['coin'][:2], 16) ^ 1:02x}" + o["coin"][2:]
+    else:
+        man = {**man, "salt": "00" * 32}
+    return {**{k: v for k, v in man.items() if k != "beacon"}, "schema": CC.MANIFEST_SCHEMA, "coins": coins, "salt_opening": o}
+
+
+def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path]) -> list[tuple[str, str, dict, str]]:
+    """(check, ``pass`` or ``draw``, its input, the recorded verdict or ``CONTROL``) of the run's coin checks."""
+    ch = out / "challenger"
+    if not (ch / "coins.json").is_file() or not (out / "draw.json").is_file():
+        return []
+    coins = load(ch / "coins.json")
+    recorded = coins.get("scheme") != Co.SCHEME
+    reg, receipt, d = load(out / "request/registration.json"), load(out / "receipt.json"), load(out / "draw.json")
+    openings = [json.loads(x) for x in (ch / "openings.jsonl").read_text().splitlines() if x]
+    drawn = next((o for o in openings if o["label"] == "draw"), None)
+    audit = out / "outcome-honest/audit.json"
+    got: list[tuple[str, str, dict, str]] = []
+    if drawn is not None and audit.is_file() and "select" in checks:
+        x = {"coins": coins, "recorded": recorded, "opening": drawn, "stream": load(audit)["stream"],
+             "registration": receipt["registration"], "receipt": receipt, "k": reg["law"]["k"],
+             "population": reg["population"], "units": d["units"]}
+        got.append(("select", "draw", x, checks["select"]["verdict"]))
+        other = load(out / "other/registration.json") if (out / "other/registration.json").is_file() else {"x": 1}
+        for name, edit in (("draw-unit", {"units": sorted({*x["units"][1:], next(u for u in range(x["population"])
+                                                                                    if u not in x["units"])})}),
+                           ("draw-coin", {"opening": {**drawn, "coin": f"{int(drawn['coin'][:2], 16) ^ 1:02x}" + drawn["coin"][2:]}}),
+                           ("draw-after", {"registration": hashlib.sha512(D.canonical(other).encode()).hexdigest()}),
+                           ("draw-stream", {"stream": "00" * 64}),
+                           ("draw-receipt", {"receipt": {**receipt, "received": "1"}}),
+                           ("draw-fewer", {"k": x["k"] - 1, "units": x["units"][:-1]})):
+            got.append((name, "draw", {**x, **edit}, "CONTROL"))
+    pass_path = passes.get(summary.get("served_run") or "")
+    salt = out / "salt-opening.json"
+    if pass_path is not None and salt.is_file():
+        raw = pass_path.read_bytes()
+        man, context = json.loads(raw), load(out / "request/params.json")["context"]
+        x = {"coins": coins, "raw": raw.hex(), "context": context, "recorded": recorded}
+        if "receive-honest" in checks:
+            got.append(("receive-honest", "pass", x, checks["receive-honest"]["verdict"]))
+        for case in COIN_CONTROLS:
+            if f"receive-coin-{case}" in checks:
+                v = json.dumps(_variant(man, coins, load(salt), case), sort_keys=True).encode()
+                got.append((f"receive-coin-{case}", "pass", {**x, "raw": v.hex()}, checks[f"receive-coin-{case}"]["verdict"]))
+        if "receive-unrecorded" in checks:
+            v = json.dumps({k: w for k, w in man.items() if k not in ("coins", "salt_opening")}).encode()
+            got.append(("receive-unrecorded", "pass", {**x, "raw": v.hex()}, checks["receive-unrecorded"]["verdict"]))
+    return got
+
+
+def coin_judged(recorded: str, kind: str, out: Any) -> bool:
+    """Whether the coin check's outcome `out` is the recorded verdict (a control's: refused)."""
+    refused = out is not None and "refused" in out
+    if recorded in ("DRAWN", "REGISTERED"):
+        return not refused and (kind == "draw" or out.get("how") is not None)
+    return refused
+
+
 def opening_reference(x: dict) -> Any:
     p = CC.params(CC.canonical(D.canonical(x["params"]).encode()))
     c = CC.commitment(bytes.fromhex(x["commitment"]))
@@ -163,6 +241,19 @@ class Sides:
         self.core = D.Server(D.ProtocolPort("pouw-check", CC.case, inputs=None, package=LEAN).argv())
         self.opening = D.Server(D.Port("pouw-check-difftest", "opening", opening_reference, inputs=None,
                                        package=LEAN).argv())
+        self.record = OR.Record()
+
+    def coin(self, kind: str, x: dict) -> tuple[Any, bool]:
+        """Lean's outcome of a pass or draw check, and whether Python's is the same (`of_record`)."""
+        try:
+            return (self.record.pass_epoch if kind == "pass" else self.record.draw)(x), True
+        except OR.Disagree as e:
+            return e.lean, False
+
+    def close(self) -> None:
+        self.core.close()
+        self.opening.close()
+        self.record.close()
 
     def case(self, case: dict) -> tuple[dict, bool]:
         """Python's outcome, and whether Lean's is the same, reason included."""
@@ -192,12 +283,12 @@ def judged(recorded: str, a: dict, public: Any) -> bool:
     return recorded == "REJECT" and a["verdict"] == "reject"
 
 
-def replay_run(sides: Sides, out: Path) -> dict:
+def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
     summary = load(out / "summary.json")
     checks = summary.get("checks") or {}
     reg_p = out / "request/registration.json"
     reg = load(reg_p) if reg_p.is_file() else None
-    row: dict[str, Any] = {"checks": len(checks), "cases": [], "openings": [], "apart": []}
+    row: dict[str, Any] = {"checks": len(checks), "cases": [], "openings": [], "coins": [], "apart": []}
     if not current(reg):
         row["version"] = "no registration" if reg is None else (reg.get("scheme") or "no scheme")
         try:
@@ -221,6 +312,11 @@ def replay_run(sides: Sides, out: Path) -> dict:
         py, same = sides.open(x)
         mapped.add(name)
         row["openings"].append({"check": name, "recorded": checks[name]["verdict"], "python": py, "lean_same": same})
+    for name, kind, x, recorded in coin_inputs(out, checks, summary, passes):
+        lean, same = sides.coin(kind, x)
+        mapped.add(name)
+        row["coins"].append({"check": name, "kind": kind, "recorded": recorded, "lean": lean, "lean_same": same,
+                             "same_verdict": coin_judged(recorded, kind, lean)})
     row["apart"] = sorted(set(checks) - mapped)
     return row
 
@@ -248,7 +344,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("out", type=Path)
     ap.add_argument("--runs", type=Path, nargs="*")
     ap.add_argument("--v2", type=Path)
+    ap.add_argument("--pass", dest="passes", action="append", default=[], metavar="RUN=MANIFEST",
+                    help="a served run's retained pass manifest, for its windows' pass checks")
     a = ap.parse_args(argv)
+    passes = {k: Path(v) for k, _, v in (x.partition("=") for x in a.passes)}
     a.out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         runs = a.runs if a.runs is not None else store_runs(Path(tmp) / "runs")
@@ -267,18 +366,21 @@ def main(argv: list[str] | None = None) -> int:
             if not (out / "summary.json").is_file():
                 report["runs"][r.name] = {"version": "no summary (the job failed before its checks)"}
                 continue
-            report["runs"][r.name] = replay_run(sides, out)
-        sides.core.close()
-        sides.opening.close()
+            report["runs"][r.name] = replay_run(sides, out, passes)
+        sides.close()
     cur = {k: v for k, v in report["runs"].items() if v.get("version") == CC.SCHEME}
     cases = [c for v in cur.values() for c in v["cases"]]
+    coins = [c for v in cur.values() for c in v["coins"]]
     opens = [o for v in cur.values() for o in v["openings"]]
     older = [c for v in report["runs"].values() if v.get("version") != CC.SCHEME for c in v.get("cases", [])]
-    every = cases + opens + older + report["v2"]["registrations"]
-    t = {"runs": len(report["runs"]), "current": len(cur), "cases": len(cases),
-         "same_verdict": sum(c["same_verdict"] for c in cases),
-         "controls": sum(c["recorded"] in ("REFUSED", "REJECT") for c in cases),
-         "controls_same": sum(c["same_verdict"] for c in cases if c["recorded"] in ("REFUSED", "REJECT")),
+    every = cases + coins + opens + older + report["v2"]["registrations"]
+    judged_ = cases + coins
+    negative = ("REFUSED", "REJECT", "CONTROL")
+    t = {"runs": len(report["runs"]), "current": len(cur), "cases": len(judged_),
+         "same_verdict": sum(c["same_verdict"] for c in judged_),
+         "controls": sum(c["recorded"] in negative for c in judged_),
+         "controls_same": sum(c["same_verdict"] for c in judged_ if c["recorded"] in negative),
+         "coin_cases": len(coins), "generated_controls": sum(c["recorded"] == "CONTROL" for c in coins),
          "controls_by_rule": sum(c["recorded"] in ("REFUSED", "REJECT") and registration_stage(c["reason"])
                                  for c in cases),
          "lean_same": sum(c["lean_same"] for c in every), "compared": len(every), "openings": len(opens),
@@ -287,8 +389,10 @@ def main(argv: list[str] | None = None) -> int:
          "apart": dict(sorted(Counter(n.split("-")[0] for v in cur.values() for n in v["apart"]).items()))}
     report["totals"] = t
     t["line"] = (f"{t['current']} runs, {t['same_verdict']}/{t['cases']} same verdict, {t['controls']} negative controls "
-                 f"({t['controls_same']} same, {t['controls_by_rule']} refused by a registration rule, the rest the "
-                 f"service's reject); Lean = Python on {t['lean_same']}/{t['compared']} inputs "
+                 f"({t['controls_same']} same; {t['controls_by_rule']} refused by a registration rule, "
+                 f"{t['controls'] - t['controls_by_rule'] - t['generated_controls']} by the service or the coin rule, "
+                 f"{t['generated_controls']} generated draw controls; {t['coin_cases']} coin cases); Lean = Python on "
+                 f"{t['lean_same']}/{t['compared']} inputs "
                  f"({t['openings']} pre-layout openings, {t['older_cases']} cases of {len(t['older_runs'])} older runs, "
                  f"{t['v2']} v2 registrations apart)")
     (a.out / "replay.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
