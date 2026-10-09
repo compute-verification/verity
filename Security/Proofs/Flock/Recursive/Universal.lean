@@ -35,7 +35,7 @@ theorem compiledForkSound_of_fast100 {nT r : ℕ} (T : Fin nT → Type) (CT : Fi
     (sch : Accounting.Schedule) (hsch : Accounting.fast100 cls.m = some sch)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
     Flock.Premises.CompiledForkSound T CT cls regs sch := by
-  letI : Inhabited Refine.Dig := ⟨Refine.H512 []⟩
+  let _ : Inhabited Refine.Dig := ⟨Refine.H512 []⟩
   exact flock_inner_sound_compiled T CT execArith execArith_correct Refine.H512 Refine.enc512 Refine.leaf512 cls regs
     sch hsch hlay
 
