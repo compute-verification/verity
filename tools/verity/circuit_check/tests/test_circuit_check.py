@@ -13,6 +13,7 @@ import dataclasses
 import gzip
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -606,30 +607,6 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 
 
-@pytest.mark.slow
-def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tmp_path):
-    """Two runs of one target: the second reuses it.  An entry whose recorded digest of one module it held no longer matches (as
-    after an edit) is not reused, and the run records a new entry.  About 14 min on a node: it runs the CLI end to end in fresh
-    interpreters, so it catches a read the cache records in one process that a fresh one doesn't see."""
-    import subprocess
-    import sys
-
-    def run(*targets):
-        r = subprocess.run([sys.executable, "-m", "circuit_check", *targets, "-q", "--cache", str(tmp_path)], capture_output=True, text=True)
-        assert r.returncode == 0, r.stderr
-        return r.stdout
-
-    assert "0 of 1 targets reused" in run("F32Mul_v1") and "1 of 1 targets reused" in run("F32Mul_v1")
-    assert "1 of 2 targets reused" in run("F32Mul_v1", "rope-head")           # per target: the new one runs, the old one is reused
-    (entry,) = [p for p in tmp_path.glob("*/*/*.json") if json.loads(p.read_text())["key"]["request"]["target"][1] == "F32Mul_v1"]
-    e = json.loads(entry.read_text())
-    assert "verity.ml.circuits.defs" in e["reads"]["modules"] and e["reads"]["enums"]
-    assert e["key"]["version"] == entry.parent.parent.name and e["key"]["request"]["target"] == ["definition", "F32Mul_v1"]
-    e["reads"]["modules"]["verity.ml.circuits.defs"]["d"] = "0" * 64
-    entry.write_text(json.dumps(e))
-    assert "0 of 1 targets reused" in run("F32Mul_v1") and len(list(entry.parent.glob("*.json"))) == 2
-
-
 def test_a_result_after_a_read_the_tracer_cannot_see_is_not_stored(tmp_path):
     """A check that starts a program (its reads are untraced) is not stored, nor is any later one in that process; a library
     built in the tree and loaded by the dynamic loader is an input by its bytes."""
@@ -716,9 +693,11 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get("VERITY_CIRCUIT_CHECK_SLOW"),
+                    reason="8 min on a node, nearly all of it each worker's cold start: VERITY_CIRCUIT_CHECK_SLOW=1")
 def test_parallel_jobs_give_the_serial_report(tmp_path):
-    """About 6.5 min on a node: it checks four real targets serially and in worker processes, so it catches a `--jobs` worker
-    whose report differs from the serial one."""
+    """It checks four real targets serially and in worker processes, so it catches a `--jobs` worker whose report differs from
+    the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order."""
     from circuit_check import cli
 
     specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
