@@ -538,12 +538,10 @@ theorem zk_sessions_recursive_fork_on
 reference openings, unless the recursive prover has an inner fork (the body of `InnerForkRec`: at some draw and round,
 two continuations of `σ` whose decoded inner transcripts `pick` reads as a collision of `H`).
 
-Its proof is open (about 200 lines): read `InnerSoundForkOn` at the simulated inner prover `refStrat` and at `G` := the
-inner transcripts `u` such that the leaf of `σ` at `u`'s coins has an outer outcome that accepts and decodes to `u`.
-Then the leaves' average is `prob (accepts ∧ G)` against `refStrat` (`leafAvg_relabel` with the leaf's predicate
-carried along the coins), and a fork of `refStrat` whose two transcripts satisfy `G` is a fork of `σ` at the same coins
-whose two trials reach outcomes decoding to those transcripts (`forkG` on `refStrat` against `forkG` on `σ`, by
-induction on the rounds through `contF`). -/
+It reads `InnerSoundForkOn` at the simulated inner prover `refStrat` and at `G` := the inner transcripts `u` such that
+the leaf of `σ` at `u`'s coins has an outer outcome that accepts and decodes to `u` (`AtLeaf`). The leaves' average is
+then `prob (accepts ∧ G)` against `refStrat` (`leafAvg_relabel_at`), and a fork of `refStrat` whose two transcripts
+satisfy `G` is a fork of `σ` at the same coins (`finds_forkG_ref`). -/
 theorem innerAtLeavesV_of_forkOn (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
