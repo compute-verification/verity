@@ -577,6 +577,9 @@ def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_pa
     assert doc["strict"] and "refused" not in doc and answered == 2 * 105 and doc["k"] == 105
     assert doc["audits"] == doc["audits_accepted_under_signer"] == 2 and doc["audits_accepted"] == 0
     assert doc["late"] == doc["wrong"] == 0 and doc["profile"] is None
+    rec = doc["records"][0]
+    assert rec["witness"]["expected"] == {str(a["index"]): rec["witness"]["signed"]["rounds"][j]["digest"]
+                                          for j, a in enumerate(rec["answers"])}
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS + 1_000)
     assert doc["audits"] == 0 and answered == 0 and doc["records"] == []
     assert "fits 1 calls of 854029 ns" in doc["refused"]
