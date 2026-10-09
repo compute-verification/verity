@@ -2,20 +2,33 @@
 # rec-private (lane rec-v0): a hidden netlist as the recursion's inner statement. The universal unit UniversalUnit_v1{CLS}
 # (verity.ml.private_circuits.universal) runs a random netlist padded to the class, its op/src/out one row every instance
 # opens (the registered program: rec_inner.program_unit, so three regions), x a row per instance, staged with plain leaves
-# (rec_inner.py universal); its inner session is proved on the CPU (M0, FC_COINS=os) against the rec proxy opening a
+# and salts from the OS (rec_inner.py universal); its inner session is proved on the CPU (M0, FC_COINS=os) against the rec
+# proxy, whose challenger commits to every coin first (rec_live: coins.json), opening a
 # recursive session on the firewall's state
 # (rec_live --firewall, the parts V* will prove in order), the firewall's contract (Lean flock-firewall) checks what the
 # proxy let out, V* is staged over it (rec_vstage points, InnerFold.lean, rec_vstage stage under the class's cap), and each
 # of V*'s statements is proved with --zk behind the outer firewall (FC_FIREWALL=1: the send check, released by the firewall
 # as part NAME of the recursive session, --firewall-state), each release decided again by Lean's core-firewall
 # (verity/firewall-release/v0) on the record before it, and each session verified by Lean's flock-verify verify --zk and
-# replayed by the live build. Each of V*'s statements reads registered values, so it is a shared-row public file, a form the
-# soundness proof does not cover until the shared-row route lands: both verifiers refuse it, and summary.json says "Lean
-# refused: form not covered", a refusal; its lean_of_record accepts the run only when Lean accepted every part.
-# The controls, each refused where it should be, by a check before that:
+# replayed by the live build. Each outer session is served with the verifier's draw of every unit (rec-private-outer.sh),
+# and each of V*'s statements reads registered values, a shared-row public file at hidden outputs (--registered); a form Lean
+# refuses is "Lean refused: form not covered" in summary.json, a refusal, and its lean_of_record accepts the run only when
+# Lean accepted every part.
+# The controls, each refused where it should be:
+#   faulty       a faulty unit (rec_inner.py faulty: instance 0's output row one bit off in the prover's file, the prover
+#                checking nothing), proved against the registered statement: V*'s algebra over its claims (alg parts, outer
+#                sessions sent though the witness fails, FC_ZK_SELF_CHECK=skip)
+#   outside      a description that is not a circuit (rec_inner.py universal --outside: a gate reading a wire computed
+#                after it), registered as its own statement: a member of the class, so nothing refuses it, which the run
+#                shows (its algebra proved and verified as an honest statement's, outside-alg-p*)
 #   other        another netlist of the class (the registered one with an unread no-op gate changed: same outputs), proved
 #                against the registered statement: V*'s algebra over the inner's claims at the registered statement's fold
 #                (alg parts; outer sessions sent though the witness fails, FC_ZK_SELF_CHECK=skip)
+#   other-coins  the honest inner transcript against coins other than the challenger committed to (rec_inner.py forge --what
+#                challenge on a copy): the firewall's contract on the run's transcript with that coin swapped
+#                (rec_private_coins.py), and V*'s algebra over the forged session (alg parts, as other's)
+#   challenger   firewall_agree.py --cases: challengers whose coins do not open their commitments, which both the firewall
+#                and its contract refuse, beside the run's own session
 #   made-up      --wired's cheater (universal.run_wired: layer 1 reads a made-up input): the verifier's Linking check on
 #                the inner statement's public file, live (statement --links, before any session) and in V*'s fold
 #                (InnerFold.lean --program, the setup Lean's verify runs) over a session recorded under no links; the
@@ -29,7 +42,8 @@
 #      FLOCK_WORK (as 80-rec-inner.sh)  TAG (default CLS-nN)  LEAN_FROM (a cache directory whose lean-<sha>/flock-verify
 #      of the same sources is used)  STAGED STAGED_RECORD (an earlier staging, not restaged)  WCLS (the wired circuit's
 #      class)  CAP_FOLD (an earlier fold of the statement: the cap from it, the other netlist's chain in the background)
-#      OUTER_DRAW (rec-private-outer.sh: the verifier's draw, default all)
+#      OUTER_DRAW (rec-private-outer.sh: the verifier's draw, default all)  REC_FAST_STAGE=1 (rec_inner.py universal --fast)
+#      CONTROLS=0 (none of faulty, outside, other-coins; outside is never staged beside STAGED)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then
@@ -94,9 +108,16 @@ else
   /usr/bin/time -v -o $O/time-stage-universal.txt python3 $PY universal --cls $CLS --n $N --seed $SEED --out $DD/u > $O/stage-universal.json 2> $O/stage-universal.err \
     || { tail -20 $O/stage-universal.err; exit 1; }
 fi
-# WCLS: the wired circuit's class (default CLS), staged by today's path: four layers of the unit
-/usr/bin/time -v -o $O/time-stage-wired.txt python3 $PY wired --cls ${WCLS:-$CLS} --n $NW --seed $SEED --out $DD/w > $O/stage-wired.json 2> $O/stage-wired.err \
-  || { tail -20 $O/stage-wired.err; exit 1; }
+# in the background: WCLS, the wired circuit's class (default CLS), staged by today's path (four layers of the unit), and the
+# description outside the class (x/), each waited for where it is first read
+/usr/bin/time -v -o $O/time-stage-wired.txt python3 $PY wired --cls ${WCLS:-$CLS} --n $NW --seed $SEED --out $DD/w > $O/stage-wired.json 2> $O/stage-wired.err &
+WS=$!
+XS=
+if [ "${CONTROLS:-1}" = 1 ] && [ -z "${STAGED:-}" ]; then
+  ( /usr/bin/time -v -o $O/time-stage-outside.txt python3 $PY universal --cls $CLS --n $N --seed $SEED --out $DD/x --outside \
+      > $O/stage-outside.json 2> $O/stage-outside.err; echo $? > $DD/stage-outside.exit ) &
+  XS=$!
+fi
 cp $DD/u/stage/partition.json $O/
 U=$DD/u/stage; PUB=$(pub_of $U)
 
@@ -163,6 +184,28 @@ if [ -n "${CAP_FOLD:-}" ]; then
   OC=$!
 fi
 
+# the faulty unit's and the outside description's chains in the background, beside the honest one: the inner session, V*'s
+# fold and V*'s algebra (--levels none), into $DD/vx and $DD/vu
+achain() {
+  local name=$1 st=$2 inst=$3 out=$4
+  inner $name $st $inst && fold $name $st \
+    && /usr/bin/time -v -o $O/vstar/time-$name.txt python3 -m verity_flock.rec_vstage stage $DD/inner-$name $DD/fold-$name.json $out \
+         --points $DD/points-$name.json --salts $out-acc-salts.bin --levels none --cap $CAP > $O/vstar/$name.json 2> $O/vstar/$name.err
+  echo "$name chain exit $?"
+}
+XC= UC=
+if [ "${CONTROLS:-1}" = 1 ]; then
+  ( python3 $PY faulty --stage $U --n $N --out $DD/u/faulty > $O/stage-faulty.json && achain faulty $U $DD/u/faulty/inst-$N.bin $DD/vx ) \
+    > $O/faulty-chain.log 2>&1 &
+  XC=$!
+  if [ -n "$XS" ]; then
+    ( until [ -s $DD/stage-outside.exit ]; do sleep 10; done
+      [ "$(cat $DD/stage-outside.exit)" = 0 ] || { tail -20 $O/stage-outside.err; exit 1; }
+      achain outside $DD/x/stage $DD/x/stage/inst-$N.bin $DD/vu ) > $O/outside-chain.log 2>&1 &
+    UC=$!
+  fi
+fi
+
 # honest: the inner session through the firewall (a recursive session opened with PARTS), the firewall's contract on what it
 # let out, the inner verified by Lean as far as it goes (plain leaves: refused until soundness covers them), V*'s fold
 inner honest $U $U/inst-$N.bin firewall || exit 1
@@ -170,6 +213,24 @@ SID=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['session'
 echo $SID > $O/inner/honest/firewall-session.txt
 python3 verity/ml/flock/verifier/firewall_agree.py --lean $T/flock-firewall --out $O/inner/firewall-contract --sessions $DD/inner-honest \
   > $O/inner/firewall-contract.txt 2>&1; echo "inner firewall contract exit $?"
+cp $DD/inner-honest/coins.json $O/inner/honest/
+python3 verity/ml/flock/verifier/firewall_agree.py --lean $T/flock-firewall --out $O/inner/firewall-cases --cases \
+  > $O/inner/firewall-cases.txt 2>&1; echo "firewall cases exit $?"
+python3 verity/ml/flock/pod/rec_private_coins.py --lean $T/flock-firewall --session $DD/inner-honest --out $O/inner/coins-contract \
+  > $O/inner/coins-contract.txt 2>&1; echo "coins contract exit $?"
+CC=
+if [ "${CONTROLS:-1}" = 1 ]; then
+  # other-coins: a copy of the honest session with rep 0's challenge coin one bit off, as the session and the coin record have it
+  IC=$DD/inner-other-coins; rm -rf $IC; mkdir -p $IC $O/inner/other-coins
+  cp -r $DD/inner-honest/session $DD/inner-honest/public.json $DD/inner-honest/private.json $DD/inner-honest/coins.json $IC/ || exit 1
+  python3 $PY forge --what challenge --inner $IC > $O/inner/other-coins/forge.json || exit 1
+  ( python3 -m verity_flock.rec_vstage points $IC $U/circuit.txt $PUB > $DD/points-other-coins.json 2> $O/inner/other-coins/points.err \
+      && fold other-coins $U \
+      && /usr/bin/time -v -o $O/vstar/time-other-coins.txt python3 -m verity_flock.rec_vstage stage $IC $DD/fold-other-coins.json $DD/vc \
+           --points $DD/points-other-coins.json --salts $DD/vc-acc-salts.bin --levels none --cap $CAP > $O/vstar/other-coins.json 2> $O/vstar/other-coins.err
+    echo "other-coins chain exit $?" ) > $O/other-coins-chain.log 2>&1 &
+  CC=$!
+fi
 ( /usr/bin/time -v -o $O/inner/honest/time-lean.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $U/circuit.txt \
     --public $PUB --partition $U/partition.json --coins os --session $DD/inner-honest/session > $O/inner/honest/lean.log 2> $O/inner/honest/lean.err
   echo "inner lean exit $?" ) &
@@ -202,6 +263,7 @@ python3 $PY flipped --inner $F --fold $DD/fold-honest.json --points $DD/points-h
 # the wired circuit: the honest statement's inner session under the verifier's links, V*'s fold with the verifier's program
 # (Linking) and without it; the cheater's public file under the verifier's links (the live build's Linking refuses it before
 # any session), its inner session under none (a verifier that checks no Linking records it), and V*'s fold of it with the program
+wait $WS || { tail -20 $O/stage-wired.err; exit 1; }
 W=$DD/w/stage
 inner wired $W $(ls $W/inst-*.bin) - $W/links.json || exit 1
 fold wired $W --program $W/program.desc
@@ -225,6 +287,11 @@ outer forged-top-$(basename $LAST) $LAST dev
 outer flipped-top-L1 $DD/vf/forged-flipped-top/L1 dev
 [ -n "${OC:-}" ] && { wait $OC; tail -3 $O/other-chain.log; }
 for C in $(ls -d $DD/vo/alg/p* | sort -V); do outer other-alg-$(basename $C) $C dev; done
+for c in $XC $CC $UC; do wait $c; done
+tail -n2 $O/faulty-chain.log $O/other-coins-chain.log $O/outside-chain.log
+for C in $(ls -d $DD/vx/alg/p* 2>/dev/null | sort -V); do outer faulty-alg-$(basename $C) $C dev; done
+for C in $(ls -d $DD/vc/alg/p* 2>/dev/null | sort -V); do outer other-coins-alg-$(basename $C) $C dev; done
+for C in $(ls -d $DD/vu/alg/p* 2>/dev/null | sort -V); do outer outside-alg-$(basename $C) $C plain; done
 cp $FWS/record.jsonl $O/firewall-record.jsonl
 wait $IL
 bash verity/ml/flock/pod/88-rec-private-public.sh TAG=$TAG > $O/public.log 2>&1; echo "public views exit $?"
