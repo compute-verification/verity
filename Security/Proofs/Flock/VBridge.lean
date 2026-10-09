@@ -26,6 +26,7 @@ import Proofs.Flock.VBridge.Algebra.Ligerito
 import Proofs.Flock.VBridge.Algebra.ToVStar
 import Proofs.Flock.VBridge.Algebra.BitsOk
 import Proofs.Flock.VBridge.Algebra.Rows
+import Proofs.Flock.VBridge.Algebra.RunSkel
 import Proofs.Flock.VBridge.Compiled
 import Proofs.Flock.VBridge.AccChain
 import Proofs.Flock.VBridge.Decode
