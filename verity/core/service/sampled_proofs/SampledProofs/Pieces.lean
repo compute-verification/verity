@@ -132,21 +132,26 @@ def verdict (j : Json) : V Json := do
   return Json.mkObj [("verdict", Json.str name.name)]
 
 /-- `{"record", "scheme", "roots", "domains", "population"}` to `matches_public`'s `{"ok", "codes", "detail"}`: a record
-whose roots are objects with a string port, a root and a domain, and which has a scheme and a population, a string scheme,
-roots and domains objects, an integer population. -/
+whose roots are objects with a string port, root and domain, which has a scheme and an integer population; a string
+scheme, roots and domains objects of strings, an integer population. (Python's `==` and `jeq` agree there: no boolean
+meets an integer.) -/
 def matchesPublic (j : Json) : V Json := do
   let rec_ := getD j "record"
   let .arr roots := getD rec_ "roots" | throw "the record's roots are not a list"
-  if !roots.all fun r => (getD r "port" matches .str _) && (field? r "root").isSome && (field? r "domain").isSome then
-    throw "a registered root is not an object with a string port, a root and a domain"
-  if (field? rec_ "scheme").isNone || (field? rec_ "population").isNone then throw "the record has no scheme or population"
-  if !(getD j "scheme" matches .str _) || !(getD j "roots" matches .obj _) || !(getD j "domains" matches .obj _)
-      || (int? (getD j "population")).isNone then
-    throw "scheme is not a string, roots or domains not an object, or population not an integer"
+  if !roots.all fun r => ["port", "root", "domain"].all (getD r · matches .str _) then
+    throw "a registered root is not an object with a string port, root and domain"
+  if (field? rec_ "scheme").isNone || (int? (getD rec_ "population")).isNone then
+    throw "the record has no scheme or no integer population"
+  let strings := fun (k : String) => match getD j k with
+    | .obj _ => (entries (getD j k)).all (·.2 matches .str _)
+    | _ => false
+  if !(getD j "scheme" matches .str _) || !strings "roots" || !strings "domains" || (int? (getD j "population")).isNone then
+    throw "scheme is not a string, roots or domains not an object of strings, or population not an integer"
   return (Record.matchesPublic rec_ (getD j "scheme") (getD j "roots") (getD j "domains") (getD j "population")).toJson
 
 /-- `{"verdicts", "registration"?}` to `{"registered": {value: root} or null}` (`Record.sessionRegistered`, with a
-registration `Record.ownRegistered`); refused where `inputOf` refuses the verdicts. -/
+registration `Record.ownRegistered`); refused where `inputOf` refuses the verdicts, and a registration whose roots are not
+a list of objects with a string port or whose registered values, if any, are not a list of objects with a string value. -/
 def sessionRegistered (j : Json) : V Json := do
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
   let vs := entries (getD j "verdicts")
@@ -158,8 +163,13 @@ def sessionRegistered (j : Json) : V Json := do
   let opened := Record.sessionRegistered vs
   let opened ← match field? j "registration" with
     | none => pure opened
-    | some (.obj _) => pure (Record.ownRegistered (getD j "registration") opened)
-    | some _ => throw "registration is not an object"
+    | some reg => do
+      let .arr roots := getD reg "roots" | throw "the registration's roots are not a list"
+      if !roots.all (getD · "port" matches .str _) then throw "a registered root has no string port"
+      if let some es := field? reg "registered" then
+        let .arr es := es | throw "the registration's registered values are not a list"
+        if !es.all (getD · "value" matches .str _) then throw "a registered value has no string value"
+      pure (Record.ownRegistered reg opened)
   return Json.mkObj [("registered", match opened with
     | some kvs => Json.mkObj kvs.toList
     | none => Json.null)]

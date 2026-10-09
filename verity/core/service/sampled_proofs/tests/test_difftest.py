@@ -135,7 +135,7 @@ QUERIES = [s.query for s in SETUPS] + [
 
 PARAM_KEYS = {"anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query", "registered",
               "scheme", "work_table"}
-EVIDENCE_KEYS = {"draw", "instances", "proved_units", "receipt", "served", "session_registered", "session_roots", "sessions",
+EVIDENCE_KEYS = {"draw", "instances", "proved_units", "receipt", "served", "session_roots", "sessions",
                  "statement", "verdicts"}
 RATIO = re.compile(r"(0|[1-9][0-9]*)(?:/(0|[1-9][0-9]*))?")
 DIGITS = re.compile(r"[0-9]+")
@@ -297,10 +297,19 @@ def decode_evidence(b: bytes) -> dict:
     if not (_nat(j["instances"]) and isinstance(j["verdicts"], dict) and all(isinstance(v, dict) for v in j["verdicts"].values())
             and isinstance(j["sessions"], list) and all(isinstance(s, str) for s in j["sessions"])
             and isinstance(j["receipt"], dict) and nats(j["proved_units"]) and isinstance(j["statement"], dict)
-            and (j["served"] is None or nats(j["served"]))
-            and all(j[k] is None or isinstance(j[k], dict) for k in ("session_roots", "session_registered"))):
+            and (j["served"] is None or nats(j["served"])) and (j["session_roots"] is None or isinstance(j["session_roots"], dict))):
         raise D.Reject("the evidence's fields")
+    _registered_reads(j["verdicts"])
     return j
+
+
+def _registered_reads(verdicts: dict) -> None:
+    """`OneStage.evidenceOf`'s rule on the verdicts: a verifier of record that accepted reports its registered reads as
+    objects with a string value and a root."""
+    for v in verdicts.values():
+        if v.get("of_record") and v.get("accepted") is True and isinstance(v.get("registered"), dict) and not all(
+                isinstance(e, dict) and isinstance(e.get("value"), str) and "root" in e for e in v["registered"].values()):
+            raise D.Reject("a verifier of record reports registered reads that are not objects with a string value and a root")
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -319,7 +328,8 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     if not DR.check_draw(e["draw"], rec, mine).ok:
         return "reject", "draw"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
-                             e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"], e["session_registered"])
+                             e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
+                             audit.session_registered(e["verdicts"], rec))
     if not out["accepted"]:
         if not all(x["ok"] for x in out["checks"].values()):
             return "reject", "checks"
@@ -413,7 +423,7 @@ def check_draw(j):
     j = _json(j)
     if not isinstance(j, dict) or not _int(j.get("population")) or not isinstance(j.get("law"), dict):
         raise D.Reject("population is not an integer or law not an object")
-    return {"codes": list(DR.check_draw(j.get("draw"), {"population": j["population"]}, j["law"]).codes)}
+    return _json(DR.check_draw(j.get("draw"), {"population": j["population"]}, j["law"]).to_json())
 
 
 def check_proved(j):
@@ -423,7 +433,7 @@ def check_proved(j):
     if not (isinstance(d, dict) and ints(d.get("units")) and ("closure" not in d or ints(d["closure"]))
             and ints(j.get("proved_units")) and _int(j.get("instances"))):
         raise D.Reject("not a draw of integer units, proved units and an instance count")
-    return {"codes": list(DR.check_proved(d, j["proved_units"], j["instances"]).codes)}
+    return _json(DR.check_proved(d, j["proved_units"], j["instances"]).to_json())
 
 
 def draw(j):
@@ -492,6 +502,87 @@ def verdict(j):
     return {"verdict": "undecided" if all(v["accepted"] is True for v in ran) else "reject"}
 
 
+def matches_public(j):
+    j = _json(j)
+    rec = j.get("record") if isinstance(j, dict) else None
+    roots = rec.get("roots") if isinstance(rec, dict) else None
+    if not (isinstance(roots, list) and all(isinstance(r, dict) and all(isinstance(r.get(k), str) for k in ("port", "root", "domain"))
+                                            for r in roots)):
+        raise D.Reject("a registered root is not an object with a string port, root and domain")
+    if "scheme" not in rec or not _int(rec.get("population")):
+        raise D.Reject("the record has no scheme or no integer population")
+    strings = lambda x: isinstance(x, dict) and all(isinstance(v, str) for v in x.values())  # noqa: E731
+    if not (isinstance(j.get("scheme"), str) and strings(j.get("roots")) and strings(j.get("domains")) and _int(j.get("population"))):
+        raise D.Reject("scheme is not a string, roots or domains not an object of strings, or population not an integer")
+    return _json(R.matches_public(rec, j["scheme"], j["roots"], j["domains"], j["population"]).to_json())
+
+
+def session_registered(j):
+    j = _json(j)
+    vs = j.get("verdicts") if isinstance(j, dict) else None
+    if not isinstance(vs, dict) or not all(isinstance(v, dict) for v in vs.values()):
+        raise D.Reject("verdicts is not an object of objects")
+    _registered_reads(vs)
+    reg = j.get("registration")
+    if "registration" in j:
+        if not (isinstance(reg, dict) and isinstance(reg.get("roots"), list)
+                and all(isinstance(r, dict) and isinstance(r.get("port"), str) for r in reg["roots"])):
+            raise D.Reject("a registered root has no string port")
+        if "registered" in reg and not (isinstance(reg["registered"], list) and all(
+                isinstance(e, dict) and isinstance(e.get("value"), str) for e in reg["registered"])):
+            raise D.Reject("a registered value has no string value")
+    return {"registered": audit.session_registered(vs, reg)}
+
+
+RECORD_INPUT_KEYS = {"delta", "draw", "instances", "law", "proved_units", "receipt", "registration", "served", "session_roots",
+                     "sessions", "statement", "verdicts"}
+REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "protocol", "query", "roots", "scheme")
+
+
+def _record_input(j) -> Fraction:
+    """`Record.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
+    ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
+    _exactly(j, RECORD_INPUT_KEYS, "the record's input")
+    reg, draw_ = j["registration"], j["draw"]
+    if not (isinstance(reg, dict) and all(k in reg for k in REGISTRATION_KEYS) and _int(reg["population"])
+            and isinstance(reg["anchors"], list) and isinstance(reg["roots"], list)
+            and all(isinstance(r, dict) and isinstance(r.get("port"), str) and "root" in r and "leaves" in r for r in reg["roots"])
+            and ("registered" not in reg or isinstance(reg["registered"], list) and all(
+                isinstance(e, dict) and isinstance(e.get("value"), str) and all(k in e for k in ("root", "leaves", "domain"))
+                for e in reg["registered"]))):
+        raise D.Reject("the registration")
+    if not (isinstance(j["receipt"], dict) and isinstance(draw_, dict) and ints(draw_.get("units"))
+            and ("closure" not in draw_ or ints(draw_["closure"])) and ("population" not in draw_ or _int(draw_["population"]))
+            and (draw_.get("law") != "subset" or "k" in draw_) and isinstance(j["law"], dict)):
+        raise D.Reject("the receipt, the draw or the law")
+    if not (ints(j["proved_units"]) and _int(j["instances"]) and isinstance(j["statement"], dict)
+            and isinstance(j["verdicts"], dict) and all(isinstance(v, dict) for v in j["verdicts"].values())
+            and isinstance(j["sessions"], list) and all(isinstance(x, str) for x in j["sessions"])
+            and (j["served"] is None or ints(j["served"])) and (j["session_roots"] is None or isinstance(j["session_roots"], dict))):
+        raise D.Reject("the evidence")
+    _registered_reads(j["verdicts"])
+    delta = ratio(j["delta"])
+    if not 0 < delta < 1:
+        raise D.Reject("delta is not in (0, 1)")
+    return delta
+
+
+def audit_record_of(j) -> dict:
+    """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), the registered roots
+    the verdicts' own for the registration's values, and Bernoulli's float bound null, which the Lean leaves to Python."""
+    delta = _record_input(j)
+    out = audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
+                             j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
+                             audit.session_registered(j["verdicts"], j["registration"]))
+    if j["draw"].get("law") == "bernoulli" and out["wrong_units"]:
+        out["wrong_units"]["bound"] = None
+    return out
+
+
+def record(j):
+    return codec.canonical_json(audit_record_of(_json(j))).decode()
+
+
 # --- strategies ------------------------------------------------------------------------------------------------------
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text("ab/1", max_size=3),
@@ -541,11 +632,18 @@ def drawn(draw, law: dict, n: int) -> dict:
     return d
 
 
+def reads(rec: dict) -> dict:
+    """A Lean verdict's `registered`: per port of the statement, the value it reads and the root it opened against (the
+    record's)."""
+    return {f"{e['value']}.{i}": {"root": e["root"], "value": e["value"]} for e in rec["registered"] for i in range(2)}
+
+
 @st.composite
 def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict]:
     """A valid audit: the verifier's parameters, the registration record and the evidence (verdicts mostly accepting). On a
     program with values to register it is mostly v2: the verifier expects some registered, the record registers them, the
-    log's earlier record (if any) some of them under the same roots, and the sessions opened their reads against those."""
+    log's earlier record (if any) some of them under the same roots, and the verdict of record reports the sessions'
+    reads opened against those."""
     s = draw(st.sampled_from(setups))
     values = draw(st.sampled_from([*s.values, None, *s.values, {}])) if isinstance(s, RegisteredSetup) else None
     held = draw(st.sampled_from([values, dict(list(values.items())[:1]), None])) if values else None
@@ -577,16 +675,26 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     d = drawn(draw, mine, n)
     proved = DR.proved(d)
     verdicts = {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True}}
+    if values:
+        verdicts["lean"]["registered"] = reads(rec)
+    elif draw(st.booleans()):
+        verdicts["lean"]["registered"] = {}
     if draw(st.booleans()):
         verdicts["upstream"] = {"accepted": draw(st.sampled_from([True, None])), "of_record": False}
     evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "verifier-test", received=RECEIVED),
                 "served": draw(st.sampled_from([None, list(d["units"])])),
-                "session_registered": ({e["value"]: e["root"] for e in rec["registered"]} if values
-                                       else draw(st.sampled_from([None, {}]))),
                 "session_roots": draw(st.sampled_from([None, dict(ROOTS)])), "sessions": ["ab" * 64],
                 "statement": {"instances": len(proved)}, "verdicts": verdicts}
     return _json(params), _json(rec), _json(evidence)
+
+
+def _registered(f):
+    """A change to the registered reads the verdict of record reports (`f(reads or None, x)`)."""
+    def change(a, x):
+        lean = a["evidence"]["verdicts"]["lean"]
+        lean["registered"] = f(lean.get("registered"), x)
+    return change
 
 
 def _set(where: str, key: str, value):
@@ -680,6 +788,7 @@ DRAW = [
     _draw(lambda d, x: {**d, "strata": d["strata"][::-1]} if "strata" in d else d),
     _draw(lambda d, x: [None, 5, [], "draw"][x % 4]),
 ]
+DRAW_CHANGES = DRAW  # `DRAW` is the draw piece's port below
 EVIDENCE = [
     _set("evidence", "receipt", lambda a, x: [{**a["evidence"]["receipt"], "registration": "00" * 64}, {}, 5][x % 3]),
     _set("evidence", "proved_units", lambda a, x: [a["evidence"]["proved_units"][:-1], a["evidence"]["proved_units"][::-1],
@@ -689,7 +798,8 @@ EVIDENCE = [
                                              a["evidence"]["draw"]["units"][::-1], "s"][x % 4]),
     _set("evidence", "session_roots", lambda a, x: [{}, {"x": "00" * 64}, {"y": "ab" * 64}, {**ROOTS, "y": "ab" * 64},
                                                     {"x": ROOTS["x"]}, 5][x % 6]),
-    _set("evidence", "session_registered", lambda a, x: [{"weights": "aa" * 64}, 5][x % 2]),
+    _registered(lambda r, x: [{"w.0": {"root": "aa" * 64, "value": "weights"}}, 5, {"w.0": 5}, {"w.0": {"value": "weights"}},
+                              {"w.0": {"root": "aa" * 64, "value": 1}}][x % 5]),
     _set("evidence", "sessions", lambda a, x: [[1], "s", []][x % 3]),
     _set("evidence", "statement", 5),
     lambda a, x: a["evidence"].pop(sorted(a["evidence"])[x % len(a["evidence"])]),
@@ -769,11 +879,24 @@ REGISTERED_PARAMS = [
         [{"root": "r", "value": "W", "x": 1}]][x % 12]}]),
     _held,
 ]
+def _other_reads(r: dict, x: int) -> dict:
+    """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), every
+    root upper case, a value missing or added (one the record names as a root port, or one it doesn't name), only one
+    port's, none."""
+    ports = sorted(r)
+    p = ports[x % len(ports)]
+    v = r[p]["value"]
+    return [{**r, p: {**r[p], "root": "12" * 64}}, {k: e for k, e in r.items() if e["value"] != v}, {},
+            {**r, "extra.0": {"root": "ab" * 64, "value": "extra"}}, {**r, "x.0": {"root": ROOTS["x"], "value": "x"}},
+            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]}][x % 7]
+
+
 REGISTERED_EVIDENCE = [
-    _set("evidence", "session_registered", lambda a, x: (lambda sr: [
-        None, {}, {k: "12" * 64 for k in sr}, dict(list(sr.items())[:-1]), {**sr, "extra": "ab" * 64},
-        {**sr, **{k: None for k in list(sr)[:1]}}, {k: r.upper() for k, r in sr.items()}][x % 7])(
-        a["evidence"]["session_registered"] or {})),
+    _registered(lambda r, x: _other_reads(r, x) if r else [None, {}][x % 2]),
+    _registered(lambda r, x: None),
+    _set("evidence", "verdicts", lambda a, x: {**a["evidence"]["verdicts"], "lean-2": {
+        **a["evidence"]["verdicts"]["lean"], "registered": _other_reads(a["evidence"]["verdicts"]["lean"].get("registered") or {
+            "W.0": {"root": "ab" * 64, "value": "W"}}, x)}}),
 ]
 GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE]
 
@@ -848,9 +971,8 @@ def test_an_accepted_case_is_compared_whole(server):
         d = {**{k_: v for k_, v in mine.items()}, "population": s.population, "units": units}
         proved = DR.proved(d)
         evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_registered": None,
-                    "session_roots": None, "sessions": [], "statement": {},
-                    "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": LEAF, "log": [], "partition": None,
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                   "work_table": table}
@@ -993,11 +1115,81 @@ VERDICTS = st.dictionaries(st.sampled_from(["lean", "upstream", "rust"]), st.one
 VERDICT = D.Port(PIECES, "verdict", verdict, st.one_of(
     st.builds(lambda vs: {"verdicts": vs}, VERDICTS), st.builds(lambda vs: {"verdicts": vs}, JSON), JSON), package=PACKAGE)
 
+
+
+def _public(a: dict, change, x: int) -> dict:
+    """`matches_public`'s input from an audit: its record, and the verifier's public file read off it, maybe changed."""
+    rec = a["record"]
+    roots = rec.get("roots") if isinstance(rec.get("roots"), list) else []
+    ok = all(isinstance(r, dict) and "port" in r for r in roots)
+    pub = {"domains": {r["port"]: r.get("domain") for r in roots} if ok else {}, "population": rec.get("population"),
+           "record": rec, "roots": {r["port"]: r.get("root") for r in roots} if ok else {}, "scheme": rec.get("scheme")}
+    return change(pub, x)
+
+
+PUBLIC_CHANGES = [
+    lambda p, x: p,
+    lambda p, x: {**p, "roots": {**p["roots"], sorted(p["roots"] or ["x"])[0]: "00" * 64}},
+    lambda p, x: {**p, "domains": {**p["domains"], sorted(p["domains"] or ["x"])[0]: "00" * 64}},
+    lambda p, x: {**p, "domains": {**p["domains"], "z": "00" * 64}},
+    lambda p, x: {**p, "roots": {**p["roots"], "z": "00" * 64}},
+    lambda p, x: {**p, "roots": dict(list(p["roots"].items())[:-1])},
+    lambda p, x: {**p, "scheme": ["frame-v3/blake3", 5][x % 2]},
+    lambda p, x: {**p, "population": [p["population"] + 1 if _int(p["population"]) else 1, "6", True][x % 3]},
+    lambda p, x: {**p, ["roots", "domains"][x % 2]: [5, {"x": 5}, {"x": None}][x % 3]},
+    lambda p, x: {k: v for k, v in p.items() if k != sorted(p)[x % 5]},
+]
+MATCHES_PUBLIC = D.Port(PIECES, "matches_public", matches_public, st.one_of(
+    st.builds(_public, changed_audits(most=0), st.sampled_from(PUBLIC_CHANGES), st.integers(0, 63)),
+    st.builds(_public, changed_audits([RECORD], most=1, least=1), st.sampled_from(PUBLIC_CHANGES[:2]), st.integers(0, 63)),
+    st.builds(lambda a, x: _public(a, PUBLIC_CHANGES[0], x), changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS), st.integers(0, 3)),
+    JSON), package=PACKAGE)
+
+
+def _reads_input(a: dict, with_registration: bool) -> dict:
+    out = {"verdicts": a["evidence"].get("verdicts")}
+    return out | {"registration": a["record"]} if with_registration else out
+
+
+SESSION_REGISTERED = D.Port(PIECES, "session_registered", session_registered, st.one_of(
+    st.builds(_reads_input, changed_audits([REGISTERED_EVIDENCE, VERDICTS_OF], 1, 0, REGISTERED_SETUPS), st.booleans()),
+    st.builds(_reads_input, changed_audits([EVIDENCE, REGISTERED_EVIDENCE, ENTRIES, RECORD], 1, 1), st.booleans()),
+    st.builds(lambda vs, r: {"registration": r, "verdicts": vs}, VERDICTS, JSON),
+    st.builds(lambda vs: {"verdicts": vs}, JSON), JSON), package=PACKAGE)
+
+
+def _record_case(a: dict, delta: str) -> dict:
+    """`audit_record`'s arguments from an audit: the verifier's derived law (or the record's, when the parameters don't
+    derive one), and the evidence, with δ."""
+    p, e = a["params"], a["evidence"]
+    try:
+        law = DR.derive(PROGRAMS[PO.program_sha512(p["program"])], p["query"], p["law"], p["work_table"])
+    except Exception:  # noqa: BLE001 - a changed parameter the verifier would refuse: the record's own law stands in
+        law = a["record"].get("law") if isinstance(a["record"], dict) else None
+    out = {"delta": delta, "law": law, "registration": a["record"]}
+    return out | {k: e.get(k) for k in ("draw", "instances", "proved_units", "receipt", "served", "session_roots", "sessions",
+                                         "statement", "verdicts")}
+
+
+#: δ as the exact ratio of a double (`str(Fraction(delta))`), as the switch passes it.
+EXACT_DELTA = st.floats(2 ** -40, 1 - 2 ** -40).map(lambda f: str(Fraction(f))) | st.sampled_from(
+    [str(Fraction(f)) for f in (0.5, 0.25, 0.1, 0.05, 0.01, 1e-6, 2 ** -20, 0.999)])
+RECORD_PORT = D.Port(PIECES, "record", record, st.one_of(
+    st.builds(_record_case, changed_audits(most=0), EXACT_DELTA),
+    st.builds(_record_case, changed_audits([EVIDENCE, DRAW_CHANGES, VERDICTS_OF, REGISTERED_EVIDENCE], 1, 1), EXACT_DELTA),
+    st.builds(_record_case, changed_audits([RECORD, ENTRIES, REGISTERED_EVIDENCE], 1, 1, REGISTERED_SETUPS), EXACT_DELTA),
+    st.builds(_record_case, changed_audits(most=2, least=2), EXACT_DELTA),
+    st.builds(_record_case, changed_audits(most=0), st.sampled_from(["0", "1", "3/2", "a", "1/0", "2/4", 5, None])),
+    st.builds(lambda a, k: {kk: v for kk, v in _record_case(a, "1/4").items() if kk != k}, changed_audits(most=0),
+              st.sampled_from(sorted(RECORD_INPUT_KEYS))),
+    JSON), package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300)]
+              (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300), (MATCHES_PUBLIC, 400),
+              (SESSION_REGISTERED, 400), (RECORD_PORT, 600)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -1021,9 +1213,9 @@ def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
               "scheme": SCHEME, "work_table": None}
     evidence = {"draw": {**law, "population": s.population, "units": [0]}, "instances": 1, "proved_units": [0],
-                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None,
-                "session_registered": {e["value"]: e["root"] for e in rec["registered"]}, "session_roots": None,
-                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": [], "statement": {},
+                "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": reads(rec)}}}
     return _json({"evidence": evidence, "params": params, "record": rec})
 
 
@@ -1047,14 +1239,62 @@ def test_every_r7_code_is_reached(pieces):
 
 
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
-    """A v2 audit of each program accepts with the sessions' registered reads opened against the registered roots, and
-    rejects them opened against another root, one missing, one extra, or none reported."""
+    """A v2 audit of each program accepts when the verifier of record reports the sessions' registered reads opened against
+    the registered roots (and a value the registration doesn't name is not its to read), and rejects them opened against
+    another root, a value's reads missing, a root port's value read as registered, or none reported."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
-        opened = a["evidence"]["session_registered"]
-        v = sorted(opened)[0]
-        for got, want in ((opened, "accept"), ({**opened, v: "12" * 64}, "reject"),
-                          ({k: r for k, r in opened.items() if k != v}, "reject"), ({**opened, "extra": "ab" * 64}, "reject"),
-                          ({}, "reject"), (None, "reject")):
-            case = _json(_case({**a, "evidence": {**a["evidence"], "session_registered": got}}))
+        opened = a["evidence"]["verdicts"]["lean"]["registered"]
+        p = sorted(opened)[0]
+        v = opened[p]["value"]
+        for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
+                          ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"),
+                          ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
+                          ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
+            lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
+            case = _json(_case({**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}))
             assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, got)
+
+
+def _accepted_record_case(kind: str, delta: float) -> dict:
+    s = SETUPS[3]
+    law = {"law": "bernoulli", "p": "1/2"} if kind == "bernoulli" else {"k": 3, "law": kind}
+    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if kind == "work" else None
+    mine = DR.derive(s.program, s.query, law, table)
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF, work_table=table)
+    units = {"subset": [0, 3, 4], "bernoulli": [1, 2, 4]}.get(kind) or sorted(
+        u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
+    d = {**mine, "population": s.population, "units": units}
+    if kind == "work":
+        d["closure"] = [u for u in range(s.population) if u not in units][:1]
+    proved = DR.proved(d)
+    return _json({"delta": str(Fraction(delta)), "draw": d, "instances": len(proved), "law": mine, "proved_units": proved,
+                  "receipt": R.receipt(rec, "v", received=RECEIVED), "registration": rec, "served": list(units),
+                  "session_roots": dict(ROOTS), "sessions": ["ab" * 64, "cd" * 64], "statement": {"instances": len(proved)},
+                  "verdicts": {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True},
+                               "upstream": {"accepted": True, "of_record": False}}})
+
+
+def test_the_record_is_compared_field_by_field(pieces):
+    """The whole audit record, field by field, on an accepted audit of each law (with a work law's closure), the same audit
+    rejected by its served draw and its sessions' roots, and an accepted v2 audit: every field the Lean writes is
+    `audit_record`'s, Bernoulli's float bound aside (null in the Lean, a number in Python)."""
+    cases = [_accepted_record_case(kind, delta) for kind in ("subset", "bernoulli", "stratified", "work")
+             for delta in (0.05, 0.1, 2 ** -20)]
+    rejected = _accepted_record_case("subset", 0.25)
+    cases.append({**rejected, "served": rejected["served"][:-1], "session_roots": {**ROOTS, "x": "00" * 64}})
+    v2 = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
+    cases.append(_record_case(v2, str(Fraction(0.1))))
+    for case in cases:
+        kind, line = D.replay(RECORD_PORT, case, pieces)
+        assert kind == "output", line
+        lean, python = json.loads(json.loads(line)), audit_record_of(copy.deepcopy(case))
+        assert set(lean) == set(python)
+        for field in sorted(python):
+            assert codec.canonical_json(lean[field]) == codec.canonical_json(python[field]), (case["draw"]["law"], field)
+        if case["draw"]["law"] == "bernoulli":
+            whole = audit.audit_record(*(case[k] for k in ("registration", "receipt", "draw", "law", "proved_units",
+                                                           "instances", "statement", "verdicts")), float(Fraction(case["delta"])))
+            assert lean["wrong_units"]["bound"] is None and isinstance(whole["wrong_units"]["bound"], int | float)
+    assert [json.loads(json.loads(D.replay(RECORD_PORT, c, pieces)[1]))["accepted"] for c in cases] == [True] * 12 + [False, True]
