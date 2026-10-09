@@ -4,6 +4,10 @@
     python rec_stage.py measure --cls G,N_IN,N_OUT --n N --out DIR [--seed S] [--profile FILE]
         today's path (`rec_inner.universal`'s stage half: bind and trace, the partition's units and class, the lanes,
         `class_statement.stage`), one JSON line per phase: its seconds and the process's peak RSS within it
+    python rec_stage.py fast --cls G,N_IN,N_OUT --n N --out DIR [--seed S] [--netlist FILE] [--profile FILE]
+        `rec_inner.universal --fast` (`verity_flock.universal_stage`): DIR/stage and DIR/other as 87-rec-private.sh stages
+        them, under a fresh salt key, phase by phase as ``measure``; RESULT: universal's record, the phases, and the staged
+        size beside the class's closed forms
 """
 from __future__ import annotations
 
@@ -108,28 +112,56 @@ def measure(cls: str, n: int, out: Path, seed: int = 0, log=sys.stdout) -> dict:
         {k: st[k] for k in ("k_log", "vus_per_block", "unit_rows", "unit_nnz", "circuit_bytes", "ands", "circuit_sha512")}
 
 
+def fast(cls: str, n: int, out: Path, seed: int = 0, netlist: str | None = None, log=sys.stdout) -> dict:
+    """`rec_inner.universal --fast`'s two statements, phase by phase."""
+    RI._benchmark()
+    from verity_flock import circuit as FC
+    from verity_flock import universal_stage as US
+
+    from verity.ml.private_circuits import universal as U
+
+    ph = Phases(log)
+    for owner, attr, name in ((US, "trace", "trace"), (US, "program", "program"), (US, "unit", "unit"), (US, "rows_of", "stage/rows"),
+                              (US, "lower", "stage/lower"), (FC, "compose", "stage/compose"), (FC, "write", "stage/write")):
+        ph.wrap(owner, attr, name)
+    with ph("total"):
+        res = RI.universal(cls, n, out, seed, Path(netlist) if netlist else None, fast=True)
+    G, N_IN, N_OUT = (int(v) for v in cls.split(","))
+    K = U.index_bits(G, N_IN)
+    st = res["stage"]
+    size = {"ands": st["ands"], "ands_closed_form": U.and_count(G, N_IN, N_OUT), "unit_rows": st["unit_rows"],
+            "unit_nnz": st["unit_nnz"], "program_bits": 2 * G + 2 * G * K + N_OUT * K,
+            "statement_bits": st["n"] * (1 << st["k_log"]) // st["vus_per_block"], "circuit_bytes": st["circuit_bytes"]}
+    return {"universal": {k: v for k, v in res.items() if k not in ("stage", "other")} |
+            {nm: {k: v for k, v in res[nm].items() if k != "outputs"} for nm in ("stage", "other")},
+            "outputs_agree_interpret": True, "size": size, "phases": ph.rows}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    m = sub.add_parser("measure")
-    m.add_argument("--cls", required=True)
-    m.add_argument("--n", type=int, required=True)
-    m.add_argument("--out", required=True)
-    m.add_argument("--seed", type=int, default=0)
-    m.add_argument("--profile")
+    for cmd in ("measure", "fast"):
+        m = sub.add_parser(cmd)
+        m.add_argument("--cls", required=True)
+        m.add_argument("--n", type=int, required=True)
+        m.add_argument("--out", required=True)
+        m.add_argument("--seed", type=int, default=0)
+        m.add_argument("--profile")
+        if cmd == "fast":
+            m.add_argument("--netlist")
     a = ap.parse_args(argv)
-    if a.cmd == "measure":
-        out = Path(a.out)
-        out.mkdir(parents=True, exist_ok=True)
-        if a.profile:
-            import cProfile
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    f, args = (measure, (a.cls, a.n, out, a.seed)) if a.cmd == "measure" else (fast, (a.cls, a.n, out, a.seed, a.netlist))
+    if a.profile:
+        import cProfile
 
-            pr = cProfile.Profile()
-            res = pr.runcall(measure, a.cls, a.n, out, a.seed)
-            pr.dump_stats(a.profile)
-        else:
-            res = measure(a.cls, a.n, out, a.seed)
-        print("RESULT " + json.dumps(res), flush=True)
+        pr = cProfile.Profile()
+        res = pr.runcall(f, *args)
+        pr.dump_stats(a.profile)
+    else:
+        res = f(*args)
+    print("RESULT " + json.dumps(res), flush=True)
     return 0
 
 
