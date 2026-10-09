@@ -9954,7 +9954,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "5480f54841ce2835edb5386ae4537cfb35311d38a1774150b453fe0961fff332",
+   "digest": "5273345b19e3ab98c0bccc91e3784844da442ff795fe113de6a9faa57c5bd0c5",
    "definitions": {
     "Flock.Registered.Port": "aade65f635f88322beebf73b54575522406e962788786d682837b0c542626389",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -9987,7 +9987,8 @@
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b",
     "Flock.Registered.sibs": "b434bb6941f9571a60856e1147aa3dae7ad6ff6fef41efb6677b956aa8e4b147",
     "Flock.Registered.tableRow": "d282b834f17e1c68b1a02f3e11d6eccad176108d6236f9ee3bd6bf55eb99b8ec",
-    "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22"
+    "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22",
+    "Flock.checkRegistered": "8f020acbd0b4638ea2eb647402e29a6bce245720bdedf9b6c29e930eb0f58aaa"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -15166,13 +15167,11 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.Defs": {
-   "digest": "c19766367f5486dd0e74cb14fd66c9aa9919bc1a2d98516953b04c7c3bf70083",
+   "digest": "ee8e32426436aeb7715c5f904b32f33bddd59389c6e540c016a86c873ae277b5",
    "definitions": {
-    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "dd3e6f0573cea7acdb20726188642ed0db7476781125cbd157fb7c469ce203b2",
+    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "413a2f07f95f33951926c91ea36ad6ad97ceb71ee0dae2f4663088c5d458dea5",
     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
     "FlockSoundness.Discharge.ZkReg.OwnReads": "63afdb8c86471f962ec5537985abda2af738111456c4f73cc59c01848b1346a7",
-    "FlockSoundness.Discharge.ZkReg.checkRegistered": "2c56b68cce3bcd0d7ecc9cf4a93359ee4e6bd02bbc8114d710d1e06cfd8eb39d",
-    "FlockSoundness.Discharge.ZkReg.checkRegistered._sparseCasesOn_1": "22dadcdf9f74a48b5e566838bc540dd36d562dd1c1be2565bfa3f061b1ed1f7e",
     "FlockSoundness.Discharge.ZkReg.regPaths": "b944e319b40e60721b3d1563861fcdb802c8a8eb46d33cb46eac08c8735a9a1e"
    },
    "guarantees": [
