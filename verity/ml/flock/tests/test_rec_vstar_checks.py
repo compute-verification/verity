@@ -118,7 +118,7 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
     obj = json.loads((d / "partition.json").read_text())
     obj["query"]["params"]["template"] = "RecOpen_v4{LANES=8,H=2}"
     (tmp_path / "partition.json").write_text(json.dumps(obj))
-    (tmp_path / "program.json").write_bytes((d / "program.json").read_bytes() + b" ")
+    (tmp_path / "program.json").write_text(json.dumps({**json.loads((d / "program.json").read_text()), "x": 1}))
     for part, prog, why in ((tmp_path / "partition.json", d / "program.json",
                              "setup: partition: the circuit's partition digest is not the verifier's partition object's"),
                             (d / "partition.json", tmp_path / "program.json",
