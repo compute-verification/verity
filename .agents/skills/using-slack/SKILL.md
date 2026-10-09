@@ -2,7 +2,7 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, and the
   advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
@@ -19,7 +19,7 @@ description: >
 The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier) and `@console`, plus two advisors,
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
   registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
@@ -46,6 +46,12 @@ or `❌ declined — ...`), with no reaction: every handle posts through one bot
 A reply (`send --thread TS`) you post in your own thread without naming anyone wakes everyone the root addressed, which on an announcement is
 every handle. So a progress note goes out as `send --kind fyi`, which is quiet: it wakes only the `--to` names it starts
 with, and everyone else reads it in their digest.
+
+A reply under an announcement, quiet or not (a status line aside), also rings the owner of each PR it names, by number
+(`#1585`, or the numbers in a `train-prep-...` branch) or by its `cursor/` branch: the owner is the handle whose holder's agent
+id ends in the branch's last 4 characters (or that lists them in `branch_suffixes`). It also rings a handle that, earlier in
+the thread, named a run id (`dd21`) beside one of its own PRs, when the post names that run. A PR whose owner can't be found
+rings whoever named it in the thread. Everything else there stays in `research msg read`.
 
 Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refuse a body that names a handle with `@` past
 its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
@@ -79,6 +85,8 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
+- Never subscribe to an announcement's thread (the merge thread is one), and unsubscribe from any you hold: there the
+  doorbell rings you for a post that names you at its start, one of your PRs, or a run you named beside one of your PRs.
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
 
 ~~~text
@@ -205,7 +213,7 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
   before it sends anything, and `--dry-run` prints the request.
 - **The answer** is a button, or a reply in the card's thread. The asker subscribes to its own card's thread; the site posts
   every decision there too (a click, a default applied, a `resolve`). When Daniel answers in the thread, the asker records his
-  answer on the card with `resolve`. Until console deploys that route, it fails with HTTP 404, and the thread reply stands.
+  answer on the card with `resolve`. Until the site deploys that route, it fails with HTTP 404, and the thread reply stands.
 - **A route without the card's fields** (HTTP 400) gets the old Approve/Deny card. The question becomes its title, and the
   rest goes in its text: Approve takes the recommendation. That route never applies a default, so the asker applies it at the
   deadline itself.
