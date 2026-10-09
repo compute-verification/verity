@@ -461,7 +461,7 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
     reqs = wp.get("requests") or []
     ids = man["identities"]
     pdg = bmap["program_digest"]
-    program_digest = bytes.fromhex(pdg)
+    program_digest = scheme.program_field(pdg)
     run_id = run_id or f"padded-conversion/{rd.name}"
     geo = geo_digest or hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest()
 

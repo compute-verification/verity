@@ -78,7 +78,7 @@ def staged(tmp_path_factory):
     program, query = _program()
     part = P.partition(program, query)
     s = InputSet.open(generate(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
-    text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_sha512(program),
+    text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
                       statics=FC.set_statics(s))
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program)))
@@ -86,11 +86,11 @@ def staged(tmp_path_factory):
     reads = G.reads(program, query, {VALUE: 64})
     assert reads == {"cs": {"value": VALUE, "rows": list(POSITIONS)}}
     rng = np.random.default_rng(20261001)
-    reg = G.Registered.commit(P.program_sha512(program), VALUE, rng.integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
+    reg = G.Registered.commit(P.program_digest(program), VALUE, rng.integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
     own = G.reads_file(program, query, {VALUE: 64}, {VALUE: reg.root.hex()})
     (d / "own.json").write_text(json.dumps(own))
     x = rng.integers(0, 1 << 16, (8, 64))
-    out = G.Registered.commit(P.program_sha512(program), OUT_VALUE,
+    out = G.Registered.commit(P.program_digest(program), OUT_VALUE,
                               np.random.default_rng(20261003).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     own_out = {**own, "ports": {**own["ports"], "out": {**out.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}
     (d / "own-out.json").write_text(json.dumps(own_out))
@@ -276,8 +276,8 @@ def test_a_registered_output_row_is_on_both_sides(staged):
 
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
     """`verify` sets up every table's statement through the same check (§16.12): with two tables, table 1's drawn statement
-    (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes and the
-    session fails only on its missing proofs."""
+    (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes, so the
+    verifier goes on to read the (empty) session's proofs, which it names by the tables it set up."""
     sess = staged.dir / "session"
     sess.mkdir(exist_ok=True)
     (sess / "session.json").write_text("{}")
@@ -291,7 +291,8 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
         assert line["accepted"] is False
         return line["why"]
 
-    assert why(staged.dir / "own.json").startswith("session files: "), "setup passes: the session has no proofs"
+    honest = why(staged.dir / "own.json")
+    assert honest.startswith("session files: ") and "circuit-00.rep0.bin" in honest, honest
     moved = _own(staged, "own-moved-5", lambda ps: ps["cs"]["reads"].__setitem__(5, 10))
     assert why(moved) == f"setup: registered reads: port cs: unit 5 reads position {POSITIONS[5]}, and the verifier's program reads 10"
 
@@ -311,8 +312,9 @@ def rope(tmp_path_factory):
 
 def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
-    honest session, proved by upstream over a registered statement, is accepted under its own reads file and refused under
-    one that moves every position."""
+    honest session, proved by upstream over a registered statement, sets up under its own reads file, where it meets the
+    refusal of its form, a shared-row public file (§16.15), which only a statement that sets up meets, and is refused at setup
+    under one that moves every position."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]
@@ -326,7 +328,8 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
         return line
 
     ok = verify("honest", rope / "registered" / "own.json")
-    assert ok["accepted"] is True and ok["partition"]["units"] == "derived", ok
+    assert ok["accepted"] is False and ok["why"] == ("refused: a shared-row public file (header shared_rows): a statement form "
+                                                     "the soundness proof does not cover"), ok
     root = json.loads((rope / "registered" / "own.json").read_text())["ports"]["cs"]["root"]
     assert ok["registered"] == {"cs": {"value": VALUE, "root": root}}
     moved = verify("honest", rope / "vectors" / "wrong-position" / "registered.json")

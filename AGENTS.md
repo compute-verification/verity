@@ -313,7 +313,8 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 - **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a tip being checked
   (Checking and merging). Only the lander moves `main`.
 - **Landing is the lander's.** Push your PR, mark it ready and go back to research. Only the lander lands, restacks and
-  reruns, and you hear back only if your PR fails. A lane holds at most two open PRs.
+  reruns, and you hear back only if your PR fails. A lane works on at most two open PRs; one whose head is in a queued
+  or running check, or in a train the lander holds, doesn't count until that check fails.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`.

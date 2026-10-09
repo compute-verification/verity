@@ -85,6 +85,11 @@ class TargetProfile:
                            kernel class back from the instantiated `Fp8LinearMethod.fp8_linear` and refuse a mismatch; a model without
                            FP8 linears makes a declared kernel a mismatch too (nothing to select — the declaration would be idle).
                            Omitted from `to_json()` when None so every pre-R15 profile digest is unchanged.
+    moe_backend         -> `EngineArgs.moe_backend`, the fused-MoE experts kernel (applied to `KernelConfig.moe_backend`; an explicit backend that
+                           cannot run raises in vLLM's `select_*_moe_backend`, never falls back).  `"triton"` -> `TritonExperts` (`fused_moe_kernel`,
+                           the launch `MoeExpertGemm_v1` and the block-FP8 `MoeExpertFp8Gemm_v1` state); None = vLLM's selection.  Builder and runtime
+                           read the class back from every fused-MoE layer's `quant_method.experts_cls` and refuse a mismatch; the header attests it
+                           (`backends.moe_experts_class`) only when declared, so undeclared MoE runs keep their ids.  Omitted from `to_json()` when None.
     async_scheduling    -> [R17-1 / DP-pad-02 (b)] the serving profile's RESOLVED async-scheduling configuration the workload Program is
                            SPECIALIZED for (`SchedulerConfig.async_scheduling` after the pinned vLLM's resolution, `config/vllm.py:1273-1322`
                            of d9105ea80).  Under async scheduling step t+1 is scheduled before step t's sample is known, so a request that
@@ -175,6 +180,8 @@ class TargetProfile:
                                       "emulate_precision_casts": True,
                                       "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"}}
     fp8_block_gemm: str | None = None
+    #: the fused-MoE experts kernel (None = vLLM's selection; see the doc); applied and read back
+    moe_backend: str | None = None
     #: [R17-1] the resolved async-scheduling configuration the Program is specialized for (None = the pinned resolver's value, see the doc)
     async_scheduling: bool | None = None
     #: [R17-42 route A (3)] the fused-MoE block's construction in the Program (None = "indexed-read-ordered"; see the doc); never attested
@@ -205,6 +212,8 @@ class TargetProfile:
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
+    # the registered fused-MoE backends: value -> the experts class every fused-MoE layer must carry
+    MOE_BACKEND_KERNELS = {"triton": "TritonExperts"}
 
     #: [R17-42] the registered MoE constructions: value -> the frontend rule family that owns the block's leaf kernels and the Definitions
     #: it binds (one Program per construction; the digest differs by construction on the same trace)
@@ -263,6 +272,8 @@ class TargetProfile:
         if self.fp8_block_gemm is not None and self.fp8_block_gemm not in self.FP8_BLOCK_GEMM_KERNELS:
             raise ValueError(f"fp8_block_gemm must be None (vLLM's selector) or one of {sorted(self.FP8_BLOCK_GEMM_KERNELS)}; "
                              f"got {self.fp8_block_gemm!r}")
+        if self.moe_backend is not None and self.moe_backend not in self.MOE_BACKEND_KERNELS:
+            raise ValueError(f"moe_backend must be None (vLLM's selector) or one of {sorted(self.MOE_BACKEND_KERNELS)}; got {self.moe_backend!r}")
         if self.async_scheduling is not None and not isinstance(self.async_scheduling, bool):
             # [R17-1] a declared value is a boolean (JSON true/false) -- "1"/"true" strings are not accepted (one spelling, no coercion)
             raise ValueError(f"async_scheduling must be None (the pinned resolver's value), true or false; got {self.async_scheduling!r}")
@@ -406,6 +417,8 @@ class TargetProfile:
             kw["attention_backend"] = self.attention_backend
         if self.flash_attn_version is not None:
             kw["attention_config"] = {"flash_attn_version": int(self.flash_attn_version)}
+        if self.moe_backend is not None:
+            kw["moe_backend"] = self.moe_backend
         if execution and self.compilation is not None:
             c = self.COMPILATIONS[self.compilation]
             kw["enforce_eager"] = False
@@ -443,6 +456,8 @@ class TargetProfile:
             d.pop("compilation", None)
         if d.get("fp8_block_gemm") is None:
             d.pop("fp8_block_gemm", None)     # [R15 fp8] absent = vLLM's selector; keeps every pre-R15 profile's digest
+        if d.get("moe_backend") is None:
+            d.pop("moe_backend", None)
         if d.get("async_scheduling") is None:
             d.pop("async_scheduling", None)   # [R17-1] absent = the pinned resolver's value (effective_async_scheduling); pre-R17 digests unchanged
         if d.get("moe_construction") is None:
@@ -468,6 +483,10 @@ class TargetProfile:
     def fp8_block_gemm_kernel(self) -> str | None:
         """The vLLM kernel class the declared `fp8_block_gemm` must have selected (None = not declared: whatever vLLM takes)."""
         return None if self.fp8_block_gemm is None else self.FP8_BLOCK_GEMM_KERNELS[self.fp8_block_gemm]
+
+    def moe_experts_class(self) -> str | None:
+        """The experts class the declared `moe_backend` must have selected (None = not declared: whatever vLLM takes)."""
+        return None if self.moe_backend is None else self.MOE_BACKEND_KERNELS[self.moe_backend]
 
     @classmethod
     def from_json(cls, d: dict) -> "TargetProfile":
@@ -623,6 +642,11 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
         got = applied.get("fp8_block_gemm_kernel", "<absent>")
         if got != profile.fp8_block_gemm_kernel():
             bad.append(f"fp8_block_gemm declared {profile.fp8_block_gemm!r} ({profile.fp8_block_gemm_kernel()}), applied {got!r}")
+    # a declared MoE backend on a model with no fused-MoE layer is a mismatch too (`moe_experts_class_of` is None there)
+    if profile.moe_backend is not None:
+        got = applied.get("moe_experts_class", "<absent>")
+        if got != profile.moe_experts_class():
+            bad.append(f"moe_backend declared {profile.moe_backend!r} ({profile.moe_experts_class()}), applied {got!r}")
     return bad
 
 
@@ -630,15 +654,29 @@ def fp8_block_gemm_kernel_of(model) -> str | None:
     """[R15 fp8] READ BACK the block-scaled FP8 linear kernel class the instantiated model carries: the class name of
     `<layer>.quant_method.fp8_linear` (vLLM `Fp8LinearMethod`), one value over all FP8 linear layers; None when no layer has one,
     '<mixed>' when the layers disagree (both are mismatches against a declared kernel).  Structural scaffolding, no model fact."""
-    names: set[str] = set()
-    for m in model.modules():
-        qm = getattr(m, "quant_method", None)
-        k = getattr(qm, "fp8_linear", None)
-        if k is not None:
-            names.add(type(k).__name__)
-    if not names:
-        return None
-    return names.pop() if len(names) == 1 else "<mixed>"
+    return _one_name({type(k).__name__ for k in _quant_attrs(model, "fp8_linear")})
+
+
+def moe_experts_class_of(model) -> str | None:
+    """READ BACK the experts class of every fused-MoE layer: `<layer>.quant_method.experts_cls` (vLLM's `Fp8MoEMethod` and
+    `UnquantizedFusedMoEMethod`), one name over all layers; None when no layer has one, '<mixed>' when they disagree."""
+    return _one_name({getattr(c, "__name__", repr(c)) for c in _quant_attrs(model, "experts_cls")})
+
+
+def applied_kernels(profile: TargetProfile, model) -> dict:
+    """The kernel read-backs `profile_mismatches` judges: the FP8 linears' always, the experts class under a declared `moe_backend`."""
+    out = {"fp8_block_gemm_kernel": fp8_block_gemm_kernel_of(model)}
+    if profile.moe_backend is not None:
+        out["moe_experts_class"] = moe_experts_class_of(model)
+    return out
+
+
+def _quant_attrs(model, attr: str) -> list:
+    return [v for m in model.modules() if (v := getattr(getattr(m, "quant_method", None), attr, None)) is not None]
+
+
+def _one_name(names: set[str]) -> str | None:
+    return None if not names else names.pop() if len(names) == 1 else "<mixed>"
 
 
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------

@@ -137,9 +137,9 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
 
 
 def program_sha512(sub, statics: dict | None = None) -> str:
-    """SHA-512 over the canonical descriptor core's ``program_digest`` hashes (the subcircuit's Definition at its default
-    statics); a caller that builds the partition over another Program passes that Program's SHA-512 instead."""
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    """META ``program_sha512``: core's ``program_digest`` of the subcircuit's Definition at its default statics; a caller that
+    builds the partition over another Program passes that Program's digest instead."""
+    from verity.ml.circuits.codec import encode_program, program_digest
     from verity.ml.circuits.program import Program
 
     try:
@@ -147,7 +147,7 @@ def program_sha512(sub, statics: dict | None = None) -> str:
     except (TypeError, ValueError, AttributeError):
         # a silicon reference no core Definition wraps: its digests as the program
         return hashlib.sha512(json.dumps(sub.program_digests([statics or {}]), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+    return program_digest(desc)
 
 
 def partition_digest(obj: dict) -> str:
