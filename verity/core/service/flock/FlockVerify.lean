@@ -311,8 +311,8 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), and a V* statement (a `rec-open/…` or
-`rec-residuals/…` unit) the inner statement and session its coefficients are checked against (`RecCoins.check`). Each DIR holds `session.json`
-and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
+`rec-residuals/…` unit) the inner statement and session its coefficients are checked against (`RecCoins.check`).
+Each DIR holds `session.json` and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
 soundness proof does not cover (`ProvedScope.check`, §16.15) is refused, and so is a session without a draw, both after
