@@ -80,9 +80,13 @@ class DigestSigner:
     def verify(self, message: bytes, signature: bytes) -> bool:
         return signature == hashlib.sha512(message).digest()
 
+    def public_key(self) -> DigestSigner:
+        return self
 
-def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes) -> list:
-    issuer = Issuer(DigestSigner())
+
+def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes,
+            signer=None) -> list:
+    issuer = Issuer(signer or DigestSigner())
     return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
 
 
@@ -172,15 +176,17 @@ def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int,
 
 
 def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prior: Sequence[online.Past] = (),
-                         lag: int = 0) -> tuple[list[dict], dict, list[online.Past]]:
+                         lag: int = 0, *, audit=Audit, signer=None) -> tuple[list[dict], dict, list[online.Past]]:
     """One configuration through prover, shaper, certifier, records and audit, raw, committed and certified. The prover's
     syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior` and reads the frames ready by `lag`
-    buckets before each window (`online.declare`). Returns one row per link-window, the configuration's tallies and the
-    online prover's history (empty for the other policies)."""
+    buckets before each window (`online.declare`). The verifier is `audit` (a class with `audit.Audit`'s interface), and
+    the certificates are `signer`'s (default `DigestSigner`), checked against its `public_key()`. Returns one row per
+    link-window, the configuration's tallies and the online prover's history (empty for the other policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
-    raw, committed, certified = Audit(), Audit(), Audit()
-    key = DigestSigner()
+    raw, committed, certified = audit(), audit(), audit()
+    signer = signer or DigestSigner()
+    key = signer.public_key()
     rows: list[dict] = []
     tally = new_tally()
     run = cfg.get("labels", {}).get("run")
@@ -214,7 +220,7 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
         own_late = Counter(f.anchor // T for f, h, r in zip(frames, logical, ready, strict=True) if r > h)
         records = run_shaper(frames, ready, syncs, Certifier(name, params))
         published = [commit(r, params) for r in records]
-        signed = certify(records, Direction.EGRESS, params, parameters_digest(params, sync_set))
+        signed = certify(records, Direction.EGRESS, params, parameters_digest(params, sync_set), signer)
         v_raw = raw.check_link(name, records, frames, syncs, sync_set, params)
         v_com = committed.check_link(name, published, frames, syncs, sync_set, params)
         v_cer = certified.check_link(name, signed, frames, syncs, sync_set, params, key=key)
@@ -272,7 +278,7 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
             if (t + 1) % params.buckets == 0:
                 records.append(certifier.close_window())
         published = [commit(r, params) for r in records]
-        signed = certify(records, Direction.INGRESS, params, parameters_digest(params))
+        signed = certify(records, Direction.INGRESS, params, parameters_digest(params), signer)
         v_raw = raw.check_ingress_link(name, records, windows)
         v_com = committed.check_ingress_link(name, published, windows)
         v_cer = certified.check_ingress_link(name, signed, windows, key=key, params=params)
