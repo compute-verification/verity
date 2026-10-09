@@ -46,6 +46,7 @@ bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on t
 
 Until the console site's events route delivers (`routes.d/router.json` says `"mode": "server"`), the sending CLI does: it rings
 the doorbells right after posting. `match` is the older, handle-only test of whether a post is addressed to HANDLE."""
+# A comment.
 from __future__ import annotations
 
 import argparse
