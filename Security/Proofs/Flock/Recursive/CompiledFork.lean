@@ -159,6 +159,7 @@ noncomputable def clashPickCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle
       ClashCL H E Lf sch o o')
     fun ⟨_, _, _, _, hc⟩ => hc.collision
 
+omit [Fintype K] in
 /-- **Two runs of the compiled inner prover satisfying `G` that clash are a fork** (`Inner.fork_of_outcomes`, at round
 `0`), which `pickOn G (clashPickCL …)` reads as a collision of `H`. -/
 theorem fork_of_clashCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
