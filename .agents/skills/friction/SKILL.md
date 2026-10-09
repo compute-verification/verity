@@ -102,6 +102,11 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (11:02 PM PDT, relayed by top): parallel proof work runs against fixed statements. The final theorem's
+  statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
+  integration runs continuously; what the deadline leaves open is a gap list of exact lemma names
+  (`.agents/skills/lean-proofs/SKILL.md`). The same night: say "private circuit" or "the circuit's description", never
+  "netlist" (the README's Glossary).
 - 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
