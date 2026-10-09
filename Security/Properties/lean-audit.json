@@ -88,7 +88,13 @@
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "Properties.Identity", "Models.Core.Assumptions", "Definitions.NetworkCertifier", "Mathlib.Data.Set.Card"],
+   "imports": [
+    "NetworkCheck.Check",
+    "Properties.Identity",
+    "Models.Core.Assumptions",
+    "Definitions.NetworkCertifier",
+    "Mathlib.Data.Set.Card"
+   ],
    "except": [],
    "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
   },
@@ -225,6 +231,18 @@
    "signature": ["Properties.CertifierNetwork.deviceOutputAccepted : Properties.CertifierNetwork.DeviceOutputAccepted"],
    "assumptions": [],
    "type_hash": "e60b64d60e57ef470c1c3b410954f8dfa0db434866dc3ea3d91a0c0f618c5e4f"
+  },
+  "Properties.Identity.streamIsFlock": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.Identity.streamIsFlock : Properties.Identity.StreamIsFlock"],
+   "assumptions": [],
+   "type_hash": "6aec9f0aeb818e57fee91f2501341e6daedc03c827239507a164afefe16a1227"
+  },
+  "Properties.Identity.taggedIsFlock": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.Identity.taggedIsFlock : Properties.Identity.TaggedIsFlock"],
+   "assumptions": [],
+   "type_hash": "b8c26397362383a6cd25f84f8849848435fb7099b294d9b366798b9740e59e7f"
   },
   "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
    "owner": "@network-accounting",
@@ -623,6 +641,14 @@
    },
    "Properties.CertifierNetwork.deviceOutputAccepted": {
     "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "none"
+   },
+   "Properties.Identity.streamIsFlock": {
+    "function": "Identity.Sha512.State.finalize",
+    "outcome": "none"
+   },
+   "Properties.Identity.taggedIsFlock": {
+    "function": "Identity.taggedSha512",
     "outcome": "none"
    },
    "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
@@ -2853,6 +2879,17 @@
     "Properties.CertifierNetwork.unitParams": "be94e89979a4e1e7a32b0cdfe1e7b1280083df617657cd292a9868b65f663342"
    },
    "guarantees": ["Properties.CertifierNetwork.deviceOutputAccepted"]
+  },
+  "Properties.Identity": {
+   "digest": "8a0cbfca3a346713ec61ae7d9f67b539311a61ad1f2e04f2b1e0c2cbd8d8e958",
+   "definitions": {
+    "Properties.Identity.taggedInput": "6e5a58ad26b9bb5ab41d91ee9caceeab889ee235a79cfb34c00922ad1162505c"
+   },
+   "guarantees": [
+    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
+    "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.NetworkCertifier.acceptedRowsAreProgramRows"
+   ]
   },
   "Properties.Nci": {
    "digest": "4b3d77855a2e124826e7a66b941d25fed75466b4c80308bbf134a764603d1ed0",
