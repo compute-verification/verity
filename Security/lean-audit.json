@@ -12105,9 +12105,9 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAudit"]
   },
   "Proofs.Flock.Recursive.Property": {
-   "digest": "5fe0dcc3d06f877d51ddce682ce2d4dd905a9697ba55c7cb44116aa9fd96af93",
+   "digest": "715c6ffa7491a65c85c1bf60685da79062278513f4cf23178f6fa1c0c6008273",
    "definitions": {
-    "Flock.Guarantees.RecursiveAudit": "b47d8c8949979d02c86a544f0480537d5242af6d31cc19df36452d6676b17361",
+    "Flock.Guarantees.RecursiveAudit": "60452ae0c9451ebcc15b484486242cdca16b31abfcb3a6c00304b7c43c1f3f60",
     "Flock.Guarantees.VerifiesV": "691c7c29c1f8c4a209a18068faac579746978aa5b886a70477600befd7b5d119",
     "Flock.Guarantees.custodied": "f02d1367a9f3f6b5057ec71559395e70cc359f494260d570652b627993ea0ebf",
     "Flock.Guarantees.innerAt": "0edea11218d4de94176fef521c51a0621f0b4981be113153cd35114b14f117de",
@@ -12116,6 +12116,18 @@
     "Flock.Guarantees.outerStatements": "c67e0bf66d61e8f9c87068edd46ed3c4a2dd97a0a49236785d20935e87921836",
     "Flock.Guarantees.outerStatementsAt": "6dd572846dfcdd3800aa27323228f40517a99a279ff259d83876fc61b99a60b5",
     "Flock.Guarantees.regBcCommit": "c85713263cca218f61b85195c6e4d770bb9c152d2213e58c04b2075a47ac65ff"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAudit"]
+  },
+  "Proofs.Flock.Recursive.Reads": {
+   "digest": "253c03a587ddebf0d50e7dfcafba73eb9553a5794aacfc91f919c6267ac6b37d",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.ReadV": "c1b053d2f22f6a408a6bc74f214acdf65bd3d1ab4257e8014673d6f8d09835ca",
+    "FlockSoundness.Discharge.Recursion.StmtRead": "fd753a84e523937017d4650892e3d652956faae1aaefb4dc73827b3faa94e4a9",
+    "FlockSoundness.Discharge.Recursion.opZ": "ca81d587aa755e321d56bdab169de6152f9c580250c985fb6b085fb1886ee87d",
+    "FlockSoundness.Discharge.Recursion.readZ": "59235aa4596e790a0f9d3dce22bd839eb5fb63433838dacaa1df4e09882ca971",
+    "FlockSoundness.Discharge.Recursion.readsZ": "6a7127960952d80fe5a269a1b9c03c00ae67df1f5d95479a7d24ac7f8b986cbe",
+    "FlockSoundness.Discharge.Recursion.rowZ": "14c57426fef1f3e80df13e075264a1da2cb192ca0d987625d77fe9f14dcaaa91"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAudit"]
   },
