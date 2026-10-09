@@ -680,6 +680,52 @@ def a0(run: Run) -> Iterator[Case]:
     yield from _negatives(run, c, neg, src, cases, base_instances=len(a["proved_units"]), session_roots=live.get("roots") or {})
 
 
+def a0_lean(run: Run) -> Iterator[Case]:
+    """A0 with the auditor's Lean program driving (`a0_lean.py`): A0's registration of a generated set (its name and
+    content digest in `generate.log`), the draw `flock-audit`'s own, the session served at it (`served-draw.json`), and
+    the audit record with `flock-audit` the verifier of record, taking the sessions, the served draw and the sessions'
+    roots. The run kept neither the public file (its leaf layer is the record's, which the run's R4 matched against the
+    launcher's own copy) nor the session's LIVE line (instances are the draw's proved units, which its passing proved
+    check implies)."""
+    base = "out"
+    a = run.json(f"{base}/audit.json")
+    state = run.json(f"{base}/state.json")
+    rec = a["registration"]
+    n = state["n"]
+    gen = stage_report(run, f"{base}/generate.log") if "--- stdout" in run.path(f"{base}/generate.log").read_text() \
+        else json.loads(run.path(f"{base}/generate.log").read_text())
+    if gen.get("set") != rec["window"].get("input_set"):
+        raise Gap(f"generate.log's set {gen.get('set')} is not the record's {rec['window'].get('input_set')}")
+    s, set_from = run.input_set("rope101")
+    if s.subcircuit.id != gen["subcircuit"]:
+        raise Gap(f"rope101's subcircuit is {s.subcircuit.id}, the generated set's {gen['subcircuit']}")
+    template = s.subcircuit.definition()
+    program = P.population_program(template, n)
+    prov: dict = {"commit": run.commit(), "set": f"{gen['set']} (generate.log), its subcircuit {gen['subcircuit']} from "
+                                                 f"rope101's relation ({set_from})",
+                  "program": "P.population_program(set template, n)"}
+    if PO.program_sha512(program) != rec["program"]:
+        raise Gap(f"the set's population program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
+    query = P.template_instance_query(template.id)
+    partition, prov["partition"] = partition_form(program, query, rec, [template.id])
+    layouts = stand_in_layouts(s, n)
+    ports, prov["ports"] = choose(((f"{tag} {layout}{' +content' if content else ''} ({gen['set']})",
+                                    stand_in_ports(gen["set"], gen["content_digest"], n, layouts[layout], tag, content))
+                                   for layout in ("words", "hidden") for tag in STAND_IN_BINDINGS for content in (True, False)),
+                                  rec, "verity/flock-circuit/binding/v2 hidden")
+    prov["leaf_layer"] = "the record's: the run kept no copy of the public file (stage and archive were scratch)"
+    law = DR.parse_law(state["law"])
+    served = run.json(f"{base}/served-draw.json")["units"]
+    sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or []
+    p = params(program, query, law, ports, rec["leaf_layer"], delta_of(state["delta"]), partition=partition)
+    e = evidence(a, instances=len(DR.proved(a["draw"])), sessions=sessions, session_roots=a["statement"].get("roots") or {},
+                 served=served)
+    prov["evidence"] = ("audit.json; served = served-draw.json; the sessions' roots the statement's; instances the draw's "
+                        "proved units (inferred: the LIVE line was not kept, the run's proved check passed)")
+    yield Case(run.id, "a0-lean", rec["format"], "audit", "audit", program, p, rec, e,
+               recorded_audit(a, f"{base}/audit.json"), prov)
+
+
 def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable[[dict], Case]], *, base_instances: int,
                session_roots: dict | None, served: list[int] | None = None) -> Iterator[Case]:
     """The run's negatives: its own (`cases`), `audit_negatives`' (on the base audit as that function re-decided it:
@@ -1265,7 +1311,7 @@ def session_digests(run: Run, session: str) -> list[str]:
                   if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
 
 
-DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a2": a2, "a3": a3, "a4": a4,
+DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a0-lean": a0_lean, "a2": a2, "a3": a3, "a4": a4,
                                                        "served-window": served_window}
 
 
@@ -1409,6 +1455,10 @@ def classify(run: Run) -> str:
         return "no-recorded-verdict"
     if len(drivers) == 1 and drivers[0] in DRIVERS:
         return drivers[0]
+    if run.has("out/flock-audit.argv.json"):
+        return "a0-lean"
+    if run.has("run/stage/registered.json"):
+        return "registered-gemm"
     return "unhandled"
 
 
