@@ -605,8 +605,9 @@ def memory_gb(root: Path = Path("/")) -> int:
 
 #: the memory circuit-check counts on per worker: a cold `--all` on vy-nebius-cpu-1 (755 GB) at 23 workers grew six of them to
 #: 136, 84, 80, 54, 51 and 40 GiB and took the node down twice (7 Oct,
-#: note:core-firewall/20261007T2327Z-finding-circuit-check-all-exhausts-cpu-1)
-CIRCUIT_CHECK_GB_PER_JOB = 128
+#: note:core-firewall/20261007T2327Z-finding-circuit-check-all-exhausts-cpu-1); at 7 workers in vy-n2's 900 GiB session scope
+#: they grew to 155, 151, 136, 136, 133, 107 and 55 GiB and the scope OOM-killed one (r20261009-061009-1b4d, 9 Oct)
+CIRCUIT_CHECK_GB_PER_JOB = 160
 
 
 def circuit_check_jobs(b: int) -> int:
