@@ -53,6 +53,10 @@ namespace LeanAudit
 
 def under (ps : Array Name) (m : Name) : Bool := ps.any (·.isPrefixOf m)
 
+/-- The module with index `i`. `EnvironmentHeader.moduleNames` builds an array of every imported module's name on each
+call, which made the walks over a guarantee's reads take minutes on `Security/Proofs`' imports. -/
+def moduleName (env : Environment) (i : ModuleIdx) : Name := env.header.modules[i.toNat]!.module
+
 def kind : ConstantInfo → String
   | .axiomInfo _ => "axiom"
   | .defnInfo _ => "def"
@@ -186,7 +190,7 @@ partial def liftOf (env : Environment) (meaning : Array Name) : Expr → Option 
     let .const g us := e.getAppFn | none
     let .defnInfo v ← env.find? g | none
     let i ← env.getModuleIdxFor? g
-    guard (us.length == v.levelParams.length && under meaning env.header.moduleNames[i.toNat]!)
+    guard (us.length == v.levelParams.length && under meaning (moduleName env i))
     return (g, inlineAuxProofs env ((v.value.instantiateLevelParams v.levelParams us).beta e.getAppArgs))
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
@@ -258,7 +262,7 @@ def reads (env : Environment) (meaning : Array Name) (roots : Array Name) :
       seen := seen.insert c
       let some ci := env.find? c | continue
       let some i := env.getModuleIdxFor? c | continue
-      let m := env.header.moduleNames[i.toNat]!
+      let m := moduleName env i
       if ci matches .thmInfo _ then continue
       if !under meaning m then
         outside := outside.push (c, m)
@@ -347,7 +351,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
-  let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => env.header.moduleNames[i.toNat]!
+  let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
   let hypotheses ← forallTelescope ci.type fun xs _ => do
     let mut out := #[]
@@ -486,7 +490,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
       let head := liftOf env meaning ci.type
       if let some (g, s) := head then
-        let m := (env.getModuleIdxFor? g).map fun i => env.header.moduleNames[i.toNat]!.toString
+        let m := (env.getModuleIdxFor? g).map fun i => (moduleName env i).toString
         h.putStrLn (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
           ("canon", toJson (canonText s))]).compress
       if !back.isEmpty then

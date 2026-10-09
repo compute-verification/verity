@@ -299,6 +299,13 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
+def test_facts_names_a_module_without_listing_every_module():
+    """`EnvironmentHeader.moduleNames` builds the array of every imported module's name on each call. Indexed for each
+    constant a guarantee's reads reach, it was 80% of `Facts.lean`'s time: 45 s instead of 10 s on `Security/Properties`."""
+    assert "moduleNames[" not in (HERE.parent / "Facts.lean").read_text(), \
+        "Facts.lean: name a module by `moduleName env i`, not `env.header.moduleNames[i]`"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     """`Facts.lean`'s renaming and unfolding on a real build: a guarantee lifted into a `Guarantees` definition (its old theorem
