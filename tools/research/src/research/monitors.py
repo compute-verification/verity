@@ -38,7 +38,8 @@ UNWATCHED_S past the end of any booked window, fill-status-n2 opens `unwatched`:
 `relay` runs the relay-side monitors into a local alert dir, then posts every new event of node 1's alert dir (over ssh) and the
 local one to #agent-alerts as `vy-monitors`, tagging the owners; each clear is a reply in its alert's thread (a post of its
 own when that thread is gone). An owner other than infra also gets a pointer in #agent-coordination, where its doorbell rings
-(#agent-alerts rings only infra). Grafana's notes in node 1's outbox are posted too. On its first pass over an alert dir it
+(#agent-alerts rings only infra). A finding with a `thread` (failed-checks': the merge thread) is instead a reply there,
+ringing its owners. Grafana's notes in node 1's outbox are posted too. On its first pass over an alert dir it
 posts only the incidents still open. A post that fails stops only its own source, until the next pass; one Slack refuses for
 good, or that has failed for RELAY_GIVE_UP_S, is dropped with a log line.
 
@@ -135,6 +136,7 @@ class Finding:
     severity: str | None = None         # default: the monitor's
     cleared: str | None = None          # what its clear says (default: "Cleared:" and the alert's first line)
     for_s: float | None = None          # default: the monitor's
+    thread: str | None = None           # a thread of #agent-coordination the relay posts it in, instead of #agent-alerts
 
 
 @dataclass(frozen=True)
@@ -197,6 +199,7 @@ class Ctx:
     machine: str = ""                   # where a `machine` monitor runs (its runner's --machine)
     peers: tuple[str, ...] = ()         # the ssh hosts it watches (--peer)
     research: tuple[str, ...] = (sys.executable, "-m", "research")
+    act: bool = False                   # a runner's pass, which may act (failed-checks' cancels), not `check`'s
     pass_: Pass = field(default_factory=Pass)
 
     def path(self, p: str) -> Path:
@@ -1097,6 +1100,261 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
                     severity="page" if pct >= LOST_TARGET_PCT and lost else None)]
 
 
+# ---- failed checks (relay-side: GitHub and the Slack registry name each PR's lane) ---------------------------------------------
+
+MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the trains
+LANDER = "old-circuits-and-proofs"
+REPO_SLUG = "danielreuter/verity"
+# Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
+# nothing they don't already bear (and its guard refuses everything while its fill runner is stopped)
+CHECK_MACHINES = (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
+SLOT_WRAPPER = "check/slot.py"
+CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
+FAILED_RECENT_S = 6 * 3600
+TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
+TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
+BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+LANE_RE = re.compile(r"-([0-9a-f]{4})$")
+# a log's first failing line: the first line matching the first of these that any line matches, else its last line
+FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL(?:ED)?\b|\bfailed\b|Error\b|Traceback")
+
+# A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
+# "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
+FAILED_READER = r'''
+import fcntl, json, os, re, subprocess, time
+A = json.loads(__ARGS__)
+PICK = [re.compile(p) for p in A["pick"]]
+
+
+def load(p):
+    try:
+        with open(p, errors="replace") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def first_failing(p):
+    try:
+        with open(p, errors="replace") as f:
+            lines = f.read(A["log_bytes"]).splitlines()
+    except OSError:
+        return None
+    for rx in PICK:
+        for ln in lines:
+            if rx.search(ln):
+                return ln.strip()[:300]
+    return next((ln.strip()[:300] for ln in reversed(lines) if ln.strip()), None)
+
+
+def steps(p):
+    out = []
+    try:
+        with open(p, errors="replace") as f:
+            for ln in f:
+                try:
+                    out.append(json.loads(ln))
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+    return out
+
+
+now, rows = time.time(), []
+try:
+    names = sorted(n for n in os.listdir(A["runs"]) if any(n.startswith("r" + d + "-") for d in A["days"]))
+except OSError:
+    names = []
+for n in names:
+    d = os.path.join(A["runs"], n)
+    ts = [os.stat(p).st_mtime for p in (os.path.join(d, "status.json"), os.path.join(d, "steps.jsonl")) if os.path.exists(p)]
+    if not ts or now - max(ts) > A["recent_s"]:
+        continue
+    req = load(os.path.join(A["requests"], n, "request.json"))
+    if A["wrapper"] not in " ".join(str(a) for a in req.get("command") or []):
+        continue
+    st = load(os.path.join(d, "status.json"))
+    last = (st.get("transitions") or [{}])[-1]
+    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped")), None)
+    state = st.get("state") or last.get("state")
+    if bad is None and state not in ("failed", "cancelled"):
+        continue
+    fail = load(os.path.join(d, "failure.json"))
+    sha, cwd = (req.get("remote") or {}).get("source_sha"), req.get("cwd") or ""
+    row = {"run": n, "state": state, "rc": last.get("rc"), "ended": last.get("ended_utc"), "class": fail.get("class"),
+           "why": (fail.get("why") or "")[:300], "by": req.get("submitted_by") or "", "sha": sha, "subjects": []}
+    if bad is not None:
+        row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"),
+                   line=first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None)
+    if sha and os.path.isdir(cwd):
+        try:
+            r = subprocess.run(["git", "-C", cwd, "log", "--first-parent", "--format=%s", "-n", "40", sha],
+                               capture_output=True, text=True, timeout=10)
+            row["subjects"] = r.stdout.splitlines() if r.returncode == 0 else []
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    rows.append(row)
+waiting = []
+try:
+    tickets = sorted(t for t in os.listdir(A["line"]) if not t.startswith("."))
+except OSError:
+    tickets = []
+for t in tickets:
+    try:
+        fd = os.open(os.path.join(A["line"], t), os.O_RDONLY)
+    except OSError:
+        continue
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        continue
+    except BlockingIOError:
+        pass
+    finally:
+        os.close(fd)
+    who = load(os.path.join(A["line"], t))
+    waiting.append({"run": who.get("run"), "by": who.get("by")})
+print(json.dumps({"rows": rows, "waiting": waiting}))
+'''
+
+
+def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
+    days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
+    args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
+            "pick": list(FAILING), "log_bytes": 8 << 20}
+    return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
+
+
+def _registry() -> dict:
+    from . import slack
+
+    return slack.load_registry(slack.registry_path())
+
+
+def agent_ids(reg: dict, handle: str) -> list[str]:
+    return next((BC_ID_RE.findall(h.get("holder") or "") for h in reg["handles"] if h["handle"] == handle), [])
+
+
+def lane_of(reg: dict, branch: str) -> str | None:
+    """The handle whose holder's agent id ends in `branch`'s suffix (`cursor/x-558b`: the agent bc-…558b)."""
+    m = LANE_RE.search(branch)
+    return next((h["handle"] for h in reg["handles"] if m and any(i.endswith(m[1]) for i in BC_ID_RE.findall(h.get("holder") or ""))),
+                None)
+
+
+def train_prs(subjects: list[str]) -> list[int]:
+    """The PRs of a train: its first-parent subjects from the head, while each is the lander's `Merge #N (sha)` (or a `Merge
+    main (sha)` that brings the train up to main)."""
+    out = []
+    for s in subjects:
+        if m := TRAIN_RE.match(s):
+            out.append(int(m[1]))
+        elif not TRAIN_MAIN_RE.match(s):
+            break
+    return out
+
+
+def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
+    """(number, branch) of each open PR the run checks: a train's, else the PR whose head it is."""
+    gh = ["gh", "-R", REPO_SLUG, "pr"]
+    if nums := list(dict.fromkeys(train_prs(row.get("subjects") or []))):
+        out = []
+        for n in nums:
+            pr = json.loads(ctx.sh([*gh, "view", str(n), "--json", "headRefName,state"], timeout=30))
+            if pr.get("state") == "OPEN":
+                out.append((n, pr.get("headRefName") or ""))
+        return out
+    if not row.get("sha"):
+        return []
+    got = json.loads(ctx.sh([*gh, "list", "--state", "open", "--search", row["sha"], "--json", "number,headRefName"], timeout=30))
+    return [(p["number"], p.get("headRefName") or "") for p in got]
+
+
+def _hm(utc: str | None) -> str:
+    return f"{utc[11:16]}Z" if utc and len(utc) >= 16 else "?"
+
+
+def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None:
+    """The post for one failed check run, or None for one nobody needs telling about: cancelled by hand before any step failed
+    (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result)."""
+    if row.get("step") is None and row.get("class") == "CANCELLED_MANUAL":
+        return None
+    if not train_prs(row.get("subjects") or []) and not any(i in row.get("by", "") for i in agent_ids(reg, LANDER)):
+        return None
+    try:
+        prs, unread = _open_prs(ctx, row), ""
+    except Exception as e:  # noqa: BLE001  (the lander still hears of it)
+        prs, unread = [], f" Its PRs are unread ({type(e).__name__}: {str(e)[:120]})."
+    run, clean = row["run"], lambda s: (s or "").replace("`", "'")
+    if row.get("step"):
+        going = " (the run goes on)" if row.get("state") == "running" else ""
+        what = (f"*Check `{run}` failed step `{row['step']}` on {machine}* at {_hm(row.get('step_ended'))}{going}: its log's "
+                f"first failing line is `{clean(row.get('line')) or 'none'}`.")
+    else:
+        how = "was killed" if row.get("state") == "cancelled" or (row.get("rc") or 0) > 128 else f"ended rc {row.get('rc')}"
+        what = (f"*Check `{run}` {how} on {machine}* at {_hm(row.get('ended'))}, before any step failed "
+                f"({row.get('class') or 'unclassified'}): {clean(row.get('why')) or 'no reason recorded'}.")
+    lanes = [lane_of(reg, b) for _, b in prs]
+    if prs:
+        what += f" {'Train' if train_prs(row.get('subjects') or []) else 'PR'} at `{(row.get('sha') or '?')[:9]}`: " + \
+            ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in the registry)") for (n, b), h in zip(prs, lanes)) + "."
+    infra = () if row.get("step") else ("infra",)
+    return Finding(f"{machine}:{run}", what + unread, owners=tuple(dict.fromkeys([*(h for h in lanes if h), LANDER, *infra])),
+                   thread=MERGE_THREAD)
+
+
+def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
+    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
+    failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled."""
+    if not (ctx.act and waiting and row.get("step") and row.get("state") == "running"):
+        return None
+    who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
+    ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
+            f"failed-checks: step {row['step']} failed while {len(waiting)} waited for a check slot on {machine} ({who})"],
+           timeout=120)
+    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}."
+
+
+def failed_checks(ctx: Ctx) -> list[Finding]:
+    """Each check run through slot.py on a Nebius machine with a failed step (while it still runs, under --keep-going), or that
+    ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
+    PR it checks (the handle its branch suffix names in the registry) and the lander. One still running whose step failed is
+    cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it comes later)."""
+    reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
+    for machine, host in CHECK_MACHINES:
+        script = failed_reader(ctx.now)
+        try:
+            got = json.loads(ctx.sh([*SSH, host, f"timeout -k 5 50 {' '.join(NICE)} python3 -"], input=script, timeout=60))
+            rows, waiting = got["rows"], got["waiting"]
+        except Exception as e:  # noqa: BLE001  (the other machines still post)
+            errors.append(f"{machine}: {type(e).__name__}: {e}"[:300])
+            continue
+        for row in rows:
+            key, new = f"{machine}:{row['run']}", f"{machine}:{row['run']}" not in memo
+            if new:
+                f = failed_check(ctx, reg, machine, row)
+                memo[key] = {"t": ctx.now, "f": None if f is None else {"text": f.text, "owners": list(f.owners)}}
+            if not (got := memo[key]["f"]):
+                continue
+            if "cancelled" not in got:
+                try:
+                    if said := cancel_failed(ctx, machine, row, waiting):
+                        got["cancelled"] = said
+                        if new:
+                            got["text"] += " " + said
+                except Exception as e:  # noqa: BLE001  (tried again next pass, while it still runs)
+                    got["cancel_error"] = f"{type(e).__name__}: {e}"[:300]
+            out.append(Finding(key, got["text"], owners=tuple(got["owners"]), thread=MERGE_THREAD))
+            if got.get("cancelled") and not got["text"].endswith(got["cancelled"]):
+                out.append(Finding(f"{key}:cancelled", f"*Check `{row['run']}` on {machine}*: {got['cancelled']}",
+                                   owners=tuple(got["owners"]), thread=MERGE_THREAD))
+    for k in [k for k, v in memo.items() if ctx.now - v["t"] > 2 * FAILED_RECENT_S]:
+        del memo[k]
+    if errors and len(errors) == len(CHECK_MACHINES):
+        raise RuntimeError("; ".join(errors))
+    return out
+
+
 # ---- the registry ---------------------------------------------------------------------------------------------------------------
 
 RETENTION = ("Free space by the retention policy: `research retention report` on the node lists what is recorded and what nobody "
@@ -1168,6 +1426,10 @@ MONITORS: list[Monitor] = [
     Monitor("asks", "infra", "warn", "relay", asks,
             "Answer the ask, or close it: `research msg close --as YOU --thread TS` (✅), or with `--declined WHY` (❌).",
             every_s=900, unread_s=3 * 3600),
+    Monitor("failed-checks", "infra", "warn", "relay", failed_checks,
+            "Read the failed step's log in the run's dir on that machine (or `research inspect RUN`): the PR it names fixes it "
+            "and says so in the thread. A run that ended before any step failed (killed, out of memory or disk) rings infra too.",
+            every_s=60, events=True, unread_s=1800),
     Monitor("node-heartbeat", "infra", "page", "relay", node_heartbeat,
             "`ssh n1 systemctl status vy-monitors.timer vy-monitors.service` and `ssh n1 journalctl -u vy-monitors -n 50`; for "
             "an alert dir that takes no writes, its disk and owner (`df` and `ls -ld` on node 1).",
@@ -1288,6 +1550,8 @@ def step(state: dict, monitors: list[Monitor], ctx_for: Callable[[dict], Ctx], n
               "text": f.text if f else o["cleared"], "action": m.action, "webhook": bool(webhook)}
         if o:
             ev["since"] = o["since"]
+        if f and f.thread:
+            ev["thread"] = f.thread
         try:
             fresh = sink.write(ev, now)
         except OSError as e:
@@ -1621,6 +1885,10 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
                     reply(ch, message(ev), th[k])
                     done.append(k)
             return th
+        if ev.get("thread"):
+            if not th.get("pointer"):
+                th["pointer"] = slack._post(api, front, POSTER, message(ev, tag), ev["thread"], route=(reg, routes), tags=("alert",))
+            return th
         if not th.get("ts"):
             th["ts"] = slack._post(api, alerts, POSTER, message(ev, tag))
         if (others := [o for o in ev["owners"] if o != "infra"]) and not th.get("pointer"):
@@ -1636,8 +1904,8 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
-def _ctx_for(ns: argparse.Namespace, now: float) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, n2_host=os.environ.get("VY_N2", "vy-n2"), node1=getattr(ns, "node1", "n1"),
+def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node1=getattr(ns, "node1", "n1"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -1691,7 +1959,7 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
         return None
     try:
         state = load(state_path)
-        evs = step(state, select(where, ns.only), _ctx_for(ns, now), now, AlertDir(alerts), by=ns.by,
+        evs = step(state, select(where, ns.only), _ctx_for(ns, now, act=True), now, AlertDir(alerts), by=ns.by,
                    webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
                    pass_s=PASS_S if where in ("node", "machine") else None)
         save(state_path, state)
