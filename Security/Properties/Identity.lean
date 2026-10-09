@@ -5,8 +5,8 @@ import Identity.Tagged
 
 `Identity.Sha512` (package `core_identity`) streams SHA-512 over C-Flock's compression: a state absorbs pieces
 (`State.update`) and pads once (`State.finalize`). `Flock.Sha512.hash` pads a whole message and compresses it. These say
-that the two compute one function, so that a statement about what SHA-512 hashes reads `Flock.Sha512.hash` (the function
-the security analysis's SHA-512 assumptions are about) whichever of the two the code calls:
+that the two compute one function, so that a statement about what SHA-512 hashes, such as a collision among the strings a
+run hashes, reads `Flock.Sha512.hash` whichever of the two the code calls:
 
 * `StreamIsFlock`: a state that absorbed pieces `ms` finalizes to `Flock.Sha512.hash` of their concatenation;
 * `TaggedIsFlock`: `Identity.taggedSha512 tag payload` is `Flock.Sha512.hash` of `taggedInput tag payload`, the string
