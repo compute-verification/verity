@@ -737,6 +737,41 @@ PORTS = {
 server = D.server_fixture(PORTS["constants"][0])
 
 
+#: What the recorded served windows of the current registration registered (served_zk runs r20261006-070934-e5f4,
+#: -081412-94b4, -195343-75a1, -202341-0806, -214314-06f0 and -225123-3136): run, the work item, the law's K′ and the
+#: entries root's domain, each at ε 1/2, δ 1/10, 3 grid bits and w = 4096
+SERVED = [
+    ("e5f4", {"credited": 33554432, "credited_tiles": 8192, "level": 87, "n": 9216}, 4,
+     "033a13db83abc925f5f87e5a3c586d3ec3d9cc7ae21245a150aaff0388ae3204d480216a98dbf8e7ea9d369a3b7eeb7e1d7283897e157c5a93c3d47fde9b27e1"),
+    ("94b4", {"credited": 805306368, "credited_tiles": 196608, "level": 123, "n": 212992}, 4,
+     "53bd0b2f99ea77a2ee9c6443ef44e068803aa79dbb0a1d91b117e77ae31328b9748c14dc9e39bdb4e326ab1ff3f7c4f4bc018ab6137ca3a71db8743ea32f7004"),
+    ("75a1", {"credited": 805306368, "credited_tiles": 196608, "level": 123, "n": 212992}, 4,
+     "369b2d7c40a7cada17ddbcd6c66e53cd4a49edf594cd540ff05a0dd68685a31c751221e846991a30edbaeaa96ab9e919fdbfbd61a9c54d6e74baa4743bdeee16"),
+    ("0806", {"credited": 33554432, "credited_tiles": 8192, "level": 87, "n": 9216}, 4,
+     "9d7ed3025d59d0b96637d6d332b6dfb3a2ff5f87fa0c361cfd652e8d33c896ea9efb24a2265fb360134e207efc366d006a6ffd49bccc84c1193a776ca517b9c2"),
+    ("06f0", {"credited": 1476395008, "credited_tiles": 360448, "level": 130, "n": 393216}, 4,
+     "47205c057ee419bc38cd24a5f91ea7b97d322bdce9be5c2b9631e4afd531a1449aa8601ae0c8f02269a984eee3a47ec0c8c22b2891e21cdb849b74dffd5f60cc"),
+    ("3136", {"credited": 1476395008, "credited_tiles": 360448, "level": 130, "n": 393216}, 4,
+     "96e26f4cbffb87a3436eaac2bf9f63bf175bb7be18c0d332a33af5c44b17f9eb49c22caafaedd132db8f56eb1393d5dbe857cecf065df4b2251d870698388e5e"),
+]
+
+
+@pytest.mark.parametrize("run,work,k,domain", SERVED, ids=[s[0] for s in SERVED])
+def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -> None:
+    """Lean and Python agree on each recorded window's level, work, sampling and side domains, and give what it
+    registered."""
+    tw, eps, delta = 4096, [1, 2], [1, 10]
+    at = json.loads(D.replay(PORTS["work_at"][0], {"ell": work["level"], "bits": 3}, server)[1])
+    assert json.loads(D.replay(PORTS["work_to_json"][0], {"work": at, "tile_work": tw}, server)[1]) == work
+    assert json.loads(D.replay(PORTS["k_prime"][0], {"eps": eps, "delta": delta, "credited": work["credited"],
+                                                     "n": at["n"], "w_max": tw}, server)[1]) == k
+    sampling = json.loads(D.replay(PORTS["sampling"][0], {"eps": eps, "delta": delta, "work": at, "tile_work": tw,
+                                                          "bits": 3}, server)[1])
+    assert sampling == {"delta": "1/10", "eps": "1/2", "grid_bits": 3, "law": {"k": k, "law": "subset"}}
+    for side in ("a", "b"):
+        D.replay(PORTS["side_domain"][0], {"window": domain, "side": side}, server)
+
+
 @pytest.mark.parametrize("fn", sorted(PORTS))
 def test_the_lean_is_the_python(fn: str, server) -> None:
     port, examples = PORTS[fn]
