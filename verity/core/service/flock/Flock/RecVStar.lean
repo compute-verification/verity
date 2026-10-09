@@ -112,7 +112,8 @@ def bindingsOf (c : Circuit) : V VStar.Bindings := do
   pure ⟨digest, program, pd⟩
 
 /-- A statement of V*'s binds the verifier's own partition object and program: META's partition digest is the object's
-(`HmRow.partitionDigest`), META's `program_sha512` and the object's `program` are the program's SHA-512, and
+(`HmRow.partitionDigest`), META's `program_sha512` and the object's `program` are the program's digest (the SHA-512 of
+its canonical descriptor without `annotations`, `TemplateQuery.Desc.parse`), and
 `program_digests` names one Definition, the template the object's query names. Its digest is not recomputed: that is
 core's codec's digest of the one-Definition program, which this verifier does not encode. -/
 def checkBindings (c : Circuit) (partition : Option Json) (program : Option ByteArray) : V VStar.Bindings := do
