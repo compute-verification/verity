@@ -18,6 +18,7 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py forge --what top|unsalted --inner DIR
                                                              top: flips one byte of rep 0's level-1 top in private.json;
                                                              unsalted: public.json's tops as their clear nodes (no salts)
+    python rec_inner.py differ PUB_A PUB_B                   where two public files differ (header fields, body bytes)
 """
 from __future__ import annotations
 
@@ -90,23 +91,49 @@ def _differing(a: Path, b: Path) -> dict:
         return {k: x for key, sub in v.items() for k, x in flat(sub, f"{at}{key}.").items()} if isinstance(v, dict) else {at[:-1]: v}
 
     fa, fb = flat(json.loads(ha)), flat(json.loads(hb))
-    return {"pub_bytes": len(pa), "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb)),
+    return {"pub_bytes": len(pa), "same_size": len(pa) == len(pb),
+            "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb)),
             "header_differing": sorted(k for k in fa.keys() | fb.keys() if fa.get(k) != fb.get(k)),
             "body_bytes": len(ba), "body_bytes_differing": sum(x != y for x, y in zip(ba, bb)) + abs(len(ba) - len(bb))}
 
 
+def program_unit(fn):
+    """The universal unit ``fn`` over two parameters, ``prog`` (the netlist's ``op``, ``src`` and ``out`` bits in that order,
+    which its one Call reads as slices: no gates of its own) and ``x``. A class statement has a row port, and a public region,
+    per parameter of its unit (`class_statement.sources`), so the program is one row and the inner statement has three
+    regions (``prog``, ``x``, ``out``): the recursion's claims (2 + 2 a region) are rec-v0's eight. With ``fn`` itself the
+    unit, five regions' twelve claims put V*'s batched-sum residual alone past a statement's sha512x3 slots
+    (`rec_residuals.MAX_SLOTS`)."""
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.types import Array
+    from verity.ml.private_circuits import universal as U
+
+    params, ret = fn.signature()
+    prog = sum(t.leaves for _, t in params[:-1])
+
+    def body(B, S, p, x):
+        args, at = [], 0
+        for _, t in params[:-1]:
+            args.append(p[at:at + t.leaves].reshape(t))
+            at += t.leaves
+        return B.call(fn, *args, x)
+
+    return bind(CompositeDefinition(f"ProgramRow[{fn.id}]", 1, (), lambda S: ((("prog", Array(prog, U.BIT)), params[-1]), ret),
+                                    body, register=False))
+
+
 def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = None, fast: bool | None = None,
               salt_key: bytes | None = None) -> dict:
-    """A hidden netlist as the inner statement: ``UniversalUnit_v1{G, N_IN, N_OUT}``'s class statement (`class_statement.stage`,
-    words packed, plain leaves), one Call partitioned by ``Q_template_instance``, of a random netlist of 3/4 of the class's
-    gates over 3/4 of its inputs padded to the class (`universal.pad`), on ``n`` random x. The netlist's ``op``, ``src`` and
-    ``out`` are one row every instance opens (committed once: the registered program), ``x`` a row per instance, the outputs
-    hidden rows. Into ``out/stage`` with its partition object. ``out/other``: another netlist of the class under the same salt
-    key and x, the registered one with its last no-op gate made ``(XNOR, 0, 0)`` (a constant nothing reads, so every output
-    is the same and only the program's rows differ; with no no-op gate, another random netlist): the statement of a prover
-    whose program is not the registered one. ``netlist`` (default $REC_NETLIST): a JSON `universal.Netlist` (``n_in``, ``gates``,
-    ``outputs``) in place of the random one; ``fast`` (default REC_FAST_STAGE=1): the same files from
-    `verity_flock.universal_stage`."""
+    """A hidden netlist as the inner statement: ``UniversalUnit_v1{G, N_IN, N_OUT}`` as `program_unit`'s class statement
+    (`class_statement.stage`, words packed, plain leaves), one Call partitioned by ``Q_template_instance``, of a random netlist
+    of 3/4 of the class's gates over 3/4 of its inputs padded to the class (`universal.pad`), on ``n`` random x. The netlist's
+    ``op``, ``src`` and ``out`` are one row every instance opens (committed once: the registered program), ``x`` a row per
+    instance, the outputs hidden rows. Into ``out/stage`` with its partition object. ``out/other``: another netlist of the
+    class under the same salt key and x, the registered one with its last no-op gate made ``(XNOR, 0, 0)`` (a constant nothing
+    reads, so every output is the same and only the program's row differs; with no no-op gate, another random netlist): the
+    statement of a prover whose program is not the registered one. ``netlist`` (default $REC_NETLIST): a JSON
+    `universal.Netlist` (``n_in``, ``gates``, ``outputs``) in place of the random one; ``fast`` (default REC_FAST_STAGE=1): the
+    same files from `verity_flock.universal_stage`."""
     fast = os.environ.get("REC_FAST_STAGE") == "1" if fast is None else fast
     netlist = netlist or os.environ.get("REC_NETLIST") or None
     B = _benchmark()
@@ -146,16 +173,18 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
         from verity_flock import universal_stage as US
 
         gates = US.trace(G, N_IN, N_OUT)
-        built, program_sha512 = US.program(gates)[2:]
-        st = US.stage(gates, US.unit(gates), PO.digest(built), program_sha512, nets, xs, out, salt_key)
+        digests = US.program_digests(gates, program_unit)
+        st = US.stage(gates, US.unit(gates, program_row=True), digests, nets, xs, out, salt_key)
+        built = digests()[0]
         for name, nl in nets:
             if st[name]["outputs"] != [U.interpret(nl, x) for x in xs]:
                 raise AssertionError(f"{name}: the laid-out unit rows disagree with universal.interpret")
             (out / name / "partition.json").write_text(json.dumps(built, sort_keys=True))
             res[name] = {k: st[name][k] for k in keys} | {"outputs": st[name]["outputs"]}
     else:
-        program = PU.one_call(fn)
-        query = PO.template_instance_query(fn)
+        unit = program_unit(fn)
+        program = PU.one_call(unit)
+        query = PO.template_instance_query(unit)
         units = PU.PartitionUnits(program, query=query)
         [(shape, cl)] = units.classes().items()
         for name, nl in nets:
@@ -183,7 +212,9 @@ def wired(cls: str, n: int, out: Path, seed: int = 0) -> dict:
     the Program's, public) on ``n`` instances as one class statement of ``4 n`` instances with link rows
     (`class_statement.Wiring`), plain leaves: the honest staging in ``out/stage`` and the cheating prover's, whose layer 1
     reads a made-up input in place of layer 0's outputs, every unit correct on what it is given, in ``out/made-up-input``,
-    each with the verifier's program descriptor and partition object (`universal.run_wired`, ``--stage-only``)."""
+    each with the verifier's program descriptor and partition object (`universal.run_wired`, ``--stage-only``); the
+    verifier's own links in ``out/stage/links.json``, and none (``out/no-links.json``: a live verifier that checks no
+    Linking, so it records the cheater's session)."""
     B = _benchmark()
     G, N_IN, N_OUT = (int(v) for v in cls.split(","))
     row = B.run_wired(argparse.Namespace(n=n, seed=seed, stage_only=True, keep_stage=True, lean=None), G, N_IN, N_OUT, out)
@@ -193,6 +224,7 @@ def wired(cls: str, n: int, out: Path, seed: int = 0) -> dict:
         shutil.move(d / name, out / name)
     for f in ("partition.json", "program.desc"):
         shutil.copyfile(out / "stage" / f, out / "made-up-input" / f)
+    shutil.move(d / "no-links.json", out / "no-links.json")
     shutil.rmtree(d)
     return row | _shape(out / "stage", 4 * n) | {
         "made_up_public": _differing(out / "stage" / f"pub-{4 * n}.bin", out / "made-up-input" / f"pub-{4 * n}.bin")}
@@ -296,9 +328,14 @@ def main(argv=None) -> int:
     fl = sp.add_parser("flipped")
     for k in ("--inner", "--fold", "--points", "--salts", "--out"):
         fl.add_argument(k, required=True)
+    df = sp.add_parser("differ")
+    df.add_argument("a")
+    df.add_argument("b")
     a = ap.parse_args(argv)
     if a.cmd == "flipped":
         res = flipped(a.inner, a.fold, a.points, a.salts, a.out)
+    elif a.cmd == "differ":
+        res = _differing(Path(a.a), Path(a.b))
     elif a.cmd in ("universal", "wired"):
         res = universal(a.cls, a.n, Path(a.out), a.seed, a.netlist, a.fast) if a.cmd == "universal" else wired(a.cls, a.n, Path(a.out), a.seed)
     else:

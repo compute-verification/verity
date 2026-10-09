@@ -1,6 +1,6 @@
 """A hidden netlist as the recursion's inner statement (``pod/rec_inner.py universal``, ``pod/87-rec-private.sh``): the universal
-unit's class statement with plain leaves, whose circuit is the class's whatever the netlist, and whose public file tells two
-netlists of the class apart only by the salted commitment of the program row they differ in; and V*'s fold
+unit's class statement with plain leaves, its program one row, whose circuit is the class's whatever the netlist, and whose
+public file tells two netlists of the class apart only by the salted commitment of their program row; and V*'s fold
 (`InnerFold.lean`) taking the verifier's program, so that the setup checks a wired statement's cut wires (Linking)."""
 from __future__ import annotations
 
@@ -27,8 +27,9 @@ def test_inner_fold_hands_the_verifiers_program_to_the_setup():
 
 @pytest.mark.slow
 def test_universal_staging_hides_the_netlist_but_its_program_row(tmp_path):
-    """Two netlists of class ``16,16,8`` staged on the same x and salt key: one circuit (the class's), plain leaves, and public
-    files differing in one program row's root and its 64-byte commitment, nothing else."""
+    """Two netlists of class ``16,16,8`` staged on the same x and salt key: one circuit (the class's), plain leaves, three
+    regions (x, the program, the outputs: rec-v0's eight claims for V*'s algebra), and public files differing in the program
+    row's root and its 64-byte commitment, nothing else."""
     root = HERE.parents[3]
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, root / "verity" / "ml" / "flock" / "python")))
     p = subprocess.run([sys.executable, str(POD / "rec_inner.py"), "universal", "--cls", "16,16,8", "--n", "4", "--out",
@@ -38,7 +39,6 @@ def test_universal_staging_hides_the_netlist_but_its_program_row(tmp_path):
     o = r["other"]
     assert r["leaf_scheme"] == "flock-leaf/sha512-unsalted" and (r["m"], r["k_log"]) == (25, 22)
     assert o["same_circuit"] and o["same_outputs"] and o["netlist_gates_differing"] == 1
-    [row] = o["header_differing"]
-    port = row.removeprefix("frame_v3.roots.")
-    assert port != row and port != "p0" and r["stage"]["shared_rows"][port] == 1
+    assert r["stage"]["shared_rows"] == {"p0": 4, "p1": 1, "out": 4}
+    assert o["header_differing"] == ["frame_v3.roots.p1"]
     assert 0 < o["body_bytes_differing"] <= 64

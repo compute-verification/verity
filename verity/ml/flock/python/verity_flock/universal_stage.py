@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -192,9 +193,10 @@ def trace(G: int, N_IN: int, N_OUT: int) -> Gates:
     return Gates(G, N_IN, N_OUT, first, E.kind[:n].copy(), E.a[:n].copy(), E.b[:n].copy(), E.depth[:n].copy(), outputs)
 
 
-def program(gates: Gates):
-    """(the one-Call Program of the unit, its ``Q_template_instance`` query), core's own, with `universal.traced` answered
-    from ``gates``: the Program's descriptor (its digest and the partition object's) is encoded from the emitted body."""
+def program(gates: Gates, wrap=None):
+    """(the one-Call Program of the unit, its ``Q_template_instance`` query, the partition object, the Program's digest),
+    core's own, with `universal.traced` answered from ``gates``: the Program's descriptor is encoded from the emitted body.
+    ``wrap``: the unit as a Definition over the bound ``UniversalUnit`` (``rec_inner.program_unit``), else that Definition."""
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.defs import bind
 
@@ -206,8 +208,9 @@ def program(gates: Gates):
     U.traced = lambda *k: T if k == key else orig(*k)  # type: ignore[assignment]
     try:
         fn = bind(U.UniversalUnit, G=gates.G, N_IN=gates.N_IN, N_OUT=gates.N_OUT)
-        prog = PU.one_call(fn)
-        query = PO.template_instance_query(fn)
+        unit = wrap(fn) if wrap else fn
+        prog = PU.one_call(unit)
+        query = PO.template_instance_query(unit)
         built = PO.build(prog, query)
         from verity.ml.circuits.codec import program_digest
 
@@ -215,6 +218,41 @@ def program(gates: Gates):
     finally:
         U.traced = orig  # type: ignore[assignment]
     return prog, query, built, digest
+
+
+def program_digests(gates: Gates, wrap=None):
+    """`program`'s partition object and Program digest, computed in a forked child while the caller stages (the Program's
+    body is a Python object per gate: at G = 8090 most of an hour, and the staging needs only its digests, at the compose);
+    returns the call that waits for ``(partition object, Program digest)``."""
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        code = 1
+        try:
+            os.close(r)
+            try:
+                _, _, built, digest = program(gates, wrap)
+                data, code = {"built": built, "program": digest}, 0
+            except BaseException as e:  # noqa: BLE001  (reported to the parent, which raises)
+                data = {"error": f"{type(e).__name__}: {e}"}
+            with os.fdopen(w, "wb") as f:
+                f.write(json.dumps(data).encode())
+        finally:
+            os._exit(code)
+    os.close(w)
+    got: list = []
+
+    def wait() -> tuple[dict, str]:
+        if not got:
+            with os.fdopen(r, "rb") as f:
+                data = json.loads(f.read() or b'{"error": "the child wrote nothing"}')
+            _, status = os.waitpid(pid, 0)
+            if "error" in data or status:
+                raise RuntimeError(f"program_digests: {data.get('error', f'the child exited with status {status}')}")
+            got.append((data["built"], data["program"]))
+        return got[0]
+
+    return wait
 
 
 # --- vectorized text ---------------------------------------------------------------------------------------------------------
@@ -381,7 +419,9 @@ class Unit:
         return self.inputs - 2
 
 
-def unit(gates: Gates) -> Unit:
+def unit(gates: Gates, program_row: bool = False) -> Unit:
+    """The unit's class, its row ports ``UniversalUnit``'s parameters (``op``, ``src``, ``out``, ``x``), or with
+    ``program_row`` ``rec_inner.program_unit``'s (``prog``: the first three as one; ``x``)."""
     first = gates.first
     N = len(gates.kind)
     idx = np.arange(N, dtype=np.int64)
@@ -402,7 +442,7 @@ def unit(gates: Gates) -> Unit:
     port = np.full(first, -1, np.int64)
     port[inputs] = np.arange(len(inputs))
     G, K, N_OUT = gates.G, U.index_bits(gates.G, gates.N_IN), gates.N_OUT
-    bounds = np.asarray([2 + 2 * G, 2 + 2 * G + 2 * G * K, 2 + 2 * G + 2 * G * K + N_OUT * K])
+    bounds = np.asarray([first - gates.N_IN] if program_row else [2 + 2 * G, 2 + 2 * G + 2 * G * K, 2 + 2 * G + 2 * G * K + N_OUT * K])
     param = np.searchsorted(bounds, inputs, side="right")
     groups: dict[int, list[int]] = {}
     for t, p in enumerate(param.tolist()):
@@ -577,15 +617,20 @@ def _expanded_with(lay_type):
     return orig, expanded
 
 
-def stage(gates: Gates, u: Unit, partition: str, program_sha512: str, nets: Sequence[tuple[str, U.Netlist]],
-          xs: Sequence[Sequence[int]], out: Path, salt_key: bytes) -> dict:
+def stage(gates: Gates, u: Unit, digests, nets: Sequence[tuple[str, U.Netlist]], xs: Sequence[Sequence[int]], out: Path,
+          salt_key: bytes) -> dict:
     """`class_statement.stage`'s files for each ``(name, netlist)`` of ``nets`` on the instances ``xs`` into ``out/name``
     (packed words, `class_statement.LEAF_SCHEME`), one composed circuit for all; each name's record as `stage` returns it,
-    with its outputs (``outputs``: per instance, `universal.interpret`'s order) as the laid-out rows compute them."""
+    with its outputs (``outputs``: per instance, `universal.interpret`'s order) as the laid-out rows compute them.
+    ``digests``: the call `program_digests` returns, made once the layout is built."""
+    from verity.ml.circuits import partition_object as PO
+
     name = u.shape[:16] + "-packed"
     port_words, _ = _port_layout(u)
     lanes = [rows_of(u, net, xs, port_words) for _, net in nets]
     low, outs = lower(u, f"unit-class/{name}", lanes)
+    built, program_sha512 = digests()
+    partition = PO.digest(built)
     sub_name = name
     content = u.content_sha256
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
@@ -621,8 +666,7 @@ def stage(gates: Gates, u: Unit, partition: str, program_sha512: str, nets: Sequ
         for i, (g, wp) in enumerate(zip(u.groups, port_words)):
             per_port[f"p{i}"] = rows[:, b:b + wp]
             b += wp
-            x_port = int(np.searchsorted(np.asarray([2 + 2 * gates.G, 2 + 2 * gates.G + 2 * gates.G * U.index_bits(gates.G, gates.N_IN),
-                                                     gates.first - gates.N_IN]), u.inputs[g[0]], side="right")) == 3
+            x_port = bool(u.inputs[g[0]] >= gates.first - gates.N_IN)
             at = list(range(n)) if x_port else [0]
             tables[f"p{i}"], refs[f"p{i}"] = per_port[f"p{i}"][at], np.arange(n) if x_port else np.zeros(n, np.int64)
         head = FC.write(text, iset, 0, n, d / f"inst-{n}.bin", d / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outw},
