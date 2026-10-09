@@ -65,7 +65,7 @@ def VerifiesV {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zs : Reg₂
 (`execArith`) and its hm96-sha512 Merkle scheme (`Refine.enc512`, `Refine.leaf512` under `Refine.H512`), on the class
 `cls`, its regions and the schedule `sch`. -/
 noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
-    [∀ k, Nonempty (CT k)] (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
+    [∀ k, Nonempty (CT k)] (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
     (sch : Accounting.Schedule) : Inner :=
   flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch
 
@@ -96,7 +96,8 @@ def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- the class of the compiled table, its regions and schedule
-    (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)
+    (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
+    (sch : Accounting.Schedule)
     -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × (innerExec T CT cls regs sch).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)

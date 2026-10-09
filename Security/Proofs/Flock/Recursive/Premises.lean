@@ -43,7 +43,8 @@ abbrev VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : �
 arithmetic (`execArith`) and hm96-sha512 Merkle scheme (`Refine.enc512`, `Refine.leaf512` under `Refine.H512`), on the
 class `cls`, its regions and the schedule `sch`. -/
 def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-    (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule) : Prop :=
+    (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
+    (sch : Accounting.Schedule) : Prop :=
   InnerSoundForkOn Refine.H512 (flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch)
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch)
     (ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩))
