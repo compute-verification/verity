@@ -8,6 +8,7 @@
 #                 the class, else a random one: DIR/stage and DIR/other as 87-rec-private.sh stages them, kept under
 #                 $FLOCK_WORK/data/rec-stage/$TAG; $OUT/fast-$TAG.jsonl (phases, RESULT), time-fast-$TAG.txt, files-$TAG.txt
 #   MODE=inner    that statement's inner session on the CPU (M0) against the rec proxy, and its replay: $OUT/inner/
+#   MODE=fold     V*'s points from that session and InnerFold.lean's fold of it over the statement: $OUT/fold/
 # Run from the verity tree (research run --cwd source). Big files under $FLOCK_WORK (default /workspace/jobs/rec-stage).
 # env: LADDER="128,64,32 256,64,32 512,64,32 1024,64,32 2048,64,32"  PROFILE_G=128  N=8  CPUS=16  TIMEOUT=10800 (seconds, per class)
 #      CLS NETLIST TAG (default CLS-nN)  (MODE=fast)
@@ -107,5 +108,30 @@ if [ $MODE = inner ]; then
   cp $I/public.json $D/ && du -sb $I/session/* $I/*.json > $D/sizes.txt
   cat $D/prove.exit
   exit 0
+fi
+
+if [ $MODE = fold ]; then
+  # V*'s points from MODE=inner's session and its native side (InnerFold.lean's inner-fold) on the statement, as
+  # 87-rec-private.sh's fold() runs it: $OUT/fold/; inner-fold is 87's build of these sources, copied from a job that has it
+  TAG=${TAG:?MODE=fold needs TAG}; DD=$FW/data/rec-stage/$TAG; ST=$DD/stage; I=$DD/inner; D=$O/fold; mkdir -p $D
+  [ -f $I/public.json ] || { echo "no inner session at $I (MODE=inner)" >&2; exit 1; }
+  TSHA=$( (find verity/core/service/flock verity/core/service/firewall verity/core/protocols/interface verity/core/difftest/lean \
+    -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
+  T=$FW/tools-$TSHA
+  if [ ! -x $T/inner-fold ]; then
+    for c in /workspace/jobs/*/cache/*/tools-$TSHA; do
+      [ -x $c/inner-fold ] && mkdir -p $T && cp $c/inner-fold $T/ && break
+    done
+  fi
+  [ -x $T/inner-fold ] || { echo "no inner-fold of tools-$TSHA on this node (87-rec-private.sh builds it)" >&2; exit 1; }
+  sha256sum $T/inner-fold > $O/inner-fold.sha256
+  export PYTHONPATH=$PYTHONPATH:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm
+  PUB=$(ls $ST/pub-*.bin | head -1)
+  /usr/bin/time -v -o $D/time-points.txt python3 -m verity_flock.rec_vstage points $I $ST/circuit.txt $PUB > $D/points.json 2> $D/points.err \
+    || { tail -5 $D/points.err; exit 1; }
+  timeout $TIMEOUT /usr/bin/time -v -o $D/time-fold.txt $T/inner-fold --plain-leaves --partition $ST/partition.json verity/flock-circuit \
+    $ST/circuit.txt $PUB $D/points.json os > $D/fold.json 2> $D/fold.err
+  rc=$?; echo "fold exit $rc" | tee $D/fold.exit
+  exit $rc
 fi
 echo "unknown MODE=$MODE" >&2; exit 2
