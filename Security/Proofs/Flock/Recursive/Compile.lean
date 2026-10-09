@@ -261,7 +261,7 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
           ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   (recursive_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg
     hbr).imp id <| Or.imp id <| Or.imp id fun h =>
-      h.trans (add_le_add le_rfl (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape)))
+      h.trans (add_le_add le_rfl (ENNReal.ofReal_le_ofReal (Accounting.tableError_le_of_le_33 hm1 hm2 hsch _ hshape)))
 
 end Target
 
