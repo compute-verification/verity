@@ -34,11 +34,13 @@ EOF
 # build's replay --zk
 outer() {
   local name=$1 C=$2 mode=$3 D=$O/outer/$1 PORT=$(free_port) PIN=$(sha512sum $2/circuit.txt | cut -d' ' -f1) SP SESS
-  local ENV=(FC_ZK_SELF_CHECK=skip) EXTRA=()
+  local ENV=(FC_ZK_SELF_CHECK=skip) EXTRA=() DRAW=()
   mkdir -p $D
   [ -f $C/inst.bin ] || { echo "$name: no statement under $C"; return 1; }
+  # the verifier's draw (Lean refuses a session without one, D12): OUTER_DRAW=all (default) every unit, subset:n; none: no draw
+  [ "${OUTER_DRAW:-all}" = all ] && DRAW=(--draw subset:$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $C/pub.bin))
   $B serve --zk --listen 127.0.0.1:$PORT --out $D/sessions --instances $C/pub.bin --circuit $C/circuit.txt --pin $PIN \
-    --operator loopback > $D/serve.log 2>&1 &
+    "${DRAW[@]}" --operator loopback > $D/serve.log 2>&1 &
   SP=$!
   for i in $(seq 1800); do grep -q SERVING $D/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
   if [ $mode = fw ]; then
