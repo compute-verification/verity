@@ -9,7 +9,8 @@ alone, or an audit record that does not accept, has no profiles and fails its `v
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
 
 * `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
-* `matches_public`, `check_draw`, `check_proved`: compared whole, details included;
+* `matches_public`, `check_draw`, `check_proved`, and the proof service's public-items rule (`check_public`): compared
+  whole, details included;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
   reads are the verdicts' own on both sides, for the registration's own values (`audit.session_registered`), never an
   argument. One field is Python's on both: `wrong_units.bound` under a Bernoulli law, a float relaxation
@@ -228,6 +229,16 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
     return _decide(got, py, whole=True)
 
 
+def check_public(python: Verdict, record: Any, scheme: str, query: Mapping[str, Any], values: Iterable[tuple[str, bool]],
+                 declared: Iterable[str]) -> Verdict:
+    """The proof service's public-items rule by the verifier of record. Its Python is the service's (`service.check_public`,
+    which imports this module), so `python` is that verdict, on `record` with `scheme`, the check's `query`, the values as
+    `(name, registered)` and the Spec's declared items."""
+    got = lean("check_public", {"record": record, "scheme": scheme, "query": dict(query),
+                                "values": [{"name": n, "registered": r} for n, r in values], "public": list(declared)})
+    return _decide(got, python, whole=True)
+
+
 def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any]) -> Verdict:
     """`draw.check_draw` by the verifier of record."""
     py = D.check_draw(draw, registration, law)
@@ -289,4 +300,4 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
 
 
 __all__ = ["BUILD_LOCK", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record", "check", "check_draw",
-           "check_proved", "executable", "lean", "matches_public"]
+           "check_proved", "check_public", "executable", "lean", "matches_public"]

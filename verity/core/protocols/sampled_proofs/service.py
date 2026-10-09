@@ -376,7 +376,9 @@ def check_public(spec: Spec, record: Any, values: Sequence[Value] | None = None)
     default every declared Value; under `TwoStage`, a `Stream` passes the boundary values or the interior ones). Codes:
     `keys` (a field one-stage doesn't define), `roots` (a root or registered entry that is not one of those Values' one
     salted root, such as a per-call root), `unsalted` (a scheme other than `SCHEME`), `query` (not the check's),
-    `undeclared` (observable items the Spec doesn't declare, such as a leaf count or a template's population)."""
+    `undeclared` (observable items the Spec doesn't declare, such as a leaf count or a template's population). An entry's
+    fields are read in key order, so the detail is a function of the record's canonical JSON, which is all the Lean port
+    (`verifier.check_public`, which a `Stream` runs) reads."""
     values = spec.values if values is None else tuple(values)
     c = _Collect()
     if not isinstance(record, Mapping):
@@ -501,17 +503,18 @@ class Stream:
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
                  work_table: Mapping[str, Any] | None = None) -> Registration:
-        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`, by
-        its verifier of record, `verifier.check`) against the challenger's own copies: the population program it builds from `unit` and the record's N, the check's
-        query, the selection rule's law (a two-stage rule's `replay`), `SCHEME`, the stream's log, and the per-registration
-        copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes
-        them). Under `TwoStage` its roots are the boundary values'. Then the receipt. Raises `Refused`: when the stream
-        has stopped, while an earlier registration has no final outcome, or when either check fails."""
+        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
+        each by its verifier of record (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
+        the population program it builds from `unit` and the record's N, the check's query, the selection rule's law (a
+        two-stage rule's `replay`), `SCHEME`, the stream's log, and the per-registration copies given here (`ports`,
+        `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes them). Under `TwoStage` its
+        roots are the boundary values'. Then the receipt. Raises `Refused`: when the stream has stopped, while an earlier
+        registration has no final outcome, or when either check fails."""
         if self.stopped:
             raise _refuse("stopped", {"failures": self.failures, "budget": self.budget})
         if self._entries and self._entries[-1].outcome is None:
             raise _refuse("open", {"order": self._entries[-1].registration.order})
-        v = check_public(self.spec, record, self._values(interior=False))
+        v = self._public(record, interior=False)
         if not v.ok:
             raise Refused(v)
         n = record.get("population")
@@ -533,6 +536,13 @@ class Stream:
         if not isinstance(self.spec.selection, TwoStage):
             return self.spec.values
         return tuple(v for v in self.spec.values if (v.phase == "interior") == interior)
+
+    def _public(self, record: Mapping[str, Any], *, interior: bool) -> Verdict:
+        """`check_public` on the boundary values or the interior ones, by the verifier of record
+        (`verifier.check_public`)."""
+        values = self._values(interior=interior)
+        return V.check_public(check_public(self.spec, record, values), record, SCHEME, self.spec.check.query,
+                              [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
 
     def _log_record(self, record: Mapping[str, Any], order: int) -> Registration:
         reg = Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
@@ -603,7 +613,7 @@ class Stream:
         n = len(draw.proved)
         if not n:
             raise _refuse("interior-empty", "a draw of no RUs has no interiors")
-        v = check_public(self.spec, record, self._values(interior=True))
+        v = self._public(record, interior=True)
         if not v.ok:
             raise Refused(v)
         if record.get("population") != n:
