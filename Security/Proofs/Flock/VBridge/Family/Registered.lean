@@ -17,7 +17,8 @@ family's choice.
   hold; `hRes_false`, `hZero_false`: at an accepted outer proof with a part, `HRes` and `HZero` are false; `not_accOut`:
   `hAccRows_of`'s `hout` is never satisfiable.
 * `oneAt_keyProg`: every unit's constant is the program's input gate `Layout.oneG`; `hOne_of`, `hOneOpen_of`: `HOne` and
-  `HOneOpen` from `OneInLayer`, the layers carrying 1 at that gate.
+  `HOneOpen` from `OneInLayer`, the layers carrying 1 at that gate; `one_of_pubAgree`, `hOne_of_pub`, `hOneOpen_of_pub`:
+  both from `PubAgree`, the layers agreeing with the registration at single gates, as `RegAgree` does at rows.
 * `ResZeroAtL`, `partCols_of_resZeroAtL`, `algebraHolds_of_decodeL`: `ResZeroAt` with the outputs read in the layer
   (`copyVal`) instead of registered, and `AlgebraHolds` from it as from `ResZeroAt`.
 * `hRowKeys_of`: `HRowKeys` from the part circuits' keys (`RowColKeys`) and the family's registered reads covering the
@@ -219,6 +220,51 @@ theorem oneAt_keyProg (c : Flock.Circuit) (hU : Built c.unit) (nv : ℕ) (u : Fi
     (one := Placed.oneGate nv (Layout.keyB c hU))
     (hone := Placed.insOf_ne_one nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) nv u)
 
+section Pin
+
+variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+
+/-- **The layer agrees with the registration at a unit's single gates**: on every wire of a unit whose commit string is
+a single gate (`posK`'s `.inr`), the layer's bit is the registration's (`keyGate`: 1 at the constant, 0 at the zero,
+the public file's output bit at a computed gate, `outBitOf`), the bit `laySh`'s registered leaf there pins
+(`keyReaders`' `regGate`). `RegAgree`'s counterpart at the single gates, which `ZkOuter.Good` does not ask. -/
+def PubAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
+  ∀ u, ∀ g ∈ ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u, (zo.lay.pos g).isLeft = false →
+    bits g = Layout.keyGate (Layout.outBitOf c hU nv (Layout.outsOf c hU nv) fun _ : Unit => zo.pub) () g
+
+/-- **A layer agreeing with the registration at single gates carries 1 at the constant**: every unit's copy 0 reads
+its constant (`mem_io_of_read`, as in `fill_one`), a single gate (`oneG` is below the row bits). -/
+theorem one_of_pubAgree {bits : Fin (Layout.keyN c hU nv) → Bool} (h : PubAgree zo bits) (u : Fin nv)
+    (hj : 0 < c.upv) : bits (Layout.oneG (c := c) (hU := hU) (n := nv)) = true := by
+  have hio : (keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stack c.upv).one ∈
+      ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u := by
+    refine (keyInst hU nv (Layout.outsOf c hU nv) u).mem_io_of_read
+      (i := ⟨0 * ((Rows.ofNet hU).nComp + 1) + 0, Rows.mul_add_lt hj (by omega)⟩) ?_ ?_
+    · rw [stack_a_one (Rows.ofNet hU) c.upv hj]
+      simp
+    · refine (keyInst hU nv (Layout.outsOf c hU nv) u).outside _ fun i h => ?_
+      have := congrArg Fin.val h
+      have hi := i.isLt
+      simp only [Rows.one, Rows.comp] at this
+      omega
+  rw [keyInst_one, oneAt_keyProg] at hio
+  have hnone : Layout.keyRowOf c hU nv (Layout.portRowW c) (Layout.oneG (c := c) (hU := hU) (n := nv)) = none := by
+    rcases hr : Layout.keyRowOf c hU nv (Layout.portRowW c) (Layout.oneG (c := c) (hU := hU) (n := nv)) with
+      _ | ⟨u', q, k⟩
+    · rfl
+    · obtain ⟨h2, -⟩ := Layout.keyRowOf_spec hr
+      simp [Layout.oneG, Placed.oneGate] at h2
+  have hpos : (zo.lay.pos (Layout.oneG (c := c) (hU := hU) (n := nv))).isLeft = false := by
+    rw [Decode.lay_pos zo]
+    unfold posK
+    rw [hnone]
+    rfl
+  rw [h u _ hio hpos]
+  simp [Layout.keyGate]
+
+end Pin
+
 section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
@@ -337,6 +383,27 @@ theorem hRowsAgree_of (hreg : F.RowsRegistered dg N k Rw) (hcol : F.RowColKeys d
   refine ⟨hlt', q', b, hb', hkey', hread', ?_⟩
   rw [← hval]
   exact (hshared R ω t R₂ τ o ha _ _ _ _ _ _ hread hread' hport hat b hb hb').symm
+
+/-- **The layers agree with the registration at single gates** (`PubAgree`) at every accepted outer proof, in every
+session: a proposed conjunct of `ZkOuter.Good` (`Recursive/Flock.lean`), bounded as `RegAgree` is, by the openings of
+the single gates' registered leaves. -/
+def PubAgrees : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j,
+    PubAgree (F.zs R ω t R₂ j) (layers F.zs dg N k Rw R ω t R₂ τ j)
+
+/-- **`HOne` from `PubAgrees`** (`one_of_pubAgree` at the part's unit). -/
+theorem hOne_of_pub (h : F.PubAgrees dg N k Rw) : F.HOne dg N k Rw := by
+  intro R ω t R₂ τ o ha r p _
+  rw [oneAt_keyProg]
+  exact one_of_pubAgree _ (h R ω t R₂ τ o ha (F.sess p)) (F.un p r)
+    (upv_pos (F.zs R ω t R₂ (F.sess p)).hc (F.Vs (F.sess p)).hscope)
+
+/-- **`HOneOpen` from `PubAgrees`** (`one_of_pubAgree` at the opening's unit). -/
+theorem hOneOpen_of_pub (h : F.PubAgrees dg N k Rw) : F.HOneOpen dg N k Rw := by
+  intro R ω t R₂ τ o ha r ℓ _ j _
+  rw [oneAt_keyProg]
+  exact one_of_pubAgree _ (h R ω t R₂ τ o ha (F.sessO ℓ)) (F.unO ℓ r j)
+    (upv_pos (F.zs R ω t R₂ (F.sessO ℓ)).hc (F.Vs (F.sessO ℓ)).hscope)
 
 /-- **`HRes` is false at an accepted outer proof with a part** (`not_resZeroAt`). -/
 theorem hRes_false {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (h : F.HRes dg N k Rw gs) {R ω t R₂ τ o}
