@@ -1792,7 +1792,7 @@ def route_error(what: str, e: urllib.error.HTTPError) -> str:
     if e.code == 429:
         return f"{what}: the route is rate limiting ({why}; retry after {e.headers.get('Retry-After')} s)"
     if e.code >= 500:
-        return f"{what}: the route is down ({why}); ask @console"
+        return f"{what}: the route is down ({why}); ask @top"
     return f"{what}: the route answered {why}"
 
 
