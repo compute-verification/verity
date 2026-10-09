@@ -88,7 +88,8 @@ a `sys.path` entry another test file added: every suite runs alone.
   through a helper that hands it to the store CLI: integrations/vllm's `store_io`, or C-Flock's `verifier/ci.py` `fetch`.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
-  every `--jobs` slot with pytest-xdist (`--dist worksteal`), and runs parallel suites first, one at a time. C-Flock does
+  the `--jobs` slots with pytest-xdist (`--dist worksteal`), one parallel suite at a time, beside the other suites on the few
+  slots they need to finish when their longest does. C-Flock does
   (637 s in one process, 209 s on four). Its tests must then run in any order and in any process. Session and module
   fixtures are built once per worker, so keep them cheap. Declare it only after the suite passes
   `uv run tools/verity/check/suites.py SUITE --fresh` a few times.
