@@ -92,7 +92,7 @@ theorem vbridge_of_vstar
       sess un cp hvr hsz hres)
     (FlockVBridge.AccChain.accChains_of_decode zs dg N k Rw sh rep acc ops sessO unO cpO hu hcoef hcons hrd)
     (stagesAccept_of_runs T CT cls regs sch zs dg N k Rw sh rep x wmsg files hsch hfiles hruns) hcm hdec
-    (FlockVBridge.Full.vFull_of_whole _ Sk hks hio)
+    (vFullR_of_vFull (FlockVBridge.Full.vFull_of_whole _ Sk hks hio))
 
 end outer
 

@@ -707,7 +707,7 @@ theorem vbridge_of_familyL (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
     (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw)
     (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
-    (hdec : F.HDecodes) (hfull : VFull (ℐ).r F.Sk) :
+    (hdec : F.HDecodes) (hfull : VFullR (ℐ).r F.Sk) :
     Flock.Assumptions.VBridge (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
   ⟨fun R ω t R₂ τ o h =>
     (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).accepts regs (F.x R ω) T CT sch (hsch R ω t _) _
@@ -720,7 +720,7 @@ theorem vbridge_of_familyL (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
             (unitSums_of_opensAtL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) F.sh _ _ F.sessO
               (fun ℓ j => F.unO ℓ r j) (fun ℓ j => cpO ℓ r j) (hu R ω t R₂ τ o h r))
             (F.coefsAre R ω t _ r) (F.consAre R ω t _ r) (hrd R ω t R₂ τ o h r)⟩),
-    hcm, hdec, fun i hi j g hg _ => hfull i hi j g hg⟩
+    hcm, hdec, hfull⟩
 
 /-- **VBridge G at V*'s statement family whose openings are read off the layers**: `vbridge_of_familyL` at `rows`
 and `acc` the layers' (`rowsOf`, `accOf`), `HUL` from `hUL_of` and `HReads` from `hReads_of`. -/
@@ -731,7 +731,7 @@ theorem vbridge_of_openings (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg
     (hcoef : F.HCoefCols dg N k Rw) (hn : 0 < F.nOpen)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : F.HEnds dg N k Rw V) (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw)
-    (hcm : F.HCommits) (hdec : F.HDecodes) (hfull : VFull (ℐ).r F.Sk) :
+    (hcm : F.HCommits) (hdec : F.HDecodes) (hfull : VFullR (ℐ).r F.Sk) :
     Flock.Assumptions.VBridge (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
   vbridge_of_familyL F dg N k Rw hst hsh hres (F.hUL_of dg N k Rw hrows hacc hU hone hcoef V hV)
     (F.hReads_of dg N k Rw hacc hn V hV hE) hsch hfiles hruns hcm hdec hfull
