@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.Target
 import Proofs.Flock.Recursive.ForkRuns
+import Proofs.Flock.Recursive.ClashFree
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
@@ -14,9 +15,8 @@ level-0 cap and a conflict at a rep's recorded cap each imply, so that `Compile`
 * `sched_prob_le_value`: the schedule's simulation at one statement, the body of `sched_sound`: against `s`, the run on
   the schedule's steps ends at an outcome satisfying `p` no more often than the game's `value`.
 * `table_value_clashFree`: the compiled table's value on a set of outcomes no two of which clash is at most
-  `tableError`, from `table_prob_clashFree`, the same against one prover (the coupling with the oracle table, `W`'s rows
-  as the tables, open), since every message type of the table is inhabited (`allInh_tableCL`) and so its value is
-  reached by strategies (`value_le_of_forall_prob`).
+  `tableError`, from `table_prob_clashFree` (`ClashFree`), the same against one prover, since every message type of the
+  table is inhabited (`allInh_tableCL`) and so its value is reached by strategies (`value_le_of_forall_prob`).
 * `compiled_runs_sound`: the lemma, from the three. With no clash between two runs satisfying `G`, `RunOut` is clash
   free, every accepted run satisfying `G` ends in it, and the simulation reads the table's value there.
 -/
@@ -82,36 +82,7 @@ theorem allInh_tableCL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UI
     | exact AllInh.pure' _
     | exact AllInh.recv' _
     | exact AllInh.draw' _
-    | refine AllInh.bind' ?_ fun _ => ?_
-    | intro _
-    | dsimp only)
-
-/-- **The compiled table on a clash-free set of outcomes, against one prover.** On a statement no witness satisfies, for
-every set `W` of outcomes none of which self-clashes, no two of which open a position of the first's level-0 cap to
-different rows, and no two of which open a position of a rep's level-`ℓ` cap that the first records to different rows:
-every prover makes the compiled table end accepted in `W` with probability at most `tableError`.
-
-Its proof is open (about 250–350 lines). It is `table_sound_compiledL`'s argument with the plurality chooser replaced by
-`W`'s, which needs no rewinding: the level-0 table at a cap `c` is the row a `W`-outcome with `cap₀ = c` opens at each
-position (any row where none does), and a rep's table at `(slot, d)` the row a `W`-outcome recording `d` there opens. By
-the hypotheses an accepted run in `W` is off none of these tables and does not self-clash, so `bad_splitL` leaves it
-agreeing with the oracle run `lockTableL` couples to it, and `Lock.expect_le_coupled` with `table_sound` bounds it by
-`tableError` with no bad term, as in `compiled_le_badL`. Needs: the chooser, an invariant along `Lock.leafE` that the
-table `Lock.getPair` records at each slot is the chooser's at the recorded cap (true at the root, kept by `hset` and
-`hkeep`), the agreement from the three hypotheses, and `prob_toReal` between `prob` and `expect`. -/
-theorem table_prob_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule)
-    (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
-    (hno : ¬ ∃ z, S.Satisfies z) (W : OutCL F D Sl → Prop)
-    (hW₀ : ∀ o, W o → ¬ SelfClashL H E Lf sch o)
-    (hW₁ : ∀ o o', W o → W o' → ∀ p, ¬ Rewinding.ConflictAt (op₀L H E Lf sch o.cap₀) (o, o') p)
-    (hW₂ : ∀ o o', W o → W o' → ∀ i < 2, ∀ ℓ, 1 ≤ ℓ → ∀ cap,
-      (if i = 0 then o.pend.1 else o.pend.2).caps[ℓ - 1]? = some cap →
-      ∀ p, ¬ Rewinding.ConflictAt (opRL H E Lf sch i ℓ cap) (o, o') p)
-    (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts)) :
-    prob (fun o : OutCL F D Sl => o.accepted = true ∧ W o) (tableCL A H E Lf S sch hm ptLocal mPts) σ ≤
-      ENNReal.ofReal (tableError sch (S.shape mPts)) := by
-  sorry
+    | refine AllInh.bind' ?_ fun _ => ?_)
 
 /-- **The compiled table's value on a clash-free set of outcomes** is at most `tableError`: `table_prob_clashFree` for
 every prover. -/

@@ -91,6 +91,7 @@ theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D
     InnerSoundForkOn H (flockInnerCL T CT A H E Lf cls regs sch) (clashPickCL T CT A H E Lf cls regs sch)
       (ENNReal.ofReal (tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩)) := by
   intro M hno G s
+  change Hidden cls at M
   have hout : ∀ {t o}, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
       (schedSteps T CT 0 t) o → outCL T CT A H E Lf cls regs sch M t = some o := by
     intro t o ho
@@ -111,8 +112,9 @@ theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D
       | nil => exact (hne rfl).elim
       | cons _ _ => exact Nat.succ_pos _
     refine Inner.fork_of_outcomes H _ hr _ s ht ht' ?_
-    rw [pickOn_of hG hG']
-    exact collOf_isColl H _ ⟨o, o', hout ho, hout ho', hc⟩
+    have e : pickOn G (clashPickCL T CT A H E Lf cls regs sch M) t t' =
+        clashPickCL T CT A H E Lf cls regs sch M t t' := pickOn_of hG hG'
+    exact (congrArg (StrictCR.IsColl H) e).mpr (collOf_isColl H _ ⟨o, o', hout ho, hout ho', hc⟩)
   · exact Or.inr hb
 
 /-- **The compile lemma as `InnerSoundFork`**: `flock_inner_sound_compiled` at `G := True`. -/
