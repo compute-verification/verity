@@ -39,7 +39,7 @@ def Inner.toJson (i : Inner) : Json :=
   Json.mkObj [("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog), ("claims", Lean.toJson i.claims)]
 
 def Inner.ofJson (j : Json) : Except String Inner := do
-  if j.getObjValAs? String "format" != .ok FORMAT then throw s!"rec-inner: not a {FORMAT} object"
+  if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
   pure ⟨← j.getObjValAs? Nat "m", ← j.getObjValAs? Nat "k_log", ← j.getObjValAs? Nat "claims"⟩
 
 /-- V*'s statements at the inner shape, in `VStar.statements`' order: each one's unit name and instance count. The parts
