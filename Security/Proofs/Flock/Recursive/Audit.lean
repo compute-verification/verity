@@ -4,21 +4,23 @@ import Proofs.Flock.Recursive.Private
 /-!
 # The recursive audit's property: its proof and what it rests on
 
-`Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `recursive_sound_compiled` (the compile
-gap's target) at `execArith`, the registration break of `RecursiveRanRegistered`'s proof at the commit strings V* checks
-(`regBcCommit_binding`), and `RecursiveCircuitPrivateLeaves`. Its premises are `Proofs.Flock.Recursive.Premises`'.
+`Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `zk_sessions_recursive_fork_inner` at
+the compiled table and the premise `CompiledForkSound`, the registration break of `RecursiveRanRegistered`'s proof at
+the commit strings V* checks (`regBcCommit_binding`), and `RecursiveCircuitPrivateLeaves`. Its premises are
+`Proofs.Flock.Recursive.Premises`'.
 
-Open, each a lemma whose proof is `sorry` (on tonight's path, owner proofs):
-* `FlockSoundness.Discharge.Recursion.flock_inner_sound_compiled` (`Compile`, the compile lemma): C-Flock's compiled
-  table is sound in fork form at `tableError`.
+Open, a lemma whose proof is `sorry` (on tonight's path, owner proofs):
 * `FlockSoundness.Discharge.Recursion.zk_sessions_recursive_fork_inner` (`Compile`): the recursive audit is sound with
   the inner protocol's soundness in fork form, the inner fork a third beside the round and session forks.
 
+`FlockSoundness.Discharge.Recursion.flock_inner_sound_compiled` (`Compile`, the compile lemma, `sorry`) discharges the
+premise `CompiledForkSound` at a class whose schedule is `fast100`'s and whose layout holds; the property takes the
+premise until it is proved.
+
 Still taken by the property, each to become a lemma at the executable (V*'s session row, the universal unit's class,
-the firewall's schedule) or a refusal of the verifier: the class's schedule and layout (`_hsch`, `_hlay`), V*'s laws'
-strata (`_hS`), the read commit strings opening the root (`_hop`) and the run's hidden statement being theirs (`_hx`),
-the fields of the class and law it ranges over, and in (ii) V*'s sessions' zero knowledge
-(`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
+the firewall's schedule) or a refusal of the verifier: V*'s laws' strata (`_hS`), the read commit strings opening the
+root (`_hop`) and the run's hidden statement being theirs (`_hx`), the fields of the class and law it ranges over, and
+in (ii) V*'s sessions' zero knowledge (`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
 -/
 
 namespace Flock.SecurityProofs
@@ -54,11 +56,10 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   swap
   · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
     exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter hKey p₀ o P w hw E
-  intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ cls regs sch zs dg N σ x wmsg Sk cmt msg rt stmt reads row op hsch hlay
-    hS _ hA3 hop hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
-  haveI : Inhabited Refine.Dig := ⟨Refine.H512 []⟩
-  rcases recursive_sound_compiled T CT execArith execArith_correct Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch
-    hsch hlay hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr with hf | hf | hf | hb
+  intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ cls regs sch zs dg N σ x wmsg Sk cmt msg rt stmt reads row op hS _ hA3
+    hin hop hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+  rcases zk_sessions_recursive_fork_inner hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr Refine.H512
+    (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch) hin with hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))

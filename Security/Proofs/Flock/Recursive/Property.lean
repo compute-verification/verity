@@ -19,7 +19,7 @@ netlist registered by hm96 leaves. It is a conjunction:
   class and the owed outputs.
 
 Its premises are the list in `Proofs.Flock.Recursive.Premises`. Its proof (`Flock.SecurityProofs.RecursiveAudit`,
-`Proofs.Flock.Recursive.Gaps`) rests on the open lemmas that file and `Compile` name.
+`Proofs.Flock.Recursive.Audit`) rests on the open lemma that file names.
 
 * `regBcCommit`: the registration's commitment at a row position as V* checks a registered read, the commit string
   `b ‖ c` that `Flock.Registered.opens` opens; the netlist's rows are what those strings commit to, so a row's hm96
@@ -77,13 +77,13 @@ sessions
 (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root `rt`. On an outcome `o` whose sessions
 all verify, `reads o i` says a session read row `i`, `row o i` is the commit string it read there and `op o i` its
 opening of `rt`; `stmt q ω` is the hidden statement at the draw `ω` of the netlist whose rows the commit strings `q`
-commit to. Taken: the schedule and layout of the class (`_hsch`, `_hlay`), the strata of V*'s laws (`_hS`), the
-statement check accepting V*'s statements (`_hck`), A3 (`_hA3`), every read string opening `rt` at an accepted outcome
+commit to. Taken: the strata of V*'s laws (`_hS`), the statement check accepting V*'s statements (`_hck`), A3
+(`_hA3`), the compile lemma at the class's schedule (`_hin`), every read string opening `rt` at an accepted outcome
 (`_hop`), and the run's hidden statement being the read strings' (`_hx`). Then for the registered commit strings `p`
 (the developer's openings `op₀`), for every count curve `(k, R_w, M, ρ)` that bounds every session's rate, given V*'s
-bridge (VBridge): a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded transcripts play the compiled table to
-outcomes that clash; or a run `σ` reaches whose sessions all verify having read at some row a commit string other than
-`p i`, whose opening and the developer's collide; or
+bridge (VBridge): a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded transcripts play the
+compiled table to outcomes that clash; or a run `σ` reaches whose sessions all verify having read at some row a commit
+string other than `p i`, whose opening and the developer's collide; or
 $$\Pr[\text{every session verifies} \wedge \neg\,\text{the statement of } p \text{ holds}]$$
 is at most V*'s sessions' expected statistical errors, `r` times their expected stage slack, and the compiled table's
 error.
@@ -117,14 +117,14 @@ def RecursiveAudit : Prop :=
       (Reg₂ × VRec Vs Reg' dg N) → ℕ → ByteArray)
     (op : Reg × L.Ω × List (Cm × (innerExec T CT cls regs sch).Coin) ×
       (Reg₂ × VRec Vs Reg' dg N) → ℕ → Flock.Registered.Port × ByteArray × ByteArray)
-    -- the class's schedule and layout, and V*'s laws' strata
-    (_hsch : Accounting.fast100 cls.m = some sch)
-    (_hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
+    -- V*'s laws' strata
     (_hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     -- the verifier of record's statement check accepts V*'s statements
     (_hck : ∀ R ω t R₂ j, FailClosed.ScopeZ (zs R ω t R₂ j).I)
     -- A3
     (_hA3 : ∀ j, Flock.Premises.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    -- the compile lemma
+    (_hin : Flock.Premises.CompiledForkSound T CT cls regs sch)
     -- at an outcome whose sessions all verify, every read commit string opens `rt`, and the hidden statement is theirs
     (_hop : ∀ o, VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i →
       (regBcCommit i).Opens rt (row o i) (op o i))
