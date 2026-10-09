@@ -14,12 +14,14 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
-* `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`.
+* `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
+* `check_public`: the proof service's public-items rule on a registration record (`Public.check`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`check_draw`, `check_proved` and `record`.
+`check_draw`, `check_proved`, `record` and `check_public`.
 -/
 import SampledProofs.OneStage
+import SampledProofs.Public
 
 namespace SampledProofs.Pieces
 
@@ -178,13 +180,31 @@ def sessionRegistered (j : Json) : V Json := do
 def record (j : Json) : V Json := do
   return Json.str (← PyJson.canonical (← Record.record (← Record.inputOf j)))
 
+/-- `{"record", "scheme", "query", "values": [{"name", "registered"}], "public": [item]}` to the service's public-items
+rule's `{"ok", "codes", "detail"}` (`Public.check`), the query's digest computed here: a string scheme, the check's query
+an object, each value a string name with a boolean, each declared item a string. -/
+def checkPublic (j : Json) : V Json := do
+  if !(getD j "scheme" matches .str _) then throw "scheme is not a string"
+  if !(getD j "query" matches .obj _) then throw "query is not an object"
+  let .arr vs := getD j "values" | throw "values is not a list"
+  let values ← vs.mapM fun v => match getD v "name", getD v "registered" with
+    | .str name, .bool registered => pure ({ name, registered } : Public.Value)
+    | _, _ => throw "a value is not a string name with a boolean"
+  let .arr ps := getD j "public" | throw "public is not a list"
+  let declared ← ps.mapM fun
+    | .str s => pure s
+    | _ => throw "a declared item is not a string"
+  let query ← Registration.queryDigest (getD j "query")
+  return (← Public.check (getD j "record") (getD j "scheme") query values declared).toJson
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("check_proved", checkProved), ("bound", bound),
-   ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record)]
+   ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
+   ("check_public", checkPublic)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("check_draw", checkDraw),
-   ("check_proved", checkProved), ("record", record)]
+   ("check_proved", checkProved), ("record", record), ("check_public", checkPublic)]
 
 end SampledProofs.Pieces
