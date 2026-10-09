@@ -101,6 +101,15 @@
   "Randomness": "core's randomness (`core_randomness`), read through PouwCommit: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec"
  },
  "guarantees": {
+  "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
+   "owner": "@memory-accounting"
+  },
+  "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
+   "owner": "@memory-accounting"
+  },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
    "signature": ["NciCheck.Properties.SecurityProofs.AcceptsExactly : NciCheck.Properties.AcceptsExactly"],
