@@ -23,7 +23,8 @@ open Val (zero add sm mv cst)
 /-! ## Linear values of one skeleton -/
 
 /-- Two linear values (no products) with the same elements in the same order and a constant alike present. -/
-def Lin.LSk (a a' : Lin) : Prop := a.t.map Prod.fst = a'.t.map Prod.fst ∧ a.c.isSome = a'.c.isSome ∧ a.q = [] ∧ a'.q = []
+def Lin.LSk (a a' : Lin) : Prop :=
+  a.t.map Prod.fst = a'.t.map Prod.fst ∧ a.c.isSome = a'.c.isSome ∧ a.q = [] ∧ a'.q = []
 
 theorem addAt_keys {κ : Type} [DecidableEq κ] (k : κ) (v v' : F128) :
     ∀ {t t' : Terms κ}, t.map Prod.fst = t'.map Prod.fst → (addAt t k v).map Prod.fst = (addAt t' k v').map Prod.fst
