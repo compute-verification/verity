@@ -3,6 +3,7 @@ import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
 import Proofs.Core
 import Proofs.Nci.Chain
+import Proofs.Nci.Counterexample
 import Proofs.Nci.Throttling
 
 /-!
