@@ -55,7 +55,8 @@ theorem VStmt.pop_eq_nv {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
 which is `Q`'s units (`VStmt.pop_eq_nv`). -/
 theorem VStmt.tiles_of_loads {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     (hdj : ZkLink.DrawFileZK z.dj (.stratified Q.law.Kd (Array.ofFn Q.law.St)) Q.law.pop)
-    (hck : ScopeZ z.I) (hL : Q.Loads z.I) : Audit.Law.Tiles Q.law.St Q.nv :=
-  VStmt.pop_eq_nv z hdj hck hL ▸ VStmt.tiles_of_session z hdj
+    (hck : ScopeZ z.I) (hL : Q.Loads z.I) : Audit.Law.Tiles Q.law.St Q.nv := by
+  have h := VStmt.tiles_of_session z hdj
+  rwa [VStmt.pop_eq_nv z hdj hck hL] at h
 
 end FlockSoundness.Discharge.Recursion
