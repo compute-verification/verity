@@ -252,15 +252,6 @@ def identifierInput (args : List String) : IO (Except String (Option (Lean.Json 
       | .ok _ => return .error "identifier: not a JSON object"
       | .error e => return .error s!"identifier: not JSON: {e}"
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
-def recordDraw (record : String) : Option Lean.Json :=
-  match Lean.Json.parse record with
-  | .ok j => match j.getObjVal? "unit_draw" with
-    | .ok Lean.Json.null => none
-    | .ok d => some d
-    | .error _ => none
-  | .error _ => none
-
 /-- `archive-put DIR FILE...`: store each file under `DIR/sha512/<its SHA-512>`, and print the digests. -/
 def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
   IO.FS.createDirAll (dir ++ "/sha512")

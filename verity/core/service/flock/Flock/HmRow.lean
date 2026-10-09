@@ -1904,6 +1904,16 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
+/-- A record's `unit_draw`, when it is a draw (not absent, not null): the `draw` `verify` sets a session's statement up
+at (`Stmt.setupTables`). -/
+def recordDraw (record : String) : Option Json :=
+  match Json.parse record with
+  | .ok j => match j.getObjVal? "unit_draw" with
+    | .ok Json.null => none
+    | .ok d => some d
+    | .error _ => none
+  | .error _ => none
+
 /-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check

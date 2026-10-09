@@ -52,15 +52,7 @@ structure Transcript where
   record : String
   proofs : Array ByteArray
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null): `Main.recordDraw`, which the executable's root
-module defines and no library exports. -/
-def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
-  | .ok j => match j.getObjVal? "unit_draw" with
-    | .ok Json.null => none
-    | .ok d => some d
-    | .error _ => none
-  | .error _ => none
+export Flock (recordDraw)
 
 /-- The session's statement flock-verify sets up for a record: `Main.buildSession` on an `hm96Rows` statement, at the
 record's draw. -/
