@@ -110,12 +110,72 @@ def test_the_strict_memory_challengers_documents_are_judged_alike(tmp_path):
     for limit, wrong, accepted in [(cap, honest, 2), (cap + 1_000, honest, 0), (cap, lambda i: i % 7 == 0, 0)]:
         live, ready, leaves, doc = _live(tmp_path, limit, wrong)
         by = {name: live.judge(ready, leaves, doc, by=name) for name in ("python", "lean")}
+        assert live.judge(ready, leaves, doc)["verdict"]["by"] == live.VERDICT == "lean"
         assert by["python"]["verdict"].pop("by") == "python" and by["lean"]["verdict"].pop("by") == "lean"
         assert by["python"] == by["lean"]
-        judged = {k: v for k, v in by["python"].items() if k != "verdict"}
+        assert by["python"]["verdicts"] == {"lean": by["python"]["verdict"], "python": by["python"]["verdict"]}
+        judged = {k: v for k, v in by["python"].items() if k not in ("verdict", "verdicts")}
         assert judged == doc and by["python"]["audits_accepted"] == accepted
         assert (doc.get("wrong", 0) > 0) == (wrong is not honest)
         assert ("refused" in by["python"]["verdict"]) == (limit != cap)
+
+
+@pytest.fixture(scope="module")
+def strict_doc(tmp_path_factory):
+    """The strict memory challenger's accepted document at the RTT cap, and the same with one answer's block flipped,
+    which both verdicts reject."""
+    from verity.core.protocols.pous.schemes import p2
+
+    live, ready, leaves, doc = _live(tmp_path_factory.mktemp("strict"), 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
+    bad = json.loads(json.dumps(doc))
+    a = bad["records"][1]["answers"][3]
+    a["block"] = a["block"][:-1] + ("0" if a["block"][-1] != "0" else "1")
+    return live, ready, leaves, doc, bad
+
+
+@pytest.mark.parametrize("record", ["lean", "python"])
+@pytest.mark.parametrize("forced", ["lean", "python"])
+def test_a_disagreement_between_the_verdicts_rejects_the_document(strict_doc, forced, record, monkeypatch):
+    """`forced`'s verdict flips its accept bit (rejecting the honest document the other accepts, and accepting the flipped
+    one the other rejects): the document accepts nothing, its verdict names the disagreement and both outcomes, and both
+    verdicts are kept, whichever one accepted and whichever is the record's."""
+    live, ready, leaves, honest, bad = strict_doc
+    real = live.VERDICTS[forced]
+
+    def flipped(*args):
+        v = real(*args)
+        return {**v, "accepted": not v["accepted"], "audits_accepted": len(v["audits"]) - v["audits_accepted"]}
+
+    monkeypatch.setitem(live.VERDICTS, forced, flipped)
+    other = "python" if forced == "lean" else "lean"
+    for doc, accepts in ((honest, other), (bad, forced)):
+        out = live.judge(ready, leaves, doc, by=record)
+        v, both = out["verdict"], out["verdicts"]
+        assert set(v) == {"by", "rejected"} and v["by"] == record and v["rejected"].startswith(live.DISAGREE + ": lean {")
+        assert both[accepts]["accepted"] and not both[forced if accepts == other else other]["accepted"]
+        assert out["audits_accepted"] == 0 and out["profile"] is None and not out["audit_of_record"]["accepted"]
+
+
+def test_without_the_lean_the_python_is_the_records_and_a_lean_failure_rejects(strict_doc, monkeypatch):
+    """Where the Lean can't run (the GPU pods' venv), the Python's verdict is the record's and the Lean's is marked
+    unavailable, for `--replay`; asked for the Lean's there, nothing is accepted.  Where the Lean should run and raises,
+    the document is rejected for the disagreement."""
+    live, ready, leaves, honest, _ = strict_doc
+    monkeypatch.setattr(live, "lean_unavailable", lambda: "lake is not on the PATH")
+    out = live.judge(ready, leaves, honest)
+    assert out["verdict"]["by"] == "python" and out["verdict"]["accepted"] and out["audits_accepted"] == 2
+    assert out["verdicts"]["lean"] == {"unavailable": "lake is not on the PATH"}
+    assert live.judge(ready, leaves, honest, by="lean")["audits_accepted"] == 0
+    monkeypatch.setattr(live, "lean_unavailable", lambda: None)
+
+    def broken(*args):
+        raise RuntimeError("pous-timed-audit failed (2)")
+
+    monkeypatch.setitem(live.VERDICTS, "lean", broken)
+    out = live.judge(ready, leaves, honest)
+    assert out["verdicts"]["lean"] == {"failed": "RuntimeError: pous-timed-audit failed (2)"}
+    assert out["verdict"]["by"] == "lean" and out["verdict"]["rejected"].startswith(live.DISAGREE)
+    assert out["audits_accepted"] == 0
 
 
 @pytest.mark.slow

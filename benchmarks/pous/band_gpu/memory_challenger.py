@@ -18,8 +18,10 @@ harness's `ControlResponder`) and `verity.core.protocols.pous.protocol.TimedAudi
   the memory challenger refuses a `k` or limit the certificate does not cover, sends no challenge and records `refused`.
 - **The record** keeps what re-derives every number: each audit's challenge source (with `vk` it gives every index), and each
   answer's block, its time, the responder's reported device and server time, and its verdicts.  A strict audit's document
-  is judged from that record by the verdict of record (`VERDICT`, `judge`): `verdict`, which replays `protocol.TimedAudit` on
-  it, or the Lean's.  Under `--clock wall`, `host_trace`
+  is judged from that record twice (`judge`), by the Lean's verdict and by `verdict`, which replays `protocol.TimedAudit` on
+  it and stays the reference; both are kept (`verdicts`), `VERDICT` names the record's (the Lean's, or the Python's where
+  the Lean can't run, as in the GPU pods' venv), and a document the two disagree on accepts nothing (`DISAGREE`).
+  Under `--clock wall`, `host_trace`
   splits every round trip over `TRACE_OVER_NS` into where its time went, on CLOCK_MONOTONIC (`hosttrace.sh`'s kernel trace
   of the same cores reads that clock), and `memory_challenger_rusage` counts the memory challenger thread's page faults and
   context switches.
@@ -315,9 +317,12 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
             **({"host_trace": host_trace(r.log, records)} if r.log is not None else {}), "records": records}
 
 
-VERDICT = "python"
-"""The verdict of record on an audit document (`judge`): `"python"`, `verdict` (protocol.TimedAudit replayed on the record,
-the reference), or `"lean"`, `pous_check`'s `pous-timed-audit` (`verity/core/protocols/pous/check/timed_audit.py`)."""
+VERDICT = "lean"
+"""The verdict of record on an audit document (`judge`): `"lean"`, `pous_check`'s `pous-timed-audit`
+(`verity/core/protocols/pous/check/timed_audit.py`), or `"python"`, `verdict` (protocol.TimedAudit replayed on the record,
+the reference).  `judge` runs both and records both either way.  Where the Lean can't run (`lean_unavailable`), the
+Python's is the record's and the Lean's is computed afterwards by `timed_audit.py --replay`."""
+DISAGREE = "the Lean and Python verdicts disagree"
 
 HEX = re.compile("(?:[0-9a-f]{2})*")
 
@@ -430,12 +435,44 @@ def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
 VERDICTS = {"python": verdict, "lean": lean_verdict}
 
 
-def judge(ready: Any, leaves: bytes, doc: dict[str, Any], by: str = VERDICT) -> dict[str, Any]:
-    """`doc` under the verdict of record `by`: its answers' verdicts, the counts, the audit of record's acceptance and the
-    profile are the verdict's, which `verdict` keeps beside them; a refused or faulted record accepts nothing (a refused one
-    has no profile to record)."""
-    v = VERDICTS[by](ready, leaves, doc)
-    out = {**copy.deepcopy(doc), "verdict": {"by": by, **v}, "audits_accepted": v.get("audits_accepted", 0)}
+def lean_unavailable() -> str | None:
+    """Why the Lean verdict can't run in this process (no `lake` on the PATH, or no `verity_difftest` beside this Python, as
+    in the GPU pods' venv), or None."""
+    import importlib.util
+    import shutil
+
+    if shutil.which("lake") is None:
+        return "lake is not on the PATH"
+    if importlib.util.find_spec("verity_difftest") is None or importlib.util.find_spec("hypothesis") is None:
+        return "verity_difftest is not importable here"
+    return None
+
+
+def judge(ready: Any, leaves: bytes, doc: dict[str, Any], by: str | None = None) -> dict[str, Any]:
+    """`doc` under the verdict of record `by` (`VERDICT`, or the Python's where the Lean can't run): its answers' verdicts,
+    the counts, the audit of record's acceptance and the profile are the verdict's, kept as `verdict` (with `by`).  Both
+    verdicts run, and both are kept as `verdicts` (the Lean's `{"unavailable": why}` where it can't run here, `{"failed":
+    why}` where it should and raises).  Where both ran and differ, the record is a rejection, `{"rejected": DISAGREE...}`
+    naming each one's outcome.  A refused, faulted or rejected record accepts nothing (a refused one has no profile to
+    record)."""
+    verdicts = {"python": VERDICTS["python"](ready, leaves, doc)}
+    why = lean_unavailable()
+    if why is not None:
+        verdicts["lean"] = {"unavailable": why}
+    else:
+        try:
+            verdicts["lean"] = VERDICTS["lean"](ready, leaves, doc)
+        except Exception as e:
+            verdicts["lean"] = {"failed": f"{type(e).__name__}: {e}"}
+    by = by or (VERDICT if why is None else "python")
+    v = verdicts[by]
+    if "unavailable" not in verdicts["lean"] and verdicts["lean"] != verdicts["python"]:
+        outcome = {name: {f: w[f] for f in ("accepted", "audits_accepted", "fault", "refused", "failed") if f in w}
+                   for name, w in verdicts.items()}
+        v = {"rejected": f"{DISAGREE}: lean {json.dumps(outcome['lean'])}, python {json.dumps(outcome['python'])} "
+                         "(both in `verdicts`)"}
+    out = {**copy.deepcopy(doc), "verdict": {"by": by, **v}, "verdicts": verdicts,
+           "audits_accepted": v.get("audits_accepted", 0)}
     if "refused" not in v:
         out["profile"] = v.get("profile")
     if "audits" in v:
