@@ -565,6 +565,22 @@ def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(
     assert SLOT.memory_gb(tmp_path / "absent") == 0
 
 
+def test_memory_gb_counts_a_cgroups_page_cache_as_left(tmp_path):
+    """vy-nebius-cpu-1, 9 Oct 20:50Z: 273 GB of page cache in the user slice held slot a (mem=560) shut with 677 GB available."""
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc/meminfo").write_text(f"MemAvailable: {677 << 20} kB\n")
+    (tmp_path / "proc/self").mkdir()
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice\n")
+    cg = tmp_path / "sys/fs/cgroup/user.slice"
+    cg.mkdir(parents=True)
+    (cg / "memory.max").write_text(f"{700 << 30}\n")
+    (cg / "memory.current").write_text(f"{347 << 30}\n")
+    assert SLOT.memory_gb(tmp_path) == 353
+    (cg / "memory.stat").write_text(f"anon {74 << 30}\nfile {273 << 30}\nactive_file {200 << 30}\ninactive_file {73 << 30}\n"
+                                    f"shmem 0\n")
+    assert SLOT.memory_gb(tmp_path) == 626
+
+
 def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, monkeypatch, capsys):
     """Node 1, 8 Oct 02:00Z: OOM kills at 1,605 of 1,716 GB across ~8 runs under the user slice; a check whose peak doesn't fit
     waits in line instead of starting and being killed with the others."""
