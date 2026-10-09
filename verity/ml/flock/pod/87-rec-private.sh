@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # rec-private (lane rec-v0): a hidden netlist as the recursion's inner statement. The universal unit UniversalUnit_v1{CLS}
 # (verity.ml.private_circuits.universal) runs a random netlist padded to the class, its op/src/out one row every instance
-# opens (the registered program), x a row per instance, staged with plain leaves (rec_inner.py universal); its inner session
-# is proved on the CPU (M0, FC_COINS=os) against the rec proxy opening a recursive session on the firewall's state
+# opens (the registered program: rec_inner.program_unit, so three regions), x a row per instance, staged with plain leaves
+# (rec_inner.py universal); its inner session is proved on the CPU (M0, FC_COINS=os) against the rec proxy opening a
+# recursive session on the firewall's state
 # (rec_live --firewall, the parts V* will prove in order), the firewall's contract (Lean flock-firewall) checks what the
 # proxy let out, V* is staged over it (rec_vstage points, InnerFold.lean, rec_vstage stage under the class's cap), and each
 # of V*'s statements is proved with --zk behind the outer firewall (FC_FIREWALL=1: the send check, released by the firewall
@@ -20,7 +21,7 @@
 #   forged-top   rec_vstage --forge top: an opening that climbs to a node other than its committed top (the last level)
 # Run from the verity tree (research run --cwd source). Big files stay under $FLOCK_WORK/data/rec-private/$TAG; out/ gets
 # the records and summary.json.
-# env: CLS=16,16,8  N=32 (instances: m = k_log + 5)  NW=8 (wired: per layer, 4 NW in all)  SEED=0  CPUS=32
+# env: CLS=16,16,8  N=64 (instances, two a block: m = k_log + 5)  NW=8 (wired: per layer, 4 NW in all)  SEED=0  CPUS=32
 #      FLOCK_WORK (as 80-rec-inner.sh)  TAG (default CLS-nN)  LEAN_FROM (a cache directory whose lean-<sha>/flock-verify
 #      of the same sources is used)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -42,7 +43,7 @@ if [ ! -x $FW0/cache/rec-v0/lean-$LSHA0/flock-verify ]; then
 fi
 . verity/ml/flock/pod/rec-env.sh
 
-CLS=${CLS:-16,16,8}; N=${N:-32}; NW=${NW:-8}; SEED=${SEED:-0}; TAG=${TAG:-${CLS//,/-}-n$N}
+CLS=${CLS:-16,16,8}; N=${N:-64}; NW=${NW:-8}; SEED=${SEED:-0}; TAG=${TAG:-${CLS//,/-}-n$N}
 DD=$FW/data/rec-private/$TAG; rm -rf $DD; mkdir -p $DD $O/inner $O/vstar $O/outer || exit 1
 command -v research >/dev/null && research keep $DD --owner @proofs --expires 2026-10-23 --priority low --why "rec-private $TAG" > /dev/null 2>&1
 PY=verity/ml/flock/pod/rec_inner.py

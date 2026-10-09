@@ -90,15 +90,40 @@ def _differing(a: Path, b: Path) -> dict:
             "body_bytes": len(ba), "body_bytes_differing": sum(x != y for x, y in zip(ba, bb)) + abs(len(ba) - len(bb))}
 
 
+def program_unit(fn):
+    """The universal unit ``fn`` over two parameters, ``prog`` (the netlist's ``op``, ``src`` and ``out`` bits in that order,
+    which its one Call reads as slices: no gates of its own) and ``x``. A class statement has a row port, and a public region,
+    per parameter of its unit (`class_statement.sources`), so the program is one row and the inner statement has three
+    regions (``prog``, ``x``, ``out``): the recursion's claims (2 + 2 a region) are rec-v0's eight. With ``fn`` itself the
+    unit, five regions' twelve claims put V*'s batched-sum residual alone past a statement's sha512x3 slots
+    (`rec_residuals.MAX_SLOTS`)."""
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.types import Array
+    from verity.ml.private_circuits import universal as U
+
+    params, ret = fn.signature()
+    prog = sum(t.leaves for _, t in params[:-1])
+
+    def body(B, S, p, x):
+        args, at = [], 0
+        for _, t in params[:-1]:
+            args.append(p[at:at + t.leaves].reshape(t))
+            at += t.leaves
+        return B.call(fn, *args, x)
+
+    return bind(CompositeDefinition(f"ProgramRow[{fn.id}]", 1, (), lambda S: ((("prog", Array(prog, U.BIT)), params[-1]), ret),
+                                    body, register=False))
+
+
 def universal(cls: str, n: int, out: Path, seed: int = 0) -> dict:
-    """A hidden netlist as the inner statement: ``UniversalUnit_v1{G, N_IN, N_OUT}``'s class statement (`class_statement.stage`,
-    words packed, plain leaves), one Call partitioned by ``Q_template_instance``, of a random netlist of 3/4 of the class's
-    gates over 3/4 of its inputs padded to the class (`universal.pad`), on ``n`` random x. The netlist's ``op``, ``src`` and
-    ``out`` are one row every instance opens (committed once: the registered program), ``x`` a row per instance, the outputs
-    hidden rows. Into ``out/stage`` with its partition object. ``out/other``: another netlist of the class under the same salt
-    key and x, the registered one with its last no-op gate made ``(XNOR, 0, 0)`` (a constant nothing reads, so every output
-    is the same and only the program's rows differ; with no no-op gate, another random netlist): the statement of a prover
-    whose program is not the registered one."""
+    """A hidden netlist as the inner statement: ``UniversalUnit_v1{G, N_IN, N_OUT}`` as `program_unit`'s class statement
+    (`class_statement.stage`, words packed, plain leaves), one Call partitioned by ``Q_template_instance``, of a random netlist
+    of 3/4 of the class's gates over 3/4 of its inputs padded to the class (`universal.pad`), on ``n`` random x. The netlist's
+    ``op``, ``src`` and ``out`` are one row every instance opens (committed once: the registered program), ``x`` a row per
+    instance, the outputs hidden rows. Into ``out/stage`` with its partition object. ``out/other``: another netlist of the
+    class under the same salt key and x, the registered one with its last no-op gate made ``(XNOR, 0, 0)`` (a constant nothing
+    reads, so every output is the same and only the program's row differs; with no no-op gate, another random netlist): the
+    statement of a prover whose program is not the registered one."""
     B = _benchmark()
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
@@ -119,8 +144,9 @@ def universal(cls: str, n: int, out: Path, seed: int = 0) -> dict:
     xs = [[rng.randrange(2) for _ in range(N_IN)] for _ in range(n)]
     if any(U.interpret(net, x) != U.interpret(small, x[:small.n_in]) for x in xs):
         raise AssertionError("the padded netlist's outputs are not the netlist's")
-    program = PU.one_call(fn)
-    query = PO.template_instance_query(fn)
+    unit = program_unit(fn)
+    program = PU.one_call(unit)
+    query = PO.template_instance_query(unit)
     units = PU.PartitionUnits(program, query=query)
     [(shape, cl)] = units.classes().items()
     salt_key = secrets.token_bytes(32)
