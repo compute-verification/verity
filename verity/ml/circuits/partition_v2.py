@@ -78,7 +78,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import partition_object as PO
-from .codec import canonical_json
+from .codec import canonical_json, program_digest
 from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, _wide_operands, boundary_widths, call_scope, check_cut,
                   evaluate_definition, separable)
 from .partition import RECOMPUTE_RULES, CutVerdict
@@ -121,11 +121,6 @@ def definition_digest(fn: Any) -> str:
     return hashlib.sha512(b"verity/partition/v2/definition\0" + fn.id.encode()).hexdigest()
 
 
-def shape_digest(form: str) -> str:
-    """The SHA-512 of a unit's circuit: of its canonical form (`units.UnitCircuit.form`)."""
-    return hashlib.sha512(b"verity/partition/v2/shape\0" + form.encode()).hexdigest()
-
-
 # --- the advice ------------------------------------------------------------------------------------------------------------------
 
 
@@ -145,13 +140,13 @@ class Entry:
     units: int
     owner: tuple[int, ...] = ()                       # FLAT: a unit per computing gate (`cut.CallGraph` order)
     shape: tuple[int, ...] = ()                       # FLAT: a class per unit, classes numbered in first-use order
-    classes: tuple[str, ...] = ()                     # FLAT: `shape_digest` per class
+    classes: tuple[str, ...] = ()                     # FLAT: `units.UnitCircuit.shape` per class
     parts: tuple[tuple[int | None, int], ...] = ()    # PARTS: (child entry or None, members) per body node
 
 
 @dataclass(frozen=True)
 class Advice:
-    program: str                                      # `partition_object.program_sha512`
+    program: str                                      # `codec.program_digest`
     calls: tuple[Call, ...]
     entries: tuple[Entry, ...]
 
@@ -208,7 +203,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
         a = acts.get(fn.id)
         if a is None:
             a = acts[fn.id] = Activation(fn)
-        shape, classes = _classes(shape_digest(uc.form) for uc in a.circuits(owner))
+        shape, classes = _classes(uc.shape for uc in a.circuits(owner))
         return Entry(definition_digest(fn), FLAT, graph(fn).n, len(shape) if units is None else units, owner, shape, classes)
 
     def add(fn: Any) -> int:
@@ -240,7 +235,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
         m = _members(nodes[k])
         calls.append(Call(k, e, m, start))
         start += m * entries[e].units
-    return Advice(PO.program_sha512(program), tuple(calls), tuple(entries))
+    return Advice(program_digest(program), tuple(calls), tuple(entries))
 
 
 # --- rows ------------------------------------------------------------------------------------------------------------------------
@@ -572,7 +567,7 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
         return _verdict({"program-not-topological": [order]})
     G = _Graphs()
     # G1: the Call table against the program's root Calls
-    if adv.program != PO.program_sha512(program):
+    if adv.program != program_digest(program):
         fail("header-program", adv.program)
     calls = PO.calls(program)
     nodes = program.root.body.nodes
@@ -650,7 +645,7 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
                 fail("unit-too-wide", {"entry": j, "definition": fn.id, "units": wide[:_MAX_LISTED], "n": len(wide)})
         # G7: the shapes, and the caps
         ucs = G.activation(fn).circuits(en.owner)
-        want = _classes(shape_digest(uc.form) for uc in ucs)
+        want = _classes(uc.shape for uc in ucs)
         if (en.shape, en.classes) != want:
             wrong = [u for u, (a, b) in enumerate(zip(en.shape, want[0])) if a != b or en.classes[a:a + 1] != want[1][b:b + 1]]
             fail("shape", {"entry": j, "definition": fn.id, "units": wrong[:_MAX_LISTED], "n": len(wrong) + abs(len(en.shape) - len(ucs)),
@@ -909,7 +904,7 @@ def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: A
     if len(en.owner) != a.graph.n:
         raise Malformed(f"entry {j}: {len(en.owner)} owners for {a.graph.n} computing gates")
     uc = a.circuits(en.owner)[u]
-    if shape_digest(uc.form) != en.classes[en.shape[u]]:
+    if uc.shape != en.classes[en.shape[u]]:
         bad["unit-shape"] = [[j, u]]
     root = _roots(program, a, base, uc)
     return Unit(i, False, k, node, member, tuple(path), j, u, fn.id, uc, base, tuple(root[x] for x in uc.outputs),
@@ -983,5 +978,5 @@ def from_v1(obj: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "Call", "Entry",
-           "Advice", "Malformed", "Reader", "Unit", "grid", "definition_digest", "shape_digest", "build", "rows", "pad", "decode", "predicates",
+           "Advice", "Malformed", "Reader", "Unit", "grid", "definition_digest", "build", "rows", "pad", "decode", "predicates",
            "statement", "validate", "digest", "check", "locate", "unit", "check_unit", "openings", "from_v1"]

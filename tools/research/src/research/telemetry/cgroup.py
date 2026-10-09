@@ -253,6 +253,45 @@ class Cgroup:
         return out
 
 
+#: Where a machine gives each login session (an ssh login, and the run it starts) a memory cap of its own: the Nebius nodes'
+#: 50-vy-job-memory.conf, which pods/nebius/deploy.toml installs.
+SESSION_DROPINS = Path("/etc/systemd/system/session-.scope.d")
+
+
+def session_cap(dropins: Path | None = None) -> str | None:
+    """The MemoryMax= this machine's systemd gives every login session scope (the last one set, as systemd reads them), or None."""
+    cap = None
+    try:
+        files = sorted((dropins or SESSION_DROPINS).glob("*.conf"))
+    except OSError:
+        return None
+    for f in files:
+        raw, _ = _read(f)
+        for line in (raw or "").splitlines():
+            k, _, v = line.strip().partition("=")
+            if k.strip() == "MemoryMax":
+                cap = v.strip() or None
+    return None if cap in (None, "infinity") else cap
+
+
+def uncapped(limits: dict[str, Any], cap: str | None) -> str | None:
+    """Why a run whose own cgroup reads `limits` (Cgroup.limits()) would go without the per-session cap `cap` (session_cap()), or None.
+    When user-1001.slice is at its MemoryMax, logind can't create the login's session-N.scope and the login (and what it starts)
+    stays in ssh.service: its memory.max is the service's, shared with every login that failed the same way, or none."""
+    if cap is None:
+        return None
+    path = limits.get("path") or "?"
+    if limits.get("memory_max_kind") != "finite":
+        return (f"this machine caps each login session at MemoryMax={cap} ({SESSION_DROPINS}), but this run's cgroup {path} has memory.max "
+                f"{limits.get('memory_max_kind')}, so its workload would run with no cap of its own. Launch it from an ssh login, or "
+                f"with --queue and --mem-gb")
+    if path.endswith(".service"):
+        return (f"this machine caps each login session at MemoryMax={cap} ({SESSION_DROPINS}), but this run is in {path}, whose memory.max "
+                f"is shared by everything that service runs: its login got no session scope (logind fails to create one while "
+                f"user-1001.slice is at its MemoryMax; `journalctl -u systemd-logind` says why). Launch it again once the slice has room")
+    return None
+
+
 def scope_for(sampler_cg: Cgroup, workload_cg: Cgroup | None) -> tuple[str, str]:
     """(scope, reason).  job_cgroup only when the workload sits in a cgroup of its own that is NOT the sampler's; RunPod pods put every
     process in the namespace root -> shared_pod_cgroup."""

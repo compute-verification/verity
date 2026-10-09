@@ -1,5 +1,6 @@
-"""Asks as Linear issues (the trial from 8 Oct): `research msg ask --linear` files the ask in its owner's team, a team named
-after the handle, and rings on Slack with the issue's link.
+"""Asks as Linear issues (the trial from 8 Oct): `research msg ask` (and `send --to` one handle) files the ask in its owner's
+team, the registry's `linear` key, and rings on Slack with the issue's link; `close` and `decline` move the issue to done or
+canceled.
 
 Credentials come from the environment only. LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET are an OAuth app's client-credentials
 grant (never the authorization-code flow): an `app` actor, so each issue and comment shows as filed by the asking handle
@@ -153,14 +154,15 @@ class Linear:
         self._quiet(issue_id)
 
     def close(self, issue_id: str, state_type: str) -> str:
-        """Move the issue to its team's first state of `state_type` (`completed`, `canceled`); that state's name."""
-        states = self.gql("query($id: String!) { issue(id: $id) { team { states { nodes { id name type } } } } }",
-                          {"id": issue_id})["issue"]["team"]["states"]["nodes"]
-        state = next((s for s in states if s["type"] == state_type), None)
+        """Move the issue (its id, or an identifier such as `INF-12`) to its team's first state of `state_type` (`completed`,
+        `canceled`); that state's name."""
+        issue = self.gql("query($id: String!) { issue(id: $id) { id team { states { nodes { id name type } } } } }",
+                         {"id": issue_id})["issue"]
+        state = next((s for s in issue["team"]["states"]["nodes"] if s["type"] == state_type), None)
         if state is None:
             raise LinearError(f"the issue's team has no {state_type} state")
         self.gql("mutation($id: String!, $s: String!) { issueUpdate(id: $id, input: {stateId: $s}) { success } }",
-                 {"id": issue_id, "s": state["id"]})
+                 {"id": issue["id"], "s": state["id"]})
         return state["name"]
 
     def subscribers(self, issue_id: str) -> list[str]:

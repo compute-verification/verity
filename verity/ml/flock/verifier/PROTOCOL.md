@@ -1227,12 +1227,30 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·⌈H/2⌉`, `64`, `16·LANES` and `64` u16 words, and
     outputs `out` then `acc_out` of 64 words each, one 16-bit port per word.
 
-  Any other unit is not checked against a builder (D12, §17.1).
+  So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
+  - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
+    `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
+    the structure;
+  - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
+    its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
+    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 128 `sha512x3`
+    slots and 16 residuals it fits, and refuses unless the parts hold every residual once; part `j` must exist;
+  - part `j`'s S is the whole S's residuals and the operands their products read, each term renumbered into the part's
+    `w` (its row ports' elements, in order) and `v` (the elements it reads, ascending); a term outside them, or a
+    transposed block not in one run of the part's `w`, is refused, never read as element 0;
+  - its input ports must total the part's (`16·P(n)` bits a row port of `n` elements and `v`, `P(n) = 64·⌈8n/64⌉`) and
+    its output ports 2048, compared before the verifier builds its net;
+  - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
+    `ir_lower.layout` lays it out, one 16-bit port per word.
+
+  Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
   when the unit returns the outputs, so a tail that returns them would otherwise pass with no unit in a VU.
-- **Blocks.** `vus_per_block ≥ 1` (D9, §17.1). Every range's count is `vus_per_block` times its per-VU count, and the
-  unit range's power-of-two bound binds only when the unit returns the outputs, so a tail that returns them would otherwise
-  pass with no VU in a block.
+- **Blocks.** `vus_per_block ≥ 1` (D9, §17.1), and a power of two whatever returns the outputs. Every range's count is
+  `vus_per_block` times its per-VU count, and the unit range's power-of-two bound binds only when the unit returns the
+  outputs, so a tail that returns them would otherwise pass with no VU in a block, or with `G = 3`: the `Digest` regions'
+  `log2 G` VU bits (Lean's `Nat.log2`, Rust's `trailing_zeros`, which agree only at a power of two) would pin VUs 0 and 1
+  in one verifier, VU 0 in the other, and VU 2 in neither.
 - **Header sizes.** A power of a number META chooses is computed only once the number is bounded. `parse` refuses
   `k_log > 27` where it reads it (`HmRow.kLogOf`), before the layout check computes `2^{k_log}`, or `2^{slot_log}` once
   `slot_log ≤ k_log`; and it compares a lookup's `in_bits` with its pinned table's `log2` before `2^{in_bits}`. `setupH`
@@ -1444,7 +1462,8 @@ statements define such a session; any other statement refuses `J > 1`.
 ### 16.13 Hidden outputs (the default `verity/flock-circuit` and `verity/flock-circuit/types`)
 
 `@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows (Daniel, Oct 1); `+seed-injection` is the
-selftest build. `Flock.HmOut` (`Stmt.setupHidden`, no soundness theorem yet: §17.4) applies §16.10's definitions to every
+selftest build. `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
+`--zk` `zk_session_soundH` and `zk_session_soundHJ`, within the one theorem of §16.15) applies §16.10's definitions to every
 row. The public file holds roots, hiding leaves and structure only, under M0 and `--zk`. M0's transcript is not hiding
 (`NON_ZK_PROOF`, zero mask slots); only `--zk` targets that.
 
@@ -1500,7 +1519,54 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
 stays `NON_ZK_PROOF`. **Agreement:** README.
 
-### 16.15 Plain leaves (`verity/flock-circuit+plain-leaves`, a recursive session's inner statement)
+Each table's statement must have upstream's mask shape (`Zk.shapeOk`), and, which upstream does not check, its Δ and its
+regions avoid the mask slot (`Zk.maskFree`, D12): no pair of `da` or `db` has a row or a column in the mask range's
+word-aligned span, and every region fixes, at each of the span's words, an in-block word bit (`i + 7 < k_log`, not
+free) that differs from the word's bit `i`. Otherwise the verifier refuses: `zk: a pair of Δ or a region meets the mask
+slot`. The zero-knowledge proof covers no such statement: a region or a wire there would read the masks.
+
+### 16.15 The forms the soundness proof covers
+
+`verify` fails closed (Daniel, Oct 4): soundness is one theorem over every session it accepts, with no condition on the
+circuit, the public file or the statement's form, so it refuses every statement outside the forms the proof covers. A
+refusal is a completeness limit; accepting an uncovered form is a soundness gap. `Flock.ProvedScope.check` is the one
+rule; widening it to another form is one line of it plus the proof that the headlines cover that form. Every session of
+a statement outside them is refused once every check has passed, so a session that fails a check keeps that check's
+reason, and one whose verdict is `refused: <why>: a statement form the soundness proof does not cover` passed every check,
+`<why>` the first rule its statement fails:
+
+1. an hm96-sha512 row statement (§16.10 on): `<name>, a statement before hm96-sha512 rows`;
+2. untyped (§16.11): `<name>, a typed statement`;
+3. retained rounds (§6.2) and `hm96-sha512/v1` leaves (`<name>, a statement without retained rounds`, `... with <leaf>
+   leaves`);
+4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`;
+5. no public input ports: `public input ports (--public-inputs)`;
+6. no shared-row public file: `a shared-row public file (header shared_rows)`;
+7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
+   outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
+   read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
+   `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+
+At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's law
+(`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified law, with or without
+`--zk`, and under `--zk` by the subset law (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is `refused: <why>: no
+soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and
+`a subset draw without --zk`. A session without a draw is refused too, since every claim is about a drawn session
+(each claim's record hypothesis reads the record's draw): it is verified against the population's statement, and its
+verdict is `refused: a session without a draw: every soundness claim is about a drawn session (D12)` only once every
+check has passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's
+reason. A claim for the draw of every unit would cover it; none is proved.
+
+The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
+are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
+the one theorem: at every statement, with or without `--zk`, it states the headline of the statement's case (public or
+hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several). The live server refuses the same
+statements with the same reason (`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is
+the refusal, and `without_refusal` keeps the session's verdict otherwise.
+`flock-firewall` is a separate executable that accepts no proof, and an accept from `contract` means what
+`Contract.holds_*` states, outside `flock_verify_sound`.
+
+### 16.16 Plain leaves (`verity/flock-circuit+plain-leaves`, a recursive session's inner statement)
 
 §16.13's statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`, §14): a recursive session's inner
 statement, staged under `FLOCK_PLAIN_LEAVES=1`, whose firewall commits every tree top under a salt of its own, so a leaf
@@ -1528,7 +1594,8 @@ Upstream's Rust verifier (below, with `verity/ml/flock/live`'s `ReplayChallenger
 run in CI on every change to the Lean verifier, the statements or the pinned files:
 
 1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
-   - every honest session: both accept;
+   - every honest session: both accept, except a session of a set marked `lean_refuses`, a drawn session of one marked
+     `lean_refuses_drawn` and a session without a draw of one marked `lean_refuses_drawless` (D12 below);
    - every record-level negative: both reject, except the recipes marked `accept` (both accept), `info` (both return
      the same verdict) and the divergence recipes D1, D2 below (the Lean verifier rejects, upstream accepts);
    - every red-team forgery, materialised as a record and proofs: both reject.
@@ -1559,8 +1626,9 @@ expectation):
 - **D8:** at least one unit per VU (§16.10). Upstream's `Composite::check` in the pinned builds that have tails (`25519ba1`,
   `967b8d06`) lets `units_per_vu = 0` through when a tail returns the outputs; the spec refuses it, as
   `verity/ml/flock/live`'s now does. No vector exercises it.
-- **D9:** at least one VU per block (§16.10). Upstream's `Composite::check` in the same builds lets `vus_per_block = 0`
-  through when a tail returns the outputs; the spec refuses it, as `verity/ml/flock/live`'s now does. No vector exercises it.
+- **D9:** at least one VU per block, and a power of two of them (§16.10). Upstream's `Composite::check` in the same builds
+  lets `vus_per_block = 0` through when a tail returns the outputs; the spec refuses it, and every `vus_per_block` not a
+  power of two, as `verity/ml/flock/live`'s now does. No vector exercises either.
 - **D10:** the header's `identifier` (§16.10). Upstream ignores it (the public digest binds it); the spec refuses one that
   is not the verifier's own `--identifier F`. No vector exercises it; `verity/ml/flock/tests/test_lean_identifier.py` runs
   it on the Lean verifier.
@@ -1571,7 +1639,21 @@ expectation):
   writer (`ir_lower.layout`, `derive`, `tail.stage_layout`) closes its output groups before the constant row, so
   `128 · (col + words) ≤ constPos < useful ≤ 2^{unit_log}`. No vector exercises it;
   `verity/ml/flock/tests/test_lean_out_group_slot.py` runs it on the Lean verifier.
-- **D12:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
+- **D12:** a statement form the soundness proof does not cover (§16.15). The pinned upstream builds verify it; the spec
+  refuses every session once every check has passed, as `verity/ml/flock/live`'s now does. A set marked `lean_refuses`
+  in `vectors.json` expects that refusal of each session that upstream accepts, and of every other session its own reason
+  (`agree.py --lean-refuses`): a session refused for its form alone passed every check, and is compared as accepted. So,
+  too, a draw by a law no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a closure, and
+  a subset draw without `--zk`), which the Lean verifier alone refuses, at setup (the live server and upstream verify
+  it): a set marked `lean_refuses_drawn` expects that refusal of every drawn session (`agree.py --lean-refuses-drawn`).
+  `verity/ml/flock/tests/test_lean_draw_laws.py` runs each law on the Lean verifier. So, too, a session without a draw
+  (§16.15), which the Lean verifier alone refuses, and only once every check has passed: a set marked
+  `lean_refuses_drawless` expects that refusal of each session without a draw that upstream accepts, and of every other
+  session without a draw its own reason (`agree.py --lean-refuses-drawless`). `agree.py`'s `passed_every_check` counts
+  the sessions refused last and for nothing else. So, too, under `--zk`, a statement
+  whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the live server
+  and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it; `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
+- **D13:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
   unit's net as the file gives it. The spec refuses a `rec-open/` unit whose name is not `rec-open/l<LANES>-h<H>` at valid
   parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
   exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
@@ -1632,7 +1714,7 @@ is the article's recursion caveat, applied to the slots of one block.
 | 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under the scheme's collision resistance (SHA-256, or SHA-512 on the target statement; an explicit collision extractor) | 4a; Merkle 3 |
 | 1c Fiat–Shamir | not used (interactive coins). Replaced by **session binding**: every coin is issued only after the framed bytes it answers are fixed by their SHA-256 digest (R2); both reps bind one root (S13, S16, S18); Σ, the digest and the link points precede every Flock coin (S4, S14, §9.1) | 3 |
 | 1d constraint system = semantics | the lowering theorem for every pinned circuit against its reference function (soundness and totality), and the assembly: the fold equals the multilinear extension of `I ⊗ A_0 + Δ`, the region values equal the extension of the known bytes, and Δ makes the stated copies | 3 |
-| 1e glue | one theorem, for the `setupH` statements (not `Stmt.setupHidden`'s, §16.13): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. No zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
+| 1e glue | one theorem, `FailClosed.flock_verify_sound`, over every statement `verify` accepts, `setupH`'s and `Stmt.setupHidden`'s (§16.13, §16.15): `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. Without `--zk`, no zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
 | 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. The field code is proved to be GF(2^128) and K (level 3, below). What remains: the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
 | 3 prover completeness | out of scope (upstream's prover). Every honest session in the corpus is accepted | tests |
 

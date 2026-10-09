@@ -71,8 +71,8 @@ slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit
 the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
 refuse.
 
-To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python
-tools/verity/lean/check.py --build --update PKG` with no wrapper around it. It exits 0 when the Lean check passes, whether or not the
+To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python3
+tools/verity/lean/check.py --build --update PKG` with no wrapper around it (vy-nebius-1 has no `python`, exit 127). It exits 0 when the Lean check passes, whether or not the
 record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
 in the run's own clone of the shipped tree, removed when the run ends; with `--cwd source` every run of the commit builds in
 the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live Lean check.
@@ -168,9 +168,17 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. Its conclusion is the property or a break
+  tied to the run: for SHA-512, `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`, over the
+  inputs the run itself hashed; for LMS, a signature in the run that verifies on a message missing from the device's
+  signing log; for Merkle binding, a collision among the inputs hashed along the two openings' paths. Every `∃` in the
+  break is bounded by something the run carries. "Some collision exists", or an extractor free to ignore the run, is
+  vacuous: collisions exist by pigeonhole, and `Classical.choice` is an allowed axiom, so the axiom check can't catch it.
+  No advantage bounds, which would need a probability model. An input condition becomes a refusal in the verifier, not a
+  hypothesis (the Lean check refuses NaN-coded noise, as Python's verifier does); that the honest draw never produces
+  such an input is a completeness fact, measured rather than proved.
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
-  Daniel gets a DM showing it. Approval may come back for chosen packages (a grant in `tools/verity/check/queue.toml`). "Pin" is
-  retired: say guarantee.
+  Daniel gets a DM showing it. "Pin" is retired: say guarantee. (Since 8 Oct no change waits on a per-head grant at all.)
 - 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
   conclusion, where an assumption is a named `Prop` (README "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
@@ -186,7 +194,8 @@ These are Daniel's rulings, newest first.
   third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
   than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
   hard to break, a table, a ledger or a PR cites a guarantee with its assumptions, and proving an assumption removes it
-  from every guarantee that took it.
+  from every guarantee that took it. Since 2026-10-08 a hash or a signature is not an assumption at all: the guarantee
+  ends in a break tied to the run (above).
 - 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
   derived from Lean and the Lean check's output, and no hand-kept ledger is generated alongside.
 - 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not

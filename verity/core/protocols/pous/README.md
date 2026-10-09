@@ -8,7 +8,7 @@ A spec-level reference for POUS, proof of useful space for model weights, with t
 - **the dense scheme** (`verity.core.protocols.pous.dense`, selectable): the same on the complete DAG (Lean's `chainDense`);
 - **P2** (`verity.core.protocols.pous.schemes.p2`, **experimental**): the squaring-based scheme, proved in abstract M1 under the
   pinned `P2SlackFamilyUncond` (k = 105), with its instantiation assumption not accepted; never the default.
-  `p2-16448/v3` has the frozen spec's SHAKE256 keys, `p2-16448/v2` ChaCha8 keys, which the spec does not allow;
+  `p2-16448/v4` has the spec's (v4) counter-mode SHA-512 keys, `p2-16448/v2` ChaCha8 keys, which the spec does not allow;
 - **P3** (`verity.core.protocols.pous.scheme`, the fast research codec): two layers over the band graph `B(220, 12)` with a transpose
   connector and a tweakable `P` (Lean's `p3Scheme`).
 

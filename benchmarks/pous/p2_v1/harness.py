@@ -1,12 +1,12 @@
 """P2's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu | p2-v3-gpu | p2-v3-mc-gpu`): P2 with its GPU kernels (`p2v1.cu`, `gpu.py`)
 on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so the two compare side by side.
-The kernels take a setup's key prefix, so one arm runs either framing:
+The kernels take a setup's key prefix, so one arm runs either framing, both on v4's counter-mode SHA-512 keys:
 
-- `V1` (`p2-v1-gpu`): the frozen v1 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
-- `V3` (`p2-16448/v3`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
+- `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
+- `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `band_gpu/memory_challenger.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
-  with v3's own codec back to `W`'s, when that segment is wholly encoded.
+  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
@@ -59,8 +59,8 @@ SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 """The bench's setup source: in a deployment the verifier's secret or a beacon round drawn after the commitment to `W`."""
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
         "P2ErrorSplitB19Uncond")
-ASSUMPTIONS = ("P2-EXP-IO", "SHAKE256/P2-EXP-IO storage-game idealization", "P2–M1-SGI (not accepted)", "SeqRoot",
-               "perfect isolation", "cr/sha-256")
+ASSUMPTIONS = ("P2-EXP-IO", "SHA-512-CTR/P2-EXP-IO", "P2–M1-SGI (not accepted)", "SeqRoot", "perfect isolation", "cr/sha-512",
+               "trusted-nebius-host")
 RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 
@@ -104,8 +104,8 @@ class V1:
 
 
 class V3(V1):
-    """`p2-16448/v3` (`verity.core.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under v3's
-    manifest, `protocol.draw_salt`'s 24-byte salt, v3's key prefix (which frames that salt and no commitment) and `vk`'s
+    """`p2-16448/v4` (`verity.core.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under the
+    scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
     leaves, audited by `protocol.TimedAudit` (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
@@ -119,7 +119,7 @@ class V3(V1):
         self.P, self.p2 = P, p2
         self.params = schemes.P2Params(P.w, P.c0, P.blocks_per_segment, P.segments)
         if self.params.payload_bytes != P.payload_bytes:
-            raise ValueError(f"v3 carries {self.params.payload_bytes} payload bytes a block, not {P.payload_bytes}")
+            raise ValueError(f"the registered P2 carries {self.params.payload_bytes} payload bytes a block, not {P.payload_bytes}")
         self.scheme_obj = schemes.P2(self.params)
         self.scheme = self.scheme_obj.name
         self.model = protocol.commit(self.scheme_obj, w_host)
@@ -141,8 +141,8 @@ class V3(V1):
         return {"salt": self.salt.hex(), "scheme": self.scheme, "params": self.params.manifest()}
 
     def codec_gate(self, c_host: bytes, w_host: bytes, encoded: int) -> dict[str, Any] | None:
-        """Segment 0 of `C`, as the device encoded it, decoded by v3's own codec (`P2.decode_segment`) to segment 0 of `W`:
-        decoding is a bijection, so `C`'s first segment is exactly v3's encoding of `W`'s.  None (no gate) when segment 0 is
+        """Segment 0 of `C`, as the device encoded it, decoded by the scheme's own codec (`P2.decode_segment`) to segment 0 of `W`:
+        decoding is a bijection, so `C`'s first segment is exactly the scheme's encoding of `W`'s.  None (no gate) when segment 0 is
         not wholly encoded."""
         bps, nb, seg = self.P.blocks_per_segment, self.P.width_bytes, self.params.segment_bytes
         if encoded < bps:
@@ -156,7 +156,7 @@ class V3(V1):
 
 
 class MC(V3):
-    """`p2-16448/v3` audited by the memory challenger (`p2-v3-mc-gpu`, `memory_challenger/live.py`): sessions over a coin
+    """`p2-16448/v4` audited by the memory challenger (`p2-v3-mc-gpu`, `memory_challenger/live.py`): sessions over a coin
     tree committed before them, each round's whole answer hashed after its receipt time, one signature a session.  Its
     leaves are each block's `sha512/row/v2` digest (`memory_challenger.block_digest`), what the verdict checks a round's
     digest against.  `sign_with` picks the
@@ -208,9 +208,10 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
     from .gpu import Kernels
 
     device = torch.device("cuda", torch.cuda.current_device())
+    ext = native.load(build_dir)
 
     def responder(c: Any, cpu: int | None) -> Any:
-        r = native.ext().Responder(c.data_ptr(), c.shape[0], c.shape[1], device.index, "127.0.0.1", 0, -1 if cpu is None else cpu)
+        r = ext.Responder(c.data_ptr(), c.shape[0], c.shape[1], device.index, "127.0.0.1", 0, -1 if cpu is None else cpu)
         r.start()
         return r
 
@@ -250,22 +251,38 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The pinned vector at `params.w`, through the device: keys, encode and decode, bit-exact."""
+KEYS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
+"""The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
+
+
+def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None,
+                keys: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The pinned vector at `params.w`, through the device: its `K` and `t` against `KEYS`, encode and decode against
+    `vectors.json`, bit-exact, from a library that reports v4's keys."""
     doc = vectors or json.loads(R.VECTORS.read_text())
     v = next((x for x in doc["vectors"] if int(x["w"]) == params.w and int(x["c0"]) == params.c0), None)
     if v is None:
         return {"passed": False, "reason": f"no pinned vector at w = {params.w}, c0 = {params.c0}"}
+    kv = next((x for x in (keys or json.loads(KEYS.read_text()))["vectors"] if x["id"] == v["id"]), None)
+    if kv is None or (kv["setup_salt"], kv["model_commitment"]) != (v["setup_salt"], v["model_commitment"]):
+        return {"passed": False, "reason": f"no pinned keys for {v['id']}"}
     salt, model = bytes.fromhex(v["setup_salt"]), bytes.fromhex(v["model_commitment"])
     bound = backend.bind(params, R.expand_prefix(salt, params, model))
     first = int(v["segment"]) * params.blocks_per_segment + int(v["block"])
     k, t = bound.keys(first, 1)
     nb = params.width_bytes
     m, c = rows([int(v["m"], 16)], nb, backend.device), rows([int(v["c"], 16)], nb, backend.device)
-    got = {"K": k[0].cpu().numpy().tobytes().hex() == v["K"], "t": t[0].cpu().numpy().tobytes().hex() == v["t"],
+    version = keys_version(bound)
+    got = {"keys_v4": version == 4, "K": k[0].cpu().numpy().tobytes().hex() == kv["K"],
+           "t": t[0].cpu().numpy().tobytes().hex() == kv["t"],
            "encode": bytes(bound.encode(m, first)[0].cpu().numpy()) == bytes.fromhex(v["c"]),
            "decode": bytes(bound.decode(c, first)[0].cpu().numpy()) == bytes.fromhex(v["m"]), "flags": bound.raised() == 0}
-    return {"passed": all(got.values()), "vector": v["id"], **got}
+    return {"passed": all(got.values()), "vector": v["id"], "keys_version": version, **got}
+
+
+def keys_version(bound: Any) -> int:
+    """The key framing a bound library reports expanding: 4 is `reference.keys`; anything else is retired."""
+    return getattr(bound, "keys_version", 1)
 
 
 def picks(encoded: int, blocks: int, extra: int = 8) -> list[int]:
@@ -298,7 +315,7 @@ def payload_bytes(m: Any, params: R.Params, used: int) -> Any:
 
 def profile(k: int, limit_ns: int, gaps: tuple[str, ...], scheme: str = R.PROTOCOL,
             storage: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The run's profile; `storage` is `protocol.TimedAudit`'s `StorageProfile` of the audit of record (v3), whose
+    """The run's profile; `storage` is `protocol.TimedAudit`'s `StorageProfile` of the audit of record (the registered scheme), whose
     `certified` it reports alongside the arm's own gaps."""
     return {"scheme": scheme, "k": k, "limit_ns": limit_ns, "rho": "18/19", "error": "1% + 2^-128", "pins": list(PINS),
             "assumptions": list(ASSUMPTIONS), "gaps": list(gaps),
@@ -361,7 +378,7 @@ def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments:
 def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], framing: type[V1] = V1,
         backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None,
         research: bool = False) -> dict[str, Any]:
-    """One run of P2's arm under `framing` (`V1`, the frozen spec's, or `V3`, `p2-16448/v3`'s).  `backend`, `params` and
+    """One run of P2's arm under `framing` (`V1`, the v4 spec's, or `V3`, `p2-16448/v4`'s).  `backend`, `params` and
     `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s memory
     challenger audit where P2 has no certificate (the CPU tests)."""
     import torch
@@ -447,11 +464,12 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     def result(metrics: dict[str, Any], rows_: list[tuple[str, Any, str]], prof: dict[str, Any] | None) -> dict[str, Any]:
         return {"implementation": {"name": fr.impl, "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
-                                   "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by "
-                                              "pous_native.shake256_rows; encode by an addition-chain root on CGBN's generic squaring",
+                                   "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by p2keys4.cuh (counter-mode "
+                                              "SHA-512 from the key prefix's midstate); encode by an addition-chain root on CGBN's generic squaring",
                                    "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
-                "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex()},
+                "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
+                          "keys_version": keys_version(bound)},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 

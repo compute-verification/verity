@@ -1,5 +1,6 @@
 import Difftest
 import VStar
+import Flock.RecResiduals
 
 /-!
 # V*'s difftest executable
@@ -8,7 +9,8 @@ The functions `verity_flock`'s builders are held to (`tests/test_vstar_difftest.
 circuits on the parameters it is given: a part's rows as a laid-out netlist (`sha`, `climb`, `residuals`: the netlist's
 SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit file
 (`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
-`spec`, `parts`), and V*'s statements over an inner session's shape (`statements`).
+`spec`, `parts`), and V*'s statements over an inner session's shape (`statements`). `verifier_parts` holds the Lean
+verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units.
 -/
 
 namespace VStar.DT
@@ -140,10 +142,29 @@ def statementsFn (j : Json) : Except String Json := do
         ("v_of", natsJson p.v)] ++ (← gfSummary p.S.gf)))
   pure (Json.arr out)
 
+/-- Each of V*'s algebra statements over an inner session of shape `(m, k_log, claims)`: its name and whether the Lean
+verifier's net for it (`Flock.RecResiduals`, which a `rec-residuals/…` unit must equal) is V*'s unit's; and whether the
+verifier refuses the part past the last. -/
+def verifierPartsFn (j : Json) : Except String Json := do
+  let sh ← shapeOf j
+  let st ← statements sh
+  let some fsh := Flock.RecResiduals.shape? sh.m sh.kLog sh.claims | throw "the verifier refuses a shape V* takes"
+  let mut out : Array Json := #[]
+  let mut n := 0
+  for s in st do
+    if let .inner j name p := s then
+      n := n + 1
+      let mine ← netOf name (← (← innerUnit p.S name).laid)
+      let (S, ns, nv) ← Flock.RecResiduals.part fsh j
+      let theirs ← netOf (Flock.RecResiduals.unitName sh.m sh.kLog sh.claims j) (Flock.RecResiduals.unitLaid S ns nv)
+      out := out.push (Json.mkObj [("name", (name : Json)), ("equal", (decide (mine = theirs) : Json))])
+  pure (Json.mkObj [("parts", Json.arr out), ("past_refused", ((Flock.RecResiduals.part fsh n).toOption.isNone : Json))])
+
 end VStar.DT
 
 open VStar.DT in
 def main : IO Unit := Difftest.serve (Difftest.table [
   ("sha", sha), ("climb", climb), ("residuals", residuals), ("rec_open_unit", recOpenLowering),
   ("rec_open_circuit", recOpenCircuit), ("inner_unit", innerLowering), ("inner_circuit", innerCircuit),
-  ("structure", structureFn), ("spec", specFn), ("parts", partsFn), ("statements", statementsFn)])
+  ("structure", structureFn), ("spec", specFn), ("parts", partsFn), ("statements", statementsFn),
+  ("verifier_parts", verifierPartsFn)])
