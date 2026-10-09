@@ -35,11 +35,10 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from hypothesis import HealthCheck, given, settings
-from hypothesis import seed as use_seed
-from hypothesis.strategies import SearchStrategy
+if TYPE_CHECKING:
+    from hypothesis.strategies import SearchStrategy
 
 #: One side's answer to one input: `(kind, text)`. A `Port`'s kinds are `output` (the canonical text), `reject` (the
 #: reason) and `error`; a `ProtocolPort`'s are the verdicts (the outcome's canonical text) and `error`.
@@ -350,7 +349,9 @@ class Stats:
 def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
     """Draw `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
-    count Python's outcomes by kind."""
+    count Python's outcomes by kind.  Hypothesis is imported here, so the server, `build` and `replay` run without it."""
+    from hypothesis import HealthCheck, given, settings
+    from hypothesis import seed as use_seed
     seen: dict[str, int] = {}
 
     @use_seed(seed)
