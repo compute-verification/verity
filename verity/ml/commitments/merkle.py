@@ -10,8 +10,9 @@ Promoted from veritor ``protocol/merkle.py`` (eb865ce2) with the ``Commitment`` 
 ``protocol/messages.py``.  The frame ``veritor/protocol/merkle/frame/v3`` and every tag below are wire constants
 mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.  A domain with ``hash="sha512"`` hashes the
 same bytes with SHA-512, so its domain id, leaves, pads, nodes and roots are 64 bytes, and its domain id absorbs the positions'
-SHA-512 identity (``frame_v3/PROTOCOL.md`` §6).  Its ``binding`` is 64 bytes, the caller's SHA-512 identity digest, or
-32 bytes, a SHA-256 identity digest as recorded statements carry it; every part is length-framed, so the two cannot collide.
+SHA-512 identity (``frame_v3/PROTOCOL.md`` §6).  Under every frame a ``binding`` is 64 bytes, the caller's SHA-512 identity
+digest, or 32 bytes, a SHA-256 identity digest as recorded statements carry it; every part is length-framed, so the two cannot
+collide.
 
 A domain with ``hash="blake3"`` (``frame-b3``) is a tree mode for latency.  Its domain id is BLAKE3 over the same framed domain
 message; leaves, pads and the empty root are BLAKE3 keyed by that id, and a level's nodes are BLAKE3 keyed by the level's key.
@@ -194,9 +195,10 @@ class CommitmentDomain:
 
     ``binding`` is the digest of what the commitment may not outlive:
     the header for the boundary, the replay phase for an interior, a fixed
-    tag for a per-model weight root.  It is 32 bytes, or under ``hash="sha512"``
-    also 64 (a SHA-512 identity digest).  ``owner`` is ``-2`` for the weights,
-    ``-1`` for the boundary, else a replay unit index.
+    tag for a per-model weight root.  It is 64 bytes (a SHA-512 identity digest),
+    or 32 (a SHA-256 one, as recorded statements carry it), under every frame.
+    ``owner`` is ``-2`` for the weights, ``-1`` for the boundary, else a replay
+    unit index.
     """
 
     binding: bytes
@@ -206,9 +208,8 @@ class CommitmentDomain:
     domain_id: bytes = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        widths = (32, 64) if self.hash == "sha512" else (32,)
-        if type(self.binding) is not bytes or len(self.binding) not in widths:
-            raise ProtocolError("binding must be 32 bytes, or 64 (a SHA-512 identity) under frame-v3-sha512")
+        if type(self.binding) is not bytes or len(self.binding) not in (32, 64):
+            raise ProtocolError("binding must be 64 bytes (a SHA-512 identity) or 32 (a SHA-256 one)")
         if type(self.owner) is not int or self.owner < -2:
             raise ProtocolError(
                 "owner must be -2 (weights), -1 (boundary) or a replay unit"

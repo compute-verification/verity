@@ -388,7 +388,7 @@ def _fmt_static(v):
         return "(" + ",".join(_fmt_static(x) for x in v) + ")"
     if isinstance(v, dict):
         import hashlib, json
-        return "{" + hashlib.sha256(json.dumps(_plain_static(v), sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12] + "}"
+        return "{" + hashlib.sha512(json.dumps(_plain_static(v), sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12] + "}"
     return repr(v)
 
 

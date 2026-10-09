@@ -22,9 +22,9 @@ pc8 = pytest.importorskip("verity.core.protocols.pouw.circuit.pc8", reason="the 
 
 #: `program_digest` of the `Pc8Check` Programs the Lean layout was checked against; a change to any needs the Lean re-read
 DIGESTS = {
-    ("sm120", 2, 128, 3, (1, 1)): "987a100a20ddac7d0c3c001823363386f7e00ce3fab6b2bf6baca12dd0100621",
-    ("sm120", 4, 128, 4, (2, 2)): "da4d18d5c67f12d385b0813e7b97cfd2f3aa4b72f556c58a81b3af82532c266e",
-    ("h100", 2, 256, 2, (1, 2)): "781e32adf2b050e15e39d6d4aa7b8371692fed90769838d0ce8f08d318e50268",
+    ("sm120", 2, 128, 3, (1, 1)): "e8c2f1dc2089cb3a260faa982dc4e2300294b75a97519045398c0198684bf8cc1b63dea4140a2cf8ad9e205c245e4aae293f3b69781468940866225ca345c267",
+    ("sm120", 4, 128, 4, (2, 2)): "0c543396657700464262e4797817d5ec7420669f52d0cc3a5e6d775a32d5b16788ec5dd57df82d2d2b258577511120e986c906a70c9899f0bb50644b08601303",
+    ("h100", 2, 256, 2, (1, 2)): "d8112b40ed2b64d509ea1640cc7f7c10792909d228a7193c9e67d9d37d9aaa868c232658600a0b3358f5cf813e55d6550c7d8b6eb1b04ada14bc00200be6c298",
 }
 
 

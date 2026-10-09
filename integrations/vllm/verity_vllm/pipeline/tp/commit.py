@@ -414,7 +414,7 @@ def main(args: Options) -> int:
                     if str(wdoc.get("workload_digest")) == str(pdr_):                 # only a composition the manifest names is of record
                         for q in wdoc.get("requests") or []:
                             spec = str(((q.get("component") or {}).get("specialization")) or "")
-                            digs.update(_re.findall(r'program_digest=\\?"([0-9a-f]{64})', spec))
+                            digs.update(_re.findall(r'program_digest=\\?"([0-9a-f]{128})', spec))
                 except Exception as e:  # noqa: BLE001
                     print(f"[tp2commit] rank {r}: GP-01 workload_program unreadable for the replay's of-record set: {e!r}", flush=True)
             of_record[str(r)] = sorted(digs)
