@@ -11,7 +11,7 @@ family already reads, at each history and registration:
 * the proof file of rep `r` (`proofOf`) holds the messages w holds (`decoded`, at `F.rep`), the verifier's `final_c`
   at the rep's coins, the PCS parameters the verifier pins (`pcsParams`) and the level-0 cap and Ligerito openings
   V*'s layers hold (`cap`, `lig`, parameters of the definition);
-* rep `r`'s stream (`roundsOf`) has one round per coin array of `F.rep`'s rounds (the verifier's coins at `t`), each
+* rep `r`'s stream (`streamRounds`) has one round per coin array of `F.rep`'s rounds (the verifier's coins at `t`), each
   issuing its coins and retaining the frames `verifyRep` absorbs before it (`frameAt`, `run_of_frames`' frames);
 * the link points are the inner transcript's first coin (`ptsOf`), and both reps' tapes the inner transcript's steps
   after them (`Steps`).
@@ -66,33 +66,33 @@ def frameAt (st : Setup) (sch : Flock.Schedule) (dom : ByteArray) (n : ℕ) (p :
     (j - (3 + (st.m - 6) + 2 + (st.fold.kLog - 6) + 1 + (2 + n) + 1)) [])
 
 /-- **A rep's recorded rounds**: round `j` issues the coins `coins[j]` and retains the bytes `fr j`. -/
-def roundsOf (coins : Array (Array F128)) (fr : ℕ → List UInt8) : Array Round :=
+def streamRounds (coins : Array (Array F128)) (fr : ℕ → List UInt8) : Array Round :=
   coins.mapIdx fun j c => { n := c.size, sha := ByteArray.empty, coins := c, bytes := some ⟨(fr j).toArray⟩ }
 
-theorem roundsOf_get {coins : Array (Array F128)} {fr : ℕ → List UInt8} {j : ℕ} (h : j < coins.size) :
-    (roundsOf coins fr)[j]! =
+theorem streamRounds_get {coins : Array (Array F128)} {fr : ℕ → List UInt8} {j : ℕ} (h : j < coins.size) :
+    (streamRounds coins fr)[j]! =
       { n := coins[j].size, sha := ByteArray.empty, coins := coins[j], bytes := some ⟨(fr j).toArray⟩ } := by
-  unfold roundsOf
+  unfold streamRounds
   rw [getElem!_pos _ j (by simpa using h), Array.getElem_mapIdx]
 
-theorem roundsOf_coins (coins : Array (Array F128)) (fr : ℕ → List UInt8) :
-    (roundsOf coins fr).map (·.coins) = coins := by
-  apply Array.ext (by simp [roundsOf])
+theorem streamRounds_coins (coins : Array (Array F128)) (fr : ℕ → List UInt8) :
+    (streamRounds coins fr).map (·.coins) = coins := by
+  apply Array.ext (by simp [streamRounds])
   intro i h₁ h₂
-  simp [roundsOf]
+  simp [streamRounds]
 
-theorem roundsOf_wf (coins : Array (Array F128)) (fr : ℕ → List UInt8) : RoundsWF (roundsOf coins fr) := by
+theorem streamRounds_wf (coins : Array (Array F128)) (fr : ℕ → List UInt8) : RoundsWF (streamRounds coins fr) := by
   intro i hi
-  rw [roundsOf_get (by simpa [roundsOf] using hi)]
+  rw [streamRounds_get (by simpa [streamRounds] using hi)]
 
-theorem roundsOf_retains {coins : Array (Array F128)} {fr : ℕ → List UInt8} {j : ℕ} {L : List UInt8}
-    (h : j < coins.size) (hL : fr j = L) : Retains (roundsOf coins fr)[j]! L := by
-  rw [roundsOf_get h]
+theorem streamRounds_retains {coins : Array (Array F128)} {fr : ℕ → List UInt8} {j : ℕ} {L : List UInt8}
+    (h : j < coins.size) (hL : fr j = L) : Retains (streamRounds coins fr)[j]! L := by
+  rw [streamRounds_get h]
   simp [Retains, hL]
 
-theorem roundsOf_n {coins : Array (Array F128)} {fr : ℕ → List UInt8} {j c : ℕ} (h : j < coins.size)
-    (hc : (coins[j]!).size = c) : ((roundsOf coins fr)[j]!).n = c := by
-  rw [roundsOf_get h]
+theorem streamRounds_n {coins : Array (Array F128)} {fr : ℕ → List UInt8} {j c : ℕ} (h : j < coins.size)
+    (hc : (coins[j]!).size = c) : ((streamRounds coins fr)[j]!).n = c := by
+  rw [streamRounds_get h]
   rw [getElem!_pos coins j h] at hc
   exact hc
 
@@ -242,7 +242,7 @@ def proof (r : ℕ) : Proof := s.proofAt (fin2 r)
 /-- Rep `r`'s stream, for `n` extra claims. -/
 def stream (n r : ℕ) : StreamRec :=
   { name := streamName s.spec r, parent := "", label := "", at_ := 0, rootSha := none,
-    rounds := roundsOf (s.d (fin2 r)).rounds (frameAt s.st s.sch (s.spec.domain s.spec.tables[0]! r).toUTF8 n
+    rounds := streamRounds (s.d (fin2 r)).rounds (frameAt s.st s.sch (s.spec.domain s.spec.tables[0]! r).toUTF8 n
       (s.proof r) (valOf s.sh (s.d (fin2 r)).w (s.d (fin2 r)).comb (s.d (fin2 r)).cons .T)) }
 
 /-- The session record at the link points `P`, for `n` extra claims: the level-0 cap's bytes as the table's `root_B`, and
@@ -385,7 +385,7 @@ theorem points_ok {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptLo
     (pts : Fin 2 → Fin mPts → 𝔽) : PointsOK s.st s.S ptLocal mPts pts (s.points ptLocal mPts pts) :=
   Classical.epsilon_spec (hset.2.2.2.2.2.2.2.2 pts)
 
-theorem stream_wf (n r : ℕ) : RoundsWF (s.stream n r).rounds := roundsOf_wf _ _
+theorem stream_wf (n r : ℕ) : RoundsWF (s.stream n r).rounds := streamRounds_wf _ _
 
 /-- **Both reps' runs of the table files** (`TableFiles.Runs`), by `run_of_frames`: the stream's rounds issue `F.rep`'s
 coins and retain `frameAt`'s bytes. -/
@@ -423,7 +423,7 @@ theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
     ⟨_, rfl⟩
   rw [← htdef]
   have htk : t.k = 0 := by subst htdef; rfl
-  have htr : t.rounds = roundsOf (s.d (fin2 r)).rounds (frameAt s.st s.sch (s.spec.domain s.spec.tables[0]! r).toUTF8
+  have htr : t.rounds = streamRounds (s.d (fin2 r)).rounds (frameAt s.st s.sch (s.spec.domain s.spec.tables[0]! r).toUTF8
       e.size (s.proof r) (valOf s.sh (s.d (fin2 r)).w (s.d (fin2 r)).comb (s.d (fin2 r)).cons .T)) := by
     subst htdef; rfl
   have htp : t.pending = Transcript.header 1 0 (s.spec.domain s.spec.tables[0]! r).toUTF8.size ++
@@ -433,9 +433,9 @@ theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
   have hR : ∀ j, j < (s.d (fin2 r)).rounds.size →
       Retains t.rounds[j]! (frameAt s.st s.sch (s.spec.domain s.spec.tables[0]! r).toUTF8 e.size (s.proof r)
         (valOf s.sh (s.d (fin2 r)).w (s.d (fin2 r)).comb (s.d (fin2 r)).cons .T) j) :=
-    fun j hj => by rw [htr]; exact roundsOf_retains hj rfl
+    fun j hj => by rw [htr]; exact streamRounds_retains hj rfl
   have hN : ∀ j c, j < (s.d (fin2 r)).rounds.size → ((s.d (fin2 r)).rounds[j]!).size = c → (t.rounds[j]!).n = c :=
-    fun j c hj hc => by rw [htr]; exact roundsOf_n hj hc
+    fun j c hj hc => by rw [htr]; exact streamRounds_n hj hc
   have hcl' : ∀ j, 3 + (s.st.m - 6) ≤ j → j < 3 + (s.st.m - 6) + 2 + (s.st.fold.kLog - 6) + 1 →
       ((s.d (fin2 r)).rounds[j]!).size = 1 := fun j h₁ h₂ => by
     have h := hcl (j - (3 + (s.st.m - 6))) (by omega)
@@ -447,7 +447,7 @@ theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
     ⟨hN j 1 (by omega) (hcl' j h₁ h₂), answers_of_retains (hL ▸ hR j (by omega))⟩
   obtain ⟨t₄, hrun, hk⟩ := FlockVBridge.Runs.run_of_frames s.sh (s.d (fin2 r)) (halg (fin2 r)).1 (halg (fin2 r)).2
     s.st s.sch
-    (s.proof r) b e t htk (by rw [htr, roundsOf_coins]) (by rw [htr]; exact roundsOf_wf _ _) hshm.symm hm14
+    (s.proof r) b e t htk (by rw [htr, streamRounds_coins]) (by rw [htr]; exact streamRounds_wf _ _) hshm.symm hm14
     (hkL.trans hshk.symm) hshk.symm hkm hxe hes hshs hf hb (fun _ _ _ h => proofOf_zc h) ⟨rfl, rfl⟩ rfl rfl rfl rfl
     (beq_self_eq_true _) (hcomb (fin2 r)) (hopen (fin2 r))
     (by rw [htk]; exact hN 0 6 (by omega) hc0)

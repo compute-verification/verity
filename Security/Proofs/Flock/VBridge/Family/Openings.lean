@@ -20,7 +20,7 @@ whenever a level climbs (`H ≥ 1`). This file reads the openings from the layer
   (`chainOf`, `rec_outer.chain_order`: rep-major, then level, then query) position `p`'s row of `rec-acc` the `acc`
   input of the opening at `p`, or, past the last, the `acc_out` output of the last; `α` the one `verifierRows`' Ligerito
   run draws for the level (`ConsCtx.alpha`, `RecAlgebra.queryFold`).
-* `hUL_of`: `HUL` at those definitions, from the openings' units (`HOpenUnits`, `HOne`), the registered `coef` read in
+* `hUL_of`: `HUL` at those definitions, from the openings' units (`HOpenUnits`, `HOneOpen`), the registered `coef` read in
   the layer being the verifier's (`HCoefCols`) and the openings reading and writing one function `V`, the rows of the
   registration's `rec-acc` (`HAccRows`). `hReads_of`: `HReads`, from `HAccRows` and the algebra reading `V` at the reps'
   ends (`HEnds`, which `readsEnds_of_regBits` gives).
@@ -523,7 +523,7 @@ def HOpenUnits : Prop :=
     ∃ H, Flock.RecOpen.params (F.Vs (F.sessO ℓ)).c.unit.name = some (levelLanes F.sh ℓ, H)
 
 /-- **The openings' constants**: at every accepted outer proof, each opening's unit carries 1 on its constant gate. -/
-def HOne : Prop :=
+def HOneOpen : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, layers F.zs dg N k Rw R ω t R₂ τ (F.sessO ℓ)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sessO ℓ)).c (F.Vs (F.sessO ℓ)).hU (F.Vs (F.sessO ℓ)).nv)
@@ -556,10 +556,10 @@ def HEnds (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → A
       (F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r)
 
 /-- **`HUL` at the family's openings read off the layers**: when `rows` and `acc` are `rowsOf` and `accOf`, every
-opening's unit is the verifier's (`HOpenUnits`) and carries 1 on its constant (`HOne`), reads the verifier's `coef`
+opening's unit is the verifier's (`HOpenUnits`) and carries 1 on its constant (`HOneOpen`), reads the verifier's `coef`
 (`HCoefCols`), and the openings read and write one function `V` (`HAccRows`), `HUL` holds. -/
 theorem hUL_of (hrows : F.rows = F.rowsOf) (hacc : F.acc = F.accOf) (hU : F.HOpenUnits)
-    (hone : F.HOne dg N k Rw) (hcoef : F.HCoefCols dg N k Rw)
+    (hone : F.HOneOpen dg N k Rw) (hcoef : F.HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V) :
     F.HUL dg N k Rw := by
   intro R ω t R₂ τ o h r ℓ hℓ j hj
@@ -727,7 +727,7 @@ and `acc` the layers' (`rowsOf`, `accOf`), `HUL` from `hUL_of` and `HReads` from
 theorem vbridge_of_openings (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hrows : F.rows = F.rowsOf) (hacc : F.acc = F.accOf) (hst : F.HStruct GS gs)
-    (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hU : F.HOpenUnits) (hone : F.HOne dg N k Rw)
+    (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hU : F.HOpenUnits) (hone : F.HOneOpen dg N k Rw)
     (hcoef : F.HCoefCols dg N k Rw) (hn : 0 < F.nOpen)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : F.HEnds dg N k Rw V) (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw)
