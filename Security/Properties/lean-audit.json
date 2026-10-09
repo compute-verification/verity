@@ -2558,7 +2558,7 @@
    ]
   },
   "Properties.Pouw": {
-   "digest": "85111b8ca1647e5b6f4ae015a39e757d5d60430dbb0be2a1b9f2646818e4b43a",
+   "digest": "66423f4118c92ff184a122c1b88e2926f42f01df70de8d3ba866765df679736e",
    "definitions": {
     "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
     "Properties.Pouw.Window.BucketCost": "ef0d49364a07c1f1c1b5f69c8b1bf9b65a5b57b6ad2366ad5eeb9c2e596d92ae",
@@ -2576,7 +2576,7 @@
     "Properties.Pouw.Window.KPrimeServed": "e04552a46d5011cfc207a623075a274ffe4168fe4a8b619416f5de983f472110",
     "Properties.Pouw.Window.LevelsCount": "1bcac3f171f96710f98d462ef2d8e56f9b545dbdc27886ecc16b9f4fb905e21f",
     "Properties.Pouw.Window.LevelsCounted": "bbd9eca6299e815a14b2313cd595e60ec3ad63d26af8a77cc486a3c922aaa946",
-    "Properties.Pouw.Window.LevelsServed": "8939fce20beabba6deb02af1e5c94d9a4827a24dd33231154253b5c6f54b5a3d",
+    "Properties.Pouw.Window.LevelsServed": "8818e1099384056fbd32cc663eade08353f0cafaf9a4ddf204365c09df8e54dc",
     "Properties.Pouw.Window.MissBounded": "84d67aac897f07ce71cf2bf930986308c15e790f9254261c16508b6b47284651",
     "Properties.Pouw.Window.OnGridMeans": "11221385b030c8c17293bcc576648b983701308b3847b5c7cc156126293d653c",
     "Properties.Pouw.Window.PadLeast": "b79e79eb5db0f9e0b5c04d50d4dc9ed012bed6c105931ff891059743cec23e88",
