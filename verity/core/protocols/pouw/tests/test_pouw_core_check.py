@@ -310,6 +310,7 @@ DRAW_EXPECT = {
     "foreign": ("coin", "the draw's coin does not open"), "tampered": ("coin", "the draw's coin does not open"),
     "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
+    "early-coins-live": ("coin", "the draw's coin does not open"),
 }
 
 

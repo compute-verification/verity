@@ -26,9 +26,11 @@ from verity.ml.randomness import derive
 class Coins:
     """An epoch's challenger under a coin scheme of `core_check.COIN_VERSIONS` (`coins.Challenger`'s, any version)."""
 
-    def __init__(self, rng: random.Random, epoch: int, scheme: str = Co.SCHEME) -> None:
+    def __init__(self, rng: random.Random, epoch: int, scheme: str = Co.SCHEME, early: bool = False) -> None:
         keep = CC.COIN_VERSIONS[scheme][0]
-        dom = CommitmentDomain(tagged(scheme, epoch)[:keep], -1, RangeIndexedDomain(len(Co.LABELS)), hash="sha512")
+        binding = CC.tagged_sha256(scheme, epoch) if early else tagged(scheme, epoch)[:keep]
+        dom = CommitmentDomain(binding, -1, RangeIndexedDomain(len(Co.LABELS)), hash="sha512")
+        self.early = early
         self.coins = {label: (rng.randbytes(Co.COIN_BYTES), rng.randbytes(Co.HM96.salt_bytes)) for label in Co.LABELS}
         self.tree = MerkleTree(dom, {i: Co.leaf_value(*self.coins[label]) for i, label in enumerate(Co.LABELS)},
                                lambda _: scheme)
@@ -258,17 +260,24 @@ def _receipt(rng: random.Random, reg: str) -> dict:
             "verifier": f"served-zk/challenger/{rng.choice(['window', 'ctl-x'])}"}
 
 
-def honest_draw(rng: random.Random, scheme: str | None = None, many: bool = False) -> tuple[dict, Coins]:
-    """An honest draw under `scheme` (any version by default); `many` draws at least one unit of at least 50."""
-    ch = Coins(rng, rng.randrange(4), scheme or rng.choice([Co.SCHEME, Co.SCHEME, CC.COINS_RECORDED]))
+def honest_draw(rng: random.Random, scheme: str | None = None, many: bool = False, early: bool | None = None
+                ) -> tuple[dict, Coins]:
+    """An honest draw under `scheme` (any version by default, `CC.COIN_EARLY`'s binding included, `early`);
+    `many` draws at least one unit of at least 50."""
+    scheme = scheme or rng.choice([Co.SCHEME, Co.SCHEME, CC.COINS_RECORDED, Co.SCHEME])
+    early = (scheme == Co.SCHEME and rng.random() < 0.3) if early is None else early
+    ch = Coins(rng, rng.randrange(4), scheme, early)
     reg, stream = rng.randbytes(64).hex(), rng.randbytes(64).hex()
     receipt = _receipt(rng, reg)
     n = rng.choice([50, rng.randint(50, 5000), rng.randint(50, 1 << 40)] + ([] if many else [1, 2, 7]))
     k = rng.randint(1 if many else 0, min(n, 12))
     opening = ch.open("draw", bytes.fromhex(reg))
-    key = derive(bytes.fromhex(opening["coin"]), CC.DRAW_DOMAIN, CC.draw_key_context(stream, reg, receipt))
-    units = CC.stream_subset(k, n, key.stream("draw", 2 * k * CC.width(n) + 64))
-    return {"coins": ch.commitment, "recorded": ch.scheme != Co.SCHEME or rng.random() < 0.3, "opening": opening,
+    ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
+    coin = bytes.fromhex(opening["coin"])
+    src = CC.stream_v1(CC.derive_v1(coin, CC.DRAW_DOMAIN, ctx), "draw", size) if ch.early else \
+        derive(coin, CC.DRAW_DOMAIN, ctx).stream("draw", size)
+    units = CC.stream_subset(k, n, src)
+    return {"coins": ch.commitment, "recorded": ch.scheme != Co.SCHEME or ch.early or rng.random() < 0.3, "opening": opening,
             "stream": stream, "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units}, ch
 
 
@@ -277,7 +286,7 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
     match name:
         case "verifier-coins":
             d["coins"] = rng.choice([None, {**d["coins"], "root": "00"}, {**d["coins"], "scheme": "x"}])
-        case "recorded-scheme":
+        case "recorded-scheme" | "early-coins-live":
             d["recorded"] = False
         case "registration":
             d["registration"] = rng.choice([d["registration"].upper(), d["registration"][:-2], None, 5])
@@ -299,7 +308,7 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
         case "epoch":
             d["opening"] = {**o, "epoch": o["epoch"] + 1}
         case "foreign":
-            d["opening"] = Coins(rng, ch.epoch, ch.scheme).open("draw", bytes.fromhex(d["registration"]))
+            d["opening"] = Coins(rng, ch.epoch, ch.scheme, ch.early).open("draw", bytes.fromhex(d["registration"]))
         case "tampered":
             d["opening"] = {**o, "salt": _flip(o["salt"])}
         case "early":
@@ -322,12 +331,13 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
 
 
 DRAW_NAMES = ["verifier-coins", "recorded-scheme", "registration", "stream", "receipt", "law", "opening-form", "label",
-              "epoch", "foreign", "tampered", "early", "units", "other-key"]
+              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live"]
 
 
 def draw_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `draw` case: an honest draw, then mutation `name`."""
-    d, ch = honest_draw(rng, CC.COINS_RECORDED if name == "recorded-scheme" else None, name in ("units", "other-key"))
+    d, ch = honest_draw(rng, CC.COINS_RECORDED if name == "recorded-scheme" else Co.SCHEME if name == "early-coins-live" else None,
+                        name in ("units", "other-key"), True if name == "early-coins-live" else None)
     if name != "honest":
         _mutate_draw(d, ch, name, rng)
     return d

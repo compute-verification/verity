@@ -187,3 +187,8 @@ def test_pass_and_draw(pass_server):
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
     assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon"}
     assert "draw accept" in PASSED and len(PASSED) > 40
+    for seed in range(4):   # `COIN_EARLY`'s draws: accepted only as a replay of a recorded run, by both sides
+        early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)
+        live = {**early, "recorded": False}
+        assert (draw(early), draw(live)["refused"][0]) == (None, "coin")
+        D.replay(DRAW, early, pass_server), D.replay(DRAW, live, pass_server)

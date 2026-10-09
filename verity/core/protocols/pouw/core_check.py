@@ -28,7 +28,8 @@ file opens the unit's rows under the registered window root, through its entry a
 `pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
-and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`.
+and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
+and a replay of a recorded draw `COIN_EARLY` too.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -50,7 +51,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.ml.commitments.rowleaf import row_leaf
-from verity.ml.randomness import derive
+from verity.ml.randomness import derive, frame
 
 ID = "verity/pouw/v1"
 ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
@@ -626,6 +627,10 @@ MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
 COINS_RECORDED = "verity/pouw/epoch-coins/v2"
 #: a coin commitment's scheme: (the bytes of `tagged` its binding and the weights' root keep, the weights' root's tag)
 COIN_VERSIONS = {Co.SCHEME: (64, "verity/pouw/weights/v1"), COINS_RECORDED: (32, "verity/pouw/weights/v2")}
+#: the e2e-service's first coin commitments (r20261006-08…, -19… to -21…), named `coins.SCHEME` but on SHA-256 as core
+#: was then: bound by `tagged_sha256`, and the draw's key and stream `derive_v1`'s.  Only a replay of a recorded draw
+#: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
+COIN_EARLY = Co.SCHEME
 DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
 _OPENING = "a coin opening is {epoch, label, after, coin, salt, path}: an integer, a string, hex, and SHA-512 digests"
 _MATMULS = "the pass's matmuls are not a list of objects with integer index, m, k, n and weight"
@@ -665,23 +670,54 @@ def opening_of(j: Any) -> Co.CoinOpening:
     return Co.CoinOpening(j["epoch"], j["label"], *hexes, tuple(path))
 
 
-def coin_reason(c: tuple[str, int, bytes], o: Co.CoinOpening, label: str, after: bytes) -> str | None:
-    """`coins.coin_reason` under commitment `c`'s scheme (`COIN_VERSIONS`)."""
+def tagged_sha256(tag: str, *parts: Any) -> bytes:
+    """`protocol.tagged` as it was on SHA-256 (`COIN_EARLY`'s binding)."""
+    return hashlib.sha256(tag.encode() + b"\0" + b"".join(frame(p) for p in parts)).digest()
+
+
+def derive_v1(source: bytes, domain: str, context: dict) -> bytes:
+    """`randomness.derive` as it was (``verity/randomness/derive/v1``, SHA-256): `COIN_EARLY`'s draw key."""
+    ctx = b"".join(frame(k) + frame(context[k]) for k in sorted(context))
+    return hashlib.sha256(b"verity/randomness/derive/v1\0" + frame(source) + frame(domain) + frame(ctx)).digest()
+
+
+def stream_v1(key: bytes, index: str, n: int) -> bytes:
+    """`Key.stream` as it was (``verity/randomness/stream/v1``, SHA-256 blocks): `COIN_EARLY`'s draw stream."""
+    head = b"verity/randomness/stream/v1\0" + key + frame(frame(index))
+    return b"".join(hashlib.sha256(head + c.to_bytes(8, "big")).digest() for c in range((n + 31) // 32))[:n]
+
+
+def coin_version(c: tuple[str, int, bytes], o: Co.CoinOpening, label: str, after: bytes, early: bool = False
+                 ) -> tuple[str | None, bool]:
+    """`coins.coin_reason` under commitment `c`'s scheme (`COIN_VERSIONS`), and whether the coin opened under
+    `COIN_EARLY`'s binding, which `early` also tries when the current one doesn't open."""
     scheme, epoch, root = c
     if o.epoch != epoch:
-        return f"coin is epoch {o.epoch}'s, not epoch {epoch}'s"
+        return f"coin is epoch {o.epoch}'s, not epoch {epoch}'s", False
     if o.label != label:
-        return f"coin is the epoch's {o.label!r} coin, not its {label!r} coin"
+        return f"coin is the epoch's {o.label!r} coin, not its {label!r} coin", False
     if len(o.coin) != Co.COIN_BYTES or len(o.salt) != Co.HM96.salt_bytes:
-        return "coin opening is malformed"
-    dom = CommitmentDomain(tagged(scheme, epoch)[:COIN_VERSIONS[scheme][0]], -1, RangeIndexedDomain(len(Co.LABELS)),
-                           hash="sha512")
-    if not verify_opening(dom, Commitment(root, len(Co.LABELS)),
-                          Opening(Co.LABELS.index(label), Co.leaf_value(o.coin, o.salt), o.path), scheme, VerificationLimits()):
-        return "coin does not open against the epoch's coin commitment"
+        return "coin opening is malformed", False
+
+    def opens(binding: bytes) -> bool:
+        return verify_opening(CommitmentDomain(binding, -1, RangeIndexedDomain(len(Co.LABELS)), hash="sha512"),
+                              Commitment(root, len(Co.LABELS)),
+                              Opening(Co.LABELS.index(label), Co.leaf_value(o.coin, o.salt), o.path), scheme,
+                              VerificationLimits())
+    if opens(tagged(scheme, epoch)[:COIN_VERSIONS[scheme][0]]):
+        old = False
+    elif early and scheme == COIN_EARLY and opens(tagged_sha256(scheme, epoch)):
+        old = True
+    else:
+        return "coin does not open against the epoch's coin commitment", False
     if o.after != after:
-        return "coin was not opened after what the verifier recorded"
-    return None
+        return "coin was not opened after what the verifier recorded", old
+    return None, old
+
+
+def coin_reason(c: tuple[str, int, bytes], o: Co.CoinOpening, label: str, after: bytes) -> str | None:
+    """`coins.coin_reason` under commitment `c`'s scheme (`COIN_VERSIONS`)."""
+    return coin_version(c, o, label, after)[0]
 
 
 def weights_root(scheme: str, roots: dict[int, bytes]) -> bytes:
@@ -862,10 +898,11 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
         o = opening_of(opening)
     except Refused as e:
         return "coin", f"the draw's {e}"
-    why = coin_reason(c, o, "draw", bytes.fromhex(registration))
+    why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
     if why is not None:
         return "coin", f"the draw's {why}"
-    src = derive(o.coin, DRAW_DOMAIN, draw_key_context(stream, registration, receipt)).stream("draw", 2 * k * width(population) + 64)
+    ctx, n = draw_key_context(stream, registration, receipt), 2 * k * width(population) + 64
+    src = stream_v1(derive_v1(o.coin, DRAW_DOMAIN, ctx), "draw", n) if old else derive(o.coin, DRAW_DOMAIN, ctx).stream("draw", n)
     got = stream_subset(k, population, src)
     if got is None:
         return "sampler", "the draw's stream ran out"

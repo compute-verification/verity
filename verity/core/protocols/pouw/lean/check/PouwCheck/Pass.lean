@@ -17,7 +17,9 @@ Either way the manifest's salt must be the epoch's. A refusal is `coin` (the coi
 receipt.
 
 Both read the coin versions of `coinVersion`: the current one, whose binding and weights' root are `tagged`'s whole
-SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', which keep its first 32 bytes.
+SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', which keep its first 32 bytes. A replay of a
+recorded draw also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
+then: bound by `taggedSha256`, after the current binding, and drawn by `deriveV1` and `streamV1`.
 -/
 
 namespace PouwCheck
@@ -78,17 +80,45 @@ def openingOf (j : Json) : Except String CoinOpening := do
   let some path := ps.toList.mapM fun p => (hex? p).filter (·.size == 64) | throw OPENING_FORM
   pure ⟨epoch, label, after, coin, salt, path⟩
 
-/-- `core_check.coin_reason`: `coins.coin_reason` under the commitment's scheme. -/
-def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) := do
+/-- `core_check.tagged_sha256`: `tagged` as it was on SHA-256, the binding of `COIN_EARLY`. -/
+def taggedSha256 (tag : String) (parts : List PouwCommit.Part) : ByteArray :=
+  Flock.Sha256.hash (parts.foldl (fun acc p => acc ++ PouwCommit.frame p) (tag.toUTF8.push 0))
+
+/-- `core_check.derive_v1`: `derive` as it was (`verity/randomness/derive/v1`, SHA-256), `COIN_EARLY`'s draw key. -/
+def deriveV1 (source : ByteArray) (domain : String) (context : List (String × PouwCommit.Part)) : ByteArray :=
+  let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
+    (fun acc kv => acc ++ PouwCommit.frame (.str kv.1) ++ PouwCommit.frame kv.2) ByteArray.empty)
+  Flock.Sha256.hash ("verity/randomness/derive/v1".toUTF8.push 0 ++ PouwCommit.frame (.bytes source) ++
+    PouwCommit.frame (.str domain) ++ PouwCommit.frame (.bytes ctx))
+
+/-- `core_check.stream_v1`: `Key.stream` as it was (`verity/randomness/stream/v1`, SHA-256 blocks), `COIN_EARLY`'s draw
+stream. -/
+def streamV1 (key : ByteArray) (index : List PouwCommit.Part) (n : Nat) : ByteArray :=
+  let head := "verity/randomness/stream/v1".toUTF8.push 0 ++ key ++ FlockSoundness.Randomness.frames index
+  ((List.range ((n + 31) / 32)).foldl (fun acc c => acc ++ Flock.Sha256.hash (head ++ PouwCommit.be8 c))
+    ByteArray.empty).extract 0 n
+
+/-- `core_check.coin_version`: `coins.coin_reason` under the commitment's scheme, and whether the coin opened under the
+binding of the e2e-service's first coin commitments (`COIN_EARLY`: `PouwCommit.SCHEME` bound by `taggedSha256`), which
+`early` also tries when the current one doesn't open. -/
+def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) (early : Bool) :
+    Except String (Option String × Bool) := do
   let rank := if label == "salt" then 0 else 1
-  if o.epoch != c.epoch then return some s!"coin is epoch {o.epoch}'s, not epoch {c.epoch}'s"
-  if o.label != label then return some s!"coin is the epoch's {pyRepr o.label} coin, not its {pyRepr label} coin"
-  if o.coin.size != PouwCommit.COIN_BYTES || o.salt.size != 192 then return some "coin opening is malformed"
-  let d ← Domain.mk? .sha512 ((tagged c.scheme [.int c.epoch]).extract 0 c.keep) (-1) 2
-  if !(← d.verify c.root rank (leafValue o.coin o.salt) o.path fun v => pure (d.leaf rank c.scheme v)) then
-    return some "coin does not open against the epoch's coin commitment"
-  if o.after != after then return some "coin was not opened after what the verifier recorded"
-  return none
+  if o.epoch != c.epoch then return (some s!"coin is epoch {o.epoch}'s, not epoch {c.epoch}'s", false)
+  if o.label != label then return (some s!"coin is the epoch's {pyRepr o.label} coin, not its {pyRepr label} coin", false)
+  if o.coin.size != PouwCommit.COIN_BYTES || o.salt.size != 192 then return (some "coin opening is malformed", false)
+  let opens (b : ByteArray) : Except String Bool := do
+    let d ← Domain.mk? .sha512 b (-1) 2
+    d.verify c.root rank (leafValue o.coin o.salt) o.path fun v => pure (d.leaf rank c.scheme v)
+  let old ← if ← opens ((tagged c.scheme [.int c.epoch]).extract 0 c.keep) then pure false
+    else if early && c.scheme == PouwCommit.SCHEME && (← opens (taggedSha256 c.scheme [.int c.epoch])) then pure true
+    else return (some "coin does not open against the epoch's coin commitment", false)
+  if o.after != after then return (some "coin was not opened after what the verifier recorded", old)
+  return (none, old)
+
+/-- `core_check.coin_reason`: `coins.coin_reason` under the commitment's scheme. -/
+def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
+  (·.1) <$> coinVersionAt c o label after false
 
 /-- `core_check.weights_root`: `audit.weights_root` under a scheme's version. -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
@@ -218,10 +248,14 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
   if !(1 ≤ n && k ≤ n) then throw ("draw", "the law is not subset:k over N with k <= N and N >= 1")
   let o ← (openingOf opening).mapError fun e => ("coin", s!"the draw's {e}")
   let after ← port (pyFromHex reg)
-  if let some why := (← port (coinReasonAt c o "draw" after)) then coin s!"the draw's {why}"
-  let key ← port (PouwCommit.key? o.coin DRAW_DOMAIN
-    [("stream", FlockSoundness.Randomness.Part.str st), ("registration", FlockSoundness.Randomness.Part.str reg), ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest kvs))])
-  let some got := Flock.Draw.subset k n (FlockSoundness.Randomness.stream key [.str "draw"] (2 * k * Flock.Draw.width n + 64))
+  let (why, old) ← port (coinVersionAt c o "draw" after recorded)
+  if let some why := why then coin s!"the draw's {why}"
+  let ctx := [("stream", FlockSoundness.Randomness.Part.str st), ("registration", FlockSoundness.Randomness.Part.str reg),
+    ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest kvs))]
+  let bytes := 2 * k * Flock.Draw.width n + 64
+  let src ← if old then pure (streamV1 (deriveV1 o.coin DRAW_DOMAIN ctx) [.str "draw"] bytes)
+    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? o.coin DRAW_DOMAIN ctx)) [.str "draw"] bytes)
+  let some got := Flock.Draw.subset k n src
     | throw ("sampler", "the draw's stream ran out")
   let same := match units with
     | .arr us => us.toList.mapM PouwWindow.natOf? == some got.toList
