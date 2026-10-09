@@ -15,9 +15,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `statement`, `verdicts` (`{name: {"accepted": true | false | null, "of_record", ...}}`, each verifier's verdict on the
   drawn units' sessions), `sessions`, `served`, `session_roots` and `session_registered` (each null when absent);
 * **check**: R1–R7 (`Registration.check`), then the record's checks (the draw, the proved units, the receipt, the served
-  draw, the sessions' roots, the roots the sessions' registered reads were opened against). It rejects when one fails or a verdict that ran did not accept; it is
-  undecided when they all hold but no verifier of record accepted because none is named or one has not run; and it
-  accepts exactly when `audit_record` does;
+  draw, the sessions' roots, the roots the sessions' registered reads were opened against). It rejects when one fails or
+  a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
+  is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound`; null for a
   Bernoulli law, whose bound is a float in Python), and the **profile** is `audit.profile`'s `IntegrityProfile`: one level
   `unit`, the partition's units, drawn by the verifier's law.
