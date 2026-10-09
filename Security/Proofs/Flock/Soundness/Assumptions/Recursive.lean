@@ -1,7 +1,10 @@
 import Proofs.Flock.Recursive.StageRead
 
 /-!
-# The recursive audit's one new assumption: V*'s bridge (trusted)
+# V*'s bridge: the recursive audit's open obligation
+
+`VBridge` is a fact about our own code (V*'s circuits and the verifier), not about the world, so it is an obligation,
+not a premise: it is discharged by `Proofs.Flock.VBridge` (VBridge G), and stays a hypothesis only until that lands.
 
 In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's firewall sends the auditor a salted
 SHA-512 commitment to each inner round message, relays the auditor's live coin for the round, and afterwards proves, in
@@ -22,7 +25,10 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 
-/-- **`v-bridge`: V*'s circuits compute the inner verifier** (V*'s session `j` is of the circuit `(Vs j).c`, pinned by
+/-- Obligation: discharged by VBridge G (`Proofs.Flock.VBridge`), with `VCommits` derived there from acceptance
+(`PubCommits`).
+
+**`v-bridge`: V*'s circuits compute the inner verifier** (V*'s session `j` is of the circuit `(Vs j).c`, pinned by
 its file's digest through `ZkOuter.hc`, under the law `(Vs j).law`; `k, Rw` the count curve's). Four facts about V*'s
 circuits, laws and inputs, each read at every history `(R, ω, t)` (the registration, the draw of the hidden circuit's
 units, the rounds' commitments and coins) and every registration `R₂` of the outer proof (`outerV`: the values V*'s
