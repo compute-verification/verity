@@ -243,6 +243,60 @@ def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     assert LA.build_key("pkg/a", root) != ka
 
 
+def _outputs(pkg: Path, module: str) -> list[Path]:
+    """The files Lake writes for ``module`` in ``pkg``'s `.lake/build`."""
+    *path, last = module.split(".")
+    lib, ir = pkg.joinpath(".lake", "build", "lib", "lean", *path), pkg.joinpath(".lake", "build", "ir", *path)
+    return [lib / f"{last}{ext}" for ext in (".olean", ".olean.server", ".olean.private", ".ilean", ".trace", ".olean.hash")] + \
+        [ir / f"{last}{ext}" for ext in (".c", ".c.hash")]
+
+
+def test_a_kept_build_keeps_the_outputs_of_a_package_whose_sources_are_above_it(tmp_path):
+    """`prune` looked for `A/B.lean` beside the lakefile, but a package with `srcDir = ".."` (Security/Proofs, Security/Properties)
+    keeps `Proofs.Core` in `Security/Proofs/Core.lean`, one directory up from where the module name puts it. So every run
+    deleted those two packages' whole kept builds as stale and built them cold: dd21 (r20261009-035518-dd21) removed 7,656 and
+    320 outputs (957 and 40 modules, 8 files each), and spent 2,067 s and 384 s building them, one after the other, of
+    lean-audit's 3,016 s."""
+    top = tmp_path / "Spec"
+    files = {"Spec/lakefile.toml": 'name = "spec"\n', "Spec/Defs.lean": "", "Spec/Defs/A.lean": "",
+             "Spec/Proofs/lakefile.toml": 'name = "proofs"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n',
+             "Spec/Proofs/Core.lean": "", "Spec/Proofs/Core/Deep.lean": ""}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text)
+    kept = [p for m in ("Proofs.Core", "Proofs.Core.Deep") for p in _outputs(top / "Proofs", m)]
+    stale = _outputs(top / "Proofs", "Proofs.Gone") + _outputs(top / "Proofs", "Core")       # where the old prune looked
+    for p in kept + stale:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("built")
+    assert LA.prune(top / "Proofs") == len(stale)
+    assert all(p.is_file() for p in kept) and not any(p.exists() for p in stale)
+    spec = [p for m in ("Defs", "Defs.A") for p in _outputs(top, m)]
+    for p in spec + _outputs(top, "Proofs.Core"):                   # a nested package's module is not the spec's
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("built")
+    assert LA.prune(top) == len(_outputs(top, "Proofs.Core")) and all(p.is_file() for p in spec)
+
+
+def test_a_kept_build_of_each_real_package_keeps_every_module(tmp_path):
+    """Every audited package's own modules survive `prune`, whatever its `srcDir`, and an output of no module goes."""
+    files = LA.COMMON.tracked_files(ROOT)
+    for f in files:
+        if f.endswith(".lean") or f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean"):
+            (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / f).write_bytes((ROOT / f).read_bytes() if f.endswith("lakefile.toml") else b"")
+    for pkg in LA.packages(files):
+        modules = sorted(LA.AUDIT.lean_modules(ROOT / pkg))
+        assert modules, pkg
+        outs = [p for m in modules for p in _outputs(tmp_path / pkg, m)]
+        stale = _outputs(tmp_path / pkg, f"{modules[0].split('.')[0]}.NoSuchModule")
+        for p in outs + stale:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("built")
+        assert LA.prune(tmp_path / pkg) == len(stale), pkg
+        assert all(p.is_file() for p in outs), pkg
+
+
 def test_a_moved_package_takes_the_build_it_left(tmp_path, monkeypatch):
     """A kept build is keyed by the package's toolchain, manifest and lakefile, not its path or the paths to what it requires:
     after a move, its build comes in warm, and Lake reuses it where the package is now (`.lake/build` survives a move)."""
@@ -375,8 +429,11 @@ def test_every_file_the_step_loads_is_in_its_key():
 
     files = LA.COMMON.tracked_files()
     got = LA.inputs("Security/Proofs", files)
-    loaded = re.findall(r'_module\(ROOT / "tools" / "verity" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/verity/lean/lean_audit.py").read_text())
+    src = (ROOT / "tools/verity/lean/lean_audit.py").read_text()
+    loaded = re.findall(r'_module\(ROOT / "tools" / "verity" / "check" / "([a-z_]+\.py)"', src)
     assert loaded == ["common.py"] and all(f"tools/verity/check/{m}" in got for m in loaded)
+    auditor = re.findall(r'_module\(ROOT / "tools" / "verity" / "lean" / "([a-z_]+\.py)"', src)
+    assert auditor == ["check.py"] and all(f"tools/verity/lean/{m}" in got for m in auditor)
     assert "tools/verity/check/check.py" not in got
     for node in ast.walk(ast.parse((ROOT / "tools/verity/check/common.py").read_text())):
         names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module] if isinstance(node, ast.ImportFrom) else []

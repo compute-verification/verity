@@ -95,6 +95,8 @@ def _module(path: Path, name: str):
 
 #: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them) and `common.py` (`test_lean_audit.py` holds it)
 COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
+#: the auditor, for how it names a package's modules (`lean_modules`, which follows each `srcDir`)
+AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_audit")
 
 
 def _sha(p: Path) -> str:
@@ -476,12 +478,16 @@ def build_key(pkg: str, root: Path) -> str:
 
 
 def prune(pkg: Path) -> int:
-    """Remove the kept outputs of modules whose source is gone, so no `.olean` outlives its `.lean`; the number removed."""
+    """Remove the kept outputs of modules whose source is gone, so no `.olean` outlives its `.lean`; the number removed. An
+    output is named by its module (`lib/lean/A/B.olean`, `ir/A/B.c`), and the module's source is found where Lake finds it,
+    under the package's `srcDir`s (`audit.lean_modules`): `Security/Proofs`, with `srcDir = ".."`, keeps `Proofs.Core` in
+    `Security/Proofs/Core.lean`."""
+    modules = set(AUDIT.lean_modules(pkg))
     n = 0
     for sub in ("lib/lean", "ir"):
         base = pkg / ".lake" / "build" / sub
         for f in sorted(base.rglob("*")) if base.is_dir() else ():
-            if f.is_file() and not (pkg / f.relative_to(base).parent / (f.name.split(".")[0] + ".lean")).is_file():
+            if f.is_file() and ".".join([*f.relative_to(base).parent.parts, f.name.split(".")[0]]) not in modules:
                 f.unlink()
                 n += 1
     return n
