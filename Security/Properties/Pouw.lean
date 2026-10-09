@@ -79,7 +79,7 @@ def LevelsCount : Prop :=
 /-- The served grid's sizes: 304 levels for 1 to 2⁴⁰ tiles, 161 for 2¹⁰ to 2³⁰; the window's one public output, its
 level, so takes at most 9 bits, within a proof unit's 16. -/
 def LevelsServed : Prop :=
-  levels gridBits 1 (2 ^ 40) = 304 ∧ levels gridBits (2 ^ 10) (2 ^ 30) = 161 ∧ 304 ≤ 2 ^ 9
+  levels gridBits 1 (2 ^ 40) = 304 ∧ levels gridBits (2 ^ 10) (2 ^ 30) = 161 ∧ levels gridBits 1 (2 ^ 40) ≤ 2 ^ 9
 
 /-- A window of 8192 real tiles registers level 87: credited 8192, padded to 9216. -/
 def Bucket8192 : Prop := bucket gridBits 8192 = ⟨87, 8192, 9216⟩
