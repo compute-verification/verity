@@ -295,7 +295,8 @@ def DigestIsRecord's : Prop :=
 
 /-- An acceptance whose profile draws by a Bernoulli law publishes no bound on wrong units. -/
 def BernoulliBoundsNothing : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) (r : Core.Ratio),
-    OneStage.check p c e = .accept pub prof → (∃ l ∈ prof.levels, l.draw = some (.bernoulli r)) → pub.bound = none
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+    OneStage.check p c e = .accept pub prof →
+      ∀ r : Core.Ratio, (∃ l ∈ prof.levels, l.draw = some (.bernoulli r)) → pub.bound = none
 
 end Properties.SampledProofs

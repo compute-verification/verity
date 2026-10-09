@@ -1001,7 +1001,7 @@ theorem digestIsRecord's : DigestIsRecord's := by
       exact hg
 
 theorem bernoulliBoundsNothing : BernoulliBoundsNothing := by
-  intro p c e pub prof r h hl
+  intro p c e pub prof h r hl
   obtain ⟨law, d, n, -, -, -, -, -, -, rfl, rfl⟩ := acceptMeans p c e pub prof h
   obtain ⟨l, hl, hd⟩ := hl
   simp only [profileOf, List.mem_toArray, List.mem_singleton] at hl
