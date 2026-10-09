@@ -10,9 +10,10 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); O=$RESEARCH_RUN_DIR/out; W=${FLOCK_WORK:-/workspace/jobs/pc-stage}; mkdir -p $O $W
 nproc; free -g | head -2
-[ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
+UV=$(command -v uv || ls /workspace/jobs/bin/uv 2>/dev/null || echo $HOME/.local/bin/uv)
+[ -x $UV ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 exec 8>$W/venv.lock; flock 8
-[ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
+[ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; }
 exec 8>&-
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 GA=(); [ -n "${GATES:-}" ] && GA=(--gates "$(cd "$RESEARCH_RUN_DIR" && realpath "$GATES")")
