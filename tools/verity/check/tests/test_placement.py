@@ -106,6 +106,17 @@ def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
         assert got == N2 and len(skipped) == 1 and skipped[0].startswith(f"{N1}: ") and why in skipped[0], (why, skipped)
 
 
+def test_a_machine_whose_deadline_is_nearer_than_a_full_check_is_skipped_by_name():
+    """The lander's ask (9 Oct): node 2 stops at 05:30Z on 10 Oct, so from 03:00Z a full check placed there would be cut off."""
+    n1 = machine([slot("c", HOLDER)], [waiter()], pools=lean())
+    n2 = {**machine([slot("d")]), "deadline_in_s": CHECK.FULL_CHECK_S - 60}
+    got, _, skipped = CHECK.choose([N1, N2], {N1: n1, N2: n2})
+    assert got == N1 and skipped == [f"{N2}: its deadline is 149 min away, under the 150 min a full check takes"]
+    assert CHECK.twins([N1, N2], {N1: n1, N2: n2}, N1) == []                      # and it gets no twin
+    assert CHECK.choose([N1, N2], {N1: n1, N2: {**n2, "deadline_in_s": CHECK.FULL_CHECK_S + 60}})[0] == N2
+    assert CHECK.choose([N1, N2], {N1: n1, N2: {**n2, "deadline_in_s": None}})[0] == N2      # no deadline file
+
+
 def test_with_no_machine_readable_auto_refuses_and_launches_nothing(monkeypatch, capsys):
     monkeypatch.setattr(CHECK, "read_slots", lambda names: {n: "exit 255: no route to host" for n in names})
     calls = []

@@ -274,10 +274,12 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
 AUTO = ("vy-nebius-1", "vy-nebius-2")
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
+#: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
+FULL_CHECK_S = 9000
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
-#: each `{"error": ...}` when it can't be read there
+#: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
-import json, sys, types
+import json, sys, time, types
 from datetime import datetime, timezone
 
 
@@ -299,7 +301,11 @@ def doc(f):
 now = datetime.now(timezone.utc)
 slot = load("check_slot_for_lean_slot", SLOT_SRC, "tools/verity/check/slot.py")
 lean = load("check_lean_slot", LEAN_SRC, "tools/verity/check/lean_slot.py")
-print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now))}))
+try:
+    left = int(open("/etc/research/deadline").read().split()[0]) - time.time()
+except (OSError, ValueError, IndexError):
+    left = None
+print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now)), "deadline_in_s": left}))
 '''
 SLOT = _load("slot")
 
@@ -354,11 +360,14 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
     ``priority``, a train check's, only the priority ones), and the state in a few words. ValueError when no check can run
-    there: a document has an error, the slots file lists no slot, or the Lean slots file grants check's lean-audit step none."""
+    there: a document has an error, the slots file lists no slot, the Lean slots file grants check's lean-audit step none, or the
+    machine's deadline is nearer than FULL_CHECK_S."""
     check, lean = doc["check"], doc["lean"]
     for d, what in ((check, "check slots"), (lean, "Lean audit slots")):
         if "error" in d:
             raise ValueError(f"its {what} can't be read: {d['error']}")
+    if (left := doc.get("deadline_in_s")) is not None and left < FULL_CHECK_S:
+        raise ValueError(f"its deadline is {max(left, 0) / 60:.0f} min away, under the {FULL_CHECK_S / 60:.0f} min a full check takes")
     ahead = len([w for w in check["waiters"] if w["priority"] or not priority])
     waiting = f"{ahead} waiting ahead" + (" with priority" if priority else "")
     if check["slots"] is None:
