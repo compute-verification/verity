@@ -142,17 +142,6 @@
       ]
     },
     {
-      "handle": "console",
-      "holder": "the console coordinator (bc-ddee017b-705a-5429-a92e-fed2ba6ea491)",
-      "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
-      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
-      "usergroup": "S0C5LSDENA1",
-      "linear": "CON",
-      "owns": [
-        "benchmarks/census/"
-      ]
-    },
-    {
       "handle": "ci",
       "holder": "the CI lead (bc-81ff5c35-39a9-5232-a6b5-8e933b944292)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
@@ -161,6 +150,7 @@
       "linear": "CI",
       "owns": [
         "tools/verity/check/",
+        "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"
@@ -207,6 +197,7 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
+        "benchmarks/census/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",

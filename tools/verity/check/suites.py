@@ -9,12 +9,16 @@
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
-the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
-`[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
+the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
+transitively without their dependency groups, which are their own tests' tooling; a package that lists `exports` under
+`[tool.verity.tests]` is those paths of it, what its dependents read, in place of its directory), the paths it lists under
+`[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
+tests read a little of a large dependency), the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
-and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the check code that runs the suites (`RUNNER`). The cache key hashes all
+and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the code that runs the suites (`RUNNER`: this runner and its guard,
+not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
@@ -43,7 +47,8 @@ fails without running.
 
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
 so a cached pass never hides a change to something the tests read; the workspace metadata, and what a store fetch reads
-(`STORE_READS`), every suite may read. It also records what the key leaves out but the tests
+(`STORE_READS`), every suite may read. Markdown is prose: a suite's directories key without their `*.md`, and its guard fails a
+test that opens one, unless the suite lists a `.md` under `inputs` (`markdown`), when its directories key whole. It also records what the key leaves out but the tests
 used: the workspace metadata files they opened, the installed distributions they imported outside their resolved
 dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. A Python a test
 starts, or a Python started by a program it starts, traces its own opens while it keeps the suite's PYTHONPATH and environment
@@ -126,8 +131,10 @@ GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the runner itself, and check, which runs it.
-RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/check/guard/verity_suite_guard.py",
+#: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer (Daniel, 9 Oct). Not
+#: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
+#: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
+RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py",
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
@@ -146,7 +153,8 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity-core-sampled-proofs",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "memory-challenger-lean", "benchmarks/pous")
+              "verity-pouw-check-difftest", "memory-challenger-lean", "benchmarks/pous",
+              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -216,17 +224,20 @@ class Suite:
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
+    inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
 
 
 def _pyproject(path: str) -> dict:
     return tomllib.loads((ROOT / path / "pyproject.toml").read_text())
 
 
-def _requires(project: dict, data: dict) -> tuple[str, ...]:
+def _requires(project: dict, data: dict, groups: bool = True) -> tuple[str, ...]:
+    """The distributions a member names: its dependencies and extras, and with ``groups`` its dependency groups (its own tests'
+    tooling, which code that imports it never reads)."""
     reqs = list(project.get("dependencies", []))
     for extra in project.get("optional-dependencies", {}).values():
         reqs += extra
-    for group in data.get("dependency-groups", {}).values():
+    for group in data.get("dependency-groups", {}).values() if groups else ():
         reqs += [r for r in group if isinstance(r, str)]
     return tuple(sorted({_requirement_name(r) for r in reqs}))
 
@@ -242,11 +253,14 @@ def members() -> dict[str, str]:
 
 
 def shipped(path: str) -> list[str]:
-    """The directories a workspace package's dependents key on: its directory, or for the root, which holds the whole tree, the
-    packages its wheel ships."""
+    """The paths a workspace package's dependents key on: those it lists under `[tool.verity.tests] exports`, else its directory,
+    or for the root, which holds the whole tree, the packages its wheel ships."""
+    data = _pyproject(path)
+    if (exports := data.get("tool", {}).get("verity", {}).get("tests", {}).get("exports")) is not None:
+        return list(exports)
     if path != ".":
         return [path]
-    return list(_pyproject(".")["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
+    return list(data["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 
 
 def tests_pythonpath() -> str:
@@ -336,7 +350,7 @@ def discover() -> list[Suite]:
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
-                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0))))
+                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True))
     return suites
 
 
@@ -355,7 +369,8 @@ def artifact_ids(suite: Suite) -> dict[str, str]:
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Directories of the workspace packages `suite` depends on, directly or through another."""
+    """Directories of the workspace packages `suite` depends on, directly (its dependencies, extras and dependency groups) or
+    through another's dependencies and extras: a dependency's groups are its own tests' tooling, not what code importing it reads."""
     seen: dict[str, str] = {}
     todo = [r for r in suite.requires if r in pkgs]
     while todo:
@@ -364,7 +379,7 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
             continue
         seen[name] = pkgs[name]
         data = _pyproject(pkgs[name])
-        todo += [r for r in _requires(data["project"], data) if r in pkgs]
+        todo += [r for r in _requires(data["project"], data, groups=False) if r in pkgs]
     return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 
@@ -385,6 +400,33 @@ def object_ids(tree: str, paths: list[str]) -> dict[str, str]:
     specs = [tree if p == "." else f"{tree}:{p}" for p in paths]
     out = _git("cat-file", "--batch-check=%(objectname)", stdin="\n".join(specs) + "\n").splitlines()
     return {p: ("absent" if line.endswith(" missing") else line) for p, line in zip(paths, out)}
+
+
+def markdown(suite: Suite) -> bool:
+    """Whether the suite's tests read Markdown, which it says by listing a `.md` file under `inputs`: its directories key whole.
+    Any other suite's directories key without their `*.md` (`input_ids`), and its guard fails a test that opens one, so an edit
+    to prose alone re-runs only the suites that read it."""
+    return any(p.endswith(".md") for p in suite.inputs)
+
+
+_PROSE: dict[tuple[str, str], str] = {}
+#: each digest `input_ids` wrote -> the git tree it read it from, which `components` keeps beside the key for `--explain`
+_TREES: dict[str, str] = {}
+
+
+def input_ids(tree: str, paths: list[str], prose: bool = True) -> dict[str, str]:
+    """`object_ids`, with each directory, when not ``prose``, as a digest of its files but its `*.md` (each by its path from the
+    directory, as git's tree id hashes them)."""
+    ids = object_ids(tree, paths)
+    for p in paths if not prose else ():
+        if ids[p] != "absent" and (ROOT / p).is_dir():
+            if (tree, p) not in _PROSE:
+                cut = "" if p == "." else p + "/"
+                _PROSE[tree, p] = "nomd:" + _digest(sorted((f.removeprefix(cut), i) for f, i in own_ids(tree, p).items()
+                                                           if not f.endswith(".md")))
+            _TREES[_PROSE[tree, p]] = ids[p]
+            ids[p] = _PROSE[tree, p]
+    return ids
 
 
 def locked(text: str | None = None) -> dict[str, dict]:
@@ -523,8 +565,9 @@ def environment() -> dict:
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
-    declared too."""
-    return sorted({suite.path, *closure(suite, pkgs), *suite.inputs})
+    declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
+    its tests read of them, which the guard holds it to."""
+    return sorted({suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -542,7 +585,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     if "uv.lock" in files:
         r = subprocess.run(["git", "show", f"{rev}:uv.lock"], cwd=ROOT, capture_output=True, text=True)
         before = locked(r.stdout if r.returncode == 0 else "")
-    return [s for s in suites if any(_under(f, inputs_of(s, pkgs)) for f in files)
+    return [s for s in suites if any(_under(f, inputs_of(s, pkgs)) for f in files if markdown(s) or not f.endswith(".md"))
             or resolved(roots(s, pkgs), before, s.path) != resolved(roots(s, pkgs), lock, s.path)]
 
 
@@ -585,13 +628,20 @@ def _digest(doc) -> str:
 def components(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> dict:
     """What a suite's key hashes: its name and depth, each input's object id (under its own directory by the path from there:
     `_rel`), the build outputs, the resolved dependencies, the environment and the pytest arguments. A pass keeps them beside it,
-    so `--explain` can say what a miss changed."""
-    return {"suite": suite.name, "depth": depth(suite), "inputs": _rel_keys(suite.path, ids),
-            "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "resolved": deps or {}, "environment": env, "pytest": args}
+    so `--explain` can say what a miss changed; beside them, unhashed, the git tree of each directory keyed without its Markdown
+    (`trees`), which lists the files a change moved."""
+    inputs = _rel_keys(suite.path, ids)
+    out = {"suite": suite.name, "depth": depth(suite), "inputs": inputs,
+           "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "resolved": deps or {}, "environment": env, "pytest": args}
+    if trees := {q: _TREES[i] for q, i in inputs.items() if i in _TREES}:
+        out["trees"] = trees
+    return out
 
 
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> str:
-    return _digest(components(suite, ids, env, args, deps))
+    c = components(suite, ids, env, args, deps)
+    c.pop("trees", None)
+    return _digest(c)
 
 
 def cached(k: str) -> dict | None:
@@ -793,7 +843,7 @@ class PerTest:
                  tree: str):
         self.suite, self.tree = suite, tree
         self.dir = per_test_dir(suite)
-        self.own = own_ids(tree, suite.path)
+        self.own = {f: i for f, i in own_ids(tree, suite.path).items() if markdown(suite) or not f.endswith(".md")}
         self.narrow = suite.parallel             # a suite that doesn't declare order independence keys each module on everything
         texts = {}
         for f in self.own if self.narrow else ():
@@ -813,7 +863,7 @@ class PerTest:
         self.fixtures = {p.removeprefix("fixture:"): i for p, i in ids.items() if p.startswith("fixture:")}
         self._index: tuple[dict[str, str], dict[str, str]] | None = None
         self._held: dict[str, bool] = {}
-        self.components = {"suite_tree": ids.get(suite.path), "depth": depth(suite),
+        self.components = {"suite_tree": _TREES.get(ids.get(suite.path), ids.get(suite.path)), "depth": depth(suite),
                            "outside": _rel_keys(suite.path, {p: i for p, i in ids.items() if p != suite.path}),
                            "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "environment": _digest(env),
                            "resolved": _digest(deps or {}), "pytest": arg_sets[0]}
@@ -1034,6 +1084,8 @@ class PerTest:
             files = _changed_files(was.get("suite_tree"), now["suite_tree"])
             if files is not None and self.suite.path != ".":
                 files = [f"{self.suite.path}/{f}" for f in files]      # the subtree's own paths, as the root's
+            if files is not None and not markdown(self.suite):
+                files = [f for f in files if not f.endswith(".md")]
             if files is None:
                 why.append(f"a file under {self.suite.path} changed (its old tree isn't here to list which)")
             else:
@@ -1073,7 +1125,10 @@ def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
         elif q not in ni:
             out.append(f"input {p}: no longer an input")
         elif wi[q] != ni[q]:
-            files = _changed_files(wi[q], ni[q])
+            wt, nt = was.get("trees", {}).get(q, wi[q]), now.get("trees", {}).get(q, ni[q])
+            files = _changed_files(wt, nt)
+            if files is not None and q in now.get("trees", {}):
+                files = [f for f in files if not f.endswith(".md")]
             where = "" if files is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in files[:8])}" + \
                 (f" and {len(files) - 8} more" if len(files) > 8 else "")
             out.append(f"input {p} changed ({wi[q][:12]} -> {ni[q][:12]}){where}")
@@ -1238,7 +1293,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
-               VERITY_SUITE_WATCH=json.dumps(list(watch)))
+               VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0")
     env.pop("VERITY_SUITE_REUSE", None)
     env.pop("VERITY_SUITE_MODULE", None)
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
@@ -1490,7 +1545,7 @@ def main(argv: list[str] | None = None) -> int:
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
         paths = inputs[s]
-        ids = object_ids(tree, sorted(set(paths) | set(RUNNER)))
+        ids = input_ids(tree, sorted(set(paths) | set(RUNNER)), markdown(s))
         ids.update({f"fixture:{p}": art for p, art in fixtures.items() if _under(p, paths)})
         deps = resolved(roots(s, pkgs), lock, s.path)
         keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick
@@ -1614,7 +1669,8 @@ def main(argv: list[str] | None = None) -> int:
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
             print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
-                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml")
+                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml"
+                  f" (a file of a dependency that lists `exports`: under those, if its dependents read it)")
         elif r.unguarded:
             print(f"        xdist workers {', '.join(r.unguarded)} sent the guard no record of what they read\n        log: {r.log}")
         elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above

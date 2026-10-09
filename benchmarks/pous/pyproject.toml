@@ -6,5 +6,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # tests/ checks the harness against PoUS itself (verity.core.protocols.pous) and the census's hardware ids;
-# pod.sh runs bench/placement.py's deployment gate (GATE_ROLE).
-inputs = ["verity", "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py"]
+# pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
+# run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
+# packages and their path dependencies (each lakefile's `[[require]]`).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/pous/p2/PROTOCOL.md", "verity/core/protocols/interface",
+          "verity/core/service/flock", "verity/core/primitives/identity", "verity/core/primitives/randomness",
+          "verity/core/primitives/lms", "verity/core/difftest", "verity/core/devices/memory_challenger",
+          "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
+          "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py"]
