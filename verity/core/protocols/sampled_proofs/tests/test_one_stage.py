@@ -100,6 +100,13 @@ def test_registration_v1_passes_r1_to_r6():
     assert len(R.digest(rec)) == 128 and R.digest(rec) == R.digest(dict(rec))
 
 
+def test_a_root_with_a_trailing_newline_is_refused_at_r3():
+    """`$` matches before a final newline, so a root is held to hex by `fullmatch`: Lean's `isHex` refuses the newline too."""
+    prog, q, rec = _registration(6)
+    roots = [dict(rec["roots"][0], root=rec["roots"][0]["root"] + "\n"), *rec["roots"][1:]]
+    assert _check({**rec, "roots": roots}, prog, q).codes == ("R3-root",)
+
+
 def test_registration_refusals():
     prog, q, rec = _registration(6)
     cases = [({"format": "verity/registration/v0"}, "R1-protocol"), ({"law": {"law": "subset", "k": 3}}, "R1-law"),
