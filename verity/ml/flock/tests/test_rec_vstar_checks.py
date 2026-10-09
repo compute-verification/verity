@@ -61,7 +61,7 @@ def test_the_verifiers_statements_are_the_ones_v_star_stages(tmp_path, shape):
 def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
     """At the 16,16,8 class's shape (level 0 is `rec-open/l64-h8` over 436 openings, as its run's cap recorded): another
     instance count, a part named at other claims, a part V*'s algebra does not have, and an honest part's name under an inner
-    shape of one more claim are each refused by the value compared."""
+    shape of one more region are each refused by the value compared."""
     inner = _inner(tmp_path / "inner.json", 27, 22, 8)
     parts = len(_v_star(27, 22, 8)) - 4
     cases = [
@@ -72,8 +72,8 @@ def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
         (inner, f"rec-residuals/m27-k22-c8-p{parts}", 2,
          f"rec-residuals/m27-k22-c8-p{parts}: not one of V*'s statements at the inner session's shape (m 27, k_log 22, claims 8)"),
         (inner, "rec-open/l64-h9", 436, "rec-open/l64-h9: not one of V*'s statements"),
-        (_inner(tmp_path / "more.json", 27, 22, 9), "rec-residuals/m27-k22-c8-p0", 2,
-         "rec-residuals/m27-k22-c8-p0: shape (m 27, k_log 22, claims 8), the inner session's (m 27, k_log 22, claims 9)"),
+        (_inner(tmp_path / "more.json", 27, 22, 10), "rec-residuals/m27-k22-c8-p0", 2,
+         "rec-residuals/m27-k22-c8-p0: shape (m 27, k_log 22, claims 8), the inner session's (m 27, k_log 22, claims 10)"),
     ]
     assert _v_star(27, 22, 8)[0] == ["rec-open/l64-h8", 436]
     for f, name, n, why in cases:
