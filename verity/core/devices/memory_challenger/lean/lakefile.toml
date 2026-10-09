@@ -1,0 +1,52 @@
+# PoUS's memory challenger's verdict as executable Lean: its record formats and crypto, `verdict` on a record as its
+# caller holds it (`memory-challenger-verdict`) and as a core protocol (`memory-challenger`). Code: Lean core and the
+# packages below, no Mathlib and nothing of Security.
+name = "core_memory_challenger"
+defaultTargets = ["MemoryChallenger", "memory-challenger", "memory-challenger-test", "memory-challenger-verdict",
+                  "memory-challenger-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../service/flock"
+
+[[require]]
+name = "core_randomness"
+path = "../../../primitives/randomness"
+
+[[require]]
+name = "lms"
+path = "../../../primitives/lms/lean"
+
+[[require]]
+name = "core_protocol"
+path = "../../../protocols/interface"
+
+[[require]]
+name = "verity_difftest"
+path = "../../../difftest/lean"
+
+[[lean_lib]]
+name = "MemoryChallenger"
+
+# `verdict` under the accepted schemes (S1's LMS at its deployed parameters): the interface's command line.
+[[lean_exe]]
+name = "memory-challenger"
+root = "MemoryChallenger.Main"
+
+# `verdict` under the test signers' schemes alone, with a protocol id of its own, for the difftest.
+[[lean_exe]]
+name = "memory-challenger-test"
+root = "MemoryChallenger.TestMain"
+
+# `verdict` on a record as `memory_challenger.verdict`'s caller holds it, the whole `Verdict` back (`verdict.py`).
+[[lean_exe]]
+name = "memory-challenger-verdict"
+root = "MemoryChallenger.VerdictMain"
+
+[[lean_exe]]
+name = "memory-challenger-difftest"
+root = "MemoryChallenger.DifftestMain"

@@ -21,6 +21,9 @@ never answers hangs its test.
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
 (`pytestmark = pytest.mark.skipif(shutil.which("lake") is None, ...)`), which puts its suite among those `check` runs after
 its Lean steps (`AFTER_LEAN` in `tools/verity/check/check.py`, held by `tests/test_no_wall_clock.py`).
+
+Only `run` imports Hypothesis: `build`, `Server` and `canonical` need the stdlib alone, so a port's Lean can serve at run
+time (the memory challenger's `verdict.py` in the PoUS harness) where no test dependency is installed.
 """
 
 from __future__ import annotations
@@ -352,6 +355,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
     count Python's outcomes by kind.  Hypothesis is imported here, so the server, `build` and `replay` run without it."""
     from hypothesis import HealthCheck, given, settings
     from hypothesis import seed as use_seed
+
     seen: dict[str, int] = {}
 
     @use_seed(seed)
