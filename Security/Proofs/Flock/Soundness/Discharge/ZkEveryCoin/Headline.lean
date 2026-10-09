@@ -77,7 +77,7 @@ theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.
           + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by
   by_cases hA : C.Admits c
   · simp only [outExe, simAll, hA, ite_true]
-    obtain ⟨h1, h2⟩ := zkViewAt_of_ok C hC hKey c hA
+    obtain ⟨h1, h2⟩ := zkViewAt_of_ok C hC (δ₁ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey c hA
       (fun v => (Sum.inl (v 0) : (C.T c).tab.View ⊕ (C.T c).tab.Cut)) (fun _ => w) (fun _ => w0) (fun _ => hv)
       (fun _ => hreg c) (E c)
     have eR := ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) ((C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt)))
