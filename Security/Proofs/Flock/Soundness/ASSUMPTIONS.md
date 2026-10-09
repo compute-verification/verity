@@ -359,8 +359,12 @@ malicious-verifier claim rests on beyond the theorems.
 - **Discharged only by fixed readers.** `HmRowComputes` and `decode_row` count as discharged only for readers of the
   witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
   chooses its values discharges nothing (red-team review of #513, C3).
-- **Why it is not a proof yet.** It is a fact about the `sha512x3` and `hm96` sections of the circuit file and the
-  chain's wiring (`HmRow.rowWires`), which the model does not read yet.
+- **Proved so far.** For `sha512/row/v1` rows, from the `sha512x3` and `hm96` sections of the circuit file, Δ and the
+  chain's wiring (`HmRow.rowWires`): at an untyped statement `Stmt.setupH` accepted, `row_bc_setupH`, given that its rows
+  are v1 and its unit returns the outputs (`hv1`, `ho`), and at e2e-layout's drawn units `keyedRowsOuts_computes`; at a
+  typed template statement, `row_bc_setupH_typed`, with no hypothesis (`HmRow.rowPorts` refuses a typed statement's bit
+  rows, and `HmRow.checkTyped` a root with no forced-zero row). `HmRows.Computes` at a typed statement's drawn units
+  still needs their sites.
 - **Upstream:** watch entry `hm-row-computes`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
