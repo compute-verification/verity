@@ -197,6 +197,64 @@ theorem rowEnc_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → 
   have hj : 8 * j + t.val < K := by simp at h2; omega
   simp only [BitVal.get, show 8 * j + t.val < W by omega, ↓reduceDIte, padBits, hj]
 
+/-! ## Under any 128-byte prefix -/
+
+/-- **`rowEnc` under the first block `pre w`** of a row of `w` words, for any `pre` of 128 bytes: a `sha512/row/v2`
+row's (`Hidden.rowPre`) as well as `sha512/row/v1`'s. -/
+def rowEncP (pre : ℕ → ByteArray) (v : BitVal W) : List UInt8 :=
+  if RowShaped v then (pre (v.1.val / 16)).data.toList ++ rowBytes v
+  else List.replicate (128 + W) 0 ++ bitCode v
+
+theorem rowEncP_inj {pre : ℕ → ByteArray} (hpre : ∀ w, (pre w).size = 128) : Function.Injective (rowEncP pre (W := W)) := by
+  have hl : ∀ w, (pre w).data.toList.length = 128 := fun w => by rw [Array.length_toList]; exact hpre w
+  have hrow : ∀ {v : BitVal W}, RowShaped v → (rowEncP pre v).length = 128 + 2 * (v.1.val / 16) := fun h => by
+    simp only [rowEncP, h, ↓reduceIte, List.length_append, hl, rowBytes, List.length_ofFn]
+  have hoth : ∀ {v : BitVal W}, ¬ RowShaped v → (rowEncP pre v).length = 128 + W + (2 * W + 1) := fun h => by
+    simp only [rowEncP, h, ↓reduceIte, List.length_append, List.length_replicate, bitCode_length]
+  intro v w h
+  have hv1 := v.1.isLt
+  have hw1 := w.1.isLt
+  by_cases hv : RowShaped v <;> by_cases hw : RowShaped w
+  · have hk : v.1 = w.1 := by
+      have e := congrArg List.length h
+      rw [hrow hv, hrow hw] at e
+      exact Fin.ext (by have := hv.1; have := hw.1; omega)
+    simp only [rowEncP, hv, hw, ↓reduceIte] at h
+    obtain ⟨-, hb⟩ := List.append_inj h (by rw [hl, hl])
+    refine Prod.ext hk (funext fun i => ?_)
+    by_cases hi : i.val < v.1.val
+    · exact get_of_rowBytes hv hk hb i hi
+    · rw [hv.2 i (by omega), hw.2 i (by rw [← hk]; omega)]
+  · have e := congrArg List.length h
+    rw [hrow hv, hoth hw] at e
+    omega
+  · have e := congrArg List.length h
+    rw [hoth hv, hrow hw] at e
+    omega
+  · simp only [rowEncP, hv, hw, ↓reduceIte] at h
+    exact bitCode_inj (List.append_inj h rfl).2
+
+/-- **`rowEncP` of a row of `16 k` bits**: `pre k` and the row's `2 k` bytes. -/
+theorem rowEncP_row (pre : ℕ → ByteArray) {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → Bool) :
+    rowEncP pre (widthOf W K, (padBits b : Fin W → Bool)) =
+      (pre k).data.toList ++ List.ofFn fun j : Fin (2 * k) => byteOf fun t => b ⟨8 * j.val + t.val, by omega⟩ := by
+  have hw : (widthOf W K).val = K := by simp only [widthOf]; omega
+  have hs : RowShaped (widthOf W K, (padBits b : Fin W → Bool)) :=
+    ⟨by rw [hw, hK]; omega, fun i hi => by
+      change (widthOf W K).val ≤ i.val at hi
+      rw [hw] at hi
+      simp only [padBits, show ¬ i.val < K by omega, ↓reduceDIte]⟩
+  have hk : (widthOf W K).val / 16 = k := by rw [hw, hK]; omega
+  simp only [rowEncP, hs, ↓reduceIte]
+  rw [hk]
+  congr 1
+  refine List.ext_getElem (by simp [rowBytes, hk]) fun j h1 h2 => ?_
+  simp only [rowBytes, List.getElem_ofFn]
+  congr 1
+  funext t
+  have hj : 8 * j + t.val < K := by simp at h2; omega
+  simp only [BitVal.get, show 8 * j + t.val < W by omega, ↓reduceDIte, padBits, hj]
+
 /-! ## At `keyProg`'s rows -/
 
 open Placed

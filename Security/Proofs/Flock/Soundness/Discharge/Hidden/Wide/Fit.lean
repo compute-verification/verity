@@ -327,4 +327,31 @@ theorem sat_flatF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
 
 end Hidden
 
+/-! ## Rows of one kind -/
+
+/-- Whether a circuit's rows are `sha512/row/v2` rows: some row is. -/
+def rowV2 (c : Circuit) : Bool := c.ports.any (·.v2)
+
+/-- **The rows the hidden-output headlines cover**: rows that fit, one output row per output port after the input rows
+(`OutRowsF`), all `sha512/row/v2` rows or none. -/
+def RowsFit (c : Circuit) : Prop := OutRowsF c ∧ ∀ p ∈ c.ports.toList, p.v2 = rowV2 c
+
+/-- **The first block of a row of `w` words**: `sha512/row/v2`'s for `16 w` bits, or `sha512/row/v1`'s. -/
+def rowPre (v2 : Bool) (w : ℕ) : ByteArray := if v2 then HmRow.rowPrefixV2 (16 * w) else HmRow.rowPrefix w
+
+theorem size_rowPre (v2 : Bool) (w : ℕ) : (rowPre v2 w).size = 128 := by
+  unfold rowPre
+  split
+  · exact size_rowPrefixV2 _
+  · exact size_rowPrefix _
+
+/-- **A row's own prefix is `rowPre`** at rows that fit, of one kind. -/
+theorem prefixOf_fit {c : Circuit} (h : RowsFit c) {p : ℕ} (hp : p < c.ports.size) :
+    HmRow.prefixOf c.ports[p]! = rowPre (rowV2 c) c.ports[p]!.words := by
+  obtain ⟨hs, hb, -, -⟩ := h.1.fit hp
+  have hv : c.ports[p]!.v2 = rowV2 c := h.2 _ (by rw [getElem!_pos c.ports p hp]; exact Array.getElem_mem_toList hp)
+  unfold HmRow.prefixOf rowPre
+  rw [hs, hv, hb]
+  rfl
+
 end FlockSoundness.Discharge.Hidden
