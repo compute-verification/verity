@@ -178,9 +178,10 @@ def countIn (units : Array Int) (s : Json) : Nat :=
 stratified or work, with exactly its law's keys; the law it names is `law` and its population the registered one; its
 units integers, strictly ascending, in `[0, population)`; a subset's `k` its number of units; a Bernoulli `p` written
 `NUM/DEN` with `0 ≤ NUM ≤ DEN`, `0 < DEN`; a stratified or work draw's strata well formed over its population
-(`Draw.strataMessage` none: each stratum exactly its keys, a distinct template, its ranges ascending, disjoint and tiling
-`[0, population)`, its `k` the rule's), each stratum's `k` the number of units drawn in it; and a work draw's closure,
-when it has one, integers, non-empty, strictly ascending, in `[0, population)` and none of them drawn. -/
+(`Draw.strataMessage` none: each stratum exactly its keys, a distinct string template, its ranges ascending, disjoint and
+tiling `[0, population)`, its `k` the rule's), and each stratum's `k`, where its template is a string (as
+`Draw.strataMessage` none has every one), the number of units drawn in it; and a work draw's closure, when it has one,
+integers, non-empty, strictly ascending, in `[0, population)` and none of them drawn. -/
 def Drawn (draw population law : Json) : Prop :=
   let kind := kindOf draw
   let closure := kind == "work" && (field? draw "closure").isSome
@@ -193,7 +194,8 @@ def Drawn (draw population law : Json) : Prop :=
     (kind = "bernoulli" → ∃ p, getD draw "p" = .str p ∧ (Draw.probability? p).isSome) ∧
     ((kind = "stratified" ∨ kind = "work") →
       ∃ n, int? (getD draw "population") = some n ∧ Draw.strataMessage draw n = none ∧
-        ∀ ss, getD draw "strata" = .arr ss → ∀ s ∈ ss, int? (getD s "k") = some (countIn units s : Int)) ∧
+        ∀ ss, getD draw "strata" = .arr ss → ∀ s ∈ ss, ∀ t, getD s "template" = .str t →
+          int? (getD s "k") = some (countIn units s : Int)) ∧
     (closure → ∃ cs ys, getD draw "closure" = .arr cs ∧ cs.mapM int? = some ys ∧ ∃ (h : 0 < ys.size),
       Ascending ys ∧ 0 ≤ ys[0] ∧ (∃ n, int? (getD draw "population") = some n ∧ ys[ys.size - 1] < n) ∧
       ∀ y ∈ ys, y ∉ units)
