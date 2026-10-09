@@ -424,7 +424,7 @@ def test_s3_full_b0_matches_certified_digest():
     rep = derive_report(m, (_meta(LP, dtype=torch.int32),), **PROF, config=C, name="Serve")
     assert rep.ok, rep.unsupported
     assert rep.family and rep.family["matched"]
-    assert rep.digest == "dc895366bba839f2ff51eeb4a2b3bf09846b3c0cc3bef51bcd5ab51cea4f7e78"   # the re-baseline re-key (AmpereBF16TcDot16_v2); d4f4b1f1 before
+    assert rep.digest == "7d09b7a652a8364525bf82a34bb7e261efc033d7b53ceda20d5e5bf2a774bbbdd402d04cd3bd7868946582956090359a851d01cf6415568b830647b8b2f56df7"   # the re-baseline re-key (AmpereBF16TcDot16_v2); d4f4b1f1 before
     assert rep.digest == _serve_oracle_digest(C, LP, STEPS)
 
 

@@ -488,7 +488,7 @@ def test_query_json_roundtrip_and_id(GS):
     q2 = from_json(doc)
     assert to_json(q2) == doc
     assert query_id(q) == query_id(q2)
-    assert len(query_id(q)) == 64
+    assert len(query_id(q)) == 128
     assert query_id(q) != query_id(default(32))
     assert query_id(instances("//DotBf16_v1")) != query_id(instances("//Gemm_v1"))
 

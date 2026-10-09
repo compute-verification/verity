@@ -14,6 +14,7 @@ view and the Match's and the Commit's lookups, each in a fresh interpreter. They
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 import subprocess
@@ -108,7 +109,21 @@ def _build_101(tmp_path) -> Path:
     from tests.regression import store_io
     if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():
         pytest.skip("the evidence store is not reachable here")
-    return store_io.fetch(BUILD_101, to=tmp_path / "build")
+    build = store_io.fetch(BUILD_101, to=tmp_path / "build")
+    _rekey_sha512(build / "build_request")
+    return build
+
+
+def _rekey_sha512(d: Path) -> None:
+    """#101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
+    digest of the descriptor the Build wrote; each file of the request dir then carries that same descriptor's SHA-512 digest in its
+    place, so nothing but the digest changes."""
+    desc = json.load(gzip.open(d / "descriptor.json.gz"))
+    old = hashlib.sha256(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+    assert json.load(open(d / "result.json"))["program"]["digest"] == old
+    new = program_digest(desc)
+    for p in d.glob("*.json"):
+        p.write_text(p.read_text().replace(old, new))
 
 
 def _run(code: str, *args: str) -> subprocess.CompletedProcess:

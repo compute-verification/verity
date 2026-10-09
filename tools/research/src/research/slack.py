@@ -80,7 +80,9 @@ SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 REGISTRY_REFS = ("origin/main",)                                  # where a checkout older than the registry finds it
 FRONT_DOOR = "agent-coordination"
-ASKS_ON_LINEAR = False                                            # the Linear trial's cutover turns it on (`linear.py`)
+ASKS_ON_LINEAR = True                                             # an ask is also an issue in its owner's team (`linear.py`)
+LINEAR_LINK_RE = re.compile(r"\nLinear: <https://linear\.app/[^|>]+\|([A-Z][A-Z0-9]*-\d+)>")
+LINEAR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,6}$")
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
 #: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
@@ -185,6 +187,8 @@ def load_registry(path: Path) -> dict:
             if not isinstance(p, str) or not p or p.startswith("/") or ".." in p.split("/") or p in owned:
                 raise SlackError(f"registry {path}: @{name} owns {p!r}: a path relative to the checkout that no other handle owns")
             owned[p] = name
+        if "linear" in h and (not LINEAR_KEY_RE.match(str(h["linear"])) or any(o.get("linear") == h["linear"] for o in reg["handles"] if o is not h)):
+            raise SlackError(f"registry {path}: @{name}'s linear {h['linear']!r}: a Linear team key no other handle has")
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
@@ -625,6 +629,29 @@ def lead_names(text: str, reg: dict) -> list[str]:
     return names
 
 
+UNROUTED_SKIP_RE = re.compile(r"```.*?```|`[^`\n]*`|<[^>\n]*>|^\s*>.*$", re.S | re.M)   # code, links, quoted lines
+LATER_AT_RE = re.compile(r"(?<![\w.@/-])@([a-z0-9][a-z0-9._-]*)")
+LATER_NAME_RE = re.compile(r"(?:^|(?<=[.!?;])[ \t]+)[ \t]*([a-z0-9][a-z0-9._-]*):\s", re.M)
+
+
+def unrouted_names(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> list[str]:
+    """The handles other than `author`, the `rung` ones and the lead's that a body names where no doorbell reaches: `@handle` after its
+    lead, or `handle:` right after the lead, starting a later line or starting a sentence (only a post's start routes, `lead_names`)."""
+    body = body or ""
+    m = LEAD_RE.match(body)
+    rest = UNROUTED_SKIP_RE.sub("", body[m.end() if m else 0:])
+    found = [n.rstrip("._-") for n in LATER_AT_RE.findall(rest)] + LATER_NAME_RE.findall(rest)
+    handles = {h["handle"] for h in reg["handles"]} - {author, *rung, *lead_names(body, reg)}
+    return list(dict.fromkeys(n for n in found if n in handles))
+
+
+def refuse_unrouted(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> None:
+    if names := unrouted_names(body, reg, author, rung):
+        raise SlackError(f"it names {' '.join('@' + n for n in names)} past its start, where nothing rings: only the names a "
+                         "post starts with wake anyone. Move them to the start (--to, or the leading @names) to ring them, "
+                         "or drop the @ (and don't start a line or sentence with `name:`) to mention them without a doorbell")
+
+
 def header_names(text: str, reg: dict) -> list[str]:
     """The names an announcement's header (`📣 *Announcement* from @x to @a @b`) addresses; empty for `to every handle`."""
     first = (text or "").split("\n", 1)[0]
@@ -993,6 +1020,9 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             missing |= not cid
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
+    if key := h.get("linear"):
+        print(f'subscribe_linear_comment(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
+              f"# a comment on an issue in @{h['handle']}'s Linear team; the doorbell already carries each new ask")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
           f"starts, replies in or picks up (not for a status line alone); renew on every wake")
     return 2 if missing else 0
@@ -1028,18 +1058,37 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    body = _body(ns)
-    if (ns.linear or ASKS_ON_LINEAR) and not ns.dry_run:
-        from . import linear  # noqa: PLC0415
-
-        issue, why = linear.ask_issue(owner["handle"], h["handle"], body)
-        if issue:
-            body = f"{body}\nLinear: <{issue['url']}|{issue['identifier']}>"
-            print(f"linear: {issue['identifier']} {issue['url']}")
-        else:
-            print(f"research msg ask: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
+    refuse_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
+    body = linear_ask(ns, owner, h["handle"], body)
     _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
+
+
+def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> str:
+    """The ask's body, filed as an issue in its owner's Linear team (`linear` in the registry) and ending with the issue's
+    link; as it was when the owner has no team or Linear fails, so the ask still goes out on Slack."""
+    if not (getattr(ns, "linear", False) or ASKS_ON_LINEAR) or ns.dry_run or not owner.get("linear"):
+        return body
+    from . import linear  # noqa: PLC0415
+
+    issue, why = linear.ask_issue(owner["linear"], sender, body)
+    if not issue:
+        print(f"research msg: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
+        return body
+    print(f"linear: {issue['identifier']} {issue['url']}")
+    return f"{body}\nLinear: <{issue['url']}|{issue['identifier']}>"
+
+
+def linear_close(text: str, state_type: str) -> None:
+    """Move the Linear issue an ask's root links (`linear_ask`) to its team's first `state_type` state."""
+    if not (m := LINEAR_LINK_RE.search(text or "")):
+        return
+    from . import linear  # noqa: PLC0415
+
+    try:
+        print(f"linear: {m[1]} {linear.Linear().close(m[1], state_type)}")
+    except (linear.LinearError, OSError, ValueError) as e:
+        print(f"research msg: {m[1]} stays open on Linear ({e}); the status line stands", file=sys.stderr)
 
 
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
@@ -1099,6 +1148,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    if to or kind != "announce":                                     # an announcement with no --to reaches every handle
+        refuse_unrouted(body, reg, h["handle"], tuple(t["handle"] for t in to))
     if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
         raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
     if kind == "announce":
@@ -1111,6 +1162,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
             raise SlackError("--verify and --ships go with --kind announce")
         if to and (m := LEAD_RE.match(body)) and set(lead_names(body, reg)) <= {t["handle"] for t in to}:
             body = body[m.end():]                                    # `--to @ci` with a body that starts `@ci` names it once
+        if kind == "ask" and not ns.thread and len(to) == 1:
+            body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
@@ -1187,7 +1240,9 @@ def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = name_entry(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
-    body = _body(ns) + (f" {QUIET}" if ns.quiet else "")
+    body = _body(ns)
+    refuse_unrouted(body, reg, h["handle"])
+    body += f" {QUIET}" if ns.quiet else ""
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1204,8 +1259,10 @@ def _status(ns: argparse.Namespace, reg: dict, word: str, reaction: str, detail:
     api, ch = client(ns), channel_id(ns, reg)
     detail = " ".join((detail or "").split())
     _post(api, ch, h["handle"], f"{word}" + (f" \u2014 {detail}" if detail else ""), ns.thread, route=_route(ns, reg, ch))
-    if not is_announcement(api.root(ch, ns.thread)):
+    root = api.root(ch, ns.thread)
+    if not is_announcement(root):
         api.call("reactions.add", channel=ch, timestamp=ns.thread, name=reaction)
+        linear_close((root or {}).get("text", ""), "canceled" if reaction == "x" else "completed")
     return 0
 
 
@@ -1552,7 +1609,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and not is_quiet(m.get("text") or "")
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and \
+            not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})

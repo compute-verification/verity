@@ -1351,6 +1351,7 @@
         "verity/experimental/claims/": "verity/core/claims/",
         "verity/experimental/core/": "verity/core/",
         "verity/experimental/core/protocols/pouw/": "verity/core/protocols/pouw/lean/",
+        "verity/experimental/core/protocols/pous/": "verity/core/protocols/pous/check/",
         "verity/experimental/commitments/multiproof.py": "verity/ml/commitments/multiproof.py",
         "verity/experimental/private_circuits/": "verity/ml/private_circuits/",
         "verity/experimental/tests/commitments/": "verity/ml/commitments/tests/",

@@ -1,5 +1,6 @@
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Models.Core.Guarantees.PrivatePartition
+import Proofs.Core.Advice
 
 /-! # Proofs about private partitions: the per-Call check, the leakage weight, and the registration -/
 
@@ -56,9 +57,14 @@ theorem PrivateOutBitsLe : Guarantees.PrivateOutBitsLe :=
   fun _ _ P _ h T => P.sum_outBits_le h T
 
 theorem RegisteredMeets : Guarantees.RegisteredMeets := by
-  intro R C advice hbind Q root ⟨n₀, P₀, ⟨_, hf, hn, _⟩, hr₀⟩ n P hr
-  have h : (⟨n, P⟩ : (n : ℕ) × Partition C n) = ⟨n₀, P₀⟩ := hbind (hr.trans hr₀.symm)
-  cases h
-  exact ⟨hn, hf, P₀.sum_outBits_le hf⟩
+  intro C H F hF A hA Q root r₀ ⟨⟨_, hf, hn, _⟩, hr₀⟩ r hr
+  have fits : ∀ x : (n : ℕ) × Partition C n, x = ⟨r₀.n, r₀.P⟩ →
+      x.1 ≤ Q.units ∧ x.2.Fits Q.X ∧ ∀ T : Finset (Fin x.1), ∑ u ∈ T, x.2.outBits u ≤ T.card * Q.X := by
+    rintro _ rfl
+    exact ⟨hn, hf, r₀.P.sum_outBits_le hf⟩
+  rcases Advice.root_bind hF (hr₀.trans hr.symm) with he | hc
+  · refine Or.inl (fits ⟨r.n, r.P⟩ (Option.some_inj.mp ?_))
+    rw [← hA r.n r.P, ← hA r₀.n r₀.P, he]
+  · exact Or.inr hc
 
 end Verity.SecurityProofs
