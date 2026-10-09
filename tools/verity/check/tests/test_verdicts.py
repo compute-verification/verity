@@ -149,6 +149,29 @@ def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, 
     assert V.main(["combine", str(tmp_path / "all.tar.gz"), str(pack)]) == 1 and not (tmp_path / "all.tar.gz").exists()
 
 
+def test_combine_streams_its_entries_and_writes_the_pack_holding_them_whole_would(tmp_path):
+    """`gather_verdicts` combines the newest recorded checks' packs on the lander's VM, and twelve of them held whole outgrew its
+    15 GB: combining keeps one entry at a time in memory, writes the same bytes, and leaves no spill behind."""
+    import tracemalloc
+
+    big = 8 << 20
+    a, b = tmp_path / "a.tar.gz", tmp_path / "b.tar.gz"
+    V._write(a, [("check/lean-builds/x.json", os.urandom(big)), ("tests/k.json", b"{\"a\": 1}")])
+    V._write(b, [("check/lean-builds/y.json", os.urandom(big)), ("tests/k.json", b"{\"b\": 2}")])
+    out = tmp_path / "out" / "all.tar.gz"
+    tracemalloc.start()
+    assert V.combine([a, b], out) == 3
+    peak = tracemalloc.get_traced_memory()[1]
+    tracemalloc.stop()
+    assert peak < big // 2, peak
+    with tarfile.open(a, "r:gz") as ta, tarfile.open(b, "r:gz") as tb:
+        found = {**{m.name: tb.extractfile(m).read() for m in tb.getmembers()}, **{m.name: ta.extractfile(m).read() for m in ta.getmembers()}}
+    whole = tmp_path / "whole.tar.gz"
+    V._write(whole, sorted(found.items()))
+    assert out.read_bytes() == whole.read_bytes() and found["tests/k.json"] == b"{\"a\": 1}"
+    assert [p.name for p in out.parent.iterdir()] == ["all.tar.gz"]
+
+
 def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tmp_path, monkeypatch):
     check = _load("check")
     _fill(_machine(tmp_path, monkeypatch, "a"))
