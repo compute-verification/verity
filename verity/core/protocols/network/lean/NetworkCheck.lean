@@ -3,6 +3,7 @@ import NetworkCheck.Check
 import NetworkCheck.Difftest
 import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
+import NetworkCheck.RecordsBytes
 
 /-!
 # The network certificate's checks
@@ -14,6 +15,7 @@ check of a spatial unit's certified link-windows as a core protocol (`verity/net
 executable), held to `audit.py` by `tests/test_network_check_protocol.py`. `NetworkCheck.Records` is the same audit over
 raw, committed and certified records (`verity/network-records/v1`, the `network-records` executable, which
 `lean_audit.Audit` runs), held to `audit.py` by `tests/test_network_records_protocol.py`; `NetworkCheck.RecordsGrid` proves
-that its linear Program grid is `NetworkCheck.Check`'s. Code: it imports only Lean, C-Flock's verifier
+that its linear Program grid is `NetworkCheck.Check`'s, and `NetworkCheck.RecordsBytes` that its evidence, payloads kept
+as bytes, is v2's read as bits. Code: it imports only Lean, C-Flock's verifier
 (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`), the core protocol interface, the certifier program and the LMS port.
 -/

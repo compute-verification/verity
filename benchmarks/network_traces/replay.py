@@ -186,14 +186,15 @@ def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int,
 
 
 def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prior: Sequence[online.Past] = (),
-                         lag: int = 0) -> tuple[list[dict], dict, list[online.Past]]:
+                         lag: int = 0, *, audit=Audit) -> tuple[list[dict], dict, list[online.Past]]:
     """One configuration through prover, shaper, certifier, records and audit, raw, committed and certified. The prover's
     syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior` and reads the frames ready by `lag`
-    buckets before each window (`online.declare`). Returns one row per link-window, the configuration's tallies and the
-    online prover's history (empty for the other policies)."""
+    buckets before each window (`online.declare`). The verifier is `audit` (a class with `audit.Audit`'s interface).
+    Returns one row per link-window, the configuration's tallies and the online prover's history (empty for the other
+    policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
-    raw, committed, certified = Audit(), Audit(), Audit()
+    raw, committed, certified = audit(), audit(), audit()
     signer = ReplaySigner()
     key = signer.public_key()
     rows: list[dict] = []

@@ -10,7 +10,9 @@ is checked exactly as `verity/network-certificate/v2` checks it (`NetworkCheck.C
 Program's grid from `expectedGrids`, and `ingressVerdict` on that one record); a raw or committed record carries no direction, so it is matched by link and window
 alone (`_by_window`), as one record of the link's egress windows and of its ingress windows alike.
 
-**Params** and **evidence**: `verity/network-certificate/v2`'s, read by its decoders.
+**Params** and **evidence**: `verity/network-certificate/v2`'s, read by its decoders; the evidence keeps each payload as
+its bytes (`ByteEvidence`, which `NetworkCheck.RecordsBytes` proves is v2's reading of the same JSON), since v2's bits
+take a cons cell per bit.
 
 **Commitment**: the unit's published records, each `u8 kind ‖ u64be len(body) ‖ body`, concatenated, decoded exactly:
 
@@ -54,6 +56,32 @@ inductive Published where
 structure Commitment where
   records : Array Published
   bytes : ByteArray
+
+/-- A logical frame of the evidence with its payload kept as bytes. `toLogical` is the frame as `Check.evidenceOf` reads
+it, `NetworkCertifier.LogicalFrame` with the payload's bits, most significant first. -/
+structure ByteFrame where
+  payload : ByteArray
+  anchor : Nat
+  index : Nat
+
+def ByteFrame.toLogical (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨Check.bitsOfBytes f.payload, f.anchor, f.index⟩
+
+/-- The frame without its content: when the shaper hands it (`eligible`) reads only its anchor and its index. -/
+def ByteFrame.timing (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨[], f.anchor, f.index⟩
+
+/-- `Check.Link` with each payload kept as bytes. -/
+structure ByteLink where
+  frames : List ByteFrame
+  syncs : Array ClockSync
+
+def ByteLink.toLink (l : ByteLink) : Link := ⟨l.frames.map ByteFrame.toLogical, l.syncs⟩
+
+/-- `Check.Evidence` with each payload kept as bytes; `toEvidence` is `Check.evidenceOf`'s reading of the same JSON
+(`RecordsBytes.evidenceOf_toEvidence`). -/
+structure ByteEvidence where
+  links : Array ByteLink
+
+def ByteEvidence.toEvidence (e : ByteEvidence) : Evidence := ⟨e.links.map ByteLink.toLink⟩
 
 /-! ## Decoding -/
 
@@ -131,6 +159,35 @@ def commitmentOf (b : ByteArray) : Flock.V Commitment := do
   if r.pos ≠ b.size then throw "bytes left after the records"
   pure ⟨rs, b⟩
 
+/-- `Flock.unhex` of the characters `cs`, there `s.toList.toArray`. -/
+def unhexChars (cs : Array Char) : Flock.V ByteArray := do
+  if cs.size % 2 != 0 then throw s!"odd-length hex"
+  let v := fun (c : Char) =>
+    if c.isDigit then some (c.toNat - 48) else if 'a' ≤ c && c ≤ 'f' then some (c.toNat - 87) else none
+  let mut b := ByteArray.emptyWithCapacity (cs.size / 2)
+  for i in [0:cs.size / 2] do
+    match v (cs.getD (2 * i) ' '), v (cs.getD (2 * i + 1) ' ') with
+    | some h, some l => b := b.push (h * 16 + l).toUInt8
+    | _, _ => throw "not lowercase hex"
+  return b
+
+/-- `Flock.unhex` (`RecordsBytes.unhex_eq`), its characters read into an array with no list between, 8 bytes a character
+rather than 32: the evidence a case carries is hex of hex. -/
+def unhex (s : String) : Flock.V ByteArray := unhexChars (s.foldl Array.push (Array.emptyWithCapacity s.length))
+
+/-- `Check.evidenceOf`'s frame, its payload's bytes as they are. -/
+def byteFrameOf (j : Json) : Flock.V ByteFrame := do
+  let #[p, a, i] ← Flock.J.asArr j "a frame" | throw "a frame is [payload, anchor, index]"
+  pure ⟨← unhex (← Flock.J.asStr p "a frame's payload"), ← Flock.J.asNat a "an anchor",
+    ← Flock.J.asNat i "an index"⟩
+
+/-- `Check.evidenceOf`, each payload's bytes as they are. -/
+def evidenceOf (j : Json) : Flock.V ByteEvidence := do
+  let links ← (← Flock.J.arr j "links" "the object").mapM fun l => do
+    pure { frames := (← (← Flock.J.arr l "frames" "a link").mapM byteFrameOf).toList,
+           syncs := ← (← Flock.J.arr l "syncs" "a link").mapM Check.syncOf : ByteLink }
+  pure ⟨links⟩
+
 end Decoding
 
 /-! ## The committed record's digest (`commitment.py`) -/
@@ -207,10 +264,25 @@ def expectedGrids (g : Grid) (W : Nat) (l : Link) : Array RawGrid :=
     (releases g.allocation (fun t => enq.getD t 0) 0 0 (W * T))).toArray
   (Array.range W).map fun w => all.extract (w * T) (w * T + T)
 
+/-- `expectedGrids` of the link as `Check.evidenceOf` reads it, from its payloads' bytes: the hand times from the frames'
+anchors and indices, the payloads as they are (`RecordsBytes.expectedGridsOfBytes_eq`). -/
+def expectedGridsOfBytes (g : Grid) (W : Nat) (l : ByteLink) : Array RawGrid :=
+  let T := g.buckets
+  let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 Check.noSync
+  let enq := enqueueCounts (W * T) (handingRev T W syncs 0 (l.frames.map ByteFrame.timing) []).reverse
+  let payloads := l.frames.toArray.map ByteFrame.payload
+  let all := (rows g.allocation (fun k => payloads.getD k (Check.bytesOfBits [])) 0
+    (releases g.allocation (fun t => enq.getD t 0) 0 0 (W * T))).toArray
+  (Array.range W).map fun w => all.extract (w * T) (w * T + T)
+
+/-- `Check.unitSync`: the spatial unit's clock in window `w`, the sync the first egress link declares. -/
+def unitSync (e : ByteEvidence) (w : Nat) : ClockSync :=
+  ((e.links[0]?).map (·.syncs.getD w Check.noSync)).getD Check.noSync
+
 /-- An egress link-window's violation (`check_link`), none when it is accepted; `expected` is the Program's grid of the
 link-window. A certified record's is v2's `Check.egressVerdict`. -/
-def egressVerdict (p : Check.Params) (c : Commitment) (e : Evidence) (egressDigest : ByteArray) (l : String) (link : Link)
-    (expected : RawGrid) (w : Nat) : Option String :=
+def egressVerdict (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDigest : ByteArray) (l : String)
+    (link : ByteLink) (expected : RawGrid) (w : Nat) : Option String :=
   let screened : Except String (RawGrid → Bool) := match (found c .egress l w).toList with
     | [] => .error "no-verdict"
     | [.certified r] => (Check.screen p #[r]).map fun r grid =>
@@ -228,7 +300,7 @@ def egressVerdict (p : Check.Params) (c : Commitment) (e : Evidence) (egressDige
   | .error v => some v
   | .ok agrees =>
     let s := link.syncs.getD w Check.noSync
-    let u := Check.unitSync e w
+    let u := unitSync e w
     if !(Check.inSyncSet p.syncSet s && s.delta == u.delta && s.rho == u.rho) then some "advice"
     else if agrees expected then none
     else some "mismatch"
@@ -242,9 +314,10 @@ def ingressVerdict (p : Check.Params) (c : Commitment) (ingressDigest : ByteArra
   | _ => some "duplicate"
 
 /-- Every link-window's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's. -/
-def verdicts (p : Check.Params) (c : Commitment) (e : Evidence) (egressDigest ingressDigest : ByteArray) : Array LinkWindow :=
+def verdicts (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDigest ingressDigest : ByteArray) :
+    Array LinkWindow :=
   (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) =>
-      let grids := expectedGrids p.grid p.windows link
+      let grids := expectedGridsOfBytes p.grid p.windows link
       (List.range p.windows).map fun w =>
         ({ direction := .egress, link := l, window := w,
            violation := egressVerdict p c e egressDigest l link (grids.getD w #[]) w } : LinkWindow)) ++
@@ -253,19 +326,19 @@ def verdicts (p : Check.Params) (c : Commitment) (e : Evidence) (egressDigest in
         LinkWindow)).toArray
 
 /-- Every link-window's verdict, or why the evidence or the parameters can't give them (v2's refusals). -/
-def evaluate (p : Check.Params) (c : Commitment) (e : Evidence) : Except String (Array LinkWindow) :=
+def evaluate (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array LinkWindow) :=
   if e.links.size ≠ p.egress.size then
     .error s!"evidence: {e.links.size} links' frames and syncs for {p.egress.size} egress links"
   else if e.links.any (·.syncs.size ≠ p.windows) then
     .error s!"evidence: a link declares other than {p.windows} syncs"
-  else if e.links.any (·.frames.any (·.payload.length ≠ 8 * p.grid.frameBytes)) then
+  else if e.links.any (·.frames.any (·.payload.size ≠ p.grid.frameBytes)) then
     .error s!"evidence: a frame of other than {p.grid.frameBytes} bytes"
   else
     match parametersDigest p.grid (some (Check.manifestSet p.syncSet)), parametersDigest p.ingressGrid none with
     | .ok eg, .ok ig => .ok (verdicts p c e eg ig)
     | _, _ => .error "the parameters digest has no canonical JSON"
 
-def check (p : Check.Params) (c : Commitment) (e : Evidence) : Core.Outcome Unit Profile :=
+def check (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Core.Outcome Unit Profile :=
   match evaluate p c e with
   | .error why => .reject why
   | .ok vs =>
@@ -285,12 +358,12 @@ def protocol : Core.Protocol where
   id := protocolId
   Params := Check.Params
   Commitment := Commitment
-  Evidence := Evidence
+  Evidence := ByteEvidence
   Public := Unit
   Profile := Profile
   params := Check.paramsOf
   commitment := commitmentOf
-  evidence b := do Check.evidenceOf (← Core.canonicalJson b)
+  evidence b := do evidenceOf (← Core.canonicalJson b)
   digest c := (Identity.taggedSha512 commitmentTag c.bytes).toOption.getD .empty
   check := check
   publicJson _ := Json.mkObj []
@@ -304,12 +377,12 @@ def linkWindowJson (v : LinkWindow) : Json :=
 named as `Core.Protocol.answer` names it (`case: `, `params: `, `commitment: `, `evidence: `). -/
 def verdictsFn (j : Json) : Except String Json := do
   let parsed : Flock.V (Json × ByteArray × ByteArray) := do
-    pure (← Flock.J.get j "params" "the case", ← Flock.unhex (← Flock.J.str j "commitment" "the case"),
-      ← Flock.unhex (← Flock.J.str j "evidence" "the case"))
+    pure (← Flock.J.get j "params" "the case", ← unhex (← Flock.J.str j "commitment" "the case"),
+      ← unhex (← Flock.J.str j "evidence" "the case"))
   let (pj, cb, eb) ← parsed.mapError (s!"case: {·}")
   let p ← (Check.paramsOf pj).mapError (s!"params: {·}")
   let c ← (commitmentOf cb).mapError (s!"commitment: {·}")
-  let e ← (Core.canonicalJson eb >>= Check.evidenceOf).mapError (s!"evidence: {·}")
+  let e ← (Core.canonicalJson eb >>= evidenceOf).mapError (s!"evidence: {·}")
   let vs ← evaluate p c e
   pure (Json.mkObj [("link_windows", .arr (vs.map linkWindowJson))])
 

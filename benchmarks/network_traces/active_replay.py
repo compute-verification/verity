@@ -1193,8 +1193,9 @@ def live_comparisons(plan: dict, setup: Setup, frames: Sequence[LogicalFrame], r
     return {"model_syncs_met_windows": sum(w not in late for w in range(windows)), "hindsight": hindsight}
 
 
-def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
-    """The audit of one run's published records, and the comparisons with the reference and the model."""
+def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dict:
+    """The audit of one run's published records, and the comparisons with the reference and the model. The verifier
+    is `audit`, a class with `audit.Audit`'s interface."""
     setup = Setup(report)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, plan["windows"]
@@ -1215,7 +1216,7 @@ def audit_configuration(plan: dict, report: dict, run: Path) -> dict:
     committed = read_committed(run / "committed.jsonl")
     verdicts = []
     for kind, records in (("raw", in_records + out_records), ("committed", committed)):
-        a = Audit()
+        a = audit()
         v = a.check_link(setup.egress_link, records, frames, syncs, setup.sync_set, e)
         v += a.check_ingress_link(setup.ingress_link, records, windows)
         verdicts.append(v)
