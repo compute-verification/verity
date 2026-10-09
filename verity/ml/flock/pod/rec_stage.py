@@ -143,7 +143,8 @@ def fast(cls: str, n: int, out: Path, seed: int = 0, netlist: str | None = None,
 
 
 def direct(definition: str, n: int, out: Path, seed: int = 0, log=sys.stdout) -> dict:
-    """The Definition at ``definition`` (MODULE:NAME) as its own one-Call program, staged at ``n`` lanes, phase by phase."""
+    """The Definition at ``definition`` (MODULE:NAME), ``n`` instances of it as one population program (each instance a unit
+    of `Q_template_instance`, META naming the template, no links), every instance's rows its own, phase by phase."""
     import importlib
     import os
 
@@ -156,11 +157,13 @@ def direct(definition: str, n: int, out: Path, seed: int = 0, log=sys.stdout) ->
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.defs import bind
 
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
     ph = Phases(log)
     mod, name = definition.split(":")
     with ph("total"):
         fn = bind(getattr(importlib.import_module(mod), name))
-        program = PU.one_call(fn)
+        program = P.population_program(fn, n)
         query = PO.template_instance_query(fn)
         units = PU.PartitionUnits(program, query=query)
         [(shape, cl)] = units.classes().items()
@@ -168,7 +171,8 @@ def direct(definition: str, n: int, out: Path, seed: int = 0, log=sys.stdout) ->
             key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": f"rec-stage/direct/{fn.id}", "seed": seed})
             lanes = CS.class_lanes(units, cl, key, n, CS.broadcast_params(units))
         with ph("stage"):
-            st = CS.stage(units, "q-template-instance", shape, cl, lanes, out, None, packed=True)
+            st = CS.stage(units, "q-template-instance", shape, cl, lanes, out, None, packed=True,
+                          wiring=CS.Wiring(program, query, list(range(n))), share_rows=False)
         (out / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
         (out / "program.json").write_bytes(codec.canonical_json(codec.encode_program(program)))
     return {"definition": fn.id, "n": n, "phases": ph.rows} | \
