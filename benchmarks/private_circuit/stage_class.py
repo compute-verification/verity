@@ -10,7 +10,8 @@ checks the laid-out rows against them. The whole-unit reference evaluations `uni
 are skipped: at the largest classes they cost more than staging.
 
 ``DIR/phases.jsonl`` gets one line per phase as it ends: wall seconds, the process's resident and peak resident GiB, and
-``DIR/row.json`` the class, the unit's ANDs, rows and nonzeros and the statement's size. ``--keep-stage`` keeps the staged files.
+``DIR/row.json`` the class, the unit's ANDs, rows and nonzeros and the statement's size. ``--keep-stage`` keeps the staged files; ``--stage-dir`` stages
+into another directory, kept (a large class's files belong outside a run dir).
 """
 from __future__ import annotations
 
@@ -68,6 +69,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", required=True)
     ap.add_argument("--keep-stage", action="store_true")
+    ap.add_argument("--stage-dir", default=None, help="stage here (kept) instead of DIR/stage")
     a = ap.parse_args()
     G, N_IN, N_OUT = (int(v) for v in a.cls.split(","))
     out = Path(a.out)
@@ -100,7 +102,7 @@ def main() -> int:
         raise AssertionError("the transcript's outputs disagree with universal.interpret")
     ph.end("lanes")
     gc.collect()
-    d = out / "stage"
+    d = Path(a.stage_dir) if a.stage_dir else out / "stage"
     salt_key = secrets.token_bytes(32)
     st = CS.stage(units, SPEC, shape, cl, (ins, outs, idents), d, salt_key, packed=True)
     if st["n"] != a.n:
@@ -116,7 +118,7 @@ def main() -> int:
            "phases": ph.rows, "peak_gib": round(_peak_gib(), 3), "wall_s": round(time.monotonic() - ph.t0, 2)}
     (out / "row.json").write_text(json.dumps(row, indent=1))
     print(json.dumps({k: row[k] for k in ("class", "unit", "peak_gib", "wall_s")}), flush=True)
-    if not a.keep_stage:
+    if not (a.keep_stage or a.stage_dir):
         shutil.rmtree(d, ignore_errors=True)
     return 0
 
