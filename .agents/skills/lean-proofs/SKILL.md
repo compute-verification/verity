@@ -155,15 +155,16 @@ simp with that.
   and the theorem keeps its named assumptions as binders (tools/verity/lean/README.md, "A lift is not a change"). Daniel's DM
   still lists the changed record.
 - **One shape.** A property takes its inputs, one hypothesis that its function returned an outcome, and premises; the
-  rest is its conclusion. In a package with a `shape` block in `lean-audit.json`, each guarantee's entry under
-  `shape.properties` names its `function` (a constant or several) and that `outcome`: `accept` by default, `undecided` or
-  `reject` where the property is about that outcome, `none` for a function that always returns (a device's `step`, a
-  constant), which takes only the input; two acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a constant of a module under
-  `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis, and a conjunction as its
-  conjuncts. A guarantee that doesn't fit yet has a file `shape.frozen/<name>` (default `shape-frozen/`) with one sentence
-  on why; the check fails once it fits, until the file goes. Don't add a file: restate the guarantee, or move what isn't
-  a property (an iff's converse, an honest case) to `Proofs/` as completeness. Every `def G : Prop` of the spec is the
-  statement of a guarantee the lock lists.
+  rest is its conclusion. Each guarantee's entry under `shape.properties` in `lean-audit.json` names its `function` (a
+  constant or several) and that `outcome`: `accept` by default, `undecided` or `reject` where the property is about that
+  outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
+  acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
+  constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
+  and a conjunction as its conjuncts. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
+  with one sentence on why; the check fails once it fits, until the entry goes. Every `def G : Prop` of a `Guarantees` module (or a module
+  under `shape.statements`) is the statement of a guarantee the lock lists, or is under `shape.frozen` until it is. Adding an entry is a claims change the
+  landing DM shows Daniel: rather restate the guarantee, or move what isn't a property (an iff's converse, an honest
+  case) to `Proofs/` as completeness.
 
 ## Before the PR
 

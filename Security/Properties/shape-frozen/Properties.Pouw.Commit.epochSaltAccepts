@@ -1,1 +1,0 @@
-RESTATE: Split the iff: keep epochSalt = .ok (.ok s) -> CoinOpens and s = saltOf; move the converse to Proofs.

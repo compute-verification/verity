@@ -1,1 +1,0 @@
-RESTATE: Split the iff as AcceptsExactly; its acceptance is 'no error field', a predicate rather than an equation (question for top).

@@ -1,1 +1,0 @@
-RESTATE: Split the iff: keep evaluate j = .ok out -> WellFormed j; move WellFormed j -> accepts to Proofs as completeness.

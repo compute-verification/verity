@@ -152,6 +152,19 @@
    "type_hash": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
   }
  },
+ "shape": {
+  "premises": [],
+  "properties": {},
+  "frozen": {
+   "Flock.Firewall.Contract.commitLeaf_eq": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_coins": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_commit": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_computed": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_finish": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_fixed": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_masked": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement"
+  }
+ },
  "reads": {
   "Flock.Bytes": {
    "digest": "545f7e2773bcf0633bcd678500ce58072d4b40d9a2805f5da3ff4e67819a714f",

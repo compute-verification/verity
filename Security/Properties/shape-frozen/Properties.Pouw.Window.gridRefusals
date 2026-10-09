@@ -1,1 +1,0 @@
-RESTATE: Split each isOk = decide(domain): keep accepts -> domain and f? n = .ok v -> v = f n; move domain -> accepts (and its value) to Proofs as completeness.

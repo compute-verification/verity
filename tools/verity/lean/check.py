@@ -715,7 +715,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     config = work / "facts-config.json"
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
-                                  "spec": spec_of(policy), "shape": "shape" in policy,
+                                  "spec": spec_of(policy),
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
@@ -1035,31 +1035,35 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
 OUTCOMES = ("accept", "undecided", "reject", "none")
 
 
-def shape(policy: dict, facts: dict, frozen: dict[str, str]) -> list[str]:
+def shape(policy: dict, facts: dict) -> list[str]:
     """The shape every property has (the lean-proofs skill, "One shape"), as the policy's `shape` declares it: for each
-    guarantee, its entry under `shape.properties` names the function it is about (`function`: a constant, or several) and
-    the outcome its one hypothesis that is not a premise takes (`outcome`, `OUTCOMES`).  Its statement, with a lifted
-    definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type reaches the
-    function, and with an outcome other than `accept`, a constant named for the outcome), and premises: hypotheses whose
-    head is a constant of a module under `shape.premises`.  Several acceptances of the function are one, of the tuple of
-    their inputs (a binding property).  A `Prop` field of a structure an input ranges over is a hypothesis too, and a
-    conjunction counts as its conjuncts.  A guarantee in ``frozen`` ({name: its file's reason}, the files under
-    `shape.frozen`) is exempt until it fits, and then its file must go.  Every statement (`def G : Prop`) of the spec is
-    one that a listed guarantee states, or has a frozen file until one does."""
-    spec = policy.get("shape")
-    if spec is None:
-        return []
+    guarantee, its entry under `shape.properties` names the function it is about (`function`: a constant, or
+    several) and the outcome its one hypothesis that is not a premise takes (`outcome`, `OUTCOMES`). Its statement,
+    with a lifted definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type
+    reaches the function, and with an outcome other than `accept`, a constant named for the outcome), and premises:
+    hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
+    one, of the tuple of their inputs (a binding property). A `Prop` field of a structure an input ranges over is a
+    hypothesis too, and a conjunction counts as its conjuncts. A guarantee under `shape.frozen` ({name: why it
+    doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
+    spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
+    component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
+    one does. Every package is checked: one without a `shape` section has no entries, so each of its guarantees is
+    frozen or fails. The landing DM shows each entry added to `shape.frozen`."""
+    spec = policy.get("shape", {})
     fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
-    where = spec.get("frozen", "shape-frozen")
+    frozen, where = spec.get("frozen", {}), "shape.frozen"
     guarantees = set(policy.get("guarantees", {}))
-    lifted = {p.get("lift") for p in facts["pins"].values()}
-    unstated = {d["name"]: d["module"] for d in facts.get("spec_definitions", []) if d.get("statement") and d["name"] not in lifted}
+    lifted = {(p.get("lift") or {}).get("head") for p in facts["pins"].values()}
+    homes = spec.get("statements")
+    held = (lambda m: under(homes, m)) if homes is not None else (lambda m: "Guarantees" in m.split("."))
+    unstated = {d["name"]: d["module"] for d in facts.get("spec_definitions", []) if d.get("statement") and held(d["module"])
+                and d["name"] not in lifted and d["name"] not in policy.get("assumptions", {})}
     for name in sorted(set(frozen) - guarantees - set(unstated)):
-        fails.append(f"shape: {where}/{name} freezes {name}, which is neither a guarantee of this package nor a statement "
-                     f"of its spec that none states: delete the file")
+        fails.append(f"shape: {where} lists {name}, which is neither a guarantee of this package nor a statement of its "
+                     f"spec that none states: remove the entry")
     for name, module in sorted(unstated.items()):
         if name in frozen and not frozen[name].strip():
-            fails.append(f"shape: {where}/{name} gives no reason: one sentence on why no guarantee states {name} yet")
+            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why no guarantee states {name} yet")
         elif name not in frozen:
             fails.append(f"shape: {name} ({module}) is a statement that no guarantee of this package states: list the "
                          f"theorem that proves it under `guarantees`, or move it out of the spec")
@@ -1067,13 +1071,13 @@ def shape(policy: dict, facts: dict, frozen: dict[str, str]) -> list[str]:
         fails.append(f"shape: shape.properties lists {name}, which is not a guarantee of this package: remove the entry")
     for name in sorted(guarantees):
         if name in frozen and not frozen[name].strip():
-            fails.append(f"shape: {where}/{name} gives no reason: one sentence on why {name} doesn't have the shape yet")
+            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why {name} doesn't have the shape yet")
         got = facts["pins"].get(name, {}).get("shape")
         why = refusals(entries.get(name), got, premises) if isinstance(got, list) else \
             [f"has no shape in the facts ({(got or {}).get('error', 'not computed')})"]
         if name in frozen:
             if not why:
-                fails.append(f"shape: {name} has the shape now: delete {where}/{name}, the frozen list only shrinks")
+                fails.append(f"shape: {name} has the shape now: remove it from {where}, which only shrinks")
         elif why:
             fails += [f"shape: {name} {w}" for w in why]
     return fails
@@ -1134,13 +1138,6 @@ def reaches(function: str, reached: set[str]) -> bool:
         if ".".join(parts[:i]) in reached:
             return all(any(c.rsplit(".", 1)[-1] == p for c in reached) for p in parts[i:])
     return False
-
-
-def frozen_reasons(pkg: Path, policy: dict) -> dict[str, str]:
-    """{guarantee: reason}: the files under the package's `shape.frozen` directory, one per guarantee, named for it."""
-    spec = policy.get("shape")
-    d = pkg / (spec or {}).get("frozen", "shape-frozen")
-    return {p.name: p.read_text() for p in sorted(d.iterdir()) if p.is_file()} if spec is not None and d.is_dir() else {}
 
 
 def unowned(rec: dict | None) -> dict:
@@ -1333,8 +1330,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}
-                     | ({"shape": policy["shape"]} if "shape" in policy else {}), qwork, moved)
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(Path(o).resolve().relative_to(lib).with_suffix("").parts) for o in qf["oleans"]
                   if Path(o).resolve().is_relative_to(lib)}
@@ -1788,7 +1784,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return rep
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts, frozen_reasons(pkg, current))
+    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)

@@ -1,1 +1,0 @@
-RESTATE: Split the iff as EpochSaltAccepts; its no-commitment conjunct (acceptance -> False) already fits.

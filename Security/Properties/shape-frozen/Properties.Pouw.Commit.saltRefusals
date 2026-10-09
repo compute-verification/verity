@@ -1,1 +1,0 @@
-RESTATE: Split each isOk = decide(...): keep accepts -> nonempty coin or seed; move the converse to Proofs.

@@ -1,1 +1,0 @@
-RESTATE: Split the iff: keep coinReason = .ok none -> CoinOpens; move CoinOpens -> accepts to Proofs.

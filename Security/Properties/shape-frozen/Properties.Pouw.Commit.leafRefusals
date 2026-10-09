@@ -1,1 +1,0 @@
-RESTATE: Split isOk = decide(...): keep accepts -> the salt and digest sizes; move the converse to Proofs.
