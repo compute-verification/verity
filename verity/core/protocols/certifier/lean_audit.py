@@ -16,14 +16,16 @@ certified record of the link is in it) are placeholders. Anything the Lean proto
 `LmsKey` for a certified record, a raw grid that isn't a tuple of tuples of bytes or `None`, a window or a grid field
 outside its integer width, a frame of other than B bytes) raises `ValueError`, as does a call `audit.Audit` refuses; the
 exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
-`VERITY_NETWORK_RECORDS_EXE` names the executable; by default the first request runs `lake build network-records` in that
-package and starts what it builds.
+`VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
+default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
+after a request starts its own executable at its first; `SERVER`'s is closed at exit.
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
 
 from __future__ import annotations
 
+import atexit
 import fcntl
 import json
 import os
@@ -151,12 +153,22 @@ class Server:
     def __init__(self, exe: Path | str | None = None):
         named = exe or os.environ.get("VERITY_NETWORK_RECORDS_EXE")
         self.exe = Path(named) if named else None
+        self._pid = os.getpid()
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
+
+    def _own(self) -> None:
+        """In a process forked from the one that started the executable, forget the parent's: its pipe is the parent's."""
+        if self._pid != os.getpid():
+            if self._proc is not None:
+                self._proc.stdin.close()
+                self._proc.stdout.close()
+            self._pid, self._proc, self._lock = os.getpid(), None, threading.Lock()
 
     def verdicts(self, case: dict) -> list[dict]:
         """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order);
         `ValueError` when the Lean check refuses the case."""
+        self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
                 if self.exe is None:
@@ -184,6 +196,7 @@ class Server:
         return msg["output"]["link_windows"]
 
     def close(self) -> None:
+        self._own()
         with self._lock:
             if self._proc is not None:
                 self._proc.stdin.close()
@@ -192,6 +205,7 @@ class Server:
 
 
 SERVER = Server()
+atexit.register(SERVER.close)
 
 
 def _need_key(records: Sequence[Published], key: PublicKey | None) -> None:

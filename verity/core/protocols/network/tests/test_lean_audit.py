@@ -6,7 +6,11 @@ comes from several links; on `service.py`'s calls; and a refusal, never a Python
 from __future__ import annotations
 
 import dataclasses
+import os
 import shutil
+import subprocess
+import sys
+import warnings
 from fractions import Fraction
 
 import pytest
@@ -193,6 +197,55 @@ def test_outside_the_domain_it_refuses(lean, tmp_path):
     with pytest.MonkeyPatch.context() as m:
         m.delenv("VERITY_NETWORK_RECORDS_EXE", raising=False)
         m.setenv("PATH", str(tmp_path))
-        with pytest.raises(FileNotFoundError, match="lake is not on the PATH"):
+        with pytest.raises(FileNotFoundError, match="lake is not on the PATH.*set VERITY_NETWORK_RECORDS_EXE"):
             lean_audit.Audit(server=lean_audit.Server()).check_link("a", [rec], [], sync, ss, g)
     assert a.verdicts == [audit.Verdict("b", 0, "no-verdict")]
+
+
+def test_with_the_executable_named_it_needs_nothing_else(lean, tmp_path):
+    """With `VERITY_NETWORK_RECORDS_EXE` set, a fresh interpreter with no `lake` on its PATH and `verity_difftest`
+    unimportable gets the Lean check's verdicts, and its `SERVER` is closed at exit (seen by an exit handler registered
+    before the import, which runs after `SERVER.close`)."""
+    script = (
+        "import atexit, sys; sys.modules['verity_difftest'] = None\n"
+        "atexit.register(lambda: print('closed', sys.modules['verity.core.protocols.certifier.lean_audit']"
+        ".SERVER._proc is None))\n"
+        "from fractions import Fraction\n"
+        "from verity.core.protocols.certifier import lean_audit\n"
+        "from verity.core.protocols.certifier.grid import Certifier, GridParams\n"
+        "from verity.core.protocols.certifier.schedule import ClockSync, SyncSet, run_shaper\n"
+        "g, s = GridParams(1, 1, 1), [ClockSync(0, Fraction(1))]\n"
+        "a = lean_audit.Audit()\n"
+        "print(a.check_link('a', run_shaper([], [], s, Certifier('a', g)), [], s, SyncSet((0,), (Fraction(1),)), g))\n"
+        "assert lean_audit.SERVER._proc is not None\n")
+    p = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                       env={"PATH": str(tmp_path), "VERITY_NETWORK_RECORDS_EXE": str(lean.exe)})
+    assert p.returncode == 0, p.stderr
+    assert p.stdout.splitlines() == ["[Verdict(link='a', window=0, violation=None)]", "closed True"]
+
+
+def test_a_forked_process_starts_its_own_executable(lean):
+    """A process forked after the parent's server started gets its own executable at its first request, and the parent's
+    keeps answering on its own pipe."""
+    g, ss, s = GridParams(1, 1, 1), SyncSet((0,), (Fraction(1),)), [ClockSync(0, Fraction(1))]
+    rec = run_shaper([], [], s, Certifier("a", g))
+    honest = [audit.Verdict("a", 0, None)]
+    assert lean_audit.Audit(server=lean).check_link("a", rec, [], s, ss, g) == honest
+    parent = lean._proc.pid
+    r, w = os.pipe()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        pid = os.fork()
+    if pid == 0:
+        try:
+            ok = lean_audit.Audit(server=lean).check_link("a", rec, [], s, ss, g) == honest
+            os.write(w, b"%d %d" % (ok, lean._proc.pid))
+            lean.close()
+        finally:
+            os._exit(0)
+    os.close(w)
+    with os.fdopen(r) as fh:
+        ok, child = map(int, fh.read().split())
+    assert os.waitpid(pid, 0)[1] == 0
+    assert ok == 1 and child != parent
+    assert lean_audit.Audit(server=lean).check_link("a", rec, [], s, ss, g) == honest and lean._proc.pid == parent
