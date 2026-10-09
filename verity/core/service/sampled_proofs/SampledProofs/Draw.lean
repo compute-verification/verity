@@ -96,56 +96,118 @@ def probability? (p : String) : Option (Nat × Nat) :=
   | [a, b] => if digits a && digits b && 0 < b.toNat! && a.toNat! ≤ b.toNat! then some (a.toNat!, b.toNat!) else none
   | _ => none
 
-/-- `draw.check_draw`'s failure codes: the draw is well formed, over the registered population, under the verifier's law
-(for `stratified` and `work`, the expanded law of `derive`). -/
-def checkDraw (draw population law : Json) : Array String := Id.run do
+private def sumSizes (rs : Array (Int × Int)) : Int := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
+
+/-- `draw.strata_problem`'s words for why a stratified or work law is not well formed over `population` units, in its
+order: `k` and the strata, a work stratum's keys, work and floor, the population's work, then each stratum's keys and
+template, its ranges, its floor and its `k`, and last the tiling. -/
+def strataMessage (law : Json) (population : Int) : Option String := Id.run do
+  let work := jeq (getD law "law") "work"
+  let (.arr ss, some k) := (getD law "strata", int? (getD law "k")) | return some "strata and 1 <= k <= population"
+  if ss.isEmpty || k < 1 || population < k then return some "strata and 1 <= k <= population"
+  let keys := if work then WORK_STRATUM_KEYS else STRATUM_KEYS
+  let mut total : Int := 0
+  if work then
+    if !ss.all fun s => keys? s == some keys && (nat? (getD s "work")).isSome && (nat? (getD s "floor")).isSome
+        && (ranges? (getD s "units")).isSome then
+      return some "a work stratum is exactly {template, units, work, floor, k}, its work and floor natural numbers"
+    total := ss.foldl (fun a s => a + ((int? (getD s "work")).getD 0) * sumSizes ((ranges? (getD s "units")).getD #[])) 0
+    if total == 0 then return some "a work law's population does no work"
+  let mut seen : Array String := #[]
+  let mut ranges : Array (Int × Int) := #[]
+  for s in ss do
+    let .str t := getD s "template"
+      | return some (if work then "a stratum is exactly {template, units, work, floor, k}" else "a stratum is exactly {template, units, k}")
+    if keys? s != some keys then
+      return some (if work then "a stratum is exactly {template, units, work, floor, k}" else "a stratum is exactly {template, units, k}")
+    if seen.contains t then return some s!"template {pyRepr t} twice"
+    seen := seen.push t
+    let some rs := ranges? (getD s "units") | return some s!"stratum {pyRepr t}: units are non-empty [lo, hi) ranges"
+    if (List.range (rs.size - 1)).any fun i => rs[i + 1]!.1 ≤ rs[i]!.2 then
+      return some s!"stratum {pyRepr t}: ranges ascending, disjoint and not adjacent"
+    let floor := (int? (getD s "floor")).getD 0
+    if work && floor < 1 then return some s!"stratum {pyRepr t}: a floor is at least one"
+    let size := sumSizes rs
+    let rule : Int := if work then
+        Flock.Draw.workK k.toNat ((int? (getD s "work")).getD 0).toNat size.toNat total.toNat floor.toNat
+      else Flock.Draw.stratumK k.toNat size.toNat population.toNat
+    if int? (getD s "k") != some rule then
+      return some s!"stratum {pyRepr t}: k is not the {if work then "work " else ""}rule's"
+    ranges := ranges ++ rs
+  let mut at_ : Int := 0
+  for (lo, hi) in ranges.qsort (fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)) do
+    if lo != at_ then return some "the strata don't tile the population"
+    at_ := hi
+  return if at_ == population then none else some "the strata don't tile the population"
+
+/-- `draw.check_draw`: the draw is well formed, over the registered population, under the verifier's law (for
+`stratified` and `work`, the expanded law of `derive`), each failure with Python's detail. -/
+def checkDrawFull (draw population law : Json) : Check := Id.run do
   let kind := match getD draw "law" with | .str s => s | _ => ""
-  if !(draw matches .obj _) || !["subset", "bernoulli", "stratified", "work"].contains kind then return #["not-a-draw"]
+  if !(draw matches .obj _) || !["subset", "bernoulli", "stratified", "work"].contains kind then
+    return Check.fail {} "not-a-draw" draw
   let closure := kind == "work" && (field? draw "closure").isSome
   let want := if closure then sortStrings ((lawKeys kind).push "closure") else lawKeys kind
-  if keys? draw != some want then return #["keys"]
-  let mut c : Array String := #[]
+  let have_ := (keys? draw).getD #[]
+  if have_ != want then
+    return Check.fail {} "keys" (Json.arr (sortStrings ((have_.filter (!want.contains ·)) ++ want.filter (!have_.contains ·)) |>.map Json.str))
+  let mut c : Check := {}
   let n := getD draw "population"
-  if !sameLaw (lawOf draw) law then c := addCode c "law"
-  if !jeq n population then c := addCode c "population"
-  let .arr us := getD draw "units" | return addCode c "units"
-  let some units := us.mapM int? | return addCode c "units"
-  if !ascending units then c := addCode c "units-order"
+  if !sameLaw (lawOf draw) law then c := c.fail "law" (Json.mkObj [("drawn", lawOf draw), ("verifier", law)])
+  if !jeq n population then c := c.fail "population" (Json.mkObj [("drawn", n), ("registered", population)])
+  let us := getD draw "units"
+  let some units := (match us with | .arr xs => xs.mapM int? | _ => none) | return c.fail "units" us
+  if !ascending units then c := c.fail "units-order" (intsJson (units.extract 0 16))
   if h : 0 < units.size then
     let inRange := 0 ≤ units[0] && match int? n with
       | some n => units[units.size - 1]! < n
       | none => false
-    if !inRange then c := addCode c "units-range"
-  if kind == "subset" && int? (getD draw "k") != some (units.size : Int) then c := addCode c "units-count"
+    if !inRange then
+      let out := units.filter fun u => !(0 ≤ u && match int? n with | some n => u < n | none => false)
+      c := c.fail "units-range" (intsJson (out.extract 0 16))
+  if kind == "subset" && int? (getD draw "k") != some (units.size : Int) then
+    c := c.fail "units-count" (Json.mkObj [("units", Lean.toJson units.size), ("k", getD draw "k")])
   if kind == "bernoulli" then
     let ok := match getD draw "p" with
       | .str p => (probability? p).isSome
       | _ => false
-    if !ok then c := addCode c "p"
+    if !ok then c := c.fail "p" (getD draw "p")
   if kind == "stratified" || kind == "work" then
     let problem := match int? n with
-      | some n => strataProblem draw n
-      | none => true
-    if problem then c := addCode c "strata"
-    else
-      let wrong := (match getD draw "strata" with | .arr ss => ss | _ => #[]).any fun s =>
+      | some n => strataMessage draw n
+      | none => some "population"
+    match problem with
+    | some why => c := c.fail "strata" (Json.str why)
+    | none =>
+      let wrong := (match getD draw "strata" with | .arr ss => ss | _ => #[]).filterMap fun s =>
         let rs := (ranges? (getD s "units")).getD #[]
         let drawn := units.foldl (fun acc u => if rs.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
-        int? (getD s "k") != some (drawn : Int)
-      if wrong then c := addCode c "strata-count"
+        if int? (getD s "k") != some (drawn : Int) then
+          match getD s "template" with
+          | .str t => some (t, Json.mkObj [("drawn", Lean.toJson drawn), ("k", getD s "k")])
+          | _ => none
+        else none
+      if !wrong.isEmpty then c := c.fail "strata-count" (Json.mkObj wrong.toList)
   if closure then
-    let cs := match getD draw "closure" with
+    let raw := getD draw "closure"
+    let cs := match raw with
       | .arr cs => cs.mapM int?
       | _ => none
+    let bad := match raw with | .arr _ => raw | _ => Json.null
     match cs with
     | some cs =>
       let inRange := match cs[0]?, cs.back?, int? n with
         | some lo, some hi, some n => 0 ≤ lo && hi < n
         | _, _, _ => false
-      if cs.isEmpty || !ascending cs || !inRange then c := addCode c "closure"
-      else if cs.any units.contains then c := addCode c "closure-drawn"
-    | none => c := addCode c "closure"
+      if cs.isEmpty || !ascending cs || !inRange then c := c.fail "closure" bad
+      else
+        let both := (cs.filter units.contains).qsort (· < ·)
+        if !both.isEmpty then c := c.fail "closure-drawn" (intsJson (both.extract 0 16))
+    | none => c := c.fail "closure" bad
   return c
+
+/-- `draw.check_draw`'s failure codes. -/
+def checkDraw (draw population law : Json) : Array String := (checkDrawFull draw population law).codes
 
 /-- `draw.proved`: the drawn units and a work draw's closure, ascending. -/
 def proved (draw : Json) : Array Int :=
@@ -156,12 +218,17 @@ def proved (draw : Json) : Array Int :=
 
 /-- `draw.check_proved`'s failure codes: the proved statement's instances are exactly the units the draw proves, in
 ascending order. -/
-def checkProved (draw : Json) (provedUnits : Array Json) (instances : Json) : Array String := Id.run do
+def checkProvedFull (draw : Json) (provedUnits : Array Json) (instances : Json) : Check := Id.run do
   let want := proved draw
-  let mut c := #[]
-  if int? instances != some (want.size : Int) then c := addCode c "instances"
-  if provedUnits.map int? != want.map some then c := addCode c "units"
+  let mut c : Check := {}
+  if int? instances != some (want.size : Int) then
+    c := c.fail "instances" (Json.mkObj [("statement", instances), ("drawn", Lean.toJson want.size)])
+  if provedUnits.map int? != want.map some then
+    c := c.fail "units" (Json.mkObj [("statement", Json.arr (provedUnits.extract 0 16)), ("drawn", intsJson (want.extract 0 16))])
   return c
+
+def checkProved (draw : Json) (provedUnits : Array Json) (instances : Json) : Array String :=
+  (checkProvedFull draw provedUnits instances).codes
 
 /-- `src`'s bytes handed out in order, `need` at a time (`OwnRandomness.read`); an error when fewer are left. -/
 private def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray := do

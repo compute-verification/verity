@@ -23,10 +23,11 @@ import pytest
 from research import slack
 
 REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
+ACTING_AS = slack.acting_as
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
-HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
+HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting",
            "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
 
 
@@ -76,6 +77,12 @@ class FakeSlack:
             page = msgs[start:start + min(int(p.get("limit", 100)), self.page)]
             nxt = start + len(page)
             return {"ok": True, "messages": page, "response_metadata": {"next_cursor": str(nxt) if nxt < len(msgs) else ""}}
+        if method == "chat.update":
+            m = next((m for m in self.messages.get(ch, []) if m["ts"] == p["ts"]), None)
+            if not m:
+                return {"ok": False, "error": "message_not_found"}
+            m["text"] = p["text"]
+            return {"ok": True, "channel": ch, "ts": m["ts"]}
         if method == "reactions.add":
             if (ch, p["timestamp"], p["name"]) in self.reactions:
                 return {"ok": False, "error": "already_reacted"}                     # one reaction per emoji per user, like Slack
@@ -99,7 +106,8 @@ class FakeSlack:
 @pytest.fixture(autouse=True)
 def routes_dirs(tmp_path, monkeypatch):
     """No test reads the real notes clone's routes or the published ones: `local` is the clone's routes.d, `remote` the
-    published files, `seen` the read marks; nor asks the real gh for a PR's branch."""
+    published files, `seen` the read marks; nor asks the real gh for a PR's branch.  `--as` takes any name here; the
+    holder check has tests of its own (`ACTING_AS`)."""
     local, remote = tmp_path / "notes" / slack.ROUTES_DIR, tmp_path / "published"
     local.mkdir(parents=True)
     remote.mkdir()
@@ -108,6 +116,7 @@ def routes_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
     monkeypatch.setenv("RESEARCH_PR_BRANCHES", str(tmp_path / "pr-branches.json"))
     monkeypatch.setattr(slack, "GH", str(tmp_path / "no-gh"))
+    monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))  # tests post as any name
     return local, remote
 
 
@@ -268,8 +277,8 @@ def test_a_post_that_went_out_stands_when_its_permalink_fails(capsys):
 def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_file(fake, registry, capsys, tmp_path):
     body = tmp_path / "ask.md"
     body.write_text("a frontend for the pous panel: spec in PR 12")
-    assert run(capsys, "ask", "--as", "compute-accounting", "--to", "console", "--file", str(body))[0] == 0
-    assert fake.messages[COORD][0]["text"].startswith("@console a frontend")
+    assert run(capsys, "ask", "--as", "compute-accounting", "--to", "memory-accounting", "--file", str(body))[0] == 0
+    assert fake.messages[COORD][0]["text"].startswith("@memory-accounting a frontend")
 
 
 def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(fake, registry, capsys, monkeypatch):
@@ -463,7 +472,7 @@ def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
 def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
     src = Path(slack.__file__).read_text()
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
-    assert set(slack.DIRECT_ONLY) == {"usergroups.create", "usergroups.enable", "usergroups.update"}
+    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.enable", "usergroups.update"}
     assert called == set(slack.BROKER_METHODS) | set(slack.DIRECT_ONLY) and not set(slack.BROKER_METHODS) & set(slack.DIRECT_ONLY)
     assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
 
@@ -566,7 +575,7 @@ def test_match_an_ask_only_for_its_owner(fake, registry, capsys):
     assert match(capsys, "infra", ask)[0] == 0
     assert all(match(capsys, h, ask)[0] == 1 for h in HANDLES if h != "infra")
     assert match(capsys, "infra", {"text": "<!subteam^SOTHER|@infra> hi", "ts": "5.0"})[0] == 0
-    assert match(capsys, "console", "ping @console, please")[0] == 0
+    assert match(capsys, "memory-accounting", "ping @memory-accounting, please")[0] == 0
     assert match(capsys, "infra", "email infra@infra.dev or @infra-2")[0] == 1
     assert match(capsys, "infra", {"event": {"type": "message", "text": "@infra hi", "ts": "5.0"}})[0] == 0
     assert match(capsys, "infra", {"text": "@infra note to self", "ts": "5.0", "username": "infra", "bot_id": BOT})[0] == 1
@@ -587,7 +596,7 @@ def test_match_in_threads_participants_and_status_lines(fake, registry, capsys):
     reply = fake.add(COORD, text="node 2", username="compute-accounting", bot_id=BOT, thread_ts=root["ts"])
     rc, why = match(capsys, "infra", {**reply, "channel": COORD})
     assert rc == 0 and "posted in it" in why
-    assert match(capsys, "console", {**reply, "channel": COORD})[0] == 1
+    assert match(capsys, "memory-accounting", {**reply, "channel": COORD})[0] == 1
     human = fake.add(COORD, text="any news?", user="UDANIEL", thread_ts=root["ts"])
     assert match(capsys, "infra", {**human, "channel": COORD})[0] == 0 and match(capsys, "compute-accounting", {**human, "channel": COORD})[0] == 0
 
@@ -635,7 +644,7 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     t = fake.messages[COORD][-1]["ts"]
     assert run(capsys, "done", "--as", "compute-accounting", "--thread", t)[0] == 0
     assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 7 Oct 23:00Z")[0] == 0
-    assert run(capsys, "done", "--as", "console", "--thread", t)[0] == 0                   # not addressed: not counted
+    assert run(capsys, "done", "--as", "memory-accounting", "--thread", t)[0] == 0         # not addressed: not counted
     assert not [r for r in fake.reactions if r[1] == t]                                    # one bot can't carry many agents' reactions
     fake.add(COORD, text=f"{slack.DONE} done", user="UINTRUDER", thread_ts=t)              # a human's line is no status of a handle
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
@@ -688,13 +697,13 @@ def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsy
 
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
     text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
-    assert run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", text)[0] == 0
+    assert run(capsys, "ask", "--as", "infra", "--to", "@memory-accounting", "--text", text)[0] == 0
     posted = fake.messages[COORD][0]["text"]
     assert "freeze <!date^1793525400^{date_short_pretty} {time}|1:30 AM PST (09:30Z)>," in posted
     assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
     fake.messages[COORD][0]["ts"] = "1793525400.000100"
     rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
-    assert rc == 0 and out.startswith("1793525400.000100 @infra: @console freeze 1:30 AM PST (09:30Z), see note:")
+    assert rc == 0 and out.startswith("1793525400.000100 @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
@@ -1098,6 +1107,47 @@ def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_p
     assert "PR owners unknown for #1999 (gh: HTTP 401: Bad credentials)" in log.getvalue()
 
 
+def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "acting_as", ACTING_AS)
+    reg = json.loads(registry.read_text())
+    held = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"]) for h in reg["handles"]}
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{held['infra'][0]}")
+    assert run(capsys, "send", "--as", "infra", "--text", "node 2 is free")[0] == 0
+    before = len(fake.messages[COORD])
+    rc, _, err = run(capsys, "send", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"], "--text", "x")
+    assert rc == 2 and f"@ci is held by {held['ci'][0]}, and this agent is {held['infra'][0]}" in err
+    rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
+    assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
+    lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{lander}")
+    assert "bc-8ece7cde" in held["proofs"] and run(capsys, "send", "--as", "proofs", "--text", "the train is up")[0] == 0
+    add_route(routes_dirs[0], "circuits", "1700000900.000200", holder="bc-11111111-2222-3333-4444-555555555555")
+    monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-11111111-2222-3333-4444-555555555555")
+    assert run(capsys, "send", "--as", "circuits", "--text", "a successor's first post")[0] == 0
+    monkeypatch.delenv("RESEARCH_AGENT_URL")
+    monkeypatch.setattr(slack, "self_agent_id", lambda: None)
+    rc, _, err = run(capsys, "send", "--as", "infra", "--text", "x")
+    assert rc == 2 and "this agent is unknown (set RESEARCH_AGENT_URL)" in err
+    rc, _, err = run(capsys, "send", "--dry-run", "--as", "infra", "--text", "x")
+    assert rc == 0 and "a real --as infra would be refused" in err
+
+
+def test_retract_blanks_only_the_names_own_post(fake, registry, capsys):
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--text", "x")
+    ts = out.split()[0]
+    reply = fake.add(COORD, text="a stray reply", username="infra", bot_id=BOT, thread_ts=ts)
+    other = fake.add(COORD, text="mine", username="ci", bot_id=BOT)
+    assert run(capsys, "retract", "--as", "infra", "--ts", ts, "--why", "sent by mistake")[0] == 0
+    assert next(m for m in fake.messages[COORD] if m["ts"] == ts)["text"] == "_retracted by @infra_: sent by mistake"
+    fake.replies_keep_root = True
+    assert run(capsys, "retract", "--as", "infra", "--ts", reply["ts"], "--thread", ts)[0] == 0
+    assert reply["text"] == "_retracted by @infra_"
+    rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", other["ts"])
+    assert rc == 2 and "was posted by @ci, not @infra" in err and other["text"] == "mine"
+    rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", "1700000999.000001")
+    assert rc == 2 and "a reply needs --thread ROOT" in err
+
+
 def argparse_ns(**kw):
     import argparse
     return argparse.Namespace(dry_run=False, registry=None, channel=None, channel_id=None, **kw)
@@ -1207,7 +1257,7 @@ def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
-    for who in ("proofs", "lean", "console", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
+    for who in ("proofs", "lean", "network-accounting", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
         assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
     assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
 

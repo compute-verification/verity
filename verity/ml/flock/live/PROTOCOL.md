@@ -501,9 +501,9 @@ goes out).
   expanded from ChaCha20 like the hm96 salts.
 - **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
   - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
-    table's Σ. The server refuses at configuration a Bernoulli law (its count is random), a count J does not divide, and
-    tables `--zk` cannot prove. The session's law is the record's `unit_draw`: each table's header carries only its part
-    as a subset draw;
+    table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
+    divide, and tables `--zk` cannot prove. The session's sampling design is the record's `unit_draw`: each table's
+    header carries only its part as a subset draw;
   - randomness per table (§2) and a rank check per table (§6). Per table is the joint check here, because no claim or
     message reads two tables' witnesses or masks. The tables' witnesses may be correlated: two drawn units in different
     tables can read the same row;

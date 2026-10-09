@@ -13,9 +13,12 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
   `statement`, `verdicts` (`{name: {"accepted": true | false | null, "of_record", ...}}`, each verifier's verdict on the
-  drawn units' sessions), `sessions`, `served`, `session_roots` and `session_registered` (each null when absent);
-* **check**: R1–R7 (`Registration.check`), then the record's checks (the draw, the proved units, the receipt, the served
-  draw, the sessions' roots, the roots the sessions' registered reads were opened against). It rejects when one fails or
+  drawn units' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
+  against, `"registered": {port: {"value": string, "root"}}`), `sessions`, `served` and `session_roots` (each null when
+  absent);
+* **check**: R1–R7 (`Registration.check`), then the record's checks (`Record.checks`: the draw, the proved units, the
+  receipt, the served draw, the sessions' roots, and the roots the verifiers of record report opening the sessions'
+  registered reads against, `Record.sessionRegistered`, each the registered one). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound`; null for a
@@ -25,7 +28,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 import CoreProtocol.Cli
 import CoreProtocol.Profile
 import SampledProofs.Registration
-import SampledProofs.Bound
+import SampledProofs.Record
 
 namespace SampledProofs.OneStage
 
@@ -50,7 +53,6 @@ structure Evidence where
   sessions : Array String
   served : Option (Array Nat)
   sessionRoots : Option Json
-  sessionRegistered : Option Json
 
 structure Public where
   drawn : Array Nat
@@ -145,10 +147,14 @@ def commitmentOf (b : ByteArray) : V Commitment := do
 
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
-  exactly j #["draw", "instances", "proved_units", "receipt", "served", "session_registered", "session_roots",
-    "sessions", "statement", "verdicts"] "the evidence"
+  exactly j #["draw", "instances", "proved_units", "receipt", "served", "session_roots", "sessions", "statement",
+    "verdicts"] "the evidence"
   let some instances := nat? (getD j "instances") | throw "instances is not a natural number"
   let verdicts ← (entries (← obj (getD j "verdicts") "verdicts")).mapM fun (n, v) => do pure (n, ← obj v s!"verdict {n}")
+  if !verdicts.all fun (_, v) =>
+      !(truthy (getD v "of_record") && jeq (getD v "accepted") (.bool true) && (getD v "registered" matches .obj _))
+      || (entries (getD v "registered")).all fun (_, e) => (getD e "value" matches .str _) && (field? e "root").isSome then
+    throw "a verifier of record reports registered reads that are not objects with a string value and a root"
   let .arr ss := getD j "sessions" | throw "sessions is not a list of strings"
   let sessions ← ss.mapM fun s => match s with
     | .str s => pure s
@@ -162,55 +168,19 @@ def evidenceOf (b : ByteArray) : V Evidence := do
            served := ← match getD j "served" with
              | .null => pure none
              | x => some <$> nats x "served",
-           sessionRoots := ← opt "session_roots" (obj · "session_roots"),
-           sessionRegistered := ← opt "session_registered" (obj · "session_registered") }
+           sessionRoots := ← opt "session_roots" (obj · "session_roots") }
 
-/-- `audit_record`'s checks after the draw's: the names of those that fail. -/
-def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String := Id.run do
-  let mut failed := #[]
-  if !(Draw.checkProved e.draw (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)).isEmpty then
-    failed := failed.push "proved"
-  if !jeq (getD e.receipt "registration") (Json.str digest) then failed := failed.push "receipt"
-  if let some served := e.served then
-    let units := (match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]).qsort (· < ·)
-    if (served.map (fun (n : Nat) => (n : Int))).qsort (· < ·) != units then failed := failed.push "served"
-  if let some roots := e.sessionRoots then
-    let registered := match getD rec "roots" with | .arr rs => rs | _ => #[]
-    let wrong := (entries roots).any fun (p, r) =>
-      match registered.reverse.find? (fun reg => jeq (getD reg "port") (Json.str p)) with
-      | some reg => !jeq (getD reg "root") r
-      | none => true
-    if (entries roots).isEmpty || wrong then failed := failed.push "roots"
-  -- the sessions' registered reads were opened against exactly the record's `{value: root}` (none for a v1 record)
-  if (field? rec "registered").isSome || e.sessionRegistered.isSome then
-    let want := (match getD rec "registered" with | .arr es => es | _ => #[]).foldl (fun (acc : Array (Json × Json)) x =>
-      let v := getD x "value"
-      (acc.filter fun ((w, _) : Json × Json) => !jeq w v).push (v, getD x "root")) #[]
-    let opened := (e.sessionRegistered.map entries).getD #[]
-    if opened.size != want.size
-        || !opened.all (fun (v, r) => want.any fun (w, root) => jeq w (Json.str v) && jeq root r) then
-      failed := failed.push "registered"
-  return failed
+/-- `audit_record`'s checks after the draw's (`Record.checks`): the names of those that fail. The registered roots the
+sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
+values (`Record.ownRegistered`). -/
+def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
+  let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
+  let roots := e.sessionRoots.map entries
+  let cs := Record.checks rec e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)
+    digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots
+    (Record.ownRegistered rec (Record.sessionRegistered e.verdicts))
+  (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
 
-/-- The profile's draw of the law the draw passed under (`audit.profile`). -/
-def profileDraw (law : Json) : Option Core.Draw :=
-  match getD law "law" with
-  | .str "subset" => (nat? (getD law "k")).map .subset
-  | .str "bernoulli" => do
-    let .str p := getD law "p" | none
-    let (a, b) ← Draw.probability? p
-    return .bernoulli (← Core.Ratio.mk' a b)
-  | .str "stratified" | .str "work" => do
-    let .arr ss := getD law "strata" | none
-    let strata ← ss.mapM fun s => do
-      let .str t := getD s "template" | none
-      let rs ← Draw.ranges? (getD s "units")
-      return ({ name := t, size := (rs.foldl (fun (a : Int) ((lo, hi) : Int × Int) => a + (hi - lo)) 0).toNat,
-                k := ← nat? (getD s "k") } : Core.Stratum)
-    return .stratified strata
-  | _ => none
-
-def LEVEL : String := "unit"
 
 /-- The verdicts' share of `audit_record`'s acceptance, once the record's checks hold: a verdict that ran (`accepted`
 not null) and did not accept rejects; with none of record (`of_record` truthy), or one of record that has not run, the
@@ -241,7 +211,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
   | .reject r => .reject r
   | .undecided r => .undecided r
   | .accept () () =>
-  match profileDraw law, nat? (getD rec_ "population") with
+  match Record.profileDraw law, nat? (getD rec_ "population") with
   | some draw, some population =>
     let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
     let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
@@ -252,8 +222,8 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := strata.map (Bound.countBound · p.delta), perTemplate }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
-        levels := #[{ name := LEVEL, query := some (str "partition"), size := population, draw := some draw }],
-        delta := p.delta, drawn := #[(LEVEL, units.size)] }
+        levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
+        delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
   | _, _ => .reject "the law the draw passed under has no profile"
 
 def publicJson (x : Public) : Json :=
