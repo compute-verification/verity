@@ -178,6 +178,16 @@ def _variant(man: dict, coins: dict, opening: dict, case: str) -> dict:
     return {**{k: v for k, v in man.items() if k != "beacon"}, "schema": CC.MANIFEST_SCHEMA, "coins": coins, "salt_opening": o}
 
 
+def selected_stream(ch: Path) -> str | None:
+    """The stream digest the honest select read, from its DRAWN reply (a window stopped before its outcome has no
+    audit.json); None for a run whose replies don't carry it."""
+    for line in (ch / "requests.jsonl").read_text().splitlines():
+        r, q = json.loads(line), json.loads(json.loads(line)["request"])
+        if (q.get("op"), q.get("name")) == ("select", "honest") and r["reply"].startswith("DRAWN "):
+            return json.loads(r["reply"].split(" ", 1)[1]).get("stream")
+    return None
+
+
 def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path]) -> list[tuple[str, str, dict, str]]:
     """(check, ``pass`` or ``draw``, its input, the recorded verdict or ``CONTROL``) of the run's coin checks."""
     ch = out / "challenger"
@@ -189,9 +199,10 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
     openings = [json.loads(x) for x in (ch / "openings.jsonl").read_text().splitlines() if x]
     drawn = next((o for o in openings if o["label"] == "draw"), None)
     audit = out / "outcome-honest/audit.json"
+    stream = load(audit)["stream"] if audit.is_file() else selected_stream(ch)
     got: list[tuple[str, str, dict, str]] = []
-    if drawn is not None and audit.is_file() and "select" in checks:
-        x = {"coins": coins, "recorded": recorded, "opening": drawn, "stream": load(audit)["stream"],
+    if drawn is not None and stream is not None and "select" in checks:
+        x = {"coins": coins, "recorded": recorded, "opening": drawn, "stream": stream,
              "registration": receipt["registration"], "receipt": receipt, "k": reg["law"]["k"],
              "population": reg["population"], "units": d["units"]}
         got.append(("select", "draw", x, checks["select"]["verdict"]))

@@ -842,7 +842,7 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
     ``salt`` (``after`` hex, the weights' root; ``out`` the salt coin's opening), and with a registration's ``name``:
     ``register`` (``registration`` a record's file, ``manifest`` its pass's manifest and ``recorded`` true for a pass
     recorded before epoch coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
-    draw), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
+    draw; the reply adds the stream's digest the draw read), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
     directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, DRAWN, DELIVERED, ACCEPT, REJECT, LATE,
     PENDING, REFUSED, or ERROR for a request it couldn't read."""
     op, name = cmd.get("op"), cmd.get("name")
@@ -863,7 +863,7 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
         if op == "select":
             d = ch.select(name)
             _put(cmd.get("out"), d.draw)
-            return "DRAWN", d.draw
+            return "DRAWN", {**d.draw, "stream": ch._held(name)[0].digest}
         if op == "deliver":
             o = ch.deliver(name, _sessions(_json(cmd["units"])))
             return ("DELIVERED", {"sessions": len(ch.sessions[name])}) if o is None else (o.verdict.codes[0].upper(), {})
