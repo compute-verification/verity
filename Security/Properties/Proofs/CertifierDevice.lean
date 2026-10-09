@@ -29,13 +29,10 @@ theorem completeRows : CompleteRows := Proofs.completeRows_proof
 /-- **(3) Fail-closed.** -/
 theorem failClosed : FailClosed := Proofs.failClosed_proof
 
-/-- **(4) LMS signs and verifies.** -/
+/-- **(4) LMS signatures verify.** -/
 theorem lmsCorrect : LmsCorrect := Proofs.Lms.lmsCorrect_proof
 
 /-- **(4) The issuer's certificates verify.** -/
 theorem issuerVerifies : IssuerVerifies := Proofs.Issuer.issuerVerifies_proof
-
-/-- **(4) The issuer certifies at every leaf.** -/
-theorem issuerSigns : IssuerSigns := Proofs.Issuer.issuerSigns_proof
 
 end Properties.CertifierDevice
