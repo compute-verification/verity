@@ -1,6 +1,7 @@
 import NetworkCheck.Certificate
 import NetworkCheck.Check
 import NetworkCheck.Difftest
+import NetworkCheck.Records
 
 /-!
 # The network certificate's checks
