@@ -565,18 +565,25 @@ def stage_of(outcome: dict) -> tuple[str | None, list[str] | None]:
     return "decode", [reason]
 
 
-def compare(c: Case, lean: dict, py: dict) -> dict:
+def against(c: Case, outcome: dict) -> str:
+    """An outcome against the recorded verdict: the same verdict, stage and codes (`same`), the verdict only, or not."""
+    stage, codes = stage_of(outcome)
+    r = c.recorded
+    if outcome.get("verdict") != r["verdict"]:
+        return "differ"
+    if c.kind == "analog" or (r["stage"] in (None, stage) and (r["codes"] is None or r["codes"] == codes)):
+        return "same"
+    return "same-verdict"
+
+
+def compare(c: Case, lean: dict | None, py: dict) -> dict:
+    if lean is None:
+        return {"python_recorded": against(c, py)}
     strip = lambda o: {k: v for k, v in o.items() if k != "reason"}  # noqa: E731
     lp = "same" if lean == py else ("same-verdict" if strip(lean) == strip(py) else "differ")
     stage, codes = stage_of(lean)
-    r = c.recorded
-    if lean.get("verdict") != r["verdict"]:
-        lr = "differ"
-    elif c.kind == "analog" or (r["stage"] in (None, stage) and (r["codes"] is None or r["codes"] == codes)):
-        lr = "same"
-    else:
-        lr = "same-verdict"
-    return {"lean_python": lp, "lean_recorded": lr, "lean_stage": stage, "lean_codes": codes}
+    return {"lean_python": lp, "lean_recorded": against(c, lean), "python_recorded": against(c, py), "lean_stage": stage,
+            "lean_codes": codes}
 
 
 # --- drivers -----------------------------------------------------------------------------------------------------------
@@ -590,6 +597,13 @@ OUTSIDE = {
     "m0-selftest-unit-draw-session": "M0's selftest",
     "prover-ignores-the-draw (M0 selftest)": "M0's selftest",
     "wrong-output-word": "the verifier of record (flock-verify, M0) on a tampered copy of the set, whose record the run did not keep",
+    "lean-reads-another-root-of-W": "flock-verify's registered reads (`--registered`), opening each table row against the reads "
+                                    "file's root; the protocol reads the roots the verdict opened against (replayed as "
+                                    "registered-read-opened-against-another-root)",
+    "lean-reads-moved-position": "flock-verify's registered reads (`--registered`): each unit's position against the verifier's "
+                                 "read map from its own program; the protocol reads the verdict",
+    "lean-weights-committed-afresh-read-as-registered": "flock-verify's registered reads (`--registered`) on a statement that "
+                                                        "commits W under fresh salts, with no paths; the protocol reads the verdict",
 }
 #: The flock-verify draw checks a run recorded, each with the protocol's check of the same kind (an analog).
 ANALOG = {
@@ -1105,6 +1119,104 @@ def a4(run: Run) -> Iterator[Case]:
                           session_roots=session_roots if with_served else None, served=served)
 
 
+def registered_gemm(run: Run) -> Iterator[Case]:
+    """A4 of registered values (`a4.py` before A4 was #101's layer 0): `RegisteredGemm`, `n` Calls of the generated BF16
+    set's GEMM coordinate, Call `i` reading its activation row `x[i]` and the weight column `W[pos[i]]` of the root
+    parameter W (`pos` the reads of `stage/registered.json`). Windows register W in a `verity/registration/v2` record (R7:
+    the verifier expects `{W: K}`, and a later window's log holds the earlier windows' records), baselines in a v1 record
+    that registers nothing; every record also registers its statement's roots under M0's set-bound domains over the public
+    file's shared-row tables. The audit took the sessions, their roots (the LIVE line's) and the roots the Lean verdict
+    opened registered reads against, not the served draw; `audit_negatives` re-decided it with the record's roots as the
+    sessions'."""
+    from verity_numerical.bench.input_sets import InputSet
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.refs import coll_concat
+    from verity.ml.circuits.types import Array
+    base = "run"
+    summary = run.json(f"{base}/summary.json")
+    n, cols = summary["n"], summary["cols"]
+    man = next((f["path"] for f in run.files if re.fullmatch(rf"{base}/set/sets/[^/]+/manifest\.json", f["path"])), None)
+    if man is None:
+        raise Missing(f"{base}/set/sets/*/manifest.json")
+    sd = man.rsplit("/", 1)[0]
+    for f in run.files:
+        if f["path"].startswith(sd + "/"):
+            run.path(f["path"])
+    s = InputSet.open(str(run.dir / sd))
+    template = s.subcircuit.definition()
+    (port, rd), = run.json(f"{base}/stage/registered.json")["ports"].items()
+    value, pos = rd["value"], rd["reads"]
+    (_, xt), (_, wt) = template.signature()[0]
+    ret = template.signature()[1]
+
+    def sig(S):
+        return (("x", Array(n, xt)), (value, Array(cols, wt))), Array(n, ret)
+
+    def body(B, S, x, W):
+        return coll_concat(sig(S)[1], [B.call(template, x[i], W[p]) for i, p in enumerate(pos)])
+    program = Program(bind(CompositeDefinition("RegisteredGemm", 0, (), sig, body, register=False)))
+    values = {value: summary["K"]}
+    parameters = _json([[name, t.to_json()] for name, t in program.fn.signature()[0]])
+    query = P.template_instance_query(template)
+    era_tid = run.json(f"{base}/stage/partition.json")["query"]["params"]["template"]
+    law = DR.parse_law(f"subset:{summary['k']}")
+    prov0: dict = {"commit": run.commit(), "set": f"{sd} (the run's generated set)",
+                   "program": f"RegisteredGemm over the set's template, W[pos] from {base}/stage/registered.json's reads",
+                   "registered": f"{values} with the program function's parameters"}
+    log: list[dict] = []
+    for w in summary["windows"]:
+        name, d = w["name"], f"{base}/{w['name']}"
+        rec = run.json(f"{d}/registration.json")
+        a = run.json(f"{d}/audit.json")
+        if PO.program_sha512(program) != rec["program"]:
+            raise Gap(f"RegisteredGemm is {PO.program_sha512(program)[:16]}, {name}'s record's {rec['program'][:16]}")
+        prov = dict(prov0)
+        partition, prov["partition"] = partition_form(program, query, rec, [era_tid])
+        pub = f"{d}/stage/pub-{n}.bin"
+        with open(run.path(pub), "rb") as fh:
+            header = json.loads(fh.readline())
+        layout = {p: (schema, header["shared_rows"][p] if schema == ROW else n) for p, schema in header["frame_v3"]["schemas"].items()}
+        ports, prov["ports"] = choose(((f"{tag}{' +content' if content else ''} over {pub}'s shared rows",
+                                        stand_in_ports(s.name, s.content_digest, n, layout, tag, content))
+                                       for tag in STAND_IN_BINDINGS for content in (True, False)),
+                                      rec, f"verity/flock-ir-frame/binding/v1 +content over {pub}'s shared rows")
+        leaf_layer, prov["leaf_layer"] = public_digest(run, pub, f"{d}/session/archive-put.log")
+        registered = bool(w.get("registered"))
+        prior = list(log) if registered else []
+        prov["log"] = f"the {len(prior)} earlier windows' records" if prior else "empty"
+        live = live_line(run.path(f"{d}/session/prove.log")) or {}
+        sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{d}/session")
+        delta = delta_of((a.get("profile") or {}).get("delta") or a["wrong_units"]["delta"])
+        p = params(program, query, law, ports, leaf_layer, delta, partition=partition, log=prior,
+                   registered=values if registered else None)
+        if registered:
+            p["parameters"] = parameters
+        e = evidence(a, instances=live.get("instances", -1), sessions=sessions, session_roots=live.get("roots") or {},
+                     served=None)
+        prov["evidence"] = (f"{d}/audit.json; instances and session roots from session/prove.log's LIVE line; registered "
+                            "reads' roots from the lean-verify verdict")
+        c = Case(run.id, "registered-gemm", rec["format"], name, "audit", program, p, rec, e,
+                 recorded_audit(a, f"{d}/audit.json"), prov, r7=registered)
+        yield c
+        if registered:
+            log.append(rec)
+        neg = w.get("negatives") or {}
+        src = f"{base}/summary.json ({name}'s negatives)"
+        cases: dict[str, Callable[[dict], Case]] = {}
+        if registered and run.has(f"{d}/own-lean-reads-another-root-of-W.json"):
+            other = run.json(f"{d}/own-lean-reads-another-root-of-W.json")["ports"][port]["root"]
+            later = {**rec, "window": {**rec["window"], "window": 99}, "previous": R.digest(rec),
+                     "registered": [{**x, "root": other} if x["value"] == value else x for x in rec["registered"]]}
+            nm = "registration-re-registers-W-under-another-root (R7-held)"
+            cases[nm] = lambda v, c=c, nm=nm, later=later, held=list(log): c.but(
+                nm, "negative", recorded_codes(v, "registration", src), rec=later, params={"log": held},
+                provenance={"change": f"window 99 after {name}, W under the run's second commitment of it (its root from "
+                                      f"{d}/own-lean-reads-another-root-of-W.json)"})
+        yield from _negatives(run, c, neg, src, cases, base_instances=len(a["proved_units"]),
+                              session_roots={r["port"]: r["root"] for r in rec["roots"]})
+
+
 #: what the era's code imports from a run's commit
 ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "benchmarks/pouw/served_zk")
 
@@ -1312,7 +1424,7 @@ def session_digests(run: Run, session: str) -> list[str]:
 
 
 DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a0-lean": a0_lean, "a2": a2, "a3": a3, "a4": a4,
-                                                       "served-window": served_window}
+                                                       "registered-gemm": registered_gemm, "served-window": served_window}
 
 
 # --- main --------------------------------------------------------------------------------------------------------------
@@ -1414,20 +1526,20 @@ def main() -> int:
             info["status"] = "replayed"
         with open(out / "cases" / f"{rid}.jsonl", "w") as f:
             for c in cases:
-                if c.r7 and True not in servers:
-                    results.append(_row(c, None, None, {"pending": "no --r7-lean"}))
-                    continue
                 case = c.case()
-                try:
-                    lean = servers[c.r7].exchange(case)
-                except DT.ProtocolError as err:
-                    lean = {"verdict": "error", "reason": str(err)}
+                lean = None
+                if c.r7 in servers:
+                    try:
+                        lean = servers[c.r7].exchange(case)
+                    except DT.ProtocolError as err:
+                        lean = {"verdict": "error", "reason": str(err)}
                 try:
                     py = python(c)
                 except Exception as err:  # noqa: BLE001 - a crash is a verdict here
                     py = {"verdict": "error", "reason": f"{type(err).__name__}: {err}"}
-                results.append(_row(c, lean, py, compare(c, lean, py)))
-                f.write(json.dumps({"name": c.name, "case": case}) + "\n")
+                results.append(_row(c, lean, py, {**compare(c, lean, py),
+                                                  **({"pending": "R7: no --r7-lean"} if lean is None else {})}))
+                f.write(json.dumps({"name": c.name, "r7": c.r7, "case": case}) + "\n")
         info["cases"] = len(cases)
         runs_out.append(info)
         print(f"{rid} {driver}: {info['status']} {len(cases)} cases", file=sys.stderr, flush=True)
@@ -1472,9 +1584,11 @@ def counts(runs: list[dict], results: list[dict], outside: list[dict]) -> dict:
             by[f"{r['driver']} {','.join(sorted(r.get('formats') or {})) or '-'}"][r["status"]] += 1
     return {"runs": len(runs), "cases": len(results),
             "same_verdict": sum(1 for r in results if r.get("lean_recorded") in ("same", "same-verdict")),
+            "pending_r7": sum(1 for r in results if r.get("pending")),
             "negatives": sum(1 for r in results if r["kind"] == "negative"),
             "analogs": sum(1 for r in results if r["kind"] == "analog"), "outside": len(outside),
             "lean_python": dict(Counter(r.get("lean_python", "pending") for r in results)),
+            "python_recorded": dict(Counter(r.get("python_recorded", "-") for r in results)),
             "by_driver_format": {k: dict(v) for k, v in sorted(by.items())}}
 
 
