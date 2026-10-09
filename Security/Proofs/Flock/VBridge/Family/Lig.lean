@@ -20,10 +20,12 @@ array at the length `decodeProof` reads (Proof.lean:94-151) by construction, so 
   and checks nothing of them (Ligerito.lean:143, 146, `Transcript.pow`). The messages, the out-of-domain values and `yr`
   are empty: `proofOf` sets them from the rep's values.
 * `capShaped_capOf`, `ligShaped_ligOf`: the shapes at any setup on hm96-sha512 (`SetupRealizes`' scheme), and `hCapS_of`,
-  `hLigS_of` at the family: `vbridgeRead_assembled`'s `hcapS` and `hligS`.
+  `hLigS_of` at the family: `vbridgeRead_assembled`'s `hcapS` and `hligS`. `capOf_of_capDig`: when the first cap message
+  is `capDig a` for `2^cap` digests `a` (`Steps`' first step), `capOf` is `a`.
 * `setupH_regions_le`: `Stmt.setupH` refuses more than 1,024 regions (`checkInRange`, Statement.lean:114,
   HmRow.lean:1339), as `Stmt.setupHidden` does (`Hidden.Spec.inRange`), so `RegionsFit` holds at a statement with a
-  setup's regions (`regionsFit_of_setupH`), and `hRegs_of` is `vbridgeRead_assembled`'s `hregs`.
+  setup's regions (`regionsFit_of_setupH`, `regionsFit_of_spec`; `regionsOf`'s, `length_regionsOf`), and `hRegs_of`,
+  `hRegs_of_spec` are `vbridgeRead_assembled`'s `hregs`.
 -/
 
 namespace FlockVBridge.Family
@@ -73,6 +75,18 @@ theorem regionsFit_of_setupH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {
   have h48 : (1024 : ℕ) < 2 ^ 48 := by norm_num
   omega
 
+/-- **`RegionsFit` from the verifier's hidden setup** (`Stmt.setupHidden`'s `checkInRange`). -/
+theorem regionsFit_of_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw : Option Lean.Json} {stH : Stmt} (h : FlockSoundness.Discharge.Hidden.Spec tags cf pf coins tables draw stH)
+    {S : Model.Statement} (hS : S.regions.length = stH.regions.size) : S.regions.length < 2 ^ 48 := by
+  have := spec_regions_le h
+  have h48 : (1024 : ℕ) < 2 ^ 48 := by norm_num
+  omega
+
+/-- A statement's model regions are as many as its regions. -/
+theorem length_regionsOf (st : Stmt) : (regionsOf st).length = st.regions.size := by
+  simp [regionsOf]
+
 theorem TableSrc.regionsFit_of_setupH (s : TableSrc) {tags : Tags} {cf pf : ByteArray} {coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {stH : Stmt}
     (hH : Stmt.setupH tags cf pf coins tables draw partition program = .ok stH)
@@ -86,6 +100,18 @@ def fitB (n : ℕ) (b : ByteArray) : ByteArray := ⟨Array.ofFn fun i : Fin n =>
 
 theorem size_fitB (n : ℕ) (b : ByteArray) : (fitB n b).size = n :=
   show (Array.ofFn fun i : Fin n => b.get! i.val).size = n from Array.size_ofFn
+
+theorem fitB_of_size {n : ℕ} {b : ByteArray} (h : b.size = n) : fitB n b = b := by
+  subst h
+  cases b with
+  | mk d =>
+    show (⟨Array.ofFn fun i : Fin d.size => (ByteArray.mk d).get! i.val⟩ : ByteArray) = ⟨d⟩
+    congr 1
+    apply Array.ext Array.size_ofFn
+    intro i _ h2
+    rw [Array.getElem_ofFn]
+    show d[i]! = d[i]
+    exact getElem!_pos d i h2
 
 /-- `w` elements of `a` from element 0, zero past its end. -/
 def fitRow (w : ℕ) (a : Array F128) : Array F128 := Array.ofFn fun i : Fin w => a[i.val]!
@@ -229,6 +255,17 @@ theorem capShaped_capOf {st : Setup} {sch : Flock.Schedule} (hms : st.merkle = M
     (ms : List (List (SMsg T))) : CapShaped st sch (capOf T sch ms) :=
   capShaped_capArr (shapeOf_hm96 (n := 0) hms).1 _
 
+/-- **`capOf` is the cap the first cap message holds**: when that message is `capDig a` (`Steps`' first step) for `2^cap`
+digests `a`, `capOf` is `a`. -/
+theorem capOf_of_capDig {sch : Flock.Schedule} {ms : List (List (SMsg T))} {a : Array ByteArray}
+    (h0 : (capsIn T ms)[0]? = some (capDig a)) (ha : a.size = 2 ^ (sch.levels.getD 0 default).cap)
+    (h64 : ∀ x ∈ a, x.size = 64) : capOf T sch ms = a := by
+  apply Array.ext (by rw [capOf, capArr, Array.size_ofFn, ha])
+  intro i h1 h2
+  simp only [capOf, capArr, Array.getElem_ofFn, capEntry, h0, capDig]
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem h2, Option.getD_some,
+    toDig_val (h64 _ (Array.getElem_mem h2)), fitB_of_size (h64 _ (Array.getElem_mem h2))]
+
 end msgs
 
 /-! ## At the family -/
@@ -292,6 +329,12 @@ theorem hRegs_of {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Lis
     (hH : Stmt.setupH tags cf pf coins tables draw partition program = .ok stH) (hlen : regs.length = stH.regions.size) :
     ∀ R ω, ((F.x R ω).toStatement regs).regions.length < 2 ^ 48 :=
   fun _ _ => regionsFit_of_setupH hH (S := (F.x _ _).toStatement regs) hlen
+
+/-- **`hregs` from the verifier's hidden setup** (`Stmt.setupHidden`, `Hidden.Spec.inRange`). -/
+theorem hRegs_of_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw : Option Lean.Json} {stH : Stmt} (h : FlockSoundness.Discharge.Hidden.Spec tags cf pf coins tables draw stH)
+    (hlen : regs.length = stH.regions.size) : ∀ R ω, ((F.x R ω).toStatement regs).regions.length < 2 ^ 48 :=
+  fun _ _ => regionsFit_of_spec h (S := (F.x _ _).toStatement regs) hlen
 
 end VStarFamily
 
