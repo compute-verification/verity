@@ -1597,7 +1597,7 @@ statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without
 covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
 `--zk` refuses it too.
 
-**A registered description.** When the inner statement is a private circuit's (its description, the netlist's `op`,
+**A registered description.** When the inner statement is a private circuit's (its description, the circuit's `op`,
 `src` and `out` bits, one row port every instance reads), the developer registers the description's rows once (§16.10's
 registration: `hm96-sha512/row/v1` rows under salts drawn once, a frame-v3-sha512 root under the registration's domain),
 and the statement opens them against that root: the header's `registered` names the description port, and each of its

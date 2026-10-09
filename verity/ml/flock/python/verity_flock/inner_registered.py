@@ -1,5 +1,5 @@
 """A recursive session's inner statement whose private circuit's description is registered (PROTOCOL.md §16.16): the
-description's rows (the class statement's row port of the netlist's ``op``, ``src`` and ``out`` bits, ``prog`` under
+description's rows (the class statement's row port of the private circuit's ``op``, ``src`` and ``out`` bits, ``prog`` under
 `rec_inner.program_unit`, one table row every instance reads) committed once at registration
 (`verity.core.protocols.sampled_proofs.one_stage.registered`), and the statement opening them against the registration's
 root, so that a verifier holding the root reads the description from the developer's registration, not from the prover.
