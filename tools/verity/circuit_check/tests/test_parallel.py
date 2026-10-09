@@ -1,60 +1,73 @@
-"""`cli.parallel`, the worker pool behind `circuit-check --jobs`, on its own: `test_circuit_check` builds every target at
+"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own: `test_circuit_check` builds every target at
 collection, which this needs none of."""
 from __future__ import annotations
 
 import os
-from concurrent.futures.process import BrokenProcessPool
-
-import pytest
+import signal
 
 from circuit_check import cli
 
 
 def test_every_item_is_yielded_once():
-    assert sorted(cli.parallel(abs, [-1, -2, -3], jobs=2)) == [1, 2, 3]
+    assert sorted(v for _, v, _, _ in cli.parallel(abs, [-1, -2, -3], jobs=2)) == [1, 2, 3]
 
 
-def _allocate(mb: int) -> float:
+_KEPT: list = []
+
+
+def _allocate(mb: int) -> int:
+    """A fake target that allocates ``mb`` MiB and keeps it, as a check that leaves its memo resident does."""
     block = bytearray(mb << 20)
     block[::4096] = b"x" * len(block[::4096])
-    return cli.peak_gb()
+    _KEPT.append(block)
+    return mb
+
+
+def test_a_target_s_peak_is_its_own():
+    """A 600 MiB target's peak shows it, and the small target after it, in the same single job, does not inherit it: a worker
+    that outlived the first kept its 600 MiB under the second's peak (the 104 GiB plateaus in the first heavy.json)."""
+    got = {x: (peak, start) for x, _, peak, start in cli.parallel(_allocate, [600, 1], jobs=1)}
+    (big, big_start), (small, small_start) = got[600], got[1]
+    assert big - big_start >= 0.55
+    assert small - small_start < 0.05 and small < big - 0.4
 
 
 def _die_on_7(x: int) -> int:
     if x == 7:
-        os._exit(9)
+        os.kill(os.getpid(), signal.SIGKILL)
     return x
 
 
-def test_a_target_s_peak_is_its_own():
-    """The peak a worker reports for an item is that item's: a 600 MB allocation shows, and the small item after it in the same
-    worker does not inherit it (`reset_peak`)."""
-    big, small = cli.parallel(_allocate, [600, 1], jobs=1)
-    assert big >= 0.55
-    assert small < big - 0.4
+def test_a_target_whose_process_is_killed_is_named_and_the_rest_still_run():
+    got = {x: (v, peak) for x, v, peak, _ in cli.parallel(_die_on_7, [1, 7, 2, 3], jobs=2)}
+    killed, peak = got.pop(7)
+    assert isinstance(killed, cli.Killed) and killed["how"] == "signal 9" and peak > 0
+    assert {x: v for x, (v, _) in got.items()} == {1: 1, 2: 2, 3: 3}
 
 
-def test_a_worker_that_dies_is_named_and_the_rest_still_run():
-    got = list(cli.parallel(_die_on_7, [1, 7, 2, 3], jobs=2))
-    killed = [g for g in got if isinstance(g, cli.Killed)]
-    assert [k["item"] for k in killed] == [7] and killed[0]["peak_gb"] > 0
-    assert sorted(g for g in got if not isinstance(g, cli.Killed)) == [1, 2, 3]
+def _raise(x: int) -> int:
+    raise ValueError(f"no {x}")
 
 
-def test_a_death_no_status_file_accounts_for_still_fails_the_run(monkeypatch):
-    monkeypatch.setattr(cli, "_tracked", _exit_untracked)
-    with pytest.raises(BrokenProcessPool):
-        list(cli.parallel(abs, [1, 2], jobs=2))
+def test_a_target_that_raises_is_reported_not_lost():
+    [(_, v, _, _)] = cli.parallel(_raise, [5], jobs=1)
+    assert isinstance(v, cli.Killed) and v["how"] == "raised ValueError: no 5"
 
 
-def _exit_untracked(fn, item):
-    os._exit(3)
+def test_heavy_targets_run_alone():
+    """`admit` under a 160 GB budget: a 150 GiB target starts only when nothing runs, and nothing starts beside it; light ones
+    fill what is left, past a heavy one that does not fit; one over the budget runs alone."""
+    assert cli.admit([150, 16, 16], [], jobs=8, budget=160) == [0]
+    assert cli.admit([16, 16], [150], jobs=8, budget=160) == []
+    assert cli.admit([150, 16, 16], [100], jobs=8, budget=160) == [1, 2]
+    assert cli.admit([16] * 12, [], jobs=8, budget=160) == list(range(8))
+    assert cli.admit([200, 16], [], jobs=8, budget=160) == [0]
+    assert cli.admit([16], [200], jobs=8, budget=160) == []
 
 
-def test_fresh_gives_each_item_a_worker_of_its_own():
-    """The heavy targets' phase: under a budget only one fits, and each runs in a new process."""
-    pids = list(cli.parallel(_pid, [1, 2, 3], jobs=3, weight=lambda _: 3, budget=4, fresh=True))
-    assert len(set(pids)) == 3
+def test_a_budget_still_runs_every_target_each_in_a_process_of_its_own():
+    got = list(cli.parallel(_pid, [1, 2, 3], jobs=3, weight=lambda _: 3, budget=4))
+    assert sorted(x for x, *_ in got) == [1, 2, 3] and len({v for _, v, _, _ in got}) == 3
 
 
 def _pid(_: int) -> int:
