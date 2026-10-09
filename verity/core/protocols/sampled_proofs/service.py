@@ -412,7 +412,7 @@ def check_public(spec: Spec, record: Any, values: Sequence[Value] | None = None)
                 wrong.append(name if name is not None else e)
                 continue
             seen.add(name)
-            for k in e:
+            for k in sorted(e):
                 if k in _LAYOUT[field_]:
                     need.append(f"{k}:{name}")
                 elif k not in ("value" if registered else "port", "root"):
