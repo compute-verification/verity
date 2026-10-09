@@ -376,9 +376,9 @@ theorem claims_of {r : Fin 2} {x} (hrows : RecAlgebra.verifierRows s.sh (s.d r).
   rw [ClaimsAre, RecAlgebra.verifierRows_claims hrows, hxs]
 
 /-- **The statement has fewer than `2^48` regions**, so that each rep's proof file, with its `2 + 2·|regions|` ring
-switches of 2064 bytes each, fits a `u64` (`decodeProof` reads every length as a `u64`, Proof.lean:94-151). No file shows
-it: the statement is the inner circuit's, parsed from the session's circuit file, whose regions each take bytes of it,
-so a statement with `2^48` regions has a circuit file no machine holds. -/
+switches of 2064 bytes each, fits a `u64` (`decodeProof` reads every length as a `u64`, Proof.lean:94-151). The
+verifier's setup refuses more than 1,024 (`checkInRange`, Statement.lean:114), so it holds at a statement with a setup's
+regions (`regionsFit_of_setupH`, Lig.lean). -/
 def RegionsFit : Prop := s.S.regions.length < 2 ^ 48
 
 /-- **`Encodes`** at `bytes r := encodeProof (shapeOf …) (proof r)`: the setup's (`SetupRealizes`: hm96-sha512 and a
