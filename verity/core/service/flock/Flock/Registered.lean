@@ -191,17 +191,24 @@ def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   | .stratified _ strata => strata.any full
   | .work _ strata => strata.any (full ·.toStratum)
 
-/-- U4 (PROTOCOL.md §16.10): a drawn statement draws in full every unit that reads a round's commitment (`roundCommitment`)
-by the verifier's own reads `own`, so no stage's message is read off a sample. `draw` is the record's; a statement without
-a draw proves its whole population. -/
+/-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
+does not draw in full. -/
+def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
+  own.findSome? fun p =>
+    if roundCommitment p.value then
+      ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
+    else none
+
+/-- U4 (PROTOCOL.md §16.10): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
+draw proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   let (some own, some j) := (own, draw) | pure ()
   let d ← Draw.UnitDraw.ofJson j
-  for p in own do
-    if roundCommitment p.value then
-      for u in [0:p.reads.size] do
-        if p.reads[u]!.isSome && !drawsInFull d u then
-          throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
+  match fullMiss own d with
+  | none => pure ()
+  | some (p, u) =>
+    throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
 
 end Registered
 end Flock
