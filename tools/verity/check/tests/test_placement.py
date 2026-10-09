@@ -119,6 +119,7 @@ def test_with_no_machine_readable_auto_refuses_and_launches_nothing(monkeypatch,
 
 def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, capsys):
     docs = {N1: machine([slot("c", HOLDER)], [waiter()], pools=lean()), N2: machine([slot("d")])}
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
     asked = []
     monkeypatch.setattr(CHECK, "read_slots", lambda names: asked.append(names) or {n: docs[n] for n in names})
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)

@@ -120,6 +120,17 @@ def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
     return out
 
 
+def refusal(pack: Path) -> str | None:
+    """Why `import` and `combine` would refuse the pack (not a gzipped tar, or a member that isn't a verdict entry); None when
+    they take it."""
+    try:
+        with tarfile.open(pack, "r:gz") as tar:
+            _members(tar)
+    except (BadPack, tarfile.TarError, OSError, EOFError) as e:
+        return f"{type(e).__name__}: {e}"
+    return None
+
+
 def import_(pack: Path) -> tuple[int, int]:
     """Add the pack's entries that don't exist here; (added, already here).  Nothing is written when the pack is refused."""
     base = roots()
