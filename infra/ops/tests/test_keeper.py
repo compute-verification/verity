@@ -382,6 +382,11 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
                                             f'root = "{root}"\npython = "{sys.executable}"\n')
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", "-c"])
+    pkg = tmp_path / "pkg" / "research"            # a stand-in for the research package `set` ships, which would read all of it
+    pkg.mkdir(parents=True)
+    for name, text in (("__init__.py", ""), ("cli.py", ""), ("remote.py", "def tool_identity(): ...\n")):
+        (pkg / name).write_text(text)
+    monkeypatch.setattr(remote, "source_tool_package", lambda src: pkg)
     monkeypatch.setattr(K, "NODE_KEEPER", str(KEEPER))
     monkeypatch.setattr(K, "clock", lambda: t("2098-12-31T12:00"))
     for k, v in (("KEEPER_DIR", tmp_path / "keep"), ("KEEPER_ROOT", root), ("KEEPER_MAX_AHEAD_H", 10**6)):
@@ -396,7 +401,7 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     assert (doc["owner"], doc["n"], doc["max_min"], doc["command"]) == ("@proofs", 2, 25, ["python3", "-m", "x", "--seed", "{seed}"])
     assert req["runs_root"] == str(root / "runs") and (Path(req["tool"]) / "research" / "cli.py").is_file()
     assert req["harness_args"] == ["--stage", "run", "--project", "verity", "--lane", "proofs", "--declared-output", "out/*"]
-    assert req["remote"]["machine"] == "vy-nebius-2" and req["remote"]["tool_identity"] == remote.tool_identity()
+    assert req["remote"]["machine"] == "vy-nebius-2" and req["remote"]["tool_identity"] == remote.tool_identity(pkg)
     assert cli.main(["keeper", "status", *on, "--json"]) == 0
     row, = json.loads(capsys.readouterr().out)
     assert (row["name"], row["owner"], row["next_seed"], row["live"], row["stopped"]) == ("sweep", "@proofs", 0, [], None)
