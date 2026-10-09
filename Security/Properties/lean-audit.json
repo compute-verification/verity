@@ -15,7 +15,9 @@
   "Properties.NetworkCertifier",
   "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork",
-  "Properties.Proofs.CertifierNetwork"
+  "Properties.Proofs.CertifierNetwork",
+  "Properties.SampledProofs",
+  "Properties.Proofs.SampledProofs"
  ],
  "proved_in": ["../Proofs"],
  "meaning": [
@@ -53,7 +55,9 @@
   "Lms",
   "Properties.NetworkCertifier",
   "Definitions.NetworkCertifier",
-  "Properties.CertifierNetwork"
+  "Properties.CertifierNetwork",
+  "Properties.SampledProofs",
+  "SampledProofs"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -90,6 +94,11 @@
    "imports": ["Properties.CertifierDevice", "Properties.NetworkCertifier"],
    "except": [],
    "why": "the guarantee joins the device's statements and the check's: stated over their definitions, never a proof"
+  },
+  "Properties.SampledProofs": {
+   "imports": ["SampledProofs"],
+   "except": [],
+   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
@@ -532,6 +541,15 @@
    "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
    "assumptions": [],
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
+  },
+  "Properties.SampledProofs.acceptMeans": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.bernoulliBoundsNothing": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.digestIsRecord's": {
+   "owner": "@proofs"
   }
  },
  "reads": {
