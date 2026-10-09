@@ -6,7 +6,8 @@ import Proofs.Flock.Verifier.Registered
 # Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
 
 * `Flock.SecurityProofs.RecursiveCircuitPrivate` is `circuit_private_of_zk`'s argument with `RecursiveZK` as the step:
-  at each registration salt `r`, `RecursiveZK` (and, for the other way, `RecursiveZK` on the event's complement) moves
+  at each registration salt `r`, `RecursiveZK` at `2^-193` under `hash-derived-key` (`recursiveZK_le`; and, for the
+  other way, the same on the event's complement) moves
   the firewall's commitments and V*'s sessions to the ideal leaves and V*'s simulator, which read `r` only through the
   registration's view `reg P r`; then the registration's hiding, as a test with values in `[0, 1]` (`Hides.avg_le`),
   moves `reg P r` to `reg p₀ r`.
@@ -77,7 +78,7 @@ noncomputable def realAt (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → 
         z.1.1.2 z.1.2 z.2)
 
 omit [Fintype Rr] [Nonempty Rr] in
-/-- **`RecursiveZK` at one registration salt, both ways.** -/
+/-- **`RecursiveZK` at one registration salt, both ways**, under `hash-derived-key` (`recursiveZK_le` at `2^-193`). -/
 theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞} (o : Out) (P : Prog) (w : Wit) (r : Rr)
@@ -88,7 +89,8 @@ theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → 
     (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
     realAt reg nh msgs view P w E r ≤ idealAt nh sim o E (reg P r) + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
       idealAt nh sim o E (reg P r) ≤ realAt reg nh msgs view P w E r + (εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  have zk := fun E' => RecursiveZK nh (msgs P w r) (view P w r) (sim o (reg P r)) hOuter hKey E'
+  have zk := fun E' => recursiveZK_le nh (msgs P w r) (view P w r) (sim o (reg P r)) (δ := (2 : ℝ≥0∞) ^ (-193 : ℤ))
+    hOuter hKey E'
   refine ⟨(zk fun t => E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)), ?_⟩
   refine prCoin_flip _ _ ((zk fun t => ¬ E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)))
 

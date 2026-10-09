@@ -126,15 +126,19 @@ the first commitment (Goldreich–Kahan's committed coins, or a beacon's). Then 
 `h` (the commitments), with the inner proof and the salts as its witness: `view a h p y r` is the auditor's view of it on
 the developer's randomness `r`, against the auditor of tape `a`, which may read `h`. When the outer session has a
 simulator `sim a h` (reading the auditor and the public input only) within `ε_o` of `view` at every tape, witness and
-event, and under `hash-derived-key`, the auditor's whole view (its tape, the commitments, the outer view) is within
-$$\varepsilon_o + n_h \cdot 2^{-193}$$
+event, the auditor's whole view (its tape, the commitments, the outer view) is within
+$$\varepsilon_o + n_h \cdot \delta_{K^*}$$
 of the simulator that draws `nh` ideal commitments (`idealLeaf`) and runs `sim` on them: it reads the auditor and public
 inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's complement).
 
+`δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
+`ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
+Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
+that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
+
 The salts are drawn uniformly here; the firewall reads them from the operating system, and under A3
-(`uniform/io-getrandombytes`) the same bound holds at those bytes (`Flock.SecurityProofs.recursiveZK_os`), so no premise on
-a stream generator enters. `hash-derived-key` is used only to bound the commitments' hiding gap at the pinned key by
-`2^-193`: at the gap itself the bound needs no premise (`Flock.SecurityProofs.recursiveZK_gap`). -/
+(`uniform/io-getrandombytes`) the same bound holds at those bytes (`Flock.SecurityProofs.recursiveZK_os_gap`), so no
+premise on a stream generator enters. -/
 def RecursiveZK : Prop :=
   ∀ {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo]
     [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
@@ -143,14 +147,13 @@ def RecursiveZK : Prop :=
     (∀ a p y (E : V → Prop),
       prCoin (fun r : Ωo => E (view a (fun i => firewallLeaf (msgs a p i) (y i)) p y r))
         ≤ prCoin (fun s : Ωs => E (sim a (fun i => firewallLeaf (msgs a p i) (y i)) s)) + εo) →
-    FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96 →
     ∀ E : Ωa × (Fin nh → ByteArray) × V → Prop,
       prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
           E (w.1.1.1, (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
             view w.1.1.1 (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)) w.1.1.2 w.1.2 w.2))
         ≤ prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
             E (w.1.1, (fun i => idealLeaf (w.1.2 i)), sim w.1.1 (fun i => idealLeaf (w.1.2 i)) w.2))
-          + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)
+          + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
 
 /-- **The recursive audit's real view of a private circuit**, the probability of the event `E`. The developer registers
 the private circuit `P` under the registration's randomness `r`, and the auditor sees `reg P r`; the firewall sends the `nh`

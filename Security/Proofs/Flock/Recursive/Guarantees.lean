@@ -9,9 +9,9 @@ import Proofs.Flock.Soundness.ZK.Hiding
   `Inner.accepts_of_rel_eq`).
 * `Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK` is two hybrids: the outer session's simulator at
   the firewall's commitments (the premise, averaged over the auditor's tape, the developer's randomness and the salts),
-  then T1 once per commitment (`ZK.ideal_leaves_swap` under `hash-derived-key`), whose salts the simulated outer session
-  no longer reads. `recursiveZK_le` is the same at any hm96 hiding bound `δ`; `Proofs.Flock.Recursive.OsSalts` takes it
-  to the salts the operating system gives (A3) and to the hiding gap itself.
+  then T1 once per commitment (`ZK.ideal_leaves_swap` at the pinned key's hiding gap, `CROnly.hm96Hiding_gap`), whose
+  salts the simulated outer session no longer reads. `recursiveZK_le` is the same at any hm96 hiding bound `δ`;
+  `Proofs.Flock.Recursive.OsSalts` takes it to the salts the operating system gives (A3).
 -/
 
 namespace Flock.SecurityProofs
@@ -48,8 +48,8 @@ def pullMid (A P S U : Type) : ((A × P) × S) × U ≃ P × ((A × U) × S) whe
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- **`RecursiveZK` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveZK` with `Assumptions.Hm96Hiding` at `δ` in
-place of `hash-derived-key`, and `nh·δ` in place of `nh·2^-193`. -/
+/-- **`RecursiveZK` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveZK` with `Assumptions.Hm96Hiding` at `δ`
+taken as a hypothesis, and `nh·δ` in place of `nh·hidingGap My saltHash`. -/
 theorem recursiveZK_le {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
     [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
     (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
@@ -123,10 +123,11 @@ theorem recursiveZK_le {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [
   refine h1.trans ((add_le_add h2 (le_refl εo)).trans (le_of_eq ?_))
   rw [h3, add_right_comm]
 
-/-- **The recursive audit is zero knowledge.** -/
+/-- **The recursive audit is zero knowledge**, at the pinned key's hiding gap, where hm96 hiding holds with no
+premise (`CROnly.hm96Hiding_gap`). -/
 theorem RecursiveZK : Flock.Guarantees.RecursiveZK := by
-  intro Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter hKey E
-  exact recursiveZK_le nh msgs view sim hOuter hKey E
+  intro Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter E
+  exact recursiveZK_le nh msgs view sim hOuter (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) E
 
 end ZK
 
