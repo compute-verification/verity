@@ -18,6 +18,8 @@ family's choice.
   `hAccRows_of`'s `hout` is never satisfiable.
 * `oneAt_keyProg`: every unit's constant is the program's input gate `Layout.oneG`; `hOne_of`, `hOneOpen_of`: `HOne` and
   `HOneOpen` from `OneInLayer`, the layers carrying 1 at that gate.
+* `hRowKeys_of`: `HRowKeys` from the part circuits' keys (`RowColKeys`) and the family's registered reads covering the
+  rows `own` names (`RowsRegistered`).
 -/
 
 namespace FlockVBridge.Family
@@ -171,6 +173,38 @@ theorem hOneOpen_of (h : F.OneInLayer dg N k Rw) : F.HOneOpen dg N k Rw := by
   intro R ω t R₂ τ o ha r ℓ _ j _
   rw [oneAt_keyProg]
   exact h R ω t R₂ τ o ha (F.sessO ℓ)
+
+/-- **The rows `own` names are registered reads.** At every accepted outer proof, in each session, the row of every
+port the session's reads file `own` names is a registered read at every unit. Acceptance does not give it: `hown`
+(`OwnReads`) says only that a registered read is such a row, and `rd` is the family's field. It says how the family's
+sessions take `rd` from the registration: at each such row, the registrant's committed row, salt and path at the root
+and position the verifier holds (`Reads.committed`), which only the registrant's knowledge of its openings supplies,
+no file. -/
+def RowsRegistered : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
+    (q : Fin (F.Vs j).c.ports.size), (∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = (F.Vs j).c.ports[q].name) →
+      (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))
+
+/-- **Each part's row-port columns are keyed by a bit of a row `own` names.** At every accepted outer proof, every
+row-port column `rowColOf` of part `p`'s unit is an input column whose Δ key (`Aliased.srcKey`, copy 0) is message bit
+`k` of a row port `q'`, within its row, and the session's reads file names `q'`. A fact about V*'s `InnerRepCheck`
+circuit (its row ports are the inputs from column 0, `rowCol`) and its reads file (`rec_vstage.py:356-357`: each row
+port is a read of `regs[nm]`); established from the parse of the part's circuit (`keyProg_parse`, the lane that proves
+`HStruct`) and the session's `own` (the lane that proves `HFiles`). -/
+def RowColKeys : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ p, p < (partsOf F.sh).size →
+    ∀ q < 128 * (nsOf F.sh p).sum, rowColOf F.sh p q < (Rows.ofNet (F.Vs (F.sess p)).hU).nIn ∧
+      ∃ (q' : Fin (F.Vs (F.sess p)).c.ports.size) (k' : ℕ) (_ : k' < Layout.portRowW (F.Vs (F.sess p)).c q'),
+        Aliased.srcKey (F.Vs (F.sess p)).c (0 * (Rows.ofNet (F.Vs (F.sess p)).hU).nIn + rowColOf F.sh p q) =
+          .msg q'.val (k' / 8) (k' % 8) ∧
+        ∃ pt ∈ (F.zs R ω t R₂ (F.sess p)).own, pt.name = (F.Vs (F.sess p)).c.ports[q'].name
+
+/-- **`HRowKeys` from the circuit's keys and the registration's rows** (`RowColKeys`, `RowsRegistered`): the column's
+key names a row `own` names, a registered read, and its bit is the registrant's. -/
+theorem hRowKeys_of (hreg : F.RowsRegistered dg N k Rw) (hcol : F.RowColKeys dg N k Rw) : F.HRowKeys dg N k Rw := by
+  intro R ω t R₂ τ o ha r p hp q hq
+  obtain ⟨hlt, q', k', hk, hkey, hown⟩ := hcol R ω t R₂ τ o ha p hp q hq
+  exact ⟨_, hlt, q', k', hk, hkey, hreg R ω t R₂ τ o ha (F.sess p) (F.un p r) q' hown, rfl⟩
 
 /-- **`HRes` is false at an accepted outer proof with a part** (`not_resZeroAt`). -/
 theorem hRes_false {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (h : F.HRes dg N k Rw gs) {R ω t R₂ τ o}
