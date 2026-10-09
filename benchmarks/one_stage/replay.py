@@ -56,6 +56,8 @@ ROW = "hm96-sha512/row/v1"
 STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 SERVED_BINDINGS = {"sha512": identity_digest_sha512, "v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
+#: `registration.SERVED_DOMAIN`, today's and before it
+SERVED_TAGS = (R.SERVED_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
 
@@ -150,13 +152,17 @@ class Run:
     programs: Programs
     sets_fallback: str | None = None
     outside: list[dict] = field(default_factory=list)
+    fetch: Callable[[str], None] | None = None
 
     @property
     def id(self) -> str:
         return self.row["art"][4:12]
 
     def path(self, rel: str) -> Path:
+        """The run's file `rel`, fetched now when the art holds it and the replay fetches."""
         p = self.dir / rel
+        if not p.exists() and self.fetch is not None and any(f["path"] == rel for f in self.files):
+            self.fetch(rel)
         if not p.exists():
             raise Missing(rel)
         return p
@@ -165,7 +171,7 @@ class Run:
         return json.loads(self.path(rel).read_text())
 
     def has(self, rel: str) -> bool:
-        return (self.dir / rel).exists()
+        return (self.dir / rel).exists() or any(f["path"] == rel for f in self.files)
 
     def file_sha256(self, rel: str) -> str | None:
         return next((f["sha256"] for f in self.files if f["path"] == rel), None)
@@ -196,12 +202,12 @@ def live_line(path: Path) -> dict | None:
 
 
 def archive_keys(path: Path) -> dict[str, str]:
-    """`flock-verify archive-put`'s stdout: the SHA-512 content key of each file it put, by file name."""
+    """`flock-verify archive-put`'s stdout: the SHA-512 content key of each file it put, by the path it was put from."""
     out: dict[str, str] = {}
     for line in path.read_text().splitlines():
         parts = line.split()
         if len(parts) == 2 and re.fullmatch(r"[0-9a-f]{128}", parts[0]):
-            out[Path(parts[1]).name] = parts[0]
+            out[parts[1]] = parts[0]
     return out
 
 
@@ -210,16 +216,26 @@ def sha512_file(path: Path) -> str:
 
 
 def public_digest(run: Run, pub: str, archive_log: str) -> tuple[str, str]:
-    """The SHA-512 of the verifier's public file: the file's own when the run kept it, else `archive-put`'s key for it."""
-    key = archive_keys(run.path(archive_log)).get(Path(pub).name) if run.has(archive_log) else None
-    if run.has(pub):
-        d = sha512_file(run.path(pub))
-        if key is not None and key != d:
-            raise Gap(f"{pub}: its SHA-512 is not archive-put's key")
-        return d, f"SHA-512 of {pub}"
-    if key is None:
-        raise Missing(f"{pub} (or its key in {archive_log})")
-    return key, f"archive-put's key of {Path(pub).name} ({archive_log})"
+    """The SHA-512 of the verifier's public file `pub`: `archive-put`'s key for it, else the file's own."""
+    if run.has(archive_log):
+        key = next((k for path, k in archive_keys(run.path(archive_log)).items() if path.endswith("/" + pub)), None)
+        if key is not None:
+            return key, f"archive-put's key of {pub} ({archive_log})"
+    return sha512_file(run.path(pub)), f"SHA-512 of {pub}"
+
+
+def tar_member(run: Run, tar: str, name: str) -> bytes:
+    with tarfile.open(run.path(tar)) as t:
+        m = next((m for m in t.getmembers() if m.isfile() and Path(m.name).name == name), None)
+        if m is None:
+            raise Missing(f"{tar}: {name}")
+        return t.extractfile(m).read()
+
+
+def flipped(body: bytes) -> bytes:
+    """The public file with the first byte of its body (the first `b || c`) flipped, as A2's negative made it."""
+    nl = body.index(b"\n") + 1
+    return body[:nl] + bytes([body[nl] ^ 1]) + body[nl + 1:]
 
 
 # --- the verifier's copies ---------------------------------------------------------------------------------------------
@@ -266,6 +282,31 @@ def stand_in_ports(s, n: int, layout: dict[str, tuple[str, int]], tag: str, cont
                "port": p[len(prefix):], "schema": schema}
         out[p] = {"domain": _domain(STAND_IN_BINDINGS[tag](tag, doc), leaves), "leaves": leaves}
     return out
+
+
+def served_domain(form: tuple[str, str], program: str, partition: str, port: str, schema: str, leaves: int, run: str) -> str:
+    """`registration.served_domain` under the era's tag and identity digest (`v1`, before 64-byte bindings, or `sha512`)."""
+    tag, binding = form
+    doc = {"program": program, "partition": partition, "port": port, "schema": schema, "leaves": int(leaves), "run": run}
+    return _domain(SERVED_BINDINGS[binding](tag, doc), leaves)
+
+
+SERVED_FORMS = [(tag, b) for tag in SERVED_TAGS for b in SERVED_BINDINGS]
+
+
+def served_ports(form: tuple[str, str], part: dict, layout: dict[str, tuple[str, int]], run: str) -> dict:
+    return {p: {"domain": served_domain(form, part["program"], P.digest(part), p, schema, leaves, run), "leaves": leaves}
+            for p, (schema, leaves) in layout.items()}
+
+
+def choose_served(part: dict, layout: dict[str, tuple[str, int]], run: str, rec: dict) -> tuple[dict, str, tuple[str, str]]:
+    """The served domains under the era's form that the record's match (R3 passed in the run), else today's (a gap)."""
+    for form in SERVED_FORMS:
+        ports = served_ports(form, part, layout, run)
+        if matches(ports, rec):
+            return ports, f"served_domain {form[0]} {form[1]}", form
+    return served_ports(SERVED_FORMS[0], part, layout, run), "GAP: no served domain form matches the record's; today's", \
+        SERVED_FORMS[0]
 
 
 def matches(ports: dict, rec: dict, only: Callable[[str], bool] = lambda p: True) -> bool:
@@ -465,7 +506,6 @@ OUTSIDE = {
 ANALOG = {
     "instances-not-the-draw (Lean U3)": "flock-verify U3; analog: the proved check on one instance more",
     "draw-dropped-from-record (Lean U1)": "flock-verify U1; analog: the draw check on a null draw",
-    "public-file-b||c-byte-flipped (R4)": "R4 against the digest of a public file the run did not keep; analog: another digest",
 }
 
 
@@ -494,8 +534,7 @@ def a0(run: Run) -> Iterator[Case]:
                                   rec, "verity/flock-circuit/binding/v2 hidden")
     leaf_layer, prov["leaf_layer"] = public_digest(run, f"{base}/stage/pub-{n}.bin", f"{base}/session/archive-put.log")
     live = live_line(run.path(f"{base}/session/prove.log")) or {}
-    sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or sorted(
-        sha512_file(f) for f in (run.dir / base / "session" / "sessions").glob("*/session.json"))
+    sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{base}/session")
     law = summary["law"]
     p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     e = evidence(a, instances=live.get("instances", -1), sessions=sessions, session_roots=live.get("roots") or {},
@@ -585,7 +624,81 @@ def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable
                                 "why": OUTSIDE.get(name, "UNHANDLED: the replay has no case for it")})
 
 
-DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0}
+def a2(run: Run) -> Iterator[Case]:
+    """A2 (`a2.py`): A0's template over serving's own commitment (vllm-serving-commit's rows): served domains recomputed
+    from the record's program, partition and run, and the verifier's partition object passed as it is."""
+    base = "out/a2"
+    a = run.json(f"{base}/audit.json")
+    summary = run.json(f"{base}/summary.json")
+    rec = a["registration"]
+    n = summary["n"]
+    s, set_from = run.input_set("rope101", run.sets_fallback)
+    template = s.subcircuit.definition()
+    program = P.population_program(template, n)
+    prov: dict = {"commit": run.commit(), "set": set_from, "program": "P.population_program(set template, n)"}
+    if PO.program_sha512(program) != rec["program"]:
+        raise Gap(f"the set's population program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
+    query = P.template_instance_query(template.id)
+    part = run.json(f"{base}/stage/partition.json")
+    if P.digest(part) != rec["partition"] or part["program"] != rec["program"]:
+        raise Gap("stage/partition.json is not the record's partition")
+    prov["partition"] = f"{base}/stage/partition.json (the run passed its object)"
+    layout = stand_in_layouts(s, n)["words"]
+    window_run = rec["window"].get("run", "")
+    ports, prov["ports"], form = choose_served(part, layout, window_run, rec)
+    pub = f"{base}/stage/pub-{n}.bin"
+    body: list[bytes] = []
+
+    def public() -> bytes:
+        if not body:
+            try:
+                body.append(run.path(pub).read_bytes())
+            except Missing:
+                body.append(tar_member(run, "inputs/served.tar", f"pub-{n}.bin"))
+        return body[0]
+    try:
+        leaf_layer, prov["leaf_layer"] = public_digest(run, pub, f"{base}/session/archive-put.log")
+    except Missing:
+        leaf_layer = hashlib.sha512(public()).hexdigest()
+        prov["leaf_layer"] = f"SHA-512 of serving's pub-{n}.bin in inputs/served.tar (the run did not keep {pub})"
+    live = live_line(run.path(f"{base}/session/prove.log")) or {}
+    sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{base}/session")
+    law = {"k": summary["k"], "law": "subset"}
+    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=part)
+    e = evidence(a, instances=live.get("instances", -1), sessions=sessions, session_roots=live.get("roots") or {},
+                 served=None)
+    prov["evidence"] = "audit.json; instances and session roots from session/prove.log's LIVE line"
+    if summary.get("unbound"):
+        prov["unbound"] = "the session ran on the verifier's re-headered copies for M0's unbound statement"
+    c = Case(run.id, "a2", rec["format"], "audit", "audit", program, p, rec, e, recorded_audit(a, f"{base}/audit.json"), prov)
+    yield c
+    src = f"{base}/negatives.json"
+    draw = a["draw"]
+    smaller = P.population_program(template, n - 1)
+    cases: dict[str, Callable[[dict], Case]] = {
+        "public-file-b||c-byte-flipped (R4)": lambda v: c.but(
+            "public-file-b||c-byte-flipped (R4)", "negative", recorded_codes(v, "registration", src),
+            params={"leaf_layer": hashlib.sha512(flipped(public())).hexdigest()}),
+        "domains-of-another-run (R3)": lambda v: c.but(
+            "domains-of-another-run (R3)", "negative", recorded_codes(v, "registration", src),
+            params={"ports": served_ports(form, part, layout, window_run + "-other")}),
+        "registration-partition-mismatch (R2)": lambda v: c.but(
+            "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=smaller,
+            params={"program": descriptor(smaller)}),
+        "draw-outside-the-partition": lambda v: c.but(
+            "draw-outside-the-partition", "negative", recorded_codes(v, "draw", src),
+            evidence={"draw": {**draw, "units": draw["units"][:-1] + [n]}}),
+    }
+    yield from _negatives(run, c, run.json(src), src, cases, base_instances=len(a["proved_units"]),
+                          session_roots=live.get("roots") or {})
+
+
+def session_digests(run: Run, session: str) -> list[str]:
+    return sorted(f["sha256"] and sha512_file(run.path(f["path"])) for f in run.files
+                  if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
+
+
+DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a2": a2}
 
 
 # --- main --------------------------------------------------------------------------------------------------------------
@@ -667,7 +780,8 @@ def main() -> int:
     results, runs_out, outside = [], [], []
     for r in rows:
         rid = r["art"][4:12]
-        run = Run(r, runs_root / rid, lists[rid], sets, programs, fallback, outside)
+        run = Run(r, runs_root / rid, lists[rid], sets, programs, fallback, outside,
+                  (lambda rel, art=r["art"], d=runs_root / rid: research_fetch(art, d, [rel])) if a.fetch else None)
         info = {"run": rid, "art": r["art"], "id": r.get("run"), "drivers": r.get("drivers"),
                 "formats": r.get("registration_formats"), "python_verdicts": len(r.get("python_verdicts") or [])}
         driver = classify(run)
@@ -726,8 +840,8 @@ def classify(run: Run) -> str:
         return "neither-reads (registration v0)"
     if not run.row.get("python_verdicts"):
         return "no-recorded-verdict"
-    if drivers == ["a0"]:
-        return "a0"
+    if drivers in (["a0"], ["a2"]):
+        return drivers[0]
     return "unhandled"
 
 
