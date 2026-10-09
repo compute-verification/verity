@@ -98,17 +98,23 @@ def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any
                          "verdict": verdict}}
 
 
-def session_registered(verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, str | None] | None:
+def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
+                       registration: Mapping[str, Any] | None = None) -> dict[str, str | None] | None:
     """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verifiers of record report
     (the Lean verdict's `registered`, `{port: {"value", "root"}}`) on the sessions they accepted, a value two of them
-    report under different roots mapped to None. None when no accepted verdict of record reports registered reads."""
+    report under different roots mapped to None. None when no accepted verdict of record reports registered reads. With
+    `registration`, only its own values (its roots' ports and its registered values), as the service splits the sessions'
+    roots between a boundary registration and its interiors."""
     out: dict[str, str | None] | None = None
     for v in verdicts.values():
         if v.get("of_record") and v.get("accepted") is True and isinstance(v.get("registered"), Mapping):
             out = {} if out is None else out
             for e in v["registered"].values():
                 out[e["value"]] = e["root"] if out.get(e["value"], e["root"]) == e["root"] else None
-    return out
+    if out is None or registration is None:
+        return out
+    named = {r["port"] for r in registration["roots"]} | {e["value"] for e in registration.get("registered", [])}
+    return {k: r for k, r in out.items() if k in named}
 
 
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
