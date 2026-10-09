@@ -261,6 +261,10 @@ theorem outcome_of_map {α β : Type} (f : α → β) (g : Game α) (s : Strateg
     (h : Game.Outcome (g.map f) (Strategy.map f g s) b) : ∃ a, Game.Outcome g s a ∧ f a = b :=
   outcome_of_bind (f := fun a => .ret (f a)) g s (fun _ => PUnit.unit) h
 
+theorem outcome_oneRun {β γ : Type} (g : Game β) (s : Strategy g) (pick : β → γ) {a : β}
+    (ha : Game.Outcome g s a) : Game.Outcome (StrictCR.oneRun g s pick).g (StrictCR.oneRun g s pick).s (pick a) :=
+  outcome_map pick g s ha
+
 theorem outcome_twoRuns {β γ : Type} (g : Game β) (s : Strategy g) (pick : β → β → γ) {a a' : β}
     (ha : Game.Outcome g s a) (ha' : Game.Outcome g s a') :
     Game.Outcome (StrictCR.twoRuns g s pick).g (StrictCR.twoRuns g s pick).s (pick a a') :=
@@ -572,7 +576,9 @@ theorem innerAtLeavesV_of_forkOn (zs : Reg → L.Ω → List (Cm × I.Coin) → 
   let G : List (I.Msg × I.Coin) → Prop := AtLeaf I.r f V (σ.2 ω)
   have hVT : ∀ t s' u, V t s' u → Game.Outcome (T t s').g (T t s').s (id u) := by
     rintro t s' u ⟨b, hb, -, rfl⟩
-    exact outcome_map (fun o => (wmsg (layers (zs σ.1 ω t o.1) dg N k Rw o.2)).zip (t.map Prod.snd)) _ _ hb
+    exact outcome_oneRun (outerV (zs σ.1 ω t) dg N)
+      (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outerV (zs σ.1 ω t) dg N) s')
+      (fun o => (wmsg (layers (zs σ.1 ω t o.1) dg N k Rw o.2)).zip (t.map Prod.snd)) hb
   rcases hin (x σ.1 ω) hx G (refStrat I.r f (ref ω) id (σ.2 ω)) with ⟨i, hi, hF⟩ | hle
   · exact (hno ⟨ω, i, hi, finds_forkG_ref H (pick (x σ.1 ω)) G i I.r f (ref ω) id V T (σ.2 ω) hVT
       (fun _ hu => hu) hF⟩).elim
