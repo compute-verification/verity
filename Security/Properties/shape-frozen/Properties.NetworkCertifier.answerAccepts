@@ -1,0 +1,1 @@
+RESTATE: Split the iff: keep accept -> the three decode and the check accepts; move the converse to Proofs as completeness.

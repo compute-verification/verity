@@ -1,0 +1,1 @@
+RESTATE: Split the iff: keep accepts -> KPrimeDomain; move KPrimeDomain -> accepts to Proofs as completeness.

@@ -534,6 +534,310 @@
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
   }
  },
+ "shape": {
+  "premises": [],
+  "frozen": "shape-frozen",
+  "properties": {
+   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.CheckAccepts": {
+    "function": "NciCheck.check",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.CheckRefuses": {
+    "function": "NciCheck.check",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.Decodes": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.Reports": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.Witnesses": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
+    "function": [],
+    "outcome": "accept"
+   },
+   "Proofs.NetworkCertifier.encardAcceptedObservationsLe": {
+    "function": [],
+    "outcome": "accept"
+   },
+   "Properties.CertifierDevice.completeRows": {
+    "function": "CertifierDevice.step",
+    "outcome": "none"
+   },
+   "Properties.CertifierDevice.contentIndependent": {
+    "function": "CertifierDevice.step",
+    "outcome": "none"
+   },
+   "Properties.CertifierDevice.failClosed": {
+    "function": "CertifierDevice.step",
+    "outcome": "none"
+   },
+   "Properties.CertifierDevice.issuerSigns": {
+    "function": "CertifierDevice.Issuer.certify",
+    "outcome": "accept"
+   },
+   "Properties.CertifierDevice.issuerVerifies": {
+    "function": "CertifierDevice.Issuer.certify",
+    "outcome": "accept"
+   },
+   "Properties.CertifierDevice.linkSchedule": {
+    "function": "CertifierDevice.step",
+    "outcome": "none"
+   },
+   "Properties.CertifierDevice.lmsCorrect": {
+    "function": "Lms.verify",
+    "outcome": "accept"
+   },
+   "Properties.CertifierDevice.records": {
+    "function": "CertifierDevice.step",
+    "outcome": "none"
+   },
+   "Properties.CertifierNetwork.deviceOutputAccepted": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "none"
+   },
+   "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.acceptsIff": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.acceptsOneRecordEach": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.answerAccepts": {
+    "function": "NetworkCheck.Check.protocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.decodeRefusals": {
+    "function": "NetworkCheck.Check.protocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.honestAccepted": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.malformedEvidenceRejects": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.undecidedIff": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "undecided"
+   },
+   "Properties.NetworkCertifier.undigestedParamsReject": {
+    "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Check.acceptMeans": {
+    "function": "PouwCheck.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Check.acceptedDraw": {
+    "function": "PouwCheck.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Check.acceptedInRange": {
+    "function": "PouwCheck.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Check.acceptedIsTheService's": {
+    "function": "PouwCheck.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Check.commitmentKeepsBytes": {
+    "function": "PouwCheck.protocol.commitment",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Check.digestIsOneStage's": {
+    "function": "PouwCheck.protocol.digest",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Check.neverNull": {
+    "function": ["PouwCheck.protocol.profileJson", "PouwCheck.protocol.publicJson"],
+    "outcome": "none"
+   },
+   "Properties.Pouw.Check.publishesPublic": {
+    "function": "PouwCheck.Public.entries",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Check.serviceRejectRejects": {
+    "function": "PouwCheck.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Check.undecidedOnlyFromService": {
+    "function": "PouwCheck.protocol.check",
+    "outcome": "undecided"
+   },
+   "Properties.Pouw.Commit.coinAccepts": {
+    "function": "PouwCommit.coinReason",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.coinBinding": {
+    "function": "PouwCommit.coinReason",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.coinNumbers": {
+    "function": [
+     "PouwCommit.COIN_BYTES",
+     "PouwCommit.LABELS",
+     "PouwCommit.coinDomain",
+     "PouwCommit.depth",
+     "PouwCommit.leafValue"
+    ],
+    "outcome": "none"
+   },
+   "Properties.Pouw.Commit.coinRaises": {
+    "function": "PouwCommit.coinReason",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.depthServed": {
+    "function": "PouwCommit.depth",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Commit.domainRefusals": {
+    "function": "PouwCommit.Domain.mk?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.drawCoinAccepts": {
+    "function": "PouwCommit.drawCoin",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.drawShape": {
+    "function": "PouwCommit.weightedDraw",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.epochSaltAccepts": {
+    "function": "PouwCommit.epochSalt",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.frameInjective": {
+    "function": ["PouwCommit.frameBytes", "PouwCommit.frameHash"],
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.frameSizes": {
+    "function": "PouwCommit.Domain.mk?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.keyRefusals": {
+    "function": "PouwCommit.key?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.keySize": {
+    "function": "PouwCommit.key?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.leafRefusals": {
+    "function": "PouwCommit.RowsDomain.leaf",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.saltRefusals": {
+    "function": ["PouwCommit.saltOf", "PouwCommit.unverifiedSalt"],
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.saltSize": {
+    "function": ["PouwCommit.saltOf", "PouwCommit.unverifiedSalt"],
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Commit.taggedSize": {
+    "function": "PouwCommit.tagged",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Window.bucket8192": {
+    "function": "PouwWindow.bucket",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Window.bucketCost": {
+    "function": "PouwWindow.bucket?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.bucketCost3": {
+    "function": "PouwWindow.bucket?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.bucketCredits": {
+    "function": "PouwWindow.bucket?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.drawMisses": {
+    "function": "PouwWindow.kPrime",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.floorPointGreatest": {
+    "function": "PouwWindow.floorPoint?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.gridRefusals": {
+    "function": [
+     "PouwWindow.Work.at?",
+     "PouwWindow.Work.levels?",
+     "PouwWindow.bucket?",
+     "PouwWindow.floorPoint?",
+     "PouwWindow.level?",
+     "PouwWindow.pad?",
+     "PouwWindow.point?"
+    ],
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.kPrimeExactAtEquality": {
+    "function": "PouwWindow.kPrime",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Window.kPrimeLeast": {
+    "function": "PouwWindow.kPrime",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.kPrimeRefuses": {
+    "function": "PouwWindow.kPrime",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.kPrimeServed": {
+    "function": "PouwWindow.kPrime",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Window.levelsCount": {
+    "function": "PouwWindow.levels?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.levelsServed": {
+    "function": "PouwWindow.levels",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Window.onGridMeans": {
+    "function": "PouwWindow.onGrid",
+    "outcome": "none"
+   },
+   "Properties.Pouw.Window.padLeast": {
+    "function": "PouwWindow.pad?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.pointEnumerates": {
+    "function": ["PouwWindow.level", "PouwWindow.point"],
+    "outcome": "none"
+   },
+   "Properties.Pouw.Window.publicItems_eq": {
+    "function": "PouwWindow.publicItems",
+    "outcome": "none"
+   }
+  }
+ },
  "reads": {
   "CertifierDevice.Certifier": {
    "digest": "a7223a59cdfaeb84288c5aeb28d141a5657664909a3fdc827f6baa079552ce54",

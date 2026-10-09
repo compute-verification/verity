@@ -1,0 +1,1 @@
+COMPLETENESS: Move to Proofs with its honest case as written; no Lean instance (the network difftest's accepted transcripts could supply one); it pairs with AcceptsIff's forward half.
