@@ -28,7 +28,8 @@
 # env: CLS=16,16,8  N=64 (instances, two a block: m = k_log + 5)  NW=8 (wired: per layer, 4 NW in all)  SEED=0  CPUS=32
 #      FLOCK_WORK (as 80-rec-inner.sh)  TAG (default CLS-nN)  LEAN_FROM (a cache directory whose lean-<sha>/flock-verify
 #      of the same sources is used)  STAGED STAGED_RECORD (an earlier staging, not restaged)  WCLS (the wired circuit's
-#      class)  CAP_FOLD (an earlier fold of the statement: the cap from it, the other netlist's chain in the background)
+#      class)  CAP_CLAIMS (the cap's claims, 2 + regions x link points: no fold first, the other netlist's chain in the
+#      background, the honest fold held to it)
 #      OUTER_DRAW (rec-private-outer.sh: the verifier's draw, default all)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -137,25 +138,26 @@ fold() {
 
 # the other netlist first: its inner session (against the registered statement) and V*'s fold over the registered statement
 # give the claims, so the class's cap and the recursive session's parts are known before the honest session opens one
-# CAP_FOLD: an earlier fold of this statement (its extra claims are the statement's, so the cap is the same), and the other
+# CAP_CLAIMS: the claims the statement's structure gives (Stmt.extraClaims: one per region and link point), and the other
 # netlist's chain (its inner session, fold and V*'s staging) runs in the background beside the honest one
-[ -z "${CAP_FOLD:-}" ] && { inner other $U $DD/u/other/inst-$N.bin || exit 1; }
+[ -z "${CAP_CLAIMS:-}" ] && { inner other $U $DD/u/other/inst-$N.bin || exit 1; }
 wait $LP; echo "flock-verify build exit $?"; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 wait $TP; echo "tools build exit $?"; [ -x $T/inner-fold ] && [ -x $T/core-firewall ] || { tail -30 $O/build-tools.log; exit 1; }
-[ -z "${CAP_FOLD:-}" ] && { fold other $U || exit 1; }
-for i in $(seq 360); do [ -z "${CAP_FOLD:-}" ] || [ -s $CAP_FOLD ] && break; sleep 20; done
-python3 - $U/circuit.txt $N ${CAP_FOLD:-$DD/fold-other.json} > $DD/cap.json <<'EOF' || exit 1
+[ -z "${CAP_CLAIMS:-}" ] && { fold other $U || exit 1; }
+python3 - $U/circuit.txt $N ${CAP_CLAIMS:-$DD/fold-other.json} > $DD/cap.json <<'EOF' || exit 1
 import json, sys
 from pathlib import Path
 from verity_flock import rec_shape as RS
-cap = RS.Cap.of(Path(sys.argv[1]), int(sys.argv[2]), 2 + len(json.loads(Path(sys.argv[3]).read_text())["extras"]))
+c = sys.argv[3]
+claims = int(c) if c.isdigit() else 2 + len(json.loads(Path(c).read_text())["extras"])
+cap = RS.Cap.of(Path(sys.argv[1]), int(sys.argv[2]), claims)
 print(json.dumps({"cap": cap.spec(), "shape": [cap.shape.m, cap.shape.k_log, cap.shape.claims], "parts": list(RS.outer(cap)),
                   "statements": RS.outer(cap)}))
 EOF
 cp $DD/cap.json $O/
 CAP=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['cap'])" $DD/cap.json)
 PARTS=$(python3 -c "import json, sys; print(','.join(json.load(open(sys.argv[1]))['parts']))" $DD/cap.json)
-if [ -n "${CAP_FOLD:-}" ]; then
+if [ -n "${CAP_CLAIMS:-}" ]; then
   ( inner other $U $DD/u/other/inst-$N.bin && fold other $U \
       && /usr/bin/time -v -o $O/vstar/time-other.txt python3 -m verity_flock.rec_vstage stage $DD/inner-other $DD/fold-other.json $DD/vo \
            --points $DD/points-other.json --salts $DD/vo-acc-salts.bin --levels none --cap $CAP > $O/vstar/other.json 2> $O/vstar/other.err
@@ -175,6 +177,8 @@ python3 verity/ml/flock/verifier/firewall_agree.py --lean $T/flock-firewall --ou
   echo "inner lean exit $?" ) &
 IL=$!
 fold honest $U || exit 1
+[ -z "${CAP_CLAIMS:-}" ] || python3 -c "import json, sys; sys.exit(2 + len(json.load(open(sys.argv[1]))['extras']) != int(sys.argv[2]))" \
+  $DD/fold-honest.json $CAP_CLAIMS || { echo "CAP_CLAIMS=$CAP_CLAIMS is not the honest fold's claims"; exit 1; }
 python3 -m verity_flock.rec_vstar $DD/inner-honest > $O/vstar/vstar-honest.json 2> $O/vstar/vstar-honest.err; echo "vstar honest exit $?"
 
 # V*'s statements: honest (every level and the algebra, under the class's cap), the wrong top, and the other netlist's algebra
@@ -187,7 +191,7 @@ vstage() {
 vstage honest $DD/inner-honest $DD/fold-honest.json $V --points $DD/points-honest.json --salts $V/acc-salts.bin
 [ -f $V/acc-salts.bin ] || { tail -20 $O/vstar/honest.err; exit 1; }
 vstage forged-top $DD/inner-honest $DD/fold-honest.json $V --points $DD/points-honest.json --salts $V/acc-salts.bin --forge top
-[ -z "${CAP_FOLD:-}" ] && vstage other $DD/inner-other $DD/fold-other.json $DD/vo --points $DD/points-other.json --salts $DD/vo-acc-salts.bin --levels none
+[ -z "${CAP_CLAIMS:-}" ] && vstage other $DD/inner-other $DD/fold-other.json $DD/vo --points $DD/points-other.json --salts $DD/vo-acc-salts.bin --levels none
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstar/sizes.txt
 
 # the flipped top: rec_inner.py forge --what top on a copy of the honest session; V*'s reference and staging refuse it by name,
