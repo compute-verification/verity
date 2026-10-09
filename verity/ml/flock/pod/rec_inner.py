@@ -146,7 +146,7 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
         from verity_flock import universal_stage as US
 
         gates = US.trace(G, N_IN, N_OUT)
-        _program, _query, built, program_sha512 = US.program(gates)
+        built, program_sha512 = US.program(gates)[2:]
         st = US.stage(gates, US.unit(gates), PO.digest(built), program_sha512, nets, xs, out, salt_key)
         for name, nl in nets:
             if st[name]["outputs"] != [U.interpret(nl, x) for x in xs]:
