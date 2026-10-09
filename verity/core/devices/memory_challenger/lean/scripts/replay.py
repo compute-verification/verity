@@ -105,7 +105,7 @@ def replay(doc: dict[str, Any]) -> dict[str, Any]:
                 stored = _stored(rec, under_signer)
                 j = judge(signed, commitment, openings, expected, trusted, schemes)
                 calls.append({"section": section, "record": n, "schemes": name, "edit": None, **j,
-                              "stored": stored, "control": section != "audit"})
+                              "stored": stored, "control": section != "audit", "scheme": signed.scheme})
             if section == "audit" and own is not None:
                 sig = bytearray(signed.signature)
                 sig[len(sig) // 2] ^= 1
@@ -116,15 +116,21 @@ def replay(doc: dict[str, Any]) -> dict[str, Any]:
                                 ("receipt moved after signing", dataclasses.replace(signed, rounds=tuple(rounds)))):
                     j = judge(s, commitment, openings, expected, trusted, own)
                     calls.append({"section": section, "record": n, "schemes": "signer", "edit": edit, **j,
-                                  "stored": None, "control": True})
+                                  "stored": None, "control": True, "scheme": s.scheme})
     return {"run_id": doc.get("run_id"), "calls": calls}
 
 
-def _agrees_with_record(c: dict[str, Any]) -> bool | None:
+def _agrees_with_record(c: dict[str, Any]) -> bool | str | None:
+    """True when today's Python gives the recorded verdict; `"retired"` when it differs only in refusing the signer's scheme,
+    which `SCHEMES` no longer accepts (the record's version is retired); None when nothing was recorded to compare."""
     if c["stored"] is None:
         return None if c["edit"] is None else "the signature does not verify" in c["python"].reasons
     accepted, reasons = c["stored"]
-    return c["python"].accepted == accepted and (reasons is None or list(c["python"].reasons) == list(reasons))
+    now = list(c["python"].reasons)
+    if c["python"].accepted == accepted and (reasons is None or now == list(reasons)):
+        return True
+    retired = f"signature scheme {c['scheme']!r} is not accepted"
+    return "retired" if reasons is not None and now == [retired, *reasons] and c["scheme"] not in mc.SCHEMES else False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -137,28 +143,34 @@ def main(argv: list[str] | None = None) -> int:
         doc = json.loads(Path(f).read_text())
         r = replay(doc)
         calls = r["calls"]
-        signers = sorted({(doc["metrics"][s]["signer"]["scheme"]) for s in SECTIONS
-                          if isinstance(doc.get("metrics", {}).get(s), dict) and doc["metrics"][s].get("records")})
+        metrics = doc.get("metrics") or {}
+        signers = sorted({metrics[s]["signer"]["scheme"] for s in SECTIONS
+                          if isinstance(metrics.get(s), dict) and metrics[s].get("records")})
         summary = {"run_id": r["run_id"], "file": f, "signers": signers, "calls": len(calls),
                    "sessions": len({(c["section"], c["record"]) for c in calls}),
                    "same": sum(c["same"] for c in calls), "controls": sum(c["control"] for c in calls),
                    "accepted": sum(c["lean"].accepted for c in calls),
                    "matches_record": sum(_agrees_with_record(c) is True for c in calls),
+                   "retired_scheme": sum(_agrees_with_record(c) == "retired" for c in calls),
                    "unrecorded": sum(_agrees_with_record(c) is None for c in calls),
                    "differences": [{k: (dataclasses.asdict(v) if isinstance(v, mc.Verdict) else v) for k, v in c.items()}
                                    for c in calls if not c["same"] or _agrees_with_record(c) is False]}
+        summary["as_recorded"] = summary["matches_record"] + summary["retired_scheme"] + summary["unrecorded"] == len(calls)
         runs.append(summary)
         print(f"{summary['run_id']}: {summary['calls']} verdicts over {summary['sessions']} sessions ({', '.join(signers)}), "
               f"{summary['same']} same verdict, {summary['controls']} negative controls, {summary['accepted']} accepted, "
-              f"{summary['matches_record']} as recorded, {len(summary['differences'])} differences", flush=True)
-    calls = sum(r["calls"] for r in runs)
-    same_runs = sum(r["same"] == r["calls"] and not r["differences"] for r in runs)
-    line = (f"{len(runs)} runs, {same_runs} same verdict ({calls} verdicts, {sum(r['same'] for r in runs)} same), "
-            f"{sum(r['controls'] for r in runs)} negative controls")
+              f"{summary['matches_record']} as recorded, {summary['retired_scheme']} as recorded but for a retired scheme, "
+              f"{len(summary['differences'])} differences", flush=True)
+    judged = [r for r in runs if r["calls"]]
+    calls = sum(r["calls"] for r in judged)
+    same_runs = sum(r["same"] == r["calls"] for r in judged)
+    line = (f"{len(judged)} runs, {same_runs} same verdict, {sum(r['controls'] for r in judged)} negative controls "
+            f"({calls} verdicts, {sum(r['same'] for r in judged)} same; {sum(r['as_recorded'] for r in judged)} runs as "
+            f"recorded; {len(runs) - len(judged)} files hold no session)")
     print(line)
     if a.json:
         Path(a.json).write_text(json.dumps({"line": line, "runs": runs}, indent=1) + "\n")
-    return 0 if same_runs == len(runs) else 1
+    return 0 if same_runs == len(judged) and all(r["as_recorded"] for r in judged) else 1
 
 
 if __name__ == "__main__":
