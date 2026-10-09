@@ -302,6 +302,9 @@ Never print a secret's value.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
 
+- **Reread the rules every night.** At the start of each night, reread this file and the rulings in
+  `.agents/skills/friction/SKILL.md` and `.agents/skills/lean-proofs/SKILL.md`: rules change during the day, and a lane
+  that acts on a retired one waits on gates that no longer exist.
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
@@ -313,7 +316,8 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 - **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a tip being checked
   (Checking and merging). Only the lander moves `main`.
 - **Landing is the lander's.** Push your PR, mark it ready and go back to research. Only the lander lands, restacks and
-  reruns, and you hear back only if your PR fails. A lane holds at most two open PRs.
+  reruns, and you hear back only if your PR fails. A lane works on at most two open PRs; one whose head is in a queued
+  or running check, or in a train the lander holds, doesn't count until that check fails.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`.
