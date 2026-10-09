@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import random
+import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -24,6 +25,10 @@ PKG = ROOT / "verity/core/protocols/pouw/lean/check"
 _spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
+sys.modules["pouw_check_cases"] = vectors
+_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
+openings = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(openings)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -179,6 +184,75 @@ def test_ratios_have_one_spelling():
                    ("", "canonical form"), ("1/2/3", "not a ratio"), ("-1", "canonical form"), ("1.5", "canonical form")):
         with pytest.raises(CC.Refused, match=why):
             CC.ratio(s, "x")
+
+
+_WINDOW_ENTRY = "is not the registered window's entry"
+_HEADER, _COUNT = "the proof's public file has no JSON header", "the proof's header has no instance count"
+_ROWS = "the proof's first rows are not an A row and a B row of the registered schemas"
+_FIELDS = "the opening's salt is not 192 bytes, or a path"
+#: the refusal each opening mutation aims at, by its reason's start or end ("…" before an end); None for an acceptance
+OPENING_EXPECT = {
+    "honest": None, "undrawn": "…is not drawn", "domain": "the registered window domain is not",
+    "context": "the registered window domain is not", "root-hex": "the registered window root is not",
+    "root-short": "the registered window root is not", **{n: "the opening names no entry" for n in (
+        "entry-missing", "entry-kind", "entry-root", "entry-negative", "entry-huge", "entry-float", "entry-null",
+        "opening-list", "index-string", "index-bool", "index-missing")},
+    "entry-bool": {None, "…" + _WINDOW_ENTRY}, "salt-upper": None, "salt-spaced": None,
+    **{n: _FIELDS for n in ("salt-short", "salt-type", "salt-bad", "window-path-type", "window-path-digest",
+                            "side-path-type", "side-path-digest", "side-missing", "side-index-type", "side-index-bool")},
+    **{n: "…" + _WINDOW_ENTRY for n in ("window-path-short", "entry-other", "entry-negative-index", "entry-past",
+                                        "forged-entry")},
+    "out-of-range": "…is not in the entry's range", "kind-none": "…is not in the entry's range",
+    **{n: _HEADER for n in ("no-newline", "header-not-json", "header-nan", "header-list", "header-utf8")},
+    **{n: _COUNT for n in ("instances-missing", "instances-bool", "instances-float", "instances-string")},
+    "instances-two": "…instances, not one tile",
+    **{n: _ROWS for n in ("schemas-missing", "frame-type", "schemas-type", "schemas-swapped", "schemas-one",
+                          "schemas-prefixed")},
+    "schemas-unsorted": None, "body-short": "the proof's body holds no A row and B row",
+    "a-index": "side a: the opening is of row", "b-index": "side b: the opening is of row",
+    **{n: "side a: the proof's committed row is not" for n in ("a-row", "a-path-short", "rows-swapped", "past-side")},
+    **{n: "side b: the proof's committed row is not" for n in ("b-row", "b-path")},
+    "params-bad": CC.Refused, "commitment-bad": CC.Refused,
+}
+
+
+def _opening(case: dict) -> str | None:
+    return CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
+                      case["unit"], bytes.fromhex(case["pub"]), case["opening"])
+
+
+def _hits(reason: str | None, want) -> bool:
+    if want is None or reason is None:
+        return reason is want
+    return reason.endswith(want[1:]) if want.startswith("…") else reason.startswith(want)
+
+
+def test_every_opening_mutation_hits_its_refusal():
+    """`core_check.opening` accepts an honest opening, a call's tile or the filler's, and refuses each mutation, over a
+    few cases each, with the reason it aims at (or reads hex and the header as both sides must)."""
+    assert set(OPENING_EXPECT) == set(openings.NAMES) | {"honest"}
+    for name, want in OPENING_EXPECT.items():
+        for seed in range(4):
+            case = openings.instance(random.Random(f"{name}/{seed}"), name)
+            if want is CC.Refused:
+                with pytest.raises(CC.Refused):
+                    _opening(case)
+                continue
+            got = _opening(case)
+            assert any(_hits(got, w) for w in (want if isinstance(want, set) else {want})), (name, seed, got)
+
+
+def test_the_opening_reads_what_served_zk_writes():
+    """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
+    A and B rows' schemas."""
+    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+    assert CC.SERVED_DOMAIN == R.SERVED_DOMAIN
+    assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
+    case = openings.honest(random.Random(1))
+    assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.served_domain(
+        case["record"]["program"], case["record"]["partition"], Wd.PORT, Wd.ENTRY_SCHEMA,
+        case["params"]["check"]["entries"], case["params"]["context"])
 
 
 def test_canonical_json_is_leans():

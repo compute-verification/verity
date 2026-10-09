@@ -80,3 +80,14 @@ def test_lake_builds_only_under_the_build_lock(monkeypatch, tmp_path):
     monkeypatch.setattr(D.subprocess, "run", lake)
     assert D.build(tmp_path, "port") == tmp_path / ".lake" / "build" / "bin" / "port"
     assert seen == ["held"]
+
+
+def test_serving_a_port_needs_no_hypothesis():
+    """A port's Lean serves at run time where only the stdlib is (the PoUS harness's venv): `build`, `Server` and
+    `canonical` import with Hypothesis unimportable, and only `run` needs it."""
+    code = ("import sys; sys.modules['hypothesis'] = None\n"
+            "import verity_difftest as D\n"
+            "assert D.canonical({'b': 1, 'a': [2]}) == '{\"a\":[2],\"b\":1}' and D.Server and D.build\n"
+            "try:\n    D.run(None)\nexcept ImportError:\n    print('run needs hypothesis')\n")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+    assert out == "run needs hypothesis\n"
