@@ -862,11 +862,15 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
     `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
     recorded runs' packs are taken.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
-    flag turns reuse off but `--no-cache`.  None when there is no pack at all (the check then runs on its own cache)."""
+    flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
+    verdicts are recomputed, never reused; a refused pack given is an error.  None when there is no pack at all (the check then
+    runs on its own cache)."""
     from research.store.local import LocalStore
 
     if given is not None and not given.is_file():
         raise SystemExit(f"check: --verdicts-in {given}: no such pack")
+    if given is not None and (why := VERDICTS.refusal(given)):
+        raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
     packs = [given] if given is not None else []
     try:
         store = store or LocalStore()
@@ -877,7 +881,12 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
-                packs.append(store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz")
+                pack = store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz"
+                if why := VERDICTS.refusal(pack):
+                    print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed",
+                          flush=True)
+                    continue
+                packs.append(pack)
                 if len(packs) == limit + (given is not None):
                     break
     except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)

@@ -217,6 +217,31 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
     assert check.gather_verdicts(tmp_path / "none", _Store(tmp_path, {"r-none": None})) is None
 
 
+def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refused_pack_given_is_an_error(tmp_path, monkeypatch,
+                                                                                                          capsys):
+    """A pack holding a Lean audit's scratch (9 Oct: `check/lean-audit-scratch-*/.../lake-manifest.json` in a recorded check's
+    pack crashed every `--record`) is skipped and the next one taken; none of its entries is reused."""
+    check = _load("check")
+    bad = tmp_path / "bad.tar.gz"
+    with tarfile.open(bad, "w:gz") as tar:
+        for name in ("tests/k7.json", "check/lean-audit-scratch-_2hjygw7/backends/flock/verifier/lean/lake-manifest.json"):
+            data = b"{}"
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    r = _machine(tmp_path, monkeypatch, "old")
+    _write(r["tests"] / "k3.json", "3")
+    V.export(old := tmp_path / "old.tar.gz")
+    got = check.gather_verdicts(tmp_path / "out", _Store(tmp_path, {"r-bad": bad, "r-old": old}), limit=1)
+    out = capsys.readouterr().out
+    assert "skipping r-bad's pack, which import refuses (BadPack: member 'check/lean-audit-scratch-" in out
+    assert "1 entries gathered from 1 recorded checks (r-old)" in out
+    _machine(tmp_path, monkeypatch, "pod")
+    assert V.import_(got) == (1, 0) and not (V.roots()["tests"] / "k7.json").exists()
+    with pytest.raises(SystemExit, match="refused"):
+        check.gather_verdicts(tmp_path / "x", _Store(tmp_path, {}), given=bad)
+
+
 def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys):
     check = _load("check")
 
