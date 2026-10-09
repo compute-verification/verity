@@ -28,8 +28,8 @@
     uv run python tools/verity/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/verity/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
-                                                            the steps; with --record --on, the pack travels with the run;
-                                                            without it, --record gathers one from the newest recorded checks
+                                                            the steps; with --record, added to the pack it gathers from the
+                                                            newest recorded checks, and with --on that pack travels with the run
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
@@ -121,9 +121,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
-`--verdicts-in`.  `--record` without `--verdicts-in` or `--no-cache` sends one pack of the newest recorded checks' packs
-(`gather_verdicts`), so every machine reuses every pass a recorded check earned; the pack imported is named in the result's
-`verdicts`.
+`--verdicts-in`.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs (`gather_verdicts`), with a
+`--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
+imported is named in the result's `verdicts`.
 
 The evidence store.  A recorded check runs the store-backed tests (integrations/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -836,8 +836,12 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
-    if not combining and "--verdicts-in" not in rest and "--no-cache" not in rest:
-        if pack := gather_verdicts(d):
+    if not combining and "--no-cache" not in rest:
+        given = None
+        if "--verdicts-in" in rest[:-1]:
+            i = rest.index("--verdicts-in")
+            given, rest = Path(rest[i + 1]).resolve(), rest[:i] + rest[i + 2:]
+        if pack := gather_verdicts(d, given=given):
             rest += ["--verdicts-in", str(pack)]
     if on:
         cmd += ["--on", on, "--source", "."]
@@ -854,33 +858,37 @@ def record(argv: list[str]) -> int:
 GATHER = 12
 
 
-def gather_verdicts(d: Path, store=None, limit: int = GATHER) -> Path | None:
+def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
     """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
     `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
-    recorded runs' packs are taken.  None when the store has none, or can't be read (the check then runs on its own cache)."""
+    recorded runs' packs are taken.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
+    flag turns reuse off but `--no-cache`.  None when there is no pack at all (the check then runs on its own cache)."""
     from research.store.local import LocalStore
 
+    if given is not None and not given.is_file():
+        raise SystemExit(f"check: --verdicts-in {given}: no such pack")
+    packs = [given] if given is not None else []
     try:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
         rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state = 'done' ORDER BY start_utc DESC LIMIT ?",
                                (4 * limit,))
-        packs = []
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
                 packs.append(store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz")
-                if len(packs) == limit:
+                if len(packs) == limit + (given is not None):
                     break
-        if not packs:
-            return None
-        n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
-    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes)
+    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)
         print(f"check: no verdicts gathered from the store ({type(e).__name__}: {e})", flush=True)
+        del packs[given is not None:]
+    if not packs:
         return None
-    print(f"check: verdicts: {n} entries gathered from {len(packs)} recorded checks ({', '.join(p.parent.name for p in packs)})",
-          flush=True)
+    n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
+    names = [*([f"{given.name} (given)"] if given is not None else []), *(p.parent.name for p in packs[given is not None:])]
+    print(f"check: verdicts: {n} entries gathered from {len(packs) - (given is not None)} recorded checks"
+          f"{' and the pack given' if given is not None else ''} ({', '.join(names)})", flush=True)
     return d / "verdicts-gathered.tar.gz"
 
 

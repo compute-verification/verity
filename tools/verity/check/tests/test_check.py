@@ -354,7 +354,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d: None)
+    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
@@ -363,11 +363,13 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         launched.clear()
 
 
-def test_record_sends_the_verdicts_it_gathers_unless_given_a_pack_or_no_cache(tmp_path, monkeypatch):
+def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_cache(tmp_path, monkeypatch):
+    """`--verdicts-in` adds to the gathered pack, never replaces it: a stale pack given once turned reuse off for every check
+    it rode with, because the gathered pack it replaced held the passes."""
     import subprocess
     import sys
 
-    real, launched = subprocess.run, []
+    real, launched, given_to = subprocess.run, [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
@@ -375,7 +377,8 @@ def test_record_sends_the_verdicts_it_gathers_unless_given_a_pack_or_no_cache(tm
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    def gathered(d: Path) -> Path:
+    def gathered(d: Path, given: Path | None = None) -> Path:
+        given_to.append(given)
         (d / "verdicts-gathered.tar.gz").write_bytes(b"")
         return d / "verdicts-gathered.tar.gz"
 
@@ -388,10 +391,16 @@ def test_record_sends_the_verdicts_it_gathers_unless_given_a_pack_or_no_cache(tm
     [cmd] = launched
     tail = cmd[cmd.index("--") + 1:]
     assert tail[-2] == "--verdicts-in" and tail[-1].endswith("verdicts-gathered.tar.gz") and cmd[cmd.index("--send") + 1] == tail[-1]
-    for given in (["--verdicts-in", str(tmp_path / "mine.tar.gz")], ["--no-cache"]):
-        launched.clear()
-        assert CHECK.record(["--base", "HEAD", *given]) == 0
-        assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    assert given_to == [None]
+    launched.clear()
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", "mine.tar.gz"]) == 0
+    [cmd] = launched
+    tail = cmd[cmd.index("--") + 1:]
+    assert given_to[-1] == Path("mine.tar.gz").resolve() and "mine.tar.gz" not in " ".join(cmd)
+    assert tail[-2:] == ["--verdicts-in", cmd[cmd.index("--send") + 1]] and tail[-1].endswith("verdicts-gathered.tar.gz")
+    launched.clear()
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
+    assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
