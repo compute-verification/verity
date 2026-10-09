@@ -7,10 +7,16 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain;
-* `check_draw`, `check_proved`: the draw's checks;
+* `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
 * `draw`: the verifier's draw from given bytes of its own randomness;
 * `bound`: the exact bounds on wrong units at δ;
-* `verdict`: the verdicts' share of the outcome once the record's checks hold.
+* `verdict`: the verdicts' share of the outcome once the record's checks hold;
+* `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
+* `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`);
+* `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`.
+
+`sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
+`check_draw`, `check_proved` and `record`.
 -/
 import SampledProofs.OneStage
 
@@ -76,7 +82,7 @@ def domain (j : Json) : V Json := do
 def checkDraw (j : Json) : V Json := do
   if (int? (getD j "population")).isNone then throw "population is not an integer"
   if !(getD j "law" matches .obj _) then throw "law is not an object"
-  return codes (Draw.checkDraw (getD j "draw") (getD j "population") (getD j "law"))
+  return (Draw.checkDrawFull (getD j "draw") (getD j "population") (getD j "law")).toJson
 
 /-- `{"law", "population", "source"}`, the law an object, the population a natural number and the source hex, to the draw
 `two_stage.draw_first` samples from the source's bytes; refused where it raises. -/
@@ -93,7 +99,7 @@ def checkProved (j : Json) : V Json := do
   if let some c := field? draw "closure" then let _ ← ints c "closure"
   let us ← ints (getD j "proved_units") "proved_units"
   if (int? (getD j "instances")).isNone then throw "instances is not an integer"
-  return codes (Draw.checkProved draw (us.map Lean.toJson) (getD j "instances"))
+  return (Draw.checkProvedFull draw (us.map Lean.toJson) (getD j "instances")).toJson
 
 /-- `{"strata": [{"name", "size", "k"}], "delta"}` to `{"bound", "per_stratum"}` (`Stratified.count_bound` and
 `stratum_bound`); refused where `Stratified` is: no strata, a name empty or twice, `k > size`, δ not in (0, 1). -/
@@ -124,8 +130,45 @@ def verdict (j : Json) : V Json := do
     | .undecided _ => .undecided
   return Json.mkObj [("verdict", Json.str name.name)]
 
+/-- `{"record", "scheme", "roots", "domains", "population"}` to `matches_public`'s `{"ok", "codes", "detail"}`: a record
+whose roots are objects with a string port, a root and a domain, and which has a scheme and a population, a string scheme,
+roots and domains objects, an integer population. -/
+def matchesPublic (j : Json) : V Json := do
+  let rec_ := getD j "record"
+  let .arr roots := getD rec_ "roots" | throw "the record's roots are not a list"
+  if !roots.all fun r => (getD r "port" matches .str _) && (field? r "root").isSome && (field? r "domain").isSome then
+    throw "a registered root is not an object with a string port, a root and a domain"
+  if (field? rec_ "scheme").isNone || (field? rec_ "population").isNone then throw "the record has no scheme or population"
+  if !(getD j "scheme" matches .str _) || !(getD j "roots" matches .obj _) || !(getD j "domains" matches .obj _)
+      || (int? (getD j "population")).isNone then
+    throw "scheme is not a string, roots or domains not an object, or population not an integer"
+  return (Record.matchesPublic rec_ (getD j "scheme") (getD j "roots") (getD j "domains") (getD j "population")).toJson
+
+/-- `{"verdicts"}` to `{"registered": {value: root} or null}` (`Record.sessionRegistered`); refused where `inputOf` refuses
+the verdicts. -/
+def sessionRegistered (j : Json) : V Json := do
+  let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
+  let vs := entries (getD j "verdicts")
+  if !vs.all (·.2 matches .obj _) then throw "a verdict is not an object"
+  if !vs.all fun (_, v) =>
+      !(truthy (getD v "of_record") && jeq (getD v "accepted") (.bool true) && (getD v "registered" matches .obj _))
+      || (entries (getD v "registered")).all fun (_, e) => (getD e "value" matches .str _) && (field? e "root").isSome then
+    throw "a verifier of record reports registered reads that are not objects with a string value and a root"
+  return Json.mkObj [("registered", match Record.sessionRegistered vs with
+    | some kvs => Json.mkObj kvs.toList
+    | none => Json.null)]
+
+/-- `audit_record`'s arguments (`Record.inputOf`) to the record, as the text Python's `canonical_json` writes. -/
+def record (j : Json) : V Json := do
+  return Json.str (← PyJson.canonical (← Record.record (← Record.inputOf j)))
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
-   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("check_proved", checkProved), ("bound", bound), ("verdict", verdict)]
+   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("check_proved", checkProved), ("bound", bound),
+   ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record)]
+
+def verifier : List (String × (Json → V Json)) :=
+  [("registration", registration), ("matches_public", matchesPublic), ("check_draw", checkDraw),
+   ("check_proved", checkProved), ("record", record)]
 
 end SampledProofs.Pieces
