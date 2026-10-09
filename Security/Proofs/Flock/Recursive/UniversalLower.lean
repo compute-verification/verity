@@ -648,6 +648,13 @@ def digestIs (t : CircuitType) (h : String) : Bool :=
   | .ok d => d == h
   | .error _ => false
 
+/-- The format's rules accept the type, and `derive` lays it out (one group a side), so `uu_rows_iff` applies. -/
+def accepted (t : CircuitType) : Bool :=
+  (match CircuitType.check (fun _ => none) t with | .ok _ => true | .error _ => false) &&
+    match derive t [] [] with | .ok _ => true | .error _ => false
+
+#guard ([⟨1, 1, 1⟩, ⟨2, 2, 1⟩, ⟨3, 2, 2⟩, ⟨5, 3, 4⟩, ⟨7, 9, 3⟩, ⟨16, 16, 8⟩] : List Params).all (accepted ∘ uuType)
+
 #guard (uuType ⟨1, 1, 1⟩).items.size == 5
 #guard digestIs (uuType ⟨1, 1, 1⟩)
   "7893b854a063f857204b130c83412de9bab8b4343c2a310082a6ebf92a2463e1a47c3b8ef8d89e12e23a0eed1ce55bad57b116d5408ec7ca04f33e25adb94dca"
