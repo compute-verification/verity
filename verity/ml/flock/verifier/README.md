@@ -54,9 +54,12 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   digest, but `verify` refuses it, with or without `--zk`, until a soundness headline covers plain leaves.
 - `verity/flock-circuit/types` (and `+seed-injection`): the typed statement (§16.11) with hidden outputs (§16.13);
   `verity/flock-circuit/types@210d32e1` is its form with public outputs.
-- `verity/flock-circuit@b3727bd9` and `verity/flock-circuit/types@b3727bd9` (and `+seed-injection`): the two before, for
+- `verity/flock-circuit@cec3e347` and `verity/flock-circuit/types@cec3e347` (and `+seed-injection`): the two before, for
+  statements composed up to verity `cec3e347`, whose `--zk` identity names the pads and every table's draws ChaCha20
+  streams of the prover's seed; the default's names the OS's bytes (§16.14).
+- `verity/flock-circuit@b3727bd9` and `verity/flock-circuit/types@b3727bd9` (and `+seed-injection`): `@cec3e347`'s, for
   statements composed up to verity `b3727bd9`, whose META `leaf_scheme.salt_source` names a ChaCha20 expansion of a
-  per-proof OS key; the default's names the OS's bytes, each tree's read once (§16.10, §16.13).
+  per-proof OS key; from `@cec3e347` on it names the OS's bytes, each tree's read once (§16.10, §16.13).
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
   statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10), with
   public outputs. Runs staged from `68ae79f2` until hidden outputs use this name. A proving build's session of this
