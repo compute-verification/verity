@@ -14,16 +14,18 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: the harness (`verity_difftest`); the reference, `core_check.py`, and what it imports (`window.py`, and the
-# core window.py imports: `verity.ml`'s circuits codec, commitments and crypto, and `verity.errors`) with the packages
-# above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean, and C-Flock's
-# verifier modules they import (`Flock.Canon`, `Flock.Hash` and theirs) with its configuration.
+# Test-only: the harness (`verity_difftest`); the reference, `core_check.py`, and what it imports (`window.py`, `coins.py`,
+# `audit.py` and `protocol.py`, and what they import: `verity.ml`'s circuits codec, commitments, crypto and randomness,
+# and `verity.errors`) with the packages
+# above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean and what it
+# requires (PoUW's commitments, core's identity and randomness, C-Flock's verifier with its configuration).
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",
+          "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/audit.py",
+          "verity/core/protocols/pouw/protocol.py", "verity/ml/randomness",
           "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/core/protocols/interface", "verity/core/protocols/pouw/lean/window",
+          "verity/core/protocols/pouw/lean/commit", "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
-          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
-          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean",
-          "verity/core/service/flock/Flock/Hash.lean"]
+          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock"]
