@@ -191,7 +191,8 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     row i of a two-row registration in instance i, the verifier's own entry built from the rows' ``b || c`` alone
     (`commits_entry`), as V* builds a round's from its two ``c_k``; v is row i of the value the verifier registers itself
     (`verifier_value`, a function of the two v's alone), so the statement has no public input; and, when Lean is built, its
-    `statement` under the reads file."""
+    `statement` under the reads file. Under a name of V*'s parts (`rec-residuals/…`) the toy S is refused: such a unit must be
+    the verifier's own part net (PROTOCOL.md §16.10)."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     g = random.Random(11)
@@ -206,7 +207,7 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
         bcs = RL.commit_rows([rows0[i], rows1[i]], salts)
         own[nm] = RR.commits_entry(program, f"rec-c{i}", RR.port_words(S_SMALL["ports"][i][1]), bcs)
         assert own[nm] == regs[nm][0].entry()
-    st = RR.statement(S_SMALL, "rec-residuals/small", 2)
+    st = RR.statement(S_SMALL, "toy-residuals/small", 2)
     s = RR.write(st, regs, [v0, v1], tmp_path, own=own)
     assert s["holds"] == [True, False] and s["nonzero_residuals"] == [[], [0]] and s["unit_agrees"] == [True, True]
     meta = json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])
@@ -221,10 +222,23 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     assert reads["v"] == {**vreg.entry(), "word_bits": 16, "reads": [0, 1]}
     if not BIN.exists():
         pytest.skip("the Lean verifier is not built")
-    p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(tmp_path / "circuit.txt"),
-                        "--public", str(tmp_path / "pub.bin"),
-                        "--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program.json"),
-                        "--registered", str(tmp_path / "registered.json")], capture_output=True, text=True, check=False)
+
+    def statement(circuit):
+        return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(circuit),
+                               "--public", str(tmp_path / "pub.bin"),
+                               "--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program.json"),
+                               "--registered", str(tmp_path / "registered.json")], capture_output=True, text=True, check=False)
+
+    p = statement(tmp_path / "circuit.txt")
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
     assert line["registered"] == {nm: {"value": e["value"], "root": e["root"]} for nm, e in reads.items()}
+    text = (tmp_path / "circuit.txt").read_text()
+    head = text.index("\n", text.index("CIRCUIT unit ")) + 1
+    end = text.index("\n", head)
+    fields = text[head:end].split(" ")
+    assert fields[1] == "toy-residuals/small"
+    (tmp_path / "renamed.txt").write_text(text[:head] + " ".join([fields[0], "rec-residuals/small", *fields[2:]]) + text[end:])
+    p = statement(tmp_path / "renamed.txt")
+    why = "unit rec-residuals/small is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
+    assert p.returncode == 1 and why in p.stdout, p.stdout + p.stderr
