@@ -27,7 +27,7 @@ theorem zk_session_soundHJ_custody_json
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
-    (hscope : Layout.scopeOk c = true)
+    (hscope : Layout.scopeOkH c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
@@ -48,7 +48,7 @@ theorem zk_session_soundHJ_custody_json
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ hTags hRec
+        (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hRec
           fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj (drawFileZK_of_toJson_subset dj kd n hdj) _)) τ
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
