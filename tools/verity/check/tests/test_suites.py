@@ -1201,3 +1201,32 @@ def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     assert S.metadata() == ["pké/pyproject.toml", "pyproject.toml", "uv.lock"]
     assert [s.path for s in S.discover()] == ["pké"]
+
+
+def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_their_longest(tmp_path, monkeypatch):
+    """ee02's pytest step ran its parallel suites one at a time (650 s) before circuit_check's one process (2,730 s) started, and
+    its lean-suites ran evaluate (527 s) only after flock (862 s): the suites in one process now run beside the parallel ones."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.serial_slots([2730.0, 231.0, 203.0, 138.0, 98.0, 94.0, 36.0], 8, 32) == 2
+    assert S.serial_slots([527.0, 289.0, 62.0, 52.0, 46.0, 42.0, 7.0], 1, 32) == 2
+    assert S.serial_slots([100.0, 100.0, 100.0, None], 1, 32) == 4, "a suite never timed gets a slot of its own"
+    assert S.serial_slots([None] * 40, 2, 32) == 8, "a fresh test cache times none: the parallel lane keeps 24 of 32"
+    assert S.serial_slots([100.0, 100.0] + [None] * 40, 2, 32) == 10
+    assert S.serial_slots([100.0] * 40, 1, 32) == 31, "the parallel suites keep a slot"
+    assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
+
+
+def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):
+    import json
+
+    root = tmp_path / "tree"
+    _env_workspace(root, {"wide": "def test_a():\n    pass\n\ndef test_b():\n    pass\n", "one": "def test_one():\n    pass\n"})
+    wide = root / "wide" / "pyproject.toml"
+    wide.write_text(wide.read_text() + "\n[tool.verity.tests]\nparallel = true\n")
+    _git(root, "commit", "-qam", "wide is parallel")
+    (tmp_path / "cache").mkdir()
+    (tmp_path / "cache" / "durations.json").write_text(json.dumps({"one": 100.0, "wide": 50.0}))
+    p = _run_suite(root, tmp_path, "--fresh", "--jobs", "3")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
+    assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
