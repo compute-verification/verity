@@ -243,6 +243,26 @@ def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     assert LA.build_key("pkg/a", root) != ka
 
 
+def test_a_package_whose_sources_sit_beside_it_keeps_its_build(tmp_path):
+    """`Security/Proofs` has `srcDir = ".."`. Pruning looked for each kept output's source inside the package, found none,
+    and deleted the whole kept build on every warm take, so each check's audit rebuilt `Security/Proofs` from scratch."""
+    pkg = tmp_path / "Security" / "Proofs"
+    (pkg / "Flock").mkdir(parents=True)
+    (pkg / "lakefile.toml").write_text('name = "proofs"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    (pkg / "Flock" / "X.lean").write_text("theorem x : True := trivial\n")
+    (tmp_path / "Security" / "Flock").mkdir()
+    (tmp_path / "Security" / "Flock" / "Y.lean").write_text("theorem y : True := trivial\n")
+    lib, ir = pkg / ".lake/build/lib/lean", pkg / ".lake/build/ir"
+    kept = [lib / "Proofs/Flock/X.olean", lib / "Proofs/Flock/X.olean.hash", lib / "Proofs/Flock/X.ilean",
+            lib / "Proofs/Flock/X.trace", ir / "Proofs/Flock/X.c", ir / "Proofs/Flock/X.c.hash", lib / "Flock/Y.olean"]
+    stale = [lib / "Proofs/Flock/Gone.olean", ir / "Proofs/Flock/Gone.c", lib / "Proofs/Proofs/Flock/X.olean"]
+    for f in kept + stale:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("built")
+    assert LA.prune(pkg) == len(stale)
+    assert all(f.is_file() for f in kept) and not any(f.exists() for f in stale)
+
+
 def test_a_moved_package_takes_the_build_it_left(tmp_path, monkeypatch):
     """A kept build is keyed by the package's toolchain, manifest and lakefile, not its path or the paths to what it requires:
     after a move, its build comes in warm, and Lake reuses it where the package is now (`.lake/build` survives a move)."""

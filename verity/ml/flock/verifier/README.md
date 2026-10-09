@@ -24,10 +24,11 @@ rows, the typed statements, public input ports, several tables without `--zk`, s
 outside `Layout.scopeOk` (a unit reading more than one input group, a tail that computes the outputs, among others).
 Those statements still parse, set up and verify (`statement` prints their digest and Σ), and the agreement check
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
-law no soundness claim draws by is refused at setup, with `refused: <why>: no soundness claim draws by this law`
-(`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with or without a closure, and a subset draw without `--zk`
-(`lean_refuses_drawn`). So is a session without a draw, with `refused: a session without a draw: every soundness claim is
-about a drawn session (D12)`, last, after the form's refusal (`lean_refuses_drawless`).
+sampling design no soundness claim draws by is refused at setup, with
+`refused: <why>: no soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with
+or without a closure, and a subset draw without `--zk` (`lean_refuses_drawn`). So is a session without a draw, with
+`refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
+refusal (`lean_refuses_drawless`).
 
 ## Build and run
 
