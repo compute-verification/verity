@@ -13,14 +13,21 @@ run recorded.
   names, the domains derived again), and how each was found (`provenance`). Floats in verdicts and statements, which
   neither side reads, are written as strings. The registered roots the record's `registered` check reads are the
   verdicts' own, for the registration's own values (`audit.session_registered(verdicts, registration)`), on both sides.
+* **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
+  the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
+  recorded refusal, by the verifier of record's Lean (`one_stage.verifier.lean`) and today's Python.
 * **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the draw's, the record's: proved,
-  receipt, served, roots, registered; the verdicts') becomes the base case with the one change the run made; a refusal
-  by a check the protocol does not make (the public file's own match, `flock-verify`'s U1-U3 and roots, M0's selftests
-  and bindings, a tampered set before the verifier of record) is listed as outside, with the reason, and where the
-  protocol has a check of the same kind its analog is replayed and counted apart.
+  receipt, served, roots, registered; the verdicts'; the public file's) becomes the base case with the one change the
+  run made; a refusal by a check the protocol does not make (`flock-verify`'s U1-U3 and roots, M0's selftests and
+  bindings, a tampered set before the verifier of record) is listed as outside, with the reason, and where the protocol
+  has a check of the same kind its analog is replayed and counted apart.
 * **Verdicts.** Lean (`serve`), today's Python (`registration.check`, `draw.check_draw`, `audit.audit_record`, written
   as `OneStage.check` writes its outcome) and the recorded verdict, compared by verdict, stage (registration, draw,
-  checks, verdict) and codes.
+  checks, verdict; public) and codes.
+* **The whole record.** Where the registration passes and the draw is an object, the audit record itself by the
+  verifier of record (`one_stage.verifier.audit_record`: the Lean's `record` beside Python's `audit_record`, equal under
+  canonical JSON but for `wrong_units.bound` under a Bernoulli law, which is Python's on both), on the case's evidence
+  with its floats; whether they agree, and the fields where they don't.
 * **No recorded verdict.** A run that recorded no verdict (a serving bundle no verifier audited in its own run, an A2
   or A4 run that stopped before its audit record) compares Lean with today's Python on the stages it holds: the whole
   audit where it kept the session, else the registration alone (its `stages`; each outcome read up to them, one that
@@ -50,7 +57,7 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -463,17 +470,23 @@ class Case:
     provenance: dict = field(default_factory=dict)
     r7: bool = False
     stages: tuple[str, ...] = STAGES   # the stages of `OneStage.check` the run's files hold
+    #: `matches_public`'s other arguments (`scheme`, `roots`, `domains`, `population`): a check of the public file, not
+    #: `OneStage.check`
+    public: dict | None = None
 
     def case(self) -> dict:
+        if self.public is not None:
+            return {"fn": "matches_public", "input": {"record": self.rec, **self.public}}
         return {"commitment": DT.canonical(self.rec).encode().hex(),
                 "evidence": DT.canonical(strings(self.evidence)).encode().hex(), "params": _json(self.params)}
 
     def but(self, name: str, kind: str, recorded_: dict | None, *, params: dict | None = None, rec: dict | None = None,
-            evidence: dict | None = None, program: Any = None, provenance: dict | None = None) -> Case:
+            evidence: dict | None = None, program: Any = None, provenance: dict | None = None,
+            public: dict | None = None) -> Case:
         return Case(self.run, self.driver, self.format, name, kind, program if program is not None else self.program,
                     {**self.params, **(params or {})}, rec if rec is not None else self.rec,
                     {**self.evidence, **(evidence or {})}, recorded_, {**self.provenance, **(provenance or {})}, self.r7,
-                    self.stages)
+                    self.stages, {**(self.public or {}), **public} if public is not None else self.public)
 
 
 def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: str, *, partition: dict | None = None,
@@ -520,8 +533,26 @@ def recorded_failed(v: dict, source: str) -> dict:
 
 # --- the two verdicts --------------------------------------------------------------------------------------------------
 
+def public_outcome(v: dict) -> dict:
+    """A `matches_public` verdict (`{"ok", "codes", "detail"}`) as an outcome: its stage `public`, the whole verdict kept."""
+    if v["ok"]:
+        return {"verdict": "accept", "check": v}
+    return {"verdict": "reject", "reason": f"public: {', '.join(v['codes'])}", "check": v}
+
+
+def lean_public(c: Case) -> dict:
+    """The verifier of record's Lean (`sampled-proofs-verifier`) on a public-file case."""
+    got = V.lean("matches_public", c.case()["input"])
+    if "refused" in got:
+        return {"verdict": "error", "reason": got["refused"]}
+    return public_outcome(got)
+
+
 def python(c: Case) -> dict:
     """Today's Python on the case, as `OneStage.check` writes its outcome (`test_difftest.check`, with Lean's reasons)."""
+    if c.public is not None:
+        x = c.public
+        return public_outcome(R.matches_public(c.rec, x["scheme"], x["roots"], x["domains"], x["population"]).to_json())
     p, rec, e = c.params, c.rec, json.loads(DT.canonical(strings(c.evidence)))
     program = c.program
     digest = bytes.fromhex(R.digest(rec))
@@ -561,6 +592,31 @@ def python(c: Case) -> dict:
     return out("accept", None, public, {**profile, "delta": str(profile["delta"])})
 
 
+def whole_record(c: Case) -> dict | None:
+    """The audit record by the verifier of record (`verifier.audit_record`, Lean beside Python), on the case's evidence
+    with its floats, the law the verifier derives and the run's δ: whether the two records agree, each side's acceptance
+    and failed checks, and where they disagree the fields and both sides' values. None where `OneStage.check` never
+    reaches the record: a public-file case, a case that holds the registration alone, a registration R1-R7 refuse, a law
+    that doesn't derive, a draw that isn't an object."""
+    p, rec, e = c.params, c.rec, c.evidence
+    if c.public is not None or c.stages != STAGES or not isinstance(e["draw"], dict):
+        return None
+    if R.check(rec, c.program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
+               p["partition"], p["work_table"], p["registered"]).codes:
+        return None
+    try:
+        mine = DR.derive(c.program, p["query"], p["law"], p["work_table"])
+    except (P.QueryRefused, ValueError):
+        return None
+    r = V.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"], e["verdicts"],
+                       float(Fraction(p["delta"])), e["sessions"], e["served"], e["session_roots"])
+    v = r["verifiers"]
+    out = {"agree": v["agree"], "lean": v["lean"], "python": v["python"]}
+    if not v["agree"]:
+        out["disagree"] = r["checks"]["verifiers"]["detail"]
+    return out
+
+
 def stage_of(outcome: dict) -> tuple[str | None, list[str] | None]:
     """The stage of `OneStage.check` an outcome's reason names, and its codes."""
     v, reason = outcome.get("verdict"), outcome.get("reason") or ""
@@ -568,7 +624,8 @@ def stage_of(outcome: dict) -> tuple[str | None, list[str] | None]:
         return None, None
     if v == "undecided":
         return "verdict", None
-    for prefix, stage in (("registration: ", "registration"), ("draw: ", "draw"), ("the audit's checks failed: ", "checks")):
+    for prefix, stage in (("registration: ", "registration"), ("draw: ", "draw"), ("the audit's checks failed: ", "checks"),
+                          ("public: ", "public")):
         if reason.startswith(prefix):
             rest = reason[len(prefix):]
             if stage == "registration" and rest.startswith("R1-law: "):
@@ -617,8 +674,6 @@ def compare(c: Case, lean: dict, py: dict) -> dict:
 
 #: Negatives a run recorded that are not the protocol's checks, with why.
 OUTSIDE = {
-    "registration-root-mismatch": "the verifier's public file against the record (`registration.matches_public`), before the protocol",
-    "public-file-domain-mismatch": "the verifier's public file against the record (`registration.matches_public`), before the protocol",
     "public-body-altered-leaf-layer-updated (Lean roots)": "flock-verify recomputing the roots from the public file",
     "statement-binds-another-partition": "M0's statement bindings (`a0.bindings`)",
     "m0-selftest-unit-draw-session": "M0's selftest",
@@ -673,6 +728,20 @@ def a0(run: Run) -> Iterator[Case]:
     c = Case(run.id, "a0", rec["format"], "audit", "audit", program, p, rec, e,
              recorded_audit(a, f"{base}/audit.json"), prov)
     yield c
+    pc = None
+    public = (a.get("checks_before_draw") or {}).get("public")
+    if public is not None:
+        pub = f"{base}/stage/pub-{n}.bin"
+        with open(run.path(pub), "rb") as fh:
+            header = json.loads(fh.readline())
+        fv = header["frame_v3"]
+        psrc = f"{base}/audit.json's checks_before_draw.public"
+        pc = c.but("public", "audit", recorded("accept", source=psrc) if public["ok"] else
+                   recorded("reject", "public", public["codes"], psrc),
+                   public={"scheme": header["scheme"], "roots": fv["roots"], "domains": fv["domain_ids"],
+                           "population": header["instances"]},
+                   provenance={"public": f"the header of {pub}: its scheme, frame_v3's roots and domain_ids, its instances"})
+        yield pc
     if not run.has(f"{base}/negatives.json"):
         return
     neg = run.json(f"{base}/negatives.json")
@@ -682,7 +751,15 @@ def a0(run: Run) -> Iterator[Case]:
     smaller = P.population_program(template, n - 1)
     spart = with_program(partition, smaller)
     first = rec["roots"][0]
-    cases: dict[str, Callable[[dict], Case]] = {
+    cases: dict[str, Callable[[dict], Case]] = {} if pc is None else {
+        "registration-root-mismatch": lambda v: pc.but(
+            "registration-root-mismatch", "negative", recorded_codes(v, "public", src),
+            rec={**rec, "roots": [{**first, "root": "00" * 64}, *rec["roots"][1:]]}),
+        "public-file-domain-mismatch": lambda v: pc.but(
+            "public-file-domain-mismatch", "negative", recorded_codes(v, "public", src),
+            public={"domains": {**pc.public["domains"], first["port"]: "00" * 64}}),
+    }
+    cases |= {
         "registration-partition-mismatch": lambda v: c.but(
             "registration-partition-mismatch", "negative", recorded_codes(v, "registration", src), program=smaller,
             params={"program": descriptor(smaller), "partition": spart}),
@@ -1782,7 +1859,8 @@ def main() -> int:
     ap.add_argument("--runs", required=True, help="the runs' files, one directory per run (the art's first 8 hex digits)")
     ap.add_argument("--fetch", action="store_true", help="fetch what --runs lacks from the store (`wanted` files, and each "
                                                          "distinct set.tar's manifests)")
-    ap.add_argument("--lean", required=True, help="sampled-proofs-one-stage")
+    ap.add_argument("--lean", required=True, help="sampled-proofs-one-stage (the record and the public file go through "
+                                                  "`one_stage.verifier`, which builds its own sampled-proofs-verifier)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", nargs="*", default=None, help="run ids (8 hex digits)")
     a = ap.parse_args()
@@ -1828,6 +1906,7 @@ def main() -> int:
         records.add_file(f, runs_root)
 
     server = DT.Server([a.lean, "serve"])
+    verifier = V.executable()
     results, runs_out, outside, audits = [], [], [], defaultdict(list)
 
     def replay(run: Run, info: dict) -> None:
@@ -1850,16 +1929,20 @@ def main() -> int:
             for c in cases:
                 case = c.case()
                 try:
-                    lean = server.exchange(case)
+                    lean = lean_public(c) if c.public is not None else server.exchange(case)
                 except DT.ProtocolError as err:
                     lean = {"verdict": "error", "reason": str(err)}
                 try:
                     py = python(c)
                 except Exception as err:  # noqa: BLE001 - a crash is a verdict here
                     py = {"verdict": "error", "reason": f"{type(err).__name__}: {err}"}
-                results.append(_row(c, lean, py, compare(c, lean, py)))
+                try:
+                    whole = whole_record(c)
+                except Exception as err:  # noqa: BLE001
+                    whole = {"agree": False, "error": f"{type(err).__name__}: {err}"}
+                results.append(_row(c, lean, py, {**compare(c, lean, py), "record": whole}))
                 f.write(json.dumps({"name": c.name, "r7": c.r7, "case": case}) + "\n")
-                if c.kind == "audit" and driver not in UNRECORDED:
+                if c.kind == "audit" and c.public is None and driver not in UNRECORDED:
                     audits[R.digest(c.rec)].append(c)
         info["cases"] = len(cases)
         print(f"{run.id} {driver}: {info['status']} {len(cases)} cases", file=sys.stderr, flush=True)
@@ -1882,6 +1965,8 @@ def main() -> int:
         replay(run, info)
     server.close()
     report = {"format": "verity/one-stage-replay/v0", "index": a.index, "lean": a.lean,
+              "verifier": {"path": str(verifier), "sha256": hashlib.sha256(verifier.read_bytes()).hexdigest(),
+                           "of_record": V.RECORD_VERDICT},
               "runs": runs_out, "cases": results, "outside": outside, "counts": counts(runs_out, results, outside)}
     report["summary"] = summary_lines(report["counts"])
     (out / "replay.json").write_text(json.dumps(report, indent=1, sort_keys=True))
@@ -1893,7 +1978,7 @@ def main() -> int:
 def _row(c: Case, lean: dict | None, py: dict | None, cmp: dict) -> dict:
     return {"run": c.run, "driver": c.driver, "format": c.format, "name": c.name, "kind": c.kind, "r7": c.r7,
             "recorded": c.recorded, "lean": lean, "python": py, **cmp, "provenance": c.provenance,
-            **({"stages": list(c.stages)} if c.stages != STAGES else {})}
+            **({"stages": list(c.stages)} if c.stages != STAGES else {}), **({"public": True} if c.public is not None else {})}
 
 
 def classify(run: Run) -> str:
@@ -1947,13 +2032,15 @@ def counts(runs: list[dict], results: list[dict], outside: list[dict]) -> dict:
     none_runs = [r for r in runs if r["driver"] in UNRECORDED]
     return {"runs": len(runs), "cases": len(mine),
             "same_verdict": sum(1 for r in mine if r.get("lean_recorded") in ("same", "same-verdict")),
+            "public": sum(1 for r in mine if r.get("public")),
+            "records": _records(mine),
             "negatives": sum(1 for r in mine if r["kind"] == "negative"),
             "analogs": sum(1 for r in mine if r["kind"] == "analog"), "outside": len(outside),
             "lean_python": dict(Counter(r.get("lean_python", "pending") for r in mine)),
             "python_recorded": dict(Counter(r.get("python_recorded", "-") for r in mine)),
             "by_driver_format": _by_driver_format([r for r in runs if r["driver"] not in UNRECORDED], mine, "lean_recorded"),
             "no_recorded_verdict": {
-                "runs": len(none_runs), "cases": len(none),
+                "runs": len(none_runs), "cases": len(none), "records": _records(none),
                 "lean_python": dict(Counter(r.get("lean_python", "pending") for r in none)),
                 "negatives": sum(1 for r in none if r["kind"] == "negative"),
                 "registration_only": sum(1 for r in none if r.get("stages") == list(REGISTRATION)),
@@ -1962,13 +2049,25 @@ def counts(runs: list[dict], results: list[dict], outside: list[dict]) -> dict:
                 "by_driver_format": _by_driver_format(none_runs, none, "lean_python")}}
 
 
+def _records(rows: list[dict]) -> dict:
+    """The whole-record comparison over `rows`: how many reach the record, how many agree, and each that doesn't."""
+    compared = [r for r in rows if r.get("record") is not None]
+    return {"compared": len(compared), "agree": sum(1 for r in compared if r["record"]["agree"]),
+            "differ": [{"run": r["run"], "name": r["name"],
+                        **({"error": r["record"]["error"]} if "error" in r["record"] else
+                           {"fields": r["record"]["disagree"]["fields"]})}
+                       for r in compared if not r["record"]["agree"]]}
+
+
 def summary_lines(c: dict) -> list[str]:
     n = c["no_recorded_verdict"]
     return [f"{c['runs']} runs in the index; {c['cases']} cases, {c['lean_python'].get('same', 0)} Lean = Python, "
             f"{c['same_verdict']} Lean = recorded, {c['negatives']} negative controls, {c['analogs']} analogs, "
             f"{c['outside']} outside",
             f"{n['runs']} runs, {n['cases']} cases, {n['lean_python'].get('same', 0)} Lean = Python, {n['negatives']} "
-            f"negative controls, no recorded verdict"]
+            f"negative controls, no recorded verdict",
+            f"whole audit records: {c['records']['agree']} of {c['records']['compared']} Lean = Python; with no recorded "
+            f"verdict {n['records']['agree']} of {n['records']['compared']}"]
 
 
 if __name__ == "__main__":
