@@ -8,8 +8,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 
 `checked_of_acceptsH`: `checked_of_accepts` at hidden outputs. The one table's statement is setupHidden's at the
 record's draw `d` (`HiddenExec.setupTables_okH`), over `HmOut.drawn c pub d` (`Hidden.setupHidden_spec'`), which is
-`HmRow.drawn` at the circuit without its output words. `checkRegistered` first refuses a registered port that is an
-output row, then runs the same `Registered.check` (`checkRegistered_ok`), so the rest is `checked_of_accepts`' proof:
+`HmRow.drawn` at the circuit without its output words. `checkRegistered` is the same `Registered.check`
+(`checkRegistered_ok`), so the rest is `checked_of_accepts`' proof:
 the drawn instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`, from
 `Hidden.loadPublic_nil`), whose leaf is the hidden layout's registered leaf at `(u, q)`.
 -/
