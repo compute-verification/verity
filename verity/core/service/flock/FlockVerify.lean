@@ -377,7 +377,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
-  let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
+  let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
