@@ -1,16 +1,29 @@
 """``python rec_private_summary.py OUT``: OUT/summary.json from the records 87-rec-private.sh and 89-rec-private-direct.sh
 leave under OUT (whichever of the staging, inner sessions, V*'s folds and stagings, outer sessions and public views are
-there), and a line of each outer session's verdicts.
+there), a line of each outer session's verdicts, and a last line of the Lean verifier of record's.
 
-Each verifier's verdict is reported with ``every_check_passed``: Lean's verify refuses a statement whose form the soundness
-proof does not cover (`ProvedScope.check`) last, so its reason is that refusal only when every check passed; the live build
-gives that refusal whatever the session holds, and the verdict it would otherwise give as ``without_refusal``."""
+Each verdict fails closed: ``accepted`` only when the verifier said so, and a refusal of a statement whose form the soundness
+proof does not cover (`ProvedScope.check`) is ``Lean refused: form not covered``, a refusal like any other. The live
+build's ``without_refusal`` (the verdict it would give but for that refusal) is reported and counts for nothing.
+``lean_of_record`` accepts the run only when Lean accepted every part cap.json names in its session of the recursive
+session (NAME, never NAME-direct); a control is ``caught`` only when Lean refused it for a reason other than its form, as the
+form's refusal comes after every other check."""
 import json
 import re
 import sys
 from pathlib import Path
 
 FORM = ": a statement form the soundness proof does not cover"
+CONTROLS = ("forged-top-", "flipped-top-", "other-alg-")
+
+
+def verdict(who: str, accepted, why) -> str:
+    if accepted is True:
+        return "accepted"
+    if accepted is None:
+        return f"{who}: no verdict"
+    w = str(why or "")
+    return f"{who} refused: form not covered" if w.endswith(FORM) else f"{who} refused: {w.removeprefix('refused: ')}"
 
 
 def text(p: Path) -> str:
@@ -30,11 +43,15 @@ def gb(p: Path) -> float | None:
 def lean(p: Path) -> dict:
     t = text(p)
     at = t.find("VERDICT ")
-    if at < 0:
-        return {"accepted": None, "why": (t + text(p.with_suffix(".err")))[-500:]}
-    v = json.JSONDecoder(strict=False).raw_decode(t[at + 8:])[0]
-    return {**{k: v.get(k) for k in ("accepted", "why", "registered", "partition")},
-            "every_check_passed": bool(v.get("accepted")) or str(v.get("why", "")).endswith(FORM)}
+    try:
+        v = json.JSONDecoder(strict=False).raw_decode(t[at + 8:])[0] if at >= 0 else None
+    except ValueError:
+        v = None
+    if not isinstance(v, dict):
+        return {"accepted": False, "verdict": verdict("Lean", None, None), "why": (t + text(p.with_suffix(".err")))[-500:]}
+    ok = v.get("accepted") is True
+    return {"accepted": ok, "verdict": verdict("Lean", ok, v.get("why")),
+            **{k: v.get(k) for k in ("why", "registered", "partition")}}
 
 
 def up(p: Path):
@@ -45,9 +62,9 @@ def live(d: Path) -> dict:
     rows = [json.loads(ln[5:]) for ln in text(d / "prove.txt").splitlines() if ln.startswith("LIVE")]
     served = [json.loads(ln.split("\t", 1)[1]) for ln in text(d / "serve.log").splitlines() if ln.startswith("SESSION\t")]
     r = rows[0] if rows else {}
-    wr = (r.get("verdict") or {}).get("without_refusal")
-    return {"accepted": r.get("accepted"), "why": r.get("why"), "without_refusal": wr,
-            "every_check_passed": (wr or {}).get("accepted", r.get("accepted")) if r else None, "firewall": r.get("firewall"),
+    ok = r.get("accepted") is True
+    return {"accepted": ok, "verdict": verdict("live", ok if r else None, r.get("why")), "why": r.get("why"),
+            "without_refusal": (r.get("verdict") or {}).get("without_refusal"), "firewall": r.get("firewall"),
             "prove_s": r.get("prove_s"), "prove_total_s": r.get("prove_total_s"),
             "e2e_s": r.get("e2e_s"), "proof_bytes": r.get("proof_bytes"), "k_log": r.get("k_log"), "instances": r.get("instances"),
             "serve": [{k: s.get(k) for k in ("accepted", "why", "verify_s")} for s in served],
@@ -57,6 +74,17 @@ def live(d: Path) -> dict:
 
 def dirs(p: Path) -> list[Path]:
     return sorted(q for q in p.iterdir() if q.is_dir()) if p.is_dir() else []
+
+
+def of_record(s: dict) -> dict:
+    parts = (s["cap"] if isinstance(s["cap"], dict) else {}).get("parts") or []
+    seen = {n: v["lean"]["verdict"] for n, v in s["outer"].items()}
+    honest = {p: seen.get(p, "no session in the recursive session") for p in parts}
+    refused = {p: v for p, v in honest.items() if v != "accepted"} if parts else {"cap.json": "no parts: nothing to accept"}
+    return {"accepted": not refused, "verdict": "accepted" if not refused else "not accepted", "parts": honest, "refused": refused,
+            "direct": {p: seen[p + "-direct"] for p in parts if p + "-direct" in seen},
+            "controls": {n: {"verdict": v, "caught": v.startswith("Lean refused: ") and v != "Lean refused: form not covered"}
+                         for n, v in seen.items() if n.startswith(CONTROLS)}}
 
 
 def main(o: Path) -> dict:
@@ -95,6 +123,7 @@ def main(o: Path) -> dict:
                               "replay": up(d / "replay.txt"),
                               "core_firewall": text(d / "core-firewall.txt").strip() or text(d / "core-firewall.err")[-300:] or None,
                               "sizes": text(d / "sizes.txt")}
+    s["lean_of_record"] = of_record(s)
     (o / "summary.json").write_text(json.dumps(s, indent=1))
     return s
 
@@ -102,5 +131,7 @@ def main(o: Path) -> dict:
 if __name__ == "__main__":
     s = main(Path(sys.argv[1]))
     for n, v in s["outer"].items():
-        print(n, json.dumps({"live": v["live"]["every_check_passed"], "lean": (v["lean"].get("accepted"), v["lean"].get("why")),
+        print(n, json.dumps({"live": v["live"]["verdict"], "lean": v["lean"]["verdict"],
                              "core_firewall": (v["core_firewall"] or "")[:200]}))
+    r = s["lean_of_record"]
+    print("LEAN-OF-RECORD", r["verdict"], json.dumps(r["refused"]))
