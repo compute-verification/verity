@@ -16,10 +16,10 @@ and C-Flock `--zk --registered` sessions of the public verifier circuits V* (`zs
 form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`
 (`Proofs.Flock.Recursive.Guarantees`).
 
-* `RecursiveSound`, for the auditor: when the auditor accepts every one of V*'s sessions, the hidden circuit's statement
-  holds, except with probability at most the sum of V*'s sessions' soundness errors, plus each round's transfer slack
-  and rewinding loss (the binding of the firewall's commitments under `cr/sha-512`), plus the inner protocol's soundness
-  error. Its one new assumption is `Flock.Assumptions.VBridge`.
+* `RecursiveSound`, for the auditor, in fork form: either a run of the prover's own strategy finds a SHA-512 collision
+  (at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
+  hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
+  the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
 * `RecursiveZK`, for the developer: the auditor's whole view, the firewall's commitments (`firewallLeaf`) to every inner
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
   the commitments' hiding gap (`hash-derived-key`) plus the outer session's zero-knowledge gap.
@@ -49,18 +49,29 @@ the live stratified law on the operating system's bytes (A3, `uniform/os-random`
 registration `R₂` of the outer proof, session `j` is `zs R ω t R₂ j`, whose fields carry `flock-verify verify --zk
 --registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the registrant's record of the registered
 reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's own). For every prover `σ` of the
-recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`), `cr/sha-512` for the fork finders of each round
-(`hCR`) and the inner protocol's soundness at `ε_in`:
-$$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the hidden statement holds}] \le
-  \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + \sum_{i<r}\Big(\mathbb E\Big[\sum_j \text{stage slack}_j\Big] +
-  \big(\textstyle\sum_{pos}\kappa_i(pos)\big)\sqrt{q_i^2/2^{513}}\Big) + \varepsilon_{in},$$
-the expectations over the draw, the rounds' coins at the prover's leaves (`expAt`) and the sessions (`sumV`), each
-term at the registration `R₂` the prover sends and the strategy it names for its session. A session's outer bound
-(`ZkOuter.boundCR`) is, where its
-finders satisfy `cr/sha-512` at budgets `qF, qS, qW, qR` (`ZkOuter.CR`), its law's miss at one bad unit plus
-`zk_session_soundR`'s and `zk_session_regValsR`'s terms at the drawn units and `qR²/2^513` for its registered paths
-(`ZkOuter.bound`), and `1` elsewhere; its stage slack (`ZkOuter.slackCR`) is likewise `ZkOuter.stageSlack` or `1`. The
-weights `κ_i = weightS` and `√(q²/2^513)` are the binding of round `i`'s commitments (`stage_bind`). -/
+recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of
+three holds.
+
+* A round fork (`RoundFork`): for some round `i < r`, draw `ω` and commit string `pos`, round `i`'s fork finder
+  (`forkAt`: two continuations of `σ` after its round-`i` commitment, each running the trial for `pos`) outputs a
+  SHA-512 collision at an outcome it reaches.
+* A session fork (`SessionFork`): at some leaf `σ` reaches, some outcome of V*'s sessions its strategy reaches and some
+  session `j`, a finder of that session run from the strategy `σ` names there (its tables' knowledge finders, its
+  registered-value finders, the run that opens a drawn row's registered leaf, or its link finder: `ZkOuter.Fork`)
+  outputs a SHA-512 collision at an outcome it reaches.
+* $$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the hidden statement holds}] \le
+    \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + r\cdot\mathbb E\Big[\sum_j \text{stage slack}_j\Big] +
+    \varepsilon_{in},$$
+  the expectations over the draw, the rounds' coins at the prover's leaves (`expAt`) and the sessions (`sumV`), each
+  term at the registration `R₂` the prover sends and the strategy it names for its session. A session's outer bound
+  (`ZkOuter.boundCR`) is its law's miss at one bad unit plus the drawn units' statistical errors: the tables'
+  (`tableErrZ`: each drawn table's `bound` over `1 − N₀/(ek)`), the link's (`linkErrZC`: `Q_s/(1 − ρ)·(1/(eM) +
+  k/(eR_w))`) and the waits' (`waitErrZC`: `Q_s/(1 − ρ)·k/(eR_w)`); its stage slack (`ZkOuter.slackCR`) is the same
+  without the miss.
+
+Every `∃` in a fork ranges over `σ`'s own runs and what they output, never over arbitrary strings. The bound is exact
+for a prover that never collides on a fork, and says nothing for one that collides on a single pair: no term counts
+SHA-512 evaluations. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s laws: their strata and A3
@@ -69,10 +80,9 @@ def RecursiveSound : Prop :=
     -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters, and the finders' budgets
+    -- the count curve's parameters
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
-    {t' : ℝ} (_ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
@@ -82,20 +92,15 @@ def RecursiveSound : Prop :=
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
-    -- cr/sha-512 for the fork finders of each round
-    (q : ℕ → ℝ)
-    (_hCR : ∀ i < I.r, ∀ ω pos,
-      (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
     -- the inner protocol
     {εin : ℝ≥0∞} (_hin : InnerSound I εin),
-    prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
-        (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
-      expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
-        ∑ i ∈ Finset.range I.r,
-          (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
-            (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin
+    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
 /-- **The firewall's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
 the hm96-sha512 leaf of the message's SHA-512 digest, `H(SHA-512(msg) ⊕ M·y, c(y))` (`ZkView.leafH`, `ZkView.My`,
