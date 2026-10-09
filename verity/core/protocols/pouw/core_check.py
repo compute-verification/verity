@@ -22,6 +22,9 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   units drawn subset:K′ at the window's δ.  It publishes exactly `window.PUBLIC` and the service's profile.  The service's
   reject is a reject and its undecided (the verifier of record hasn't run) is undecided.
 
+`opening` is the rule on one unit's opening beside it (`served_commit.check`'s, which calls it): the tile proof's public
+file opens the unit's rows under the registered window root, through its entry and the entry's side trees.
+
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
 from __future__ import annotations
@@ -34,6 +37,10 @@ from fractions import Fraction
 from typing import Any
 
 from verity.core.protocols.pouw import window as Wd
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.ml.commitments.rowleaf import row_leaf
 
 ID = "verity/pouw/v1"
 ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
@@ -45,6 +52,13 @@ CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
 _DIGEST = re.compile(r"[0-9a-f]{128}")
+#: one-stage's served domain (`registration.served_domain`), the window root's
+SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
+#: a tile proof's first two rows, in its header's key order: its A row and its B row, each side's fp8-p row schema
+#: (`circuit.leaves.ROW_SCHEMA["fp8-p", X | W]`)
+OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
+SALT_BYTES = 192
+BC_BYTES = 128
 
 
 class Refused(ValueError):
@@ -464,6 +478,121 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     return "accept", None, (public, integrity_json(prof))
 
 
+# ---- a unit's opening ------------------------------------------------------------------------------------------------------
+
+def window_domain(p: dict, rec: dict) -> CommitmentDomain:
+    """The window root's domain: one-stage's served domain (`registration.served_domain`) of the registered program and
+    partition, over the check's P entries in the window's context."""
+    n = p["check"]["entries"]
+    binding = identity_digest_sha512(SERVED_DOMAIN, {"program": rec["program"], "partition": rec["partition"],
+                                                     "port": Wd.PORT, "schema": Wd.ENTRY_SCHEMA, "leaves": n,
+                                                     "run": p["context"]})
+    return CommitmentDomain(binding, Wd.OWNER, RangeIndexedDomain(0, n), hash="sha512")
+
+
+def verify_path(dom: CommitmentDomain, root: bytes, index: int, leaf: bytes, sibs: list[bytes]) -> bool:
+    """Leaf `index` with siblings `sibs` (leaf level first) hashes up to `root` in `dom`."""
+    if not 0 <= index < dom.count or len(sibs) != merkle_depth(dom.count):
+        return False
+    digest = leaf
+    for level, s in enumerate(sibs):
+        digest = dom.node(level, index >> 1, *((digest, s) if index % 2 == 0 else (s, digest)))
+        index >>= 1
+    return digest == root
+
+
+def _fromhex(s: Any, n: int) -> bytes | None:
+    """`bytes.fromhex(s)` when `s` is a string of `n` bytes' hex, else None."""
+    if not _str(s):
+        return None
+    try:
+        b = bytes.fromhex(s)
+    except ValueError:
+        return None
+    return b if len(b) == n else None
+
+
+def _path(x: Any) -> list[bytes] | None:
+    sibs = [_fromhex(s, 64) for s in x] if isinstance(x, list) else None
+    return None if sibs is None or None in sibs else sibs
+
+
+def _int(x: Any) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _no_constant(s: str) -> Any:
+    raise ValueError(f"{s} is not JSON")
+
+
+def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any) -> str | None:
+    """None when the tile proof's public file `pub` opens unit `unit`'s rows under the registered window root, else why
+    not (`served_commit.check`).  `units` is the draw's (None for a unit opened undrawn, the filler's); `op` the prover's
+    opening ``{"entry", "entry_value", "entry_salt", "window_path", "a": {"index", "path"}, "b": …}``: the unit's entry,
+    its salt and its path to the window root, and each side's row with its path to the entry's side root.  The proof's
+    first two rows, in its header's key order (serde's, as C-Flock reads it), are its A row and its B row, and its body
+    starts with their b ‖ c."""
+    if units is not None and unit not in units:
+        return f"unit {unit} is not drawn"
+    rec = c["record"]
+    dom = window_domain(p, rec)
+    roots = {r["port"]: r for r in rec["roots"]}
+    if roots.get(Wd.PORT, {}).get("domain") != dom.domain_id.hex():
+        return "the registered window domain is not the window's served domain"
+    root = _fromhex(roots[Wd.PORT]["root"], 64)
+    if root is None:
+        return "the registered window root is not a SHA-512 digest"
+    try:
+        entry = Wd.Entry.from_json(op["entry_value"])
+        entry.row()
+    except (KeyError, TypeError, ValueError):
+        return "the opening names no entry"
+    e = op.get("entry")
+    if not _int(e):
+        return "the opening names no entry"
+    salt, sibs = _fromhex(op.get("entry_salt"), SALT_BYTES), _path(op.get("window_path"))
+    sides = {s: op.get(s) for s, _ in OPENED}
+    paths = {s: _path(o.get("path")) if isinstance(o, dict) else None for s, o in sides.items()}
+    if salt is None or sibs is None or any(p_ is None or not _int(sides[s].get("index")) for s, p_ in paths.items()):
+        return (f"the opening's salt is not {SALT_BYTES} bytes, or a path or a side's index is not one (paths of SHA-512 "
+                "digests)")
+    if not (0 <= e < dom.count and verify_path(dom, root, e, Wd.entry_leaf(dom, e, Wd.entry_bc(entry, salt)), sibs)):
+        return f"entry {e} is not the registered window's entry"
+    try:
+        at = dict(zip(("a", "b"), Wd.tile_in(entry, unit)))
+    except ValueError as x:
+        return f"entry {e}: {x}"
+    head, nl, body = pub.partition(b"\n")
+    try:
+        h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
+    except ValueError:
+        h = None
+    if not isinstance(h, dict):
+        return "the proof's public file has no JSON header"
+    n = h.get("instances")
+    if not _int(n):
+        return "the proof's header has no instance count"
+    if n != 1:
+        return f"the proof has {n} instances, not one tile"
+    f = h.get("frame_v3")
+    s = f.get("schemas") if isinstance(f, dict) else None
+    if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
+        return "the proof's first rows are not an A row and a B row of the registered schemas"
+    if len(body) < 2 * BC_BYTES:
+        return "the proof's body holds no A row and B row"
+    for i, (side, schema) in enumerate(OPENED):
+        o = sides[side]
+        if o["index"] != at[side]:
+            return f"side {side}: the opening is of row {o['index']}, not the unit's row {at[side]}"
+        sdom = Wd.side_domain(dom.domain_id, side)
+        bc = body[i * BC_BYTES:(i + 1) * BC_BYTES]
+        if not (at[side] < sdom.count and verify_path(sdom, entry.root_a if side == "a" else entry.root_b, at[side],
+                                                      row_leaf(sdom, at[side], Wd._HM.tree_leaf(Wd._HM.default_key, bc),
+                                                               schema), paths[side])):
+            return f"side {side}: the proof's committed row is not entry {e}'s row {at[side]}"
+    return None
+
+
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
@@ -506,5 +635,5 @@ def line(a: dict) -> str:
 
 
 __all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
-           "case", "check", "commitment", "digest", "evidence", "integrity", "integrity_json", "law_name", "line", "params",
-           "ratio", "unit_draw"]
+           "case", "check", "commitment", "digest", "evidence", "integrity", "integrity_json", "law_name", "line", "opening",
+           "params", "ratio", "unit_draw", "verify_path", "window_domain"]
