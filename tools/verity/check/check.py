@@ -20,7 +20,9 @@
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
-                                                            refuses when no machine's slots can be read
+                                                            refuses when no machine's slots can be read; with no slot free on
+                                                            any, twins: the check on each machine it can run on (`twins`),
+                                                            the first to take a slot runs; exit 75 when none ran: rerun
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -28,8 +30,8 @@
     uv run python tools/verity/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/verity/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
-                                                            the steps; with --record --on, the pack travels with the run;
-                                                            without it, --record gathers one from the newest recorded checks
+                                                            the steps; with --record, added to the pack it gathers from the
+                                                            newest recorded checks, and with --on that pack travels with the run
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
@@ -121,9 +123,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
-`--verdicts-in`.  `--record` without `--verdicts-in` or `--no-cache` sends one pack of the newest recorded checks' packs
-(`gather_verdicts`), so every machine reuses every pass a recorded check earned; the pack imported is named in the result's
-`verdicts`.
+`--verdicts-in`.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs (`gather_verdicts`), with a
+`--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
+imported is named in the result's `verdicts`.
 
 The evidence store.  A recorded check runs the store-backed tests (integrations/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -245,21 +247,40 @@ SHARD_PARTS = "check-shard-parts.json"
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 
 
-def slot_wrap(priority: bool = False) -> list[str]:
+def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks."""
+    with --priority for the lander's train checks and --twin for one of a check's twins."""
     by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
-    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []), SLOT_WRAP[-1]]
+    return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []), *(["--by", by] if by else []),
+            *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
+
+
+def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False) -> list[str]:
+    """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home`` first: every one a check can run
+    on (`placement` refuses none) when ``home``, `choose`'s pick, has no slot free for it; else none, and it runs on ``home``."""
+    def runs(name: str) -> bool:
+        try:
+            placement(docs[name], priority)
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return False
+        return True
+
+    if placement(docs[home], priority)[0]:
+        return []
+    out = [home, *(n for n in names if n != home and runs(n))]
+    return out if len(out) > 1 else []
 
 
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots
 AUTO = ("vy-nebius-1", "vy-nebius-2")
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
+#: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
+FULL_CHECK_S = 9000
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
-#: each `{"error": ...}` when it can't be read there
+#: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
-import json, sys, types
+import json, sys, time, types
 from datetime import datetime, timezone
 
 
@@ -281,7 +302,11 @@ def doc(f):
 now = datetime.now(timezone.utc)
 slot = load("check_slot_for_lean_slot", SLOT_SRC, "tools/verity/check/slot.py")
 lean = load("check_lean_slot", LEAN_SRC, "tools/verity/check/lean_slot.py")
-print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now))}))
+try:
+    left = int(open("/etc/research/deadline").read().split()[0]) - time.time()
+except (OSError, ValueError, IndexError):
+    left = None
+print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now)), "deadline_in_s": left}))
 '''
 SLOT = _load("slot")
 
@@ -336,11 +361,14 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
     ``priority``, a train check's, only the priority ones), and the state in a few words. ValueError when no check can run
-    there: a document has an error, the slots file lists no slot, or the Lean slots file grants check's lean-audit step none."""
+    there: a document has an error, the slots file lists no slot, the Lean slots file grants check's lean-audit step none, or the
+    machine's deadline is nearer than FULL_CHECK_S."""
     check, lean = doc["check"], doc["lean"]
     for d, what in ((check, "check slots"), (lean, "Lean audit slots")):
         if "error" in d:
             raise ValueError(f"its {what} can't be read: {d['error']}")
+    if (left := doc.get("deadline_in_s")) is not None and left < FULL_CHECK_S:
+        raise ValueError(f"its deadline is {max(left, 0) / 60:.0f} min away, under the {FULL_CHECK_S / 60:.0f} min a full check takes")
     ahead = len([w for w in check["waiters"] if w["priority"] or not priority])
     waiting = f"{ahead} waiting ahead" + (" with priority" if priority else "")
     if check["slots"] is None:
@@ -756,7 +784,9 @@ def record(argv: list[str]) -> int:
     pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
     REF (default origin/main, fetched first), or whenever --agreement is given, and the newest recorded checks' verdicts
     (`gather_verdicts`) unless it is given a pack or --no-cache. A commit that can't land on REF as it is
-    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all."""
+    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
+    launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
+    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it)."""
     on = base = None
     agreement = priority = False
     rest = []
@@ -772,9 +802,11 @@ def record(argv: list[str]) -> int:
             priority = True
         else:
             rest.append(x)
+    pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
-        got, why, skipped = choose(names, read_slots(names), priority)
+        docs = read_slots(names)
+        got, why, skipped = choose(names, docs, priority)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:
@@ -782,6 +814,10 @@ def record(argv: list[str]) -> int:
             return 2
         print(f"check: --on {on}: {got}: {why}", flush=True)
         on = got
+        if both := twins(names, docs, got, priority):
+            pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
+            print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
+                  f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
@@ -836,15 +872,28 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
-    if not combining and "--verdicts-in" not in rest and "--no-cache" not in rest:
-        if pack := gather_verdicts(d):
+    if not combining and "--no-cache" not in rest:
+        given = None
+        if "--verdicts-in" in rest[:-1]:
+            i = rest.index("--verdicts-in")
+            given, rest = Path(rest[i + 1]).resolve(), rest[:i] + rest[i + 2:]
+        if pack := gather_verdicts(d, given=given):
             rest += ["--verdicts-in", str(pack)]
     if on:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-    cmd += ["--", *(slot_wrap(priority) if on else []), *tool.CHECK.command, *rest]
     try:
+        if both:
+            procs = []
+            for m in both:
+                c = list(cmd)
+                c[c.index("--on") + 1] = m
+                procs.append(subprocess.Popen([*c, "--", *slot_wrap(priority, pair if m == on else f"{pair}@{on}"),
+                                               *tool.CHECK.command, *rest], cwd=ROOT, env=env))
+            rcs = [p.wait() for p in procs]
+            return 0 if 0 in rcs else next((rc for rc in rcs if rc != SLOT.NOT_STARTED), rcs[0])
+        cmd += ["--", *(slot_wrap(priority) if on else []), *tool.CHECK.command, *rest]
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
         shutil.rmtree(d, ignore_errors=True)
@@ -854,33 +903,46 @@ def record(argv: list[str]) -> int:
 GATHER = 12
 
 
-def gather_verdicts(d: Path, store=None, limit: int = GATHER) -> Path | None:
+def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
     """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
     `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
-    recorded runs' packs are taken.  None when the store has none, or can't be read (the check then runs on its own cache)."""
+    recorded runs' packs are taken.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
+    flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
+    verdicts are recomputed, never reused; a refused pack given is an error.  None when there is no pack at all (the check then
+    runs on its own cache)."""
     from research.store.local import LocalStore
 
+    if given is not None and not given.is_file():
+        raise SystemExit(f"check: --verdicts-in {given}: no such pack")
+    if given is not None and (why := VERDICTS.refusal(given)):
+        raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
+    packs = [given] if given is not None else []
     try:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
         rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state = 'done' ORDER BY start_utc DESC LIMIT ?",
                                (4 * limit,))
-        packs = []
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
-                packs.append(store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz")
-                if len(packs) == limit:
+                pack = store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz"
+                if why := VERDICTS.refusal(pack):
+                    print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed",
+                          flush=True)
+                    continue
+                packs.append(pack)
+                if len(packs) == limit + (given is not None):
                     break
-        if not packs:
-            return None
-        n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
-    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes)
+    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)
         print(f"check: no verdicts gathered from the store ({type(e).__name__}: {e})", flush=True)
+        del packs[given is not None:]
+    if not packs:
         return None
-    print(f"check: verdicts: {n} entries gathered from {len(packs)} recorded checks ({', '.join(p.parent.name for p in packs)})",
-          flush=True)
+    n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
+    names = [*([f"{given.name} (given)"] if given is not None else []), *(p.parent.name for p in packs[given is not None:])]
+    print(f"check: verdicts: {n} entries gathered from {len(packs) - (given is not None)} recorded checks"
+          f"{' and the pack given' if given is not None else ''} ({', '.join(names)})", flush=True)
     return d / "verdicts-gathered.tar.gz"
 
 
@@ -1364,6 +1426,55 @@ def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
     return found
 
 
+def reuse(out: Path, done: list[dict]) -> dict:
+    """Per step that can reuse a kept pass, how many of its parts this check reused and how many it ran again: suites
+    (`suites.json`, `suites-lean.json`; each suite run again with the inputs that forced it, `suites.forced_by`), circuit-check
+    targets (its step's cache), Lean packages (`lean-audit/audit.json`'s `cached`), and the steps cached whole (`STEP_KEYS`)."""
+    got: dict[str, dict] = {}
+    for f, step in (("suites.json", "pytest"), ("suites-lean.json", "lean-suites")):
+        try:
+            rows = [r for r in json.loads((out / f).read_text()) if r.get("status") != "skipped"]
+        except (OSError, ValueError):
+            continue
+        ran = sorted((r for r in rows if r.get("status") != "cached"), key=lambda r: -(r.get("seconds") or 0))
+        got[step] = {"of": "suites", "reused": len(rows) - len(ran), "rerun": len(ran),
+                     "reran": [{"suite": r["suite"], "seconds": r.get("seconds"),
+                                "forced_by": ((r.get("forced_by") or {}).get("why") or ["not recorded"])[:3]} for r in ran]}
+    for s in done:
+        c = s.get("cache") or {}
+        if s["step"] == "circuit-check" and "hits" in c:
+            misses = {"untraced": len(c.get("untraced") or []), "errors": len(c.get("errors") or []),
+                      "changed": len(c.get("changed") or [])}
+            got["circuit-check"] = {"of": "targets", "reused": c["hits"], "rerun": c.get("stored", 0) + sum(misses.values()),
+                                    "not_stored": misses}
+        elif s["step"] in STEP_KEYS and s["status"] in ("passed", "failed"):
+            got[s["step"]] = {"of": "step", "reused": int("hit" in c), "rerun": int("hit" not in c)}
+        elif s["step"] == "lean-audit" and s["status"] in ("passed", "failed"):
+            try:
+                a = json.loads((out / "lean-audit" / "audit.json").read_text())
+            except (OSError, ValueError):
+                continue
+            hit = set(a.get("cached") or {})
+            every = hit | {p["package"] for p in a.get("packages") or [] if isinstance(p, dict) and "package" in p}
+            got["lean-audit"] = {"of": "packages", "reused": len(hit), "rerun": len(every - hit), "reran": sorted(every - hit)}
+    for g in got.values():
+        g["rate"] = round(g["reused"] / (g["reused"] + g["rerun"]), 3) if g["reused"] + g["rerun"] else None
+    return {"summary": ", ".join(f"{step} {g['reused']}/{g['reused'] + g['rerun']} {g['of']}" for step, g in got.items()),
+            "steps": got}
+
+
+def reuse_lines(r: dict) -> list[str]:
+    """`reuse` as the log prints it: per step in one line (no rate across steps: thousands of circuit-check targets would hide
+    every suite run again), then each step's, then each suite run again with what forced it."""
+    lines = [f"check: reused {r['summary'] or 'nothing'}"]
+    for step, g in r["steps"].items():
+        lines.append(f"check: reuse   {step}: {g['reused']} {g['of']} reused, {g['rerun']} run again")
+        for x in g.get("reran") or []:
+            if isinstance(x, dict):
+                lines.append(f"check: reuse     {x['suite']} ({x['seconds']} s): {'; '.join(x['forced_by'])[:300]}")
+    return lines
+
+
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
@@ -1373,7 +1484,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
     doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
-           "workload_fingerprint": {"steps": [s["step"] for s in done]},
+           "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
@@ -1483,6 +1594,7 @@ def main(argv: list[str]) -> int:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded)
+    print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1

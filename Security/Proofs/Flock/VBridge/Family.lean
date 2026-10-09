@@ -128,7 +128,7 @@ theorem vbridge_of_reps
       (∀ r, AlgebraHolds sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) r) ∧
         AccHolds sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) r)) →
       (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).Runs)
-    (hcm : VCommits zs Sk cmt) (hdec : VDecodes wmsg (fun _ _ a b => a = b) Sk msg) (hfull : VFull (ℐ).r Sk) :
+    (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg) (hfull : VFullR (ℐ).r Sk) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
   ⟨fun R ω t R₂ τ o h =>
     (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).accepts regs (x R ω) T CT sch (hsch R ω t _) _
@@ -334,8 +334,8 @@ def HRuns : Prop :=
 /-- **`hcm`**: V*'s public files register the stages' commitments. -/
 def HCommits : Prop := VCommits F.zs F.Sk F.cmt
 
-/-- **`hdec`**: V*'s circuits decode each stage's message from its commit strings. -/
-def HDecodes : Prop := VDecodes F.wmsg (fun _ _ a b => a = b) F.Sk F.msg
+/-- **`hdec`**: V*'s circuits decode each stage's message from the read wires of its commit strings. -/
+def HDecodes : Prop := VDecodesR F.wmsg (fun _ _ a b => a = b) F.Sk F.msg
 
 /-- **`hks`, `hio`**: V*'s laws draw every stratum whole, and each stage's commit string is a wire of a unit. -/
 def HFull : Prop :=

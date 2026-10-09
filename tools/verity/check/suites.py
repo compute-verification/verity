@@ -9,12 +9,16 @@
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
-the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
-`[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
+the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
+transitively without their dependency groups, which are their own tests' tooling; a package that lists `exports` under
+`[tool.verity.tests]` is those paths of it, what its dependents read, in place of its directory), the paths it lists under
+`[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
+tests read a little of a large dependency), the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
-and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the check code that runs the suites (`RUNNER`). The cache key hashes all
+and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the code that runs the suites (`RUNNER`: this runner and its guard,
+not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
@@ -87,8 +91,10 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 `--jobs` is how many test processes run at once, by default the CPUs this process may use but at most one per
 `TEST_PROCESS_GB` of available memory. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
-kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. Parallel suites run first, one
-at a time, then the others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
+kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run one at a
+time, beside the others, which run side by side on as few of the processes as let them finish about when the longest of them
+does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
+suite runs in one process.
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
@@ -124,8 +130,10 @@ GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the runner itself, and check, which runs it.
-RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/check/guard/verity_suite_guard.py",
+#: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer (Daniel, 9 Oct). Not
+#: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
+#: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
+RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py",
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
@@ -144,7 +152,8 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity-core-sampled-proofs",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest")
+              "verity-pouw-check-difftest", "memory-challenger-lean", "benchmarks/pous",
+              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -214,17 +223,20 @@ class Suite:
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
+    inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
 
 
 def _pyproject(path: str) -> dict:
     return tomllib.loads((ROOT / path / "pyproject.toml").read_text())
 
 
-def _requires(project: dict, data: dict) -> tuple[str, ...]:
+def _requires(project: dict, data: dict, groups: bool = True) -> tuple[str, ...]:
+    """The distributions a member names: its dependencies and extras, and with ``groups`` its dependency groups (its own tests'
+    tooling, which code that imports it never reads)."""
     reqs = list(project.get("dependencies", []))
     for extra in project.get("optional-dependencies", {}).values():
         reqs += extra
-    for group in data.get("dependency-groups", {}).values():
+    for group in data.get("dependency-groups", {}).values() if groups else ():
         reqs += [r for r in group if isinstance(r, str)]
     return tuple(sorted({_requirement_name(r) for r in reqs}))
 
@@ -240,11 +252,14 @@ def members() -> dict[str, str]:
 
 
 def shipped(path: str) -> list[str]:
-    """The directories a workspace package's dependents key on: its directory, or for the root, which holds the whole tree, the
-    packages its wheel ships."""
+    """The paths a workspace package's dependents key on: those it lists under `[tool.verity.tests] exports`, else its directory,
+    or for the root, which holds the whole tree, the packages its wheel ships."""
+    data = _pyproject(path)
+    if (exports := data.get("tool", {}).get("verity", {}).get("tests", {}).get("exports")) is not None:
+        return list(exports)
     if path != ".":
         return [path]
-    return list(_pyproject(".")["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
+    return list(data["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 
 
 def tests_pythonpath() -> str:
@@ -334,7 +349,7 @@ def discover() -> list[Suite]:
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
-                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0))))
+                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True))
     return suites
 
 
@@ -353,7 +368,8 @@ def artifact_ids(suite: Suite) -> dict[str, str]:
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Directories of the workspace packages `suite` depends on, directly or through another."""
+    """Directories of the workspace packages `suite` depends on, directly (its dependencies, extras and dependency groups) or
+    through another's dependencies and extras: a dependency's groups are its own tests' tooling, not what code importing it reads."""
     seen: dict[str, str] = {}
     todo = [r for r in suite.requires if r in pkgs]
     while todo:
@@ -362,7 +378,7 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
             continue
         seen[name] = pkgs[name]
         data = _pyproject(pkgs[name])
-        todo += [r for r in _requires(data["project"], data) if r in pkgs]
+        todo += [r for r in _requires(data["project"], data, groups=False) if r in pkgs]
     return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 
@@ -521,8 +537,9 @@ def environment() -> dict:
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
-    declared too."""
-    return sorted({suite.path, *closure(suite, pkgs), *suite.inputs})
+    declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
+    its tests read of them, which the guard holds it to."""
+    return sorted({suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -1109,23 +1126,56 @@ def explain(s: Suite, now: dict, keys: list[str], hit: dict | None, per: "PerTes
     out = []
     held = next((c for c in map(cached, keys) if c), None)
     if held:
-        out.append(f"{s.name}: a pass under this key exists but no longer holds: what its tests read beside the key moved (a metadata "
-                   f"file they opened, or a distribution they imported outside their resolved dependencies)")
-    passes = []
+        out.append(f"{s.name}: a pass under this key exists but no longer holds: {HELD}")
+    near = nearest(kept_passes().get(s.name, []), now, s.path)
+    if near is None and not held:
+        out.append(f"{s.name}: missed; {NO_PASS}")
+    elif near is not None:
+        out.append(f"{s.name}: missed; the nearest pass kept here ({_since(near[0])}) differs in:")
+        out += [f"  {line}" for line in near[1]] or [f"  {SAME_KEY}"]
+    return out + (per.explain(lock, provided) if per else [])
+
+
+HELD = ("what its tests read beside the key moved (a metadata file they opened, or a distribution they imported outside their "
+        "resolved dependencies)")
+NO_PASS = "no pass of it kept here records its key's components (passes kept before `--explain` don't)"
+SAME_KEY = "nothing its key reads (a different pytest selection?)"
+
+
+def kept_passes() -> dict[str, list[dict]]:
+    """Every pass kept here that records its key's components (`components`), by suite name."""
+    out: dict[str, list[dict]] = {}
     for f in CACHE.glob("*.json") if CACHE.is_dir() else ():
         try:
             d = json.loads(f.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(d, dict) and d.get("suite") == s.name and "components" in d:
-            passes.append(d)
-    if not passes and not held:
-        out.append(f"{s.name}: missed; no pass of it kept here records its key's components (passes kept before `--explain` don't)")
-    elif passes:
-        best = min(passes, key=lambda d: (len(explain_changes(d["components"], now, s.path)), d.get("when", "")))
-        out.append(f"{s.name}: missed; the nearest pass kept here ({_since(best)}) differs in:")
-        out += [f"  {line}" for line in explain_changes(best["components"], now, s.path)] or ["  nothing its key reads (a different pytest selection?)"]
-    return out + (per.explain(lock, provided) if per else [])
+        if isinstance(d, dict) and isinstance(d.get("suite"), str) and "components" in d:
+            out.setdefault(d["suite"], []).append(d)
+    return out
+
+
+def nearest(passes: list[dict], now: dict, own: str) -> tuple[dict, list[str]] | None:
+    """The pass of ``passes`` whose components differ least from ``now``, with what differs (`explain_changes`)."""
+    if not passes:
+        return None
+    diffs = [(explain_changes(d["components"], now, own), d) for d in passes]
+    lines, best = min(diffs, key=lambda x: (len(x[0]), x[1].get("when", "")))
+    return best, lines
+
+
+def forced_by(s: Suite, now: dict, passes: list[dict], held: bool, fresh: bool) -> dict:
+    """What makes ``s`` run rather than reuse a pass, for `--json` and check's reuse report: the inputs of its key that differ
+    from the nearest pass kept here (``nearest``: that pass's run and commit), or why there is none to compare."""
+    if fresh:
+        return {"why": ["--fresh"]}
+    if held:
+        return {"why": [f"a pass under this key no longer holds: {HELD}"]}
+    near = nearest(passes, now, s.path)
+    if near is None:
+        return {"why": [NO_PASS]}
+    best, lines = near
+    return {"why": lines or [SAME_KEY], "nearest": {k: best.get(k) for k in ("run", "commit", "when")}}
 
 
 def _durations() -> dict[str, float]:
@@ -1352,6 +1402,21 @@ class Slots:
                 self.cond.notify_all()
 
 
+def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
+    """How many of the ``jobs`` slots the suites that run in one process share (``seconds``: each one's last duration, None when
+    none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
+    the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
+    up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
+    every slot the others couldn't use."""
+    if not parallel:
+        return jobs
+    if not seconds:
+        return 0
+    timed = [s for s in seconds if s is not None]
+    need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + min(len(seconds) - len(timed), jobs // 4)
+    return max(1, min(int(need), jobs - 1))
+
+
 def select(suites: list[Suite], names: list[str]) -> list[Suite]:
     if not names:
         return suites
@@ -1477,8 +1542,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"failed  {s.name:28} {why} (log: {logs / 'lean-build.log'})")
                 results.append(Result(s, "failed", log=logs / "lean-build.log"))
         todo = [t for t in todo if t[0].name not in AFTER_LEAN]
+    here = kept_passes() if todo else {}
+    forced = {s: forced_by(s, components(s, ids_of[s], env, args, deps), here.get(s.name, []),
+                           any(map(cached, keys)), a.fresh) for s, _paths, keys, deps in todo}
     known = _durations()
-    todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].name, float("inf"))))
+    todo.sort(key=lambda t: -known.get(t[0].name, float("inf")))
     for r in results:
         if r.status == "cached":
             print(f"cached  {r.suite.name:28} passed at {_since(r.since)}")
@@ -1488,7 +1556,13 @@ def main(argv: list[str] | None = None) -> int:
     spread = jobs if XDIST else 1
     if spread == 1 and jobs > 1 and any(t[0].parallel for t in todo):
         print("pytest-xdist is not installed: each parallel suite runs in one process")
-    slots = Slots(jobs)
+    wide = [t[0] for t in todo if t[0].parallel and spread > 1]
+    one = [t[0] for t in todo if t[0] not in wide]
+    r = serial_slots([known.get(s.name) for s in one], len(wide), jobs)
+    lanes = {False: Slots(r), True: Slots(jobs - r)}
+    turns = {s: lane.index(s) for lane in (wide, one) for s in lane}
+    if wide and one:
+        print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
     per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree)
            for s, _paths, _keys, deps in todo if not a.no_per_test}
@@ -1496,9 +1570,9 @@ def main(argv: list[str] | None = None) -> int:
     hit_of = {s: hit for s, _paths, _keys, hit, _deps in plan}
     stopping = threading.Event()
 
-    def start(turn: int, s: Suite, paths: list[str]) -> Result:
-        n = spread if s.parallel else 1
-        with slots.take(turn, n):
+    def start(s: Suite, paths: list[str]) -> Result:
+        n = jobs - r if s in wide else 1
+        with lanes[s in wide].take(turns[s], n):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not _under(m, paths)], reuse.get(s, []),
@@ -1517,6 +1591,8 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
+        if s in forced:
+            print(f"        ran because: {'; '.join(forced[s]['why'][:3])}" + (" ..." if len(forced[s]["why"]) > 3 else ""))
         if r.timed_out:
             print(f"        TIMED OUT: still running after {r.timed_out:g} s, so its process group was killed; a suite that needs "
                   f"longer declares [tool.verity.tests] timeout_s in {s.path}/pyproject.toml")
@@ -1553,7 +1629,8 @@ def main(argv: list[str] | None = None) -> int:
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
             print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
-                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml")
+                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml"
+                  f" (a file of a dependency that lists `exports`: under those, if its dependents read it)")
         elif r.unguarded:
             print(f"        xdist workers {', '.join(r.unguarded)} sent the guard no record of what they read\n        log: {r.log}")
         elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above
@@ -1562,7 +1639,7 @@ def main(argv: list[str] | None = None) -> int:
             print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(todo))) as pool:
-        futures = {pool.submit(start, i, s, paths): (s, keys[0], paths, deps) for i, (s, paths, keys, deps) in enumerate(todo)}
+        futures = {pool.submit(start, s, paths): (s, keys[0], paths, deps) for s, paths, keys, deps in todo}
         handled = set()
         try:
             for fut in concurrent.futures.as_completed(futures):
@@ -1600,7 +1677,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "outside": r.outside, "child_outside": r.child_outside, "unguarded": r.unguarded,
                                        "since": r.since, "reused": r.reused,
                                        "contradicts": r.contradicts, "nondeterministic": r.nondeterministic,
-                                       "timed_out": r.timed_out} for r in results]
+                                       "timed_out": r.timed_out, "forced_by": forced.get(r.suite)} for r in results]
                                      + [{"suite": s.path, "name": s.name, "status": "skipped"} for s in skipped], indent=1) + "\n")
     return 1 if failed or written else 0
 

@@ -58,20 +58,40 @@ theorem coinNumbers : CoinNumbers :=
 theorem depthServed : DepthServed := by
   unfold DepthServed depth; decide +kernel
 
-theorem domainRefusals : DomainRefusals := by
-  intro h binding owner count
+theorem isOk_of_ok {ε α : Type} {x : Except ε α} {a : α} (h : x = .ok a) : x.isOk = true := by
+  subst h; rfl
+
+theorem ok_of_isOk {ε α : Type} {x : Except ε α} (h : x.isOk = true) : ∃ a, x = .ok a := by
+  cases x with
+  | error e => simp [Except.isOk, Except.toBool] at h
+  | ok a => exact ⟨a, rfl⟩
+
+/-- `CommitmentDomain` refuses exactly a binding of neither 32 nor 64 bytes and an owner below -2. -/
+theorem domain_isOk (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat) :
+    (Domain.mk? h binding owner count).isOk = decide ((binding.size = 32 ∨ binding.size = 64) ∧ -2 ≤ owner) := by
   have e : (-2 ≤ owner) ↔ ¬ owner < -2 := by omega
   unfold Domain.mk?
   by_cases h32 : binding.size = 32 <;> by_cases h64 : binding.size = 64 <;> by_cases ho : owner < -2 <;>
     simp [h32, h64, ho, e] <;> rfl
 
-theorem leafRefusals : LeafRefusals := by
-  intro d rank schema v
+theorem domainRefusals : DomainRefusals := fun h binding owner count _ hd =>
+  of_decide_eq_true ((domain_isOk h binding owner count).symm.trans (isOk_of_ok hd))
+
+/-- `Hm96Domain.leaf` refuses exactly a value shorter than its salt, and in a tile tree one other than a digest and its
+salt. -/
+theorem leaf_isOk (d : RowsDomain) (rank : Nat) (schema : String) (v : ByteArray) :
+    (d.leaf rank schema v).isOk = decide (d.hm96 = true → 192 ≤ v.size ∧ (d.digests = true → v.size = 256)) := by
   have e : 192 ≤ v.size ↔ ¬ v.size < 192 := by omega
   rcases d with ⟨frame, hm, dg⟩
   unfold RowsDomain.leaf
   cases hm <;> cases dg <;> by_cases h1 : v.size < 192 <;> by_cases h2 : v.size = 256 <;>
     simp [h1, h2, HM96_SALT, e] <;> first | rfl | omega
+
+theorem leafRefusals : LeafRefusals :=
+  ⟨fun frame digests rank schema v _ hx =>
+      (of_decide_eq_true ((leaf_isOk ⟨frame, true, digests⟩ rank schema v).symm.trans (isOk_of_ok hx)) rfl).1,
+    fun frame rank schema v _ hx =>
+      (of_decide_eq_true ((leaf_isOk ⟨frame, true, true⟩ rank schema v).symm.trans (isOk_of_ok hx)) rfl).2 rfl⟩
 
 theorem idx_labels (label : String) (rank : Nat) :
     List.idxOf? label ["salt", "draw"] = some rank ↔ (label = "salt" ∧ rank = 0) ∨ (label = "draw" ∧ rank = 1) := by
@@ -96,8 +116,9 @@ theorem idx_none (label : String) : List.idxOf? label ["salt", "draw"] = none �
       have hd' : ¬"draw" = label := fun h => hd h.symm
       simp [List.idxOf?, List.findIdx?, List.findIdx?.go, hs, hd, hs', hd']
 
-theorem coinAccepts : CoinAccepts := by
-  intro c o label after
+/-- `coin_reason` accepts exactly the openings `CoinOpens` describes. -/
+theorem coinAccepts_iff (c : CoinCommitment) (o : CoinOpening) (label : String) (after : ByteArray) :
+    coinReason c o label after = .ok none ↔ CoinOpens c o label after := by
   have hc : ∀ e, (coinDomain e).count = 2 := fun _ => rfl
   have hh : ∀ e, (coinDomain e).hash = .sha512 := fun _ => rfl
   unfold coinReason CoinOpens
@@ -141,8 +162,15 @@ theorem coinAccepts : CoinAccepts := by
       repeat' split
       all_goals simp_all
 
-theorem coinRaises : CoinRaises := by
-  intro c o label after
+theorem coinAccepts : CoinAccepts := fun c o label after => (coinAccepts_iff c o label after).1
+
+/-- `coin_reason` raises exactly on a label outside `LABELS`, or, once the epoch, the label and the sizes match, on a path
+holding an item of neither 32 nor 64 bytes. -/
+theorem coinRaises_iff (c : CoinCommitment) (o : CoinOpening) (label : String) (after : ByteArray) :
+    (coinReason c o label after).isOk = false ↔
+      label ∉ LABELS ∨
+        (o.epoch = c.epoch ∧ o.label = label ∧ o.coin.size = 32 ∧ o.salt.size = 192 ∧
+          o.path.any (fun p => p.size != 32 && p.size != 64) = true) := by
   have hc : ∀ e, (coinDomain e).count = 2 := fun _ => rfl
   have hh : ∀ e, (coinDomain e).hash = .sha512 := fun _ => rfl
   unfold coinReason
@@ -175,6 +203,16 @@ theorem coinRaises : CoinRaises := by
       all_goals (repeat' split at *)
       all_goals simp_all
 
+theorem coinRaises : CoinRaises := by
+  intro c o label after r hr
+  have hn : ¬ (coinReason c o label after).isOk = false := by rw [isOk_of_ok hr]; simp
+  rw [coinRaises_iff] at hn
+  refine ⟨Classical.byContradiction fun h => hn (.inl h), fun h1 h2 h3 h4 p hp => ?_⟩
+  refine Classical.byContradiction fun hs => hn (.inr ⟨h1, h2, h3, h4, ?_⟩)
+  simp only [not_or] at hs
+  rw [List.any_eq_true]
+  exact ⟨p, hp, by simp [hs.1, hs.2]⟩
+
 /-! ## Salts, keys and draws -/
 
 open FlockSoundness.Randomness in
@@ -184,12 +222,16 @@ theorem derive_size (source : ByteArray) (domain : String) (context : List (Stri
   rw [ByteArray.size_extract, sha512_size]
   rfl
 
-theorem keyRefusals : KeyRefusals := by
-  intro source domain context
+/-- A key is refused exactly when its source is empty. -/
+theorem key_isOk (source : ByteArray) (domain : String) (context : List (String × Part)) :
+    (key? source domain context).isOk = decide (source.size ≠ 0) := by
   unfold key?
   by_cases h : source.size = 0
   · rw [ite_eq_left_of_eq_true _ _ (eq_true h)]; simp only [h, ne_eq, not_true_eq_false, decide_false]; rfl
   · rw [ite_eq_right_of_eq_false _ _ (eq_false h)]; simp only [h, ne_eq, not_false_eq_true, decide_true]; rfl
+
+theorem keyRefusals : KeyRefusals := fun source domain context _ hk =>
+  of_decide_eq_true ((key_isOk source domain context).symm.trans (isOk_of_ok hk))
 
 theorem keySize : KeySize := by
   intro source domain context k h
@@ -227,7 +269,10 @@ theorem saltSize : SaltSize := by
     · cases h
     · rw [← Except.ok.inj h]; exact stream_size ..
 
-theorem saltRefusals : SaltRefusals := by
+/-- `salt_of` refuses exactly an empty coin, and `Epoch.unverified` exactly an empty seed. -/
+theorem salt_isOk :
+    (∀ (c : CoinCommitment) (coin wr : ByteArray), (saltOf c coin wr).isOk = decide (coin.size ≠ 0)) ∧
+      ∀ seed wr : ByteArray, (unverifiedSalt seed wr).isOk = decide (seed.size ≠ 0) := by
   refine ⟨fun c coin wr => ?_, fun seed wr => ?_⟩
   · unfold saltOf key?
     by_cases h : coin.size = 0
@@ -238,9 +283,15 @@ theorem saltRefusals : SaltRefusals := by
     · rw [ite_eq_left_of_eq_true _ _ (eq_true h)]; simp only [h, ne_eq, not_true_eq_false, decide_false]; rfl
     · rw [ite_eq_right_of_eq_false _ _ (eq_false h)]; simp only [h, ne_eq, not_false_eq_true, decide_true]; rfl
 
-theorem epochSaltAccepts : EpochSaltAccepts := by
-  intro c o wr s
-  rw [← coinAccepts c o "salt" wr]
+theorem saltRefusals : SaltRefusals :=
+  ⟨fun c coin wr _ hs => of_decide_eq_true ((salt_isOk.1 c coin wr).symm.trans (isOk_of_ok hs)),
+    fun seed wr _ hs => of_decide_eq_true ((salt_isOk.2 seed wr).symm.trans (isOk_of_ok hs))⟩
+
+/-- `Epoch.start` gives a salt exactly when the opening is the epoch's salt coin opened after the weights' root, and that
+salt is `salt_of` of the opened coin. -/
+theorem epochSalt_iff (c : CoinCommitment) (o : CoinOpening) (wr s : ByteArray) :
+    epochSalt c o wr = .ok (.ok s) ↔ CoinOpens c o "salt" wr ∧ saltOf c o.coin wr = .ok s := by
+  rw [← coinAccepts_iff c o "salt" wr]
   unfold epochSalt
   cases h : coinReason c o "salt" wr with
   | error e => simp [bind, Except.bind]
@@ -250,14 +301,26 @@ theorem epochSaltAccepts : EpochSaltAccepts := by
     | none =>
       cases hs : saltOf c o.coin wr <;> simp [bind, Except.bind, pure, Except.pure]
 
-theorem drawCoinAccepts : DrawCoinAccepts := by
+theorem epochSaltAccepts : EpochSaltAccepts := fun c o wr s => (epochSalt_iff c o wr s).1
+
+/-- `draw_coin` gives a coin exactly when the opening is the epoch's draw coin opened after what the verifier recorded,
+and the coin is the opened one; an epoch without a coin commitment gives none. -/
+theorem drawCoin_iff :
+    (∀ c o after coin, drawCoin (some c) o after = .ok (.ok coin) ↔ CoinOpens c o "draw" after ∧ coin = o.coin) ∧
+      ∀ o after coin, drawCoin none o after ≠ .ok (.ok coin) := by
   refine ⟨fun c o after coin => ?_, fun o after coin => ?_⟩
-  · rw [← coinAccepts c o "draw" after]
+  · rw [← coinAccepts_iff c o "draw" after]
     unfold drawCoin
     cases h : coinReason c o "draw" after with
     | error e => simp [h, bind, Except.bind]
     | ok r => cases r <;> simp [h, bind, Except.bind, pure, Except.pure, eq_comm]
   · simp [drawCoin, pure, Except.pure]
+
+theorem drawCoinAccepts : DrawCoinAccepts := by
+  intro cc o after coin h
+  cases cc with
+  | none => exact absurd h (drawCoin_iff.2 o after coin)
+  | some c => exact ⟨c, rfl, (drawCoin_iff.1 c o after coin).1 h⟩
 
 theorem mapM_shape {α β : Type} (f : α → Except String β) :
     ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ys.length = l.length ∧ ∀ y ∈ ys, ∃ x ∈ l, f x = .ok y := by
@@ -528,8 +591,8 @@ theorem pathFrames_one (d : Domain) (rank : Nat) (leaf sib : ByteArray) :
 
 theorem coinBinding : CoinBinding := by
   intro c o o' label after after' h h'
-  obtain ⟨rank, sib, hl, -, -, -, -, hp, hsib, -, hroot, -⟩ := (coinAccepts c o label after).1 h
-  obtain ⟨rank', sib', hl', -, -, -, -, hp', hsib', -, hroot', -⟩ := (coinAccepts c o' label after').1 h'
+  obtain ⟨rank, sib, hl, -, -, -, -, hp, hsib, -, hroot, -⟩ := coinAccepts c o label after h
+  obtain ⟨rank', sib', hl', -, -, -, -, hp', hsib', -, hroot', -⟩ := coinAccepts c o' label after' h'
   rw [hl] at hl'
   cases hl'
   have hidx : LABELS.idxOf label = rank := by
@@ -582,5 +645,99 @@ theorem coinBinding : CoinBinding := by
     have e := frameBytes_sizes _ _ _ (by simp only [List.map_cons, List.map_nil, hlf, hsib, hsib']) e
     simp only [List.cons.injEq, and_true, true_and] at e
     exact leaves e.2
+
+/-! ## Completeness
+
+The other half of each property above: an honest input is accepted. Each comes with one accepted input, so the property it
+pairs with is about inputs the port does accept. -/
+
+def zeroBytes (n : Nat) : ByteArray := ⟨Array.replicate n 0⟩
+
+theorem zeroBytes_size (n : Nat) : (zeroBytes n).size = n := by simp [zeroBytes, ByteArray.size]
+
+theorem domain_complete (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat)
+    (hb : binding.size = 32 ∨ binding.size = 64) (ho : -2 ≤ owner) : ∃ d, Domain.mk? h binding owner count = .ok d :=
+  ok_of_isOk ((domain_isOk ..).trans (decide_eq_true ⟨hb, ho⟩))
+
+theorem domain_instance : ∃ d, Domain.mk? .sha512 (zeroBytes 64) 0 2 = .ok d :=
+  domain_complete _ _ _ _ (.inr (zeroBytes_size 64)) (by decide)
+
+theorem leaf_complete (d : RowsDomain) (rank : Nat) (schema : String) (v : ByteArray)
+    (hv : d.hm96 = true → 192 ≤ v.size ∧ (d.digests = true → v.size = 256)) : ∃ x, d.leaf rank schema v = .ok x :=
+  ok_of_isOk ((leaf_isOk ..).trans (decide_eq_true hv))
+
+theorem leaf_instance : ∃ x, RowsDomain.leaf ⟨⟨.sha512, 1, ByteArray.empty⟩, true, true⟩ 0 "s" (zeroBytes 256) = .ok x :=
+  leaf_complete _ _ _ _ fun _ => ⟨by rw [zeroBytes_size]; decide, fun _ => zeroBytes_size 256⟩
+
+theorem key_complete (source : ByteArray) (domain : String) (context : List (String × Part)) (hs : source.size ≠ 0) :
+    ∃ k, key? source domain context = .ok k :=
+  ok_of_isOk ((key_isOk ..).trans (decide_eq_true hs))
+
+theorem key_instance : ∃ k, key? (zeroBytes 32) "d" [] = .ok k := key_complete _ _ _ (by rw [zeroBytes_size]; decide)
+
+theorem salt_complete :
+    (∀ (c : CoinCommitment) (coin wr : ByteArray), coin.size ≠ 0 → ∃ s, saltOf c coin wr = .ok s) ∧
+      ∀ seed wr : ByteArray, seed.size ≠ 0 → ∃ s, unverifiedSalt seed wr = .ok s :=
+  ⟨fun c coin wr h => ok_of_isOk ((salt_isOk.1 c coin wr).trans (decide_eq_true h)),
+    fun seed wr h => ok_of_isOk ((salt_isOk.2 seed wr).trans (decide_eq_true h))⟩
+
+theorem salt_instance : (∃ s, saltOf ⟨0, ByteArray.empty⟩ (zeroBytes 32) ByteArray.empty = .ok s) ∧
+    ∃ s, unverifiedSalt (zeroBytes 32) ByteArray.empty = .ok s :=
+  ⟨salt_complete.1 _ _ _ (by rw [zeroBytes_size]; decide), salt_complete.2 _ _ (by rw [zeroBytes_size]; decide)⟩
+
+/-- The commitment to epoch `epoch`'s coins whose `label` coin (at `rank`) is zero bytes, with a zero salt and sibling, and
+that coin's opening after `after`. -/
+def zeroCoins (epoch rank : Nat) : CoinCommitment := ⟨epoch, coinRoot epoch rank (zeroBytes 32) (zeroBytes 192) (zeroBytes 64)⟩
+
+def zeroOpening (epoch : Nat) (label : String) (after : ByteArray) : CoinOpening :=
+  ⟨epoch, label, after, zeroBytes 32, zeroBytes 192, [zeroBytes 64]⟩
+
+theorem zeroCoins_open (label : String) (rank epoch : Nat) (after : ByteArray) (hl : LABELS.idxOf? label = some rank) :
+    CoinOpens (zeroCoins epoch rank) (zeroOpening epoch label after) label after := by
+  refine ⟨rank, zeroBytes 64, hl, rfl, rfl, zeroBytes_size 32, zeroBytes_size 192, rfl, zeroBytes_size 64, ?_, rfl, rfl⟩
+  show (coinRoot epoch rank _ _ _).size = 64
+  unfold coinRoot
+  split <;> exact frameHash_size ..
+
+theorem coinAccepts_complete (c : CoinCommitment) (o : CoinOpening) (label : String) (after : ByteArray)
+    (h : CoinOpens c o label after) : coinReason c o label after = .ok none :=
+  (coinAccepts_iff c o label after).2 h
+
+theorem coinAccepts_instance : coinReason (zeroCoins 0 0) (zeroOpening 0 "salt" ByteArray.empty) "salt" ByteArray.empty =
+    .ok none :=
+  coinAccepts_complete _ _ _ _ (zeroCoins_open "salt" 0 0 _ (by decide))
+
+theorem coinRaises_complete (c : CoinCommitment) (o : CoinOpening) (label : String) (after : ByteArray)
+    (hl : label ∈ LABELS)
+    (hp : o.epoch = c.epoch → o.label = label → o.coin.size = 32 → o.salt.size = 192 →
+      ∀ p ∈ o.path, p.size = 32 ∨ p.size = 64) :
+    ∃ r, coinReason c o label after = .ok r := by
+  refine ok_of_isOk (Bool.not_eq_false _ ▸ fun hf => ?_)
+  rcases (coinRaises_iff c o label after).1 hf with h | ⟨h1, h2, h3, h4, h5⟩
+  · exact h hl
+  · rw [List.any_eq_true] at h5
+    obtain ⟨p, hp', hb⟩ := h5
+    rcases hp h1 h2 h3 h4 p hp' with e | e <;> simp [e] at hb
+
+theorem coinRaises_instance :
+    ∃ r, coinReason (zeroCoins 0 0) (zeroOpening 0 "salt" ByteArray.empty) "salt" ByteArray.empty = .ok r :=
+  ⟨none, coinAccepts_instance⟩
+
+theorem epochSalt_complete (c : CoinCommitment) (o : CoinOpening) (wr s : ByteArray) (h : CoinOpens c o "salt" wr)
+    (hs : saltOf c o.coin wr = .ok s) : epochSalt c o wr = .ok (.ok s) :=
+  (epochSalt_iff c o wr s).2 ⟨h, hs⟩
+
+theorem epochSalt_instance : ∃ s, epochSalt (zeroCoins 0 0) (zeroOpening 0 "salt" ByteArray.empty) ByteArray.empty =
+    .ok (.ok s) := by
+  obtain ⟨s, hs⟩ := salt_complete.1 (zeroCoins 0 0) (zeroBytes 32) ByteArray.empty (by rw [zeroBytes_size]; decide)
+  exact ⟨s, epochSalt_complete _ _ _ _ (zeroCoins_open "salt" 0 0 _ (by decide)) hs⟩
+
+theorem drawCoin_complete (c : CoinCommitment) (o : CoinOpening) (after : ByteArray) (h : CoinOpens c o "draw" after) :
+    drawCoin (some c) o after = .ok (.ok o.coin) :=
+  (drawCoin_iff.1 c o after o.coin).2 ⟨h, rfl⟩
+
+theorem drawCoin_instance :
+    drawCoin (some (zeroCoins 0 1)) (zeroOpening 0 "draw" ByteArray.empty) ByteArray.empty = .ok (.ok (zeroBytes 32)) :=
+  drawCoin_complete _ _ _ (zeroCoins_open "draw" 1 0 _ (by decide))
 
 end Properties.Pouw.Commit
