@@ -22,6 +22,9 @@
 #      the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
+#      When no drawn unit stages (stage_tile.py refuses side rows that carry their index, every window on the current
+#      layout, until TileRead's template reads it), the job skips to the challenger's replay and summary.json, whose
+#      "blocked" says why, and exits 4: steps 1-4's checks are recorded and the rest are absent.
 #   7. the checks, each as expected, into summary.json:
 #        coins                 the challenger's coin commitment, published before any request                  COINS
 #        coin-salt             its salt coin, opened after the request pass's weights' root                    OPENED
@@ -179,6 +182,37 @@ FILL=$(jq_ "$OUT/request/advice.json" "[e for e in d['entries'] if e['kind'] == 
 REAL=$(jq_ "$OUT/request/advice.json" "d['real']")
 log "draw: units $UNITS of $(jq_ "$R" "d['population']") (real tiles $REAL, the filler from $FILL)"
 
+# ---- 7. the challenger's replay and the summary -----------------------------------------------------------------------------
+finish() {       # the challenger quits, then its requests again from its recorded coins, Lean drawing and the reference's
+  [ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
+  [ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
+  local v
+  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay" --lean "$LEAN" | tee "$OUT/replay.out" | first)
+  expect replay SAME "${v:-ERROR}"
+  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/replay-twin.out" | first)
+  expect replay-twin SAME "${v:-ERROR}"
+}
+summary() {      # summary [BLOCKED]: summary.json; BLOCKED says why the window stopped after select (its status, 4)
+  {
+    echo "{"
+    echo "\"served_run\": \"$SERVED_RUN\", \"calls\": [$(echo "$CALLS" | tr ' ' ',')], \"units\": [$(echo "$UNITS" | tr ' ' ',')],"
+    echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": ${FU:-null}, \"params\": $(cat "$RP"),"
+    echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
+    echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"
+    echo "\"stage\": $(cat "$OUT/u$U0/stage.json" 2>/dev/null || echo null),"
+    echo "\"shape\": $(cat "$OUT/shape-filler.json" 2>/dev/null || echo null),"
+    echo "\"blocked\": $("$PY" -c "import json, sys; print(json.dumps(sys.argv[1] or None))" "${1:-}"),"
+    echo "\"checks\": {$(for t in "${!VERDICT[@]}"; do printf '"%s": {"verdict": "%s", "expected": "%s"},' "$t" "${VERDICT[$t]}" "${EXPECT[$t]}"; done | sed 's/,$//')}"
+    echo "}"
+  } > "$OUT/summary.json"
+  local ok=1
+  for t in "${!VERDICT[@]}"; do [ "${VERDICT[$t]}" = "${EXPECT[$t]}" ] || ok=0; done
+  log "served-zk window: $([ $ok = 1 ] && echo 'every check as expected' || echo 'a check NOT as expected'): $("$PY" -c "import json; print(json.dumps({k: v['verdict'] for k, v in sorted(json.load(open('$OUT/summary.json'))['checks'].items())}))")"
+  "$PY" -c "import json; json.load(open('$OUT/summary.json'))" || { log "summary.json is not JSON"; ok=0; }
+  [ -z "${1:-}" ] || { log "served-zk window BLOCKED after select: $1"; exit 4; }
+  [ $ok = 1 ] || exit 1
+}
+
 # ---- 5. the units -------------------------------------------------------------------------------------------------------------
 stage_unit() {   # stage_unit TAG SIDE UNIT: $W/TAG staged, its stage.json, opening.json, pin.txt and pub.bin copied to $OUT/TAG
   local tag=$1 p=$2 t=$3
@@ -211,7 +245,7 @@ for t in $UNITS; do
   [ "$t" -lt "$FILL" ] && [ -z "$REAL_UNIT" ] && REAL_UNIT=$t
   prove_unit "u$t"
 done
-[ -n "$U0" ] || { log "no drawn unit staged"; exit 4; }
+[ -n "$U0" ] || { log "no drawn unit staged"; finish; summary "no drawn unit staged: $(tail -1 "$OUT/u${UNITS%% *}/stage.out")"; }
 if [ -z "$REAL_UNIT" ]; then stage_unit u0-real request 0 && prove_unit u0-real && REAL_UNIT=0-real; fi
 DRAWN_FILLER=$(for t in $UNITS; do [ "$t" -ge "$FILL" ] && echo "$t"; done | head -1)
 FU=${DRAWN_FILLER:-$FILL}
@@ -297,27 +331,5 @@ for c in $HZ_CASES; do
   units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out" "" "$W/u$U0/st/$c/session.json"
   control "st-$c" "$([ "$c" = honest ] && echo ACCEPT || echo REJECT)" "$OUT/units-st-$c.json"
 done
-[ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
-[ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
-v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay" --lean "$LEAN" | tee "$OUT/replay.out" | first)
-expect replay SAME "${v:-ERROR}"
-v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/replay-twin.out" | first)
-expect replay-twin SAME "${v:-ERROR}"
-
-# ---- 7. summary ---------------------------------------------------------------------------------------------------------------
-{
-  echo "{"
-  echo "\"served_run\": \"$SERVED_RUN\", \"calls\": [$(echo "$CALLS" | tr ' ' ',')], \"units\": [$(echo "$UNITS" | tr ' ' ',')],"
-  echo "\"real_tiles\": $REAL, \"filler_from\": $FILL, \"filler_unit\": $FU, \"params\": $(cat "$RP"),"
-  echo "\"public\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['public'])" 2>/dev/null || echo null),"
-  echo "\"coins\": $(jq_ "$OUT/outcome-honest/outcome.json" "json.dumps(d['coins'])" 2>/dev/null || echo null),"
-  echo "\"stage\": $(cat "$OUT/u$U0/stage.json"),"
-  echo "\"shape\": $(cat "$OUT/shape-filler.json" 2>/dev/null || echo null),"
-  echo "\"checks\": {$(for t in "${!VERDICT[@]}"; do printf '"%s": {"verdict": "%s", "expected": "%s"},' "$t" "${VERDICT[$t]}" "${EXPECT[$t]}"; done | sed 's/,$//')}"
-  echo "}"
-} > "$OUT/summary.json"
-ok=1
-for t in "${!VERDICT[@]}"; do [ "${VERDICT[$t]}" = "${EXPECT[$t]}" ] || ok=0; done
-log "served-zk window: $([ $ok = 1 ] && echo 'every check as expected' || echo 'a check NOT as expected'): $("$PY" -c "import json; print(json.dumps({k: v['verdict'] for k, v in sorted(json.load(open('$OUT/summary.json'))['checks'].items())}))")"
-"$PY" -c "import json; json.load(open('$OUT/summary.json'))" || log "summary.json is not JSON"
-[ $ok = 1 ]
+finish
+summary
