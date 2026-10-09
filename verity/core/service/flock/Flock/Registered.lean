@@ -211,4 +211,11 @@ def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
     throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
 
 end Registered
+
+/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
+output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
+registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
+def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
+  Registered.check st.c st.pub registered (Registered.derived st.partition)
+
 end Flock
