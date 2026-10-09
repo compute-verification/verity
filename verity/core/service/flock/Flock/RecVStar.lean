@@ -123,7 +123,7 @@ def checkBindings (c : Circuit) (partition : Option Json) (program : Option Byte
   let (digest, sha, pd) := (b.partition, b.program, b.programDigests)
   let own := hexOf (← HmRow.partitionDigest obj)
   if digest != own then throw s!"{name}: META partition digest {digest}, the verifier's partition object's {own}"
-  let ps := hexOf (Sha512.hash prog)
+  let ps := hexOf (← TemplateQuery.Desc.parse prog).sha512
   if sha != ps then throw s!"{name}: META program_sha512 {sha}, the verifier's program's {ps}"
   let op := (obj.getObjValAs? String "program").toOption.getD ""
   if op != ps then throw s!"{name}: the partition object's program {op}, the verifier's program's {ps}"
