@@ -171,12 +171,14 @@ def evidenceOf (b : ByteArray) : V Evidence := do
            sessionRoots := ← opt "session_roots" (obj · "session_roots") }
 
 /-- `audit_record`'s checks after the draw's (`Record.checks`): the names of those that fail. The registered roots the
-sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`). -/
+sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
+values (`Record.ownRegistered`). -/
 def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let roots := e.sessionRoots.map entries
   let cs := Record.checks rec e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)
-    digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots (Record.sessionRegistered e.verdicts)
+    digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots
+    (Record.ownRegistered rec (Record.sessionRegistered e.verdicts))
   (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
 
 

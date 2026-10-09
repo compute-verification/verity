@@ -12,7 +12,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `bound`: the exact bounds on wrong units at δ;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
-* `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`);
+* `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
+  registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
@@ -144,8 +145,8 @@ def matchesPublic (j : Json) : V Json := do
     throw "scheme is not a string, roots or domains not an object, or population not an integer"
   return (Record.matchesPublic rec_ (getD j "scheme") (getD j "roots") (getD j "domains") (getD j "population")).toJson
 
-/-- `{"verdicts"}` to `{"registered": {value: root} or null}` (`Record.sessionRegistered`); refused where `inputOf` refuses
-the verdicts. -/
+/-- `{"verdicts", "registration"?}` to `{"registered": {value: root} or null}` (`Record.sessionRegistered`, with a
+registration `Record.ownRegistered`); refused where `inputOf` refuses the verdicts. -/
 def sessionRegistered (j : Json) : V Json := do
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
   let vs := entries (getD j "verdicts")
@@ -154,7 +155,12 @@ def sessionRegistered (j : Json) : V Json := do
       !(truthy (getD v "of_record") && jeq (getD v "accepted") (.bool true) && (getD v "registered" matches .obj _))
       || (entries (getD v "registered")).all fun (_, e) => (getD e "value" matches .str _) && (field? e "root").isSome then
     throw "a verifier of record reports registered reads that are not objects with a string value and a root"
-  return Json.mkObj [("registered", match Record.sessionRegistered vs with
+  let opened := Record.sessionRegistered vs
+  let opened ← match field? j "registration" with
+    | none => pure opened
+    | some (.obj _) => pure (Record.ownRegistered (getD j "registration") opened)
+    | some _ => throw "registration is not an object"
+  return Json.mkObj [("registered", match opened with
     | some kvs => Json.mkObj kvs.toList
     | none => Json.null)]
 

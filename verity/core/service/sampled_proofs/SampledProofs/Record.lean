@@ -6,11 +6,12 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
   details;
 * `sessionRegistered`: `audit.session_registered`, the `{value: root}` the verifiers of record that accepted report opening
   the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root"}}`), a value reported under
-  two roots mapped to null; none when no such verdict reports any;
+  two roots mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its
+  roots' ports and registered values), as the service splits the sessions' roots between a boundary and its interiors;
 * `checks`: `audit_record`'s checks, each with Python's detail: the draw's and the proved units' always, and the receipt's,
   the served draw's, the sessions' roots' and the registered roots' when they fail;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
-  the verdicts (`sessionRegistered`), never taken as input. Python writes `delta` as a float: here it is the double nearest
+  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. Python writes `delta` as a float: here it is the double nearest
   the exact δ given, which `PyJson` writes as Python's `repr` does. One field is not computed: `wrong_units.bound` under a
   Bernoulli law, which Python bounds by a float relaxation (`IntegrityProfile.worst_case`, through `math.log`), is null.
 -/
@@ -75,9 +76,14 @@ def sessionRegistered (verdicts : Array (String × Json)) : Option (Array (Strin
       out := some acc
   return out
 
+def ownRegistered (rec : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
+  let named := (byPort rec).map (·.1) ++ (registeredRoots rec).map (·.1)
+  opened.map (·.filter fun (v, _) => named.contains v)
+
 private def sortedInts (xs : Array Int) : Array Int := xs.qsort (· < ·)
 
-private def failed (code : String) (detail : Json) : Check := Check.fail {} code detail
+/-- A check `audit_record` writes itself: its detail is the object given, not keyed by its code. -/
+private def failed (code : String) (detail : Json) : Check := { codes := #[code], detail := entries detail }
 
 /-- `audit_record`'s checks, in its order: `draw` and `proved` always, then `receipt`, `served`, `roots` and `registered`
 only when they fail. `digest` is the registration's, `units` the draw's. -/
@@ -242,7 +248,7 @@ def record (i : Input) : V Json := do
   let get := getD reg
   let digest ← registrationDigest reg
   let cs := checks reg i.receipt i.draw i.law i.units i.provedUnits i.instances digest i.served i.sessionRoots
-    (sessionRegistered i.verdicts)
+    (ownRegistered reg (sessionRegistered i.verdicts))
   let accepted' := fun (v : Json) => jeq (getD v "accepted") (.bool true)
   let ran := i.verdicts.filter fun (_, v) => !(getD v "accepted" matches .null)
   let ofRecord := i.verdicts.filter fun (_, v) => truthy (getD v "of_record")
