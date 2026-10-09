@@ -506,6 +506,9 @@
    "assumptions": [],
    "type_hash": "6a209c7ca35c0c87663d813e3cdd72ba1735b8675038b6ed046f1875d985113d"
   },
+  "Flock.SecurityProofs.RecursiveAudit": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.RecursiveCircuitIndist": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveCircuitIndist : Flock.Guarantees.RecursiveCircuitIndist"],
@@ -17163,8 +17166,10 @@
   "toolchain": "d95e8a4c480ea108924167135008bc1409c650e2ac659cc2acb8bd8db870d011"
  },
  "shape": {
-  "premises": [],
-  "properties": {},
+  "premises": ["Proofs.Flock.Recursive.Premises"],
+  "properties": {
+   "Flock.SecurityProofs.RecursiveAudit": {"function": ["Flock.ProvedScope.check", "Flock.Zk.verify"], "outcome": "accept"}
+  },
   "frozen": {
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -17174,6 +17179,11 @@
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
+   "Flock.SecurityProofs.RanRegisteredRun": "lemma: the one-session registration break, which RecursiveAudit's (i) uses at the commit strings V* checks; it leaves the list for RecursiveAudit, the one property.",
+   "Flock.SecurityProofs.RecursiveCircuitIndist": "lemma: the two-netlist form of RecursiveCircuitPrivate; it leaves the list for RecursiveAudit, whose (ii) is RecursiveCircuitPrivateLeaves.",
+   "Flock.SecurityProofs.RecursiveCircuitPrivate": "lemma: the reduction RecursiveCircuitPrivateLeaves applies at a registration by hm96 leaves; it leaves the list for RecursiveAudit.",
+   "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "lemma: RecursiveAudit's (ii), stated there; it leaves the list for RecursiveAudit, the one property.",
+   "Flock.SecurityProofs.RecursiveRanRegistered": "lemma: RecursiveAudit's (i) restates it at C-Flock's compiled table and the commit strings V* checks, with the inner fork; it leaves the list for RecursiveAudit.",
    "Flock.SecurityProofs.RecursiveSound": "frozen (hash,obligation,world-unlisted,scope): It takes the fork finders' collision resistance (_hCR) as a hypothesis instead of the fork form and InnerSound as an open obligation; beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope).",
    "Flock.SecurityProofs.RecursiveZK": "frozen (hash,obligation,no-function): It takes HashDerivedKeyHm96 as a hypothesis and the outer proof's zero knowledge as an open obligation, and as a simulation statement it has no acceptance of a function to take.",
    "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (hash,scope): It takes HashDerivedKey (_hKey) as a hypothesis, and avoidsMask (_hdm) as a scope condition that the verifier doesn't refuse; Security/Proofs/Flock/Soundness/Discharge/FailClosed/Mask.lean:9-11 derives it from the setup, so restating on that removes the scope reason.",

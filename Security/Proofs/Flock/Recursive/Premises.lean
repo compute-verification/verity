@@ -1,0 +1,44 @@
+import Proofs.Flock.Soundness.Assumptions.Recursive
+import Proofs.Flock.Soundness.Assumptions.Zk
+
+/-!
+# The premises the recursive audit's property takes
+
+The named premises a property of the recursive audit may take (the ruling of 8 Oct, 4:30 PM): `shape.premises` in
+`Security/lean-audit.json` names this module, so the shape check reads a hypothesis whose head is one of these as a
+premise and refuses every other. Each is the named assumption it abbreviates, unchanged.
+
+* `VBridge` (`Flock.Assumptions.VBridge`): V*'s circuits compute C-Flock's inner verifier. On the list until VBridge G
+  (`FlockVBridge.Compiled.vbridge_compiled`'s open hypotheses) is proved.
+* `UniformRandomBytes` (A3, `uniform/os-random`): the bytes the verifier's operating system returns are uniform.
+* `HashDerivedKeyHm96` (`hash-derived-key`): hm96's salt hash keys its hiding at `2^-193`.
+
+The list belongs in `Security/Definitions/` (the same ruling), whose modules import only Mathlib and the spec; C-Flock's
+definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
+-/
+
+namespace Flock.Premises
+
+open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
+
+/-- **VBridge**: `Flock.Assumptions.VBridge`. -/
+abbrev VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
+  Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg
+
+/-- **A3**: `Assumptions.UniformRandomBytes`. -/
+abbrev UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
+    Prop :=
+  FlockSoundness.Assumptions.UniformRandomBytes L t
+
+/-- **hash-derived-key**: `Assumptions.Zk.HashDerivedKeyHm96`. -/
+abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96
+
+end Flock.Premises
