@@ -99,13 +99,15 @@ class FakeSlack:
 @pytest.fixture(autouse=True)
 def routes_dirs(tmp_path, monkeypatch):
     """No test reads the real notes clone's routes or the published ones: `local` is the clone's routes.d, `remote` the
-    published files, `seen` the read marks."""
+    published files, `seen` the read marks; nor asks the real gh for a PR's branch."""
     local, remote = tmp_path / "notes" / slack.ROUTES_DIR, tmp_path / "published"
     local.mkdir(parents=True)
     remote.mkdir()
     monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "notes"))
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{remote}")
     monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
+    monkeypatch.setenv("RESEARCH_PR_BRANCHES", str(tmp_path / "pr-branches.json"))
+    monkeypatch.setattr(slack, "GH", str(tmp_path / "no-gh"))
     return local, remote
 
 
@@ -990,7 +992,7 @@ VECTORS = Path(__file__).with_name("slack_routing_vectors.json")
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["vectors"], ids=lambda v: v["name"])
 def test_the_routing_rule_matches_every_vector(v):
     doc = json.loads(VECTORS.read_text())
-    assert slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"])) == v["targets"]
+    assert slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]), v.get("history", []), v.get("branches")) == v["targets"]
 
 
 def bells(fake, inbox_ts):
@@ -1063,6 +1065,37 @@ def test_an_ask_rings_the_owners_doorbell_once_and_the_doorbell_cannot_route(fak
     slack.deliver(slack.client(argparse_ns()), reg, slack.Routes(), COORD, next(m for m in fake.messages[COORD] if m["ts"] == ts), link,
                   now=float(ts) + 60)
     assert len(bells(fake, box)) == 1                                                  # one doorbell per (post, target)
+
+
+def test_a_reply_in_the_merge_thread_rings_the_owners_of_the_prs_it_names_and_no_one_else(fake, registry, routes_dirs, capsys, tmp_path, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    boxes = {n: inbox(fake, routes_dirs, n) for n in ("circuits", "proofs", "compute-accounting")}
+    (tmp_path / "pr-branches.json").write_text(json.dumps({"1585": "cursor/gemm-rows-8c79"}))
+    root = fake.add(COORD, text="\U0001f4e3 *Announcement* from @infra to every handle\nmerge thread", username="infra", bot_id=BOT)
+    fake.add(COORD, text="#1600 is ready for the next train", username="proofs", bot_id=BOT, thread_ts=root["ts"])
+    rc, _, err = run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "Landed #1585; #1600 failed its suites")
+    assert rc == 0 and "route: PR owners unknown for #1600" in err
+    assert [len(bells(fake, b)) for b in boxes.values()] == [1, 1, 0]                 # #1585's owner, #1600's namer; not compute-accounting
+    rc, _, err = run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "the next train starts at 3 PM")
+    assert rc == 0 and [len(bells(fake, b)) for b in boxes.values()] == [1, 1, 0]
+
+
+def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_path, monkeypatch):
+    import sys
+    calls = tmp_path / "calls"
+    gh = tmp_path / "gh"
+    gh.write_text(f"#!{sys.executable}\nimport json, pathlib\np = pathlib.Path({str(calls)!r})\np.write_text(p.read_text() + 'x' if p.exists() else 'x')\n"
+                  "print(json.dumps([{'number': 1585, 'headRefName': 'cursor/gemm-rows-8c79'}]))\n")
+    gh.chmod(0o755)
+    monkeypatch.setattr(slack, "GH", str(gh))
+    assert slack.pr_branches({"1585"}) == {"1585": "cursor/gemm-rows-8c79"}
+    assert slack.pr_branches({"1585"}) == {"1585": "cursor/gemm-rows-8c79"} and calls.read_text() == "x"
+    log = io.StringIO()
+    assert slack.pr_branches({"1585", "1999"}, log) == {"1585": "cursor/gemm-rows-8c79"} and calls.read_text() == "xx"
+    assert log.getvalue() == ""
+    gh.write_text("#!/bin/sh\necho 'HTTP 401: Bad credentials' >&2\nexit 1\n")
+    assert slack.pr_branches({"1999"}, log) == {}
+    assert "PR owners unknown for #1999 (gh: HTTP 401: Bad credentials)" in log.getvalue()
 
 
 def argparse_ns(**kw):
@@ -1305,7 +1338,7 @@ def test_the_delivery_rule_matches_every_subscription_vector(v):
     doc = json.loads(VECTORS.read_text())
     got = slack.deliveries(v["msg"], v["root"], doc["registry"], doc["subscriptions"]["book"], set(doc["inboxes"]))
     assert [[d["name"], d["deliver"]] for d in got] == v["deliveries"]
-    assert [d["name"] for d in got if d["why"] == "addressed"] == slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]))
+    assert [d["name"] for d in got if d["why"] == "addressed"] == slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]), v.get("history", []), v.get("branches"))
 
 
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])

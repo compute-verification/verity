@@ -3,8 +3,8 @@
 
 A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which
 `names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`deliveries`): the names that
-lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, and every name
-whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
+lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, on a reply
+under an announcement the owners of the PRs it names (`pr_watchers`), and every name whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
 or a `digest` (in that name's next `read --as`). The footer carries the post's kind and flags, which subscriptions filter on.
 Notes are records, never messages.
 
@@ -57,6 +57,7 @@ import math
 import os
 import re
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -130,6 +131,12 @@ CAP_PER_HOUR = 20                                                # doorbells int
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
+PR_RE = re.compile(r"(?<![\w&/#])#(\d{3,6})\b")
+BRANCH_RE = re.compile(r"\bcursor/([a-z0-9._-]*[a-z0-9])")
+TRAIN_PREP_RE = re.compile(r"^train-prep-((?:\d+-)+)")                  # `cursor/train-prep-1585-1586-on-041c30713-4292`
+RUN_ID_RE = re.compile(r"\br\d{8}-\d{6}-([0-9a-f]{4})\b|(?<![\w./#@-])([0-9a-f]{4})(?![\w/@-])")   # a run, or its last 4
+HISTORY_S = 86400                                                # how far back a reply's thread counts for `pr_watchers`
+GH, GH_REPO = "gh", "danielreuter/verity"                       # `pr_branches` asks gh for PR branches
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
 FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                                  # `_ask · urgent_`
@@ -658,12 +665,74 @@ def header_names(text: str, reg: dict) -> list[str]:
     return lead_names(first.split(" to ", 1)[1], reg) if " to " in first else []
 
 
-def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset()) -> list[str]:
+def branch_owners(branch: str, reg: dict) -> list[str]:
+    """The handles whose agent made `branch`: its last 4 characters are the last 4 of the holder's agent id, or one of the
+    handle's `branch_suffixes` (a holder whose PRs another agent of its own opens)."""
+    suffix = branch.rsplit("-", 1)[-1]
+    return [h["handle"] for h in reg["handles"] if len(suffix) == 4 and
+            suffix in [a[-4:] for a in AGENT_ID_RE.findall(h.get("holder") or "") if len(a) > 11] + h.get("branch_suffixes", [])]
+
+
+def named_prs(text: str) -> tuple[list[str], list[str]]:
+    """The PR numbers a post names (`#1585`, and those a train-prep branch's name lists) and the other `cursor/` branches it
+    names, each in order."""
+    nums, branches = [], []
+    for n in PR_RE.findall(text or ""):
+        nums.append(n)
+    for b in BRANCH_RE.findall(text or ""):
+        if m := TRAIN_PREP_RE.match(b):
+            nums += m[1].rstrip("-").split("-")
+        else:
+            branches.append(b)
+    return list(dict.fromkeys(nums)), list(dict.fromkeys(branches))
+
+
+def run_ids(text: str) -> set[str]:
+    """The run ids a post names, as their last 4 characters (`dd21` for r20261009-035518-dd21); a bare 4-character word counts
+    only with a letter in it, so a year or a PR number doesn't."""
+    return {a or b for a, b in RUN_ID_RE.findall(SUBTEAM_RE.sub(" ", text or "")) if a or re.search(r"[a-f]", b)}
+
+
+def pr_watchers(msg: dict, reg: dict, history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:
+    """Who a reply under an announcement (the merge thread is one) wakes besides its addressees: the owners of each PR it
+    names (`branch_owners` of the PR's branch, from `branches`: PR number -> head branch), and each handle that, in an earlier
+    post of `history` (the thread's recent replies) naming one of its own PRs, named a run id this post names, such as the
+    train its PR waits on.  A PR whose owner isn't known wakes whoever named it in `history`: unsure, it wakes."""
+    branches = branches or {}
+
+    def owners(text: str) -> tuple[list[str], list[str]]:
+        nums, direct = named_prs(text)
+        known, unknown = [], []
+        for n in nums:
+            got = branch_owners(branches[n], reg) if n in branches else []
+            known += got
+            unknown += [] if got else [n]
+        for b in direct:
+            known += branch_owners(b, reg)
+        return known, unknown
+
+    text = msg.get("text") or ""
+    out, unknown = owners(text)
+    ids, tied = run_ids(text), []
+    for m in history:
+        who, said = poster(m, reg), m.get("text") or ""
+        if not who or is_status(said):
+            continue
+        if any(n in named_prs(said)[0] for n in unknown):
+            out.append(who)
+        if who in owners(said)[0] and ids & run_ids(said):
+            tied.append(who)
+    return list(dict.fromkeys(out + tied))
+
+
+def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset(),
+                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
     only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
-    A quiet post wakes only the names at its start.  The author is never a target."""
+    A quiet post wakes only the names at its start.  A reply under an announcement, quiet or not, also wakes its
+    `pr_watchers` (with `history` and `branches`, as there).  The author is never a target."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
     if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
@@ -687,6 +756,8 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         elif reply and by:
             rt = (root or {}).get("text") or ""
             out += lead_names(rt, reg) + (header_names(rt, reg) if is_announcement(root) else [])
+    if reply and is_announcement(root) and not is_status(text):
+        out += pr_watchers(msg, reg, history, branches)
     seen: list[str] = []
     for n in out:
         if n and n != author and n not in seen:
@@ -730,12 +801,13 @@ def matches(filt: str, msg: dict, reg: dict, targets: list[str]) -> bool:
     return bool((filt or "").split())
 
 
-def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset()) -> list[dict]:
+def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset(),
+               history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[dict]:
     """Who gets `msg`, and how: each of `route_targets` is woken (`wake`, why `addressed`); then each other name in `book`
     (name -> route) whose `subscriptions` match it, by its first matching subscription's `deliver` (`wake`: now; `digest`:
-    when that name reads its digest).  A quiet post wakes only the names it starts with, and still reaches digests.  Nothing in an inbox thread,
-    and nothing by an unknown author, reaches anyone; the author never gets their own post."""
-    targets = route_targets(msg, root, reg, inboxes)
+    when that name reads its digest).  A quiet post wakes only the names it starts with and its `pr_watchers`, and still reaches
+    digests.  Nothing in an inbox thread, and nothing by an unknown author, reaches anyone; the author never gets their own post."""
+    targets = route_targets(msg, root, reg, inboxes, history, branches)
     out = [{"name": t, "deliver": "wake", "why": "addressed"} for t in targets]
     thread, text = msg.get("thread_ts") or msg.get("ts"), msg.get("text") or ""
     author = poster(msg, reg)
@@ -886,6 +958,42 @@ def _rang(text: str, ts: str, link: str) -> bool:
     return link in text
 
 
+def pr_branches(nums: set[str], log=None) -> dict[str, str]:
+    """PR number -> head branch, for `pr_watchers`: from the cache ($RESEARCH_PR_BRANCHES, default
+    ~/.cache/research/pr-branches.json; a PR's branch never changes), and for numbers it lacks one `gh pr list`, whose answers
+    join the cache.  Without gh, or when it fails, the numbers stay unknown and their PRs wake whoever named them."""
+    path = Path(os.environ.get("RESEARCH_PR_BRANCHES") or Path.home() / ".cache" / "research" / "pr-branches.json")
+    try:
+        cache = json.loads(path.read_text())
+    except (OSError, ValueError):
+        cache = {}
+    if nums - cache.keys():
+        try:
+            out = subprocess.run([GH, "pr", "list", "--repo", GH_REPO, "--state", "all",
+                                  "--limit", "1000", "--json", "number,headRefName"], capture_output=True, text=True, timeout=60)
+            if out.returncode:
+                raise OSError(out.stderr.strip().splitlines()[-1] if out.stderr.strip() else f"exit {out.returncode}")
+            cache.update({str(p["number"]): p["headRefName"] for p in json.loads(out.stdout)})
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(cache, sort_keys=True))
+        except (OSError, ValueError, subprocess.SubprocessError) as e:
+            print(f"route: PR owners unknown for {' '.join('#' + n for n in sorted(nums - cache.keys()))} (gh: {e}); "
+                  "whoever named them in the thread is rung", file=log or sys.stderr)
+    return {n: cache[n] for n in nums if n in cache}
+
+
+def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float, log=None) -> tuple[list[dict], dict[str, str]]:
+    """For a reply under an announcement, what `pr_watchers` reads: the thread's replies before it in the last HISTORY_S, and
+    the branch of every PR they or it name.  Nothing for any other post."""
+    thread = msg.get("thread_ts")
+    if not thread or thread == msg.get("ts") or not is_announcement(root):
+        return [], {}
+    history = [m for m in api.paged("conversations.replies", "messages", channel=ch, ts=thread, oldest=f"{now - HISTORY_S:.6f}")
+               if m.get("ts") not in (thread, msg.get("ts")) and float(m.get("ts") or 0) < float(msg.get("ts") or now)]
+    nums = {n for m in [msg, *history] for n in named_prs(m.get("text") or "")[0]}
+    return history, pr_branches(nums, log) if nums else {}
+
+
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str, *, urgent: bool = False,
             now: float | None = None, log=None) -> list[str]:
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
@@ -896,17 +1004,18 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     for n in lead_names(msg.get("text", ""), reg):
         routes.get_route(n, fresh=n not in routes.local)            # a name new since the clone was pulled
     inboxes = routes.inboxes()
+    now = _now().timestamp() if now is None else now
+    history, branches = watch_context(api, ch, msg, root, now, log)
     if routes.server_delivers():
-        names = route_targets(msg, root, reg, inboxes)
+        names = route_targets(msg, root, reg, inboxes, history, branches)
         print(f"route: the router rings {' '.join('@' + n for n in names)}" if names else
               "route: this rings no one", file=log)
         return []
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
     src, lines = thread or msg.get("ts") or "", []
-    now = _now().timestamp() if now is None else now
     humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    for d in deliveries(msg, root, reg, routes.all(), inboxes):
+    for d in deliveries(msg, root, reg, routes.all(), inboxes, history, branches):
         name = d["name"]
         if name in humans:
             continue                                                 # people read Slack itself
@@ -1025,6 +1134,8 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
               f"# a comment on an issue in @{h['handle']}'s Linear team; the doorbell already carries each new ask")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
           f"starts, replies in or picks up (not for a status line alone); renew on every wake")
+    print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
+          f"@{h['handle']} at its start, one of its PRs, or a run it named beside one of its PRs; unsubscribe from any you hold")
     return 2 if missing else 0
 
 
