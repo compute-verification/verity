@@ -142,7 +142,7 @@ there (`bc`). V* stages the verifier's `pub.bin` with the inner session's `c_k` 
 (`rec_residuals.py:398-406`) only on an accepted run, which is where `VCommits` reads it. -/
 def PubCommits (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8) : Prop :=
   ∀ i R ω (t : List (Cm × (ℐ).Coin)) (e : Cm × (ℐ).Coin), t[i]? = some e → ∀ R₂ j,
-    (∃ tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) → ∀ (u : Fin (F.Vs j).nv)
+    (∃ tr, ZkReg.AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) → ∀ (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), Sum.inl (u, q) ∈ F.Sk i j →
       ((F.zs R ω t R₂ j).pub.digest u.val q.val (F.Vs j).c.ports.size).data.toList = bc j e.1 (.inl (u, q))
 
@@ -185,7 +185,7 @@ theorem vDecodesRead_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits
 strings. -/
 theorem hDecodes_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec) (hm : F.msg = msgOf F.Vs F.Sk dec) : F.HDecodes :=
-  vDecodes_of_vDecodesR (F.vDecodesRead_of dec hw hm)
+  F.vDecodesRead_of dec hw hm
 
 /-- **The stage selector names round commitments**: every value whose row holds a round's message is a round's
 commitment (`rec-c<k>` or `rec-top-L<l>`, `Flock.Registered.roundCommitment`, `Registered.lean:180-182`), the values

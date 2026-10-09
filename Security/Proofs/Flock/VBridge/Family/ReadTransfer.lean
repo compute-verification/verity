@@ -14,6 +14,8 @@ lanes' theorems state what `Flock.SecurityProofs.RecursiveSound` reads.
 namespace FlockVBridge.Family
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 
