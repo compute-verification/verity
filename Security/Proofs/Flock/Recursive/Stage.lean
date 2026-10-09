@@ -519,7 +519,9 @@ def ReadW (j : Fin S) (g : Fin ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).circuit
   ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
 
 /-- **`VDecodes` at the read wires**: layers whose bits on the read wires of each `Sk i j` are those of the values `v j`
-hold a round-`i` message the inner verifier reads as `msg i v`, at any coins. -/
+hold a round-`i` message the inner verifier reads as `msg i v`, at any coins. It asks more than `VDecodes` (the message
+must be fixed by the read wires alone), and it is true at V* when every wire `wmsg` depends on is some unit's `io`,
+which is what VBridge G's `vbridgeRead_assembled` builds. -/
 def VDecodesR (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=

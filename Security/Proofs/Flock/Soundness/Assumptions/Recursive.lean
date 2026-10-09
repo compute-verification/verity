@@ -3,8 +3,9 @@ import Proofs.Flock.Recursive.StageRead
 /-!
 # V*'s bridge: the recursive audit's open obligation
 
-`VBridge` is a fact about our own code (V*'s circuits and the verifier), not about the world, so it is an obligation,
-not a premise: it is discharged by `Proofs.Flock.VBridge` (VBridge G), and stays a hypothesis only until that lands.
+Obligation: `VBridge` is a fact about our own code (V*'s circuits and the verifier), not about the world, so it is an
+obligation, not a premise. VBridge G (`Proofs.Flock.VBridge`) discharges it, and it stays a hypothesis of
+`RecursiveSound`, and so in this module, only until that lands.
 
 In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's firewall sends the auditor a salted
 SHA-512 commitment to each inner round message, relays the auditor's live coin for the round, and afterwards proves, in
@@ -47,7 +48,8 @@ sessions read that the history does not fix, its running sums `rec-acc` and with
   accepted run);
 * **they decode each round's message from those commit strings** (`VDecodesR`, at equality): layers whose bits on the
   wires of each `Sk i j` that some unit reads (`ReadW`) are those of the values `v j` hold `msg i v` as their round-`i`
-  message;
+  message (true at V* when every wire `wmsg` depends on is some unit's `io`, which is what VBridge G's
+  `vbridgeRead_assembled` builds);
 * **their laws draw every such wire** (`VFullR`): each read wire of `Sk i j` is a wire of a unit whose stratum session
   `j`'s law draws in full.
 
