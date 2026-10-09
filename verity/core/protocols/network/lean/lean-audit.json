@@ -118,6 +118,13 @@
    "guarantees": ["NetworkCheck.RecordsGrid.expectedGrids_eq"]
   }
  },
+ "shape": {
+  "premises": [],
+  "properties": {},
+  "frozen": {
+   "NetworkCheck.RecordsGrid.expectedGrids_eq": "restatable: an equation of expectedGrids with Check.expectedGrid, not a property with an outcome; its bound hw : w < W is a hypothesis that outcome none refuses, and moving it into the conclusion (∀ w < W, …) changes the statement, which the verifier-of-record port leaves as it is"
+  }
+ },
  "dependencies": {
   "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
  }
