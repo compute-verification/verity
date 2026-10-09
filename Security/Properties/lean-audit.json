@@ -1025,6 +1025,12 @@
    "assumptions": [],
    "type_hash": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f"
   },
+  "Properties.Pouw.Window.bucketRefuses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.bucketRefuses : Properties.Pouw.Window.BucketRefuses"],
+   "assumptions": [],
+   "type_hash": "baaa8304c869d70386cf7d64a46ddc411d7472889b13de6cad574939ad9976dd"
+  },
   "Properties.Pouw.Window.drawMisses": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"],
@@ -1037,11 +1043,11 @@
    "assumptions": [],
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1"
   },
-  "Properties.Pouw.Window.gridRefusals": {
+  "Properties.Pouw.Window.floorPointRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.gridRefusals : Properties.Pouw.Window.GridRefusals"],
+   "signature": ["Properties.Pouw.Window.floorPointRefuses : Properties.Pouw.Window.FloorPointRefuses"],
    "assumptions": [],
-   "type_hash": "29629fcf6b815b0f2fa6a3d22b2c018918a742db59c94e1a11a11113d8d40d6f"
+   "type_hash": "973981d8d98b28c9c2a51aa25b7fc3e7d0e30419e2c784c52b5e901c289a9385"
   },
   "Properties.Pouw.Window.kPrimeExactAtEquality": {
    "owner": "@compute-accounting",
@@ -1067,11 +1073,23 @@
    "assumptions": [],
    "type_hash": "f120ede9251754e80c0b6b3850b115c640e1c4877d13c9d0f59894818d41849a"
   },
+  "Properties.Pouw.Window.levelRefuses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.levelRefuses : Properties.Pouw.Window.LevelRefuses"],
+   "assumptions": [],
+   "type_hash": "1c478133e352d4990c32d730d66228a533bb886955dc937373f14325e31b42b2"
+  },
   "Properties.Pouw.Window.levelsCount": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"],
    "assumptions": [],
    "type_hash": "adead606c9dfc7cebaa2c7f141e8009da48e039db74a6250f919b14e30a3a510"
+  },
+  "Properties.Pouw.Window.levelsRefuses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.levelsRefuses : Properties.Pouw.Window.LevelsRefuses"],
+   "assumptions": [],
+   "type_hash": "78c7744cee711526988fd65aa01432d39c9e1d71cf8518faeeea35dc6988b5f8"
   },
   "Properties.Pouw.Window.levelsServed": {
    "owner": "@compute-accounting",
@@ -1091,17 +1109,35 @@
    "assumptions": [],
    "type_hash": "79d2f7f93dc38938fe0a7c43e793bb9480c21422210ec02f198f40d585f99b5e"
   },
+  "Properties.Pouw.Window.padRefuses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.padRefuses : Properties.Pouw.Window.PadRefuses"],
+   "assumptions": [],
+   "type_hash": "2c2d22f4c1189a576da9882358b50af1699c2d28f7dee2443267d52fe37f67ca"
+  },
   "Properties.Pouw.Window.pointEnumerates": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"],
    "assumptions": [],
    "type_hash": "0f6f4da17e2495b903d233db371fd0e01c4da3c9f0d31e5b77da417317a9f20f"
   },
+  "Properties.Pouw.Window.pointRefuses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.pointRefuses : Properties.Pouw.Window.PointRefuses"],
+   "assumptions": [],
+   "type_hash": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75"
+  },
   "Properties.Pouw.Window.publicItems_eq": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
    "assumptions": [],
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
+  },
+  "Properties.Pouw.Window.workAtRefuses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Window.workAtRefuses : Properties.Pouw.Window.WorkAtRefuses"],
+   "assumptions": [],
+   "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
   }
  },
  "shape": {
@@ -1710,18 +1746,6 @@
     "function": "PouwWindow.floorPoint?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Window.gridRefusals": {
-    "function": [
-     "PouwWindow.Work.at?",
-     "PouwWindow.Work.levels?",
-     "PouwWindow.bucket?",
-     "PouwWindow.floorPoint?",
-     "PouwWindow.level?",
-     "PouwWindow.pad?",
-     "PouwWindow.point?"
-    ],
-    "outcome": "accept"
-   },
    "Properties.Pouw.Window.kPrimeExactAtEquality": {
     "function": "PouwWindow.kPrime",
     "outcome": "none"
@@ -1761,6 +1785,34 @@
    "Properties.Pouw.Window.publicItems_eq": {
     "function": "PouwWindow.publicItems",
     "outcome": "none"
+   },
+   "Properties.Pouw.Window.bucketRefuses": {
+    "function": "PouwWindow.bucket?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.floorPointRefuses": {
+    "function": "PouwWindow.floorPoint?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.levelRefuses": {
+    "function": "PouwWindow.level?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.levelsRefuses": {
+    "function": "PouwWindow.levels?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.padRefuses": {
+    "function": "PouwWindow.pad?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.pointRefuses": {
+    "function": "PouwWindow.point?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.workAtRefuses": {
+    "function": "PouwWindow.Work.at?",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -1789,9 +1841,7 @@
    "Properties.NetworkCertifier.malformedEvidenceRejects": "restatable: State the contrapositive: an outcome other than reject -> EvidenceFits.",
    "Properties.NetworkCertifier.undecidedIff": "restatable: Split the iff: keep undecided -> the link-window conditions (other-outcome); move the converse to Proofs.",
    "Properties.NetworkCertifier.undigestedParamsReject": "restatable: State the contrapositive: an outcome other than reject -> some ParamsDigests p eg ig.",
-   "Properties.Pouw.Commit.frameInjective": "frozen (scope): It takes |tag| < 2^32 and every |part| < 2^64 as hypotheses, which the Lean frameBytes doesn't refuse (it wraps the length; Python's frame refuses), so it leaves the list once the port refuses them and the bounds come from acceptance.",
-   "Properties.Pouw.Commit.leafRefusals": "restatable: Split isOk = decide(...): keep accepts -> the salt and digest sizes; move the converse to Proofs.",
-   "Properties.Pouw.Window.gridRefusals": "restatable: Split each isOk = decide(domain): keep accepts -> domain and f? n = .ok v -> v = f n; move domain -> accepts (and its value) to Proofs as completeness."
+   "Properties.Pouw.Commit.frameInjective": "frozen (scope): It takes |tag| < 2^32 and every |part| < 2^64 as hypotheses, which the Lean frameBytes doesn't refuse (it wraps the length; Python's frame refuses), so it leaves the list once the port refuses them and the bounds come from acceptance."
   }
  },
  "reads": {
@@ -4169,18 +4219,24 @@
     "Properties.Pouw.Window.bucketCost",
     "Properties.Pouw.Window.bucketCost3",
     "Properties.Pouw.Window.bucketCredits",
+    "Properties.Pouw.Window.bucketRefuses",
     "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.floorPointGreatest",
-    "Properties.Pouw.Window.gridRefusals",
+    "Properties.Pouw.Window.floorPointRefuses",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed",
+    "Properties.Pouw.Window.levelRefuses",
     "Properties.Pouw.Window.levelsCount",
+    "Properties.Pouw.Window.levelsRefuses",
     "Properties.Pouw.Window.levelsServed",
     "Properties.Pouw.Window.onGridMeans",
     "Properties.Pouw.Window.padLeast",
-    "Properties.Pouw.Window.pointEnumerates"
+    "Properties.Pouw.Window.padRefuses",
+    "Properties.Pouw.Window.pointEnumerates",
+    "Properties.Pouw.Window.pointRefuses",
+    "Properties.Pouw.Window.workAtRefuses"
    ]
   },
   "PouwWindow.Json": {
@@ -4620,30 +4676,36 @@
    "guarantees": ["PousCheck.Properties.SecurityProofs.deployed"]
   },
   "Properties.Pouw": {
-   "digest": "66423f4118c92ff184a122c1b88e2926f42f01df70de8d3ba866765df679736e",
+   "digest": "124b30e2721d0e7e04b319bf792b44e1b8dcb3110678b80c0f7aa95b5e04c291",
    "definitions": {
     "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
     "Properties.Pouw.Window.BucketCost": "ef0d49364a07c1f1c1b5f69c8b1bf9b65a5b57b6ad2366ad5eeb9c2e596d92ae",
     "Properties.Pouw.Window.BucketCost3": "2045bd9aa1b0f67b180fadf0368ad40f2f71ae02a62ed2f7266bbefed3dd2c5b",
     "Properties.Pouw.Window.BucketCredits": "f996cfbfe514bfcb8e7d7f1288d9191f785d283ff0f02f061862343fd346926d",
+    "Properties.Pouw.Window.BucketRefuses": "9df3a498a53184d189288ce7a4b16a0ad684a7169b2747c95a08e161d629bb78",
     "Properties.Pouw.Window.CostBounded": "113cbc9cfb5229f8be8247eb10d1a72ff194da04e3ea7b2b58887bde6f4bea11",
     "Properties.Pouw.Window.CostBounded3": "a223ac589240aaffa0645c8910b0b621d9a1dc65331e07e1a9247cb9d1d932a7",
     "Properties.Pouw.Window.DrawMisses": "06d8fc21f74b6fef11bc595ddbf12f6621e4de9b0fa315a5023cf058c0a56709",
     "Properties.Pouw.Window.FloorPointGreatest": "0cc41d01fbcadb0b163ec2fb88369ade6bbccb29bd44d4fefd987b847af165e1",
-    "Properties.Pouw.Window.GridRefusals": "662570eb01a8458bedeab794ee752ab36b94237103147c0ec8f587df4a2c518e",
+    "Properties.Pouw.Window.FloorPointRefuses": "4297cc0e5d5b46ee7d3782851aa181ced4890865f078a1f7bd42331b05167eff",
     "Properties.Pouw.Window.IsPoint": "d5e22ed4ef29611ef12dd622bd16b62e17c8e5c9b305c568b431c58c672b9488",
     "Properties.Pouw.Window.KPrimeExactAtEquality": "d8418512b1444e803757d81fd0a26b506448c8740b15c67cd023f377c2bc3215",
     "Properties.Pouw.Window.KPrimeLeast": "efbd10a4a3af2ad722380f1181fe325d067006dc449caf2a32a91ccccbc3b5aa",
     "Properties.Pouw.Window.KPrimeRefuses": "7f5f566612f0b2cb3c2c1f0cbf2e43905797342305d7ba80591a4063574c6289",
     "Properties.Pouw.Window.KPrimeServed": "e04552a46d5011cfc207a623075a274ffe4168fe4a8b619416f5de983f472110",
+    "Properties.Pouw.Window.LevelRefuses": "5923ba95ca9015436e79f6944e4f47a5a5ef2e9b93af91ecb769c91df0095e18",
     "Properties.Pouw.Window.LevelsCount": "1bcac3f171f96710f98d462ef2d8e56f9b545dbdc27886ecc16b9f4fb905e21f",
     "Properties.Pouw.Window.LevelsCounted": "bbd9eca6299e815a14b2313cd595e60ec3ad63d26af8a77cc486a3c922aaa946",
+    "Properties.Pouw.Window.LevelsRefuses": "7f1ba5568395b536cca4d2124d866f1d85dbb14246342759fe718aca38e16053",
     "Properties.Pouw.Window.LevelsServed": "8818e1099384056fbd32cc663eade08353f0cafaf9a4ddf204365c09df8e54dc",
     "Properties.Pouw.Window.MissBounded": "84d67aac897f07ce71cf2bf930986308c15e790f9254261c16508b6b47284651",
     "Properties.Pouw.Window.OnGridMeans": "11221385b030c8c17293bcc576648b983701308b3847b5c7cc156126293d653c",
     "Properties.Pouw.Window.PadLeast": "b79e79eb5db0f9e0b5c04d50d4dc9ed012bed6c105931ff891059743cec23e88",
+    "Properties.Pouw.Window.PadRefuses": "021be11c75965901140432c1c3c894bed321caf858dfc897713687613abef782",
     "Properties.Pouw.Window.PointEnumerates": "9ac160d10502ba4e78680f6806df4ecc0a25efe76dc1ad1edd417310f0b32376",
+    "Properties.Pouw.Window.PointRefuses": "29bf3b8f95b826a48d752bb546438fcf7c50ecdcffedf3e389d0b5dfc0af44ce",
     "Properties.Pouw.Window.PublicItems": "7a96c28fb3a37d5199a61fc33c6cc8957d0f805afe05baf140b2882fa359b880",
+    "Properties.Pouw.Window.WorkAtRefuses": "22405bdb7e453bff4d65b8eea7ced28a6029bf6146905f320ddeee0dc5accfd6",
     "Properties.Pouw.Window.missProb": "c5e678c835285495dce78a44f1f2877e8fadfd73147232bc5f705e24c34653e3",
     "Properties.Pouw.Window.servedK": "f180a0127ece52b30dea9c01733b3421eabdba5e8805040f54e44e4eb43e1d1e"
    },
@@ -4652,19 +4714,25 @@
     "Properties.Pouw.Window.bucketCost",
     "Properties.Pouw.Window.bucketCost3",
     "Properties.Pouw.Window.bucketCredits",
+    "Properties.Pouw.Window.bucketRefuses",
     "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.floorPointGreatest",
-    "Properties.Pouw.Window.gridRefusals",
+    "Properties.Pouw.Window.floorPointRefuses",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed",
+    "Properties.Pouw.Window.levelRefuses",
     "Properties.Pouw.Window.levelsCount",
+    "Properties.Pouw.Window.levelsRefuses",
     "Properties.Pouw.Window.levelsServed",
     "Properties.Pouw.Window.onGridMeans",
     "Properties.Pouw.Window.padLeast",
+    "Properties.Pouw.Window.padRefuses",
     "Properties.Pouw.Window.pointEnumerates",
-    "Properties.Pouw.Window.publicItems_eq"
+    "Properties.Pouw.Window.pointRefuses",
+    "Properties.Pouw.Window.publicItems_eq",
+    "Properties.Pouw.Window.workAtRefuses"
    ]
   },
   "Properties.Pouw.Check": {
@@ -4695,7 +4763,7 @@
    ]
   },
   "Properties.Pouw.Commit": {
-   "digest": "1e8edaca1ee875c1081a4c7d97851829446a55af7d65ec258a8e1e62ad3b3987",
+   "digest": "bf709f84898eb633fa21452282985fdd5870a68426229897baa636ff2c0eb60f",
    "definitions": {
     "Properties.Pouw.Commit.CoinAccepts": "e7a2e20919bdb7763c05e5cc934d6849841049e14f55d9ab0f79f2835f94c49c",
     "Properties.Pouw.Commit.CoinBinding": "c4547bc524c96cc5affe829dbedce3c9feecd748dfd43a4da1848c8c241e4162",
@@ -4711,7 +4779,7 @@
     "Properties.Pouw.Commit.FrameSizes": "86c21e59981d31bc2bd8857a5399e8f24ddb38cbf23b36658eb8ab95cf6e7b82",
     "Properties.Pouw.Commit.KeyRefusals": "5e5c8930e8bb19fac20ed99eb629adada65f855795ac2d64cfe694f46cff322a",
     "Properties.Pouw.Commit.KeySize": "e7e452f85d5d233a4bde2dce33a01471fbcd6e3ab8ba1667d4adbefc18862fb8",
-    "Properties.Pouw.Commit.LeafRefusals": "4c3b457bdb06134715da541a5116c45f72081b13dbf7065ba1f2d6b4eb0875ee",
+    "Properties.Pouw.Commit.LeafRefusals": "1b74d4b0b615788b178b71b57fc3a7123d7766a6339b37faef62256c352c1eae",
     "Properties.Pouw.Commit.SaltRefusals": "78517a825dc41125e9dde1550244210b8c1b875db673d4a7247e2be859c3efcf",
     "Properties.Pouw.Commit.SaltSize": "fb8d2f825788ea26c7d957cf3a58692eb85b2e3c91cd40fec2582fc55acc9fd8",
     "Properties.Pouw.Commit.TaggedSize": "ed2d4ae90b13ab43f0d939fe7c5cb57d97c057368bea84183366cb4324e252c6",
