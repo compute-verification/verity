@@ -874,7 +874,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
         "import json, os, sys\n"
         "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps(sys.argv[1:]))\n"
         "open(os.environ['FAKE_ARGV'] + '.cwd', 'w').write(os.getcwd())\n"
-        "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': [{'tree': 'c'}] * 3,\n"
+        "kept = json.loads(os.environ.get('FAKE_KEPT') or json.dumps([{'tree': 'c'}] * 3))\n"
+        "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': kept,\n"
         "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
         "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
         "sys.exit(1)\n")
@@ -887,6 +888,10 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     assert json.loads((tmp_path / "argv.json").read_text()) == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir",
                                                                  "/workspace/research/runs", "--src-dir", "/workspace/research/src", "--json"]
     assert "target reached: False; src trees: deleted 2 (31.0 GB, 812345 inodes), kept 3 (1:1 2:2) (tool)" in r.stdout
+    # node 1's 13:49Z and 14:49Z passes on 9 Oct kept 110 trees under condition 2 and the line couldn't say which process named them
+    kept = [{"tree": t, "why": ["2: process 7 (du) uses it", *(["2: process 9 (lake) uses it"] if t == "c" else [])]} for t in "cde"]
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_KEPT": json.dumps(kept)}, capture_output=True, text=True)
+    assert "kept 3 (1:1 2:2); trees a process names: 7 (du) 3, 9 (lake) 1 (tool)" in r.stdout
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_EVICT_ORIGIN": "/workspace/research/git/verity.git",
                                                                      "FAKE_ERROR": "2: /proc/1 is unreadable"}, capture_output=True, text=True)
     assert json.loads((tmp_path / "argv.json").read_text())[-3:] == ["--src-origin", "/workspace/research/git/verity.git", "--json"]

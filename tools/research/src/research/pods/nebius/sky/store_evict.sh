@@ -42,6 +42,13 @@ if c is not None:
     gone, kept = c.get("deleted") or [], c.get("kept") or []
     line += "; src trees: deleted %d (%.1f GB, %d inodes), kept %d (%s)" % (len(gone), c.get("deleted_bytes", 0) / 1e9, c.get("deleted_inodes", 0),
         len(kept), " ".join("%s:%d" % kv for kv in sorted((c.get("kept_by") or {}).items())) or "none")
+    procs = {}
+    for k in kept:
+        for w in k.get("why") or []:
+            if w.startswith("2: process "):
+                procs.setdefault(w[len("2: process "):].split(" uses ")[0], set()).add(k.get("tree"))
+    if procs:
+        line += "; trees a process names: " + ", ".join("%s %d" % (p, len(t)) for p, t in sorted(procs.items(), key=lambda x: -len(x[1]))[:3])
     if c.get("error"):
         line += ", nothing more deleted: " + c["error"]
 print(line)
