@@ -1,4 +1,4 @@
-import Mathlib.Data.Nat.Bitwise
+import Mathlib.Data.Nat.Notation
 
 /-!
 # SHA-512 (FIPS 180-4) on byte lists (trusted; definitions only)
