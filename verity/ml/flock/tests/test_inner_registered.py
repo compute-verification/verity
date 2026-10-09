@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,6 +23,9 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 pytestmark = pytest.mark.slow
 N = 8
+LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+STATEMENT = "verity/flock-circuit+plain-leaves"
 
 
 @pytest.fixture(scope="module")
@@ -103,3 +107,80 @@ def test_claim_writes_another_description_with_the_registered_paths(staged):
     _, tabs = IR.tables(other)
     root = bytes.fromhex(json.loads((honest / IR.OWN).read_text())["ports"]["cs"]["root"])
     assert not G.verify_read(G.domain(staged.meta["program_sha512"], IR.VALUE, 64, 1), root, 0, tabs["cs"]["bcs"][0], b"")
+
+
+# --- the Lean verifier's description check (`Registered.checkDescription`, D14) -------------------------------------------
+
+@pytest.fixture(scope="module")
+def verifier():
+    if shutil.which("lake") is None:
+        pytest.skip("no Lean toolchain")
+    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    return BIN
+
+
+def statement(d: Path, own: Path | None) -> tuple[int, str]:
+    args = [str(BIN), "statement", "--statement", STATEMENT, "--circuit", str(d / "circuit.txt"), "--public", str(d / f"pub-{N}.bin")]
+    p = subprocess.run(args + (["--registered", str(own)] if own else []), capture_output=True, text=True, check=False)
+    return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def test_an_honest_inner_statement_reads_its_description_from_the_registration(staged, verifier):
+    d = stage(staged, "lean-honest")
+    got = IR.register(d)
+    code, out = statement(d, d / IR.OWN)
+    assert code == 0, out
+    line = json.loads(out.splitlines()[0])
+    assert line["registered"] == {"cs": {"value": IR.VALUE, "root": got["cs"]["root"]}}
+    assert json.loads(line["identity"])["leaf_scheme"] == FC.LEAF_SCHEME_PLAIN
+    code, out = statement(d, None)
+    assert code == 1 and "the verifier holds no registered roots" in out, out
+
+
+def test_an_inner_statement_naming_no_registered_rows_is_refused(staged, verifier):
+    honest, plain = stage(staged, "lean-registered"), stage(staged, "lean-plain")
+    IR.register(honest)
+    assert statement(plain, None)[0] == 0, "without the verifier's registered reads, a statement naming none is set up"
+    code, out = statement(plain, honest / IR.OWN)
+    assert code == 1 and "names no registered rows" in out, out
+
+
+def test_another_description_under_the_registered_paths_is_refused(staged, verifier):
+    honest, other = stage(staged, "lean-claim-honest"), stage(staged, "lean-claim-other", cs=staged.other)
+    IR.register(honest)
+    IR.claim(other, honest)
+    code, out = statement(other, honest / IR.OWN)
+    assert code == 1 and f"port cs: table row 0 does not open {IR.VALUE}'s registered root at position 0" in out, out
+
+
+def test_a_registered_row_past_the_table_is_refused(staged, verifier):
+    d = stage(staged, "lean-extra")
+    IR.register(d, extra=1)
+    code, out = statement(d, d / IR.OWN)
+    assert code == 1 and f"port cs: its table has 1 rows, and {IR.VALUE}'s registration 2" in out, out
+
+
+def test_a_table_row_no_instance_reads_is_refused(staged, verifier):
+    d = stage(staged, "lean-unread", cs=np.concatenate([staged.desc, staged.other]))
+    IR.register(d, {"cs": IR.VALUE})
+    code, out = statement(d, d / IR.OWN)
+    assert code == 1 and f"port cs: none of the {N} instances reads table row 1, registered row 1 of {IR.VALUE}'s 2" in out, out
+
+
+def test_a_description_table_out_of_order_is_refused(staged, verifier):
+    d = stage(staged, "lean-order", cs=np.concatenate([staged.desc, staged.other]), refs=[0, 1] * (N // 2))
+    IR.register(d, {"cs": IR.VALUE})
+    assert statement(d, d / IR.OWN)[0] == 0, "a two-row description read by the instances in turn is the registration"
+    e = head(d)["registered"]["cs"]
+    IR._write_header(d, {"cs": {**e, "positions": [1, 0], "paths": e["paths"][::-1]}})
+    code, out = statement(d, d / IR.OWN)
+    assert code == 1 and "port cs: table row 0 states position 1" in out, out
+
+
+def test_the_registered_ports_are_exactly_the_verifiers(staged, verifier):
+    d = stage(staged, "lean-ports")
+    IR.register(d)
+    own = json.loads((d / IR.OWN).read_text())
+    (d / "renamed.json").write_text(json.dumps({**own, "ports": {"x": own["ports"]["cs"]}}))
+    code, out = statement(d, d / "renamed.json")
+    assert code == 1 and "names port cs registered, and the verifier's registered reads do not" in out, out

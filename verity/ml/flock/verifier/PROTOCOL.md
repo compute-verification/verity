@@ -1597,6 +1597,27 @@ statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without
 covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
 `--zk` refuses it too.
 
+**A registered description.** When the inner statement is a private circuit's (its description, the netlist's `op`,
+`src` and `out` bits, one row port every instance reads), the developer registers the description's rows once (§16.10's
+registration: `hm96-sha512/row/v1` rows under salts drawn once, a frame-v3-sha512 root under the registration's domain),
+and the statement opens them against that root: the header's `registered` names the description port, and each of its
+table rows' position and path (`verity_flock.inner_registered`). The verifier that holds the root (`statement
+--registered F` on a plain-leaves statement; V*'s native side, `InnerFold.lean --registered F`) refuses the statement
+unless, for each port of `F` (`Registered.checkDescription`):
+
+1. the header's `registered` names exactly `F`'s ports, each a row of the circuit, `hm96-sha512/row/v1` rows of the
+   registered width (`Port.fits`), and a table of a shared-row file;
+2. the port's table is the registration in order: as many rows as the registration's leaves, table row `r` at position
+   `r`, its `b ‖ c` opening the registered root there through its path;
+3. every instance's ref names a row of the table; and
+4. every table row is some instance's ref: the statement reads every registered row (D14).
+
+Each refusal names the port and the value it compared (the table's rows and the registration's leaves, the row, its
+stated position, the instance and its ref). No position depends on which unit an instance is, so the units need not be
+derived from the verifier's program, as §16.10's reads need them. Without `F`, a statement naming registered reads is
+refused as §16.10 refuses one. The description's registered value is its packed row (16 description bits to a u16 word,
+as the class statement lays out the parameter), so its `words` are the port's.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
@@ -1670,6 +1691,10 @@ expectation):
   parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
   exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
   verifier.
+- **D14:** an inner statement's registered description (§16.16). Upstream ignores the header's `registered`; the spec
+  refuses a description table that is not the registration in order, a row that does not open the registered root, and a
+  registered row no instance reads. No vector exercises it; `verity/ml/flock/tests/test_inner_registered.py` runs each
+  refusal on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
