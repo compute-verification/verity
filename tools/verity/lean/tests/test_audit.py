@@ -299,6 +299,56 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
+SHAPE_SPEC = """namespace Control
+def verify (x : Nat) : Bool := x % 2 == 0
+structure Sess where
+  x : Nat
+  hown : verify x = true
+abbrev Outer (_ : Nat) := Sess
+structure Stmt where
+  c : Nat
+  hscope : c < 100
+structure World where
+  Ω : Type
+  nonempty : Nonempty Ω
+def Accepts (s : Sess) : Prop := verify s.x = true
+def reads (s : Sess) : Nat := s.x + 1
+end Control
+"""
+SHAPE_THMS = """import Control.ShapeSpec
+import Control.ShapePrem
+namespace Control
+theorem guarded (s : Sess) (_hacc : Accepts s) (_hop : Accepts s → reads s > 0) : reads s > 0 := by unfold reads; omega
+theorem mentions (s : Sess) (_hacc : Accepts s) (_hm : reads s = s.x + 1) : True := trivial
+theorem underForall (s : Sess) (_hacc : Accepts s) (_hA : ∀ j, Uniform j) : True := trivial
+theorem family (_Vs : Fin 3 → Stmt) (zs : Fin 3 → Outer 0) (_hacc : ∀ j, Accepts (zs j)) : True := trivial
+theorem world (_W : World) (s : Sess) (_hacc : Accepts s) : True := trivial
+end Control
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(tmp_path):
+    """`Facts.lean`'s shape on real statements (the friction note `proofs/20261009T1340Z-friction-shape-check-session-
+    mentions-pass`): mentioning a session whose structure names the function (`hown`) is no acceptance, nor is an
+    implication whose consequent isn't one (`_hop`); a premise under `∀` is read by its head; a family of structures
+    (`Vs : Fin 3 → Stmt`, an `abbrev` of one) holds its fields; a structure's own `Nonempty` is no hypothesis."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "ShapeSpec.lean").write_text(SHAPE_SPEC)
+    (pkg / "Control" / "ShapePrem.lean").write_text("namespace Control\ndef Uniform (j : Nat) : Prop := j = j\nend Control\n")
+    (pkg / "Control" / "ShapeThms.lean").write_text(SHAPE_THMS)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.ShapeThms\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["guarded", "mentions", "underForall", "family", "world"]
+    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in names}}, tmp_path)
+    entry = {"function": "Control.verify", "outcome": "accept"}
+    got = {n: [w.split(" : ")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"], ["Control.ShapePrem"])]
+           for n in names}
+    assert got == {"guarded": ["takes _hop"], "mentions": ["takes _hm"], "underForall": [], "family": ["takes _Vs.hscope"],
+                   "world": []}, got
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     """`Facts.lean`'s renaming and unfolding on a real build: a guarantee lifted into a `Guarantees` definition (its old theorem
@@ -1418,6 +1468,12 @@ def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_w
     assert A.refusals(entry, [twice], []) == [], "two acceptances are one, of the pair (a binding property)"
     field = part([hyp("s.hscope", 0, ["P.Scope"], source="field"), ACCEPTS], inputs=[("s", 0)])
     assert "a field of an input it ranges over" in A.refusals(entry, [field], [])[0]
+    nonempty = part([hyp("W.nonempty", 0, ["Nonempty"], source="field") | {"head": "Nonempty"}, ACCEPTS], inputs=[("W", 0)])
+    assert A.refusals(entry, [nonempty], []) == [], "a structure's own `Nonempty` is no hypothesis"
+    implied = part([ACCEPTS, hyp("hop", 2, ["P.check", "P.Q"]) | {"guarded": True, "applies": ["P.Q"]}], inputs=[("x", 0)])
+    assert "under a hypothesis of its own" in A.refusals(entry, [implied], [])[0]
+    named = part([hyp("hm", 1, ["P.check", "P.S"]) | {"applies": ["P.S"]}], inputs=[("x", 0)])
+    assert A.refusals(entry, [named], [])[0].startswith("takes no hypothesis"), "mentioning is not applying"
     assert "takes no hypothesis that its function returned accept" in A.refusals(entry, [part(inputs=[("x", 0)])], [])[0]
     assert A.refusals({"function": "P.check", "outcome": "reject"}, [fits], [])[0].startswith("takes no hypothesis")
     assert A.refusals({"function": "P.check", "outcome": "reject"},

@@ -166,14 +166,19 @@ installs it first, so a machine without elan works), must pass clean and fail on
   entry without one. A changed owner is one line in the review and no change of the statement.
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
-  inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that reaches `F`
+  inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
   (a constant, several, or a field path such as `P.protocol.check`) and, unless `O` is `accept`, a constant named `O`,
   and premises (hypotheses whose head is under `premises`), up to the first input bound after that acceptance; what
   follows is its conclusion. With `O` `none` (a function that always returns) it takes no acceptance and must mention
   `F`. A conjunction whose conjuncts are about different functions (soundness of a check and simulation of a server)
   gives `{"conjuncts": [{"function": F1, "outcome": O1}, ...]}` in place of `function` and `outcome`, one per
-  conjunct in order, so each is checked against its own. Several acceptances of `F` count as one, of the tuple of their inputs. A `Prop` field of a structure under
-  `meaning` that an input ranges over is a hypothesis. A guarantee under `frozen` (with why it doesn't fit yet) is
+  conjunct in order, so each is checked against its own. Several acceptances of `F` count as one, of the tuple of their
+  inputs. A hypothesis is read by its body, under its leading binders: the acceptance's body applies `F` through
+  definitions (mentioning a structure whose fields name `F`, such as an outer session, is not applying it) and the
+  acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
+  P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
+  returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, except the structure's
+  own `Nonempty`. A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,

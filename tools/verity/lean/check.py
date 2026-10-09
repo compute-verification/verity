@@ -1059,8 +1059,10 @@ def shape(policy: dict, facts: dict) -> list[str]:
     with a lifted definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type
     reaches the function, and with an outcome other than `accept`, a constant named for the outcome), and premises:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
-    one, of the tuple of their inputs (a binding property). A `Prop` field of a structure an input ranges over is a
-    hypothesis too, and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
+    one, of the tuple of their inputs (a binding property). A hypothesis is read by its body under its leading binders
+    (`Facts.lean`'s `head` and `applies`): an acceptance applies the function there and holds under no hypothesis of
+    its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too,
+    a structure's own `Nonempty` aside, and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
     entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A guarantee under `shape.frozen` ({name: why it
     doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
@@ -1166,12 +1168,13 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     outcome, said = entry["outcome"], " or ".join(fns)
 
     def about(h: dict) -> bool:
-        reached = set(h["reaches"])
-        return any(reaches(f, reached) for f in fns) and (
+        reached = set(h.get("applies", h["reaches"]))
+        return not h.get("guarded") and any(reaches(f, reached) for f in fns) and (
             outcome == "accept" or any(c.rsplit(".", 1)[-1] == outcome for c in reached))
 
     def premise(h: dict) -> bool:
-        return h.get("head") in conjectures or bool(h["module"]) and under(premises, h["module"])
+        return h.get("head") in conjectures or bool(h["module"]) and under(premises, h["module"]) or \
+            h["source"] == "field" and h.get("head") == "Nonempty"
 
     hyps = sorted(got["hypotheses"], key=lambda h: h["at"])
     start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
@@ -1188,7 +1191,9 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
         what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
         out.append(f"takes {h['name']} : {h['type']}, {what} that is neither its acceptance nor a premise (its acceptance: "
                    f"{outcome} by {said}; a premise: "
-                   f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})")
+                   f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})" +
+                   (": it holds under a hypothesis of its own, and an acceptance is the event itself, under `∀` binders "
+                    "only" if h.get("guarded") else ""))
     if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
         out.append(f"says nothing about {said}, the function its entry names")
     return out

@@ -159,7 +159,9 @@ simp with that.
   constant or several) and that `outcome`: `accept` by default, `undecided` or `reject` where the property is about that
   outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
   acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
-  constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
+  constant of a module under `shape.premises` (under its leading `∀`s); the acceptance applies the function in its own
+  body, under no hypothesis of its own; a `Prop` field of a structure an input ranges over, or a family of them
+  (`Vs : Fin S → VStmt`) holds, counts as a hypothesis (a structure's own `Nonempty` aside),
   and a conjunction as its conjuncts; when they are about different functions, the entry lists `conjuncts`, one
   `{function, outcome}` each. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
   with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
