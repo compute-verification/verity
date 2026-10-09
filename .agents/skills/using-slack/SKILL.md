@@ -62,6 +62,11 @@ channels and the named humans; `research msg handles` prints it. `research msg o
 longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
 
+`--as NAME` on anything that posts or changes NAME's route takes only a name you hold: your agent id (`$RESEARCH_AGENT_URL`,
+else your Cursor identity) is in its registry `holder`, or holds its open inbox (a successor's `names open --succeeds`).
+A post sent by mistake comes back with `research msg retract --as NAME --ts TS [--thread ROOT] [--why W]`, which blanks
+your own post and needs `SLACK_BOT_TOKEN`; the doorbells it rang keep their copy.
+
 ## Setup
 
 - `SLACK_BOT_TOKEN` is Verity's bot (a Cursor secret). Never print it.

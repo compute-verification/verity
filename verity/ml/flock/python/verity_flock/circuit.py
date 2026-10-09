@@ -75,9 +75,10 @@ OWNER = -1
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
 #: identity and swappable: ``hm96-sha512/v1`` (``verity.ml.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
-#: Salts are a ChaCha20 expansion of a fresh 256-bit OS key per proof (Daniel, 2026-09-27: salts drawn leaf by leaf from the OS
-#: cost +96% prover time at m = 33), modelled as uniform like the OS generator's own ChaCha20 output; the key is never reused or
-#: stored. The level-0 salts are shared by both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
+#: Salts are the OS's own bytes, every leaf's 192 read a tree at a time in bulk (``zk_hooks::LeafSalts``; Daniel, 9 Oct, decision
+#: 4(a)), never reused or stored; ``salt_source`` still names the per-proof ChaCha20 key they replaced, because the Lean verifier
+#: pins this object (``Flock/Tags.lean``'s ``leafSchemeHm96``) and new text is a new tag set. The level-0 salts are shared by
+#: both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
 #: tree, pinned by its SHA-512. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to
 #: any value.
 LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes": 192,
