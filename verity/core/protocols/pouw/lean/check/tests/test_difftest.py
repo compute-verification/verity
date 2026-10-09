@@ -115,6 +115,41 @@ def test_opening(opening_server):
     assert set(OPENED) == REASONS | {"accept"}, set(OPENED) ^ (REASONS | {"accept"})
 
 
+RULED: Counter[str] = Counter()
+
+
+def registered_input(case) -> dict:
+    """A `serve` case's params and registration, as `registered` reads them."""
+    return {k: case[k] for k in ("params", "commitment") if k in case} if isinstance(case, dict) else {}
+
+
+def registered(x: dict) -> dict:
+    if not ("params" in x and isinstance(x.get("commitment"), str)):
+        raise CC.Refused("the input's params or commitment is malformed")
+    why = CC.registered(CC.params(x["params"]), CC.commitment(bytes.fromhex(x["commitment"])))
+    RULED[why.split(":")[0] if why else "holds"] += 1
+    return {"reason": why}
+
+
+REGISTERED = D.Port("pouw-check-difftest", "registered", registered, package=LEAN, rejects=(ValueError,),
+                    inputs=st.builds(lambda r, n: registered_input(cases.instance(r, n)), st.randoms(use_true_random=False),
+                                     st.sampled_from([n for n in NAMES if not n.startswith("answer")])))
+registered_server = D.server_fixture(REGISTERED)
+
+
+def test_registered(registered_server):
+    """PoUW's rule over generated registrations, each rule's mutation swept over a few seeds: the same reason."""
+    RULED.clear()
+    stats = D.run(REGISTERED, examples=1500, server=registered_server)
+    swept = Counter(D.replay(REGISTERED, registered_input(cases.instance(random.Random(f"{name}/{seed}"), name)),
+                             registered_server)[0]
+                    for name in NAMES if not name.startswith("answer") for seed in range(3))
+    print(f"pouw-check-difftest registered: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
+          f"{dict(sorted(RULED.items()))}")
+    assert set(RULED) >= {"holds", "window", "public-items", "level", "public-value", "population", "law", "query",
+                          "scheme"}, set(RULED)
+
+
 PASSED: Counter[str] = Counter()
 
 

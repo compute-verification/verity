@@ -1,4 +1,5 @@
 import Difftest
+import PouwCheck.Check
 import PouwCheck.Opening
 import PouwCheck.Pass
 
@@ -11,6 +12,8 @@ harness (`verity/core/difftest`):
 * `opening` (`params` as JSON, `commitment` the registration's bytes as hex, `units` a list of integers or null, `unit`,
   `pub` the proof's public file as hex, `opening` as JSON): `core_check.opening`'s reason, or null. A refusal of the
   parameters or the registration is a reject, as `core_check.params` and `commitment` raise `Refused` (a ValueError).
+* `registered` (`params`, `commitment`, as `opening` reads them): PoUW's rule over the registration
+  (`core_check.registered`), as `{"reason"}`, null when it holds.
 * `pass` (`coins` the challenger's commitment as JSON or null, `raw` the manifest's bytes as hex or null, `context`,
   `recorded`): `core_check.pass_epoch`, as `{"how"}` or `{"refused": [code, why]}`.
 * `draw` (`coins`, `recorded`, `opening`, `stream`, `registration`, `receipt`, `k`, `population`, `units`, each as
@@ -63,7 +66,14 @@ def drawOf (j : Json) : Except String Json := do
   refusal (fun _ => Json.null) (drawCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
     (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units"))
 
+def registeredOf (j : Json) : Except String Json := do
+  let p ← paramsOf (← get j "params")
+  let c ← registrationOf (← hex j "commitment")
+  pure (Json.mkObj [("reason", match registered p c with
+    | .ok _ => Json.null
+    | .error r => .str r)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("opening", openingOf), ("pass", passOf), ("draw", drawOf)]
+  ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf)]
 
 end PouwCheck.Difftest

@@ -429,23 +429,21 @@ def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
                          "law": {"k": k, "law": "subset"}}}
 
 
-def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
-    """(verdict, reason, (public, profile) on acceptance)."""
+def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
     rec = c["record"]
     win, items = rec["window"], rec["window"]["public"]
     bits, (lo, hi) = p["grid_bits"], p["range"]
     if win["kind"] != "served" or win["context"] != p["context"]:
-        return "reject", (f"window: registered kind {win['kind']} in context {win['context']}, the verifier's served in "
-                          f"{p['context']}"), None
+        return (f"window: registered kind {win['kind']} in context {win['context']}, the verifier's served in "
+                f"{p['context']}"), None
     if sorted(items) != sorted(Wd.REGISTERED):
-        return "reject", (f"public-items: registered {', '.join(sorted(items))}, declared "
-                          f"{', '.join(sorted(Wd.REGISTERED))}"), None
+        return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
     work = items["work"]
     ell = work.get("level") if isinstance(work, dict) else None
     if not _nat(ell):
-        return "reject", "level: the registration names no work level", None
+        return "level: the registration names no work level", None
     if ell + 1 > Wd.level(Wd.floor_point(hi, bits), bits) or Wd.point(ell, bits) < lo:
-        return "reject", f"level: level {ell} is outside the window's range {lo}..{hi}", None
+        return f"level: level {ell} is outside the window's range {lo}..{hi}", None
     w = Wd.Work.at(ell, bits)
     tw = p["check"]["tile_work"]
     k = Wd.k_prime(p["eps"], p["delta"], w.credited * tw, w.n, tw)
@@ -453,16 +451,31 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     want = expected_items(p, ell, w, k, root_w)
     wrong = [i for i in sorted(want) if _canon(items[i]) != _canon(want[i])]
     if wrong:
-        return "reject", f"public-value: {', '.join(wrong)}", None
+        return f"public-value: {', '.join(wrong)}", None
     if rec["population"] != w.n:
-        return "reject", f"population: registered {rec['population']}, the level's {w.n}", None
+        return f"population: registered {rec['population']}, the level's {w.n}", None
     law = {"k": k, "law": "subset"}
     if _canon(rec["law"]) != _canon(law):
-        return "reject", f"law: registered {_canon(rec['law'])}, the window's {_canon(law)}", None
+        return f"law: registered {_canon(rec['law'])}, the window's {_canon(law)}", None
     if rec["query"] != p["query"]:
-        return "reject", f"query: registered {rec['query']}, the check's {p['query']}", None
+        return f"query: registered {rec['query']}, the check's {p['query']}", None
     if rec["scheme"] != p["check"]["scheme"]:
-        return "reject", f"scheme: registered {rec['scheme']}, the check's {p['check']['scheme']}", None
+        return f"scheme: registered {rec['scheme']}, the check's {p['check']['scheme']}", None
+    return None, (w, k, items)
+
+
+def registered(p: dict, c: dict) -> str | None:
+    """PoUW's rule over the registration (`PouwCheck.registered`): why it fails, or None."""
+    return _registered(p, c)[0]
+
+
+def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
+    """(verdict, reason, (public, profile) on acceptance)."""
+    rec = c["record"]
+    why, fixed = _registered(p, c)
+    if why is not None:
+        return "reject", why, None
+    w, k, items = fixed
     if e["protocol"] != ONE_STAGE:
         return "reject", f"outcome: protocol {e['protocol']}, not one-stage's {ONE_STAGE}", None
     d = digest(c).hex()
@@ -903,5 +916,5 @@ def line(a: dict) -> str:
 
 
 __all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
-           "case", "check", "commitment", "digest", "evidence", "integrity", "integrity_json", "law_name", "line", "opening",
-           "params", "ratio", "unit_draw", "verify_path", "window_domain"]
+           "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
+           "opening", "params", "pass_epoch", "ratio", "registered", "unit_draw", "verify_path", "window_domain"]
