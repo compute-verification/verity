@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Assumptions.Recursive
 
 `RecursiveSound` at C-Flock's compiled inner protocol (`flockInnerCL`), with the inner protocol's soundness in fork form
 and the interactive table's error as its inner term. Two lemmas are open: the extraction the compile lemma is proved
-from (`compiled_fork_or_value`, `CompiledFork`) and gap 2, each with its proof `sorry`; every other declaration is proved.
+from (`compiled_clash_or_value`, `CompiledFork`) and gap 2, each with its proof `sorry`; every other declaration is proved.
 
 * `ClashCL`, `clashPickCL` (`CompiledFork`): two runs of the compiled table that clash, and the inner fork's output, a
   collision of `H` when the two transcripts play the compiled table to outcomes that clash.
@@ -40,7 +40,8 @@ error.** On every hidden template of the class whose statement no witness satisf
 satisfy `G`, play the compiled table to outcomes that clash (a collision of `H`), or the compiled table accepts a
 transcript satisfying `G` with probability at most `tableError`, which `flock_inner_sound` bounds `flockInner` by.
 
-From `compiled_fork_or_value` (`CompiledFork`, open): the runs satisfying `G` accept no more often than the interactive
+From `compiled_fork_or_value` (`CompiledFork`, from the open `compiled_clash_or_value`): the runs satisfying `G` accept
+no more often than the interactive
 table's `value`, which on a false statement is at most `tableError` (`table_value_sound`), as for `flock_inner_sound`. -/
 theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
