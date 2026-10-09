@@ -969,3 +969,13 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
     doc = json.loads((tmp_path / "result.json").read_text())
     assert list(doc)[:4] == ["schema", "kind", "run_id", "reuse"] and doc["reuse"] == r
 
+
+def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
+    """The lander launches checks only through train.sh, which runs the merge queue's command: a flag of its own (`--no-cache`,
+    a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
+    import subprocess
+
+    for flag in ("--no-cache", "--verdicts-in", "--cores"):
+        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
+                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+        assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
