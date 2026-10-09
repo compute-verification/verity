@@ -175,5 +175,40 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
 
+/-- A registered value a recursive statement reads a round's commitment from: round `i`'s commitment `rec-c<i>`, which
+V*'s algebra reads, or level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads. -/
+def roundCommitment (value : String) : Bool :=
+  let index (s : String) := !s.isEmpty && s.all Char.isDigit
+  (value.startsWith "rec-c" && index (value.drop 5).toString) || (value.startsWith "rec-top-L" && index (value.drop 9).toString)
+
+/-- Whether every draw by `d`'s law draws unit `u`: a subset draw of the whole population, a `p = 1` draw, or a unit whose
+stratum draws all of its units (`k_s = n_s`). -/
+def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
+  let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
+  match d.law with
+  | .subset k => k == d.population
+  | .bernoulli a b => a == b
+  | .stratified _ strata => strata.any full
+  | .work _ strata => strata.any (full ·.toStratum)
+
+/-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
+does not draw in full. -/
+def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
+  own.findSome? fun p =>
+    if roundCommitment p.value then
+      ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
+    else none
+
+/-- U4 (PROTOCOL.md §16.10): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
+draw proves its whole population. -/
+def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
+  let (some own, some j) := (own, draw) | pure ()
+  let d ← Draw.UnitDraw.ofJson j
+  match fullMiss own d with
+  | none => pure ()
+  | some (p, u) =>
+    throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
+
 end Registered
 end Flock
