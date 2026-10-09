@@ -548,6 +548,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="leave out (and list) the configurations whose audit reads more Program frames than this")
     a.add_argument("--each-run-up-to", type=int, default=0, metavar="FRAMES",
                    help="keep each run's smallest configuration over --max-frames when it reads at most this many")
+    a.add_argument("--controls-up-to", type=int, metavar="FRAMES",
+                   help="inject a run's controls only if its smallest configuration reads at most this many frames "
+                        "(each control checks the whole link again)")
     a.add_argument("--budget-gb", type=float,
                    help=f"run configurations at once only while their estimated peak memory ({LEAN_GB_PER_FRAME * 1e3:g} "
                         "MB per frame, the Lean check's evidence) stays under this")
@@ -585,6 +588,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             results += [_label("active", (root, c)) | {"frames": n, "left_out": f"{n} frames, over --max-frames"}
                         for c, n in configurations.items() if c not in kept]
             smallest = min(kept, key=kept.get, default=None)
+            if smallest is not None and args.controls_up_to is not None and kept[smallest] > args.controls_up_to:
+                smallest = None
             sized += [(n, (root, c, controls and c == smallest, args.verifier)) for c, n in kept.items()]
         sized.sort(key=lambda x: -x[0])
         tasks = [t for _, t in sized]
