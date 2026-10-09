@@ -320,7 +320,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/bin/vy-store-evict"
 src = "tools/research/src/research/pods/nebius/sky/store_evict.sh"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 run = ["systemd:vy-store-evict.timer", "systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
@@ -515,31 +515,45 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-store-evict.service"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-store-evict.timer"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.service"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.timer"
 by = "tools/research/src/research/pods/nebius/sky/cluster_up.sh"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-store-evict-research.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-store-evict.service.d/timed.conf"
+src = "tools/research/src/research/pods/nebius/vy-store-evict-n2-timed.conf"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-store-evict.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-store-evict-research.service.d/timed.conf"
+src = "tools/research/src/research/pods/nebius/vy-store-evict-n2-timed.conf"
+nodes = ["vy-nebius-2"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 

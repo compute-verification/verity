@@ -863,7 +863,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
     assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
     deploy = (SKY.parent / "deploy.toml").read_text()
-    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1"]' in deploy
+    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2"]' in deploy
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
     (tool / "research").mkdir(parents=True)
     bin_dir.mkdir()
