@@ -102,6 +102,23 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-09 (9:01 AM PDT, relayed by top): a part's verdict in `check` is keyed on the code that decides that verdict (a
+  suite's runner and harness), not on every line of the check tool; that is what the 7 Oct ruling's "the check's code" means.
+  The other half of reuse is declared inputs narrowed to what each suite reads, and since the guard fails a suite that
+  reads outside its inputs, narrowing fails closed. The same day:
+  - Raising `maxHeartbeats` is not banned. The kernel checks a proof the same way at any limit, so an override is a
+    question of cost, not soundness. The Lean audit records each override (file, value, reason, measured time) and the
+    nightly report lists them; nothing blocks on one.
+  - A premise is listed only if it is a fact about the world. Anything the code could check, or that could be proved,
+    becomes a check or a proof instead.
+  - A property with several conjuncts gets one shape-check entry per conjunct, so it stays one statement.
+  - A private circuit's class is "any description of its width, read in gate order", provided the format makes a
+    malformed description impossible: each gate reads only inputs and earlier gates, so no description has a cycle. The
+    class then reveals exactly its gate count, inputs and outputs.
+  - Salts are drawn from the OS, not expanded by a PRG. What remains is salted SHA-512's hiding, stated as a reduction,
+    and the OS's randomness, a listed premise.
+  - A public constant that sets how many statements a proof has (V\*'s `MAX_SLOTS`) appears in the soundness bound,
+    whose sum depends on it.
 - 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
