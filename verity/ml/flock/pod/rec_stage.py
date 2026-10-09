@@ -8,11 +8,6 @@
         `rec_inner.universal --fast` (`verity_flock.universal_stage`): DIR/stage and DIR/other as 87-rec-private.sh stages
         them, under a fresh salt key, phase by phase as ``measure``; RESULT: universal's record, the phases, and the staged
         size beside the class's closed forms
-    python rec_stage.py direct --definition MODULE:NAME --n N --out DIR [--seed S]
-        the private circuit's Definition proved directly, as a public circuit: N instances of it as one population program
-        under `Q_template_instance`, uniform words, staged as C-Flock stages a class (`class_statement.stage`, packed, its
-        own leaf scheme, every instance's rows its own, OS salts) into DIR with the verifier's partition object and program
-        descriptor
 """
 from __future__ import annotations
 
@@ -143,63 +138,22 @@ def fast(cls: str, n: int, out: Path, seed: int = 0, netlist: str | None = None,
             "outputs_agree_interpret": True, "size": size, "phases": ph.rows}
 
 
-def direct(definition: str, n: int, out: Path, seed: int = 0, log=sys.stdout) -> dict:
-    """The Definition at ``definition`` (MODULE:NAME), ``n`` instances of it as one population program (each instance a unit
-    of `Q_template_instance`, META naming the template, no links), every instance's rows its own, phase by phase."""
-    import importlib
-    import os
-
-    if os.environ.get("FLOCK_PLAIN_LEAVES"):
-        raise SystemExit("FLOCK_PLAIN_LEAVES is set: a statement proved directly has its own leaf scheme")
-    from verity_flock import class_statement as CS
-    from verity_flock import partition_units as PU
-
-    from verity.ml.circuits import codec
-    from verity.ml.circuits import partition_object as PO
-    from verity.ml.circuits.defs import bind
-
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-
-    ph = Phases(log)
-    mod, name = definition.split(":")
-    with ph("total"):
-        fn = bind(getattr(importlib.import_module(mod), name))
-        program = P.population_program(fn, n)
-        query = PO.template_instance_query(fn)
-        units = PU.PartitionUnits(program, query=query)
-        [(shape, cl)] = units.classes().items()
-        with ph("lanes"):
-            key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": f"rec-stage/direct/{fn.id}", "seed": seed})
-            lanes = CS.class_lanes(units, cl, key, n, CS.broadcast_params(units))
-        with ph("stage"):
-            st = CS.stage(units, "q-template-instance", shape, cl, lanes, out, None, packed=True,
-                          wiring=CS.Wiring(program, query, list(range(n))), share_rows=False)
-        (out / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
-        (out / "program.json").write_bytes(codec.canonical_json(codec.encode_program(program)))
-    return {"definition": fn.id, "n": n, "phases": ph.rows} | \
-        {k: st.get(k) for k in ("ands", "unit_rows", "unit_nnz", "w_in", "w_out", "k_log", "vus_per_block", "ports", "circuit_bytes",
-                                "circuit_sha512")}
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for cmd in ("measure", "fast", "direct"):
+    for cmd in ("measure", "fast"):
         m = sub.add_parser(cmd)
-        m.add_argument("--cls", required=cmd != "direct")
+        m.add_argument("--cls", required=True)
         m.add_argument("--n", type=int, required=True)
         m.add_argument("--out", required=True)
         m.add_argument("--seed", type=int, default=0)
         m.add_argument("--profile")
         if cmd == "fast":
             m.add_argument("--netlist")
-        if cmd == "direct":
-            m.add_argument("--definition", required=True)
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    f, args = {"measure": (measure, (a.cls, a.n, out, a.seed)), "fast": (fast, (a.cls, a.n, out, a.seed, getattr(a, "netlist", None))),
-               "direct": (direct, (getattr(a, "definition", None), a.n, out, a.seed))}[a.cmd]
+    f, args = (measure, (a.cls, a.n, out, a.seed)) if a.cmd == "measure" else (fast, (a.cls, a.n, out, a.seed, a.netlist))
     if a.profile:
         import cProfile
 

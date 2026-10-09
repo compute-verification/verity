@@ -587,7 +587,8 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
           packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
-          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, share_rows: bool = True) -> dict:
+          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, names_definition: bool = False,
+          share_rows: bool = True) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
@@ -603,8 +604,9 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
     and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``).
 
-    ``share_rows`` False: every instance's rows committed as its own (no header ``shared_rows``), for a public statement the
-    soundness proof covers without registered reads; a statement with link ports shares rows."""
+    ``names_definition``: META names the class's Definition as a wired statement's does, with no links (a template-instance
+    partition whose staged instances are its units in order, none reading another's outputs). ``share_rows`` False (lanes
+    without source identities): every instance commits its own rows, a public file without shared rows."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -629,6 +631,10 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     spans: list = []
     writers: list = []
     definition = None
+    if names_definition:
+        from verity.ml.circuits.codec import descriptor_id
+
+        definition = descriptor_id(act.fn)
     if wiring is not None:
         from verity.ml.circuits.codec import descriptor_id
 
@@ -699,8 +705,6 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             if not np.array_equal(tables[f"p{i}"][ref], per_port[f"p{i}"]):
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
     salts = None
-    if links and not share_rows:
-        raise ValueError(f"class {name}: a statement with link ports shares rows")
     if links:
         ports = FC._meta_ports(meta)
         salts = FC.stage_salts(iset, 0, n, ports, salt_key, {p.name: len(tables[p.name]) if p.name in tables else n for p in ports})
@@ -718,8 +722,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                 if wiring.writer_salts:
                     salts[f"p{i}"][r] = salts[out_name][w]
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
-                    share_rows=share_rows, tables=tables if share_rows else None, refs=refs if share_rows else None, salts=salts,
-                    indices=list(wiring.indices) if wiring else None)
+                    share_rows=share_rows, tables=tables, refs=refs, salts=salts, indices=list(wiring.indices) if wiring else None)
     return ({} if real is None else {"real": real, "fillers": n - real}) | \
         {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),

@@ -9,15 +9,9 @@
 #                 $FLOCK_WORK/data/rec-stage/$TAG; $OUT/fast-$TAG.jsonl (phases, RESULT), time-fast-$TAG.txt, files-$TAG.txt
 #   MODE=inner    that statement's inner session on the CPU (M0) against the rec proxy, and its replay: $OUT/inner/
 #   MODE=fold     V*'s points from that session and InnerFold.lean's fold of it over the statement: $OUT/fold/
-#   MODE=direct   the private circuit's DEFINITION (MODULE:NAME) proved directly as a public circuit (rec_stage.py direct, N
-#                 lanes): one --zk session on the CPU (M0) served with the verifier's draw (subset:N, every unit), Lean's
-#                 verify --zk and the live build's replay --zk: $OUT/direct/, summary.json
-#   MODE=reverify every outer session an 87-rec-private.sh run kept (RUN_OUT, its statements under DATA) verified again, all
-#                 at once, by this tree's flock-verify (rec-env.sh builds it): $OUT/view/ (the run's records, each session's
-#                 Lean files this build's), rec_private_summary.py's summary.json and summary.txt of the view
 # Run from the verity tree (research run --cwd source). Big files under $FLOCK_WORK (default /workspace/jobs/rec-stage).
 # env: LADDER="128,64,32 256,64,32 512,64,32 1024,64,32 2048,64,32"  PROFILE_G=128  N=8  CPUS=16  TIMEOUT=10800 (seconds, per class)
-#      CLS NETLIST TAG (default CLS-nN)  (MODE=fast)  DEFINITION (MODE=direct)  RUN_OUT DATA (MODE=reverify)
+#      CLS NETLIST TAG (default CLS-nN)  (MODE=fast)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RS_PINNED:-}" ]; then
@@ -38,28 +32,6 @@ S=$FW/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S || exit 1
 trap 'rm -rf $S' EXIT
 PY=verity/ml/flock/pod/rec_stage.py
 MODE=${MODE:-measure}; N=${N:-8}; TIMEOUT=${TIMEOUT:-10800}
-
-# from_node m0|lean: rec-env.sh's build of these sources (the CPU build of M0; Lean's flock-verify) where rec-env.sh keeps it
-# under $FW, copied there from a job on this node that has it (this job builds neither); its path
-from_node() {
-  local key want c
-  if [ $1 = m0 ]; then
-    key=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-      $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
-    local sm=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}
-    want=$FW/flock-circuit/bin-$key-g0-sm${sm:-89}/flock-circuit
-  else
-    key=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
-    want=$FW/cache/rec-v0/lean-$key/flock-verify
-  fi
-  if [ ! -x $want ]; then
-    for c in /workspace/jobs/*/${want#$FW/}; do
-      [ -x $c ] && mkdir -p $(dirname $want) && cp $c $want && break
-    done
-  fi
-  [ -x $want ] || { echo "no $1 build $key on this node (rec-env.sh builds it)" >&2; return 1; }
-  echo $want
-}
 
 if [ $MODE = measure ]; then
   pids=()
@@ -105,7 +77,17 @@ if [ $MODE = inner ]; then
   # these sources, copied from a job that has it (this job does not build it)
   TAG=${TAG:?MODE=inner needs TAG}; DD=$FW/data/rec-stage/$TAG; ST=$DD/stage; I=$DD/inner; D=$O/inner; mkdir -p $D; rm -rf $I
   [ -s $ST/circuit.txt ] || { echo "no staged statement at $ST" >&2; exit 1; }
-  B=$(from_node m0) || exit 1; sha256sum $B > $O/binary.sha256
+  KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
+    $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+  SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
+  BIN=$FW/flock-circuit/bin-$KEY-g0-sm$SM
+  if [ ! -x $BIN/flock-circuit ]; then
+    for c in /workspace/jobs/*/flock-circuit/bin-$KEY-g0-sm$SM; do
+      [ -x $c/flock-circuit ] && mkdir -p $BIN && cp $c/flock-circuit $BIN/ && break
+    done
+  fi
+  [ -x $BIN/flock-circuit ] || { echo "no CPU build of M0 $KEY-sm$SM on this node (rec-env.sh builds it)" >&2; exit 1; }
+  B=$BIN/flock-circuit; sha256sum $B > $O/binary.sha256
   export FC_COINS=os RAYON_NUM_THREADS=$(echo $RS_PINNED | tr ',' '\n' | wc -l)
   export PYTHONPATH=$PYTHONPATH:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm
   PUB=$(ls $ST/pub-*.bin | head -1); INST=$(ls $ST/inst-*.bin | head -1)
@@ -151,66 +133,5 @@ if [ $MODE = fold ]; then
     $ST/circuit.txt $PUB $D/points.json os > $D/fold.json 2> $D/fold.err
   rc=$?; echo "fold exit $rc" | tee $D/fold.exit
   exit $rc
-fi
-
-if [ $MODE = direct ]; then
-  DEF=${DEFINITION:?MODE=direct needs DEFINITION (MODULE:NAME)}; TAG=${TAG:-direct-${DEF##*:}-n$N}; DD=$FW/data/rec-stage/$TAG; D=$O/direct
-  rm -rf $DD; mkdir -p $DD $D || exit 1
-  B=$(from_node m0) && LEAN_BIN=$(from_node lean) || exit 1
-  sha256sum $B $LEAN_BIN > $O/binary.sha256
-  export FC_COINS=os RAYON_NUM_THREADS=$(echo $RS_PINNED | tr ',' '\n' | wc -l)
-  export PYTHONPATH=$PYTHONPATH:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/integrations/vllm
-  /usr/bin/time -v -o $D/time-stage.txt python3 $PY direct --definition $DEF --n $N --out $DD > $D/stage.jsonl 2> $D/stage.log \
-    || { tail -20 $D/stage.log; exit 1; }
-  grep -h RESULT $D/stage.jsonl | sed 's/^RESULT //' > $O/summary.json
-  PUB=$DD/pub-$N.bin; INST=$DD/inst-$N.bin
-  /usr/bin/time -v -o $D/time-statement.txt $B statement --instances $PUB --circuit $DD/circuit.txt > $D/statement.txt 2>&1 \
-    || { tail -5 $D/statement.txt; exit 1; }
-  PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-  $B serve --zk --listen 127.0.0.1:$PORT --out $D/sessions --instances $PUB --circuit $DD/circuit.txt \
-    --pin $(sha512sum $DD/circuit.txt | cut -d' ' -f1) --draw subset:$N --operator loopback > $D/serve.log 2>&1 &
-  SP=$!
-  for i in $(seq 600); do grep -q SERVING $D/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
-  /usr/bin/time -v -o $D/time-prove.txt $B prove --zk --verifier 127.0.0.1:$PORT --instances $INST --circuit $DD/circuit.txt --warm 0 \
-    --runs 1 > $D/prove.txt 2> $D/prove.err
-  echo "prove exit $?" | tee $D/exit.txt
-  sleep 2; kill $SP; wait $SP 2>/dev/null
-  SESS=$(find $D/sessions -name session.json -printf '%h\n' 2>/dev/null | sort | head -1)
-  [ -n "$SESS" ] || { tail -20 $D/serve.log $D/prove.err; exit 1; }
-  du -sb $DD/* $SESS/* > $D/sizes.txt
-  /usr/bin/time -v -o $D/time-lean.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $DD/circuit.txt --public $PUB \
-    --partition $DD/partition.json --program $DD/program.json --session $SESS > $D/lean.log 2> $D/lean.err
-  echo "lean exit $?" | tee -a $D/exit.txt
-  /usr/bin/time -v -o $D/time-replay.txt $B replay --zk --instances $PUB --circuit $DD/circuit.txt --sessions $SESS > $D/replay.txt 2>&1
-  echo "replay exit $?" | tee -a $D/exit.txt
-  exit 0
-fi
-
-if [ $MODE = reverify ]; then
-  RO=${RUN_OUT:?MODE=reverify needs RUN_OUT (an 87-rec-private.sh run out/)}; DD=${DATA:?MODE=reverify needs DATA (its data dir)}
-  export FLOCK_WORK=$FW RI_PINNED=$RS_PINNED RAYON_NUM_THREADS=$(echo $RS_PINNED | tr ',' '\n' | wc -l)
-  . verity/ml/flock/pod/rec-env.sh
-  wait $LP; echo "flock-verify build exit $?"; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-  sha256sum $LEAN_BIN > $O/lean.sha256
-  # the view: RUN_OUT's records, each outer session's Lean files this build's, for rec_private_summary.py
-  mkdir -p $O/view/outer || exit 1
-  for f in $RO/*; do case ${f##*/} in outer|summary.json) ;; *) ln -s $f $O/view/ ;; esac; done
-  for d in $RO/outer/*/; do
-    n=$(basename $d); m=${n%-direct}
-    case $m in
-      L*) C=$DD/v/$m ;; alg-p*) C=$DD/v/alg/p${m#alg-p} ;; forged-top-*) C=$DD/v/forged-top/${m#forged-top-} ;;
-      flipped-top-*) C=$DD/vf/forged-flipped-top/${m#flipped-top-} ;; other-alg-p*) C=$DD/vo/alg/p${m#other-alg-p} ;; *) C= ;;
-    esac
-    SESS=$(find $d/sessions -name session.json -printf '%h\n' 2>/dev/null | sort | head -1)
-    [ -n "$C" ] && [ -f $C/circuit.txt ] && [ -n "$SESS" ] || { echo "$n: no statement or session"; continue; }
-    D=$O/view/outer/$n; mkdir -p $D
-    for f in $d*; do case ${f##*/} in lean.log|lean.err|time-lean.txt) ;; *) ln -s $f $D/ ;; esac; done
-    ( /usr/bin/time -v -o $D/time-lean.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin \
-        --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $SESS > $D/lean.log 2> $D/lean.err
-      echo "$n lean exit $?" ) &
-  done
-  wait
-  python3 verity/ml/flock/pod/rec_private_summary.py $O/view | tee $O/summary.txt; cp $O/view/summary.json $O/summary.json
-  exit 0
 fi
 echo "unknown MODE=$MODE" >&2; exit 2

@@ -45,6 +45,28 @@ def test_universal_staging_hides_the_netlist_but_its_program_row(tmp_path):
     assert 0 < o["body_bytes_differing"] <= 64
 
 
+@pytest.mark.slow
+def test_direct_stages_the_registered_private_circuit_as_a_public_circuit(tmp_path):
+    """The overhead's baseline (``rec_inner.py direct``): the netlist ``universal`` registers for the same class and seed, as
+    its own one-Call statement with C-Flock's salted leaves (the ``--zk`` form Lean covers) and salts from the OS, in the
+    files rec-private-outer.sh's ``outer`` reads; its unit is the netlist's computing graph (the inputs its live gates read,
+    the outputs no input bit is)."""
+    root = HERE.parents[3]
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, root / "verity" / "ml" / "flock" / "python")))
+    rec = {}
+    for cmd in ("universal", "direct"):
+        p = subprocess.run([sys.executable, str(POD / "rec_inner.py"), cmd, "--cls", "16,16,8", "--n", "4", "--out",
+                            str(tmp_path / cmd)], env=env, capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stderr[-2000:]
+        rec[cmd] = json.loads(p.stdout)
+    u, d = rec["universal"], rec["direct"]
+    assert d["netlist"] == {k: u["netlist"][k] for k in d["netlist"]}
+    assert (d["leaf_scheme"], d["salts"], d["n"]) == ("hm96-sha512/v1", "os", 4)
+    assert d["unit"] == {"inputs_read": 5, "outputs_computed": 4}
+    assert sorted(f.name for f in (tmp_path / "direct").iterdir()) == ["circuit.txt", "inst.bin", "partition.json", "program.json",
+                                                                         "pub.bin"]
+
+
 def _summary():
     spec = importlib.util.spec_from_file_location("rec_private_summary", POD / "rec_private_summary.py")
     m = importlib.util.module_from_spec(spec)
@@ -70,18 +92,25 @@ def test_summary_counts_a_form_refusal_as_a_refusal(tmp_path):
     """rec_private_summary fails closed: Lean's refusal of a form its soundness proof does not cover is "Lean refused: form
     not covered", never acceptance; the run's Lean of record accepts only when Lean accepted every part cap.json names in the
     recursive session (NAME-direct, outside it, counts for nothing); and a control refused for its form is not caught, as
-    that refusal comes after every other check."""
+    that refusal comes after every other check; a description outside the class, a member of it, is expected accepted."""
     a, b, c, d = (tmp_path / x for x in "abcd")
-    s = _record(a, ["L1", "alg-p1"], {"L1": SHARED, "L1-direct": "", "alg-p1": "", "forged-top-L2": SHARED,
-                                       "other-alg-p1": "refused: alg/p1: the residuals are not zero", "flipped-top-L1": None})
+    s = _record(a, ["L1", "alg-p1"], {"L1": SHARED, "L1-direct": "", "alg-p1": "", "forged-top-L2": SHARED, "other-alg-p0": "",
+                                       "other-alg-p1": "refused: alg/p1: the residuals are not zero", "flipped-top-L1": None,
+                                       "outside-alg-p0": ""})
     lean = s["outer"]["L1"]["lean"]
     assert (lean["accepted"], lean["verdict"], lean["why"]) == (False, "Lean refused: form not covered", SHARED)
     r = s["lean_of_record"]
     assert (r["accepted"], r["verdict"]) == (False, "not accepted")
     assert r["refused"] == {"L1": "Lean refused: form not covered"} and r["direct"] == {"L1": "accepted"}
-    assert r["controls"] == {"forged-top-L2": {"verdict": "Lean refused: form not covered", "caught": False},
-                             "other-alg-p1": {"verdict": "Lean refused: alg/p1: the residuals are not zero", "caught": True},
-                             "flipped-top-L1": {"verdict": "Lean: no verdict", "caught": False}}
+    outside = "accepted: " + _summary().ACCEPTED["outside-alg-"]
+    assert r["controls"] == {"forged-top-L2": {"verdict": "Lean refused: form not covered", "caught": False, "expect": "caught"},
+                             "other-alg-p0": {"verdict": "accepted", "caught": False, "expect": "caught"},
+                             "other-alg-p1": {"verdict": "Lean refused: alg/p1: the residuals are not zero", "caught": True,
+                                              "expect": "caught"},
+                             "flipped-top-L1": {"verdict": "Lean: no verdict", "caught": False, "expect": "caught"},
+                             "outside-alg-p0": {"verdict": "accepted", "caught": False, "expect": outside}}
+    assert {n: (c["caught"], c["expect"]) for n, c in r["cheaters"].items()} == {
+        "forged-top": (False, "caught"), "flipped-top": (False, "caught"), "other-alg": (True, "caught"), "outside-alg": (False, outside)}
     assert s["outer"]["flipped-top-L1"]["lean"]["accepted"] is False
     assert _record(b, ["L1", "alg-p1"], {"L1": "", "alg-p1": ""})["lean_of_record"]["accepted"] is True
     assert _record(c, ["L1", "alg-p1"], {"L1-direct": "", "alg-p1-direct": ""})["lean_of_record"]["refused"] == {

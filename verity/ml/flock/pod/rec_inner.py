@@ -3,14 +3,22 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
 ``verity_flock.rec_live``'s proxy and coin server.
 
     python rec_inner.py stage --n N --sets DIR --out DIR      circuit.txt, inst-N.bin, pub-N.bin; prints the statement's shape
-    python rec_inner.py universal --cls G,N_IN,N_OUT --n N --out DIR [--seed S] [--netlist FILE] [--fast]
+    python rec_inner.py universal --cls G,N_IN,N_OUT --n N --out DIR [--seed S] [--netlist FILE] [--fast] [--outside]
                                                              a hidden netlist as the inner statement (`universal`): DIR/stage,
                                                              and DIR/other (another netlist of the class, the same x and salts);
                                                              --netlist (or REC_NETLIST=FILE): that private circuit's netlist
                                                              (`universal.Netlist` as JSON: n_in, gates, outputs), padded to the
                                                              class, not a random one;
                                                              --fast (or REC_FAST_STAGE=1): the same files from arrays
-                                                             (`verity_flock.universal_stage`), for classes today's path can't stage
+                                                             (`verity_flock.universal_stage`), for classes today's path can't stage;
+                                                             --outside: DIR/stage only, a description that is not a circuit
+    python rec_inner.py direct --cls G,N_IN,N_OUT --n N --out DIR [--seed S] [--netlist FILE]
+                                                             the private circuit `universal` registers, on the same x, as a
+                                                             public circuit (`direct`: the overhead's baseline)
+    python rec_inner.py partition --cls G,N_IN,N_OUT --circuit FILE --out FILE
+                                                             the partition object of the unit itself as the one Call (a
+                                                             staging with no program row: stage_class.py's), as FILE binds it
+    python rec_inner.py faulty --stage DIR --n N --out DIR2  DIR's prover file with instance 0's output row one bit off
     python rec_inner.py wired --cls G,N_IN,N_OUT --n N --out DIR [--seed S]
                                                              four linked units (`wired`): DIR/stage, DIR/made-up-input
     python rec_inner.py forge --what challenge|query --inner DIR
@@ -27,7 +35,6 @@ import importlib.util
 import json
 import os
 import random
-import secrets
 import shutil
 import sys
 from pathlib import Path
@@ -37,6 +44,8 @@ from verity_flock import rec_vstar as V
 
 SEED = 20261004
 STREAM = "circuit/rep0"
+#: `circuit.stage_salts` as the module has it, before `universal` or `wired` replace it
+STAGE_SALTS = FC.stage_salts
 UNIVERSAL = Path(__file__).resolve().parents[4] / "benchmarks" / "private_circuit" / "universal.py"
 
 
@@ -58,15 +67,18 @@ def stage(n: int, sets: Path, out: Path) -> dict:
             "m": meta["k_log"] + max(3, (blocks - 1).bit_length()), "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
-def _benchmark():
+def _benchmark(plain: bool = True):
     """``benchmarks/private_circuit/universal.py`` (protocol 2's universal unit end to end), whose netlists, lanes and wired
     circuit the stagings below reuse, loaded with the recursive session's plain SHA-512 leaves (``FLOCK_PLAIN_LEAVES=1``,
-    which `class_statement` reads when it loads)."""
-    os.environ["FLOCK_PLAIN_LEAVES"] = "1"
+    which `class_statement` reads when it loads), or with ``plain`` false C-Flock's salted ones."""
+    if plain:
+        os.environ["FLOCK_PLAIN_LEAVES"] = "1"
+    else:
+        os.environ.pop("FLOCK_PLAIN_LEAVES", None)
     from verity_flock import class_statement as CS
 
-    if not CS.PLAIN_LEAVES:
-        raise SystemExit("class_statement was loaded without FLOCK_PLAIN_LEAVES=1: the inner statement's leaves are plain")
+    if CS.PLAIN_LEAVES != plain:
+        raise SystemExit(f"class_statement was loaded with FLOCK_PLAIN_LEAVES={int(CS.PLAIN_LEAVES)}, not {int(plain)}")
     spec = importlib.util.spec_from_file_location("private_circuit_universal", UNIVERSAL)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -122,18 +134,58 @@ def program_unit(fn):
                                     body, register=False))
 
 
+def _os_salts():
+    """`circuit.stage_salts` with every salt fresh from the OS generator whatever key it is given, drawn once per range, ports
+    and table sizes: a second staging of the same shape in this process gets the first's salts (``other`` the registered
+    statement's), and none is derived from a key."""
+    drawn = {}
+
+    def salts(input_set, lo, hi, ports, key, tables=None):
+        at = (lo, hi, tuple(p.name for p in ports), tuple(sorted(tables.items())) if tables else None)
+        if at not in drawn:
+            drawn[at] = STAGE_SALTS(input_set, lo, hi, ports, None, tables)
+        return {k: list(v) for k, v in drawn[at].items()}
+
+    return salts
+
+
+#: a staging's record, as `universal` and `direct` report it
+KEYS = ("n", "k_log", "vus_per_block", "w_in", "w_out", "ports", "shared_rows", "circuit_sha512", "class_sha512", "circuit_bytes",
+        "ands", "unit_rows", "unit_nnz")
+
+
+def _private(B, cls: str, n: int, seed: int, netlist: Path | None) -> tuple:
+    """The private circuit `universal` registers and its ``n`` x: the class, the netlist (``netlist``'s, else a random one of
+    3/4 of the class's gates over 3/4 of its inputs) and each instance's N_IN input bits."""
+    from verity.ml.private_circuits import universal as U
+
+    G, N_IN, N_OUT = (int(v) for v in cls.split(","))
+    rng = random.Random(f"rec-private/{seed}/{G}/{N_IN}/{N_OUT}")
+    small = B._netlist(rng, G, N_IN, N_OUT)
+    if netlist is not None:
+        nl = json.loads(Path(netlist).read_text())
+        small = U.Netlist(nl["n_in"], tuple(tuple(g) for g in nl["gates"]), tuple(nl["outputs"]))
+    return (G, N_IN, N_OUT), small, [[rng.randrange(2) for _ in range(N_IN)] for _ in range(n)]
+
+
 def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = None, fast: bool | None = None,
-              salt_key: bytes | None = None) -> dict:
+              salt_key: bytes | None = None, outside: bool = False) -> dict:
     """A hidden netlist as the inner statement: ``UniversalUnit_v1{G, N_IN, N_OUT}`` as `program_unit`'s class statement
     (`class_statement.stage`, words packed, plain leaves), one Call partitioned by ``Q_template_instance``, of a random netlist
     of 3/4 of the class's gates over 3/4 of its inputs padded to the class (`universal.pad`), on ``n`` random x. The netlist's
     ``op``, ``src`` and ``out`` are one row every instance opens (committed once: the registered program), ``x`` a row per
-    instance, the outputs hidden rows. Into ``out/stage`` with its partition object. ``out/other``: another netlist of the
-    class under the same salt key and x, the registered one with its last no-op gate made ``(XNOR, 0, 0)`` (a constant nothing
-    reads, so every output is the same and only the program's row differs; with no no-op gate, another random netlist): the
-    statement of a prover whose program is not the registered one. ``netlist`` (default $REC_NETLIST): a JSON
-    `universal.Netlist` (``n_in``, ``gates``, ``outputs``) in place of the random one; ``fast`` (default REC_FAST_STAGE=1): the
-    same files from `verity_flock.universal_stage`."""
+    instance, the outputs hidden rows; every salt from the OS (`_os_salts`), or derived from ``salt_key`` when one is given (a
+    test's). Into ``out/stage`` with its partition object. ``out/other``: another netlist of the class under the same salts
+    and x, the registered one with its last no-op gate made ``(XNOR, 0, 0)`` (a constant nothing reads, so every output is the
+    same and only the program's row differs; with no no-op gate, another random netlist): the statement of a prover whose
+    program is not the registered one. ``netlist`` (default $REC_NETLIST): a JSON `universal.Netlist` (``n_in``, ``gates``,
+    ``outputs``) in place of the random one; ``fast`` (default REC_FAST_STAGE=1): the same files from
+    `verity_flock.universal_stage`.
+
+    ``outside``: only ``out/stage``, the netlist with one gate's first input the last wire, ``W - 1``, which no gate before it
+    computes (the first gate for which that changes an output on the x, else gate 0): not a circuit (its gates are not in
+    order), which the unit runs as reading 0, so it is a member of the class as every description of the class's width is
+    (`universal.Netlist`), registered under salts of its own."""
     fast = os.environ.get("REC_FAST_STAGE") == "1" if fast is None else fast
     netlist = netlist or os.environ.get("REC_NETLIST") or None
     B = _benchmark()
@@ -144,29 +196,29 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
     from verity.ml.circuits.defs import bind
     from verity.ml.private_circuits import universal as U
 
-    G, N_IN, N_OUT = (int(v) for v in cls.split(","))
-    rng = random.Random(f"rec-private/{seed}/{G}/{N_IN}/{N_OUT}")
+    (G, N_IN, N_OUT), small, xs = _private(B, cls, n, seed, netlist)
     fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
-    small = B._netlist(rng, G, N_IN, N_OUT)
-    if netlist is not None:
-        nl = json.loads(Path(netlist).read_text())
-        small = U.Netlist(nl["n_in"], tuple(tuple(g) for g in nl["gates"]), tuple(nl["outputs"]))
     net = U.pad(small, G, N_IN)
     if len(small.gates) < G:
         other = U.Netlist(N_IN, net.gates[:-1] + ((U.XNOR, 0, 0),), net.outputs)
     else:
         other = U.pad(B._netlist(random.Random(f"rec-private/other/{seed}/{G}/{N_IN}/{N_OUT}"), G, N_IN, N_OUT), G, N_IN)
-    xs = [[rng.randrange(2) for _ in range(N_IN)] for _ in range(n)]
     if any(U.interpret(net, x) != U.interpret(small, x[:small.n_in]) for x in xs):
         raise AssertionError("the padded netlist's outputs are not the netlist's")
-    salt_key = salt_key or secrets.token_bytes(32)
+    FC.stage_salts = STAGE_SALTS if salt_key is not None else _os_salts()
     res = {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT, "W": N_IN + G, "K": U.index_bits(G, N_IN)}, "n": n, "seed": seed,
            "netlist": {"gates": len(small.gates), "inputs": small.n_in, "outputs": len(small.outputs),
                        "ands": sum(1 for g in small.gates if g[0] & 1), "padded_gates": G - len(small.gates)},
-           "unit": {"ands_closed_form": U.and_count(G, N_IN, N_OUT)}}
-    keys = ("n", "k_log", "vus_per_block", "w_in", "w_out", "ports", "shared_rows", "circuit_sha512", "class_sha512",
-            "circuit_bytes", "ands", "unit_rows", "unit_nnz")
+           "unit": {"ands_closed_form": U.and_count(G, N_IN, N_OUT)}, "salts": "key" if salt_key is not None else "os"}
     nets = (("stage", net), ("other", other))
+    if outside:
+        def reading_last(i):
+            op, _, b = net.gates[i]
+            return U.Netlist(N_IN, net.gates[:i] + ((op, N_IN + G - 1, b),) + net.gates[i + 1:], net.outputs)
+
+        i = next((i for i in range(G - 1) if any(U.interpret(reading_last(i), x) != U.interpret(net, x) for x in xs)), 0)
+        nets = (("stage", reading_last(i)),)
+        res["outside"] = {"gate": i, "reads": N_IN + G - 1, "computed_by_gate": G - 1}
     for name, _nl in nets:
         shutil.rmtree(out / name, ignore_errors=True)
     if fast:
@@ -180,7 +232,7 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
             if st[name]["outputs"] != [U.interpret(nl, x) for x in xs]:
                 raise AssertionError(f"{name}: the laid-out unit rows disagree with universal.interpret")
             (out / name / "partition.json").write_text(json.dumps(built, sort_keys=True))
-            res[name] = {k: st[name][k] for k in keys} | {"outputs": st[name]["outputs"]}
+            res[name] = {k: st[name][k] for k in KEYS} | {"outputs": st[name]["outputs"]}
     else:
         unit = program_unit(fn)
         program = PU.one_call(unit)
@@ -197,7 +249,12 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
             if st["n"] != n:
                 raise AssertionError(f"staging capped the instances at {st['n']}, not {n}")
             (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
-            res[name] = {k: st[k] for k in keys} | {"outputs": want}
+            res[name] = {k: st[k] for k in KEYS} | {"outputs": want}
+    if outside:
+        res["outside"]["outputs_differ_from_the_netlist"] = sum(
+            a != b for a, b in zip(res["stage"]["outputs"], (U.interpret(net, x) for x in xs)))
+        del res["stage"]["outputs"]
+        return res | _shape(out / "stage", n)
     res["other"] |= {"same_circuit": res["other"]["circuit_sha512"] == res["stage"]["circuit_sha512"],
                      "same_outputs": res["other"]["outputs"] == res["stage"]["outputs"],
                      "netlist_gates_differing": sum(a != b for a, b in zip(net.gates, other.gates))}
@@ -207,15 +264,118 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
     return res | _shape(out / "stage", n)
 
 
+def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = None) -> dict:
+    """The overhead's baseline: the private circuit `universal` registers (the same netlist, the same x) as a public circuit
+    proved directly, with no recursion. `universal.direct`'s Boolean Definition of the netlist, unpadded, on each x's first
+    ``n_in`` bits, ``n`` instances of it as one batch (`population_program`) partitioned by ``Q_template_instance``, staged by
+    `class_statement.stage` with C-Flock's salted leaves (the ``--zk`` statement Lean covers), META naming the Definition its
+    units are instances of (``names_definition``), every instance's rows its own (no shared rows: the form Lean covers for
+    a statement without registered reads) and every salt from the OS, into ``out`` as
+    rec-private-outer.sh's ``outer`` reads a statement: circuit.txt, inst.bin, pub.bin, partition.json and program.json (the
+    program's descriptor)."""
+    netlist = netlist or os.environ.get("REC_NETLIST") or None
+    B = _benchmark(plain=False)
+    from verity_flock import class_statement as CS
+    from verity_flock import partition_units as PU
+
+    from verity.core.protocols.sampled_proofs.one_stage.partition import (
+        population_program,
+    )
+    from verity.ml.circuits import partition_object as PO
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate
+    from verity.ml.private_circuits import universal as U
+
+    (G, N_IN, N_OUT), small, xs = _private(B, cls, n, seed, netlist)
+    xs = [x[:small.n_in] for x in xs]
+    fn = bind(B.direct(small, f"RecPrivateDirectG{G}N{N_IN}O{N_OUT}S{seed}"))
+    program = population_program(fn, n)
+    query = PO.template_instance_query(fn)
+    units = PU.PartitionUnits(program, query=query)
+    [(shape, cl)] = units.classes().items()
+    act = units.activation(cl.definition)
+    uc = cl.representative
+    ins, outs = [[] for _ in uc.inputs], [[] for _ in uc.outputs]
+    for x in xs:
+        run = PU.evaluate(act, x)
+        for port, k in zip(ins, uc.inputs):
+            port.append(run[k])
+        for port, j in zip(outs, uc.outputs):
+            port.append(run[j])
+    want = [U.interpret(small, x) for x in xs]
+    if any(list(evaluate(fn, x)) != w for x, w in zip(xs, want)):
+        raise AssertionError("the Definition disagrees with universal.interpret")
+    # the unit's outputs are the netlist's computed ones in the activation's order: an output that is an input bit is not one
+    computed = {o: k for k, o in enumerate(small.outputs) if o >= small.n_in}
+    if len(outs) != len(computed) or not {tuple(c) for c in outs} <= {tuple(w[k] for w in want) for k in computed.values()}:
+        raise AssertionError("the unit's outputs are not the netlist's computed outputs")
+    FC.stage_salts = _os_salts()
+    shutil.rmtree(out, ignore_errors=True)
+    st = CS.stage(units, B.SPEC, shape, cl, (ins, outs), out, None, packed=True, names_definition=True, share_rows=False)
+    if st["n"] != n:
+        raise AssertionError(f"staging capped the instances at {st['n']}, not {n}")
+    (out / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
+    (out / "program.json").write_bytes(canonical_json(encode_program(program)))
+    for f in ("inst", "pub"):
+        (out / f"{f}-{n}.bin").rename(out / f"{f}.bin")
+    return {"class": {"G": G, "N_IN": N_IN, "N_OUT": N_OUT}, "n": n, "seed": seed, "salts": "os", "definition": fn.id,
+            "netlist": {"gates": len(small.gates), "inputs": small.n_in, "outputs": len(small.outputs),
+                        "ands": sum(1 for g in small.gates if g[0] & 1)},
+            "unit": {"inputs_read": len(uc.inputs), "outputs_computed": len(uc.outputs)}} | {k: st[k] for k in KEYS} | _shape(out, n)
+
+
+def partition(cls: str, circuit: Path, out: Path) -> dict:
+    """The partition object of ``UniversalUnit_v1{cls}`` itself as the program's one Call, ``Q_template_instance``: a staging
+    of the unit with no program row (``benchmarks/private_circuit/stage_class.py``'s, which writes none), into ``out``, once
+    its digest is the one ``circuit`` binds (META ``partition``)."""
+    from verity_flock import partition_units as PU
+
+    from verity.ml.circuits import partition_object as PO
+    from verity.ml.circuits.defs import bind
+    from verity.ml.private_circuits import universal as U
+
+    G, N_IN, N_OUT = (int(v) for v in cls.split(","))
+    fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
+    built = PO.build(PU.one_call(fn), PO.template_instance_query(fn))
+    with open(circuit) as f:
+        f.readline()
+        bound = json.loads(f.readline()[5:])["partition"]["digest"]
+    if PO.digest(built) != bound:
+        raise SystemExit(f"{circuit} binds partition {bound[:16]}…, not {fn.id}'s one Call ({PO.digest(built)[:16]}…)")
+    out.write_text(json.dumps(built, sort_keys=True))
+    return {"unit": fn.id, "partition": str(out), "digest": bound}
+
+
+def faulty(stage_dir: Path, n: int, out: Path, instance: int = 0) -> dict:
+    """A faulty unit's prover file: ``stage_dir/inst-n.bin`` with instance ``instance``'s output row one bit off (bit 0 of its
+    first word), every other row, salt and ``b || c`` as staged, in ``out/inst-n.bin``: proved against the registered
+    statement (``stage_dir``'s public file), its session is of a table one unit of which the witness does not satisfy
+    (`rec_shape.forge_filler`'s forgery, at an instance that is not a filler)."""
+    from verity_flock import rec_vstage as S
+
+    text = (stage_dir / "circuit.txt").read_text()
+    data = bytearray((stage_dir / f"inst-{n}.bin").read_bytes())
+    if json.loads(data[:data.index(b"\n")])["shared_rows"]["out"] != n or not 0 <= instance < n:
+        raise ValueError(f"instance {instance}: not one of the {n} output rows")
+    at = S._offsets(bytes(data), text, "out", instance)[0]
+    was = int.from_bytes(data[at:at + 2], "little")
+    data[at:at + 2] = (was ^ 1).to_bytes(2, "little")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"inst-{n}.bin").write_bytes(bytes(data))
+    return {"instance": instance, "port": "out", "word": 0, "was": was, "now": was ^ 1}
+
+
 def wired(cls: str, n: int, out: Path, seed: int = 0) -> dict:
     """``--wired``'s circuit (`universal.wired_topology`: four layers of the unit, a random hidden netlist each, its topology
     the Program's, public) on ``n`` instances as one class statement of ``4 n`` instances with link rows
-    (`class_statement.Wiring`), plain leaves: the honest staging in ``out/stage`` and the cheating prover's, whose layer 1
+    (`class_statement.Wiring`), plain leaves, every salt from the OS: the honest staging in ``out/stage`` and the cheating prover's, whose layer 1
     reads a made-up input in place of layer 0's outputs, every unit correct on what it is given, in ``out/made-up-input``,
     each with the verifier's program descriptor and partition object (`universal.run_wired`, ``--stage-only``); the
     verifier's own links in ``out/stage/links.json``, and none (``out/no-links.json``: a live verifier that checks no
     Linking, so it records the cheater's session)."""
     B = _benchmark()
+    FC.stage_salts = lambda input_set, lo, hi, ports, key, tables=None: STAGE_SALTS(input_set, lo, hi, ports, None, tables)
     G, N_IN, N_OUT = (int(v) for v in cls.split(","))
     row = B.run_wired(argparse.Namespace(n=n, seed=seed, stage_only=True, keep_stage=True, lean=None), G, N_IN, N_OUT, out)
     d = out / f"wired-G{G}-N{N_IN}-O{N_OUT}"
@@ -312,15 +472,25 @@ def main(argv=None) -> int:
     st.add_argument("--n", type=int, required=True)
     st.add_argument("--sets", required=True)
     st.add_argument("--out", required=True)
-    for cmd in ("universal", "wired"):
+    for cmd in ("universal", "wired", "direct"):
         u = sp.add_parser(cmd)
         u.add_argument("--cls", required=True, help="G,N_IN,N_OUT")
         u.add_argument("--n", type=int, required=True, help="instances (wired: per layer, 4 n in all)")
         u.add_argument("--out", required=True)
         u.add_argument("--seed", type=int, default=0)
-        if cmd == "universal":
+        if cmd != "wired":
             u.add_argument("--netlist")
+        if cmd == "universal":
             u.add_argument("--fast", action="store_true", default=None)
+            u.add_argument("--outside", action="store_true")
+    pt = sp.add_parser("partition")
+    pt.add_argument("--cls", required=True, help="G,N_IN,N_OUT")
+    pt.add_argument("--circuit", required=True)
+    pt.add_argument("--out", required=True)
+    fy = sp.add_parser("faulty")
+    fy.add_argument("--stage", required=True)
+    fy.add_argument("--n", type=int, required=True)
+    fy.add_argument("--out", required=True)
     fg = sp.add_parser("forge")
     fg.add_argument("--what", choices=("challenge", "query", "top", "unsalted"), required=True)
     fg.add_argument("--inner", required=True)
@@ -336,8 +506,16 @@ def main(argv=None) -> int:
         res = flipped(a.inner, a.fold, a.points, a.salts, a.out)
     elif a.cmd == "differ":
         res = _differing(Path(a.a), Path(a.b))
-    elif a.cmd in ("universal", "wired"):
-        res = universal(a.cls, a.n, Path(a.out), a.seed, a.netlist, a.fast) if a.cmd == "universal" else wired(a.cls, a.n, Path(a.out), a.seed)
+    elif a.cmd == "faulty":
+        res = faulty(Path(a.stage), a.n, Path(a.out))
+    elif a.cmd == "partition":
+        res = partition(a.cls, Path(a.circuit), Path(a.out))
+    elif a.cmd == "universal":
+        res = universal(a.cls, a.n, Path(a.out), a.seed, a.netlist, a.fast, outside=a.outside)
+    elif a.cmd == "wired":
+        res = wired(a.cls, a.n, Path(a.out), a.seed)
+    elif a.cmd == "direct":
+        res = direct(a.cls, a.n, Path(a.out), a.seed, a.netlist)
     else:
         res = stage(a.n, Path(a.sets), Path(a.out)) if a.cmd == "stage" else forge(a.what, Path(a.inner), a.level)
     json.dump(res, sys.stdout, sort_keys=True)
