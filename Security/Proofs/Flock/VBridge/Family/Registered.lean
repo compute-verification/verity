@@ -18,6 +18,8 @@ family's choice.
   `hAccRows_of`'s `hout` is never satisfiable.
 * `oneAt_keyProg`: every unit's constant is the program's input gate `Layout.oneG`; `hOne_of`, `hOneOpen_of`: `HOne` and
   `HOneOpen` from `OneInLayer`, the layers carrying 1 at that gate.
+* `ResZeroAtL`, `partCols_of_resZeroAtL`, `algebraHolds_of_decodeL`: `ResZeroAt` with the outputs read in the layer
+  (`copyVal`) instead of registered, and `AlgebraHolds` from it as from `ResZeroAt`.
 * `hRowKeys_of`: `HRowKeys` from the part circuits' keys (`RowColKeys`) and the family's registered reads covering the
   rows `own` names (`RowsRegistered`).
 -/
@@ -129,6 +131,82 @@ theorem not_accOut {u : Fin Q.nv} (hj : 0 < Q.c.upv) {LANES H : ℕ}
   exact not_regOut zo hj (by omega) b
 
 end Reg
+
+/-! ## The parts' outputs in the layer -/
+
+section Layer
+
+open FlockVBridge.OfVStar FlockVBridge.Decode
+open Flock.RecResiduals (partS)
+open FlockVBridge.PartS (wIdx)
+
+variable {mPts nU : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nU} (zo : ZkOuter mPts nU Reg' c hU hscope Lv)
+
+/-- **`ResZeroAt` with its outputs read in the layer**: `ResZeroAt`'s facts, with every output column of the part
+(`16 · RES_OUT_WORDS` bits) a 0 of copy `j` in the layer (`copyVal`) in place of a registered 0 (`RegOut`), which no
+output column is (`not_regOut`). -/
+def ResZeroAtL (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j : ℕ) (sh : Shape)
+    (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (p : ℕ) (w : ℕ → F128) (rounds : Array (Array F128))
+    (extras : Array Claim) (comb : Array F128) : Prop :=
+  ∃ (hpg : p < gs.size) (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true ∧
+    RecResiduals.check c = .ok () ∧ c.unit.unitLog ≤ 32 ∧
+    ∃ m k cl, RecResiduals.params c.unit.name = some (m, k, cl, p) ∧ RecResiduals.shape? m k cl = some sh ∧
+    ∃ S ns nv, RecResiduals.part sh p = .ok (S, ns, nv) ∧
+      (∀ q < 128 * ns.sum,
+        RegBit zo u j (rowCol (partRep ns nv).ports 0 q) (wbit (sub (wIdx (portSizes sh) gs[p].2.1) w) q)) ∧
+      (∀ q < 128 * nv,
+        RegBit zo u j (vBase (partRep ns nv) + q) (wbit (sub gs[p].2.2 (vOf sh rounds extras comb)) q)) ∧
+      ∀ t < 16 * RecResiduals.RES_OUT_WORDS,
+        copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj (partBase S ns nv + t) = false
+
+/-- **A part's residuals, zero, from its unit's copy in a good layer, its outputs read in the layer**:
+`partCols_of_resZeroAt` at `ResZeroAtL`. -/
+theorem partCols_of_resZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (hG : zo.Good bits) {u : Fin nU} {j : ℕ}
+    {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf sh = .ok S0)
+    (hg : groups S0 (portSizes sh) = .ok gs) {p : ℕ} {w : ℕ → F128} {rounds : Array (Array F128)}
+    {extras : Array Claim} {comb : Array F128} (h : ResZeroAtL zo bits u j sh gs p w rounds extras comb) :
+    ∃ hpg : p < gs.size, ∃ S', partS S0 (portSizes sh) gs[p].1 gs[p].2.1 gs[p].2.2 = .ok S' ∧
+      ∃ (w' v' : ℕ → F128) (col : ℕ → Bool) (base : ℕ),
+        (∀ k (hk : k < (wIdx (portSizes sh) gs[p].2.1).size), w' k = w (wIdx (portSizes sh) gs[p].2.1)[k]) ∧
+        (∀ k (hk : k < gs[p].2.2.size), v' k = vOf sh rounds extras comb gs[p].2.2[k]) ∧
+        PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
+  obtain ⟨hpg, hj, hone, hc, hu, m, k, cl, hp, hsh, S, ns, nv, hpart, hw, hv, hz⟩ := h
+  obtain ⟨hS', w', v', hw', hv', hcols⟩ :=
+    decode_part zo hG.2 u hj hone hc hp hsh hS hg hpg hpart hu rounds extras comb w hw hv
+  obtain ⟨S1, ns1, nv1, hpart1, -⟩ := check_part hc hp hsh
+  rw [hpart] at hpart1
+  cases hpart1
+  have hsmall := part_small hpart
+  exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht => hz t (by omega)⟩
+
+end Layer
+
+section Sessions
+
+open FlockVBridge.OfVStar FlockVBridge.Decode
+
+variable {T : ℕ} {Vs : Fin T → VStmt} {Reg' : Type}
+
+/-- **`AlgebraHolds` from each part's unit, its outputs read in the layer**: `algebraHolds_of_decode` at
+`ResZeroAtL`. -/
+theorem algebraHolds_of_decodeL (zs : (s : Fin T) → (Vs s).Outer Reg') (L : (s : Fin T) → (Vs s).Bits)
+    (hG : ∀ s, (zs s).Good (L s)) {sh : Shape} {d : RepData} {S : RecAlgebra.GfS} (hS : structureOf sh = .ok S)
+    (hbits : S.BitsOk) {v : Array F128} {info kappa}
+    (hvr : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa))
+    (hw : d.w.size = S.nw) (hc : d.comb.size = 64) (hv : v.size = S.nv)
+    {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hg : groups S (portSizes sh) = .ok gs)
+    (sess : ℕ → Fin T) (un : (p : ℕ) → Fin (Vs (sess p)).nv) (cp : ℕ → ℕ)
+    (h : ∀ p < gs.size,
+      ResZeroAtL (zs (sess p)) (L (sess p)) (un p) (cp p) sh gs p (el d.w) d.rounds d.extras d.comb) :
+    AlgebraHolds sh d := by
+  refine algebraHolds_of_parts hS hbits hvr hw hc hv hg fun p hp => ?_
+  obtain ⟨_, S', hS', w', v', col, base, hw', hv', hcols, h0⟩ :=
+    partCols_of_resZeroAtL (zs (sess p)) (hG (sess p)) hS hg (h p hp)
+  rw [vOf_eq hvr] at hv'
+  exact ⟨S', hS', w', v', col, base, hw', hv', hcols, h0⟩
+
+end Sessions
 
 /-! ## The constant -/
 
