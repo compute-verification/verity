@@ -29,7 +29,8 @@ which they differ, fails.
     python lean_replay.py traces --calibration REPORT [--recorded VERDICTS.jsonl] --out DIR [--jobs N] TRACE ...
     python lean_replay.py active --out DIR [--jobs N] RUN_DIR ...
 
-A RUN_DIR is an active run's record tree: `inputs/calibration.json`, and `out/[CELL/]runs/CONFIG/STRATEGY/` with the
+The injected controls of an active run are made on its configuration with the fewest response-record bytes. A RUN_DIR
+is an active run's record tree: `inputs/calibration.json`, and `out/[CELL/]runs/CONFIG/STRATEGY/` with the
 recorded `out/[CELL/]verdicts.jsonl`. It writes `runs.jsonl` (one line per run), `diffs.jsonl` (one line per link-window
 whose verdicts differ anywhere) and `summary.json`, and prints the summary line.
 """
@@ -474,7 +475,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                           None if recorded is None else recorded.get(run, []), controls, args.verifier))
         fn = _safe_trace
     else:
-        tasks = [(root, run, controls, args.verifier) for root in args.runs for run in active_configurations(root)]
+        tasks = []
+        for root in args.runs:
+            configurations = active_configurations(root)
+            smallest = min(configurations, key=lambda c: (c / "responses.records").stat().st_size, default=None)
+            tasks += [(root, run, controls and run == smallest, args.verifier) for run in configurations]
         fn = _safe_active
     results = []
     args.out.mkdir(parents=True, exist_ok=True)
