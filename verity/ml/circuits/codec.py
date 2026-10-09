@@ -406,7 +406,7 @@ def _check_domain(desc: dict) -> None:
 def program_digest(program_or_desc) -> str:
     desc = program_or_desc if isinstance(program_or_desc, dict) else encode_program(program_or_desc)
     d = {k: v for k, v in desc.items() if k != "annotations"}
-    return hashlib.sha256(canonical_json(d)).hexdigest()
+    return hashlib.sha512(canonical_json(d)).hexdigest()
 
 
 def descriptor_size(program_or_desc) -> int:

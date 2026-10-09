@@ -1,0 +1,33 @@
+[project]
+name = "pous-check"
+version = "0.1.0"
+description = "The differential test of pous_check, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest) and its protocol (pous-setup); interop.py, the timed audit's wire (pous-audit-difftest serve) against wire.py on the spec's vectors; and timed_audit.py, the strict timed audit's verdict of record (pous-timed-audit) against memory_challenger.verdict."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: `lake` builds this package and, through its path requires, the core protocol interface and C-Flock's verifier's
+# Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the §7 vectors are the spec's
+# file, which the vector tests read. `interop.py` holds the Lean to the wire's Python reference (`p2_v1`'s package, `wire.py`
+# and `reference.py`) on §7's audit files, and reads §7's entry pins from the spec. `timed_audit.py` holds the Lean to the
+# memory challenger's verdict (`band_gpu/memory_challenger.py`), and drives its strict audit against the harness's responder.
+# Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
+inputs_only = true
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/difftest", "verity/ml/__init__.py",
+          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
+          "verity/core/protocols/interface", "verity/core/primitives/identity", "verity/core/primitives/randomness", "verity/core/service/flock/Flock",
+          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
+          "verity/core/service/flock/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
+          "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
+          "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
+          "verity/core/protocols/pous/p2/PROTOCOL.md", "benchmarks/pous/band_gpu/__init__.py",
+          "benchmarks/pous/band_gpu/memory_challenger.py", "benchmarks/pous/band_gpu/harness.py"]

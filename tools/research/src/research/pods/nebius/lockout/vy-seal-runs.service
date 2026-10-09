@@ -1,0 +1,18 @@
+[Unit]
+Description=seal the ended run dirs under the runs roots: root's and read-only, so no agent changes what custody vouched for (vy-seal-runs)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /usr/local/sbin/vy-seal-runs seal --max 50
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+StateDirectory=vy-seal-runs
+StateDirectoryMode=0700
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=-/workspace/research/runs -/workspace/jobs/runs

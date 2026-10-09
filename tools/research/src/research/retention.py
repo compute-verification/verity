@@ -26,7 +26,9 @@ dir (`custody.marker_problem`). A path holding a nested record is left whole. A 
 
 `rm` deletes the paths it is given, with their owner's yes, for a cleanup the policy doesn't reach. A path qualifies only when a
 record covers it (its own or an ancestor's), that record and every record beneath it (sidecars and implicit ones) are valid, name
-the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. A path no
+the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. A sealed
+run dir (store.sealed) is the one read-only path either command deletes: whole, by `sudo -n vy-seal-runs delete` once every check
+here passed, which redoes custody's as root; a path inside one is refused. A path no
 record covers has nobody to say yes, so it is never deleted. A path that is, holds or lies under a `passes` directory (PASSES) also
 needs its covering record's `preserved` artifact to hold that record's whole path, PRESERVED on the remote (`store_check`, just
 before --apply deletes): a yes alone never deletes retained passes. Each record is read again just before --apply deletes, and every
@@ -51,6 +53,7 @@ from typing import Any, Callable, Sequence
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
 from .store import ids
+from .store import sealed as SL
 from .telemetry.job import write_json_atomic
 
 SCHEMA = "research/retention/v0"
@@ -622,15 +625,26 @@ def _read_only_dir(path: Path) -> str | None:
     return None
 
 
+def _in_sealed(path: Path) -> str | None:
+    if SL.sealed(Path(path).parent):
+        return f"{path} is inside a sealed run dir: only the whole run dir is deleted"
+    return None
+
+
 def _delete(root: Path, path: Path) -> str | None:
     """Remove a recorded path with its sidecar; the error, or None. A tree holding a directory this process can't write into is
-    left whole, since rmtree would stop partway."""
+    left whole, since rmtree would stop partway; a sealed run dir (store.sealed) is deleted whole by vy-seal-runs, as root."""
     try:
         if root not in Path(os.path.abspath(path)).parents:
             return f"{path} is not under {root}"
         if os.path.ismount(path):
             return f"{path} is a mount point"
-        if os.path.isdir(path) and not os.path.islink(path):
+        if why := _in_sealed(path):
+            return why
+        if SL.sealed(path):
+            if err := SL.delete(path):
+                return f"sealed, and vy-seal-runs refused to delete it: {err}"
+        elif os.path.isdir(path) and not os.path.islink(path):
             if ro := _read_only_dir(path):
                 return f"{ro} is read-only: its owner makes it writable, or keeps it"
             shutil.rmtree(path)
@@ -776,8 +790,10 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
             return f"{_kept(f, root)}: priority keep is never deleted, until its owner lowers it with `research keep`"
     if u := in_use(path):
         return f"in use: {u}"
+    if why := _in_sealed(path):
+        return why
     try:
-        ro = _read_only_dir(path) if os.path.isdir(path) and not os.path.islink(path) else None
+        ro = _read_only_dir(path) if os.path.isdir(path) and not os.path.islink(path) and not SL.sealed(path) else None
         passes = _holds_passes(path, root)
     except OSError as e:
         return f"can't read all of it ({e}), so what it holds is unknown"

@@ -27,11 +27,11 @@ from verity.core.protocols.pous.schemes.p2 import CHACHA8, P2Params  # noqa: E40
 
 FIXTURES = Path(__file__).parent / "fixtures" / "schemes"
 SMALL = {"band-chain/d12/v1": band.BandParams(16, 64, 12, 2), "dense-chain/v1": dense.DenseParams(8, 64, 2),
-         "p3/v1": Params(8, 64, 3, 2), "p2-16448/v3": P2Params(16448, 21065, 2, 1),
+         "p3/v1": Params(8, 64, 3, 2), "p2-16448/v4": P2Params(16448, 21065, 2, 1),
          "p2-16448/v2": P2Params(16448, 21065, 2, 1, CHACHA8)}
 POINT_VECTOR = {"band-chain/d12/v1": "band/64kb/segment", "dense-chain/v1": None, "p3/v1": "segment_64kb",
-                "p2-16448/v3": None, "p2-16448/v2": None}
-SLOW_ENCODE = {"p2-16448/v3", "p2-16448/v2"}
+                "p2-16448/v4": None, "p2-16448/v2": None}
+SLOW_ENCODE = {"p2-16448/v4", "p2-16448/v2"}
 
 
 def path(name: str) -> Path:

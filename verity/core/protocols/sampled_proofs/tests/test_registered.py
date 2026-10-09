@@ -49,7 +49,7 @@ Q = P.template_instance_query(MIX.id)
 
 
 def _registered(prog: Program) -> G.Registered:
-    return G.Registered.commit(P.program_sha512(prog), "W", TABLE)
+    return G.Registered.commit(P.program_digest(prog), "W", TABLE)
 
 
 def _record(prog: Program, reg: G.Registered, **kw):
@@ -64,7 +64,7 @@ def _record(prog: Program, reg: G.Registered, **kw):
 def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
     prog = _program()
     reg = _registered(prog)
-    dom = G.domain(P.program_sha512(prog), "W", 2, len(TABLE))
+    dom = G.domain(P.program_digest(prog), "W", 2, len(TABLE))
     inst = hm96.SHA512
     for r, row in enumerate(TABLE):
         # the statement's port row: the two 16-bit words, zero-padded to one SHA-512 block
@@ -83,7 +83,7 @@ def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
     as it stands, so a 16-bit value's domain, leaves and root are the ones registered before `word_bits` (`ROOT_16`)."""
     from verity.ml.commitments.identity import identity_digest
 
-    prog = P.program_sha512(_program())
+    prog = P.program_digest(_program())
     binding = identity_digest(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2, "leaves": 5})
     assert G.domain(prog, "W", 2, 5).domain_id == G.domain(prog, "W", 2, 5, 16).domain_id
     assert G.domain(prog, "W", 2, 5).binding == bytes.fromhex(binding)
@@ -98,7 +98,7 @@ def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
 def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
     """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and C-Flock's `values` row): its
     domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the entry carries it."""
-    prog = P.program_sha512(_program(w=32))
+    prog = P.program_digest(_program(w=32))
     assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
     assert G.domain(prog, "W", 2, 5, 32).domain_id != G.domain(prog, "W", 2, 5).domain_id
     reg = G.Registered.commit(prog, "W", [[0x3727C5AC, 0x3E38AA3B]] * 2, word_bits=32)
@@ -132,7 +132,7 @@ def test_a_read_opens_only_its_own_row_under_its_own_value():
     dom = reg.domain
     assert not G.verify_read(dom, reg.root, 2, reg.bcs[3], reg.path(3))
     assert not G.verify_read(dom, reg.root, 3, reg.bcs[2], reg.path(3))
-    other = G.domain(P.program_sha512(prog), "V", 2, len(TABLE))
+    other = G.domain(P.program_digest(prog), "V", 2, len(TABLE))
     assert not G.verify_read(other, reg.root, 3, reg.bcs[3], reg.path(3))
     flipped = bytes([reg.path(3)[0] ^ 1]) + reg.path(3)[1:]
     assert not G.verify_read(dom, reg.root, 3, reg.bcs[3], flipped)
@@ -147,11 +147,11 @@ def test_salts_are_one_per_row_and_never_reused():
     prog = _program()
     salt = hm96.SHA512.fresh_salt()
     with pytest.raises(ValueError, match="never reused"):
-        G.Registered.commit(P.program_sha512(prog), "W", TABLE[:2], [salt, salt])
+        G.Registered.commit(P.program_digest(prog), "W", TABLE[:2], [salt, salt])
     with pytest.raises(ValueError):
-        G.Registered.commit(P.program_sha512(prog), "W", TABLE[:2], [salt])
+        G.Registered.commit(P.program_digest(prog), "W", TABLE[:2], [salt])
     with pytest.raises(ValueError):
-        G.Registered.commit(P.program_sha512(prog), "W", [[1, 2], [3]])
+        G.Registered.commit(P.program_digest(prog), "W", [[1, 2], [3]])
 
 
 def test_a_statement_table_carries_the_registered_salts_and_paths():
@@ -233,7 +233,7 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     assert "R7-registered" in R.check(rec, prog, Q, **kw, registered={"W": 3}).codes
     # a count equal to the verifier's is still refused as a bool: True would give the registration a second digest
     one = _program(pos=(0, 0), rows=1)
-    rec1, ports1 = _record(one, G.Registered.commit(P.program_sha512(one), "W", TABLE[:1]))
+    rec1, ports1 = _record(one, G.Registered.commit(P.program_digest(one), "W", TABLE[:1]))
     kw1 = {"law": LAW, "scheme": SCHEME, "ports": ports1}
     assert rec1["registered"][0]["leaves"] == 1 and R.check(rec1, one, Q, **kw1, registered={"W": 2}).ok
     true = {**rec1, "registered": [{**rec1["registered"][0], "leaves": True}]}
@@ -242,11 +242,24 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     assert R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED, registered=[{**e, "word_bits": 16}]) == rec
 
 
+def test_an_r7_root_of_127_hex_digits_and_a_newline_is_refused():
+    """128 characters, all hex but the last: `$` would match before the newline, so the root is held to hex by `fullmatch`,
+    as Lean's `isHex` holds it."""
+    prog = _program()
+    reg = _registered(prog)
+    rec, ports = _record(prog, reg)
+    root = reg.entry()["root"][:127] + "\n"
+    assert len(root) == 128
+    got = R.check({**rec, "registered": [{**reg.entry(), "root": root}]}, prog, Q, law=LAW, scheme=SCHEME, ports=ports,
+                  registered={"W": 2})
+    assert got.codes == ("R7-root",)
+
+
 def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
     """The verifier's program says the table's leaves are 32 bits: a 32-bit registration of it passes R7, and one that
     names another width, or none (16), is refused, as is a 32-bit registration of a 16-bit table."""
     prog = _program(w=32)
-    reg = G.Registered.commit(P.program_sha512(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
+    reg = G.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     rec, ports = _record(prog, reg)
     kw = {"law": LAW, "scheme": SCHEME, "ports": ports}
     assert rec["registered"] == [reg.entry()] and reg.entry()["word_bits"] == 32
@@ -256,11 +269,11 @@ def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
     as_float = {**rec, "registered": [{**reg.entry(), "word_bits": 32.0}]}
     assert R.digest(as_float) != R.digest(rec)
     assert R.check(as_float, prog, Q, **kw, registered={"W": 2}).codes == ("R7-word_bits",)
-    sixteen = G.Registered.commit(P.program_sha512(prog), "W", TABLE)
+    sixteen = G.Registered.commit(P.program_digest(prog), "W", TABLE)
     assert set(R.check({**rec, "registered": [sixteen.entry()]}, prog, Q, **kw, registered={"W": 2}).codes) == {"R7-domain",
                                                                                                               "R7-word_bits"}
     narrow = _program()
-    rec16, ports16 = _record(narrow, G.Registered.commit(P.program_sha512(narrow), "W", TABLE, word_bits=32))
+    rec16, ports16 = _record(narrow, G.Registered.commit(P.program_digest(narrow), "W", TABLE, word_bits=32))
     assert set(R.check(rec16, narrow, Q, law=LAW, scheme=SCHEME, ports=ports16, registered={"W": 2}).codes) == {"R7-domain",
                                                                                                               "R7-word_bits"}
     # a v2 record where the verifier registers nothing, and a v1 record where it registers a value, are refused

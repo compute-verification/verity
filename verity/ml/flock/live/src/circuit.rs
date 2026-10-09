@@ -194,7 +194,9 @@ pub fn aligned_blocks(words: &BTreeSet<usize>) -> Vec<(usize, usize)> {
 }
 
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
-/// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
+/// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves). `salt_source` still names
+/// the per-proof ChaCha20 key that `zk_hooks::LeafSalts`'s OS reads replaced: the Lean verifier pins this object, so new text is a
+/// new tag set.
 pub fn leaf_scheme() -> Value {
     let (id, salt) = if cfg!(feature = "sha512") { ("hm96-sha512/v1", 192) } else { ("flock-leaf/sha256-unsalted", 0) };
     json!({"id": id, "inner": "sha512 column digest", "salt_bytes": salt, "salt_source": "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored",
@@ -1072,6 +1074,11 @@ impl Composite {
         }
         if self.g == 0 {
             return Err("vus_per_block is 0: a block of no VU".into());
+        }
+        // the Digest region's VU bits are `trailing_zeros(g)` here and `Nat.log2 g` in the Lean verifier, which pin every
+        // VU, and agree, only at a power of two
+        if !self.g.is_power_of_two() {
+            return Err("vus_per_block is not a power of two: the Digest region would pin some VUs and not others".into());
         }
         if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
@@ -3569,6 +3576,24 @@ mod tests {
         lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
         let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
         assert!(err.contains("vus_per_block is 0"), "{err}");
+    }
+
+    /// Three VUs in a block are refused (PROTOCOL.md §16.10, D9), with the tail that returns the outputs, whose unit count
+    /// need not be a power of two, laid out for them (aligned, disjoint) in the same block: the Digest region's VU bits pin
+    /// every VU only at a power of two.
+    #[test]
+    fn a_block_of_three_vus_is_refused() {
+        let text = flat_tail_statement();
+        let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let mut m: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        m["vus_per_block"] = json!(3);
+        for (i, (pos0, count)) in [(0, 3), (8, 6), (96, 3), (100, 3), (52, 1)].into_iter().enumerate() {
+            m["ranges"][i]["pos0"] = json!(pos0);
+            m["ranges"][i]["count"] = json!(count);
+        }
+        lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
+        let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
+        assert!(err.contains("vus_per_block is not a power of two"), "{err}");
     }
 
     #[test]

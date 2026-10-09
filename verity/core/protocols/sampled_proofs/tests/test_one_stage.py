@@ -100,6 +100,13 @@ def test_registration_v1_passes_r1_to_r6():
     assert len(R.digest(rec)) == 128 and R.digest(rec) == R.digest(dict(rec))
 
 
+def test_a_root_with_a_trailing_newline_is_refused_at_r3():
+    """`$` matches before a final newline, so a root is held to hex by `fullmatch`: Lean's `isHex` refuses the newline too."""
+    prog, q, rec = _registration(6)
+    roots = [dict(rec["roots"][0], root=rec["roots"][0]["root"] + "\n"), *rec["roots"][1:]]
+    assert _check({**rec, "roots": roots}, prog, q).codes == ("R3-root",)
+
+
 def test_registration_refusals():
     prog, q, rec = _registration(6)
     cases = [({"format": "verity/registration/v0"}, "R1-protocol"), ({"law": {"law": "subset", "k": 3}}, "R1-law"),
@@ -115,6 +122,10 @@ def test_registration_refusals():
     assert "R2-partition" in _check(rec, P.population_program(PAIR, 5), q).codes
     assert "keys" in _check({**rec, "extra": 1}, prog, q).codes
     assert _check({**rec, "previous": R.digest(rec)}, prog, q, log=[rec]).codes == ("R6-window",)
+    both = {"roots": [dict(rec["roots"][0], domain="00" * 64), dict(rec["roots"][1], leaves=5)]}
+    ports = _ports(prog, q, P.units(prog, q))
+    codes = {_check({**rec, **both}, prog, q, ports=dict(order)).codes for order in (ports.items(), reversed(ports.items()))}
+    assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
 def test_served_domains_bind_program_partition_port_schema_leaves_and_run():
@@ -279,7 +290,7 @@ def test_a_record_over_an_explicit_partition_object():
     whose program must still be the verifier's."""
     prog = P.population_program(PAIR, 6)
     q = P.template_instance_query(PAIR.id)
-    old = {"program": P.program_sha512(prog), "query": {"name": q["name"], "version": 0, "template": PAIR.id, "width_rule": None}}
+    old = {"program": P.program_digest(prog), "query": {"name": q["name"], "version": 0, "template": PAIR.id, "width_rule": None}}
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
     rec = R.record(prog, q, LAW, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=old)
@@ -463,13 +474,13 @@ def _template_program(name: str):
 
 def _one_stage(program, q) -> dict:
     obj = P.partition(program, q)
-    return {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_sha512(program),
+    return {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_digest(program),
             "population": P.units(program, q), "ranges": P.ranges(program, q)}
 
 
 def _core(program, q) -> dict:
     obj, part = PO.build(program, q), PO.evaluate(program, q)
-    return {"object": codec.canonical_json(obj), "digest": PO.digest(obj), "program": PO.program_sha512(program),
+    return {"object": codec.canonical_json(obj), "digest": PO.digest(obj), "program": codec.program_digest(program),
             "population": part.population, "ranges": [(t, lo, n) for _k, t, lo, n in part.ranges]}
 
 
@@ -479,7 +490,7 @@ def test_the_partition_is_cores_on_the_pinned_q_word_vector():
     q = QWORD["object"]["query"]
     obj = P.partition(prog, q)
     assert codec.canonical_json(obj) == codec.canonical_json(QWORD["object"]) == codec.canonical_json(PO.build(prog, q))
-    assert P.program_sha512(prog) == QWORD["program_sha512"] == PO.program_sha512(prog)
+    assert P.program_digest(prog) == QWORD["program_digest"] == codec.program_digest(prog)
     assert P.digest(obj) == QWORD["object_digest"] == PO.digest(PO.build(prog, q))
     with pytest.raises(P.QueryRefused):
         P.units(prog, q)
@@ -546,7 +557,7 @@ def test_a_pre_canonical_object_keeps_its_digest():
     """A record made before the canonical envelope names `{program, query}` (benchmarks' `--legacy-partition`); its digest is
     the envelope's rule over that object, as the roots registered with it bind."""
     prog = P.population_program(PAIR, 6)
-    old = {"program": P.program_sha512(prog), "query": {"name": "Q_template_instance", "version": 0, "template": PAIR.id, "width_rule": None}}
+    old = {"program": P.program_digest(prog), "query": {"name": "Q_template_instance", "version": 0, "template": PAIR.id, "width_rule": None}}
     assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
 
 

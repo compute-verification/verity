@@ -16,6 +16,20 @@ keyed-BLAKE3 row leaf, SHA-256 or SHA-512 unsalted trees). Four things are param
 Merkle scheme (`Flock.MerkleScheme`: SHA-256, or SHA-512 with 64-byte siblings) and the Halevi–Micali leaf (`Flock.Hm96`,
 generic over the hash). The legacy module (pure-block, IR frame) is not written yet.
 
+`verify` fails closed (§16.15): every session of a statement whose form the soundness proof does not cover is refused
+with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`), once every check
+has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
+rows, the typed statements, public input ports, several tables without `--zk`, shared-row public files (except under
+`--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
+outside `Layout.scopeOk` (a unit reading more than one input group, a tail that computes the outputs, among others).
+Those statements still parse, set up and verify (`statement` prints their digest and Σ), and the agreement check
+compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
+sampling design no soundness claim draws by is refused at setup, with
+`refused: <why>: no soundness claim draws by this law` (`Flock.ProvedScope.drawLaw`): a bernoulli draw, a work draw with
+or without a closure, and a subset draw without `--zk` (`lean_refuses_drawn`). So is a session without a draw, with
+`refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
+refusal (`lean_refuses_drawless`).
+
 ## Build and run
 
 ~~~text
@@ -26,8 +40,9 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
 
 `ID` names a version:
 - `verity/flock-circuit`: the default, and the statement M0 stages today: `@967b8d06`'s with every output a hidden row
-  (§16.13), so the public file holds roots, hiding leaves and structure only (M0's transcript is not hiding; no soundness
-  theorem covers `Stmt.setupHidden` yet). Before #757 the name meant `@e51e2b86`, and `/types` meant `types@210d32e1`.
+  (§16.13), so the public file holds roots, hiding leaves and structure only (M0's transcript is not hiding; the soundness
+  theorem covers `Stmt.setupHidden`'s statements in the forms of §16.15, `FailClosed.flock_headline_exec_hidden`). Before
+  #757 the name meant `@e51e2b86`, and `/types` meant `types@210d32e1`.
   It needs no `--comp`, and it pins
   `seed_injection: false`, as a proving build does. A circuit that binds a `verity/partition/v1` digest needs
   `--partition F`, the verifier's own copy of the partition object (§16.10).
@@ -35,7 +50,7 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   decodes the program and evaluates the query itself (§16.10).
 - `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its recorded cases.
 - `verity/flock-circuit+plain-leaves`: the same statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`,
-  §16.15), a recursive session's inner statement (`FLOCK_PLAIN_LEAVES=1`), ZK off. `statement` prints its identity and
+  §16.16), a recursive session's inner statement (`FLOCK_PLAIN_LEAVES=1`), ZK off. `statement` prints its identity and
   digest, but `verify` refuses it, with or without `--zk`, until a soundness headline covers plain leaves.
 - `verity/flock-circuit/types` (and `+seed-injection`): the typed statement (§16.11) with hidden outputs (§16.13);
   `verity/flock-circuit/types@210d32e1` is its form with public outputs.
@@ -127,14 +142,17 @@ result `art:294b6cf1`), 25 of 25 sessions agree:
 - a salt mutant (an opened salt flipped, with `proof_sha512` rebuilt), which Lean rejects at the Merkle opening.
 
 Triton RMSNorm n128 at `eb90718f` (lookup slots; `vectors.json` set 9, `art:187679d7`, recorded on a CPU pod in
-`r20260927-061936-560b`): every selftest case, the draw cases included, 25 of 25. `agree.py` replays each drawn session
-through upstream in its own process (`replay --drawn-only`), since upstream leaks a statement's matrices and two RMSNorm
-statements do not fit in 15 GB.
+`r20260927-061936-560b`): every selftest case, the draw cases included, 25 of 25. Its unit reads two input groups, so it
+is D12 since §16.15: the Lean verifier refuses every session, and upstream gives each its verdict. `agree.py` replays each
+drawn session through upstream in its own process (`replay --drawn-only`), since upstream leaks a statement's matrices
+and two RMSNorm statements do not fit in 15 GB.
 
 Recorded runs:
 - `art:f1f3c2aa` (`9294e161`): 25 of 25 sessions agree;
 - `art:81645236` (`19c7269a`): 25 of 25 agree;
 - `art:78ef0a6e` (`fd02e847`): 27 of 27 agree, with the retained-bytes sessions.
+
+These versions are before `hm96-sha512` rows, so their sets (0 to 7) are D12 since §16.15.
 
 `redigest.py --retain` writes a session with every round's framed bytes retained, and two negatives of it.
 
@@ -158,12 +176,13 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
 ### The statements' own tests and sets
 
 - Typed statement (§16.11): on RoPE (`D = 64`) and SiLU·mul (`I = 8192`) the derived rows are the old statement's unit
-  section byte for byte (`flock-verify typed-expand`, `test_lean_typed_statement.py`); on #273's GEMM the verifier accepts
-  the prover's 3 honest recorded CPU selftest sessions of 20 and refuses the 17 negatives (`test_lean_typed_template.py`);
-  on typed attention the derived rows are the writer's `rows/` byte for byte (`test_lean_typed_reads.py`).
-- Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's `template_instance_vectors.json`
-  (16 of 16: the population, the ranges, every unit's node, member and gates, the refusals word for word, the malformed
-  parameters).
+  section byte for byte (`flock-verify typed-expand`, `test_lean_typed_statement.py`); on #273's GEMM the statement sets
+  up and the verifier refuses all 20 of the prover's recorded CPU selftest sessions, the 3 honest ones too, for their
+  form (§16.15, `test_lean_typed_template.py`); on typed attention the derived rows are the writer's `rows/` byte for
+  byte (`test_lean_typed_reads.py`).
+- Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's
+  `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates, the
+  refusals word for word, the malformed parameters).
 - The firewall's contract (`Flock.Firewall.Contract`, `flock-firewall contract`), the property every firewall's sessions
   must have, beside the inner phase's program (`Flock.Firewall.run`, which `test_firewall_agreement.py` holds the proxy
   to): `firewall_agree.py` runs the inner phase's firewall (`rec_live.Proxy`) and the contract on the same transcript
@@ -190,21 +209,26 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   60 of 60 as expected (`r20261006-134729-fddc`: 10 relations, 265 statement values, 383 values of the firewall's own
   computation, and one item sequence of 1,454 items), and each of 21 of its sessions with items dropped, swapped,
   duplicated or moved, or with an early `finish`, a miss at the item it moves (12 of them accepted by the contract).
-- Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agrees 27 of 27. Set 14 (a shared-row RoPE file whose six
-  instances repeat three rows) agrees 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included; set 15
-  (the same instances per instance) 22 of 22. The `967b8d06` vectors patch writes each false statement as the verifier's
-  file (`<case>.pub.bin`) under its real public digest, so those negatives reach the proof's openings, not the session
-  parameters.
-- Hidden outputs (§16.13): PR #83's pinned build has none of these statements, so check's agreement step replays none, and
-  the agreement is between Lean and this repository's Rust prover, not upstream's verifier. `vectors.json` `live.sets` 2 to
-  5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate; `ci.py --live`: 20/20, 21/21,
-  20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`), the honest sessions accepted, so digest and Σ are the
-  prover's, and every negative refused, `output_row_committed_false` (an output row's `b ‖ c` not the circuit's outputs)
-  included. `test_lean_hidden_outputs.py` verifies four of each set's cases (the honest session and the three false
-  statements) from a fetched fixture (`verity/ml/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable
-  set needs a pinned upstream build with `flock-circuit replay` (the selftest's `record_replays_offline` already replays
-  in process). `test_lean_registered_reads.py` stages its registered-read statements over a hidden-output RoPE circuit
-  (`statement`, and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06`.
+- Set 13 (GEMM k1024, tail outputs, recorded on a CPU pod) agreed 27 of 27, and set 14 (a shared-row RoPE file whose six
+  instances repeat three rows) 23 of 23 with upstream on M0's selftest records, `row_ref_claim_false` included, before
+  §16.15; both are D12 now (a unit reading two input groups, a shared-row file), so the Lean verifier refuses every
+  session. Set 15 (the same instances per instance) agrees 22 of 22. The `967b8d06` vectors patch writes each false
+  statement as the verifier's file (`<case>.pub.bin`) under its real public digest, so those negatives reach the proof's
+  openings, not the session parameters.
+- Hidden outputs (§16.13): PR #83's pinned build has none of these statements, so check's agreement step replays none,
+  and the agreement is between Lean and this repository's Rust prover, not upstream's verifier. `vectors.json`
+  `live.sets` 2 to 5 are M0's selftest records at `455a01049` (flat and typed, RoPE and the GEMM coordinate;
+  `ci.py --live`: 20/20, 21/21, 20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`). On flat RoPE the honest
+  sessions pass every check, so digest and Σ are the prover's (they have no draw, so their verdict is that refusal, D12),
+  and every negative is refused by its check, `output_row_committed_false` (an
+  output row's `b ‖ c` not the circuit's outputs) included; flat GEMM (a unit reading two input groups) and both typed
+  sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
+  cases (the honest session and the three false statements) from a fetched fixture
+  (`verity/ml/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable set needs a pinned upstream build
+  with `flock-circuit replay` (the selftest's `record_replays_offline` already replays in process).
+  `test_lean_registered_reads.py` stages its registered-read statements over a hidden-output RoPE circuit (`statement`,
+  and `verify` of each of two tables' setups), and set 16's upstream session covers `@967b8d06` (a shared-row file, D12:
+  it sets up under its reads and is refused for its form).
 - `--zk` sessions (§16.14): no pinned upstream build has them, so check's agreement step replays none. `agree.py --zk`
   compares Lean's verdicts with the live build's `replay --zk`, and `test_lean_zk.py` with its server's, on the sessions of
   `art:8126390c` (`@967b8d06+seed-injection`).

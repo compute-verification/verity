@@ -724,8 +724,7 @@
   ]
  ],
  "descriptor": "{\"callees\":[\"TAdd32_v1\",\"Input32_v1\",\"Input16_v1\",\"TPair_v1\",\"TRow_v1{N=4,OP={\\\"fn\\\":\\\"TAdd32_v1\\\"},C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"},D={\\\"dict\\\":{\\\"a\\\":[1,\\\"x\\\"],\\\"k\\\":2}}}\",\"TWiden16_v1\",\"TCol_v1\",\"TSum2_v1\",\"TStep_v1\",\"TSum4_v1\",\"TSum6_v1\"],\"definitions\":{\"Input16_v1\":{\"form\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TProg_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":8,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":2,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":1,\"out\":3},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",0,1,1]},\"type\":0}],\"fn\":3,\"form\":\"call\",\"out\":4},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,8]},\"type\":5},{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0}],\"axes\":[0,null],\"fn\":4,\"form\":\"batch\",\"n\":2,\"out\":6},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,2]},\"type\":2}],\"axes\":[0],\"fn\":5,\"form\":\"batch\",\"n\":2,\"out\":6},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,8]},\"type\":5}],\"axes\":[1],\"fn\":6,\"form\":\"batch\",\"n\":4,\"out\":7},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,8]},\"type\":5}],\"axes\":[1],\"fn\":7,\"form\":\"batch\",\"n\":4,\"out\":7},{\"args\":[{\"refs\":{\"affine\":[\"n\",3,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",0,4,4]},\"type\":7},{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0}],\"fn\":8,\"form\":\"scan\",\"n\":4,\"n_xs\":1,\"out\":8},{\"args\":[{\"refs\":{\"strided\":[\"n\",5,0,1,0,0,4]},\"type\":7}],\"fn\":9,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"strided\":[\"n\",0,0,2,1,4,4]},\"type\":7}],\"fn\":9,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"n\",6,0,1]},{\"affine\":[\"n\",6,1,1]},{\"affine\":[\"n\",4,0,1]},{\"affine\":[\"n\",4,1,1]}]},\"type\":7}],\"fn\":9,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"concat\":[{\"alias\":[11,0]},{\"affine\":[\"n\",3,0,1]},{\"affine\":[\"n\",5,1,1]}]},\"type\":9}],\"fn\":10,\"form\":\"primitive\",\"out\":0}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",3,0,2]},{\"affine\":[\"n\",4,0,2]},{\"affine\":[\"n\",7,0,4]},{\"affine\":[\"n\",8,0,5]},{\"affine\":[\"n\",9,0,1]},{\"affine\":[\"n\",10,0,1]},{\"affine\":[\"n\",11,0,1]},{\"affine\":[\"n\",12,0,1]},{\"affine\":[\"n\",2,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Tuple\",[[\"Value\",32],[\"Value\",32]]],[\"Array\",2,[\"Value\",32]],[\"Array\",4,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",4,[\"Value\",32]]]],[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[TProg_v1]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TCol_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TCol_v1\"},\"TPair_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"n\",1,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"TPair_v1\"},\"TRow_v1{N=4,OP={\\\"fn\\\":\\\"TAdd32_v1\\\"},C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"},D={\\\"dict\\\":{\\\"a\\\":[1,\\\"x\\\"],\\\"k\\\":2}}}\":{\"bindings\":{\"C\":{\"f64\":\"0x1.8000000000000p+0\"},\"D\":{\"dict\":{\"a\":[1,\"x\"],\"k\":2}},\"N\":4,\"OP\":{\"fn\":\"TAdd32_v1\"}},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,3,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"row\",[\"Array\",4,[\"Value\",32]]],[\"bias\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",3,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TRow_v1\"},\"TStep_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",2,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Value\",32]],[\"x\",[\"Value\",32]],[\"k\",[\"Value\",32]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"n\",1,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"TStep_v1\"},\"TSum2_v1\":{\"form\":\"primitive\",\"id\":\"TSum2_v1\",\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]]],\"ret\":[\"Value\",32]},\"TSum4_v1\":{\"form\":\"primitive\",\"id\":\"TSum4_v1\",\"params\":[[\"x\",[\"Array\",4,[\"Value\",32]]]],\"ret\":[\"Value\",32]},\"TSum6_v1\":{\"form\":\"primitive\",\"id\":\"TSum6_v1\",\"params\":[[\"x\",[\"Array\",6,[\"Value\",32]]]],\"ret\":[\"Value\",32]},\"TWiden16_v1\":{\"form\":\"primitive\",\"id\":\"TWiden16_v1\",\"params\":[[\"a\",[\"Value\",16]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TProg_v1\",\"root\":\"Root[TProg_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",8,[\"Value\",32]],[\"Array\",2,[\"Value\",16]],[\"Array\",1,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Value\",32]]],[\"Array\",2,[\"Array\",4,[\"Value\",32]]],[\"Array\",2,[\"Value\",32]],[\"Array\",4,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",4,[\"Value\",32]]]],[\"Array\",6,[\"Value\",32]]]}",
- "program_digest_sha256": "2d62b0a3e3470d56457cbabfba4a7efb6114e70135844819c17f38db0214e78a",
- "program_sha512": "8217ea3d075b702f23db9e9a2693cedab39091e7d1f6fd09ae82d42b364d37bd90f27df47ecdbd45bfabd7b0b4ecc1bb219e0fab98e190c83d7fc50c0720876e",
+ "program_digest": "8217ea3d075b702f23db9e9a2693cedab39091e7d1f6fd09ae82d42b364d37bd90f27df47ecdbd45bfabd7b0b4ecc1bb219e0fab98e190c83d7fc50c0720876e",
  "alias_writer": [
   [
    "two parts: recorded as argument (0, 0)",
@@ -1526,7 +1525,7 @@
    ],
    [
     4,
-    "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}"
+    "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}"
    ],
    [
     5,
@@ -1622,8 +1621,7 @@
    "r"
   ],
   "descriptor": "{\"callees\":[\"TAdd32_v1\",\"Input32_v1\",\"RegisteredInput16_v1\",\"RegisteredInput32_v1\",\"TPair_v1\",\"TRow_v1{N=4,OP={\\\"fn\\\":\\\"TAdd32_v1\\\"},C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"},D={\\\"dict\\\":{\\\"a\\\":[1,\\\"x\\\"],\\\"k\\\":2}}}\",\"TWiden16_v1\",\"TCol_v1\",\"TSum2_v1\",\"TStep_v1\",\"TSum4_v1\",\"TSum6_v1\"],\"definitions\":{\"Input32_v1\":{\"form\":\"primitive\",\"id\":\"Input32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"RegisteredInput16_v1\":{\"form\":\"primitive\",\"id\":\"RegisteredInput16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"RegisteredInput32_v1\":{\"form\":\"primitive\",\"id\":\"RegisteredInput32_v1\",\"params\":[],\"ret\":[\"Value\",32]},\"Root[TProg_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":8,\"out\":1},{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":2,\"out\":2},{\"args\":[],\"axes\":[],\"fn\":3,\"form\":\"batch\",\"n\":1,\"out\":3},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",0,1,1]},\"type\":0}],\"fn\":4,\"form\":\"call\",\"out\":4},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,8]},\"type\":5},{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0}],\"axes\":[0,null],\"fn\":5,\"form\":\"batch\",\"n\":2,\"out\":6},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,2]},\"type\":2}],\"axes\":[0],\"fn\":6,\"form\":\"batch\",\"n\":2,\"out\":6},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,8]},\"type\":5}],\"axes\":[1],\"fn\":7,\"form\":\"batch\",\"n\":4,\"out\":7},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,8]},\"type\":5}],\"axes\":[1],\"fn\":8,\"form\":\"batch\",\"n\":4,\"out\":7},{\"args\":[{\"refs\":{\"affine\":[\"n\",3,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"n\",0,4,4]},\"type\":7},{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0}],\"fn\":9,\"form\":\"scan\",\"n\":4,\"n_xs\":1,\"out\":8},{\"args\":[{\"refs\":{\"strided\":[\"n\",5,0,1,0,0,4]},\"type\":7}],\"fn\":10,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"strided\":[\"n\",0,0,2,1,4,4]},\"type\":7}],\"fn\":10,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"n\",6,0,1]},{\"affine\":[\"n\",6,1,1]},{\"affine\":[\"n\",4,0,1]},{\"affine\":[\"n\",4,1,1]}]},\"type\":7}],\"fn\":10,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"concat\":[{\"alias\":[11,0]},{\"affine\":[\"n\",3,0,1]},{\"affine\":[\"n\",5,1,1]}]},\"type\":9}],\"fn\":11,\"form\":\"primitive\",\"out\":0}],\"params\":[],\"ret\":{\"concat\":[{\"affine\":[\"n\",3,0,2]},{\"affine\":[\"n\",4,0,2]},{\"affine\":[\"n\",7,0,4]},{\"affine\":[\"n\",8,0,5]},{\"affine\":[\"n\",9,0,1]},{\"affine\":[\"n\",10,0,1]},{\"affine\":[\"n\",11,0,1]},{\"affine\":[\"n\",12,0,1]},{\"affine\":[\"n\",2,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Tuple\",[[\"Value\",32],[\"Value\",32]]],[\"Array\",2,[\"Value\",32]],[\"Array\",4,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",4,[\"Value\",32]]]],[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"Root[TProg_v1]_v1\"},\"TAdd32_v1\":{\"form\":\"primitive\",\"id\":\"TAdd32_v1\",\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":[\"Value\",32]},\"TCol_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Array\",2,[\"Value\",32]]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TCol_v1\"},\"TPair_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a\",[\"Value\",32]],[\"b\",[\"Value\",32]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"n\",1,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"TPair_v1\"},\"TRow_v1{N=4,OP={\\\"fn\\\":\\\"TAdd32_v1\\\"},C={\\\"f64\\\":\\\"0x1.8000000000000p+0\\\"},D={\\\"dict\\\":{\\\"a\\\":[1,\\\"x\\\"],\\\"k\\\":2}}}\":{\"bindings\":{\"C\":{\"f64\":\"0x1.8000000000000p+0\"},\"D\":{\"dict\":{\"a\":[1,\"x\"],\"k\":2}},\"N\":4,\"OP\":{\"fn\":\"TAdd32_v1\"}},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,1,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",1,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,2,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",2,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,3,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"row\",[\"Array\",4,[\"Value\",32]]],[\"bias\",[\"Value\",32]]],\"ret\":{\"affine\":[\"n\",3,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"TRow_v1\"},\"TStep_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",1,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",2,0,1]},\"type\":0}],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"c\",[\"Value\",32]],[\"x\",[\"Value\",32]],[\"k\",[\"Value\",32]]],\"ret\":{\"concat\":[{\"affine\":[\"n\",0,0,1]},{\"affine\":[\"n\",1,0,1]}]},\"ret_type\":[\"Tuple\",[[\"Value\",32],[\"Value\",32]]]},\"form\":\"composite\",\"id\":\"TStep_v1\"},\"TSum2_v1\":{\"form\":\"primitive\",\"id\":\"TSum2_v1\",\"params\":[[\"x\",[\"Array\",2,[\"Value\",32]]]],\"ret\":[\"Value\",32]},\"TSum4_v1\":{\"form\":\"primitive\",\"id\":\"TSum4_v1\",\"params\":[[\"x\",[\"Array\",4,[\"Value\",32]]]],\"ret\":[\"Value\",32]},\"TSum6_v1\":{\"form\":\"primitive\",\"id\":\"TSum6_v1\",\"params\":[[\"x\",[\"Array\",6,[\"Value\",32]]]],\"ret\":[\"Value\",32]},\"TWiden16_v1\":{\"form\":\"primitive\",\"id\":\"TWiden16_v1\",\"params\":[[\"a\",[\"Value\",16]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TProg_v1\",\"root\":\"Root[TProg_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",32],[\"Array\",8,[\"Value\",32]],[\"Array\",2,[\"Value\",16]],[\"Array\",1,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Value\",32]]],[\"Array\",2,[\"Array\",4,[\"Value\",32]]],[\"Array\",2,[\"Value\",32]],[\"Array\",4,[\"Value\",32]],[\"Tuple\",[[\"Value\",32],[\"Array\",4,[\"Value\",32]]]],[\"Array\",6,[\"Value\",32]]]}",
-  "program_digest_sha256": "78cbd789dcd1d20a43d37fe9a4e7594980d462f1f400147f2a9aaf8212eb4946",
-  "program_sha512": "88ccc55f0fe24f3867b7d668557c042447d688355293adf9a85f283e1376c85a76fbf3cf2bb225d7707b01fe65f9cb99c0be905085cf2597f5705a88b0eca5b6",
+  "program_digest": "88ccc55f0fe24f3867b7d668557c042447d688355293adf9a85f283e1376c85a76fbf3cf2bb225d7707b01fe65f9cb99c0be905085cf2597f5705a88b0eca5b6",
   "input_nodes": [
    [
     0,
@@ -1648,7 +1646,7 @@
    ],
    [
     4,
-    "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}"
+    "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}"
    ],
    [
     5,
@@ -1722,7 +1720,7 @@
    [
     4,
     "batch",
-    "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}",
+    "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}",
     2,
     8,
     13
@@ -1953,7 +1951,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#0"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#0"
     ]
    ],
    [
@@ -1965,7 +1963,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#0"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#0"
     ]
    ],
    [
@@ -1977,7 +1975,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#0"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#0"
     ]
    ],
    [
@@ -1989,7 +1987,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#0"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#0"
     ]
    ],
    [
@@ -2001,7 +1999,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#1"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#1"
     ]
    ],
    [
@@ -2013,7 +2011,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#1"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#1"
     ]
    ],
    [
@@ -2025,7 +2023,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#1"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#1"
     ]
    ],
    [
@@ -2037,7 +2035,7 @@
     ],
     [
      "Root[TProg_v1]_v1",
-     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={2380016e6bb2}}#1"
+     "TRow_v1{N=4,OP=TAdd32_v1,C=1.5,D={03611cad7aa0}}#1"
     ]
    ],
    [

@@ -24,7 +24,7 @@ was written against another body.  Fields: ``name``, ``description``, ``format``
 once per key in one file; `merge` layers files, a later file's field replacing an earlier one's.
 
 **Digests.**  Annotations never enter a program digest: `attach` puts them in the descriptor's ``annotations`` field, which
-`codec.program_digest` and `partition_object.program_sha512` exclude (``PROTOCOL.md`` §1).  Validation reads only the descriptor's
+`codec.program_digest` excludes (``PROTOCOL.md`` §1).  Validation reads only the descriptor's
 structure; it evaluates nothing.
 """
 from __future__ import annotations
@@ -58,8 +58,8 @@ def _resolved(desc: Mapping[str, Any], entry: Mapping[str, Any]) -> dict:
 
 
 def definition_digest(desc: Mapping[str, Any], fid: str) -> str:
-    """SHA-256 of the definition's descriptor entry, interning resolved: the same for one definition in any program."""
-    return hashlib.sha256(canonical_json(_resolved(desc, desc["definitions"][fid]))).hexdigest()
+    """SHA-512 of the definition's descriptor entry, interning resolved: the same for one definition in any program."""
+    return hashlib.sha512(canonical_json(_resolved(desc, desc["definitions"][fid]))).hexdigest()
 
 
 def _stem(fid: str) -> str:
@@ -104,10 +104,10 @@ class Verdict:
 
 
 class _Program:
-    """What keys resolve against: one descriptor (and, for ``call`` keys, its SHA-512)."""
+    """What keys resolve against: one descriptor (and, for ``call`` keys, its program digest)."""
 
-    def __init__(self, desc: Mapping[str, Any], sha512: str | None) -> None:
-        self.desc, self.sha512 = desc, sha512
+    def __init__(self, desc: Mapping[str, Any], digest: str | None) -> None:
+        self.desc, self.digest = desc, digest
         root = desc["definitions"][desc["root"]]["body"]["nodes"]
         self.calls = {k for k, n in enumerate(root) if input_id(_callee(desc, n)) is None}
 
@@ -127,7 +127,7 @@ class _Program:
             program = (entry or {}).get("program")
             if not isinstance(program, str) or not _SHA512.fullmatch(program):
                 return "error", {"code": "program", "key": key}
-            if self.sha512 is None or program != self.sha512:
+            if self.digest is None or program != self.digest:
                 return "ok", []                                          # another program's Call: checked against that program
             ok = target.isdigit() and int(target) in self.calls
             return ("ok", []) if ok else ("error", {"code": "unresolved", "key": key, "why": f"root node {target} is not a Call"})
@@ -158,9 +158,9 @@ def _entry_errors(e: Mapping[str, Any], i: int) -> list[dict]:
     return out
 
 
-def validate(annotations: Mapping[str, Any], desc: Mapping[str, Any], program_sha512: str | None = None) -> Verdict:
+def validate(annotations: Mapping[str, Any], desc: Mapping[str, Any], program_digest: str | None = None) -> Verdict:
     """The annotations against one program's descriptor: every entry well formed, every key resolved (or absent: a Definition the
-    program does not have), groups closed, each (key, field) set once, the guards current.  ``program_sha512`` enables the checks of
+    program does not have), groups closed, each (key, field) set once, the guards current.  ``program_digest`` enables the checks of
     ``call`` keys naming this program."""
     v = Verdict(True)
     if not isinstance(annotations, Mapping) or set(annotations) != {"format", "entries"} or annotations.get("format") != FORMAT \
@@ -168,7 +168,7 @@ def validate(annotations: Mapping[str, Any], desc: Mapping[str, Any], program_sh
         v.errors.append({"code": "format"})
         v.ok = False
         return v
-    prog = _Program(desc, program_sha512)
+    prog = _Program(desc, program_digest)
     entries = annotations["entries"]
     keys = {e["key"] for e in entries if isinstance(e, Mapping) and isinstance(e.get("key"), str)}
     seen: dict[tuple[str, str], int] = {}

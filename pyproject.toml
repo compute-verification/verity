@@ -42,7 +42,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "infra/cluster", "infra/ops", "archive/sp1", "benchmarks/numerical", "integrations/vllm", "verity/ml/flock", "tools/verity/circuit_check", "tools/verity/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "archive/gkr", "archive/direct", "benchmarks/pouw", "benchmarks/network_traces", "tools/verity/cli", "verity/core/difftest", "verity/core/protocols/composition", "verity/core/primitives/evaluate", "verity/core/service/firewall", "verity/core/service/sampled_proofs", "verity/core/protocols/pouw/lean/window", "verity/core/protocols/pouw/lean/check"]
+members = ["tools/research", "infra/cluster", "infra/ops", "archive/sp1", "benchmarks/numerical", "integrations/vllm", "verity/ml/flock", "tools/verity/circuit_check", "tools/verity/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "archive/gkr", "archive/direct", "benchmarks/pouw", "benchmarks/network_traces", "tools/verity/cli", "verity/core/difftest", "verity/core/protocols/pous/check", "verity/core/primitives/identity", "verity/core/protocols/composition", "verity/core/primitives/evaluate", "verity/core/service/firewall", "verity/core/service/sampled_proofs", "verity/core/protocols/pouw/lean/window", "verity/core/protocols/pouw/lean/check", "verity/core/devices/memory_challenger/lean"]
 
 [tool.uv.sources]
 research = { workspace = true }

@@ -75,9 +75,10 @@ OWNER = -1
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
 #: identity and swappable: ``hm96-sha512/v1`` (``verity.ml.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
-#: Salts are a ChaCha20 expansion of a fresh 256-bit OS key per proof (Daniel, 2026-09-27: salts drawn leaf by leaf from the OS
-#: cost +96% prover time at m = 33), modelled as uniform like the OS generator's own ChaCha20 output; the key is never reused or
-#: stored. The level-0 salts are shared by both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
+#: Salts are the OS's own bytes, every leaf's 192 read a tree at a time in bulk (``zk_hooks::LeafSalts``; Daniel, 9 Oct, decision
+#: 4(a)), never reused or stored; ``salt_source`` still names the per-proof ChaCha20 key they replaced, because the Lean verifier
+#: pins this object (``Flock/Tags.lean``'s ``leafSchemeHm96``) and new text is a new tag set. The level-0 salts are shared by
+#: both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
 #: tree, pinned by its SHA-512. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to
 #: any value.
 LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes": 192,
@@ -137,9 +138,9 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
 
 
 def program_sha512(sub, statics: dict | None = None) -> str:
-    """SHA-512 over the canonical descriptor core's ``program_digest`` hashes (the subcircuit's Definition at its default
-    statics); a caller that builds the partition over another Program passes that Program's SHA-512 instead."""
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    """META ``program_sha512``: core's ``program_digest`` of the subcircuit's Definition at its default statics; a caller that
+    builds the partition over another Program passes that Program's digest instead."""
+    from verity.ml.circuits.codec import encode_program, program_digest
     from verity.ml.circuits.program import Program
 
     try:
@@ -147,7 +148,7 @@ def program_sha512(sub, statics: dict | None = None) -> str:
     except (TypeError, ValueError, AttributeError):
         # a silicon reference no core Definition wraps: its digests as the program
         return hashlib.sha512(json.dumps(sub.program_digests([statics or {}]), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+    return program_digest(desc)
 
 
 def partition_digest(obj: dict) -> str:

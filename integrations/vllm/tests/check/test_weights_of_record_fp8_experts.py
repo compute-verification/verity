@@ -28,7 +28,7 @@ CONTAINER = "model.layers.0.mlp.experts"
 SERVED = {n: f"{CONTAINER}.routed_experts.{n}" for n in ("w13_weight", "w13_weight_scale_inv", "w2_weight", "w2_weight_scale_inv")}
 PARTS = {"w1": "gate_proj", "w3": "up_proj", "w2": "down_proj"}
 WORLDS = (1, 2, 4, 8, 16)
-OF_RECORD = {"program_digests_of_record": {"e" * 64}, "checkpoint_of_record": {"repo": "test/fp8-moe", "revision": "abc"}}
+OF_RECORD = {"program_digests_of_record": {"e" * 128}, "checkpoint_of_record": {"repo": "test/fp8-moe", "revision": "abc"}}
 
 
 def _ty(shape, bits):
@@ -53,7 +53,7 @@ def _fields(world: int) -> list[tuple[str, list[int], int]]:
 def _program(world: int, rank: int) -> dict:
     struct_ = "{" + ", ".join(f"{n}: {_ty(s, b)}" for n, s, b in _fields(world)) + "}"
     tp = {"tp": {"world": world, "rank": rank}} if world > 1 else {}
-    return {"instances": {"rows": [], "params": [["weights", struct_]], "digest": "e" * 64}, "result": {"program_digest": "e" * 64, **tp},
+    return {"instances": {"rows": [], "params": [["weights", struct_]], "digest": "e" * 128}, "result": {"program_digest": "e" * 128, **tp},
             "dir": "synthetic"}
 
 

@@ -105,8 +105,8 @@ def _program(tp=None):
             t = f"Array<{n},{t}>"
         return t
     struct_ = "{" + ", ".join(f"{n}: {ty(s, b)}" for n, s, b in fields) + "}"
-    return {"instances": {"rows": [], "params": [["weights", struct_]], "digest": "d" * 64},
-            "result": {"program_digest": "d" * 64, **({"tp": tp} if tp else {})}, "dir": "synthetic"}, fields
+    return {"instances": {"rows": [], "params": [["weights", struct_]], "digest": "d" * 128},
+            "result": {"program_digest": "d" * 128, **({"tp": tp} if tp else {})}, "dir": "synthetic"}, fields
 
 
 def _served(t, fields, tp=None):
@@ -543,14 +543,14 @@ def test_w2_record_is_bound_to_the_program_and_checkpoint_of_record(checkpoint):
     prog, fields = _program()
     rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     live = live_digests(_served(t, fields))
-    ok = WR.check(rec, live, program_digests_of_record={"d" * 64}, checkpoint_of_record={"repo": "test/tiny", "revision": "abc"})
+    ok = WR.check(rec, live, program_digests_of_record={"d" * 128}, checkpoint_of_record={"repo": "test/tiny", "revision": "abc"})
     assert ok["result"] is True and ok["program_of_record"] is True and ok["checkpoint_entry_of_record"] is True
-    for short in (WR.check(rec, live, program_digests_of_record={"d" * 16}), WR.check(dict(rec, program_digest="d" * 16), live, program_digests_of_record={"d" * 64})):
-        assert short["result"] is False and short["program_of_record"] is False and "not full sha256" in short["why"] and "d" * 16 in short["why"]
-    bad = WR.check(rec, live, program_digests_of_record={"e" * 64})
+    for short in (WR.check(rec, live, program_digests_of_record={"d" * 16}), WR.check(dict(rec, program_digest="d" * 16), live, program_digests_of_record={"d" * 128})):
+        assert short["result"] is False and short["program_of_record"] is False and "not full sha512" in short["why"] and "d" * 16 in short["why"]
+    bad = WR.check(rec, live, program_digests_of_record={"e" * 128})
     assert bad["result"] is False and bad["program_of_record"] is False and "!= Program of record" in bad["why"]
-    edited = dict(rec, program_digest="e" * 64)
-    assert WR.check(edited, live, program_digests_of_record={"d" * 64})["result"] is False
+    edited = dict(rec, program_digest="e" * 128)
+    assert WR.check(edited, live, program_digests_of_record={"d" * 128})["result"] is False
     other = WR.check(rec, live, checkpoint_of_record={"repo": "other/model", "revision": "abc"})
     assert other["result"] is False and "!= the workload's model other/model" in other["why"]
     rev = WR.check(rec, live, checkpoint_of_record={"repo": "test/tiny", "revision": "ffffffffff"})
@@ -655,7 +655,7 @@ def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path):
     rc = cli.main(["weights-of-record", "--program-dir", str(pd), "--checkpoint-dir", str(d), "--checkpoints", str(man)])
     assert rc == 0
     rec = json.load(open(pd / "weights_of_record.json"))
-    assert rec["complete"] is True and rec["program_digest"] == "d" * 64 and rec["wrapper_prefix"] == PREFIX
+    assert rec["complete"] is True and rec["program_digest"] == "d" * 128 and rec["wrapper_prefix"] == PREFIX
 
 
 def _write_program(d, prog, digest, LP, T, extra_field=None):
@@ -678,11 +678,11 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     struct), or an un-stamped record built for a non-component all FAIL by name; the un-stamped single-digest rule still holds."""
     d, man, t = checkpoint
     prog, fields = _program()
-    A, B, W = "a" * 64, "b" * 64, "f" * 64
+    A, B, W = "a" * 128, "b" * 128, "f" * 128
     root = tmp_path / "row"
     _write_program(root / "build_request_LP4_T2", prog, A, 4, 2)
     _write_program(root / "build_request_LP9_T1", prog, B, 9, 1)
-    _write_program(root / "build_request", prog, "d" * 64, 9, 2)             # the default wrapper shape: NOT a workload component
+    _write_program(root / "build_request", prog, "d" * 128, 9, 2)             # the default wrapper shape: NOT a workload component
     (root / "build_workload").mkdir()
     json.dump({"workload_digest": W}, open(root / "build_workload" / "workload_program.json", "w"))
     json.dump({"program_digest": W, "component_digests": [A, B], "components": {"r0": {"program_digest": A, "LP": 4, "T": 2}, "r1": {"program_digest": B, "LP": 9, "T": 1}}},
@@ -703,24 +703,24 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     assert ok["result"] is True and ok["program_of_record"] is True and ok["of_record_set"] == sorted(run_set)
     # prefix-truncated run digests name no Program: refused by name, never matched to the stamp's full ones
     short = WR.check(rec, live, program_digests_of_record={x[:16] for x in run_set})
-    assert short["result"] is False and short["program_of_record"] is False and "not full sha256" in short["why"]
+    assert short["result"] is False and short["program_of_record"] is False and "not full sha512" in short["why"]
     # the run's set differs: a component missing from the run, or a run digest the record never saw -> FAIL by name
     bad = WR.check(rec, live, program_digests_of_record={W, A})
     assert bad["result"] is False and "record's of-record set != the run's" in bad["why"] and B[:16] in bad["why"]
-    bad = WR.check(rec, live, program_digests_of_record=run_set | {"e" * 64})
+    bad = WR.check(rec, live, program_digests_of_record=run_set | {"e" * 128})
     assert bad["result"] is False and ("e" * 16) in bad["why"]
     # B1 shape of a row: only build_request under the root -> it IS of record (the manifest's program digest)
     r1 = tmp_path / "row_b1"
-    _write_program(r1 / "build_request", prog, "d" * 64, 9, 2)
-    json.dump({"program_digest": "d" * 64}, open(r1 / "manifest.json", "w"))
+    _write_program(r1 / "build_request", prog, "d" * 128, 9, 2)
+    json.dump({"program_digest": "d" * 128}, open(r1 / "manifest.json", "w"))
     rec1 = WR.stamp_of_record_set(WR.build_record(str(r1 / "build_request"), str(d), checkpoints_manifest=str(man)), str(r1))
-    assert rec1["of_record"] is True and rec1["of_record_set"]["program_digests"] == ["d" * 64]
-    assert WR.check(rec1, live, program_digests_of_record={"d" * 64})["result"] is True
+    assert rec1["of_record"] is True and rec1["of_record_set"]["program_digests"] == ["d" * 128]
+    assert WR.check(rec1, live, program_digests_of_record={"d" * 128})["result"] is True
     # an unsound stamp: a component Program of ANOTHER weights struct under the root -> record not of record, check FAILs by name
-    _write_program(root / "build_request_LP2_T7", prog, "c" * 64, 2, 7, extra_field=("model.model.layers.2.mlp.down_proj.weight", "Array<8,Array<4,Value<16>>>"))
+    _write_program(root / "build_request_LP2_T7", prog, "c" * 128, 2, 7, extra_field=("model.model.layers.2.mlp.down_proj.weight", "Array<8,Array<4,Value<16>>>"))
     rec2 = WR.stamp_of_record_set(WR.build_record(str(root / "build_request_LP4_T2"), str(d), checkpoints_manifest=str(man)), str(root))
     assert rec2["of_record"] is False and "build_request_LP2_T7" in rec2["of_record_why"] and "weights struct differs" in rec2["of_record_why"]
-    assert "c" * 64 not in rec2["of_record_set"]["program_digests"]
+    assert "c" * 128 not in rec2["of_record_set"]["program_digests"]
     bad = WR.check(rec2, live, program_digests_of_record=run_set)
     assert bad["result"] is False and "of-record stamp is not sound" in bad["why"]
     # un-stamped record (the --program-dir path) keeps the single-digest rule: built for the default shape, refused when it is not a component
@@ -728,13 +728,13 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     assert "of_record_set" not in rec3
     bad = WR.check(rec3, live, program_digests_of_record={W, A, B})
     assert bad["result"] is False and bad["why"].startswith("record built for Program dddddddddddddddd != Program of record")
-    assert WR.check(rec3, live, program_digests_of_record={W, A, B, "d" * 64})["result"] is True
+    assert WR.check(rec3, live, program_digests_of_record={W, A, B, "d" * 128})["result"] is True
     # a manifest carrying a truncated Program digest: the stamp is not of record, by name
     r2 = tmp_path / "row_short"
-    _write_program(r2 / "build_request", prog, "d" * 64, 9, 2)
+    _write_program(r2 / "build_request", prog, "d" * 128, 9, 2)
     json.dump({"program_digest": "d" * 16}, open(r2 / "manifest.json", "w"))
     rec4 = WR.stamp_of_record_set(WR.build_record(str(r2 / "build_request"), str(d), checkpoints_manifest=str(man)), str(r2))
-    assert rec4["of_record"] is False and "not full sha256" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
+    assert rec4["of_record"] is False and "not full sha512" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
     # a root without any component Program is refused by the CLI
     assert cli.main(["weights-of-record", "--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
 
@@ -748,9 +748,9 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     d, man, t = checkpoint
     prog, fields = _program()
     pdir = tmp_path / "build_request_LP9_T2"
-    _write_program(pdir, prog, "d" * 64, 9, 2)
+    _write_program(pdir, prog, "d" * 128, 9, 2)
     stale = pdir / "weights_of_record.stale-20260920T042250Z.json"
-    stale.write_text(json.dumps({"schema": WR.SCHEMA_V1, "program_digest": "d" * 64, "complete": True, "unpinned": []}))
+    stale.write_text(json.dumps({"schema": WR.SCHEMA_V1, "program_digest": "d" * 128, "complete": True, "unpinned": []}))
     out = pdir / "weights_of_record.json"
     argv = ["--program-dir", str(pdir), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out), f"--supersedes={stale}"]
     monkeypatch.setattr("sys.argv", ["verity-vllm", "weights-of-record", *argv])
@@ -761,9 +761,9 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
     assert dv["sources"]["checkpoint_dir"] == str(d) and dv["sources"]["checkpoints_manifest"] == str(man)
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", dv["at"]) and (dv["code"] is None or re.fullmatch(r"[0-9a-f]{40}", dv["code"]))
-    assert WR.check(rec, live_digests(_served(t, fields)), program_digests_of_record={"d" * 64})["result"] is True
+    assert WR.check(rec, live_digests(_served(t, fields)), program_digests_of_record={"d" * 128})["result"] is True
     # the row's reuse rule accepts the freshly derived record (current schema, this Program)
-    (pdir / "result.json").write_text(json.dumps({"ok": True, "program_digest": "d" * 64, "LP": 9, "T": 2}))
+    (pdir / "result.json").write_text(json.dumps({"ok": True, "program_digest": "d" * 128, "LP": 9, "T": 2}))
     assert R.wor_stale(str(out), str(pdir / "result.json"), WR.SCHEMA) == ""
 
 

@@ -40,7 +40,7 @@ def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
     main = tmp_path / "main"
     (main / "mytools").mkdir(parents=True)
     (main / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (main / "tools" / "verity" / "check").mkdir(parents=True)
+    (main / "tools" / "verity" / "check").mkdir(parents=True, exist_ok=True)
     for rel, text in CHECK_FILES.items():
         (main / rel).write_text(text)
     (main / "a.txt").write_text("a\n")
@@ -376,6 +376,45 @@ def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_ref
     assert _git(origin, "for-each-ref", "refs/heads/train-prep/j") == "" and "research-train" not in _git(main, "worktree", "list")
 
 
+#: a tree's `pins.py --merged`: `gen.txt` is generated, the sorted names of the `*.dep` files; a conflict elsewhere exits 3
+STUB_PINS = '''import json, pathlib, sys
+a = sys.argv[1:]
+assert a[0] == "--merged"
+conflicted = a[a.index("--conflicted") + 1:]
+if [p for p in conflicted if p != "gen.txt"]:
+    print(json.dumps({"regenerated": [], "notes": ["not generated"]}))
+    sys.exit(3)
+gen = pathlib.Path("gen.txt")
+old = gen.read_text() if gen.is_file() and not conflicted else None
+new = "".join(sorted(p.stem + "\\n" for p in pathlib.Path(".").glob("*.dep")))
+gen.write_text(new)
+print(json.dumps({"regenerated": ["gen.txt"] if new != old else [], "notes": []}))
+'''
+
+
+def test_a_generated_file_is_regenerated_by_the_tree_s_pins_py_on_each_merge_never_merged_as_text(tmp_path, monkeypatch, capsys):
+    """0fcc (top, 8 Oct): two branches each added a Lake dependency, git merged the manifest's text and the train's manifest held
+    neither. Each merge runs the tree's own `pins.py --merged`: a conflict in a file it generates is resolved by regenerating
+    it, the merge's `Regenerated:` trailer names it, and the lines regeneration drops (a stale `old` no pull request removes)
+    don't count as a revert; a conflict in any other file still refuses."""
+    main, _feat, _tip = _repos(tmp_path)
+    (main / "tools" / "verity" / "check").mkdir(parents=True, exist_ok=True)
+    origin, heads = _origin_with(tmp_path, main, {"tools/verity/check/pins.py": STUB_PINS, "gen.txt": "old\n", "x.txt": "x\n"}, {
+        21: {"a.dep": "", "gen.txt": "old\na\n"},
+        22: {"b.dep": "", "gen.txt": "old\nb\n"},
+        23: {"x.txt": "y\n"},
+        24: {"x.txt": "z\n"}})
+    monkeypatch.chdir(main)
+    pins = {n: f"{n}@{h[:9]}" for n, h in heads.items()}
+    assert merge_main(["--train", "--prepare", "train-prep/g", pins[21], pins[22], "--lint", "true"]) == 0, capsys.readouterr().err
+    assert _git(origin, "show", "train-prep/g:gen.txt") == "a\nb"
+    assert _git(origin, "log", "-1", "--format=%B", "train-prep/g").rstrip().endswith("Regenerated: gen.txt")
+    capsys.readouterr()
+    assert merge_main(["--train", "--prepare", "train-prep/x", pins[23], pins[24], "--lint", "true"]) == 3
+    assert "#24 does not merge onto the train so far (a conflict in x.txt holds more than import lines" in capsys.readouterr().err
+    assert _git(origin, "for-each-ref", "refs/heads/train-prep/x") == ""
+
+
 def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, monkeypatch, capsys):
     """Two PRs adding a guarantee of the same name in one `lean-audit.json`, a few lines apart: git merges the lines cleanly into
     an object with the key twice, which `json.loads` would read as the last one silently."""
@@ -596,7 +635,8 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
     slot = ["python3", "tools/verity/check/slot.py"]
     for argv in ([*cmd], [*cmd, "--keep-going"], [*cmd, "--no-cache", "--cores", "8"], [*cmd, "--keep-going", "--verdicts-in", "v.tgz"],
                  [*cmd, "--verdicts-in", "v.tgz", "--cores", "4"], [*slot, "--", *cmd], [*slot, "--by", "x", "--", *cmd],
-                 [*slot, "--priority", "--by", "gates", "--", *cmd, "--keep-going"]):
+                 [*slot, "--priority", "--by", "gates", "--", *cmd, "--keep-going"], [*slot, "--twin", "p@vy-nebius-1", "--", *cmd],
+                 [*slot, "--priority", "--by", "gates", "--twin", "p", "--", *cmd, "--keep-going"]):
         assert unlike(argv, cmd) is None, argv
     other, extra = "isn't the target's declared", "which check.py doesn't take"
     for argv, why in (([], other), (None, "its record has no argv"), ([*cmd[:-1], "check.py"], other), (["env", "X=1", *cmd], other),

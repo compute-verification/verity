@@ -3,8 +3,8 @@
 
 A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which
 `names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`deliveries`): the names that
-lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, and every name
-whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
+lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, on a reply
+under an announcement the owners of the PRs it names (`pr_watchers`), and every name whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
 or a `digest` (in that name's next `read --as`). The footer carries the post's kind and flags, which subscriptions filter on.
 Notes are records, never messages.
 
@@ -18,6 +18,7 @@ Notes are records, never messages.
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
+  research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
   research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
   research msg handles [--json] | subscriptions --as HANDLE        # the registry; the subscribe calls a handle's holder makes
   research msg owners [PATH...]                                    # who owns each path (stdin: `git diff --name-only main... |`)
@@ -57,6 +58,7 @@ import math
 import os
 import re
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -80,13 +82,15 @@ SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 REGISTRY_REFS = ("origin/main",)                                  # where a checkout older than the registry finds it
 FRONT_DOOR = "agent-coordination"
-ASKS_ON_LINEAR = False                                            # the Linear trial's cutover turns it on (`linear.py`)
+ASKS_ON_LINEAR = True                                             # an ask is also an issue in its owner's team (`linear.py`)
+LINEAR_LINK_RE = re.compile(r"\nLinear: <https://linear\.app/[^|>]+\|([A-Z][A-Z0-9]*-\d+)>")
+LINEAR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,6}$")
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
 #: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
 BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
                   "reactions.add", "usergroups.list")
-DIRECT_ONLY = ("usergroups.create", "usergroups.enable", "usergroups.update")        # `groups sync --apply`: the token itself
+DIRECT_ONLY = ("chat.update", "usergroups.create", "usergroups.enable", "usergroups.update")   # `retract`, `groups sync --apply`: the token itself
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
@@ -119,7 +123,8 @@ WAIT_GRACE = timedelta(minutes=5)                                # the site's de
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
 ROUTES_RAW = "https://raw.githubusercontent.com/danielreuter/research-notes/main/routes.d/"
 ROUTE_SCHEMA = "verity/slack-route/v1"
-LEAD_RE = re.compile(r"^\s*((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
+LEAD_RE = re.compile(r"^\s*(?:(?::[a-z0-9_+'-]+:|[\u2600-\u27bf\U0001f000-\U0001faff]\ufe0f?)\s*)?"   # one emoji may lead (`:mega: @a`)
+                     r"((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
 BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
@@ -128,6 +133,12 @@ CAP_PER_HOUR = 20                                                # doorbells int
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
+PR_RE = re.compile(r"(?<![\w&/#])#(\d{3,6})\b")
+BRANCH_RE = re.compile(r"\bcursor/([a-z0-9._-]*[a-z0-9])")
+TRAIN_PREP_RE = re.compile(r"^train-prep-((?:\d+-)+)")                  # `cursor/train-prep-1585-1586-on-041c30713-4292`
+RUN_ID_RE = re.compile(r"\br\d{8}-\d{6}-([0-9a-f]{4})\b|(?<![\w./#@-])([0-9a-f]{4})(?![\w/@-])")   # a run, or its last 4
+HISTORY_S = 86400                                                # how far back a reply's thread counts for `pr_watchers`
+GH, GH_REPO = "gh", "danielreuter/verity"                       # `pr_branches` asks gh for PR branches
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
 FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                                  # `_ask · urgent_`
@@ -185,6 +196,8 @@ def load_registry(path: Path) -> dict:
             if not isinstance(p, str) or not p or p.startswith("/") or ".." in p.split("/") or p in owned:
                 raise SlackError(f"registry {path}: @{name} owns {p!r}: a path relative to the checkout that no other handle owns")
             owned[p] = name
+        if "linear" in h and (not LINEAR_KEY_RE.match(str(h["linear"])) or any(o.get("linear") == h["linear"] for o in reg["handles"] if o is not h)):
+            raise SlackError(f"registry {path}: @{name}'s linear {h['linear']!r}: a Linear team key no other handle has")
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
@@ -612,8 +625,8 @@ def poster(msg: dict | None, reg: dict) -> str | None:
 
 
 def lead_names(text: str, reg: dict) -> list[str]:
-    """The names a post addresses: the `@name`s and user-group mentions at its very start, before any other word, or a
-    handle written bare as the first word with a colon (`lean: ...`)."""
+    """The names a post addresses: the `@name`s and user-group mentions at its very start (after one emoji at most), before
+    any other word, or a handle written bare as the first word with a colon (`lean: ...`)."""
     m = LEAD_RE.match(text or "")
     if not m and (bare := BARE_LEAD_RE.match(text or "")) and any(h["handle"] == bare[1] for h in reg["handles"]):
         return [bare[1]]
@@ -625,18 +638,103 @@ def lead_names(text: str, reg: dict) -> list[str]:
     return names
 
 
+UNROUTED_SKIP_RE = re.compile(r"```.*?```|`[^`\n]*`|<[^>\n]*>|^\s*>.*$", re.S | re.M)   # code, links, quoted lines
+LATER_AT_RE = re.compile(r"(?<![\w.@/-])@([a-z0-9][a-z0-9._-]*)")
+LATER_NAME_RE = re.compile(r"(?:^|(?<=[.!?;])[ \t]+)[ \t]*([a-z0-9][a-z0-9._-]*):\s", re.M)
+
+
+def unrouted_names(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> list[str]:
+    """The handles other than `author`, the `rung` ones and the lead's that a body names where no doorbell reaches: `@handle` after its
+    lead, or `handle:` right after the lead, starting a later line or starting a sentence (only a post's start routes, `lead_names`)."""
+    body = body or ""
+    m = LEAD_RE.match(body)
+    rest = UNROUTED_SKIP_RE.sub("", body[m.end() if m else 0:])
+    found = [n.rstrip("._-") for n in LATER_AT_RE.findall(rest)] + LATER_NAME_RE.findall(rest)
+    handles = {h["handle"] for h in reg["handles"]} - {author, *rung, *lead_names(body, reg)}
+    return list(dict.fromkeys(n for n in found if n in handles))
+
+
+def refuse_unrouted(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> None:
+    if names := unrouted_names(body, reg, author, rung):
+        raise SlackError(f"it names {' '.join('@' + n for n in names)} past its start, where nothing rings: only the names a "
+                         "post starts with wake anyone. Move them to the start (--to, or the leading @names) to ring them, "
+                         "or drop the @ (and don't start a line or sentence with `name:`) to mention them without a doorbell")
+
+
 def header_names(text: str, reg: dict) -> list[str]:
     """The names an announcement's header (`📣 *Announcement* from @x to @a @b`) addresses; empty for `to every handle`."""
     first = (text or "").split("\n", 1)[0]
     return lead_names(first.split(" to ", 1)[1], reg) if " to " in first else []
 
 
-def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset()) -> list[str]:
+def branch_owners(branch: str, reg: dict) -> list[str]:
+    """The handles whose agent made `branch`: its last 4 characters are the last 4 of the holder's agent id, or one of the
+    handle's `branch_suffixes` (a holder whose PRs another agent of its own opens)."""
+    suffix = branch.rsplit("-", 1)[-1]
+    return [h["handle"] for h in reg["handles"] if len(suffix) == 4 and
+            suffix in [a[-4:] for a in AGENT_ID_RE.findall(h.get("holder") or "") if len(a) > 11] + h.get("branch_suffixes", [])]
+
+
+def named_prs(text: str) -> tuple[list[str], list[str]]:
+    """The PR numbers a post names (`#1585`, and those a train-prep branch's name lists) and the other `cursor/` branches it
+    names, each in order."""
+    nums, branches = [], []
+    for n in PR_RE.findall(text or ""):
+        nums.append(n)
+    for b in BRANCH_RE.findall(text or ""):
+        if m := TRAIN_PREP_RE.match(b):
+            nums += m[1].rstrip("-").split("-")
+        else:
+            branches.append(b)
+    return list(dict.fromkeys(nums)), list(dict.fromkeys(branches))
+
+
+def run_ids(text: str) -> set[str]:
+    """The run ids a post names, as their last 4 characters (`dd21` for r20261009-035518-dd21); a bare 4-character word counts
+    only with a letter in it, so a year or a PR number doesn't."""
+    return {a or b for a, b in RUN_ID_RE.findall(SUBTEAM_RE.sub(" ", text or "")) if a or re.search(r"[a-f]", b)}
+
+
+def pr_watchers(msg: dict, reg: dict, history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:
+    """Who a reply under an announcement (the merge thread is one) wakes besides its addressees: the owners of each PR it
+    names (`branch_owners` of the PR's branch, from `branches`: PR number -> head branch), and each handle that, in an earlier
+    post of `history` (the thread's recent replies) naming one of its own PRs, named a run id this post names, such as the
+    train its PR waits on.  A PR whose owner isn't known wakes whoever named it in `history`: unsure, it wakes."""
+    branches = branches or {}
+
+    def owners(text: str) -> tuple[list[str], list[str]]:
+        nums, direct = named_prs(text)
+        known, unknown = [], []
+        for n in nums:
+            got = branch_owners(branches[n], reg) if n in branches else []
+            known += got
+            unknown += [] if got else [n]
+        for b in direct:
+            known += branch_owners(b, reg)
+        return known, unknown
+
+    text = msg.get("text") or ""
+    out, unknown = owners(text)
+    ids, tied = run_ids(text), []
+    for m in history:
+        who, said = poster(m, reg), m.get("text") or ""
+        if not who or is_status(said):
+            continue
+        if any(n in named_prs(said)[0] for n in unknown):
+            out.append(who)
+        if who in owners(said)[0] and ids & run_ids(said):
+            tied.append(who)
+    return list(dict.fromkeys(out + tied))
+
+
+def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset(),
+                  history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:
     """The names a post in #agent-coordination wakes, in order.  `msg` and `root` (its thread's root, None for a top-level
     post) are Slack messages; `inboxes` is every inbox thread's ts.  Nothing in an inbox thread routes; a status line wakes
     only the root's poster; otherwise the names at the start, an announcement's audience (every handle when it names
     none), and on a reply that names no one the root's poster or, when the poster replies, the names the root addressed.
-    A quiet post wakes only the names at its start.  The author is never a target."""
+    A quiet post wakes only the names at its start.  A reply under an announcement, quiet or not, also wakes its
+    `pr_watchers` (with `history` and `branches`, as there).  The author is never a target."""
     text, ts, thread = msg.get("text") or "", msg.get("ts"), msg.get("thread_ts")
     reply = bool(thread) and thread != ts
     if (thread or ts) in inboxes or text.startswith(INBOX_HEAD) or \
@@ -653,13 +751,15 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
         out = lead_names(text, reg)
         if not reply and is_announcement(msg):
             out += header_names(text, reg) or [h["handle"] for h in reg["handles"]]
-        if reply and out:
-            pass                                                     # a reply that names someone is for them alone
+        if reply and set(out) - {author}:
+            pass                                                     # a reply that names someone else is for them alone
         elif reply and by and by != author:
             out.append(by)
         elif reply and by:
             rt = (root or {}).get("text") or ""
             out += lead_names(rt, reg) + (header_names(rt, reg) if is_announcement(root) else [])
+    if reply and is_announcement(root) and not is_status(text):
+        out += pr_watchers(msg, reg, history, branches)
     seen: list[str] = []
     for n in out:
         if n and n != author and n not in seen:
@@ -703,12 +803,13 @@ def matches(filt: str, msg: dict, reg: dict, targets: list[str]) -> bool:
     return bool((filt or "").split())
 
 
-def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset()) -> list[dict]:
+def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset(),
+               history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[dict]:
     """Who gets `msg`, and how: each of `route_targets` is woken (`wake`, why `addressed`); then each other name in `book`
     (name -> route) whose `subscriptions` match it, by its first matching subscription's `deliver` (`wake`: now; `digest`:
-    when that name reads its digest).  A quiet post wakes only the names it starts with, and still reaches digests.  Nothing in an inbox thread,
-    and nothing by an unknown author, reaches anyone; the author never gets their own post."""
-    targets = route_targets(msg, root, reg, inboxes)
+    when that name reads its digest).  A quiet post wakes only the names it starts with and its `pr_watchers`, and still reaches
+    digests.  Nothing in an inbox thread, and nothing by an unknown author, reaches anyone; the author never gets their own post."""
+    targets = route_targets(msg, root, reg, inboxes, history, branches)
     out = [{"name": t, "deliver": "wake", "why": "addressed"} for t in targets]
     thread, text = msg.get("thread_ts") or msg.get("ts"), msg.get("text") or ""
     author = poster(msg, reg)
@@ -859,6 +960,42 @@ def _rang(text: str, ts: str, link: str) -> bool:
     return link in text
 
 
+def pr_branches(nums: set[str], log=None) -> dict[str, str]:
+    """PR number -> head branch, for `pr_watchers`: from the cache ($RESEARCH_PR_BRANCHES, default
+    ~/.cache/research/pr-branches.json; a PR's branch never changes), and for numbers it lacks one `gh pr list`, whose answers
+    join the cache.  Without gh, or when it fails, the numbers stay unknown and their PRs wake whoever named them."""
+    path = Path(os.environ.get("RESEARCH_PR_BRANCHES") or Path.home() / ".cache" / "research" / "pr-branches.json")
+    try:
+        cache = json.loads(path.read_text())
+    except (OSError, ValueError):
+        cache = {}
+    if nums - cache.keys():
+        try:
+            out = subprocess.run([GH, "pr", "list", "--repo", GH_REPO, "--state", "all",
+                                  "--limit", "1000", "--json", "number,headRefName"], capture_output=True, text=True, timeout=60)
+            if out.returncode:
+                raise OSError(out.stderr.strip().splitlines()[-1] if out.stderr.strip() else f"exit {out.returncode}")
+            cache.update({str(p["number"]): p["headRefName"] for p in json.loads(out.stdout)})
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(cache, sort_keys=True))
+        except (OSError, ValueError, subprocess.SubprocessError) as e:
+            print(f"route: PR owners unknown for {' '.join('#' + n for n in sorted(nums - cache.keys()))} (gh: {e}); "
+                  "whoever named them in the thread is rung", file=log or sys.stderr)
+    return {n: cache[n] for n in nums if n in cache}
+
+
+def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float, log=None) -> tuple[list[dict], dict[str, str]]:
+    """For a reply under an announcement, what `pr_watchers` reads: the thread's replies before it in the last HISTORY_S, and
+    the branch of every PR they or it name.  Nothing for any other post."""
+    thread = msg.get("thread_ts")
+    if not thread or thread == msg.get("ts") or not is_announcement(root):
+        return [], {}
+    history = [m for m in api.paged("conversations.replies", "messages", channel=ch, ts=thread, oldest=f"{now - HISTORY_S:.6f}")
+               if m.get("ts") not in (thread, msg.get("ts")) and float(m.get("ts") or 0) < float(msg.get("ts") or now)]
+    nums = {n for m in [msg, *history] for n in named_prs(m.get("text") or "")[0]}
+    return history, pr_branches(nums, log) if nums else {}
+
+
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str, *, urgent: bool = False,
             now: float | None = None, log=None) -> list[str]:
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
@@ -869,17 +1006,18 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     for n in lead_names(msg.get("text", ""), reg):
         routes.get_route(n, fresh=n not in routes.local)            # a name new since the clone was pulled
     inboxes = routes.inboxes()
+    now = _now().timestamp() if now is None else now
+    history, branches = watch_context(api, ch, msg, root, now, log)
     if routes.server_delivers():
-        names = route_targets(msg, root, reg, inboxes)
+        names = route_targets(msg, root, reg, inboxes, history, branches)
         print(f"route: the router rings {' '.join('@' + n for n in names)}" if names else
               "route: this rings no one", file=log)
         return []
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
     src, lines = thread or msg.get("ts") or "", []
-    now = _now().timestamp() if now is None else now
     humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    for d in deliveries(msg, root, reg, routes.all(), inboxes):
+    for d in deliveries(msg, root, reg, routes.all(), inboxes, history, branches):
         name = d["name"]
         if name in humans:
             continue                                                 # people read Slack itself
@@ -923,7 +1061,8 @@ def channel_id_for(reg: dict, key: str) -> str | None:
 def fetch_message(api: Slack, ch: str, ts: str, thread: str | None) -> dict | None:
     """The message itself, from Slack: a wake payload is not evidence of who wrote it."""
     if thread and thread != ts:
-        msgs = api.call("conversations.replies", channel=ch, ts=thread, oldest=ts, latest=ts, inclusive="true", limit=1).get("messages", [])
+        msgs = api.call("conversations.replies", channel=ch, ts=thread, oldest=ts, latest=ts, inclusive="true",
+                        limit=2).get("messages", [])                 # Slack puts the thread's root first, whatever `oldest` says
     else:
         msgs = api.call("conversations.history", channel=ch, oldest=ts, latest=ts, inclusive="true", limit=1).get("messages", [])
     return next((m for m in msgs if m.get("ts") == ts), None)
@@ -993,8 +1132,13 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             missing |= not cid
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
+    if key := h.get("linear"):
+        print(f'subscribe_linear_comment(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
+              f"# a comment on an issue in @{h['handle']}'s Linear team; the doorbell already carries each new ask")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
           f"starts, replies in or picks up (not for a status line alone); renew on every wake")
+    print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
+          f"@{h['handle']} at its start, one of its PRs, or a run it named beside one of its PRs; unsubscribe from any you hold")
     return 2 if missing else 0
 
 
@@ -1019,27 +1163,72 @@ def name_entry(ns: argparse.Namespace, reg: dict, name: str, person_ok: bool = F
                          f"its agent opens one with `research msg names open --as {name}`") from None
 
 
+def holder_ids(ns: argparse.Namespace, reg: dict, name: str) -> list[str]:
+    """The agents that hold `name`: the ids in its registry `holder`, and its open inbox's route holder (a successor's)."""
+    try:
+        ids = AGENT_ID_RE.findall(entry(reg, name).get("holder") or "")
+    except SlackError:
+        ids = []
+    r = routes_of(ns).get_route(name.lstrip("@"))
+    return list(dict.fromkeys(ids + ([r["holder"]] if r and r.get("holder") and not r.get("closed") else [])))
+
+
+def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
+    """`name_entry` for `--as NAME` on a command that posts or changes NAME's route: only NAME's holder (`holder_ids`; a
+    short id such as `bc-8ece7cde` matches the full one) may use it, and an agent that can't tell its own id may not."""
+    h = name_entry(ns, reg, name)
+    ids, me = holder_ids(ns, reg, h["handle"]), self_agent_id()
+    if me and any(me == a or (len(a) < len(me) and me.startswith(a)) for a in ids):
+        return h
+    if not me and ns.dry_run:
+        print(f"dry-run: no agent id (set RESEARCH_AGENT_URL), so a real --as {h['handle']} would be refused", file=sys.stderr)
+        return h
+    held = f"held by {', '.join(ids)}" if ids else "held by no agent the registry or its route names"
+    raise SlackError(f"--as {h['handle']}: @{h['handle']} is {held}, and this agent is {me or 'unknown (set RESEARCH_AGENT_URL)'}; "
+                     f"post as your own handle (a successor takes a name over with `research msg names open --as "
+                     f"{h['handle']} --succeeds`)")
+
+
 def _route(ns: argparse.Namespace, reg: dict, ch: str) -> tuple[dict, Routes | None] | None:
     return (reg, routes_of(ns)) if ch == channel_id_for(reg, FRONT_DOOR) and not getattr(ns, "no_route", False) else None
 
 
 def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
-    h, owner = name_entry(ns, reg, ns.handle), name_entry(ns, reg, ns.to)
+    h, owner = acting_as(ns, reg, ns.handle), name_entry(ns, reg, ns.to)
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    body = _body(ns)
-    if (ns.linear or ASKS_ON_LINEAR) and not ns.dry_run:
-        from . import linear  # noqa: PLC0415
-
-        issue, why = linear.ask_issue(owner["handle"], h["handle"], body)
-        if issue:
-            body = f"{body}\nLinear: <{issue['url']}|{issue['identifier']}>"
-            print(f"linear: {issue['identifier']} {issue['url']}")
-        else:
-            print(f"research msg ask: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
+    refuse_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
+    body = linear_ask(ns, owner, h["handle"], body)
     _post(client(ns), ch, h["handle"], f"{tag(owner)} {body}", route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
+
+
+def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> str:
+    """The ask's body, filed as an issue in its owner's Linear team (`linear` in the registry) and ending with the issue's
+    link; as it was when the owner has no team or Linear fails, so the ask still goes out on Slack."""
+    if not (getattr(ns, "linear", False) or ASKS_ON_LINEAR) or ns.dry_run or not owner.get("linear"):
+        return body
+    from . import linear  # noqa: PLC0415
+
+    issue, why = linear.ask_issue(owner["linear"], sender, body)
+    if not issue:
+        print(f"research msg: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
+        return body
+    print(f"linear: {issue['identifier']} {issue['url']}")
+    return f"{body}\nLinear: <{issue['url']}|{issue['identifier']}>"
+
+
+def linear_close(text: str, state_type: str) -> None:
+    """Move the Linear issue an ask's root links (`linear_ask`) to its team's first `state_type` state."""
+    if not (m := LINEAR_LINK_RE.search(text or "")):
+        return
+    from . import linear  # noqa: PLC0415
+
+    try:
+        print(f"linear: {m[1]} {linear.Linear().close(m[1], state_type)}")
+    except (linear.LinearError, OSError, ValueError) as e:
+        print(f"research msg: {m[1]} stays open on Linear ({e}); the status line stands", file=sys.stderr)
 
 
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
@@ -1078,7 +1267,7 @@ def _check_audience(to: list[dict], body: str, reg: dict) -> None:
 
 
 def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
-    h = name_entry(ns, reg, ns.handle)
+    h = acting_as(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     ch = channel_id(ns, reg, FRONT_DOOR)
     _check_audience(to, body := _body(ns), reg)
@@ -1091,7 +1280,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
     `--kind` rides in the footer, where subscriptions filter on it.  An announcement (`--kind announce`) gets its header,
     and with no `--to` it is for every handle."""
-    h = name_entry(ns, reg, ns.handle)
+    h = acting_as(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
@@ -1099,6 +1288,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     if any(t["handle"] == h["handle"] for t in to):
         raise SlackError("--to names someone else")
     body = _body(ns)
+    if to or kind != "announce":                                     # an announcement with no --to reaches every handle
+        refuse_unrouted(body, reg, h["handle"], tuple(t["handle"] for t in to))
     if not to and (lead := lead_names(body, reg)) and set(lead) == {h["handle"]}:
         raise SlackError(f"it starts with @{h['handle']} only, and a post never wakes its author: name its addressee with --to")
     if kind == "announce":
@@ -1111,6 +1302,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
             raise SlackError("--verify and --ships go with --kind announce")
         if to and (m := LEAD_RE.match(body)) and set(lead_names(body, reg)) <= {t["handle"] for t in to}:
             body = body[m.end():]                                    # `--to @ci` with a body that starts `@ci` names it once
+        if kind == "ask" and not ns.thread and len(to) == 1:
+            body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
@@ -1165,6 +1358,8 @@ def cmd_list(ns: argparse.Namespace, reg: dict) -> int:
 def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
     """A name's subscriptions, in its route: list them, add `--filter F` (delivered by `--deliver`), or `--remove F`."""
     routes, name = routes_of(ns), ns.handle.lstrip("@")
+    if ns.filter or ns.remove:
+        acting_as(ns, reg, name)
     r = routes.get_route(name, fresh=name not in routes.local)
     if not r:
         raise SlackError(f"@{name} has no inbox; open one with `research msg names open --as {name}`")
@@ -1185,9 +1380,11 @@ def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
-    h = name_entry(ns, reg, ns.handle)
+    h = acting_as(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
-    body = _body(ns) + (f" {QUIET}" if ns.quiet else "")
+    body = _body(ns)
+    refuse_unrouted(body, reg, h["handle"])
+    body += f" {QUIET}" if ns.quiet else ""
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
     return 0
 
@@ -1200,12 +1397,33 @@ def cmd_pickup(ns: argparse.Namespace, reg: dict) -> int:
 def _status(ns: argparse.Namespace, reg: dict, word: str, reaction: str, detail: str | None) -> int:
     """A status line in the thread; on an ask or an alert (one owner), also the reaction on its root. On an announcement the
     line alone carries it: every handle posts through one bot, which can place each reaction only once."""
-    h = name_entry(ns, reg, ns.handle)
+    h = acting_as(ns, reg, ns.handle)
     api, ch = client(ns), channel_id(ns, reg)
     detail = " ".join((detail or "").split())
     _post(api, ch, h["handle"], f"{word}" + (f" \u2014 {detail}" if detail else ""), ns.thread, route=_route(ns, reg, ch))
-    if not is_announcement(api.root(ch, ns.thread)):
+    root = api.root(ch, ns.thread)
+    if not is_announcement(root):
         api.call("reactions.add", channel=ch, timestamp=ns.thread, name=reaction)
+        linear_close((root or {}).get("text", ""), "canceled" if reaction == "x" else "completed")
+    return 0
+
+
+def cmd_retract(ns: argparse.Namespace, reg: dict) -> int:
+    """Blank a post that `--as` NAME sent: its text becomes `_retracted by @NAME_` (and `--why`), so its thread keeps its
+    place.  Only NAME's holder may, only for NAME's own post, and only with the bot token: the broker allows no edits.  The
+    doorbells it already rang keep their copy."""
+    h, api = acting_as(ns, reg, ns.handle), client(ns)
+    ch = channel_id(ns, reg)
+    if not ns.dry_run:
+        msg = fetch_message(api, ch, ns.ts, ns.thread)
+        if not msg:
+            raise SlackError(f"no post {ns.ts} in that channel" + ("" if ns.thread else " (a reply needs --thread ROOT)"))
+        if (who := poster(msg, reg)) != h["handle"]:
+            raise SlackError(f"{ns.ts} was posted by {'@' + who if who else 'someone else'}, not @{h['handle']}: "
+                             "a name retracts only its own posts")
+    text = f"_retracted by @{h['handle']}_" + (f": {' '.join(ns.why.split())}" if ns.why else "")
+    api.call("chat.update", channel=ch, ts=ns.ts, text=text)
+    print(f"retracted {ns.ts}")
     return 0
 
 
@@ -1552,7 +1770,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and not is_quiet(m.get("text") or "")
+        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and \
+            not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
@@ -1734,7 +1953,7 @@ def route_error(what: str, e: urllib.error.HTTPError) -> str:
     if e.code == 429:
         return f"{what}: the route is rate limiting ({why}; retry after {e.headers.get('Retry-After')} s)"
     if e.code >= 500:
-        return f"{what}: the route is down ({why}); ask @console"
+        return f"{what}: the route is down ({why}); ask @top"
     return f"{what}: the route answered {why}"
 
 
@@ -1821,6 +2040,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
 
     now = _now()
     body = card(ns, reg, now)
+    acting_as(ns, reg, ns.handle)
     old = fallback(body)
     if ns.dry_run:
         print(f"dry-run: POST {ASK_DANIEL} {json.dumps(body, sort_keys=True, ensure_ascii=False)}", file=sys.stderr)
@@ -1950,6 +2170,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--now", default=None, help=argparse.SUPPRESS)
     p.add_argument("--json", action="store_true")
     cmd("pickup", "\U0001f440 on an ask or alert you own", thread=True)
+    p = cmd("retract", "blank a post your name sent (needs SLACK_BOT_TOKEN: the broker allows no edits)", as_=True)
+    p.add_argument("--ts", required=True, help="the post's ts")
+    p.add_argument("--thread", default=None, metavar="ROOT", help="its thread's root ts, when it is a reply")
+    p.add_argument("--why", default=None, help="one line the blanked post keeps")
     p = cmd("done", "\u2705 a status line, and the reaction on an ask or alert", as_=True, thread=True, url=True)
     p.add_argument("--link", default=None, metavar="URL", help="the result: a PR, file or art: id")
     p.add_argument("--note", default=None)
@@ -2005,7 +2229,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                 "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "inbox": cmd_inbox, "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close, "list": cmd_list,
-                "subscribe": cmd_subscribe, "watch": cmd_watch, "linear": cmd_linear}[ns.cmd](ns, reg)
+                "subscribe": cmd_subscribe, "watch": cmd_watch, "linear": cmd_linear, "retract": cmd_retract}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"{prog}: {e}", file=sys.stderr)
         return 2

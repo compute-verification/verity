@@ -314,5 +314,3 @@ theorem Pouw.SecurityProofs.PearlC.GammaH100Rev1_8192 : Pouw.Guarantees.PearlC.G
 theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384 : Pouw.Guarantees.PearlC.SampledH100Rev1_16384 := @Pouw.PearlC.pearlCSampledH100Rev1_16384
 
 theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1_8192 := @Pouw.PearlC.pearlCSampledH100Rev1_8192
-
-theorem Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfGranted : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfGranted := @Pouw.PearlC.ttOutPearlCDevRev1_of_granted

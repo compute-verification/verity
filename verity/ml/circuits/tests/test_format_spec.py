@@ -430,8 +430,7 @@ def build() -> dict:
         "refs": [[j, [list(r) for r in refs_from_json(j)]] for j in REFS],
         "take": [[t, j, ax, m, [list(r) for r in Coll(type_from_json(t), refs_from_json(j)).take(ax, m).refs]] for t, j, ax, m in TAKES],
         "descriptor": _canon(desc),
-        "program_digest_sha256": codec.program_digest(desc),
-        "program_sha512": PO.program_sha512(desc),
+        "program_digest": codec.program_digest(desc),
         "alias_writer": [[label, list(at) if at else None, enc.refs(r, at)] for label, at, r in ALIAS],
         "alias_reader": {"node": 12, "arg": 0, "refs": [list(r) for r in _root_nodes(D)[12].args[0].refs]},
         "decoder_rejects": rejects,
@@ -440,8 +439,7 @@ def build() -> dict:
         "program": {"root": D.root.id, "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(D.root.body.nodes) if is_input(n.fn)],
                     "input_gates": program.input_gates, "calls": [[k, fn.id] for k, fn in PO.calls(D)]},
         "binding_ids": [[i, list(input_id(i)) if input_id(i) else None] for i in BINDING_IDS],
-        "registered_program": {"registered": ["r"], "descriptor": _canon(rdesc), "program_digest_sha256": codec.program_digest(rdesc),
-                               "program_sha512": PO.program_sha512(rdesc),
+        "registered_program": {"registered": ["r"], "descriptor": _canon(rdesc), "program_digest": codec.program_digest(rdesc),
                                "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(R.root.body.nodes) if is_input(n.fn)],
                                "calls": [[k, fn.id] for k, fn in PO.calls(R)]},
         "layout": _layout(D),
@@ -525,9 +523,8 @@ def test_outside_the_domain_the_bytes_differ_and_the_codec_refuses():
 
 def test_the_program_digests(decoded):
     b = VECTORS["descriptor"].encode()
-    assert hashlib.sha256(b).hexdigest() == VECTORS["program_digest_sha256"] == codec.program_digest(decoded.desc)
-    assert hashlib.sha512(b).hexdigest() == VECTORS["program_sha512"] == PO.program_sha512(decoded.desc)
-    assert codec.program_digest(Program(PROG)) == VECTORS["program_digest_sha256"]
+    assert hashlib.sha512(b).hexdigest() == VECTORS["program_digest"] == codec.program_digest(decoded.desc)
+    assert codec.program_digest(Program(PROG)) == VECTORS["program_digest"]
 
 
 # -- 2. types, 3. reference sequences ----------------------------------------------------------------------------------------------
@@ -613,7 +610,7 @@ def test_registered_inputs_are_recognised_by_id_and_bound_into_the_digest(live, 
     assert reg["calls"] == VECTORS["program"]["calls"] and R.circuit.size == decoded.circuit.size
     assert [[k, n] for k, _, n in reg["input_nodes"]] == [[k, n] for k, _, n in VECTORS["program"]["input_nodes"]]
     assert [fid for _, fid, _ in reg["input_nodes"]] == ["Input32_v1", "RegisteredInput16_v1", "RegisteredInput32_v1"]
-    assert reg["program_digest_sha256"] != VECTORS["program_digest_sha256"] and codec.program_digest(json.loads(reg["descriptor"])) == reg["program_digest_sha256"]
+    assert reg["program_digest"] != VECTORS["program_digest"] and codec.program_digest(json.loads(reg["descriptor"])) == reg["program_digest"]
     assert [R.circuit.gate(g).prim.id for g in range(R.circuit.size) if not is_input(R.circuit.gate(g).prim)] == [
         decoded.circuit.gate(g).prim.id for g in range(decoded.circuit.size) if not is_input(decoded.circuit.gate(g).prim)]
 
