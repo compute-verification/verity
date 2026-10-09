@@ -24,8 +24,6 @@ theorem Pouw.SecurityProofs.PearlC.GammaFp4Sm120LoopLut256_16384 : Pouw.Guarante
 
 theorem Pouw.SecurityProofs.PearlC.GammaFp4Sm120LoopLut256_8192 : Pouw.Guarantees.PearlC.GammaFp4Sm120LoopLut256_8192 := @Pouw.PearlC.gammaFp4_sm120Loop_lut256_8192
 
-theorem Pouw.SecurityProofs.PearlC.GammaUImpliesGamma : Pouw.Guarantees.PearlC.GammaUImpliesGamma := @Pouw.PearlC.gammaU_implies_gamma
-
 theorem Pouw.SecurityProofs.PearlC.GammaFp4Sm120_16384 : Pouw.Guarantees.PearlC.GammaFp4Sm120_16384 := @Pouw.PearlC.pearlCGammaFp4Sm120_16384
 
 theorem Pouw.SecurityProofs.PearlC.GammaFp4Sm120_8192 : Pouw.Guarantees.PearlC.GammaFp4Sm120_8192 := @Pouw.PearlC.pearlCGammaFp4Sm120_8192
@@ -41,7 +39,3 @@ theorem Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384 :
 theorem Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192 := @Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192
 
 theorem Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut : Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut := @Pouw.PearlC.ttOutRowSeed_of_ttOut
-
-theorem Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass : Pouw.Guarantees.PearlC.TTOutRowSeedSkipClass := @Pouw.PearlC.ttOutRowSeed_skipClass
-
-theorem Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile : Pouw.Guarantees.PearlC.TTOutTileRowSeedOfTTOutTile := @Pouw.PearlC.ttOutTileRowSeed_of_ttOutTile

@@ -4,17 +4,20 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
   "k"}`), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
-  `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records), `partition` (its own partition object, or null
-  for the canonical one), `registered` (null: R7 is not ported) and `delta` (an exact ratio in (0, 1));
+  `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's `registered`, when truthy, a list of
+  objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
+  `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
+  `delta` (an exact ratio in (0, 1)); with `registered` not null, also `parameters`, its program function's `[[name,
+  type], ...]`, which the descriptor does not carry (`Registered.params`);
 * **commitment**: the registration record, canonical JSON, fixed before the draw; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
   `statement`, `verdicts` (`{name: {"accepted": true | false | null, "of_record", ...}}`, each verifier's verdict on the
   drawn units' sessions), `sessions`, `served`, `session_roots` and `session_registered` (each null when absent);
-* **check**: R1–R6 (`Registration.check`), then the record's checks (the draw, the proved units, the receipt, the served
-  draw, the sessions' roots, registered reads). It rejects when one fails or a verdict that ran did not accept; it is
-  undecided when they all hold but no verifier of record accepted because none is named or one has not run; and it
-  accepts exactly when `audit_record` does;
+* **check**: R1–R7 (`Registration.check`), then the record's checks (the draw, the proved units, the receipt, the served
+  draw, the sessions' roots, the roots the sessions' registered reads were opened against). It rejects when one fails or
+  a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
+  is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound`; null for a
   Bernoulli law, whose bound is a float in Python), and the **profile** is `audit.profile`'s `IntegrityProfile`: one level
   `unit`, the partition's units, drawn by the verifier's law.
@@ -81,9 +84,23 @@ def rule (law : Json) : V Json := do
   | _ => throw "the law is not subset, bernoulli, stratified or work"
   return law
 
+def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",
+  "registered", "scheme", "work_table"]
+
+/-- A record of the log: an object whose `registered`, when truthy, lists objects with a string `value` and `root`, which
+`Registration.heldRoots` reads (Python's `held_roots` raises on anything else). -/
+private def logRecord (j : Json) : V Json := do
+  let j ← obj j "a record of the log"
+  let r := getD j "registered"
+  if truthy r && !(match r with
+      | .arr es => es.all fun e => (getD e "value" matches .str _) && (getD e "root" matches .str _)
+      | _ => false) then
+    throw "a record of the log registers values that are not objects with a string value and root"
+  return j
+
 def paramsOfJson (j : Json) : V Params := do
-  exactly j #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query", "registered",
-    "scheme", "work_table"] "the parameters"
+  let v2 := !(getD j "registered" matches .null)
+  exactly j (if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS) "the parameters"
   let program ← Flock.TemplateQuery.Desc.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
   let law ← rule (getD j "law")
@@ -102,7 +119,7 @@ def paramsOfJson (j : Json) : V Params := do
     | _ => throw "leaf_layer is not a string or null"
   let .arr anchors := getD j "anchors" | throw "anchors is not a list"
   let .arr log := getD j "log" | throw "log is not a list"
-  let log ← log.mapM (obj · "a record of the log")
+  let log ← log.mapM logRecord
   let partition ← match getD j "partition" with
     | .null => pure none
     | p => do
@@ -110,11 +127,16 @@ def paramsOfJson (j : Json) : V Params := do
       if !(getD p "program" matches .str _) || !(getD p "query" matches .obj _) then
         throw "partition names no program digest or query"
       pure (some p)
-  if !(getD j "registered" matches .null) then throw "registered values (R7) are not ported: registered must be null"
+  let (registered, params) ← if !v2 then pure (#[], #[]) else do
+    let registered ← (entries (← obj (getD j "registered") "registered")).mapM fun (v, w) => match nat? w with
+      | some w => pure (v, w)
+      | none => throw s!"registered: the words of {v} are not a natural number"
+    pure (registered, ← Registered.params program (getD j "parameters"))
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
-  return { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition }, delta }
+  return { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition, registered,
+                         params }, delta }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
@@ -159,9 +181,15 @@ def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
       | some reg => !jeq (getD reg "root") r
       | none => true
     if (entries roots).isEmpty || wrong then failed := failed.push "roots"
-  -- a v1 record registers no values, so the sessions may open none
-  if let some opened := e.sessionRegistered then
-    if !(entries opened).isEmpty then failed := failed.push "registered"
+  -- the sessions' registered reads were opened against exactly the record's `{value: root}` (none for a v1 record)
+  if (field? rec "registered").isSome || e.sessionRegistered.isSome then
+    let want := (match getD rec "registered" with | .arr es => es | _ => #[]).foldl (fun (acc : Array (Json × Json)) x =>
+      let v := getD x "value"
+      (acc.filter fun ((w, _) : Json × Json) => !jeq w v).push (v, getD x "root")) #[]
+    let opened := (e.sessionRegistered.map entries).getD #[]
+    if opened.size != want.size
+        || !opened.all (fun (v, r) => want.any fun (w, root) => jeq w (Json.str v) && jeq root r) then
+      failed := failed.push "registered"
   return failed
 
 /-- The profile's draw of the law the draw passed under (`audit.profile`). -/

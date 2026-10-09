@@ -4,7 +4,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 
 * `decode`: a case's three decoders run independently (`answer` stops at the first refusal);
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
-* `registration`: R1–R6's failure codes for a record against the parameters;
+* `registration`: R1–R7's failure codes for a record against the parameters;
+* `registered`: the verifier's own entries for the values its parameters expect registered;
+* `domain`: a registered value's commitment domain;
 * `check_draw`, `check_proved`: the draw's checks;
 * `draw`: the verifier's draw from given bytes of its own randomness;
 * `bound`: the exact bounds on wrong units at δ;
@@ -52,9 +54,23 @@ def partition (j : Json) : V Json := do
       (Partition.strata v.program v.query)),
     ("law", orNull id (Draw.derive v.program v.query v.law v.workTable))]
 
-/-- `{"params", "record"}` to R1–R6's codes. -/
+/-- `{"params", "record"}` to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
   return codes (Registration.check (getD j "record") (← params (getD j "params")).verifier)
+
+/-- `{"params"}` to `registered_entries`: `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
+def registered (j : Json) : V Json := do
+  let v := (← params (getD j "params")).verifier
+  return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson)))
+    (Registered.entries v.program v.params v.registered)
+
+/-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, to
+`registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32). -/
+def domain (j : Json) : V Json := do
+  let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"
+  let (some words, some leaves, some b) := (nat? (getD j "words"), nat? (getD j "leaves"), nat? (getD j "word_bits"))
+    | throw "words, leaves or word_bits is not a natural number"
+  return Json.str (Flock.hexOf (← Registered.domain program value words leaves b))
 
 /-- `{"draw", "population", "law"}`, the population an integer and the law an object, to `check_draw`'s codes. -/
 def checkDraw (j : Json) : V Json := do
@@ -109,7 +125,7 @@ def verdict (j : Json) : V Json := do
   return Json.mkObj [("verdict", Json.str name.name)]
 
 def table : List (String × (Json → V Json)) :=
-  [("decode", decode), ("partition", partition), ("registration", registration), ("check_draw", checkDraw),
-   ("draw", draw), ("check_proved", checkProved), ("bound", bound), ("verdict", verdict)]
+  [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
+   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("check_proved", checkProved), ("bound", bound), ("verdict", verdict)]
 
 end SampledProofs.Pieces
