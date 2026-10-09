@@ -321,8 +321,11 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     _lock(tmp_path, numpy="2.0", pytest="8.0")
     assert touched() == []
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
+    keys = _keys(S)
+    (tmp_path / "tools" / "verity" / "check" / "check.py").write_text("# check, which runs the runner\n")
+    assert touched() == [] and _keys(S) == keys                     # check's own code decides no other suite's verdict
     (tmp_path / "tools" / "verity" / "check" / "suites.py").write_text("# the runner\n")
-    assert touched() == ["a", "b"]
+    assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
 
 
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):

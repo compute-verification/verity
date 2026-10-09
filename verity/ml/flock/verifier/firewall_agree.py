@@ -8,12 +8,13 @@ the contract's property.
 Each session runs through the firewall with `verity_flock.firewall_transcript` watching what it sends the coin server; the
 firewall's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
 transcript under the verifier's public input, the session's own schedule (`verdicts`, `decide`). `--cases` runs the built-in sessions (`cases`): honest ones, the red team's six on #1270
-(review-zk-gateway, c00b85b0c), and tamper controls, firewalls that let out what the contract forbids, which the contract
-must refuse. `leaks` are review r6's transcripts on #1323 that leak a bit, each with its public input and the item the
+(review-zk-gateway, c00b85b0c), challengers whose coins the firewall must refuse (no commitment, an opening that does not
+open, none), and tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `leaks` are review r6's transcripts on #1323 that leak a bit, each with its public input and the item the
 contract must cut. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
-and ``schedule.json`` beside them or in their parent, or ``--schedule``) with their own coins and salts, checks the replay gives the recorded
-coin server record byte for byte, and expects both to accept. Each case carries its expectation (``firewall``, ``lean``,
+``coins.json`` when the challenger committed, and ``schedule.json`` beside them or in their parent, or ``--schedule``) with
+their own coins and salts, checks the replay gives the recorded coin server record and commitments byte for byte, and
+expects both to accept. Each case carries its expectation (``firewall``, ``lean``,
 and a prefix of the contract's reason); one where the two may differ says why (``divergence``). Writes DIR/<case>.json,
 DIR/agreement.tsv and DIR/result.json; exits 1 if any case misses its expectation.
 """
@@ -169,9 +170,47 @@ class SwapsCoins(RL.Proxy):
         return out
 
 
+class IgnoresOpenings(RL.Proxy):
+    """A firewall that relays the challenger's coins without checking that they open its commitment."""
+
+    def _opened(self, stream, k, coins):
+        pass
+
+
+class Uncommitted(RL.Proxy):
+    """A firewall that serves a session the challenger committed no coins to, as it did before committed coins."""
+
+    def __init__(self, coins, fresh_salt, *, schedule, commitments=None):
+        super().__init__(coins, fresh_salt, schedule=schedule, commitments={})
+
+    def _opened(self, stream, k, coins):
+        pass
+
+
+class WrongOpening(FT.RecordingCoins):
+    """A challenger that sends its link points with a salt that does not open its commitment to them."""
+
+    def _draw(self, stream, k, n):
+        coins = super()._draw(stream, k, n)
+        if (stream, k) == (RL.LINK_COINS, 0):
+            self.openings[(stream, k)] = bytes(FT.INST.salt_bytes)
+        return coins
+
+
+class NoOpening(FT.RecordingCoins):
+    """A challenger that sends round 1 of rep 0's coins without the salt that opens its commitment to them."""
+
+    def _draw(self, stream, k, n):
+        coins = super()._draw(stream, k, n)
+        if (stream, k) == (STREAMS[0], 1):
+            del self.openings[(stream, k)]
+        return coins
+
+
 def cases():
-    """(name, requests, firewall, salt source, expectation): ``firewall`` and ``lean`` are the verdicts expected of each,
-    ``why`` a prefix of the contract's reason."""
+    """(name, requests, firewall, salt source, expectation, challenger): ``firewall`` and ``lean`` are the verdicts expected
+    of each, ``why`` a prefix of the contract's reason; ``challenger`` is the session's challenger (`run_case`'s), when it
+    is not the honest one."""
     same = lambda ok, why=None: {"firewall": ok, "lean": ok, "why": why}
     stop = "the session ended without Finish"
     reused = lambda: (lambda: b"\x5a" * FT.INST.salt_bytes)
@@ -193,11 +232,26 @@ def cases():
             ("tamper-clear-top", requests(), ClearTop, None, tamper("a commitment under salt 0 that is not the message's")),
             ("tamper-shows-salt", requests(), ShowsSalt, None, tamper("a commitment under salt")),
             ("tamper-swaps-coins", requests(), SwapsCoins, None, tamper("circuit/rep0 round 0: the workers' coins"))]
-    return out
+    # committed coins: a challenger that did not commit, or whose coins do not open its commitment, and firewalls that
+    # serve such a session anyway
+    out += [("challenger-uncommitted", requests(), RL.Proxy, None, same(False, "the schedule needs the challenger's coins"),
+             {"commit": False}),
+            ("challenger-wrong-opening", requests(), RL.Proxy, None, same(False, "link round 0: the workers' coins"),
+             {"coins": WrongOpening}),
+            ("challenger-no-opening", requests(), RL.Proxy, None, same(False, "circuit/rep0 round 1: the workers' coins"),
+             {"coins": NoOpening}),
+            ("tamper-uncommitted", requests(), Uncommitted, None, tamper("the schedule needs the challenger's coins"),
+             {"commit": False}),
+            ("tamper-wrong-opening", requests(), IgnoresOpenings, None,
+             tamper("link round 0: coins that do not open the challenger's commitment"), {"coins": WrongOpening}),
+            ("tamper-no-opening", requests(), IgnoresOpenings, None,
+             tamper("circuit/rep0 round 1: coins without the opening of the challenger's commitment"), {"coins": NoOpening})]
+    return [c if len(c) == 6 else (*c, None) for c in out]
 
 
-def run_case(name, reqs, proxy, fresh, schedule=SCHEDULE, rand=None):
-    s = FT.Session(schedule, rand or _rand(name.encode()), fresh or _salts(name.encode()), proxy=proxy)
+def run_case(name, reqs, proxy, fresh, schedule=SCHEDULE, rand=None, challenger=None, coin_salt=None):
+    s = FT.Session(schedule, rand or _rand(name.encode()), fresh or _salts(name.encode()), proxy=proxy,
+                   coin_salt=coin_salt or _salts(b"challenger:" + name.encode()), **(challenger or {}))
     for r in reqs:
         s.handle(r)
     return s
@@ -239,11 +293,20 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
         f = d / "session" / f"{t}.rep{r}.bin"
         reqs.append(RL.encode_req(RL.REQ_PROOF, t, int(r), f.read_bytes() if f.exists() else b""))
     reqs.append(RL.encode_req(RL.REQ_FINISH))
-    s = FT.Session(schedule, rand, lambda: next(it))
+    cf = d / "coins.json"
+    rec_coins = json.loads(cf.read_text()) if cf.exists() else None
+    coin_salt = FT.INST.fresh_salt
+    if rec_coins is not None:
+        op = rec_coins["openings"]
+        ys = iter([op[RL.LINK_COINS][0]] + [op[r["stream"]][r["k"]] for r in schedule["rounds"]])
+        coin_salt = lambda: bytes.fromhex(next(ys))
+    s = FT.Session(schedule, rand, lambda: next(it), coin_salt=coin_salt)
     for r in reqs:
         s.handle(r)
     got = s.coins.record()
     diff = next((k for k in got if k in pub and json.dumps(got[k], sort_keys=True) != json.dumps(pub[k], sort_keys=True)), None)
+    if diff is None and rec_coins is not None and s.coins.commitment_record() != rec_coins:
+        return s, "the replay's commitments to the coins differ from coins.json"
     return s, (f"the replay's coin server record differs from public.json at {diff}" if diff else None)
 
 
@@ -285,7 +348,9 @@ def leaks() -> list[tuple[str, dict, dict, dict]]:
     for a pad; and two commitments under one number. B3, the public input from the transcript: a masked value no relation
     is checked on, or one checked only on a relation the transcript names, a statement value nothing fixes or a wrong one,
     a Hello from the transcript's own schedule, and no public input at all. N1, a value of the firewall's own under a name
-    it chose. Accepted: the honest transcript, and a masked value checked against the verifier's relation before a value of
+    it chose. Committed coins: coins without the opening of the challenger's commitment, under another round's opening,
+    other than the ones committed, with a short opening, relayed twice, and a public input with no commitments at all.
+    Accepted: the honest transcript, and a masked value checked against the verifier's relation before a value of
     the firewall's own that depends on it leaves."""
     s = run_case("honest", requests(), RL.Proxy, None)
     honest, pub = s.transcript(), s.public()
@@ -311,7 +376,7 @@ def leaks() -> list[tuple[str, dict, dict, dict]]:
             mid.append({"check": {"relation": check, "pads": [0], "ok": True}})
         mid.append({"fixed": {"what": "final_c'", "by": "own", "want": "01", "sent": "01", "pads": [0]}})
         t["items"][r2:r2] = mid
-        return t, FT.public(pub["schedule"], relations, computes=computes)
+        return t, FT.public(pub["schedule"], relations, computes=computes, coins=pub["coins"])
 
     out = [("honest", honest, pub, {"accepted": True, "released": n, "why": ""})]
     t = copy.deepcopy(honest)
@@ -354,7 +419,7 @@ def leaks() -> list[tuple[str, dict, dict, dict]]:
     t = copy.deepcopy(honest)
     t["items"].insert(r2, {"fixed": {"what": "anything", "by": "statement", "want": "5e" * 8, "sent": "5e" * 8}})
     out.append(("statement-value-unchecked", t, pub, refused(r2, "anything: a value the public statement does not fix")))
-    out.append(("statement-value-wrong", t, FT.public(pub["schedule"], statement={"anything": bytes(8)}),
+    out.append(("statement-value-wrong", t, FT.public(pub["schedule"], statement={"anything": bytes(8)}, coins=pub["coins"]),
                 refused(r2, "anything: not the value the statement fixes")))
     t = copy.deepcopy(honest)
     t["schedule"] = copy.deepcopy(pub["schedule"])
@@ -366,6 +431,27 @@ def leaks() -> list[tuple[str, dict, dict, dict]]:
     t["items"].insert(r2, {"fixed": {"what": "own:bit=1", "by": "own", "want": "", "sent": ""}})
     out.append(("own-item-chosen", t, pub,
                 refused(r2, "own:bit=1: not a value the public input lets the firewall fix by its own computation")))
+    coin_at = {(it["coins"]["stream"], it["coins"]["round"]): i for i, it in enumerate(honest["items"]) if "coins" in it}
+    l0, r01 = coin_at[(RL.LINK_COINS, 0)], coin_at[(STREAMS[0], 1)]
+    t = copy.deepcopy(honest)
+    del t["items"][l0]["coins"]["opening"]
+    out.append(("coins-without-opening", t, pub, refused(l0, "link round 0: coins without the opening of the challenger's commitment")))
+    t = copy.deepcopy(honest)
+    t["items"][l0]["coins"]["opening"] = t["items"][r01]["coins"]["opening"]
+    out.append(("coins-under-another-rounds-opening", t, pub, refused(l0, "link round 0: coins that do not open the challenger's commitment")))
+    t = copy.deepcopy(honest)
+    c = t["items"][r01]["coins"]
+    c["coins"] = c["relayed"] = [RL.f128_hex(3)]
+    out.append(("coins-not-the-committed-ones", t, pub,
+                refused(r01, f"{STREAMS[0]} round 1: coins that do not open the challenger's commitment")))
+    t = copy.deepcopy(honest)
+    t["items"][l0]["coins"]["opening"] = t["items"][l0]["coins"]["opening"][:-2]
+    out.append(("coins-opening-short", t, pub, refused(l0, "link round 0: an opening of 191 bytes, not a 192-byte salt")))
+    t = copy.deepcopy(honest)
+    t["items"].insert(r01 + 1, copy.deepcopy(t["items"][r01]))
+    out.append(("coins-twice", t, pub, refused(r01 + 1, f"{STREAMS[0]} round 1: coins a second time")))
+    out.append(("coins-uncommitted", honest, FT.public(pub["schedule"]),
+                refused(0, "the schedule needs the challenger's coins, and the public input holds no commitment to them")))
     return out
 
 
@@ -387,8 +473,8 @@ def main(argv=None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     todo: list[tuple[str, FT.Session, dict, str | None]] = []
     if a.cases:
-        for name, reqs, proxy, fresh, expect in cases():
-            todo.append((name, run_case(name, reqs, proxy, fresh), expect, None))
+        for name, reqs, proxy, fresh, expect, challenger in cases():
+            todo.append((name, run_case(name, reqs, proxy, fresh, challenger=challenger), expect, None))
     for d in map(Path, a.sessions):
         s, bad = replay(d, json.loads(a.schedule.read_text()) if a.schedule else None)
         todo.append((f"session-{d.name}", s, {"firewall": True, "lean": True, "why": None}, bad))
