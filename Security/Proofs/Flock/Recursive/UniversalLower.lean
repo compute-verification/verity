@@ -840,7 +840,7 @@ theorem uu_rows_iff {inSplit outSplit : List ℕ} {dd : Derived} (hd : derive (u
 /-- **On a typed statement's unit rows.** When `deriveChecked` accepts a statement's layouts and its unit's type is
 `uuType p`, column values that satisfy the unit's rows as the block holds them (Δ applied), with the block's `one` at 1,
 carry `Desc.eval` of their description columns on their data columns. -/
-theorem uu_unit_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+theorem uu_unit_sound {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array DeriveAll.D}
     (hd : DeriveAll.deriveChecked types ls info words unit = .ok done)
     (ht : (ls.getD unit default).type.bind types = some (uuType p)) (one : ℕ) (z : ℕ → Bool)
