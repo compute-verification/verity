@@ -13,8 +13,8 @@ run carry an audit verdict:
 
 Each run's audit path runs twice, once with each verifier (`replay.replay_configuration`'s and
 `active_replay.audit_configuration`'s `audit`), and every link-window's verdict is compared, for each audit kind, with
-the other verifier's and with the recorded one. The certified audit of a trace replay needs an LMS key on the Lean side,
-so both sides sign with `ReplaySigner` instead of `replay.DigestSigner`; the recorded runs had no certified audit.
+the other verifier's and with the recorded one. A trace replay's certified audit (`replay.ReplaySigner`'s toy LMS key)
+is compared between the verifiers only: the recorded runs had no certified audit.
 
 **Negative controls.** The natural ones are the rejections the runs already contain, counted per violation. The injected
 ones mutate one published link-window of each run (the first link-window both verifiers accepted, of the first audit
@@ -63,11 +63,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import replay  # noqa: E402
 from verity.core.protocols.certifier import audit as py_audit  # noqa: E402
 from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, Issuer,  # noqa: E402
-                                                          LmsKey, certificate_message, parameters_digest)
+                                                          certificate_message, parameters_digest)
 from verity.core.protocols.certifier.commitment import commit  # noqa: E402
 from verity.core.protocols.certifier.grid import Reason, Record, Status  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
 
 TRACE_AUDITS = ("raw", "committed", "certified")
 ACTIVE_AUDITS = ("raw", "committed")
@@ -82,31 +81,6 @@ def verifier(name: str | type) -> type:
         return name
     module, _, cls = name.partition(":")
     return getattr(importlib.import_module(module), cls)
-
-
-class ReplaySigner:
-    """An LMS signer for the replay alone, at W = 1 like the deployed key but H = 8: leaf q mod 2^8 for the q-th message,
-    deterministic from a fixed seed, so two replays sign alike. It reuses one-time keys and is never a certifier's."""
-
-    PARAMS = lms.Params(64, 1, 8)
-    _key: lms.PrivateKey | None = None
-
-    def __init__(self) -> None:
-        if ReplaySigner._key is None:
-            ReplaySigner._key = lms.keygen(self.PARAMS, bytes(64))
-        self.key, self.q = ReplaySigner._key, 0
-
-    @property
-    def key_id(self) -> bytes:
-        return self.key.I
-
-    def sign(self, message: bytes) -> bytes:
-        sig = lms.sign_at(self.key, self.q % 2 ** self.PARAMS.H, message)
-        self.q += 1
-        return sig.encode()
-
-    def public_key(self) -> LmsKey:
-        return LmsKey(self.PARAMS, lms.public_key(self.key))
 
 
 class AuditDone(Exception):
@@ -206,7 +180,7 @@ def _change_slot(record: Record, frame_bytes: int) -> Record:
     return dataclasses.replace(record, grid=tuple(tuple(r) for r in grid))
 
 
-def _other_window_certificate(c: CertifiedRecord, signer: ReplaySigner) -> CertifiedRecord:
+def _other_window_certificate(c: CertifiedRecord, signer: replay.ReplaySigner) -> CertifiedRecord:
     h, w = c.head, c.head.window + 1
     sig = signer.sign(certificate_message(signer.key_id, h.link, h.direction, w, h.digest()))
     return CertifiedRecord(h, Certificate(signer.key_id, h.link, h.direction, w, h.digest(), sig))
@@ -231,7 +205,7 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
     owner, _, (link, records, frames, syncs, sync_set, params, key), vs = egress[0]
     w = next((v.window for v in vs if v.accepted), 0)
     raw = [r for r in records if r.link == link and isinstance(r, Record)]
-    signer = ReplaySigner()
+    signer = replay.ReplaySigner()
     parameters = parameters_digest(params, sync_set)
     tests: list[tuple[str, str, list]] = []
     target = next((r for r in raw if r.window == w), None)
@@ -302,12 +276,10 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
 def _replay_trace(configs: Sequence[dict], setup: replay.Setup, syncs: str, fresh: bool, audit: type) -> list[dict]:
     """`replay.replay_file`'s loop over one trace's configurations, with `audit` as the verifier."""
     rows, history, run = [], [], None
-    signer = ReplaySigner()
     for cfg in configs:
         same = not fresh and run is not None and cfg.get("labels", {}).get("run") == run
         run = cfg.get("labels", {}).get("run")
-        r, _, history = replay.replay_configuration(cfg, setup, syncs, history if same else (), audit=audit,
-                                                    signer=signer)
+        r, _, history = replay.replay_configuration(cfg, setup, syncs, history if same else (), audit=audit)
         rows += r
     return rows
 

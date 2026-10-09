@@ -226,3 +226,28 @@ def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys
 
     assert check.gather_verdicts(tmp_path, Broken(tmp_path, {})) is None
     assert "no verdicts gathered from the store (OSError: injected)" in capsys.readouterr().out
+
+
+def test_a_pack_given_is_added_to_the_gathered_ones_and_survives_a_store_that_cant_be_read(tmp_path, monkeypatch, capsys):
+    check = _load("check")
+    packs = {}
+    for name, entries in (("given", {"tests/k1.json": "given", "tests/k9.json": "9"}), ("new", {"tests/k1.json": "new", "tests/k2.json": "2"})):
+        r = _machine(tmp_path, monkeypatch, name)
+        for k, text in entries.items():
+            _write(r["tests"] / k.removeprefix("tests/"), text)
+        V.export(packs.setdefault(name, tmp_path / f"{name}.tar.gz"))
+    got = check.gather_verdicts(tmp_path / "out", _Store(tmp_path, {"r-new": packs["new"]}), given=packs["given"])
+    assert "3 entries gathered from 1 recorded checks and the pack given (given.tar.gz (given), r-new)" in capsys.readouterr().out
+    _machine(tmp_path, monkeypatch, "pod")
+    assert V.import_(got) == (3, 0)
+
+    class Broken(_Store):
+        def sql(self, query, params=()):
+            raise OSError("injected")
+
+    got = check.gather_verdicts(tmp_path / "broken", Broken(tmp_path, {}), given=packs["given"])
+    assert "no verdicts gathered from the store (OSError: injected)" in capsys.readouterr().out
+    _machine(tmp_path, monkeypatch, "pod2")
+    assert V.import_(got) == (2, 0)
+    with pytest.raises(SystemExit, match="no such pack"):
+        check.gather_verdicts(tmp_path / "x", _Store(tmp_path, {}), given=tmp_path / "absent.tar.gz")

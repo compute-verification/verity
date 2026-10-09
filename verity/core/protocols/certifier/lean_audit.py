@@ -1,8 +1,11 @@
 """`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v1` (`NetworkCheck.Records`, the
 `network-records` executable of `verity/core/protocols/network/lean`), which `audit.py` is the reference for.
 
-`Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone. Each
-call is one unit of the Lean protocol, sent to one `network-records verdicts` process kept open across calls and audits:
+`Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
+`audit.Audit` keeps running beside the Lean check as its reference, on every call with the same arguments: the verdicts
+are the Lean's, the Python's are kept (`Audit.reference`), a link-window where the two differ is a `disagreement` violation,
+and a call that one answers and the other raises on raises. Each call is one unit of the Lean protocol, sent to one
+`network-records verdicts` process kept open across calls and audits:
 
 - `check_link`: egress links `["", link]` (`"clock"` when `link` is empty) over windows 0 … len(syncs) − 1, the first
   link carrying no frames and the spatial unit's clock as its syncs (`Audit.syncs`, each window's set by the first call
@@ -16,25 +19,28 @@ certified record of the link is in it) are placeholders. Anything the Lean proto
 `LmsKey` for a certified record, a raw grid that isn't a tuple of tuples of bytes or `None`, a window or a grid field
 outside its integer width, a frame of other than B bytes) raises `ValueError`, as does a call `audit.Audit` refuses; the
 exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
-`VERITY_NETWORK_RECORDS_EXE` names the executable; by default the first request runs `lake build network-records` in that
-package and starts what it builds.
+`VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
+default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
+after a request starts its own executable at its first; `SERVER`'s is closed at exit.
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
 
 from __future__ import annotations
 
+import atexit
 import fcntl
 import json
 import os
 import struct
 import subprocess
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from verity.ml.crypto import lms
+from verity.core.protocols.certifier import audit
 from verity.core.protocols.certifier.audit import Published, Verdict
 from verity.core.protocols.certifier.certificate import STATUS_CODES, CertifiedRecord, Direction, LmsKey, PublicKey
 from verity.core.protocols.certifier.commitment import CommittedRecord
@@ -46,6 +52,7 @@ EXE = PACKAGE / ".lake" / "build" / "bin" / "network-records"
 # `verity_difftest.build`'s lock: no two `lake build`s of a package overlap, across processes and suites.
 BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"
 RAW, COMMITTED, CERTIFIED = 0, 1, 2
+DISAGREEMENT = "disagreement"
 _KEY = LmsKey(lms.Params(8, 8, 1, toy=True), bytes(24))
 _SYNC_SET = SyncSet((0,), (1,))
 
@@ -151,12 +158,22 @@ class Server:
     def __init__(self, exe: Path | str | None = None):
         named = exe or os.environ.get("VERITY_NETWORK_RECORDS_EXE")
         self.exe = Path(named) if named else None
+        self._pid = os.getpid()
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
+
+    def _own(self) -> None:
+        """In a process forked from the one that started the executable, forget the parent's: its pipe is the parent's."""
+        if self._pid != os.getpid():
+            if self._proc is not None:
+                self._proc.stdin.close()
+                self._proc.stdout.close()
+            self._pid, self._proc, self._lock = os.getpid(), None, threading.Lock()
 
     def verdicts(self, case: dict) -> list[dict]:
         """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order);
         `ValueError` when the Lean check refuses the case."""
+        self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
                 if self.exe is None:
@@ -184,6 +201,7 @@ class Server:
         return msg["output"]["link_windows"]
 
     def close(self) -> None:
+        self._own()
         with self._lock:
             if self._proc is not None:
                 self._proc.stdin.close()
@@ -192,6 +210,7 @@ class Server:
 
 
 SERVER = Server()
+atexit.register(SERVER.close)
 
 
 def _need_key(records: Sequence[Published], key: PublicKey | None) -> None:
@@ -221,28 +240,47 @@ def _verdicts(out: list[dict], direction: Direction, link: str, windows: int) ->
 
 @dataclass
 class Audit:
-    """`audit.Audit`, each verdict the Lean check's (the module docstring)."""
+    """`audit.Audit`, each verdict the Lean check's, with `audit.Audit` (`python`) run beside it on every call as the
+    reference: `lean` holds the Lean check's verdicts and `reference` the Python's, and a link-window where they differ is
+    a `disagreement` violation in `verdicts`. A call where one raises and the other answers raises."""
 
     verdicts: list[Verdict] = field(default_factory=list)
     syncs: dict[int, ClockSync] = field(default_factory=dict)
     server: Server = field(default=SERVER, repr=False, compare=False)
+    python: audit.Audit = field(default_factory=audit.Audit, repr=False, compare=False)
+    lean: list[Verdict] = field(default_factory=list, repr=False, compare=False)
+    reference: list[Verdict] = field(default_factory=list, repr=False, compare=False)
+
+    def _beside(self, lean: list[Verdict], reference: Callable[[], list[Verdict]]) -> list[Verdict]:
+        try:
+            ref = reference()
+        except Exception as e:
+            raise RuntimeError(f"the reference audit raised where the Lean check answered: {e!r}") from e
+        if [(v.link, v.window) for v in ref] != [(v.link, v.window) for v in lean]:
+            raise RuntimeError(f"the reference audit gave link-windows {[(v.link, v.window) for v in ref]}, "
+                               f"the Lean check {[(v.link, v.window) for v in lean]}")
+        vs = [l if l == r else Verdict(l.link, l.window, DISAGREEMENT) for l, r in zip(lean, ref)]
+        self.lean.extend(lean)
+        self.reference.extend(ref)
+        self.verdicts.extend(vs)
+        return vs
 
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
                    key: PublicKey | None = None) -> list[Verdict]:
         _need_key(records, key)
-        syncs = list(syncs)
-        if not syncs:
-            return []
-        mine = _mine(link, records, Direction.EGRESS)
-        clock = [self.syncs.get(w, s) for w, s in enumerate(syncs)]
-        unit = "clock" if link == "" else ""
-        out = self.server.verdicts(case([(unit, [], clock), (link, frames, syncs)], [], len(syncs), params, params,
-                                        sync_set, _lean_key(mine, key), mine))
-        vs = _verdicts(out, Direction.EGRESS, link, len(syncs))
+        frames, syncs = list(frames), list(syncs)
+        lean = []
+        if syncs:
+            mine = _mine(link, records, Direction.EGRESS)
+            clock = [self.syncs.get(w, s) for w, s in enumerate(syncs)]
+            unit = "clock" if link == "" else ""
+            out = self.server.verdicts(case([(unit, [], clock), (link, frames, syncs)], [], len(syncs), params, params,
+                                            sync_set, _lean_key(mine, key), mine))
+            lean = _verdicts(out, Direction.EGRESS, link, len(syncs))
+        vs = self._beside(lean, lambda: self.python.check_link(link, records, frames, syncs, sync_set, params, key))
         for w, s in enumerate(syncs):
             self.syncs.setdefault(w, s)
-        self.verdicts.extend(vs)
         return vs
 
     def check_ingress_link(self, link: str, records: Sequence[Published], windows: int, key: PublicKey | None = None,
@@ -251,13 +289,12 @@ class Audit:
         mine = _mine(link, records, Direction.INGRESS)
         if params is None and any(isinstance(r, CertifiedRecord) for r in mine):
             raise ValueError("certified ingress records are checked against the grid parameters: pass params")
-        if windows <= 0:
-            return []
-        grid = params or GridParams(1, 1, 1)
-        out = self.server.verdicts(case([], [link], windows, grid, grid, _SYNC_SET, _lean_key(mine, key), mine))
-        vs = _verdicts(out, Direction.INGRESS, link, windows)
-        self.verdicts.extend(vs)
-        return vs
+        lean = []
+        if windows > 0:
+            grid = params or GridParams(1, 1, 1)
+            out = self.server.verdicts(case([], [link], windows, grid, grid, _SYNC_SET, _lean_key(mine, key), mine))
+            lean = _verdicts(out, Direction.INGRESS, link, windows)
+        return self._beside(lean, lambda: self.python.check_ingress_link(link, records, windows, key, params))
 
     @property
     def accepted(self) -> bool:
