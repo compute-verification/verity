@@ -645,7 +645,8 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert SLOT.main(["--twin", "p2", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
     assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
             in capsys.readouterr().err)
-    monkeypatch.undo()
+    monkeypatch.undo()                                                             # undoes any_core's pin too
+    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
     assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
