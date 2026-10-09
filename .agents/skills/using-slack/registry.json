@@ -150,6 +150,7 @@
       "linear": "CI",
       "owns": [
         "tools/verity/check/",
+        "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"

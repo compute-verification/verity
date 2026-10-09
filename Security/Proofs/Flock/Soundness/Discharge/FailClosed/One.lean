@@ -1,27 +1,35 @@
 import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
+import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
 import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts
 
-`flock_verify_sound` is the soundness theorem over what `flock-verify verify` accepts (`FlockVerifyAccepts`), with or
-without `--zk`, public or hidden outputs, at any number of tables, with no hypothesis on the circuit file or the
-statement's form. It splits on the statement inside its conclusion (its hidden-output tag, `--zk`, and under `--zk`
-whether the session has one table) and states in each case the strongest claim the `FailClosed` headlines make there:
+`flock_verify_sound` is the soundness theorem over what `flock-verify verify` accepts (`FlockVerifyAccepts`, and with
+`--registered F` `FlockVerifyAcceptsR`), with or without `--zk`, public or hidden outputs, at any number of tables, with
+no hypothesis on the circuit file or the statement's form. It splits on the statement inside its conclusion (its
+hidden-output tag, `--zk`, and under `--zk` whether the session has one table) and states in each case the strongest
+claim the `FailClosed` headlines make there:
 
 - without `--zk`, public outputs: `SoundExec` (`flock_headline_exec_dec`); hidden outputs: `SoundExecH`
   (`flock_headline_exec_hidden_dec`). The check refuses more than one table without `--zk`.
 - `--zk`, public outputs: at one table `SoundZ` (`zk_session_sound`, the stratified law) and zero knowledge `ViewZ`
   (`zk_session_composed`); at every number of tables `SoundZJ` (`zk_session_soundJ`, the live subset draw).
 - `--zk`, hidden outputs: at one table `SoundZH` (`zk_session_soundH`); at every number of tables `SoundZHJ`
-  (`zk_session_soundHJ`) and zero knowledge `ViewZHJ` (`zk_session_composedHJ`).
+  (`zk_session_soundHJ`) and zero knowledge `ViewZHJ` (`zk_session_composedHJ`); and with `--registered F`, at a
+  public file with or without shared rows, `SoundZHJR` (`zk_session_soundHJR`, the live subset draw, and the registered
+  reads checked) and zero knowledge `ViewZHJR` (`ViewZHJ` at the check with the verifier's registered reads).
 
-Each claim's event is `FlockVerifyAccepts zk I` at the live session's transcript, and each is the headline's statement
-with `hh` and `hn` read off the case.
+Each claim's event is `FlockVerifyAccepts zk I` (the registered ones' `FlockVerifyAcceptsR zk I own`) at the live
+session's transcript, and each is the headline's statement with `hh` and `hn` read off the case. Its second conjunct
+covers `--registered F` everywhere else: without `--zk` or at public outputs it accepts no more than the verifier does
+without it (`verifiesZK_of_R`), so the claims above hold of it.
 
 The sixteen `FailClosed` headlines make eight distinct claims: the six soundness bounds (each its own game: the law,
-stratified or the live subset draw, and the outputs, public or hidden) and the two zero-knowledge views. The other eight
+stratified or the live subset draw, and the outputs, public or hidden) and the two zero-knowledge views. The registered
+headline (`FailClosed.ZkRegistered`) makes a ninth, `SoundZHJR`, and `ViewZHJR` is `ViewZHJ`'s view at the statements
+only its check passes. The other eight
 are corollaries of these: `flock_headline_exec` and `flock_headline_exec_hidden` state the `_dec` bounds at any decoder
 given its `DecodesOn` (`hdec`), which the `_dec` forms prove for the verifier's decoder; the soundness halves of
 `zk_session_composed` and `zk_session_composedHJ` are `zk_session_sound` and `zk_session_soundHJ`; the four `_custody`
@@ -40,6 +48,12 @@ open Flock Exec ZkExec
 the setup and verdict `Accepts` (`AcceptsZK`) models hold and the statement check passes (`Verifies`, `VerifiesZK`). -/
 def FlockVerifyAccepts (zk : Bool) (I : Inputs) (t : Exec.Transcript) : Prop :=
   if zk then VerifiesZK I t else Verifies I t
+
+/-- **`flock-verify verify --registered F` accepted** (`own` F's ports): under `--zk`, `VerifiesZKR` (the registered check
+and the statement check with the verifier's registered reads); without, `Verifies`, as without `--registered`: the
+statement check is the same without `--zk`, and the registered check only refuses more. -/
+def FlockVerifyAcceptsR (zk : Bool) (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
+  if zk then VerifiesZKR I own t else Verifies I t
 
 end Accepts
 
@@ -615,41 +629,134 @@ theorem viewZHJ (I : Inputs) : ViewZHJ I :=
   @fun P _ _ _ dj _ _ y₀ hKey hs =>
     ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y) hKey
 
+open FlockSoundness.Discharge.ZkReg (OwnReadsHJ regPathsHJ rsShHJS rsZHJS rsZHJS_computes)
+
+set_option linter.unusedVariables false in
+/-- The claim at a hidden-output statement of any number of tables under `--zk --registered F` (`own` F's ports), the law
+the live subset draw, at a public file with or without shared rows: `zk_session_soundHJR`'s, its bound and the
+registered check's consequence at every accepted outcome. -/
+def SoundZHJR (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
+  ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (own : Array Flock.Registered.Port)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the law (the live subset draw) and A3
+    (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
+    (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
+    -- the coin server's draw at each of the law's draws
+    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    -- the coin server's record of the live session
+    (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    -- the count curve's parameters
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
+    -- the live prover
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    {qF qS : ℝ}
+    (hCR : ∀ hs : ScopeZR I,
+        let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+          (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+          (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.scopeOk_spec hs.built hs.scope).2.1 dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS),
+    prob (fun o => FlockVerifyAcceptsR true I own o.2.2 ∧ ∀ hs : ScopeZR I,
+        let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+          (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+          (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.scopeOk_spec hs.built hs.scope).2.1 dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+          (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+            ((rsZHJS dj y₀ hs.typed (hs.parseH hh) hs.scope hs.built (hs.loadH hh)).bindingZ (rsZHJS_computes dj y₀ hs.typed (hs.parseH hh) hs.scope hs.built (hs.loadH hh)))
+            (reg σ) (cont σ) k Rw)).card)
+        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ⨆ hs : ScopeZR I,
+        (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+          (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+          (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.scopeOk_spec hs.built hs.scope).2.1 dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+        (Law.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+          ((rsZHJS dj y₀ hs.typed (hs.parseH hh) hs.scope hs.built (hs.loadH hh)).bindingZ (rsZHJS_computes dj y₀ hs.typed (hs.parseH hh) hs.scope hs.built (hs.loadH hh)))
+          k Rw M ρ t' (reg σ) (cont σ)) ∧
+    ∀ hs : ScopeZR I, ∀ o : Reg × Finset (Fin n) × Exec.Transcript, FlockVerifyAcceptsR true I own o.2.2 →
+      ∀ rd : FlockSoundness.Registered.Reads
+          (layShHJ (Reg := Reg) dj y₀ hs.typed (hs.parseH hh) hs.scope hs.built (pub := pubZ I))
+          (rsShHJS dj y₀ hs.typed (hs.parseH hh) hs.scope hs.built (hs.loadH hh)),
+        OwnReadsHJ I own (circZ I) (pubZ I) o.2.2 rd.isRead rd.port rd.readAt →
+          rd.Checked o.1 (regPathsHJ I (circZ I) (pubZ I) o.2.2 rd.port)
+
+theorem soundZHJR (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundZHJR I hh :=
+  @fun _ _ _ own dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
+    zk_session_soundHJR I hh own dj y₀ wr dg N kd hkd Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
+
+set_option linter.unusedVariables false in
+/-- Zero knowledge at a hidden-output statement of any number of tables under `--zk --registered F`, at every statement
+the check passes with the verifier's registered reads: `ViewZHJ` at `ScopeZR`. The view reads the statement's tags,
+not its public file, so a shared-row one changes nothing in it. -/
+def ViewZHJR (I : Inputs) : Prop :=
+  ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    -- hash-derived-key
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96),
+    ScopeZR I → ∀ (S : Finset (Fin n)) (R : Reg)
+      (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
+      ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
+        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
+
+theorem viewZHJR (I : Inputs) : ViewZHJR I :=
+  @fun P _ _ _ dj _ _ y₀ hKey hs =>
+    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y) hKey
+
 end
 
 section
 
 open Flock Exec ZkExec
 
-/-- **Soundness, over everything flock-verify accepts.** At every statement `I`, with or without `--zk`: the live session's
-probability that `flock-verify verify` accepts (`FlockVerifyAccepts zk I`) while at least `K` of the statement's proof
-units are wrong is at most the case's bound. Without `--zk`, `SoundExec` (public outputs) or `SoundExecH` (hidden);
-under `--zk`, at one table `SoundZ` with zero knowledge `ViewZ` (public) or `SoundZH` (hidden), and at every number of
-tables `SoundZJ` (public) or `SoundZHJ` with zero knowledge `ViewZHJ` (hidden). No hypothesis on the circuit file or the
-statement's form: the verifier refuses every statement the claims do not cover (`Flock.ProvedScope.check`), and there
-the event is empty. -/
+/-- **Soundness, over everything flock-verify accepts.** At every statement `I`, with or without `--zk` and with or
+without `--registered F`: the live session's probability that `flock-verify verify` accepts (`FlockVerifyAccepts zk I`,
+with `--registered F` `FlockVerifyAcceptsR zk I own`) while at least `K` of the statement's proof units are wrong is at
+most the case's bound. Without `--zk`, `SoundExec` (public outputs) or `SoundExecH` (hidden); under `--zk`, at one table
+`SoundZ` with zero knowledge `ViewZ` (public) or `SoundZH` (hidden), and at every number of tables `SoundZJ` (public) or
+`SoundZHJ` with zero knowledge `ViewZHJ` (hidden), and with `--registered F` at hidden outputs `SoundZHJR` with zero
+knowledge `ViewZHJR`, at a public file with or without shared rows. Everywhere else `--registered F` accepts no more than
+the verifier does without it (the second conjunct), so the claims without it hold. No hypothesis on the circuit file or
+the statement's form: the verifier refuses every statement the claims do not cover (`Flock.ProvedScope.check`), and
+there the event is empty. -/
 theorem flock_verify_sound (zk : Bool) (I : Inputs) :
-    if hh : I.tags.hiddenOutputs = true then
-      if zk then (∀ hn : I.count ≤ 1, SoundZH I hh hn) ∧ SoundZHJ I hh ∧ ViewZHJ I
+    (if hh : I.tags.hiddenOutputs = true then
+      if zk then (∀ hn : I.count ≤ 1, SoundZH I hh hn) ∧ SoundZHJ I hh ∧ ViewZHJ I ∧ SoundZHJR I hh ∧ ViewZHJR I
       else SoundExecH I hh
     else
       if zk then
         (∀ hn : I.count ≤ 1, SoundZ I (Bool.eq_false_of_ne_true hh) hn ∧ ViewZ I) ∧ SoundZJ I (Bool.eq_false_of_ne_true hh)
-      else SoundExec I (Bool.eq_false_of_ne_true hh) := by
-  split
-  · next hh =>
-    cases zk
-    · show SoundExecH I hh
-      exact @soundExecH I hh
-    · show (∀ hn : I.count ≤ 1, SoundZH I hh hn) ∧ SoundZHJ I hh ∧ ViewZHJ I
-      exact ⟨fun hn => @soundZH I hh hn, @soundZHJ I hh, @viewZHJ I⟩
-  · next hh =>
-    cases zk
-    · show SoundExec I (Bool.eq_false_of_ne_true hh)
-      exact @soundExec I _
-    · show (∀ hn : I.count ≤ 1, SoundZ I (Bool.eq_false_of_ne_true hh) hn ∧ ViewZ I) ∧
-        SoundZJ I (Bool.eq_false_of_ne_true hh)
-      exact ⟨fun hn => ⟨@soundZ I _ hn, @viewZ I⟩, @soundZJ I _⟩
+      else SoundExec I (Bool.eq_false_of_ne_true hh)) ∧
+    ∀ (own : Array Flock.Registered.Port) (t : Exec.Transcript), FlockVerifyAcceptsR zk I own t →
+      (zk = true ∧ I.tags.hiddenOutputs = true) ∨ FlockVerifyAccepts zk I t := by
+  refine ⟨?_, fun own t h => ?_⟩
+  · split
+    · next hh =>
+      cases zk
+      · show SoundExecH I hh
+        exact @soundExecH I hh
+      · show (∀ hn : I.count ≤ 1, SoundZH I hh hn) ∧ SoundZHJ I hh ∧ ViewZHJ I ∧ SoundZHJR I hh ∧ ViewZHJR I
+        exact ⟨fun hn => @soundZH I hh hn, @soundZHJ I hh, @viewZHJ I, @soundZHJR I hh, @viewZHJR I⟩
+    · next hh =>
+      cases zk
+      · show SoundExec I (Bool.eq_false_of_ne_true hh)
+        exact @soundExec I _
+      · show (∀ hn : I.count ≤ 1, SoundZ I (Bool.eq_false_of_ne_true hh) hn ∧ ViewZ I) ∧
+          SoundZJ I (Bool.eq_false_of_ne_true hh)
+        exact ⟨fun hn => ⟨@soundZ I _ hn, @viewZ I⟩, @soundZJ I _⟩
+  · cases zk
+    · change Verifies I t at h
+      exact Or.inr h
+    · change VerifiesZKR I own t at h
+      by_cases hh : I.tags.hiddenOutputs = true
+      · exact Or.inl ⟨rfl, hh⟩
+      · exact Or.inr (verifiesZK_of_R h (Bool.eq_false_of_ne_true hh))
 
 end
 

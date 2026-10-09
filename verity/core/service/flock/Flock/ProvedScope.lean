@@ -79,14 +79,20 @@ def firstFailure (rules : List (Bool × String)) : Option String := (rules.find?
 
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
 
+/-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a `--zk` session of a statement
+with hidden outputs whose verifier holds its own registered reads (`--registered F`), the setting of
+`EndToEndRegistered` (an untyped statement, which `statementRules` requires of every form). -/
+def sharedRowsOk (tags : Tags) (zk registered : Bool) : Bool := zk && tags.hiddenOutputs && registered
+
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
-file as the proof reads them, no shared-row public file and `scopeOk` (`scopeOkH` for a statement with hidden outputs,
-whose headlines also cover `sha512/row/v2` rows). `tags` are the session's (under `--zk`,
-`Zk.tags`'s), `count` its tables and `publicInputs` whether the verifier holds its own public input words. When this
-check moves from `scopeOk` to a format check (`formatOk`), a tail must stay refused (`c.outNet == c.unitNet`): `formatOk`
-puts no condition on a tail's stage nets, and the session headline's `keyProg` reads the unit nets only. -/
+file as the proof reads them, a shared-row public file only where `sharedRowsOk`, and `scopeOk` (`scopeOkH` for a
+statement with hidden outputs, whose headlines also cover `sha512/row/v2` rows). `tags` are the session's (under `--zk`,
+`Zk.tags`'s), `count` its tables, `publicInputs` whether the verifier holds its own public input words and `registered`
+whether it holds its own registered reads. When this check moves from `scopeOk` to a format check (`formatOk`), a tail
+must stay refused (`c.outNet == c.unitNet`): `formatOk` puts no condition on a tail's stage nets, and the session
+headline's `keyProg` reads the unit nets only. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
-    (publicInputs : Bool) : Except String Unit :=
+    (publicInputs registered : Bool) : Except String Unit :=
   match firstFailure (statementRules tags zk count publicInputs) with
   | some why => .error (refusal why)
   | none => match circuitOf tags circuitFile tables with
@@ -94,7 +100,8 @@ def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables
     | .ok c => match publicOf tags c publicFile with
       | .error e => .error (refusal s!"a public file that does not load ({e})")
       | .ok pub =>
-        if pub.tables.isSome then .error (refusal "a shared-row public file (header shared_rows)")
+        if pub.tables.isSome && !sharedRowsOk tags zk registered then
+          .error (refusal "a shared-row public file (header shared_rows)")
         else if (if tags.hiddenOutputs then scopeOkH c else scopeOk c) then .ok ()
         else .error (refusal (scopeWhy tags.hiddenOutputs c))
 
