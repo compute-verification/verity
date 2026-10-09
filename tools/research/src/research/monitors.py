@@ -91,7 +91,7 @@ N2_GUARD = (f'ok=0; s=$(head -n 1 {FILL_STATUS} 2>/dev/null); n=$(date +%s); t=$
             f'[ "$ok" = 1 ] || {{ printf "%s %s %s %s\\n" "{SKIPPED}" "$n" "$a" "$s"; exit 0; }}; ')
 N2_S = 90                                        # node 2's one session per pass, local; node 2's `timeout` ends it 10 s sooner
 PASS_S = 180                                     # a node pass's deadline, well inside vy-monitors.service's TimeoutStartSec
-HANDLES = ("infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console")
+HANDLES = ("infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting")
 EVENTS_KEEP_S = 14 * 86400
 RETRY_KEEP_S = 86400
 
