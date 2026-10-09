@@ -20,7 +20,9 @@ the `c_k`'s, or the verifier's opening and the honest one collide:
   roots are `commitsRoot` over the history's `c_k`, an accepted transcript draws every unit that reads a round's
   commitment and labels it itself, and a circuit's port names are distinct;
 * `pubCommits_or_collides`: at every history and accepting session, each row of `Sk i j` registers `cmtOf (bc cOf)`'s
-  digest of `t`'s stage-`i` commitment (`VCommits` at the row), or `openPair` collides.
+  digest of `t`'s stage-`i` commitment (`VCommits` at the row), or `openPair` collides;
+* `HPubRows`, `pubCommits_of_pubRows`: where the verifier compares the public file's `rec-c<k>` rows with the `c_k`
+  itself, `PubCommits` holds exactly, at every history.
 -/
 
 namespace FlockVBridge.Family
@@ -249,6 +251,35 @@ theorem pubCommits_or_collides (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs
   · right
     rw [hat] at h
     exact ⟨reg, x, path, _, _, h⟩
+
+/-- **The public file's round-commitment rows are the `c_k`'s**: at every history `t`, where session `j`'s circuit port
+`q` is a port of its reads file registering `rec-c<k>` and unit `u` reads it at row `x`, the public file's `b ‖ c` of
+`u`'s row `q` is the `b ‖ c` (`cOf`) of the commitment of `t`'s round `x · n₀ + kc k`. The check that establishes it:
+the verifier compares `pub.bin`'s rows at its `rec-c<k>` reads with the `c_k` it holds (`rec_vstage.py:162`), rather
+than opening them against `commits_entry`'s root (`Flock.Registered.check`), which binds them only up to a SHA-512
+collision (`pubCommits_or_collides`). -/
+def HPubRows (cOf : Cm → List UInt8) : Prop :=
+  ∀ R ω t R₂ j, ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ k, cIndex reg.value = some k →
+    ∀ (u : Fin (F.Vs j).nv) (q : Fin (F.Vs j).c.ports.size) x, (F.Vs j).c.ports[q].name = reg.name →
+      reg.reads[u.val]? = some (some x) → ∀ e : Cm × (ℐ).Coin, t[x * F.n₀ + F.kc k]? = some e →
+        (F.zs R ω t R₂ j).pub.digest u.val q.val (F.Vs j).c.ports.size = ⟨(cOf e.1).toArray⟩
+
+/-- **`PubCommits` from the verifier's checks** (`HOwn`, `HPubRows`), at every history, accepted or not. -/
+theorem pubCommits_of_pubRows (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs F.own F.sel) (hown : F.HOwn)
+    (hrows : F.HPubRows cOf) : F.PubCommits (F.bc cOf) := by
+  intro i R ω t e he R₂ j u q hpos
+  rw [hSk, mem_skOf_inl] at hpos
+  obtain ⟨p, hp, hname, x, hx, hsel⟩ := hpos
+  obtain ⟨-, k, hk, -, rfl⟩ := hsel
+  have hq : (p.name, p.value, p.reads) ∈ msgPorts (F.zs R ω t R₂ j).own :=
+    (hown R ω t R₂ j _).2 (mem_msgPorts.2 ⟨p, hp, isMsg_ownOf hp, rfl⟩)
+  obtain ⟨reg, hreg, -, hre⟩ := mem_msgPorts.1 hq
+  simp only [Prod.mk.injEq] at hre
+  obtain ⟨hn, hv, hr⟩ := hre
+  have h := hrows R ω t R₂ j reg hreg k (by rw [hv]; exact hk) u q x (hname.symm.trans hn.symm)
+    (by rw [hr]; exact hx) e he
+  show _ = cOf e.1
+  simp [h]
 
 end VStarFamily
 
