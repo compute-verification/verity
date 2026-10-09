@@ -458,6 +458,9 @@
    "assumptions": [],
    "type_hash": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f"
   },
+  "Properties.Pouw.Window.bucketRefuses": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.Window.drawMisses": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"],
@@ -470,11 +473,8 @@
    "assumptions": [],
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1"
   },
-  "Properties.Pouw.Window.gridRefusals": {
-   "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.gridRefusals : Properties.Pouw.Window.GridRefusals"],
-   "assumptions": [],
-   "type_hash": "29629fcf6b815b0f2fa6a3d22b2c018918a742db59c94e1a11a11113d8d40d6f"
+  "Properties.Pouw.Window.floorPointRefuses": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.Window.kPrimeExactAtEquality": {
    "owner": "@compute-accounting",
@@ -500,11 +500,17 @@
    "assumptions": [],
    "type_hash": "f120ede9251754e80c0b6b3850b115c640e1c4877d13c9d0f59894818d41849a"
   },
+  "Properties.Pouw.Window.levelRefuses": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.Window.levelsCount": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"],
    "assumptions": [],
    "type_hash": "adead606c9dfc7cebaa2c7f141e8009da48e039db74a6250f919b14e30a3a510"
+  },
+  "Properties.Pouw.Window.levelsRefuses": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.Window.levelsServed": {
    "owner": "@compute-accounting",
@@ -524,17 +530,26 @@
    "assumptions": [],
    "type_hash": "79d2f7f93dc38938fe0a7c43e793bb9480c21422210ec02f198f40d585f99b5e"
   },
+  "Properties.Pouw.Window.padRefuses": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.Window.pointEnumerates": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"],
    "assumptions": [],
    "type_hash": "0f6f4da17e2495b903d233db371fd0e01c4da3c9f0d31e5b77da417317a9f20f"
   },
+  "Properties.Pouw.Window.pointRefuses": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.Window.publicItems_eq": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
    "assumptions": [],
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
+  },
+  "Properties.Pouw.Window.workAtRefuses": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -779,6 +794,10 @@
     "function": "PouwWindow.bucket?",
     "outcome": "accept"
    },
+   "Properties.Pouw.Window.bucketRefuses": {
+    "function": "PouwWindow.bucket?",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Window.drawMisses": {
     "function": "PouwWindow.kPrime",
     "outcome": "accept"
@@ -787,16 +806,8 @@
     "function": "PouwWindow.floorPoint?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Window.gridRefusals": {
-    "function": [
-     "PouwWindow.Work.at?",
-     "PouwWindow.Work.levels?",
-     "PouwWindow.bucket?",
-     "PouwWindow.floorPoint?",
-     "PouwWindow.level?",
-     "PouwWindow.pad?",
-     "PouwWindow.point?"
-    ],
+   "Properties.Pouw.Window.floorPointRefuses": {
+    "function": "PouwWindow.floorPoint?",
     "outcome": "accept"
    },
    "Properties.Pouw.Window.kPrimeExactAtEquality": {
@@ -815,7 +826,15 @@
     "function": "PouwWindow.kPrime",
     "outcome": "none"
    },
+   "Properties.Pouw.Window.levelRefuses": {
+    "function": "PouwWindow.level?",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Window.levelsCount": {
+    "function": "PouwWindow.levels?",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Window.levelsRefuses": {
     "function": "PouwWindow.levels?",
     "outcome": "accept"
    },
@@ -831,13 +850,25 @@
     "function": "PouwWindow.pad?",
     "outcome": "accept"
    },
+   "Properties.Pouw.Window.padRefuses": {
+    "function": "PouwWindow.pad?",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Window.pointEnumerates": {
     "function": ["PouwWindow.level", "PouwWindow.point"],
     "outcome": "none"
    },
+   "Properties.Pouw.Window.pointRefuses": {
+    "function": "PouwWindow.point?",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Window.publicItems_eq": {
     "function": "PouwWindow.publicItems",
     "outcome": "none"
+   },
+   "Properties.Pouw.Window.workAtRefuses": {
+    "function": "PouwWindow.Work.at?",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -866,9 +897,7 @@
    "Properties.NetworkCertifier.malformedEvidenceRejects": "restatable: State the contrapositive: an outcome other than reject -> EvidenceFits.",
    "Properties.NetworkCertifier.undecidedIff": "restatable: Split the iff: keep undecided -> the link-window conditions (other-outcome); move the converse to Proofs.",
    "Properties.NetworkCertifier.undigestedParamsReject": "restatable: State the contrapositive: an outcome other than reject -> some ParamsDigests p eg ig.",
-   "Properties.Pouw.Commit.frameInjective": "frozen (scope): It takes |tag| < 2^32 and every |part| < 2^64 as hypotheses, which the Lean frameBytes doesn't refuse (it wraps the length; Python's frame refuses), so it leaves the list once the port refuses them and the bounds come from acceptance.",
-   "Properties.Pouw.Commit.leafRefusals": "restatable: Split isOk = decide(...): keep accepts -> the salt and digest sizes; move the converse to Proofs.",
-   "Properties.Pouw.Window.gridRefusals": "restatable: Split each isOk = decide(domain): keep accepts -> domain and f? n = .ok v -> v = f n; move domain -> accepts (and its value) to Proofs as completeness."
+   "Properties.Pouw.Commit.frameInjective": "frozen (scope): It takes |tag| < 2^32 and every |part| < 2^64 as hypotheses, which the Lean frameBytes doesn't refuse (it wraps the length; Python's frame refuses), so it leaves the list once the port refuses them and the bounds come from acceptance."
   }
  },
  "reads": {
