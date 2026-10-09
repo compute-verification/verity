@@ -16,9 +16,13 @@ and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grindin
   every length `decodeProof` checks (Proof.lean:81-158) at its value, a schedule of at least two levels (at one level
   `recursive_proofs`' length check, Proof.lean:130, refuses every file), digests of positive width, and a file that fits
   a `u64`.
-* `TableSrc.encodes_of`: `TableSrc.Encodes` at `bytes r := encodeProof (shapeOf …) (proof r)`, from the shapes of the
-  level-0 cap and the Ligerito openings the table's proof files carry (`CapShaped`, `LigShaped`), V*'s shape
-  (`ShapeIs`, and its claims `2 + n`), and the file's fit.
+* `encodeProof_size_le`: the file is at most `fileBound sh` bytes; at hm96-sha512 and a `fast100` schedule that is at
+  most `2^32` bytes and `2064` per ring switch (`fast100_file`).
+* `TableSrc.encodes_of`: `TableSrc.Encodes` at `bytes r := encodeProof (shapeOf …) (proof r)`, from the setup
+  (`SetupRealizes`), V*'s shape (`ShapeIs`, and its claims `2 + n`: `ClaimsAre`, from `HFit` and `ExtrasAre` by
+  `claimsAre_of`), the shapes of the level-0 cap and the Ligerito openings the proof files carry (`CapShaped`,
+  `LigShaped`), and fewer than `2^48` regions (`RegionsFit`). `hEnc_of` is it at the family; `hdec_filesAt` is ht's
+  `hdec` at the table files.
 -/
 
 namespace FlockVBridge.Family
