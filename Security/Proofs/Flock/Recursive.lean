@@ -13,7 +13,9 @@ import Proofs.Flock.Recursive.Guarantees
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Audit
+import Proofs.Flock.Recursive.ReadsOpen
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered netlist's in `Private`), and its soundness at the compiled inner
-protocol with the compile lemma open (`Compile`). -/
+protocol with the compile lemma open (`Compile`), and the registered reads read off an outcome, whose commit strings open
+the registration's root when every session verifies (`Reads`, `ReadsOpen`). -/
