@@ -100,7 +100,7 @@ from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict, _Col
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
 #: the window draw's key, from the epoch's draw coin (`draw_key`)
-DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
+DRAW_DOMAIN = CC.DRAW_DOMAIN
 #: the window root's port: the window's entries
 PORT = "entries"
 #: a window stream's failure budget: its first failure stops it
@@ -558,50 +558,20 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
-def width(n: int) -> int:
-    """Bytes per word of an exact uniform draw below `n` (Lean's ``Draw.width``, `Key.uniform`'s)."""
-    return (n.bit_length() + 64 + 7) // 8
-
-
 def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
     """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
-    return derive(coin, DRAW_DOMAIN, {"stream": stream.digest, "registration": reg.digest,
-                                      "receipt": hashlib.sha512(canonical_json(dict(reg.receipt))).hexdigest()})
+    return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
 def draw_bytes(key: Key, law: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k draw over N reads (Lean's ``2 k · width(N) + 64``)."""
     if law.get("law") != "subset":
         raise _refused("law", f"the window's draw is a subset law's, not {dict(law)}")
-    return key.stream("draw", 2 * law["k"] * width(n) + 64)
-
-
-def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
-    w = width(n)
-    space = 1 << (8 * w)
-    while pos + w <= len(src):
-        x, pos = int.from_bytes(src[pos:pos + w], "big"), pos + w
-        if x < space - space % n:
-            return x % n, pos
-    return None
-
-
-def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
-    """Lean's ``Draw.subset`` on one stream (``flock-verify draw --stream``): partial Fisher-Yates, each step an exact
-    uniform word of `width` bytes; None when the stream runs out."""
-    swapped: dict[int, int] = {}
-    pos = 0
-    for i in range(k):
-        r = _uniform(n - i, src, pos)
-        if r is None:
-            return None
-        j, pos = i + r[0], r[1]
-        swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
-    return sorted(swapped.get(i, i) for i in range(k))
+    return key.stream("draw", 2 * law["k"] * CC.width(n) + 64)
 
 
 def python_sampler(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-    units = stream_subset(law["k"], n, src)
+    units = CC.stream_subset(law["k"], n, src)
     if units is None:
         raise _refused("sampler", "the draw's stream ran out")
     return units
@@ -668,16 +638,9 @@ class Challenger:
     def pass_epoch(self, raw: bytes | None, recorded: bool = False) -> str:
         """How the pass's salt was had (``coin``, or ``recorded beacon`` for a recorded replay's), its manifest `raw`
         re-started under the challenger's own coin commitment and named by the window's parameters.  Raises `Refused`."""
-        if raw is None:
-            raise _refused("coin", "the window names no pass, whose epoch the challenger re-starts from its manifest")
-        try:
-            _, how = _pd().manifest_epoch(json.loads(raw), self.coins.commitment, recorded)
-        except DomainError as e:
-            raise _refused("coin", str(e)) from None
-        except (KeyError, TypeError, ValueError) as e:
-            raise _refused("manifest", f"{type(e).__name__}: {e}") from None
-        if hashlib.sha512(raw).hexdigest() != self.params["context"].rsplit("/", 1)[-1]:
-            raise _refused("manifest", "the pass is not the one the window's parameters name")
+        how, refused = CC.pass_epoch(self.coins.commitment.to_json(), raw, self.params["context"], recorded)
+        if refused is not None:
+            raise _refused(*refused)
         return how
 
     def _keyed(self, law: Mapping[str, Any], n: int) -> list[int]:

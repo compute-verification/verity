@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.ml.commitments.merkle import tree_levels
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.circuit import leaves as L
@@ -273,7 +274,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
     assert o.after == bytes.fromhex(reg.digest) and coin_reason(ch.coins.commitment, o, "draw", o.after) is None
     st = ch.regs["honest"][0]
     src = SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26)
-    assert len(src) == 2 * k * SC.width(26) + 64 and d.units == SC.stream_subset(k, 26, src)
+    assert len(src) == 2 * k * CC.width(26) + 64 and d.units == CC.stream_subset(k, 26, src)
     assert ch.coins_of("honest") == {"commitment": ch.coins.commitment.to_json(), "pass": "coin", "draw": o.to_json()}
     with pytest.raises(S.Refused) as e:
         ch.select("honest")
@@ -338,11 +339,13 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         _challenger(bparams, coins=_coins()).register("x", brec, manifest=braw)
     assert _codes(e) == {"coin"} and f"is {PD.MANIFEST_SCHEMA_RECORDED}, recorded before epoch coins" in e.value.verdict.detail["coin"]
     _, _, bman = PASSES[bparams["context"]]
-    for schema in ("verity-vllm/pouw-pearl-c-run/v0", None):
+    for schema, code, why in (("verity-vllm/pouw-pearl-c-run/v0", "coin", f"schema 'verity-vllm/pouw-pearl-c-run/v0', not {PD.MANIFEST_SCHEMA}"),
+                              (None, "manifest", "the pass's manifest names no schema")):
         ch = _challenger(bparams, coins=_coins())
         with pytest.raises(S.Refused) as e:
             ch.register("x", brec, manifest=_raw({**bman, "schema": schema}), recorded=True)
-        assert f"schema {schema!r}, not {PD.MANIFEST_SCHEMA}" in e.value.verdict.detail["coin"]
+        assert why in e.value.verdict.detail[code]
+    assert (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED) == (PD.MANIFEST_SCHEMA, PD.MANIFEST_SCHEMA_RECORDED)
     ch = _challenger(bparams, coins=_coins())
     ch.register("honest", brec, manifest=braw, recorded=True)
     assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.law_of(bparams, bpublic["level"])["k"]
@@ -352,14 +355,14 @@ def test_stream_subset_is_the_exact_partial_fisher_yates_on_one_stream():
     """`stream_subset` reads `width(n - i)`-byte words in order, skips a word at or above the largest multiple of the
     range, and runs out on a short stream, as Lean's ``Draw.subset`` does."""
     n, k = 26, 3
-    w = SC.width(n)
+    w = CC.width(n)
     word = lambda x: x.to_bytes(w, "big")  # noqa: E731
     top = (1 << (8 * w)) - (1 << (8 * w)) % n
     src = word(top) + word(5) + word(0) + word(199)          # top is refused; then 5 % 26, 0 % 25, 199 % 24 = 7
-    assert SC.stream_subset(k, n, src) == [1, 5, 9]
-    assert SC.stream_subset(k, n, src[:-1]) is None
+    assert CC.stream_subset(k, n, src) == [1, 5, 9]
+    assert CC.stream_subset(k, n, src[:-1]) is None
     key = SC.derive(b"\x01" * 32, SC.DRAW_DOMAIN, {"x": "y"})
-    units = SC.stream_subset(8, 1000, SC.draw_bytes(key, {"law": "subset", "k": 8}, 1000))
+    units = CC.stream_subset(8, 1000, SC.draw_bytes(key, {"law": "subset", "k": 8}, 1000))
     assert len(set(units)) == 8 and units == sorted(units) and all(0 <= u < 1000 for u in units)
 
 

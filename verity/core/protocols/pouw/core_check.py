@@ -25,6 +25,11 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 `opening` is the rule on one unit's opening beside it (`served_commit.check`'s, which calls it): the tile proof's public
 file opens the unit's rows under the registered window root, through its entry and the entry's side trees.
 
+`pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
+its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
+`draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
+and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`.
+
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
 from __future__ import annotations
@@ -36,11 +41,16 @@ import re
 from fractions import Fraction
 from typing import Any
 
+from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
+from verity.core.protocols.pouw.protocol import U64, tagged
+from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.ml.commitments.rowleaf import row_leaf
+from verity.ml.randomness import derive
 
 ID = "verity/pouw/v1"
 ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
@@ -590,6 +600,264 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
                                                       row_leaf(sdom, at[side], Wd._HM.tree_leaf(Wd._HM.default_key, bc),
                                                                schema), paths[side])):
             return f"side {side}: the proof's committed row is not entry {e}'s row {at[side]}"
+    return None
+
+
+# ---- the pass's epoch and the window's draw --------------------------------------------------------------------------------
+
+MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
+#: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it
+MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
+#: the e2e-service passes' coin commitment (r20261006-19… to -22…), whose binding and weights' root are the first 32 bytes
+#: of `tagged`: only a replay of a recorded pass reads it
+COINS_RECORDED = "verity/pouw/epoch-coins/v2"
+#: a coin commitment's scheme: (the bytes of `tagged` its binding and the weights' root keep, the weights' root's tag)
+COIN_VERSIONS = {Co.SCHEME: (64, "verity/pouw/weights/v1"), COINS_RECORDED: (32, "verity/pouw/weights/v2")}
+DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
+_OPENING = "a coin opening is {epoch, label, after, coin, salt, path}: an integer, a string, hex, and SHA-512 digests"
+_MATMULS = "the pass's matmuls are not a list of objects with integer index, m, k, n and weight"
+_WEIGHTS = "the pass's weights are not an object from each weight, in decimal, to an object with a hex root"
+
+
+def _hex(s: Any) -> bytes | None:
+    if not _str(s):
+        return None
+    try:
+        return bytes.fromhex(s)
+    except ValueError:
+        return None
+
+
+def coins_of(j: Any, recorded: bool) -> tuple[str, int, bytes]:
+    """A coin commitment ``{"scheme", "epoch", "root"}`` (`CoinCommitment.from_json`) as (scheme, epoch, root), of a scheme
+    the verifier reads: `coins.SCHEME`, and `COINS_RECORDED` only in a replay of a recorded pass."""
+    if not isinstance(j, dict) or j.get("scheme") not in ((Co.SCHEME, COINS_RECORDED) if recorded else (Co.SCHEME,)):
+        raise Refused(f"a coin commitment's scheme is {Co.SCHEME!r}")
+    if not (_int(j.get("epoch")) and j["epoch"] >= 0):
+        raise Refused("an epoch is a nonnegative integer")
+    root = _hex(j.get("root"))
+    if root is None or len(root) != 64:
+        raise Refused("a coin commitment's root is 64 bytes")
+    return j["scheme"], j["epoch"], root
+
+
+def opening_of(j: Any) -> Co.CoinOpening:
+    """A coin's opening (`CoinOpening.from_json`), its path of SHA-512 digests."""
+    if not isinstance(j, dict) or not _int(j.get("epoch")) or not _str(j.get("label")):
+        raise Refused(_OPENING)
+    hexes = [_hex(j.get(k)) for k in ("after", "coin", "salt")]
+    path = [_hex(p) for p in j["path"]] if isinstance(j.get("path"), list) else None
+    if None in hexes or path is None or any(p is None or len(p) != 64 for p in path):
+        raise Refused(_OPENING)
+    return Co.CoinOpening(j["epoch"], j["label"], *hexes, tuple(path))
+
+
+def coin_reason(c: tuple[str, int, bytes], o: Co.CoinOpening, label: str, after: bytes) -> str | None:
+    """`coins.coin_reason` under commitment `c`'s scheme (`COIN_VERSIONS`)."""
+    scheme, epoch, root = c
+    if o.epoch != epoch:
+        return f"coin is epoch {o.epoch}'s, not epoch {epoch}'s"
+    if o.label != label:
+        return f"coin is the epoch's {o.label!r} coin, not its {label!r} coin"
+    if len(o.coin) != Co.COIN_BYTES or len(o.salt) != Co.HM96.salt_bytes:
+        return "coin opening is malformed"
+    dom = CommitmentDomain(tagged(scheme, epoch)[:COIN_VERSIONS[scheme][0]], -1, RangeIndexedDomain(len(Co.LABELS)),
+                           hash="sha512")
+    if not verify_opening(dom, Commitment(root, len(Co.LABELS)),
+                          Opening(Co.LABELS.index(label), Co.leaf_value(o.coin, o.salt), o.path), scheme, VerificationLimits()):
+        return "coin does not open against the epoch's coin commitment"
+    if o.after != after:
+        return "coin was not opened after what the verifier recorded"
+    return None
+
+
+def weights_root(scheme: str, roots: dict[int, bytes]) -> bytes:
+    """`audit.weights_root` under a coin commitment's scheme (`COIN_VERSIONS`)."""
+    n, tag = COIN_VERSIONS[scheme]
+    return tagged(tag, *(p for w in sorted(roots) for p in (w, roots[w])))[:n]
+
+
+def _manifest(raw: bytes) -> dict:
+    try:
+        m = json.loads(raw.decode(), parse_constant=_no_constant)
+    except ValueError:
+        m = None
+    if not isinstance(m, dict):
+        raise Refused("the pass's manifest is not a JSON object")
+    return m
+
+
+def _workload(m: dict) -> tuple[list[dict], dict[int, bytes]]:
+    """The manifest's matmuls (each a shape and 64-bit ids, `Matmul`'s) and its weights' roots."""
+    us = m.get("matmuls")
+    if not isinstance(us, list) or not all(isinstance(u, dict) and all(_int(u.get(k)) for k in ("index", "m", "k", "n", "weight"))
+                                           for u in us):
+        raise Refused(_MATMULS)
+    for u in us:
+        if min(u["m"], u["k"], u["n"]) < 1:
+            raise Co.DomainError("a shape has m, k, n >= 1")
+        if not (0 <= u["index"] < U64 and 0 <= u["weight"] < U64):
+            raise Co.DomainError("a matmul's index and weight id are 64-bit")
+    ws = m.get("weights")
+    if not isinstance(ws, dict):
+        raise Refused(_WEIGHTS)
+    roots: dict[int, bytes] = {}
+    for w, v in ws.items():
+        r = _hex(v.get("root")) if isinstance(v, dict) else None
+        if r is None or not (w and all(c in "0123456789" for c in w) and (len(w) == 1 or w[0] != "0")):
+            raise Refused(_WEIGHTS)
+        roots[int(w)] = r
+    return us, roots
+
+
+def _check_workload(us: list[dict], roots: dict[int, bytes]) -> None:
+    """`Workload`'s and `Epoch`'s checks of the weights."""
+    if len({u["index"] for u in us}) != len(us):
+        raise Co.DomainError("matmul indices are unique")
+    dims: dict[int, tuple[int, int]] = {}
+    for u in us:
+        if dims.setdefault(u["weight"], (u["n"], u["k"])) != (u["n"], u["k"]):
+            raise Co.DomainError(f"every matmul on weight {u['weight']} has the weight's (n, k)")
+    if set(roots) != set(dims):
+        raise Co.DomainError("every weight of the workload is committed, and only those")
+
+
+def _epoch_salt(m: dict, coins: Any, recorded: bool) -> tuple[bytes, str]:
+    """`manifest_epoch`: the pass's epoch salt re-started from its manifest, and how it was had.  Raises `DomainError`
+    (the coin rule's) or `Refused` (a manifest it can't read)."""
+    schema = m.get("schema")
+    if schema == MANIFEST_RECORDED and not recorded:
+        raise Co.DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded "
+                             "pass reads it")
+    if schema not in (MANIFEST_SCHEMA, MANIFEST_RECORDED):
+        if not _str(schema):
+            raise Refused("the pass's manifest names no schema")
+        raise Co.DomainError(f"schema {schema!r}, not {MANIFEST_SCHEMA}" + (f" or {MANIFEST_RECORDED}" if recorded else ""))
+    us, roots = _workload(m)
+    if schema == MANIFEST_SCHEMA:
+        if "salt_opening" not in m:
+            raise Co.DomainError("the pass has no salt coin")
+        if coins is None:
+            raise Co.DomainError("the pass's salt coin opens against the epoch's published coin commitment, which the "
+                                 "verifier holds")
+        try:
+            c = coins_of(coins, recorded)
+        except Refused as e:
+            raise Co.DomainError(f"the verifier's coins are malformed: {e}") from None
+        try:
+            opening = opening_of(m["salt_opening"])
+            claimed = coins_of(m.get("coins"), recorded)
+        except Refused as e:
+            raise Co.DomainError(f"the pass's coins are malformed: {e}") from None
+        if claimed != c:
+            raise Co.DomainError("the pass's coin commitment is not the epoch's")
+        _check_workload(us, roots)
+        root = weights_root(c[0], roots)
+        why = coin_reason(c, opening, "salt", root)
+        if why is not None:
+            raise Co.DomainError(f"the salt's {why}")
+        salt, how = derive(opening.coin, EPOCH_SALT_DOMAIN, {"epoch": c[1], "coins": c[2], "weights": root}).stream("salt", 32), "coin"
+    elif "beacon" in m:
+        beacon = _hex(m["beacon"])
+        if not beacon:
+            raise Refused("the recorded pass's beacon is not nonempty hex")
+        _check_workload(us, roots)
+        salt = derive(beacon, SALT_DOMAIN, {"weights": weights_root(Co.SCHEME, roots)}).stream("salt", 32)
+        how = "recorded beacon"
+    else:
+        raise Co.DomainError("the recorded pass has no beacon")
+    if salt.hex() != m.get("salt"):
+        raise Co.DomainError(f"the pass's salt is not its {how}'s and the weights'")
+    return salt, how
+
+
+def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False) -> tuple[str | None, tuple[str, str] | None]:
+    """How the pass's salt was had (``coin``, or ``recorded beacon`` in a replay of a recorded pass) and None, or None and
+    the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts its epoch under `coins`, the challenger's
+    own coin commitment (its JSON), and the window's `context` names it by its SHA-512."""
+    if raw is None:
+        return None, ("coin", "the window names no pass, whose epoch the challenger re-starts from its manifest")
+    try:
+        _, how = _epoch_salt(_manifest(raw), coins, recorded)
+    except Co.DomainError as e:
+        return None, ("coin", str(e))
+    except Refused as e:
+        return None, ("manifest", str(e))
+    if hashlib.sha512(raw).hexdigest() != context.rsplit("/", 1)[-1]:
+        return None, ("manifest", "the pass is not the one the window's parameters name")
+    return how, None
+
+
+def width(n: int) -> int:
+    """Bytes per word of an exact uniform draw below `n` (Lean's ``Draw.width``, `Key.uniform`'s)."""
+    return (n.bit_length() + 64 + 7) // 8
+
+
+def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
+    w = width(n)
+    space = 1 << (8 * w)
+    while pos + w <= len(src):
+        x, pos = int.from_bytes(src[pos:pos + w], "big"), pos + w
+        if x < space - space % n:
+            return x % n, pos
+    return None
+
+
+def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
+    """Lean's ``Draw.subset`` on one stream (``flock-verify draw --stream``): partial Fisher-Yates, each step an exact
+    uniform word of `width` bytes; None when the stream runs out."""
+    swapped: dict[int, int] = {}
+    pos = 0
+    for i in range(k):
+        r = _uniform(n - i, src, pos)
+        if r is None:
+            return None
+        j, pos = i + r[0], r[1]
+        swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
+    return sorted(swapped.get(i, i) for i in range(k))
+
+
+def _plain(s: Any) -> bool:
+    return _str(s) and all(" " <= c <= "~" and c not in '"\\' for c in s)
+
+
+def draw_key_context(stream: str, registration: str, receipt: dict) -> dict:
+    """The draw key's context: the stream, the registration and its receipt (as canonical JSON's SHA-512)."""
+    if not all(_plain(x) and _plain(v) for x, v in receipt.items()):
+        raise ValueError("a receipt is an object of printable ASCII strings")
+    body = "{" + ",".join(f'"{k}":"{receipt[k]}"' for k in sorted(receipt)) + "}"
+    return {"stream": stream, "registration": registration, "receipt": hashlib.sha512(body.encode()).hexdigest()}
+
+
+def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
+         units: Any) -> tuple[str, str] | None:
+    """None when `units` are the window's draw: the epoch's draw coin `opening` opens against `coins` (the challenger's
+    commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
+    `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
+    registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why)."""
+    try:
+        c = coins_of(coins, recorded)
+    except Refused as e:
+        return "coin", f"the verifier's coins are malformed: {e}"
+    if not (_str(registration) and _DIGEST.fullmatch(registration)) or not _str(stream):
+        return "draw", "the registration is not a SHA-512 digest, or the stream's digest not a string"
+    if not (isinstance(receipt, dict) and all(_plain(x) and _plain(v) for x, v in receipt.items())):
+        return "draw", "the receipt is not an object of printable ASCII strings"
+    if not (_nat(k) and _nat(population) and 1 <= population and k <= population):
+        return "draw", "the law is not subset:k over N with k <= N and N >= 1"
+    try:
+        o = opening_of(opening)
+    except Refused as e:
+        return "coin", f"the draw's {e}"
+    why = coin_reason(c, o, "draw", bytes.fromhex(registration))
+    if why is not None:
+        return "coin", f"the draw's {why}"
+    src = derive(o.coin, DRAW_DOMAIN, draw_key_context(stream, registration, receipt)).stream("draw", 2 * k * width(population) + 64)
+    got = stream_subset(k, population, src)
+    if got is None:
+        return "sampler", "the draw's stream ran out"
+    if not (isinstance(units, list) and all(_nat(u) for u in units) and units == got):
+        return "draw", f"the units are not the draw coin's subset:{k} over {population}"
     return None
 
 

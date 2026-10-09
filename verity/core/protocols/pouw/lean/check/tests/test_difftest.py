@@ -10,6 +10,10 @@ that refused, and agreeing on it holds which rule refused, not only that one did
 `pouw-check-difftest`'s `opening` against `core_check.opening`: one `Port`, over the openings `pouw_opening_cases`
 generates (honest openings of a call's tile or the filler's, and one mutation each aimed at every refusal or at a reading
 both sides share), compared output for output: null, or the same reason.
+
+Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
+`pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
+mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 """
 from __future__ import annotations
 
@@ -26,6 +30,7 @@ from hypothesis import strategies as st
 
 import pouw_check_cases as cases
 import pouw_opening_cases as openings
+import pouw_pass_cases as passes
 from verity.core.protocols.pouw import core_check as CC
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -108,3 +113,42 @@ def test_opening(opening_server):
     print(f"pouw-check-difftest opening: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by reason: "
           f"{dict(sorted(OPENED.items()))}")
     assert set(OPENED) == REASONS | {"accept"}, set(OPENED) ^ (REASONS | {"accept"})
+
+
+PASSED: Counter[str] = Counter()
+
+
+def pass_epoch(case: dict) -> dict:
+    how, refused = CC.pass_epoch(*passes.pass_args(case))
+    PASSED[how or f"{refused[0]}: {_template(refused[1])}"] += 1
+    return {"how": how} if refused is None else {"refused": list(refused)}
+
+
+def draw(case: dict) -> dict | None:
+    refused = CC.draw(*passes.draw_args(case))
+    PASSED["draw " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
+    return None if refused is None else {"refused": list(refused)}
+
+
+PASS = D.Port("pouw-check-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False,
+              inputs=st.builds(passes.pass_instance, st.randoms(use_true_random=False),
+                               st.sampled_from(["honest"] * (len(passes.PASS_NAMES) // 6) + passes.PASS_NAMES)))
+DRAW = D.Port("pouw-check-difftest", "draw", draw, package=LEAN, need_rejects=False,
+              inputs=st.builds(passes.draw_instance, st.randoms(use_true_random=False),
+                               st.sampled_from(["honest"] * (len(passes.DRAW_NAMES) // 4) + passes.DRAW_NAMES)))
+pass_server = D.server_fixture(PASS)
+
+
+def test_pass_and_draw(pass_server):
+    """Generated passes and draws, then each mutation over a few seeds (`replay`), so every refusal is reached whatever
+    the draw."""
+    PASSED.clear()
+    stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
+    swept = Counter(D.replay(PASS, passes.pass_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                    for name in ["honest", *passes.PASS_NAMES] for seed in range(3))
+    swept += Counter(D.replay(DRAW, passes.draw_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                     for name in ["honest", *passes.DRAW_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
+          f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
+    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon"}
+    assert "draw accept" in PASSED and len(PASSED) > 40

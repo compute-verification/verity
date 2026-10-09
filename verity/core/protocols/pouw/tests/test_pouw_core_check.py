@@ -29,6 +29,9 @@ sys.modules["pouw_check_cases"] = vectors
 _spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
 openings = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(openings)
+_spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
+passes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(passes)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -261,3 +264,91 @@ def test_canonical_json_is_leans():
                    (b"\xff", "not UTF-8"), (b"{", "not JSON")):
         with pytest.raises(CC.Refused, match=why):
             CC.canonical(b)
+
+
+#: the refusal each pass mutation aims at: (code, the reason's start), or the honest pass's ``how`` (a reading both sides
+#: share)
+PASS_EXPECT = {
+    "honest": {"coin", "recorded beacon"}, "spaced-hex": {"coin", "recorded beacon"},
+    "no-pass": ("coin", "the window names no pass"), "not-utf8": ("manifest", "the pass's manifest is not a JSON object"),
+    "not-json": ("manifest", "the pass's manifest is not a JSON object"),
+    "not-object": ("manifest", "the pass's manifest is not a JSON object"),
+    "constant": ("manifest", "the pass's manifest is not a JSON object"),
+    "recorded-unread": ("coin", f"the pass's manifest is {CC.MANIFEST_RECORDED}, recorded before epoch coins"),
+    "schema-other": ("coin", "schema "), "schema-missing": ("manifest", "the pass's manifest names no schema"),
+    "matmuls-form": ("manifest", "the pass's matmuls are not"), "matmuls-not-list": ("manifest", "the pass's matmuls are not"),
+    "shape": ("coin", "a shape has m, k, n >= 1"), "ids-64-bit": ("coin", "a matmul's index and weight id are 64-bit"),
+    "weights-form": ("manifest", "the pass's weights are not"), "weights-not-object": ("manifest", "the pass's weights are not"),
+    "no-salt-coin": ("coin", "the pass has no salt coin"),
+    "no-verifier-coins": ("coin", "the pass's salt coin opens against the epoch's published coin commitment"),
+    "verifier-coins": ("coin", "the verifier's coins are malformed: an epoch is"),
+    "opening-form": ("coin", "the pass's coins are malformed: a coin opening is"),
+    "pass-coins-form": ("coin", "the pass's coins are malformed: a coin commitment's"),
+    "recorded-scheme": ("coin", "the verifier's coins are malformed: a coin commitment's scheme is 'verity/pouw/epoch-coins/v1'"),
+    "not-the-epochs": ("coin", "the pass's coin commitment is not the epoch's"),
+    "indices": ("coin", "matmul indices are unique"), "dims": ("coin", "every matmul on weight"),
+    "weights-set": ("coin", "every weight of the workload is committed, and only those"),
+    "coin-epoch": ("coin", "the salt's coin is epoch"), "coin-label": ("coin", "the salt's coin is the epoch's"),
+    "coin-size": ("coin", "the salt's coin opening is malformed"),
+    "coin-foreign": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
+    "coin-tampered": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
+    "coin-path": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
+    "coin-early": ("coin", "the salt's coin was not opened after what the verifier recorded"),
+    "resalted": ("coin", "the pass's salt is not its"), "salt-missing": ("coin", "the pass's salt is not its"),
+    "beacon-empty": ("manifest", "the recorded pass's beacon is not nonempty hex"),
+    "no-beacon": ("coin", "the recorded pass has no beacon"),
+    "not-named": ("manifest", "the pass is not the one the window's parameters name"),
+}
+
+DRAW_EXPECT = {
+    "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed"),
+    "recorded-scheme": ("coin", "the verifier's coins are malformed: a coin commitment's scheme is"),
+    "registration": ("draw", "the registration is not a SHA-512 digest"), "stream": ("draw", "the registration is not a SHA-512"),
+    "receipt": ("draw", "the receipt is not"), "law": ("draw", "the law is not subset:k over N"),
+    "opening-form": ("coin", "the draw's a coin opening is"), "label": ("coin", "the draw's coin is the epoch's 'salt' coin"),
+    "epoch": ("coin", "the draw's coin is epoch"),
+    "foreign": ("coin", "the draw's coin does not open"), "tampered": ("coin", "the draw's coin does not open"),
+    "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
+    "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
+}
+
+
+def test_every_pass_mutation_hits_its_refusal():
+    """`core_check.pass_epoch` re-starts an honest pass's epoch (each coin version, and a recorded beacon's) and refuses
+    each mutation, over a few cases each, with the refusal it aims at."""
+    assert set(PASS_EXPECT) == set(passes.PASS_NAMES) | {"honest"}
+    for name, want in PASS_EXPECT.items():
+        for seed in range(6):
+            how, refused = CC.pass_epoch(*passes.pass_args(passes.pass_instance(random.Random(f"{name}/{seed}"), name)))
+            if isinstance(want, set):
+                assert refused is None and how in want, (name, seed, refused)
+            else:
+                assert refused is not None and refused[0] == want[0] and refused[1].startswith(want[1]), (name, seed, refused)
+
+
+def test_every_draw_mutation_hits_its_refusal():
+    assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
+    for name, want in DRAW_EXPECT.items():
+        for seed in range(6):
+            got = CC.draw(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
+            assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
+                (name, seed, got)
+
+
+def test_the_versioned_coin_rule_is_the_coins_on_the_current_version():
+    """On `coins.SCHEME`, `core_check.coin_reason` and `weights_root` are `coins.coin_reason` and `audit.weights_root`;
+    the recorded version differs from it in its binding and weights' root."""
+    from verity.core.protocols.pouw import coins as Co
+    from verity.core.protocols.pouw.audit import weights_root
+    rng = random.Random(3)
+    for seed in range(8):
+        ch = Co.Challenger(seed % 3, rng.randbytes)
+        roots = {rng.randrange(99): rng.randbytes(64) for _ in range(3)}
+        assert CC.weights_root(Co.SCHEME, roots) == weights_root(roots)
+        assert CC.weights_root(CC.COINS_RECORDED, roots) != weights_root(roots)[:32]
+        o = ch.open("salt", weights_root(roots))
+        c = CC.coins_of(ch.commitment.to_json(), False)
+        for label, after, op in (("salt", o.after, o), ("salt", bytes(64), o), ("draw", o.after, o),
+                                 ("salt", o.after, Co.CoinOpening(o.epoch + 1, o.label, o.after, o.coin, o.salt, o.path)),
+                                 ("salt", o.after, Co.CoinOpening(o.epoch, o.label, o.after, o.coin[:-1] + b"x", o.salt, o.path))):
+            assert CC.coin_reason(c, op, label, after) == Co.coin_reason(ch.commitment, op, label, after)
