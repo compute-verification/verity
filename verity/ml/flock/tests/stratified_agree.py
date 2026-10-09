@@ -1,4 +1,4 @@
-"""The Lean verifier's stratified draw against core's (PR #164's `verity.experimental.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
+"""The Lean verifier's stratified draw against core's (PR #164's `verity.core.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
 
 For each program (A4 P6's six-template population, as #164's test builds it, and small and random programs):
 
@@ -141,7 +141,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=20260927)
     a = ap.parse_args()
     from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.experimental.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P
 
     rng = random.Random(a.seed)
     out = a.out or Path(tempfile.mkdtemp(prefix="stratified-agree-"))
@@ -248,7 +248,7 @@ def main() -> int:
     if worst > 5:
         bad.append(("frequency", counts, worst))
     # a query that defines no strata
-    wq = {"format": "verity/partition/v1", "program": P.program_sha512(prog), "query": {"name": "Q_word", "version": 1,
+    wq = {"format": "verity/partition/v1", "program": P.program_digest(prog), "query": {"name": "Q_word", "version": 1,
                                                                                       "params": {"X": 16, "W": 32}}}
     (out / "qword.partition.json").write_text(json.dumps(wq))
     p = subprocess.run([a.lean, "draw", "--program", str(out / "freq.desc"), "--partition", str(out / "qword.partition.json"),

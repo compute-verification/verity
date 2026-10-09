@@ -23,16 +23,21 @@ path = "../../verity/core/service/flock"
 
 [[require]]
 name = "certifier_program"
-path = "../../verity/experimental/protocols/certifier/lean"
+path = "../../verity/core/protocols/certifier/lean"
 
 [[require]]
 name = "core_randomness"
-path = "../../verity/experimental/core/primitives/randomness"
+path = "../../verity/core/primitives/randomness"
 
 # V*'s circuits as core code (`VStar`), which the bridge (`Proofs.Flock.VBridge.OfVStar`) is stated over
 [[require]]
 name = "core_vstar"
-path = "../../verity/experimental/core/service/vstar"
+path = "../../verity/core/service/vstar"
+
+# The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
+[[require]]
+name = "security_properties"
+path = "../Properties"
 
 [[lean_lib]]
 name = "Proofs"

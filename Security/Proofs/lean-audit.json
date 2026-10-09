@@ -16,7 +16,7 @@
    },
    "generate": [
     "python3",
-    "{repo}/verity/experimental/protocols/pouw/lean/scripts/fp8atom_vectors.py",
+    "{repo}/verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py",
     "{repo}",
     "--out",
     "{out}"
@@ -223,7 +223,7 @@
   "batteries": "5a2410f298248ea44bf4d2fba0cf6fa143c56a185230ef6f3d1d6e22effd58f8",
   "cslib": "4fbda9ca9a3ebb5d9e1215ea17eca3ef36fb846b72ef716232fca52747cbfdb1",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "a856f08bc67dba8ef9c710e12ff284ed17fb2e2252607a191c7b6fa247cae89b",
+  "mathlib": "de8969dc06d080acee14850be02114ed029a0ba8836fdaf3bd3eeb5b84952eb8",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "03fc7216d49ae2ec6e8f09309ddd544a4ef90a222fd4856c142919aa4aac2ae0"

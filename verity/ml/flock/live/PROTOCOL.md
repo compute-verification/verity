@@ -501,9 +501,9 @@ goes out).
   expanded from ChaCha20 like the hm96 salts.
 - **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
   - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
-    table's Σ. The server refuses at configuration a Bernoulli law (its count is random), a count J does not divide, and
-    tables `--zk` cannot prove. The session's law is the record's `unit_draw`: each table's header carries only its part
-    as a subset draw;
+    table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
+    divide, and tables `--zk` cannot prove. The session's sampling design is the record's `unit_draw`: each table's
+    header carries only its part as a subset draw;
   - randomness per table (§2) and a rank check per table (§6). Per table is the joint check here, because no claim or
     message reads two tables' witnesses or masks. The tables' witnesses may be correlated: two drawn units in different
     tables can read the same row;
@@ -813,7 +813,7 @@ outer session of the stream and every open, and `rec_live` closes the next conne
 recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
 challenger (its next proof never comes, `late`), but the firewall records no stop until a request comes, so its own count
 misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (P1's `Stream(budget=...)`,
-`verity/experimental/protocols/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
+`verity/core/protocols/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
 and the two must agree in three places: the same b, the same stream (one firewall stream a challenger stream), and one
 recursive session a registration, so that each firewall failure is one `reject` or `late` there. A stop shows the
 challenger a cut or a missing proof, which is `late` or `reject`; a session the firewall refuses after its stop sends

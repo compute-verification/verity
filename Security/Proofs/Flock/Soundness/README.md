@@ -79,7 +79,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
-unit used. The audit bound defines a wrong unit through extracted values, so it pays the table's knowledge error and a
+unit used. The audit bound defines a faulty unit through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
@@ -130,6 +130,14 @@ link term per audit.
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
   `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
   `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumption-notes/e2e-checklist.md`), or a numeric condition.
+- **Over what the verifier accepts** (`Discharge/FailClosed`). `flock-verify verify` refuses every statement outside the
+  forms the proof covers (the verifier's PROTOCOL.md §16.15; `FailClosed.scopeOk_eq`), so the executable's headlines
+  (`zk_session_sound` with its `J`, hidden, custody and composed forms, and `flock_headline_exec` with its hidden and
+  decoded forms) are restated over `Verifies` (accepted, and in scope) with no hypothesis on the circuit, the public file
+  or the statement's form. The old forms, which take those hypotheses, are the lemmas they apply. The zero-knowledge
+  views take the statement's avoidance of the mask slot from the setup (`Mask.lean`): `verify --zk` refuses a statement
+  whose Δ or regions meet it (`Zk.maskFree`). `FailClosed.flock_verify_sound` (`One.lean`) is the one theorem: at every statement, with or without `--zk`, the
+  headline of its case (public or hidden outputs; under `--zk`, one table or several).
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
@@ -175,7 +183,7 @@ link term per audit.
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; Theorem GK over a model of the session's views, `gk_simulate_hm96` (`ZK/GK/`); the link to the code remains |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
-| Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
+| Sampled audits: the integrity profile over any partition and sampling design, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
 | The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: RoPE's rows by `Rope.rope_sound`, the rest by the IR comparison tests (`assumption-notes/template-rows.md`) |
@@ -218,14 +226,14 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     or an input-port bit of a net slot (a row's first `cv`, an hm96 `pad`, a unit's leaf or leaf-cut bit, a wire's
     destination). That none is a unit's computed row follows from the layout checks (`delta_split`, `deltaIn_inBit`).
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
-  are placed in a block. Then the transcript decoded from that block makes the unit correct.
+  are placed in a block. Then the trace decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
 
-    The decoded transcript then carries `true` on the constant (`UnitPlace.decode_one`).
+    The decoded trace then carries `true` on the constant (`UnitPlace.decode_one`).
   - A unit's input columns on one gate must carry one value in every satisfying witness (`UnitPlace.aliased`), as
-    they do when they copy one source's position, or forced-zero rows. The transcript reads each gate off one of its
+    they do when they copy one source's position, or forced-zero rows. The trace reads each gate off one of its
     columns.
   - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
@@ -249,7 +257,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     copies rewrite that row, or the pin's row is empty or lands inside another range.
 - **What a correct unit computes** is its certificate's, not a hypothesis (L1 was dropped, Daniel, Sep 30): the
   end-to-end theorems are about the circuit of the statement's rows (`Prog.circuit`), and when a unit's rows are
-  `GateRows.rows G L` and `G` computes `D`, a unit that is not wrong computes `D` (`IsRowsUnit.computes_of_cert`,
+  `GateRows.rows G L` and `G` computes `D`, a unit that is not faulty computes `D` (`IsRowsUnit.computes_of_cert`,
   `Certificate.lean`). RoPE's rows are proved to be its gate circuit's (`Rope.rope_sound`,
   `assumption-notes/template-rows.md`).
 - **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
@@ -478,9 +486,9 @@ The weights are committed once and every later proof opens that root. The analys
   2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision, with
   Daniel:** state security per table, or as a lifetime budget.
 - **Partial integrity counts audits, and needs knowledge soundness** (the lifetime-soundness desk study, §2–§5).
-  - In a sampled audit only the first wrong sampled unit matters. So an audit costs one table's hash term plus one
+  - In a sampled audit only the first faulty sampled unit matters. So an audit costs one table's hash term plus one
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
-  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
+  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is faulty only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
   - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved
     for the non-ZK session, 2^-70.2), and it dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4`

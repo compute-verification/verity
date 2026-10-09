@@ -23,7 +23,6 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity.ml.circuits.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.boolean import derived
@@ -104,8 +103,9 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/targets.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
-                         # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
-                         "verity_vllm/program/frontend/rules/vllm_sampling.py",
+                         # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
+                         "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
+                         "verity_vllm/program/frontend/rules/vllm_moe_fp8.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
@@ -487,9 +487,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # READ BACK what vLLM saw during instantiation (never a literal); declared != applied -> refuse
             applied = read_back_applied()
             applied["attention_backend"] = res["target"]["consulted"].get("attention_backend_knob")
-            # [R15 fp8] the block-scaled FP8 GEMM kernel vLLM selected for the model's FP8 linears (declared by `fp8_block_gemm`)
-            from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
-            applied["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the kernels vLLM selected: the FP8 linears' (declared by `fp8_block_gemm`), the fused-MoE experts' (by `moe_backend`)
+            from verity_vllm.program.frontend.target_profile import applied_kernels
+            applied.update(applied_kernels(target, model))
             # derived (observed) selection fields: the instantiated layers' attention impl; the fused-norm dispatch (after export)
             res["attention_impls_observed"] = vm.attention_impls(model)
             # [R13 hopper] READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
@@ -527,8 +527,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied_export["attention_backend"] = applied["attention_backend"]
             if "flash_attn_version" in applied:                  # absent when no layer is a FlashAttention impl (judged by the attention rule)
                 applied_export["flash_attn_version"] = applied["flash_attn_version"]
-            # [R15 fp8] the layers' FP8 kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
-            applied_export["fp8_block_gemm_kernel"] = fp8_block_gemm_kernel_of(model)
+            # [R15 fp8] the layers' kernel objects, read back AGAIN after the export (a kernel swapped around the export would show here)
+            applied_export.update(applied_kernels(target, model))
             res["target"]["applied_after_export"] = applied_export
             bad = profile_mismatches(target, applied_export)
             if bad:
@@ -578,7 +578,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
-    digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
+    digest = hashlib.sha512(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
     # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
     corr_digest = correspondence_digest(desc)
     assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
@@ -586,7 +586,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
     corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
-    res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
+    res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                       "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
                       "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                       "correspondence_digest": corr_digest,

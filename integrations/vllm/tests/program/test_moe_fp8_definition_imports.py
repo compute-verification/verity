@@ -15,7 +15,8 @@ import pytest
 
 REGISTRY = "verity_vllm.program.registry"
 DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
-FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boolean_fp8_moe", "nvfp4", "boolean_gather")
+FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
+          "boolean_gather")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1
 #: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`) and the Boolean bit views
 #: (`boolean_attention._Bits`)
@@ -43,14 +44,15 @@ def _imports(name: str) -> list[tuple[str, int]]:
 
 
 def _core(name: str) -> bool:
-    """`name` is core as it was before the move: under `verity`, except what the move put there from outside it (experimental,
-    the catalog, the kernels, C-Flock), with core's own protocols and claims, which moved under `verity.experimental`."""
+    """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
+    (the catalog, the kernels, C-Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
+    protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.experimental", "verity.ml.circuits.ops", "verity.ml.circuits.silicon", "verity.ml.circuits.targets",
-                "verity.ml.kernels", "verity.ml.flock")
+    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
     return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.experimental.protocols", "verity.experimental.claims"))))
+                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
 
 def _allowed(module: str) -> bool:

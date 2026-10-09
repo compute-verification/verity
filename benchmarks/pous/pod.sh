@@ -9,7 +9,8 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v3 on the same library, audited by protocol.TimedAudit
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v4 on the same library, audited by protocol.TimedAudit
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
 #                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then P2_ARM (p2-v3-gpu), and the table
@@ -50,13 +51,33 @@
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
-# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.experimental.protocols.pous. reference runs
+# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.core.protocols.pous. reference runs
 # bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv. band-gpu needs no implementation tree: a Python 3.12
 # venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench; POUS_BUILD=${POUS_BUILD:-$W/pous_build}
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
+# lake: the pod image's /opt/elan, else the user's elan (node 2's research user); verity_difftest serves the memory
+# challenger's Lean verdict (its Server and build need only the stdlib)
+export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
+export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src:$REPO/verity/core/difftest/python
+# PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
+# p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
+# (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
+# the package's .lake) before the lease, in the same job:
+#   research run --on vy-nebius-2 --cwd clone ... -- bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
+#     gpu-lease 1 --on N --max-min M -- vy-pous-quiet env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
+if [ "${PREPARE:-0}" = 1 ]; then
+  case $IMPL in
+    p2-v3-mc-gpu) set -- verity/core/devices/memory_challenger/lean memory-challenger-verdict ;;
+    p2-v3-gpu) set -- verity/core/protocols/pous/check pous-timed-audit ;;
+    *) exit 0 ;;
+  esac
+  grep -q "^name = \"$2\"" "$1/lakefile.toml" || exit 0
+  (cd "$1" && lake build "$2") > "$O/lean-build.log" 2>&1 || { tail -30 "$O/lean-build.log"; exit 3; }
+  exit 0
+fi
 # the run's GPU for nvidia-smi --id: a UUID, or an index as nvidia-smi counts them (gpu-lease's CUDA_DEVICE_ORDER=PCI_BUS_ID)
 gpu_uuid() {
   local v=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-}} l
@@ -141,8 +162,6 @@ record_host() {
 smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv,noheader || true
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
-export PATH=$HOME/.local/bin:$PATH
-export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src
 if [ -n "${GATE_ROLE:-}" ]; then
   gate=(--role "$GATE_ROLE" --out "$O/placement-gate.json" ${GATE_CORES:+--cores "$GATE_CORES"})
   for p in ${GATE_PEERS:-}; do f=${p#*=}; [ "${f#/}" = "$f" ] && f=$I/$f; gate+=(--peer "${p%%=*}=$f"); done
@@ -203,18 +222,22 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
   # keyed by the nvcc and the sources' bytes: a .so another toolkit or source built is never adopted, and every checkout of the
-  # same sources adopts it rather than rebuilding (make goes by mtimes, and each run's source tree is a fresh checkout)
-  P2KEY=$(cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/{p2dec.cu,CGBN.commit} | sha256sum | cut -c1-12)
+  # same sources adopts it rather than rebuilding (make goes by mtimes, and each run's source tree is a fresh checkout);
+  # and by P2FAST, the Makefile's FAST when it is set: '-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' expands the v4 keys
+  P2KEY=$({ cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/{p2dec.cu,CGBN.commit}
+            [ -z "${P2FAST+x}" ] || echo "FAST=$P2FAST"; } | sha256sum | cut -c1-12)
   P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2KEY
   if [ -f "$P2LIB/libp2v1.so" ]; then echo "adopted $P2LIB/libp2v1.so" > "$O/p2v1-make.log"
-  else make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
+  else make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
+    ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
     ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$POUS_BUILD" --p2-lib "$P2LIB" \
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
       --workers "$WORKERS" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
-      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D") \
+      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} ${TOKENS:+--tokens "$TOKENS"} $GO \
+      $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D") \
       $([ "$1" != band-gpu ] && [ -n "${P2_ENCODE_BLOCKS:-}" ] && echo --p2-encode-blocks "$P2_ENCODE_BLOCKS") \
       $([ "$1" != band-gpu ] && [ -n "${P2_C_CACHE:-}" ] && echo --p2-c-cache "$W/p2-c-cache") \
       $([ "$1" = p2-v3-mc-gpu ] && [ "${MC_SIGNER:-lms}" = lms ] && echo --mc-lms-key "$W/pous-mc-lms-n64")

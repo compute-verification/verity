@@ -40,6 +40,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # ... nor its bookings: gpu-lease refuses a lease that overlaps a window in /workspace/pouw/fill/windows on vy-nebius-2
     monkeypatch.setenv("GPU_LEASE_WINDOWS", str(tmp_path_factory.mktemp("gpu-lease") / "absent-windows"))
     monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
+    # ... nor cpu-1's rule that a run comes through a check slot (/etc/vy/runs-via-slot), which refuses the keeper's launch there
+    monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-runs-via-slot"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
     # ... nor its dispatcher's settings: importing dispatch.py loads $VY_DISPATCH_ROOT/dispatch.env (default

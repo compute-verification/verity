@@ -113,10 +113,10 @@ SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
 **The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
-weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under `frame-v3-sha512` it is 64
-bytes, an `identity_digest_sha512` (Daniel's one-hash ruling: one hash, SHA-512), or 32 bytes, a SHA-256 identity digest as recorded
-statements carry it; every other frame takes 32 bytes only. The domain message frames every part with its u64be length, so a 64-byte
-binding and a 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
+weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under every frame it is 64 bytes, an
+`identity_digest_sha512` or another SHA-512 digest (Daniel's one-hash ruling: one hash, SHA-512), or 32 bytes, a SHA-256 identity
+digest as recorded statements carry it. The domain message frames every part with its u64be length, so a 64-byte binding and a
+32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
 `vectors_sha512.json` gives row trees over 64-byte bindings, each with its identity's tag and document, the positions' SHA-512
 identity and the domain message; the other groups are unchanged.
 
@@ -160,7 +160,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
   them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
   id from its own derivation of the binding, and refuses a root whose recorded domain differs (R3-domain in
-  `verity.experimental.protocols.sampled_proofs.one_stage.registration` does).
+  `verity.core.protocols.sampled_proofs.one_stage.registration` does).
 - **Reference and conformance.** `verity.ml.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
@@ -249,15 +249,15 @@ and `test_rowleaf_bits.py` check them.
 - **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the SHA-512 frame computes: the
   domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
   rests on `cr/sha-512` alone.
-- **What still rests on SHA-256.** Which statement and which session a root belongs to also rests on `binding`, a 32-byte SHA-256
-  identity digest from the protocol and the IR. Until the re-baseline moves identities to SHA-512, a Table 1 row that cites this
-  frame cites `cr/sha-256` beside `cr/sha-512`.
+- **What may still rest on SHA-256.** Which statement and which session a root belongs to also rests on `binding`. A 64-byte binding
+  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the IR does not, and a Table 1 row that cites this
+  frame over one cites `cr/sha-256` beside `cr/sha-512`.
 
 ## 7. `frame-b3`
 
 A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
 `verity.ml.commitments.merkle`, where the module docstring states the layout. Its first user is Pearl-C's hashing format `-h1`
-(`verity/experimental/protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
+(`verity/core/protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
 B-Ligero do not mirror it, `FrameV3` does not offer it, and `multiproof` refuses it.
 
 ~~~text
@@ -277,5 +277,5 @@ hashes no index, and a leaf (its own tag) and a node (its level's key) cannot co
   (`test_frame_v3.py`). Pearl-C's BLAKE3 device kernels, checked against this reference on the host while Pearl-C hashed
   with BLAKE3, are kept unmaintained in `archive/pouw-blake3/pearl_c/` (`hash.cuh`).
 - **Hashes.** Binding a value to a position rests on `cr/blake3`. As in §6, which statement and session a root belongs to
-  also rests on `binding` and the positions' identity, both SHA-256 identity digests, so a Table 1 row citing this mode
-  cites `cr/sha-256` beside `cr/blake3`.
+  also rests on `binding` (64 or 32 bytes, as in §6) and the positions' identity, a SHA-256 identity digest, so a Table 1 row
+  citing this mode cites `cr/sha-256` beside `cr/blake3`, and `cr/sha-512` for a 64-byte binding.

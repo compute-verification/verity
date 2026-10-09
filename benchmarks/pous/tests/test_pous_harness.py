@@ -22,12 +22,14 @@ from pathlib import Path
 import pytest
 
 torch = pytest.importorskip("torch")
-pytest.importorskip("verity.experimental.protocols.pous")
+pytest.importorskip("verity.core.protocols.pous")
 
 ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 BAND = "band-chain/d12/v1"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
+SEED = "5eed" * 8
+"""`memory_challenger.py --seed`: the audits' challenges, and so the controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -44,7 +46,7 @@ def _harness():
 
 
 def _small():
-    from verity.experimental.protocols.pous import band
+    from verity.core.protocols.pous import band
     return band.BandParams(16, 64 * 8, 12)          # 64-byte blocks, 1 KiB segments
 
 
@@ -95,8 +97,8 @@ class PyResponder:
 
 def _backend(params, flip_last: bool = False):
     """The reference codec as the twin: tags carry each row's segment id and the salt."""
-    from verity.experimental.protocols.pous import schemes
-    from verity.experimental.protocols.pous.labels import salt_value, tag
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.labels import salt_value, tag
 
     harness = _harness()
     from band_gpu.memory_challenger import scheme_of
@@ -135,7 +137,7 @@ def _backend(params, flip_last: bool = False):
 
 def _vectors(params):
     """The band's pinned whole-segment vector, at the small geometry, from the reference."""
-    from verity.experimental.protocols.pous import schemes
+    from verity.core.protocols.pous import schemes
 
     harness = _harness()
     b = params.blocks_per_segment * params.block_bytes
@@ -147,7 +149,8 @@ def _vectors(params):
 def _args(tmp_path, **kw):
     base = {"scheme": BAND, "max_segments": 0, "kernels": "", "build_dir": str(tmp_path / "build"), "reference_segments": 2,
             "workers": 2, "tokens": "1,8", "reps": 1, "load_tokens": 0, "audits": 2, "pings": 20, "allowance": "max", "k": 0, "deadline_ns": 0, "clock": "logical",
-            "verifier_cpu": None, "responder_cpu": None, "step_reps": 3, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None}
+            "verifier_cpu": None, "responder_cpu": None, "step_reps": 3, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None,
+            "seed": SEED}
     return types.SimpleNamespace(**{**base, **kw})
 
 
@@ -169,7 +172,7 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     m = body["metrics"]
     assert m["loop"]["tokens"] == [1, 8] and m["loop"]["tensors"] == 3 and set(m["loop"]["overhead"]) == {1, 8}
     honest, value, late, rec = m["audit"], m["value_control"], m["late_control"], m["recompute_control"]
-    from verity.experimental.protocols.pous import audit
+    from verity.core.protocols.pous import audit
 
     assert honest["audits_accepted"] == 2 and honest["k"] == audit.CHALLENGES and honest["responder"]["answered"] == 2 * audit.CHALLENGES
     assert set(honest["margin_s"]) >= {"min", "p50", "max"} and honest["limit_ns"] > honest["deadline_ns"]
@@ -256,7 +259,7 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     format), whose segments round-trip and whose certificate at the frozen point is
     `Pous.SecurityProofs.BandMultiMeetsFamily` with the cliff at 6; the memory challenger process rebuilds it from its manifest;
     d = 4 has no certificate and is refused."""
-    from verity.experimental.protocols.pous import band, schemes
+    from verity.core.protocols.pous import band, schemes
 
     harness = _harness()
     from band_gpu.memory_challenger import params_of, scheme_of
@@ -385,6 +388,22 @@ def test_the_control_responder_holds_only_the_late_controls_answers():
     assert got[0] == got[4] == (777_000, 777_000, b"R" * width)                         # recomputed: reported, not held
     assert got[3] == (0, 999_000, c_host[5 * width:6 * width]) and got[7][1] == 999_000
     assert got[1] == (0, 1_000, c_host[width:2 * width])
+
+
+def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path):
+    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real draws fail now
+    and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
+    _harness()
+    from band_gpu import memory_challenger as mc
+
+    files = ["--ready", str(tmp_path / "ready.json"), "--leaves", str(tmp_path / "leaves.bin"), "--out", str(tmp_path / "out.json")]
+    with pytest.raises(SystemExit) as refused:
+        mc.main([*files, "--seed", SEED])
+    assert refused.value.code == 2 and not (tmp_path / "out.json").exists()
+    seed = bytes.fromhex(SEED)
+    with pytest.raises(ValueError, match="logical clock alone"):
+        mc.audit("127.0.0.1", 0, None, None, audits=1, pings=1, seed=seed)
+    assert len({mc.seeded_source(seed, j) for j in range(4)} | {mc.seeded_source(b"other", 0)}) == 5
 
 
 def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
@@ -636,6 +655,51 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
     assert rc.returncode == 2 and "name the run's GPU" in rc.stdout and calls == []
 
 
+def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
+    """PREPARE=1, run before the GPU lease: for p2-v3-mc-gpu, `lake build memory-challenger-verdict` in its Lean package
+    (lake from the user's elan here, /opt/elan's on the pod image) and exit, with no nvidia-smi query; for p2-v3-gpu,
+    `lake build pous-timed-audit` in pous_check where its lakefile declares one; for another IMPL, nothing; a failed build
+    exits 3."""
+    home = tmp_path / "home"
+    lake = home / ".elan" / "bin" / "lake"
+    lake.parent.mkdir(parents=True)
+    lake.write_text(f"#!/bin/sh\necho \"$PWD $*\" >> {tmp_path / 'lake-args'}\nexit ${{LAKE_RC:-0}}\n")
+    lake.chmod(0o755)
+    rc, calls, _ = _pod_sh(tmp_path, "mc", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home))
+    assert rc.returncode == 0 and calls == []
+    package = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "lean"
+    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-challenger-verdict\n"
+    rc, calls, _ = _pod_sh(tmp_path, "band", "GPU-a GPU-b", "PREPARE=1", HOME=str(home))
+    assert rc.returncode == 0 and calls == [] and (tmp_path / "lake-args").read_text().count("\n") == 1
+    check = ROOT / "verity" / "core" / "protocols" / "pous" / "check"
+    declared = 'name = "pous-timed-audit"' in (check / "lakefile.toml").read_text()
+    rc, calls, _ = _pod_sh(tmp_path, "strict", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-gpu", HOME=str(home))
+    assert rc.returncode == 0 and calls == []
+    assert (tmp_path / "lake-args").read_text().splitlines()[1:] == ([f"{check} build pous-timed-audit"] if declared else [])
+    (tmp_path / "lake-args").unlink()
+    rc, calls, _ = _pod_sh(tmp_path, "failed", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home), LAKE_RC="1")
+    assert rc.returncode == 3 and calls == []
+
+
+def test_pod_sh_python_path_loads_the_lean_verdict_without_site_packages():
+    """The pod's venv holds numpy, torch and gmpy2 alone, and pod.sh's PYTHONPATH the rest: with that path and no
+    site-packages at all, the memory challenger's Lean verdict (`verdict.py`, through `verity_difftest`, Hypothesis
+    unimportable) and `live.py` load.  r20261009-034919-c88c's five arms signed their sessions and then lost them to
+    `No module named 'verity_difftest'`."""
+    line = next(s for s in (BENCH / "pod.sh").read_text().splitlines() if s.startswith("export PYTHONPATH="))
+    path = line.split("=", 1)[1].replace("$REPO", str(ROOT))
+    code = ("import importlib.util, sys\n"
+            "sys.modules['hypothesis'] = None\n"
+            "spec = importlib.util.spec_from_file_location('v', sys.argv[1])\n"
+            "spec.loader.exec_module(importlib.util.module_from_spec(spec))\n"
+            "sys.path.insert(0, sys.argv[2])\n"
+            "from memory_challenger import live\n")
+    verdict = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "lean" / "verdict.py"
+    rc = subprocess.run([sys.executable, "-S", "-c", code, str(verdict), str(BENCH)], capture_output=True, text=True,
+                        env={"PYTHONPATH": path, "PATH": os.environ.get("PATH", "/usr/bin:/bin")})
+    assert rc.returncode == 0, rc.stderr[-2000:]
+
+
 def test_pod_sh_runs_the_placement_gate_first_and_stops_on_its_refusal(tmp_path):
     """GATE_ROLE: placement.py's gate checks the run's machine before anything is built or timed; here the guarded node's record
     is another machine's, so the run exits 4 with the verdict recorded and bench.py never starts."""
@@ -691,4 +755,7 @@ def test_the_harness_moves_every_one_of_its_threads_off_the_memory_challengers_a
         stop.set()
         t.join()
         for x in os.listdir("/proc/self/task"):
-            os.sched_setaffinity(int(x), here)
+            try:
+                os.sched_setaffinity(int(x), here)
+            except ProcessLookupError:
+                pass

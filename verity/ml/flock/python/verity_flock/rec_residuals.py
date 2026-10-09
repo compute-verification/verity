@@ -76,10 +76,12 @@ V_VALUE = "rec-v"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
-# a part's sha512x3 slots per instance, at most (`slots`): 2^25 bits of compressions beside its hm96 slots' 2^24 (at most
-# MAX_REGIONS) leave its unit 2^24 of a 2^26 block, below circuit.K_MAX's 2^27 (`circuit.compose` refuses a larger one); K =
-# 4096's units are 2^22, and without the bound v's compressions (about nv / 8) put its first part at 2^27
-MAX_SLOTS = 128
+# a part's sha512x3 slots per instance, at most (`slots`): 160 slots of 2^18 bits (2^25.32) beside its hm96 slots' 2^24 (at
+# most MAX_REGIONS) leave room for a 2^22 unit in a 2^26 block (for a 2^23 unit, as at 12 claims, 159 do), below
+# circuit.K_MAX's 2^27 (`circuit.compose` refuses a larger one); K = 4096's units are 2^22, and without the bound v's
+# compressions (about nv / 8) put its first part at 2^27. A shape's widest residual reads about 10.75 slots a claim, so 160
+# holds up to 14 claims (12 claims: 130)
+MAX_SLOTS = 160
 
 
 def port_words(n: int) -> int:
@@ -98,7 +100,7 @@ def spec(sh) -> dict:
     gf, lay = A.structure(sh)
     ports = [[f"m{i}", len(r)] for i, r in enumerate(A.rounds(sh))] + [["acc0", 2], ["acc1", 2]]
     S = {"gf": gf, "ports": ports}
-    _check(S)
+    _check(S, whole=True)
     if lay.w[-4:] != A.ACC_NAMES:
         raise AssertionError("w does not end with the running sums")
     return S
@@ -123,7 +125,7 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
     reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
     w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
     holds exactly when every part does."""
-    _check(S)
+    _check(S, whole=True)
     gf = S["gf"]
     starts = [0]
     for _, n in S["ports"]:
@@ -183,7 +185,9 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
     return out
 
 
-def _check(S: dict) -> None:
+def _check(S: dict, whole: bool = False) -> None:
+    """S is an InnerRepCheck S; one statement's (``whole`` False) also holds at most ``OUT_WORDS / 8`` residuals, which a
+    whole algebra's S (``whole``, `parts`' input) need not."""
     if not isinstance(S, dict) or set(S) != {"gf", "ports"}:
         raise TypeError("InnerRepCheck's S is {'gf': GfResiduals' S, 'ports': [[name, elements], ...]}")
     names = [nm for nm, _ in S["ports"]]
@@ -191,7 +195,7 @@ def _check(S: dict) -> None:
         raise ValueError("InnerRepCheck's row ports are distinct names, not v, each of at least one element")
     if sum(n for _, n in S["ports"]) != S["gf"]["nw"]:
         raise ValueError(f"row ports of {sum(n for _, n in S['ports'])} elements for a w of {S['gf']['nw']}")
-    if F_WORDS * len(S["gf"]["res"]) > OUT_WORDS:
+    if not whole and F_WORDS * len(S["gf"]["res"]) > OUT_WORDS:
         raise ValueError(f"{len(S['gf']['res'])} residuals: more than {OUT_WORDS // F_WORDS}")
 
 
@@ -390,7 +394,7 @@ def verifier_value(program: str, value: str, rows: list[list[int]]):
     """A value the verifier registers itself (`registered.Registered`): rows it computes from the inner session's public record,
     the inner statement and its own coins, under `verifier_salts`. Its entry is then a function of those rows alone, which the
     verifier's reads file names, and the prover's table rows and salts are the same registration's."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     return RG.Registered.commit(program, value, rows, verifier_salts(program, value, len(rows)))
 
@@ -399,7 +403,7 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
     """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
     from verity.ml.commitments.merkle import tree_levels
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     dom = RG.domain(program, value, words_, len(bcs))
     root = tree_levels(dom, [RG.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
@@ -409,7 +413,7 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
 def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
     decide."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     t0 = time.perf_counter()
     defn = definition(S)
@@ -431,8 +435,8 @@ def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evalua
     instance's row of it; ``vs``: each instance's v (F elements), which the verifier registers as `V_VALUE` (`verifier_value`),
     instance i reading row i. ``own``: per row port the verifier's own entry (default the registration's), which its reads file
     names; the outputs are the verifier's zero rows, registered under its own salts."""
-    from verity.experimental.protocols.sampled_proofs.one_stage import partition as P
-    from verity.experimental.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
 
     S, n, low, sub, text = st.S, st.n, st.low, st.sub, st.text
     names = [nm for nm, _ in S["ports"]]

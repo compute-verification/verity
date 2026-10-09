@@ -84,7 +84,9 @@ unless named, and the spec's reading waits for its build.
 
 `--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
 everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
-cannot; the `compile-time` check stands in for it then.
+cannot; the `compile-time` check stands in for it then. It first takes one of the node's Lean audit slots, of pool
+LEAN_SLOT_POOL else `audit` (`--repo`'s `tools/verity/check/lean_slot.py`), unless it runs in one already (check's
+lean-audit step, `lean_changed.py --records`); refused, or with the node's slot file but no `lean_slot.py`, it exits 2.
 
 A record holds the statement, not the proof, so a guarantee may be recorded on a `sorry` stub and pass once a proof with
 allowed axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, puts the
@@ -108,7 +110,8 @@ Each package's report lists, without failing, the spec definitions that no guara
 package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
-too; its reading and replay run beside the builds that follow.
+too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
+Its reading and replay run beside the builds that follow.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -117,6 +120,7 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import difflib
 import gzip
 import hashlib
@@ -168,7 +172,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
@@ -181,6 +185,31 @@ def sibling(name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+#: the node's Lean slot file when `lean_slot.py` can't be loaded (its `SLOTS`)
+LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
+
+
+def lean_slot(repo: Path) -> int | None:
+    """`--build`: one of the node's Lean audit slots for this process (`repo`'s `lean_slot.py`, `hold`), its descriptor or None
+    (no cap here, or a slot held already); RuntimeError when the slots refuse it, or the node caps audits and ``repo`` has no
+    `lean_slot.py` (a copy of this directory elsewhere)."""
+    import importlib.util
+
+    path = repo / "tools" / "verity" / "check" / "lean_slot.py"
+    if not path.is_file():
+        if LEAN_SLOTS.exists() and not os.environ.get("LEAN_SLOT"):
+            raise RuntimeError(f"{LEAN_SLOTS} caps this node's Lean audits, and {path} is missing to take a slot: "
+                               "run it under a `lean_slot.py` from this repository")
+        return None
+    spec = importlib.util.spec_from_file_location("lean_slot_for_audit", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.hold()
+    except module.Refused as e:
+        raise RuntimeError(str(e)) from None
 
 
 def cores() -> int:
@@ -1003,6 +1032,166 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     return out, fails
 
 
+#: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
+#: always returns, whose property takes no such hypothesis, only the input
+OUTCOMES = ("accept", "undecided", "reject", "none")
+
+#: what a `shape.frozen` reason starts with (`restatable: …`, `frozen (hash): …`): a guarantee that a restatement makes fit,
+#: one frozen on a question still open, one leaving the list (a lemma, a completeness theorem, one resting on a falsified
+#: premise), and a spec statement that no guarantee states
+CATEGORIES = ("restatable", "frozen", "lemma", "completeness", "falsified", "unstated")
+
+#: a `shape.conjectures` entry's status: an open conjecture is a premise of the properties that rest on it, a falsified
+#: one refuses them
+CONJECTURE = ("open", "falsified")
+
+
+def category(why: str) -> str | None:
+    """The category a `shape.frozen` reason starts with, or None."""
+    head = why.split(":", 1)[0].split(" (", 1)[0].strip()
+    return head if head in CATEGORIES and ":" in why else None
+
+
+def shape(policy: dict, facts: dict) -> list[str]:
+    """The shape every property has (the lean-proofs skill, "One shape"), as the policy's `shape` declares it: for each
+    guarantee, its entry under `shape.properties` names the function it is about (`function`: a constant, or
+    several) and the outcome its one hypothesis that is not a premise takes (`outcome`, `OUTCOMES`). Its statement,
+    with a lifted definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type
+    reaches the function, and with an outcome other than `accept`, a constant named for the outcome), and premises:
+    hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
+    one, of the tuple of their inputs (a binding property). A `Prop` field of a structure an input ranges over is a
+    hypothesis too, and a conjunction counts as its conjuncts. A guarantee under `shape.frozen` ({name: why it
+    doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
+    spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
+    component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
+    one does. Each reason starts with its category (`CATEGORIES`). A named conjecture under `shape.conjectures`
+    ({name: {status, test, why}}, a named assumption of the package) is a premise too, of a property that is then
+    conditional and lists it under its entry's `rests_on`; one marked falsified refuses every property resting on it.
+    An open conjecture names its falsification test, which a suite runs, so a counterexample fails `check` until it is
+    marked falsified. Every package is checked: one without a `shape` section has no entries, so each of its
+    guarantees is frozen or fails. The landing DM shows each entry added to `shape.frozen`."""
+    spec = policy.get("shape", {})
+    fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
+    frozen, where = spec.get("frozen", {}), "shape.frozen"
+    conjectures = spec.get("conjectures", {})
+    for name, c in sorted(conjectures.items()):
+        c = c if isinstance(c, dict) else {}
+        if name not in policy.get("assumptions", {}):
+            fails.append(f"shape: shape.conjectures lists {name}, which is not a named assumption of this package")
+        if c.get("status") not in CONJECTURE:
+            fails.append(f"shape: shape.conjectures[{name}] has no status ({', '.join(CONJECTURE)})")
+        if not str(c.get("why", "")).strip():
+            fails.append(f"shape: shape.conjectures[{name}] gives no reason: one sentence on what it says and its status")
+        if c.get("status") == "open" and not str(c.get("test", "")).strip():
+            fails.append(f"shape: shape.conjectures[{name}] is open and names no falsification test that runs")
+    for name, why in sorted(frozen.items()):
+        if why.strip() and category(why) is None:
+            fails.append(f"shape: {where}[{name}] starts with no category: `<category>: why`, one of {', '.join(CATEGORIES)}")
+    guarantees = set(policy.get("guarantees", {}))
+    lifted = {(p.get("lift") or {}).get("head") for p in facts["pins"].values()}
+    homes = spec.get("statements")
+    held = (lambda m: under(homes, m)) if homes is not None else (lambda m: "Guarantees" in m.split("."))
+    unstated = {d["name"]: d["module"] for d in facts.get("spec_definitions", []) if d.get("statement") and held(d["module"])
+                and d["name"] not in lifted and d["name"] not in policy.get("assumptions", {})}
+    for name in sorted(set(frozen) - guarantees - set(unstated)):
+        fails.append(f"shape: {where} lists {name}, which is neither a guarantee of this package nor a statement of its "
+                     f"spec that none states: remove the entry")
+    for name, module in sorted(unstated.items()):
+        if name in frozen and not frozen[name].strip():
+            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why no guarantee states {name} yet")
+        elif category(frozen.get(name, "")) not in (None, "unstated"):
+            fails.append(f"shape: {where}[{name}] is a statement no guarantee states: its reason's category is `unstated`")
+        elif name not in frozen:
+            fails.append(f"shape: {name} ({module}) is a statement that no guarantee of this package states: list the "
+                         f"theorem that proves it under `guarantees`, or move it out of the spec")
+    for name in sorted(set(entries) - guarantees):
+        fails.append(f"shape: shape.properties lists {name}, which is not a guarantee of this package: remove the entry")
+    for name in sorted(guarantees):
+        if name in frozen and not frozen[name].strip():
+            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why {name} doesn't have the shape yet")
+        got = facts["pins"].get(name, {}).get("shape")
+        why = refusals(entries.get(name), got, premises, set(conjectures)) if isinstance(got, list) else \
+            [f"has no shape in the facts ({(got or {}).get('error', 'not computed')})"]
+        rests = sorted({c for part in got for h in part["hypotheses"] for c in [h.get("head"), *h["reaches"]]
+                        if c in conjectures}) if isinstance(got, list) else []
+        why += [f"rests on {c}, which shape.conjectures marks falsified ({conjectures[c].get('why', '')}): it comes off "
+                f"the list" for c in rests if conjectures[c].get("status") == "falsified"]
+        if not why and entries.get(name) and sorted(entries[name].get("rests_on", [])) != rests:
+            why.append(f"rests on {', '.join(rests) or 'no conjecture'}, but its entry's `rests_on` lists "
+                       f"{', '.join(sorted(entries[name].get('rests_on', []))) or 'none'}: a conditional property lists "
+                       f"each conjecture it rests on")
+        if name in frozen and why and category(frozen[name]) == "unstated":
+            fails.append(f"shape: {where}[{name}] is a guarantee: its reason's category is not `unstated`")
+        dead = [c for c in rests if conjectures[c].get("status") == "falsified"]
+        if name in frozen and dead and category(frozen[name]) != "falsified":
+            fails.append(f"shape: {where}[{name}] rests on {', '.join(dead)}, which is falsified: its reason's category "
+                         f"is `falsified`")
+        if name in frozen:
+            if not why:
+                fails.append(f"shape: {name} has the shape now: remove it from {where}, which only shrinks")
+        elif why:
+            fails += [f"shape: {name} {w}" for w in why]
+    return fails
+
+
+def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+    """Why a statement's shape (`Facts.lean`'s `shapeInfo`, one part per conjunct) isn't a property of the function
+    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one."""
+    if not entry or not entry.get("function") or entry.get("outcome") not in OUTCOMES:
+        return [f"has no entry under shape.properties naming its function and its outcome ({', '.join(OUTCOMES)})"]
+    if len(got) == 1:
+        return part_refusals(entry, got[0], premises, conjectures)
+    return [f"(conjunct {k + 1}) {w}" for k, part in enumerate(got)
+            for w in part_refusals(entry, part, premises, conjectures)]
+
+
+def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+    """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
+    first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`."""
+    fns = [entry["function"]] if isinstance(entry["function"], str) else list(entry["function"])
+    outcome, said = entry["outcome"], " or ".join(fns)
+
+    def about(h: dict) -> bool:
+        reached = set(h["reaches"])
+        return any(reaches(f, reached) for f in fns) and (
+            outcome == "accept" or any(c.rsplit(".", 1)[-1] == outcome for c in reached))
+
+    def premise(h: dict) -> bool:
+        return h.get("head") in conjectures or bool(h["module"]) and under(premises, h["module"])
+
+    hyps = sorted(got["hypotheses"], key=lambda h: h["at"])
+    start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
+        next(iter(hyps), None)
+    ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
+    taken = [h for h in hyps if ends is None or h["at"] < ends]
+    out = []
+    if outcome != "none" and start is None:
+        out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
+                   f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
+    for h in taken:
+        if (outcome != "none" and about(h)) or premise(h):
+            continue
+        what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
+        out.append(f"takes {h['name']} : {h['type']}, {what} that is neither its acceptance nor a premise (its acceptance: "
+                   f"{outcome} by {said}; a premise: "
+                   f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})")
+    if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
+        out.append(f"says nothing about {said}, the function its entry names")
+    return out
+
+
+def reaches(function: str, reached: set[str]) -> bool:
+    """Whether a statement part that reaches the constants ``reached`` applies ``function``: a constant, or a field of one
+    (`PouwCheck.protocol.check`, the `check` field of the structure `PouwCheck.protocol`), whose path is the longest of its
+    prefixes that is a constant, followed by fields, each a constant with that last component (its projection)."""
+    parts = function.split(".")
+    for i in range(len(parts), 0, -1):
+        if ".".join(parts[:i]) in reached:
+            return all(any(c.rsplit(".", 1)[-1] == p for c in reached) for p in parts[i:])
+    return False
+
+
 def unowned(rec: dict | None) -> dict:
     """A guarantee's record without its `owner`: what the build writes and the audit compares."""
     return {k: v for k, v in (rec or {}).items() if k != "owner"}
@@ -1416,11 +1605,39 @@ def path_deps(pkg: Path) -> list[Path]:
             if d.get("type") == "path"] if manifest.exists() else []
 
 
+def writable(pkg: Path) -> list[Path]:
+    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's."""
+    return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
+
+
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the `.lake` directories of the package and its path dependencies
-    (``argv`` as is where there is no sandbox)."""
-    rw = [str(d / ".lake") for d in [pkg.resolve(), *path_deps(pkg)]]
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *rw, "--", *argv] if sandboxed() else argv
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories (``argv`` as is where there
+    is no sandbox)."""
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+
+
+#: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
+_WRITING: set[Path] = set()
+_WROTE = threading.Condition()
+
+
+@contextlib.contextmanager
+def writing(pkg: Path, log=print):
+    """Hold ``pkg``'s `writable` directories for one Lake build: two builds that share one run one at a time, and the
+    others side by side. Two dependents of one stale path dependency would both rebuild its modules into its one
+    `.lake/build`, and one's `clang` reads a `.c` file the other is rewriting (exit 135)."""
+    dirs = set(writable(pkg))
+    with _WROTE:
+        if busy := sorted(str(d.parent) for d in _WRITING & dirs):
+            log(f"build: {pkg} waits for a build that writes the .lake of {', '.join(busy)}")
+        _WROTE.wait_for(lambda: not _WRITING & dirs)
+        _WRITING.update(dirs)
+    try:
+        yield
+    finally:
+        with _WROTE:
+            _WRITING.difference_update(dirs)
+            _WROTE.notify_all()
 
 
 def olean_files(lib: Path) -> list[Path]:
@@ -1615,9 +1832,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         for step, argv in (("setup", None),
                            ("build", in_sandbox(pkg, ["lake", "build"])),
                            ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
-            s = time.monotonic()
-            rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
-            rep["seconds"][step] = round(time.monotonic() - s, 1)
+            with contextlib.nullcontext() if argv is None else writing(pkg, log):
+                s = time.monotonic()
+                rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
+                rep["seconds"][step] = round(time.monotonic() - s, 1)
             if rc:
                 rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
                 return rep
@@ -1647,7 +1865,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return rep
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current))
+    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
@@ -1926,6 +2144,12 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
+    try:
+        if a.build:
+            lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits
+    except RuntimeError as e:
+        print(f"check.py: {e}", file=sys.stderr, flush=True)
+        return 2
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = a.out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-audit-")))
     out.mkdir(parents=True, exist_ok=True)

@@ -222,7 +222,7 @@ def test_registered_values_are_shared_once_and_registered_at_the_root():
 def test_a_workload_without_registered_values_keeps_its_digest():
     wl = _wl([(3, 2), (5, 0)])
     assert wl.registered == () and "registered" not in wl.artifact()["shared"]
-    assert wl.digest == "c7b27da04c555a2a56c06126ba6d3eb28b6fef06fdb2ffe449be43a4cb18c5e4"
+    assert wl.digest == "6e2b20e9356a27b5b3db628205d9b97f617a400cfa95c96fa7d9aff92b145de92892833688405e5e8ee4fa29cd4400395250238cc9764234376882bcb6904655"
 
 
 def _toy_rank_request(LP: int, T: int):

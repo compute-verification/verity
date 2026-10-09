@@ -2,7 +2,7 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, and the
   advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
@@ -19,7 +19,7 @@ description: >
 The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier) and `@console`, plus two advisors,
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
   registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
@@ -46,6 +46,16 @@ or `❌ declined — ...`), with no reaction: every handle posts through one bot
 A reply (`send --thread TS`) you post in your own thread without naming anyone wakes everyone the root addressed, which on an announcement is
 every handle. So a progress note goes out as `send --kind fyi`, which is quiet: it wakes only the `--to` names it starts
 with, and everyone else reads it in their digest.
+
+A reply under an announcement, quiet or not (a status line aside), also rings the owner of each PR it names, by number
+(`#1585`, or the numbers in a `train-prep-...` branch) or by its `cursor/` branch: the owner is the handle whose holder's agent
+id ends in the branch's last 4 characters (or that lists them in `branch_suffixes`). It also rings a handle that, earlier in
+the thread, named a run id (`dd21`) beside one of its own PRs, when the post names that run. A PR whose owner can't be found
+rings whoever named it in the thread. Everything else there stays in `research msg read`.
+
+Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refuse a body that names a handle with `@` past
+its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
+Move the name to the start (or `--to`) to ring it, or drop the `@` to mention it without a doorbell.
 
 `registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, the paths it `owns`), the
 channels and the named humans; `research msg handles` prints it. `research msg owners PATH...` names who owns each path (the
@@ -75,6 +85,8 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
+- Never subscribe to an announcement's thread (the merge thread is one), and unsubscribe from any you hold: there the
+  doorbell rings you for a post that names you at its start, one of your PRs, or a run you named beside one of your PRs.
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
 
 ~~~text
@@ -130,9 +142,14 @@ research msg pickup --thread <ts>                                              #
 subscribe_slack_thread(channelId, threadTs=<ts>)
 research msg send --as infra --thread <ts> --text '...'                        # only when the asker must act or decide
 research msg close --as infra --thread <ts> --link <PR, file or art: id>       # ✅ and the link
-research msg close --as infra --thread <ts> --declined 'a node change needs Daniel'  # ❌ and why
+research msg close --as infra --thread <ts> --declined 'past the budget line: Daniel'  # ❌ and why
 research msg read --thread <ts>                                              # the conversation so far
 ~~~
+
+An ask to one handle is also an issue in that handle's Linear team (the registry's `linear` key, in
+linear.app/verity-research): the ask prints `linear: <ID> <url>` and its Slack root links the issue. The doorbell still
+carries the ask, and the conversation stays in the Slack thread. `close` moves the issue to done, and `--declined` to
+canceled, so the team's open issues are its open asks. If Linear fails, the ask goes out on Slack alone.
 
 An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 
@@ -163,7 +180,8 @@ An addressed handle, woken by one, does four things:
 ## Asking Daniel
 
 `#ask-daniel` is the one channel for everything that needs Daniel (his design, 1:39 PM PDT on 30 Sep). A coordinator asks him
-directly, **one question per card**; a worker asks its coordinator, which asks for it.
+directly, **one question per card**; a worker asks its coordinator, which asks for it. Only money, keys and claims need him
+(8 Oct): spend past a budget line, access and keys, and what a guarantee says or rests on. Anything else is its owner's call.
 
 **Ping him, every time** (Daniel, 2:43 PM PDT on 1 Oct). A decision that waits in a note or a lead's thread waits forever.
 `research msg ask-daniel` posts the card and mentions him on it, so Slack notifies him. If the card route fails, post the
@@ -177,7 +195,7 @@ and the skills, and your own state file. If one covers the case, follow it and d
 Every card has the same shape: the question in one line; why it matters; 2 to 5 options, one of them recommended; the default;
 a deadline in Pacific time; and a link to the full context. It comes in two kinds:
 
-- **blocking**, for spend, access, destructive changes and live nodes: nothing happens until Daniel clicks. After its deadline
+- **blocking**, for spend and access (keys, a node's root): nothing happens until Daniel clicks. After its deadline
   the card shows as overdue, and it still waits.
 - **default**: the default applies at the deadline unless he objects.
 
@@ -195,7 +213,7 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
   before it sends anything, and `--dry-run` prints the request.
 - **The answer** is a button, or a reply in the card's thread. The asker subscribes to its own card's thread; the site posts
   every decision there too (a click, a default applied, a `resolve`). When Daniel answers in the thread, the asker records his
-  answer on the card with `resolve`. Until console deploys that route, it fails with HTTP 404, and the thread reply stands.
+  answer on the card with `resolve`. Until the site deploys that route, it fails with HTTP 404, and the thread reply stands.
 - **A route without the card's fields** (HTTP 400) gets the old Approve/Deny card. The question becomes its title, and the
   rest goes in its text: Approve takes the recommendation. That route never applies a default, so the asker applies it at the
   deadline itself.

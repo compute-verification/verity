@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-from verity.experimental import claims as claims_registry
+from verity.core import claims as claims_registry
 from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
@@ -448,7 +448,7 @@ _HIDDEN_ZK = ("No: NON_ZK_PROOF; no privacy claim (M0's transcript is a function
 FLOCK_CIRCUIT_HIDDEN_CONFIG = dataclasses.replace(
     FLOCK_CIRCUIT_CONFIG, id="C-Flock, generic circuit, hidden outputs, SHA-512 in-circuit commitments", ports=_HIDDEN_PORTS,
     zk=_HIDDEN_ZK, pin="verity/flock-circuit pinned circuit file with hidden outputs (PR #757); the Lean verifier of record "
-                       "(Stmt.setupHidden: no soundness theorem yet)")
+                       "(Stmt.setupHidden: FailClosed.flock_headline_exec_hidden, in the forms the proof covers)")
 FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG = dataclasses.replace(
     FLOCK_CIRCUIT_TYPED_CONFIG, id="C-Flock, typed circuit (verity/flock-circuit/types), hidden outputs, SHA-512 in-circuit commitments",
     ports=_HIDDEN_PORTS, zk=_HIDDEN_ZK + FLOCK_CIRCUIT_TYPED_CONFIG.zk[len(FLOCK_CIRCUIT_CONFIG.zk):],
@@ -2130,17 +2130,17 @@ def verity_commit() -> str | None:
     return out.stdout.strip() or None if out.returncode == 0 else None
 
 
-#: ``verity.experimental.claims`` instances of the hash names Table 1 uses (a name joining two hashes names both).
+#: ``verity.core.claims`` instances of the hash names Table 1 uses (a name joining two hashes names both).
 HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("blake3",), "BLAKE3 (keyed)": ("blake3",),
                   "BLAKE2b": ("blake2b",), "SHAKE-256": ("shake-256",), "BLAKE3 / BLAKE2b": ("blake3", "blake2b"),
                   "Poseidon2-BabyBear": ("poseidon2-babybear",), "Poseidon2-KoalaBear": ("poseidon2-koalabear",),
                   "Ajtai n=64 (linear digest)": ("ajtai-n64",), "BLAKE3 / SHA-256": ("blake3", "sha-256"), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
-#: ``verity.experimental.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
+#: ``verity.core.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
 #: is cited once, as the ``random-oracle`` model.
 HASH_PROPERTIES = (("collision resistance", "cr"), ("expected-time collision resistance", "ecr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
                    ("prg", "xof"), ("ring-sis", "sis"))
 PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
-#: ``verity.experimental.claims`` ids of a Table 1 assumption, by a phrase it contains.
+#: ``verity.core.claims`` ids of a Table 1 assumption, by a phrase it contains.
 ASSUMPTION_PHRASES = (("logup fractional-sum soundness", "logup"),)
 #: An ``unknown`` ZK text claims nothing, so it maps to ``no-zk`` (Verity claims no zero knowledge for it; the text says why).
 _ZK_GUARANTEE = {"malicious-verifier-zk": "malicious-verifier-zk", "hvzk": "hvzk", "none": "no-zk", "unknown": "no-zk"}
@@ -2164,7 +2164,7 @@ def _role(h: Hash) -> str:
 
 
 def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, Any]]:
-    """A configuration's security claims: each a ``property`` (a ``verity.experimental.claims`` id with its Table 1 text, and for soundness
+    """A configuration's security claims: each a ``property`` (a ``verity.core.claims`` id with its Table 1 text, and for soundness
     ``param``, the weakest whole-proof bound at its cells as TeX) with the ``assumptions`` it rests on, each an id (``None``
     and ``unmapped`` when the renderer has none yet), its ``role`` as the configuration declares it (a hash's role and
     detail, a proximity bound's component; empty where nothing is declared) and its Table 1 text.
@@ -2343,10 +2343,10 @@ def _compose(entry: dict[str, Any], members: Sequence[Mapping[str, Any]], config
 def scheme_entities(configurations: Sequence[Configuration]) -> list[dict[str, Any]]:
     """Each commitment scheme under its site id (:data:`SCHEME_IDS`; ``legacy_id`` the renderer's): ``name``, a one-line
     ``description`` (the commitment text of the first full-relation configuration that binds it, up to its first ``;``), its
-    ``tree_hash`` and ``leaf_hashes`` (``verity.experimental.claims`` instances of the statement-commitment hashes its configurations declare:
+    ``tree_hash`` and ``leaf_hashes`` (``verity.core.claims`` instances of the statement-commitment hashes its configurations declare:
     the tree's role names the trees), ``algebraic`` when any of them is an algebraic instance, the ``assumptions`` those hashes
     are (with the roles and configurations that declare them), and the ``leaf_circuits`` that commit its leaves."""
-    from verity.experimental.claims import INSTANCES  # noqa: PLC0415
+    from verity.core.claims import INSTANCES  # noqa: PLC0415
 
     out = []
     for sch in SCHEMES:
@@ -2515,7 +2515,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     * ``workload_headline`` -- per census workload and backend, the share of the served run's native work its cleared cells
       cover and the work-weighted overhead over that share, in both bases, uncovered subcircuits listed with why
       (:mod:`verity_numerical.bench.headline`); ``None`` under the legacy rules;
-    * ``claims`` -- the ``verity.experimental.claims`` entries cited (the site imports these); ``census`` -- the ``benchmarks/census/`` entries as read
+    * ``claims`` -- the ``verity.core.claims`` entries cited (the site imports these); ``census`` -- the ``benchmarks/census/`` entries as read
       at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
     Ids: subcircuits by their census id, backends ``<letter>-<mode>`` (or a composed backend's own id), statements

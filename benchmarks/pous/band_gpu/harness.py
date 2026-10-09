@@ -4,7 +4,7 @@ serving engine and no other protocol.
 One run, in order:
 
 1. **Kernel gates.** The scheme's pinned vector encoded on the device (`band/64kb/segment`, a whole segment; dense:
-   `dense/64kb/prefix16`), and `--reference-segments` segments of the run's `C` equal to `verity.experimental.protocols.pous`'s own encoding, and the
+   `dense/64kb/prefix16`), and `--reference-segments` segments of the run's `C` equal to `verity.core.protocols.pous`'s own encoding, and the
    round trip (decoding all of `C` gives back `W`). **A failed kernel gate stops the run; it times nothing and publishes no
    measurements** (a wrong kernel must not produce a flattering number).
 2. **Encode.** `W` (the weight set's bytes, filled as `bench.py`'s reference fills them) to `C` on the device, every segment in
@@ -37,7 +37,7 @@ One run, in order:
 7. **NVMe** (`--nvme-dir`, optional): one block's read latency from a file there.
 8. **Clocks.** The GPU's clocks, throttle reasons, temperature and power before and after, and the SM clock per timed step.
 
-`vk` is built from `C`'s leaves; gate 1's reference segments check `C` against `verity.experimental.protocols.pous`. The verifier's full private
+`vk` is built from `C`'s leaves; gate 1's reference segments check `C` against `verity.core.protocols.pous`. The verifier's full private
 setup (it encodes all of `W` itself) is `bench.py --impl reference`'s.
 """
 from __future__ import annotations
@@ -65,7 +65,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 MEMORY_CHALLENGER = HERE / "memory_challenger.py"
 SALT = bytes(range(24))
-VECTORS = ROOT / "verity" / "experimental" / "protocols" / "pous" / "tests" / "fixtures" / "vectors.json"
+VECTORS = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
 """How far past the limit the late control holds an answer (the red team's limit + 50 µs)."""
 PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
@@ -381,16 +381,16 @@ def _nvcc_version() -> str | None:
 
 
 def vector_bytes(label: str, n: int) -> bytes:
-    """The pinned vectors' input stream (`verity/experimental/protocols/pous/tests/pous_vectors.py`'s `_bytes`)."""
+    """The pinned vectors' input stream (`verity/core/protocols/pous/tests/pous_vectors.py`'s `_bytes`)."""
     return hashlib.shake_256(b"verity-pous/vectors/" + label.encode()).digest(n)
 
 
 def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any] | None = None) -> dict[str, Any]:
     """The scheme's pinned vector, encoded on the device: its pinned blocks' digest, and one segment's encode time.  The vector
     is pinned at the registered point, so a band run at another in-degree encodes it at the registered `d`
-    (`backend.encode_at`); the run's own `d` is gated against `verity.experimental.protocols.pous` by `reference_gate`."""
+    (`backend.encode_at`); the run's own `d` is gated against `verity.core.protocols.pous` by `reference_gate`."""
     import torch
-    from verity.experimental.protocols.pous import schemes
+    from verity.core.protocols.pous import schemes
 
     vector, label, count = PINNED[name]
     pinned = pinned or json.loads(VECTORS.read_text())
@@ -415,7 +415,7 @@ segment count from 1 to 2^64 at `D = 5`, `k = 111`, 241.5 µs, with the cliff at
 
 def with_in_degree(base: Any, d: int) -> Any:
     """The band's geometry at in-degree `d` (`--band-d`), refused below `MIN_BAND_D`: such a band has no certificate."""
-    from verity.experimental.protocols.pous.band import BandParams
+    from verity.core.protocols.pous.band import BandParams
 
     if not isinstance(base, BandParams):
         raise ValueError(f"--band-d sets a band's in-degree, and {type(base).__name__} is not a band's geometry")
@@ -434,7 +434,7 @@ def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
 
 
 def reference_gate(scheme: Any, c: bytes, w: bytes, picks: list[int], workers: int) -> dict[str, Any]:
-    """`picks`' segments of `C` equal to `verity.experimental.protocols.pous`'s encoding of the same segments of `W`, in spawned processes (this one
+    """`picks`' segments of `C` equal to `verity.core.protocols.pous`'s encoding of the same segments of `W`, in spawned processes (this one
     runs CUDA and torch threads, which a fork would copy mid-flight)."""
     seg = scheme.params.segment_bytes
     jobs = [(scheme.name, scheme.params, s, w[s * seg:(s + 1) * seg]) for s in picks]
@@ -530,11 +530,12 @@ def _memory_challenger_cmd(script: Path, ready: Path, leaves: Path, result: Path
     cmd += ["--deadline-ns", str(a.deadline_ns)] if a.deadline_ns else []
     cmd += ["--limit-ns", str(limit_ns)] if limit_ns else []
     cmd += ["--verifier-cpu", str(a.verifier_cpu)] if a.verifier_cpu is not None else []
+    cmd += ["--seed", a.seed] if getattr(a, "seed", None) else []
     return cmd + extra
 
 
 def _memory_challenger_env() -> dict[str, str]:
-    paths = [str(ROOT), str(ROOT / "verity" / "experimental" / "protocols" / "pous"), os.environ.get("PYTHONPATH", "")]
+    paths = [str(ROOT), str(ROOT / "verity" / "core" / "protocols" / "pous"), os.environ.get("PYTHONPATH", "")]
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
 
 
@@ -574,7 +575,9 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
                 extra: Sequence[str] = ()) -> dict[str, Any]:
     """One memory challenger process (`script`, with `extra` arguments) against the responder `start()` returns, judged
     against `limit_ns` when given, with `load` run until the memory challenger exits.  Every load call is synchronized
-    (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones."""
+    (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones.  The answers' blocks stay in
+    `audit-{tag}.json` beside `ready-{tag}.json`, where a replay of the verdict reads them, and out of the returned copy,
+    which the result embeds."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
@@ -594,6 +597,10 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
     counts = {"answered": int(responder.answered()), "pings": int(responder.pings())}
     responder.stop()
     doc = json.loads(result.read_text()) if result.exists() else {}
+    for r in doc.get("records") or ():
+        for a in r.get("answers") or () if isinstance(r, dict) else ():
+            if isinstance(a, dict):
+                a.pop("block", None)
     return {"rc": proc.returncode, "forwards_completed": completed, "responder": counts, **doc}
 
 
@@ -799,8 +806,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     """One harness run (the module docstring's steps).  `backend`, `base` (the scheme's geometry before `W` sizes it) and
     `vectors` replace the GPU kernels, the registered geometry and the pinned vectors (the CPU tests)."""
     import torch
-    from verity.experimental.protocols.pous import schemes
-    from verity.experimental.protocols.pous.verifier import leaf_hash
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.verifier import leaf_hash
 
     from .memory_challenger import scheme_of
 

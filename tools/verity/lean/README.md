@@ -134,7 +134,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
-  a test of the package's own (PoUW's `verity/experimental/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
+  a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
   closed hypothesis, or reads in its statement. `--update` writes each one's `digest`, the one its `reads` record holds, so
@@ -164,6 +164,25 @@ installs it first, so a machine without elan works), must pass clean and fail on
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
   entry without one. A changed owner is one line in the review and no change of the statement.
+- `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
+  the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
+  inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that reaches `F`
+  (a constant, several, or a field path such as `P.protocol.check`) and, unless `O` is `accept`, a constant named `O`,
+  and premises (hypotheses whose head is under `premises`), up to the first input bound after that acceptance; what
+  follows is its conclusion. With `O` `none` (a function that always returns) it takes no acceptance and must mention
+  `F`. Several acceptances of `F` count as one, of the tuple of their inputs. A `Prop` field of a structure under
+  `meaning` that an input ranges over is a hypothesis. A guarantee under `frozen` (with why it doesn't fit yet) is
+  exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
+  with a `Guarantees` component) must be the statement of a
+  listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
+  `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
+  guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
+  conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
+  property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
+  its falsification test `T`, which a suite runs, so a counterexample fails `check`; a falsified one refuses every
+  property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
+  section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
+  is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
 - **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
   policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means what it means
   whatever proves the propositions inside it), followed through `meaning` and where the walk leaves it, must lie in the
@@ -190,8 +209,7 @@ When the change lands on `main` (`research merge --push`, `research queue land`)
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
-read from another module with the same content is counted on one line. A grant in `tools/verity/check/queue.toml`
-(`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
+read from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
 `def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `check.py --update`

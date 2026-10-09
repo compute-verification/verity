@@ -3,14 +3,15 @@ import PouwCheck
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
 
-The properties of the executable check (`verity/experimental/core/protocols/pouw/check/`, the port of
-`verity/experimental/protocols/pouw/core_check.py`), stated against `protocol.check` as it runs, for every input of
+The properties of the executable check (`verity/core/protocols/pouw/lean/check/`, the port of
+`verity/core/protocols/pouw/core_check.py`), stated against `protocol.check` as it runs, for every input of
 the types its decoders produce. Each is a `Prop`, and `Properties.Proofs.Pouw.Check` proves every one.
 
-`AcceptMeans` is the check's whole meaning: it accepts exactly when the registration keeps PoUW's rule
-(`RegistrationKeeps`) and the service accepted that registration with the profile and draw the rule fixes
-(`ServiceAccepted`), and it then publishes the window's items at the verifier's values and the service's draw. The rest
-are its consequences a reader checks first, and what the other verdicts mean.
+`AcceptMeans` is the check's whole meaning: what it accepts is a registration that keeps PoUW's rule
+(`RegistrationKeeps`), which the service accepted with the profile and draw the rule fixes (`ServiceAccepted`), and it
+then publishes the window's items at the verifier's values and the service's draw. The rest are its consequences a reader
+checks first, and what the other verdicts mean. That the check accepts every such registration is completeness,
+`Properties.Proofs.Pouw.Check.acceptMeans_complete`.
 
 What the window's draw guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
 check establishes that the service drew exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
@@ -53,12 +54,12 @@ def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (
   draw.law = .subset f.sampling.k ∧ draw.population = f.work.n ∧
   draw.units.size = f.sampling.k ∧ Ascending draw.units.toList ∧ ∀ u ∈ draw.units.toList, u < f.work.n
 
-/-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes;
-it then publishes the check item, the level's work, the sampling item, `root_W` and the drawn units, and the profile is
-the service's. -/
+/-- What the check accepts is a registration that keeps PoUW's rule, which the service accepted as the rule fixes; it
+then publishes the check item, the level's work, the sampling item, `root_W` and the drawn units, and the profile is the
+service's. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity),
-    protocol.check p c e = .accept pub prof ↔
+    protocol.check p c e = .accept pub prof →
       ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
         pub = ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩
 
@@ -95,11 +96,6 @@ def NeverNull : Prop :=
   ∀ (pub : Public) (prof : Core.Integrity), protocol.publicJson pub ≠ .null ∧ protocol.profileJson prof ≠ .null
 
 /-! ## The other verdicts -/
-
-/-- The service's reject is a reject, whatever the registration. -/
-def ServiceRejectRejects : Prop :=
-  ∀ (p : Params) (c : Registration) (e : Evidence) (r : String),
-    e.said = .reject r → ∃ r', protocol.check p c e = .reject r'
 
 /-- The check is undecided only when the service is, on a registration that keeps PoUW's rule and an answer for it;
 the reason is the service's. -/

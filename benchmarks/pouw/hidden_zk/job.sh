@@ -14,6 +14,8 @@
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
+#      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; it refuses
+#      a tile's rows (row-seg/v1, row/v2) too, once every check has passed, so a tile's honest checks are REFUSED
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
@@ -108,7 +110,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity.experimental.protocols.pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.core.protocols.pouw, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }
@@ -206,7 +208,7 @@ stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged fi
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
     benchmarks/pouw/hidden_zk/hash_scratch.py verity/ml/flock/python verity verity/ml/circuits verity/ml/kernels \
-    verity/experimental)
+    verity/core)
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"
   (

@@ -50,6 +50,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
@@ -482,7 +483,7 @@ def partition_binding(units: PartitionUnits, spec: str) -> tuple[str, str]:
     cached = _BINDINGS.setdefault(units, {})
     if spec in cached:
         return cached[spec]
-    program = PO.program_sha512(units.program)
+    program = program_digest(units.program)
     if units.query is not None:
         out = PO.digest(PO.build(units.program, units.query)), program
     else:
@@ -829,7 +830,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     it), of exactly its words (its bits a multiple of 16); output
     port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
-    its own ceil(bits / 16) u16 words, low first (`verity.experimental.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
+    its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words."""
     params, ret = definition.signature()
     types = dict(params)
@@ -1197,7 +1198,7 @@ def _source_digest() -> str:
             yield from (d / f for f in files if f.endswith(".py") and "." not in f[:-3])
 
     h = hashlib.sha256()
-    for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.experimental", "verity_flock", "circuit_check",
+    for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", "verity_flock", "circuit_check",
                  "verity_vllm"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []
@@ -1219,7 +1220,7 @@ def _stage_cache(s: str) -> Path | None:
     if "source_digest" not in c:
         c["source_digest"] = _source_digest()
     a = c["a"]
-    ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
+    ident = [c["source_digest"], c["program_digest"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
              a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else []) \
         + (["plain-leaves"] if PLAIN_LEAVES else []) + ([f"real-{a.real}"] if a.real is not None else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
@@ -1518,7 +1519,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         program = PU._program(a)
     units = PU.partition_units(program, a.partition)
     classes = units.classes()
-    key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": PO.program_sha512(program)[:32], "seed": a.seed})
+    key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": program_digest(program), "seed": a.seed})
     salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1551,7 +1552,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
                                           or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
     _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
-                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_sha512=PO.program_sha512(program))
+                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_digest=program_digest(program))
     partition_binding(units, a.partition)
     # a shape taken from FLOCK_STAGE_CACHE composes nothing; built before _staged, so forked stagers share them
     if any(not ((c := _stage_cache(s)) and (c / "rec.json").exists()) for s in jobs):

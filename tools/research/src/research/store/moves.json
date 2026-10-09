@@ -292,6 +292,13 @@
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/Exec/StrictCRL.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/Exec/StrictCRL.lean",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/Exec/Tables.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/Exec/Tables.lean",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/Exec/Verdict.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/Exec/Verdict.lean",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed.lean",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed/Composed.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed/Composed.lean",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed/Exec.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed/Exec.lean",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed/Mask.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed/Mask.lean",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed/One.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed/Scope.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed/Scope.lean",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed/ZkHidden.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHidden.lean",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/HdecCor.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/HdecCor.lean",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/HdecCor/Headlines.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/HdecCor/Headlines.lean",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/Hidden.lean": "verity/Security/Proofs/Flock/Soundness/Discharge/Hidden.lean",
@@ -1215,6 +1222,7 @@
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/DecodeZLJ/": "verity/Security/Proofs/Flock/Soundness/Discharge/DecodeZLJ/",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/DrawWords/": "verity/Security/Proofs/Flock/Soundness/Discharge/DrawWords/",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/Exec/": "verity/Security/Proofs/Flock/Soundness/Discharge/Exec/",
+        "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/FailClosed/": "verity/Security/Proofs/Flock/Soundness/Discharge/FailClosed/",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/HdecCor/": "verity/Security/Proofs/Flock/Soundness/Discharge/HdecCor/",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/Hidden/": "verity/Security/Proofs/Flock/Soundness/Discharge/Hidden/",
         "backends/flock/verifier/lean/soundness/FlockSoundness/Discharge/HiddenDec/": "verity/Security/Proofs/Flock/Soundness/Discharge/HiddenDec/",
@@ -1335,6 +1343,21 @@
       "paths": {
         "Security/Specs.lean": "Security/Models.lean",
         "Security/Specs/": "Security/Models/"
+      }
+    },
+    {
+      "paths": {
+        "verity/experimental/protocols/": "verity/core/protocols/",
+        "verity/experimental/claims/": "verity/core/claims/",
+        "verity/experimental/core/": "verity/core/",
+        "verity/experimental/core/protocols/pouw/": "verity/core/protocols/pouw/lean/",
+        "verity/experimental/core/protocols/pous/": "verity/core/protocols/pous/check/",
+        "verity/experimental/commitments/multiproof.py": "verity/ml/commitments/multiproof.py",
+        "verity/experimental/private_circuits/": "verity/ml/private_circuits/",
+        "verity/experimental/tests/commitments/": "verity/ml/commitments/tests/",
+        "verity/experimental/tests/private_circuits/": "verity/ml/private_circuits/tests/",
+        "verity/experimental/tests/network/": "verity/core/protocols/network/tests/",
+        "verity/experimental/tests/sampled_proofs/": "verity/core/protocols/sampled_proofs/tests/"
       }
     }
   ]

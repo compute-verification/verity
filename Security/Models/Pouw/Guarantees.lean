@@ -1,11 +1,10 @@
-import Models.Pouw.Guarantees.AlignedExact
 import Models.Pouw.Guarantees.Barrier
 import Models.Pouw.Guarantees.Deadline
 import Models.Pouw.Guarantees.Dimension
 import Models.Pouw.Guarantees.Game
 import Models.Pouw.Guarantees.NCP
 import Models.Pouw.Guarantees.PearlC
-import Models.Pouw.Guarantees.TileBound
+import Models.Pouw.Guarantees.PearlCTileCheck
 
 /-!
 # PoUW's guarantees (trusted)
