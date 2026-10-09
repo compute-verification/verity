@@ -50,10 +50,11 @@ def DomainRefusals : Prop :=
     (binding.size = 32 ∨ binding.size = 64) ∧ -2 ≤ owner
 
 /-- A leaf `Hm96Domain.leaf` gives is of a value at least its 192-byte salt long, and in a tile tree of a 64-byte digest
-and its salt; a plain tree's leaf takes any value. -/
+and its salt. -/
 def LeafRefusals : Prop :=
-  ∀ (d : RowsDomain) rank schema (v x : ByteArray), d.leaf rank schema v = .ok x →
-    d.hm96 = true → 192 ≤ v.size ∧ (d.digests = true → v.size = 256)
+  (∀ frame digests rank schema (v x : ByteArray),
+      (RowsDomain.mk frame true digests).leaf rank schema v = .ok x → 192 ≤ v.size) ∧
+    ∀ frame rank schema (v x : ByteArray), (RowsDomain.mk frame true true).leaf rank schema v = .ok x → v.size = 256
 
 /-- `coin_reason` answers (a reason or none) only for a label in `LABELS`, and, once the epoch, the label and the sizes
 match, only for a path whose every item is 32 or 64 bytes (`Opening`'s refusal). -/

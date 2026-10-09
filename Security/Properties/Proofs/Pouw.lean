@@ -52,43 +52,59 @@ theorem ok_dom {α : Type} {x : Except String α} {a v : α} {P : Prop} [Decidab
   have hP : P := of_decide_eq_true (hok.symm.trans (by rw [h]; rfl))
   exact ⟨hP, Except.ok.inj (h.symm.trans (hv hP))⟩
 
-theorem gridRefusals : GridRefusals := by
-  intro bits n lo
-  obtain ⟨o1, o2, o3, o4, o5, o6, o7, v1, v4, v5, v7⟩ := grid_isOk bits n lo
-  refine ⟨fun g h => ok_dom o1 (fun p => (v1 p).1) h, fun g h => ok_dom o2 (fun p => (v1 p).2.1) h,
-    fun w h => ok_dom o3 (fun p => (v1 p).2.2) h, fun ℓ h => ?_, fun g h => ok_dom o5 (fun p => (v5 p).1) h,
-    fun w h => ok_dom o6 (fun p => (v5 p).2) h, fun k h => ?_⟩
-  · obtain ⟨⟨a, b⟩, c⟩ := ok_dom o4 (fun p => v4 p.1 p.2) h; exact ⟨a, b, c⟩
-  · obtain ⟨⟨a, b⟩, c⟩ := ok_dom o7 (fun p => v7 p.1 p.2) h; exact ⟨a, b, c⟩
+theorem floorPointRefuses : FloorPointRefuses := fun bits n _ h =>
+  ok_dom (grid_isOk bits n 0).1 (fun p => ((grid_isOk bits n 0).2.2.2.2.2.2.2.1 p).1) h
+
+theorem padRefuses : PadRefuses := fun bits n _ h =>
+  ok_dom (grid_isOk bits n 0).2.1 (fun p => ((grid_isOk bits n 0).2.2.2.2.2.2.2.1 p).2.1) h
+
+theorem bucketRefuses : BucketRefuses := fun bits n _ h =>
+  ok_dom (grid_isOk bits n 0).2.2.1 (fun p => ((grid_isOk bits n 0).2.2.2.2.2.2.2.1 p).2.2) h
+
+theorem levelRefuses : LevelRefuses := fun bits n _ h => by
+  obtain ⟨⟨a, b⟩, c⟩ :=
+    ok_dom (grid_isOk bits n 0).2.2.2.1 (fun p => (grid_isOk bits n 0).2.2.2.2.2.2.2.2.1 p.1 p.2) h
+  exact ⟨a, b, c⟩
+
+theorem pointRefuses : PointRefuses := fun bits ℓ _ h =>
+  ok_dom (grid_isOk bits ℓ 0).2.2.2.2.1 (fun p => ((grid_isOk bits ℓ 0).2.2.2.2.2.2.2.2.2.1 p).1) h
+
+theorem workAtRefuses : WorkAtRefuses := fun bits ℓ _ h =>
+  ok_dom (grid_isOk bits ℓ 0).2.2.2.2.2.1 (fun p => ((grid_isOk bits ℓ 0).2.2.2.2.2.2.2.2.2.1 p).2) h
+
+theorem levelsRefuses : LevelsRefuses := fun bits lo hi _ h => by
+  obtain ⟨⟨a, b⟩, c⟩ :=
+    ok_dom (grid_isOk bits hi lo).2.2.2.2.2.2.1 (fun p => (grid_isOk bits hi lo).2.2.2.2.2.2.2.2.2.2 p.1 p.2) h
+  exact ⟨a, b, c⟩
 
 theorem floorPointGreatest : FloorPointGreatest := by
   intro bits n g h
-  obtain ⟨hn, rfl⟩ := (gridRefusals bits n 0).1 g h
+  obtain ⟨hn, rfl⟩ := floorPointRefuses bits n g h
   exact floorPoint_greatest bits n.toNat (by omega)
 
 theorem padLeast : PadLeast := by
   intro bits n g h
-  obtain ⟨hn, rfl⟩ := (gridRefusals bits n 0).2.1 g h
+  obtain ⟨hn, rfl⟩ := padRefuses bits n g h
   exact pad_least bits n.toNat (by omega)
 
 theorem bucketCredits : BucketCredits := by
   intro bits real w h
-  obtain ⟨hr, rfl⟩ := (gridRefusals bits real 0).2.2.1 w h
+  obtain ⟨hr, rfl⟩ := bucketRefuses bits real w h
   exact bucket_credits bits real.toNat (by omega)
 
 theorem bucketCost : BucketCost := by
   intro bits real w h
-  obtain ⟨-, rfl⟩ := (gridRefusals bits real 0).2.2.1 w h
+  obtain ⟨-, rfl⟩ := bucketRefuses bits real w h
   exact bucket_cost bits real.toNat
 
 theorem bucketCost3 : BucketCost3 := by
   intro real w h
-  obtain ⟨-, rfl⟩ := (gridRefusals gridBits real 0).2.2.1 w h
+  obtain ⟨-, rfl⟩ := bucketRefuses gridBits real w h
   exact bucket_cost3 real.toNat
 
 theorem levelsCount : LevelsCount := by
   intro bits lo hi k h
-  obtain ⟨hlo, -, rfl⟩ := (gridRefusals bits hi lo).2.2.2.2.2.2 k h
+  obtain ⟨hlo, -, rfl⟩ := levelsRefuses bits lo hi k h
   exact levels_count bits lo.toNat hi.toNat (by omega)
 
 theorem kPrimeRefuses : KPrimeRefuses := by
