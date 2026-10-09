@@ -202,3 +202,15 @@ def test_git_merges_two_branches_that_add_guarantees_and_refuses_a_real_conflict
     assert "guarantees[P.t]: changed on both sides, differently" in refused.stderr
     assert git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split() == ["pkg/lean-audit.json"]
     assert rec.read_text() == A.text(branches["c"])
+
+
+def test_shape_entries_and_frozen_names_merge_one_by_one():
+    """Two branches that each freeze or enter a different guarantee merge; one entry set two ways is refused."""
+    base = {"shape": {"premises": [], "properties": {}, "frozen": {"P.a": "RESTATE"}}}
+    ours = {"shape": {"premises": [], "properties": {"P.b": {"function": "P.f", "outcome": "accept"}}, "frozen": {"P.a": "RESTATE"}}}
+    theirs = {"shape": {"premises": [], "properties": {}, "frozen": {"P.c": "lemma"}}}
+    merged, why = M.merge(base, ours, theirs)
+    assert why == [] and merged["shape"] == {"premises": [], "properties": {"P.b": {"function": "P.f", "outcome": "accept"}},
+                                             "frozen": {"P.c": "lemma"}}
+    _, why = M.merge(base, {"shape": {"frozen": {"P.a": "x"}}}, {"shape": {"frozen": {"P.a": "y"}}})
+    assert why == ["shape[frozen][P.a]: changed on both sides, differently"]
