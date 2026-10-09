@@ -19,7 +19,7 @@ accepted run yields a collision or a forgery.
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
-open NetworkCertifier (ClockSync)
+open NetworkCertifier (ClockSync expectedRow)
 open Properties.NetworkCertifier
 open Properties.NetworkCertifier.GridProofs (expectedRow_slot payloads_length)
 open Properties.NetworkCertifier.CheckProofs (declares_declared)
@@ -35,8 +35,8 @@ theorem bytesGrid_slot {r T : Nat} (row : Nat → Fin r → Option (List Bool)) 
   simp only [bytesGrid, Array.getElem?_map, List.getElem?_toArray, List.getElem?_range (Nat.mod_lt t hT),
     Option.map_some, Option.bind_some, List.getElem?_ofFn, s.2, ht]
   cases h : row t s with
-  | none => simp
-  | some f => simp [Properties.NetworkCertifier.Bytes.bitsOfBytes_bytesOfBits (hb f h)]
+  | none => simp [h]
+  | some f => simp [h, Properties.NetworkCertifier.Bytes.bitsOfBytes_bytesOfBits (hb f h)]
 
 theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
   intro device x c e hacc hint
@@ -67,11 +67,12 @@ theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
     have hdecl := declares_declared (W := x.config.windows) (hfit.2.1 _ hmem)
     rw [hobs.1 t hto r hr hrl hrw, hgrid _ hl0 _ hdecl r hr hrl (hrw ▸ hw), hrw]
     funext ℓ s
-    rw [programGrid, bytesGrid_slot _ hT s (fun f hf => by
-      obtain ⟨k, rfl⟩ := expectedRow_slot hf
-      rcases payloads_length (hfit.2.2 _ hmem) k with h8 | h8
-      · rw [h8]; omega
-      · rw [h8]; rfl)]
+    refine Eq.trans (bytesGrid_slot (expectedRow x.config.egress.allocation x.config.egress.buckets x.config.windows
+      (declared x.config.windows e.links[0]) e.links[0].frames) hT s (fun f hf => by
+        obtain ⟨k, rfl⟩ := expectedRow_slot hf
+        rcases payloads_length (hfit.2.2 _ hmem) k with h8 | h8
+        · rw [h8]; omega
+        · rw [h8]; rfl)) ?_
     have hℓ : ℓ = 0 := Subsingleton.elim _ _
     subst hℓ
     refine congrFun (NetTiming.SecurityProofs.CodeExpectedRow _ _ _ _ (fun w => (refSyncSet x.config.syncSet).sync (σ w))
