@@ -12,10 +12,10 @@ family's choice.
 
 * `rd_isLeft`, `not_read_unit`, `not_regOut`: a registered read is a row of a unit's port (`read_row`: `rowsSh`'s rows
   are `posK`'s `.inl`), and a unit's computed gate is no row bit (`keyRowOf` is `some` only at input gates), so no
-  output column is ever a registered read: `RegOut` at a column past the inputs is `False`. Hence `not_resZeroAt` and `not_opensAt`:
-  `ResZeroAt` and `OpensAt`, whose last conjuncts are `RegOut` at the residuals' and `acc_out`'s output columns, never
-  hold; `hRes_false`, `hZero_false`: at an accepted outer proof with a part, `HRes` and `HZero` are false; `not_accOut`:
-  `hAccRows_of`'s `hout` is never satisfiable.
+  output column is ever a registered read: `RegOut` at a column past the inputs is `False`. Hence `not_resZeroAt` and
+  `not_opensAt`: `ResZeroAt` and `OpensAt`, whose last conjuncts are `RegOut` at the residuals' and `acc_out`'s output
+  columns, never hold; `hRes_false`, `hZero_false`: at an accepted outer proof with a part, `HRes` and `HZero` are
+  false; `not_accOut`: `hAccRows_of`'s `hout` is never satisfiable.
 * `oneAt_keyProg`: every unit's constant is the program's input gate `Layout.oneG`; `hOne_of`, `hOneOpen_of`: `HOne` and
   `HOneOpen` from `OneInLayer`, the layers carrying 1 at that gate; `one_of_pubAgree`, `hOne_of_pub`, `hOneOpen_of_pub`:
   both from `PubAgree`, the layers agreeing with the registration at single gates, as `RegAgree` does at rows.
@@ -279,10 +279,10 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 
 /-- **The layers carry 1 at the constant gate.** At every accepted outer proof, each session's layer is `true` at
 `Layout.oneG`, the input gate every unit's constant is wired to (`oneAt_keyProg`). Acceptance does not give it: the
-layer is `XplurZC`'s plurality of the prover's openings, `oneG` is no unit's gate and its commit string `.inr oneG` is no
-registered read, so neither `wrong = ∅` nor `RegAgree` reads it; the public-file layer `Xpub` pins it
+layer is `XplurZC`'s plurality of the prover's openings, `oneG` is no unit's gate and its commit string `.inr oneG` is
+no registered read, so neither `wrong = ∅` nor `RegAgree` reads it; the public-file layer `Xpub` pins it
 (`FlockPublic.lean`), the `--zk` layer does not. Established by `ZkOuter.Good` (or `ZkOuter.layer`) carrying the
-constant, a restatement for the lane that owns `Recursive/Flock.lean`. -/
+constant (`PubAgrees`), a restatement for the lane that owns `Recursive/Flock.lean`. -/
 def OneInLayer : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j,
     layers F.zs dg N k Rw R ω t R₂ τ j (Layout.oneG (c := (F.Vs j).c) (hU := (F.Vs j).hU) (n := (F.Vs j).nv)) = true
