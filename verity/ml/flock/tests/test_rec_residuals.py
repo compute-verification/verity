@@ -175,6 +175,34 @@ def test_the_parts_are_the_residuals_within_the_coin_schedule(reps):
     assert [RR.slots(p.S["ports"], p.S["gf"]["nv"]) for p in RR.parts(big, max_slots=10 ** 9)] == [171, 40]
 
 
+def test_an_algebra_of_more_residuals_than_one_statement_holds_is_cut_into_parts():
+    """A whole algebra may have more than ``OUT_WORDS / 8`` residuals (a universal unit's inner session has 17, run
+    r20261009-065336-108b); `parts` cuts it into statements that each hold at most that many, and a statement alone still may
+    not."""
+    many = dict(SMALL, res=[{"mul": [], "add": [["w", 129]]}] * 17)
+    S = {"gf": many, "ports": S_SMALL["ports"]}
+    with pytest.raises(ValueError, match="17 residuals"):
+        RR._check(S)
+    assert [p.res for p in RR.parts(S)] == [list(range(16)), [16]]
+
+
+@pytest.mark.parametrize("salt_len", [192, 0], ids=["hm96-leaves", "plain-leaves"])
+def test_the_universal_units_inner_algebra_is_two_parts_within_the_caps(salt_len):
+    """At the universal unit's inner shape (m = 26, k_log = 23, 12 claims) the algebra's 17 residuals cut into two parts, of
+    156 and 159 sha512x3 slots and 53 and 46 regions, whichever leaves its Merkle scheme has; its last residual alone reads
+    130 slots, which a MAX_SLOTS of 128 refused."""
+    S = RR.spec(A.Shape(26, 23, 12, salt_len=salt_len))
+    ps = RR.parts(S)
+    shape = lambda p: (p.res, RR.slots(p.S["ports"], p.S["gf"]["nv"]), RR.regions(p.S["ports"]))
+    assert [shape(p) for p in ps] == [(list(range(13)), 156, 53), (list(range(13, 17)), 159, 46)]
+    for p in ps:
+        _, slots, regions = shape(p)
+        assert slots <= RR.MAX_SLOTS and regions <= RR.MAX_REGIONS and len(p.res) <= RR.OUT_WORDS // RR.F_WORDS
+    assert [shape(p)[1] for p in RR.parts({"gf": {**S["gf"], "res": S["gf"]["res"][16:]}, "ports": S["ports"]})] == [130]
+    with pytest.raises(ValueError, match="residual 16 alone reads more than 64 regions or 128 sha512x3 slots"):
+        RR.parts(S, max_slots=128)
+
+
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
     """Ports on which SMALL's residuals are zero: the added terms set to the residuals they cancel."""
     w = [g.getrandbits(128) for _ in range(SMALL["nw"])]
