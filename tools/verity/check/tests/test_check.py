@@ -1014,3 +1014,36 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
                        capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
     want = "RUN r20261009-050001-aaaa r20261009-050002-bbbb" if twins else "RUN r20261009-050001-aaaa"
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
+
+
+def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):
+    """check.py killed before it launches a run (the OOM killer, while it gathers verdicts) prints no traceback: train.sh says
+    how it exited and returns that, at once, rather than polling the log for ten minutes and saying only that nothing launched."""
+    import os
+    import subprocess
+
+    GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, pidf = tmp_path / "bin", tmp_path / "pid"
+    bin_.mkdir()
+    (bin_ / "uv").write_text(f"#!/bin/sh\necho 'check: verdicts: gathering'\necho $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\nexit 137\n")
+    # waits until check.py has exited, not on a clock
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nuntil [ -e {pidf} ]; do :; done\nwhile kill -0 $(cat {pidf}) 2>/dev/null; do :; done\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **GIT_ENV, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "HEAD", "auto"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    assert p.returncode == 137 and "train: check.py exited 137 before launching a run (killed" in p.stderr, (p.stdout, p.stderr)
+    assert "RUN" not in p.stdout
