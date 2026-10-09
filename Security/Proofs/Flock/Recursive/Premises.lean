@@ -16,7 +16,8 @@ abbreviates, unchanged.
   Merkle scheme is sound in fork form at `tableError`, `Recursion.flock_inner_sound_compiled`'s conclusion. On the list
   until that lemma is proved; it discharges this premise at a class whose schedule is `fast100`'s and whose layout
   holds.
-* `UniformRandomBytes` (A3, `uniform/os-random`): the bytes the verifier's operating system returns are uniform.
+* `UniformRandomBytes` (A3, `uniform/os-random`): the bytes the verifier's operating system returns are uniform, at
+  each of V*'s laws (one premise over `Vs`, so the shape check reads its head).
 * `HashDerivedKeyHm96` (`hash-derived-key`): hm96's salt hash keys its hiding at `2^-193`.
 
 The list belongs in `Security/Definitions/` (the same ruling), whose modules import only Mathlib and the spec; C-Flock's
@@ -49,10 +50,9 @@ def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch)
     (ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩))
 
-/-- **A3**: `Assumptions.UniformRandomBytes`. -/
-abbrev UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
-    Prop :=
-  FlockSoundness.Assumptions.UniformRandomBytes L t
+/-- **A3** at every one of V*'s laws: `Assumptions.UniformRandomBytes` at each law's lengths and source. -/
+abbrev UniformRandomBytes {S : ℕ} (Vs : Fin S → VStmt) : Prop :=
+  ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src
 
 /-- **hash-derived-key**: `Assumptions.Zk.HashDerivedKeyHm96`. -/
 abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96

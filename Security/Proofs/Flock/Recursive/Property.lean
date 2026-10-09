@@ -123,7 +123,7 @@ def RecursiveAudit : Prop :=
     -- the verifier of record's statement check accepts V*'s statements
     (_hck : ∀ R ω t R₂ j, FailClosed.ScopeZ (zs R ω t R₂ j).I)
     -- A3
-    (_hA3 : ∀ j, Flock.Premises.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    (_hA3 : Flock.Premises.UniformRandomBytes Vs)
     -- the compile lemma
     (_hin : Flock.Premises.CompiledForkSound T CT cls regs sch)
     -- at an outcome whose sessions all verify, every read commit string opens `rt`, and the hidden statement is theirs
