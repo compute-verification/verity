@@ -13,6 +13,7 @@ is a wire of a unit that reads that stage's commitment (`vFull_of_checkFull`).
 * `mem_unit`: a unit in one of a stratum's ranges is one of its `size` units (`Stratum.unit`).
 * `drawsInFull_of_checkFull`: U4's pass draws in full each unit that reads a round's commitment.
 * `full_card`: a unit the stratified law over `St` draws in full has a stratum of at most `ks` units (`ExecStrata`).
+* `vFull_of_whole`: `VFull` for sessions whose law draws every stratum in full (`--draw subset:N`), without U4.
 -/
 
 namespace FlockVBridge.Full
@@ -150,5 +151,16 @@ theorem vFull_of_checkFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK 
   intro i hi j g hg
   obtain ⟨u, hgu, p, hp, hc, x, hx⟩ := hreads i hi j g hg
   exact ⟨u, hgu, full_card (hS j) (hlaw j) u (drawsInFull_of_checkFull (hU4 j) (hd j) hp hc hx)⟩
+
+/-- **`VFull` for sessions drawn whole** (`--draw subset:N`): when each session's law draws every stratum in full, `VFull`
+needs only that each wire of `Sk i j` (`i < r`) is a wire of some unit. -/
+theorem vFull_of_whole (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (hks : ∀ j t, (Law.stratum (Vs j).law.σs t).card ≤ (Vs j).law.ks t)
+    (hio : ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
+      ∃ u, g ∈ ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u) :
+    VFull r Sk := by
+  intro i hi j g hg
+  obtain ⟨u, hgu⟩ := hio i hi j g hg
+  exact ⟨u, hgu, hks j _⟩
 
 end FlockVBridge.Full
