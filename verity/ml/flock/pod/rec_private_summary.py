@@ -8,7 +8,9 @@ build's ``without_refusal`` (the verdict it would give but for that refusal) is 
 ``lean_of_record`` accepts the run only when Lean accepted every part cap.json names in its session of the recursive
 session (NAME, never NAME-direct); a control is ``caught`` only when Lean refused it for a reason other than its form, as the
 form's refusal comes after every other check. ``outside-alg-*``, a description outside the class proved as its own
-registered statement, is expected not to be caught: every description of the class's width is a member of it. The firewall's
+registered statement, is expected not to be caught: every description of the class's width is a member of it. A cheating prover (``cheaters``:
+a control's parts together) is caught when one of its parts is, as a verifier that accepts only when every part does would
+refuse it; ``--wired``'s cheater is caught at V*'s fold (``made-up-fold``). The firewall's
 contract on the run's own inner transcript with a coin the challenger did not commit to (``other-coins-contract``) is a
 control of Lean's contract. ``salts`` counts the salts in the firewall's transcripts (the inner phase's, every outer
 session's): the tape's salts, the challenger's openings of its coin commitments and the tape's pads, each distinct out of
@@ -83,16 +85,39 @@ def dirs(p: Path) -> list[Path]:
     return sorted(q for q in p.iterdir() if q.is_dir()) if p.is_dir() else []
 
 
+def caught(v: str) -> bool:
+    return v.startswith("Lean refused: ") and v != "Lean refused: form not covered"
+
+
 def of_record(s: dict) -> dict:
+    """Lean's verdict on the run, each control's on its parts, and each cheating prover's (``cheaters``): caught when Lean
+    refused one of its parts at a check of its own, as a verifier that accepts only when every part is accepted would."""
     parts = (s["cap"] if isinstance(s["cap"], dict) else {}).get("parts") or []
     seen = {n: v["lean"]["verdict"] for n, v in s["outer"].items()}
     honest = {p: seen.get(p, "no session in the recursive session") for p in parts}
     refused = {p: v for p, v in honest.items() if v != "accepted"} if parts else {"cap.json": "no parts: nothing to accept"}
+    expect = lambda n: next(("accepted: " + why for a, why in ACCEPTED.items() if n.startswith(a)), "caught")
+    controls = {n: {"verdict": v, "caught": caught(v), "expect": expect(n)} for n, v in seen.items() if n.startswith(CONTROLS)}
+    cheaters = {}
+    for a in CONTROLS:
+        mine = {n: c for n, c in controls.items() if n.startswith(a)}
+        if mine:
+            cheaters[a.rstrip("-")] = {"caught": any(c["caught"] for c in mine.values()), "expect": expect(a),
+                                       "parts": {n: c["verdict"] for n, c in mine.items()}}
     return {"accepted": not refused, "verdict": "accepted" if not refused else "not accepted", "parts": honest, "refused": refused,
             "direct": {p: seen[p + "-direct"] for p in parts if p + "-direct" in seen},
-            "controls": {n: {"verdict": v, "caught": v.startswith("Lean refused: ") and v != "Lean refused: form not covered"}
-                         | {"expect": next(("accepted: " + why for a, why in ACCEPTED.items() if n.startswith(a)), "caught")}
-                         for n, v in seen.items() if n.startswith(CONTROLS)} | contract_controls(s)}
+            "controls": controls | contract_controls(s) | fold_controls(s), "cheaters": cheaters}
+
+
+def fold_controls(s: dict) -> dict:
+    """``--wired``'s cheater, refused by V*'s fold (`InnerFold.lean --program`: the setup Lean's ``verify`` runs), so it has
+    no outer session."""
+    f = s["fold"].get("made-up")
+    if not f:
+        return {}
+    why = (f["err"].strip().splitlines() or [""])[-1]
+    return {"made-up-fold": {"verdict": f"InnerFold refused: {why}" if f["exit"] else "InnerFold accepted", "caught": f["exit"] != 0,
+                             "expect": "caught"}}
 
 
 def contract_controls(s: dict) -> dict:
@@ -176,5 +201,6 @@ if __name__ == "__main__":
                              "core_firewall": (v["core_firewall"] or "")[:200]}))
     r = s["lean_of_record"]
     print("CONTROLS", json.dumps({n: [c["verdict"], c["caught"]] for n, c in r["controls"].items()}))
+    print("CHEATERS", json.dumps({n: [c["caught"], c["expect"]] for n, c in r["cheaters"].items()}))
     print("SALTS", json.dumps({k: v for k, v in s["salts"].items() if k != "transcripts"}))
     print("LEAN-OF-RECORD", r["verdict"], json.dumps(r["refused"]))

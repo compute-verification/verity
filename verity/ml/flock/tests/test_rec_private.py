@@ -94,7 +94,7 @@ def test_summary_counts_a_form_refusal_as_a_refusal(tmp_path):
     recursive session (NAME-direct, outside it, counts for nothing); and a control refused for its form is not caught, as
     that refusal comes after every other check; a description outside the class, a member of it, is expected accepted."""
     a, b, c, d = (tmp_path / x for x in "abcd")
-    s = _record(a, ["L1", "alg-p1"], {"L1": SHARED, "L1-direct": "", "alg-p1": "", "forged-top-L2": SHARED,
+    s = _record(a, ["L1", "alg-p1"], {"L1": SHARED, "L1-direct": "", "alg-p1": "", "forged-top-L2": SHARED, "other-alg-p0": "",
                                        "other-alg-p1": "refused: alg/p1: the residuals are not zero", "flipped-top-L1": None,
                                        "outside-alg-p0": ""})
     lean = s["outer"]["L1"]["lean"]
@@ -102,12 +102,15 @@ def test_summary_counts_a_form_refusal_as_a_refusal(tmp_path):
     r = s["lean_of_record"]
     assert (r["accepted"], r["verdict"]) == (False, "not accepted")
     assert r["refused"] == {"L1": "Lean refused: form not covered"} and r["direct"] == {"L1": "accepted"}
+    outside = "accepted: " + _summary().ACCEPTED["outside-alg-"]
     assert r["controls"] == {"forged-top-L2": {"verdict": "Lean refused: form not covered", "caught": False, "expect": "caught"},
+                             "other-alg-p0": {"verdict": "accepted", "caught": False, "expect": "caught"},
                              "other-alg-p1": {"verdict": "Lean refused: alg/p1: the residuals are not zero", "caught": True,
                                               "expect": "caught"},
                              "flipped-top-L1": {"verdict": "Lean: no verdict", "caught": False, "expect": "caught"},
-                             "outside-alg-p0": {"verdict": "accepted", "caught": False,
-                                                "expect": "accepted: " + _summary().ACCEPTED["outside-alg-"]}}
+                             "outside-alg-p0": {"verdict": "accepted", "caught": False, "expect": outside}}
+    assert {n: (c["caught"], c["expect"]) for n, c in r["cheaters"].items()} == {
+        "forged-top": (False, "caught"), "flipped-top": (False, "caught"), "other-alg": (True, "caught"), "outside-alg": (False, outside)}
     assert s["outer"]["flipped-top-L1"]["lean"]["accepted"] is False
     assert _record(b, ["L1", "alg-p1"], {"L1": "", "alg-p1": ""})["lean_of_record"]["accepted"] is True
     assert _record(c, ["L1", "alg-p1"], {"L1-direct": "", "alg-p1-direct": ""})["lean_of_record"]["refused"] == {
