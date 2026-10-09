@@ -14,8 +14,9 @@ import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
   ideal leaves and back (on the complement); `RecursiveCircuitPrivateLeaves` is `RecursiveCircuitPrivate` with it.
 * `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
   registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.
-* `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at the run's opening and
-  the developer's moves the hidden statement from the run's netlist to `p`.
+* `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at each row the run read
+  (its opening and the developer's) gives that the registered netlist has the rows the run read, so the hidden statement
+  is `p`'s (`_hx`).
 -/
 
 namespace Flock.SecurityProofs
@@ -199,23 +200,25 @@ theorem RanRegisteredRun : Flock.Guarantees.RanRegisteredRun := by
 
 theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
   intro n L Reg I Cm S Vs Reg' Reg₂ hS hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
-    Root Prog Op com hbind rt p op₀ hreg stmt prog op hop hx
+    Root Pos Row Op com hbind rt p op₀ hreg stmt reads row op hop hx
   rcases RecursiveSound hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · by_cases hc : ∃ o, Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
-        AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ prog o ≠ p ∧ Binding.Collides (com.ext (op o) op₀)
+        AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+        ∃ i, reads o i ∧ row o i ≠ p i ∧ Binding.Collides ((com i).ext (op o i) (op₀ i))
     · exact Or.inr (Or.inr (Or.inl hc))
     · have hmono : prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
             (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
           prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
             (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ := by
         refine prob_mono_outcome _ σ fun o hro h => ⟨h.1, fun hh => ?_⟩
-        rw [hx o h.1] at hh
-        by_cases hp : prog o = p
-        · rw [hp] at hh
-          exact h.2 hh
-        · exact hc ⟨o, hro, h.1, hp, hbind rt (prog o) p (op o) op₀ (hop o h.1) hreg hp⟩
+        have hagree : ∀ i, reads o i → p i = row o i := fun i hi => by
+          by_contra hne
+          exact hc ⟨o, hro, h.1, i, hi, fun he => hne he.symm,
+            hbind i rt (row o i) (p i) (op o i) (op₀ i) (hop o h.1 i hi) (hreg i) fun he => hne he.symm⟩
+        rw [hx o h.1 p hagree] at hh
+        exact h.2 hh
       exact Or.inr (Or.inr (Or.inr (hmono.trans hb)))
 
 end Flock.SecurityProofs
