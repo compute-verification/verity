@@ -160,22 +160,17 @@ theorem hCommits_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (se
   · rw [hSk] at hpos
     exact absurd hpos (inr_not_mem_skOf g)
 
-/-- **`VDecodes` at the read wires**, the restatement of `VDecodes` that V*'s padded rows need (`RowsRead`): layers whose
-bits on the read wires of each `Sk i j` are those of the values `v j` hold a round-`i` message the inner verifier reads
-as `msg i v`. -/
-def VDecodesRead : Prop :=
-  ∀ i < (ℐ).r, ∀ (Xt : (j : Fin F.stmts.size) → (F.Vs j).Bits)
-    (v : (j : Fin F.stmts.size) → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → ValK (F.Vs j).c),
-    (∀ j g, posK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv g ∈ F.Sk i j → ReadW F.Vs j g →
-      Xt j g = bitK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv (v j (posK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv g)) g) →
-    Option.Rel (fun a b => a = b) (F.wmsg Xt)[i]? (some (F.msg i v))
+/-- **`VDecodes` at the read wires**, the restatement of `VDecodes` that V*'s padded rows need (`RowsRead`): `VDecodesR`
+at the family, layers whose bits on the read wires of each `Sk i j` are those of the values `v j` holding a round-`i`
+message the inner verifier reads as `msg i v`. -/
+def VDecodesRead : Prop := VDecodesR F.wmsg (fun _ _ a b => a = b) F.Sk F.msg
 
 /-- **`VDecodesRead` at a decoder**: a family whose messages are `wmsgOf`'s and `msgOf`'s at one decoder `dec` decodes
 each stage's message from the read wires of its commit strings, whatever its commit strings: both read only their
 bits. -/
 theorem vDecodesRead_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec) (hm : F.msg = msgOf F.Vs F.Sk dec) : F.VDecodesRead := by
-  intro i hi Xt v hX
+  intro i hi _ Xt v hX
   rw [hw, hm]
   simp only [wmsgOf, List.getElem?_map, List.getElem?_range hi, Option.map_some]
   refine Option.Rel.some ?_
@@ -190,7 +185,7 @@ theorem vDecodesRead_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits
 strings. -/
 theorem hDecodes_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec) (hm : F.msg = msgOf F.Vs F.Sk dec) : F.HDecodes :=
-  fun i hi _ Xt v hX => F.vDecodesRead_of dec hw hm i hi Xt v fun j g hg _ => hX j g hg
+  vDecodes_of_vDecodesR (F.vDecodesRead_of dec hw hm)
 
 /-- **The stage selector names round commitments**: every value whose row holds a round's message is a round's
 commitment (`rec-c<k>` or `rec-top-L<l>`, `Flock.Registered.roundCommitment`, `Registered.lean:180-182`), the values
@@ -253,13 +248,10 @@ theorem hU4_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : �
 /-- **`HFull`** where V*'s laws draw every stratum whole and its stage wires are read. -/
 theorem hFull_of (hw : F.LawsWhole) (hrd : F.RowsRead) : F.HFull := ⟨hw, hrd⟩
 
-/-- **`VFull` at the read wires**, the restatement of `VFull` that V*'s padded rows need (`RowsRead`): each wire of
-`Sk i j` (`i < r`) some unit reads is a wire of a unit whose stratum session `j`'s law draws in full. -/
-def VFullRead : Prop :=
-  ∀ i < (ℐ).r, ∀ j g, posK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv g ∈ F.Sk i j → ReadW F.Vs j g →
-    ∃ u, g ∈ ((Placed.keyProg (F.Vs j).c (F.Vs j).hU (F.Vs j).nv).partition
-      (Layout.outsOf (F.Vs j).c (F.Vs j).hU (F.Vs j).nv)).io u ∧
-      (Law.stratum (F.Vs j).law.σs ((F.Vs j).law.σs u)).card ≤ (F.Vs j).law.ks ((F.Vs j).law.σs u)
+/-- **`VFull` at the read wires**, the restatement of `VFull` that V*'s padded rows need (`RowsRead`): `VFullR` at the
+family, each wire of `Sk i j` (`i < r`) some unit reads being a wire of a unit whose stratum session `j`'s law draws in
+full. -/
+def VFullRead : Prop := VFullR (ℐ).r F.Sk
 
 /-- **`VFullRead` from U4, without `RowsRead`**: at `skOf`'s commit strings, a read wire's unit reads a round's
 commitment (`reads_of_skOf`), which U4's pass draws in full (`drawsInFull_of_checkFull`, `full_card`). -/
@@ -272,6 +264,30 @@ theorem vFullRead_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (s
     (FlockVBridge.Full.drawsInFull_of_checkFull (hu4.2.2 j) (hu4.1 j) hp hc hx)⟩
 
 end VStarFamily
+
+/-- **`v-bridge` at the read wires, at V*'s statement family**: `VBridgeRead` at the family, from the obligations
+`vbridge_of_family` takes for its first conjunct (whose proof is `vbridge_of_reps`'s first component at the family),
+`HCommits`, and `VDecodesRead` and `VFullRead`, which `vDecodesRead_of` and `vFullRead_of` give. -/
+theorem vbridgeRead_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
+    (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw)
+    (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
+    (hdec : F.VDecodesRead) (hfull : F.VFullRead) :
+    VBridgeRead (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
+  ⟨fun R ω t R₂ τ o h =>
+    (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).accepts regs (F.x R ω) T CT sch (hsch R ω t _) _
+      (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
+        obtain ⟨v, info, kappa, hv, hvs⟩ := (hsh R ω t R₂ τ o h r).1
+        obtain ⟨hw, hc⟩ := (hsh R ω t R₂ τ o h r).2
+        exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decode (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
+            (fun s => (h s).2) hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hv hw hc hvs hst.2 F.sess
+            (fun p => F.un p r) (fun p => cp p r) (hres R ω t R₂ τ o h r),
+          FlockVBridge.AccChain.accHolds_of_units
+            (FlockVBridge.AccChain.unitSums_of_decode (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
+              (fun s => (h s).2) F.sh _ _ F.sessO (fun ℓ j => F.unO ℓ r j) (fun ℓ j => cpO ℓ r j)
+              (hu R ω t R₂ τ o h r))
+            (F.coefsAre R ω t _ r) (F.consAre R ω t _ r) (hrd R ω t R₂ τ o h r)⟩),
+    hcm, hdec, hfull⟩
 
 end family
 
