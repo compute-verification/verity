@@ -24,7 +24,8 @@ cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact a
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
 (T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`), with A3 for the salts' bytes. None of
 them is a computational property of SHA-512: hm96's hiding is statistical (`CROnly.hm96Hiding_gap`), and the one premise
-left on it, `hash-derived-key`, is about the pinned key, not about SHA-512.
+left on it, `hash-derived-key`, is a fact about one fixed key and salt hash (the common-reference-string step), not a
+hardness property.
 
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved (`mcaError_le_bchks25`, from DKT26).
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
