@@ -19,7 +19,7 @@ before each coin (`Fits`, some bytes `F`).
   it to `Refine.ligerito_refines`.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine Transcript
 
@@ -936,4 +936,4 @@ theorem ligerito_refines_of_run {ms : MerkleScheme} {sch : Flock.Schedule} {T : 
   exact ⟨P', F, fun rs hfit hwf =>
     ligerito_refines ms sch T cap p (basis sws) r b capD o hdim hlv hα1 ho (t := ⟨rs, k₀, P⟩) hwf (hF rs hfit)⟩
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra
