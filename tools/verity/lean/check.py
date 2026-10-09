@@ -84,7 +84,9 @@ unless named, and the spec's reading waits for its build.
 
 `--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
 everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
-cannot; the `compile-time` check stands in for it then.
+cannot; the `compile-time` check stands in for it then. It first takes one of the node's Lean audit slots, of pool
+LEAN_SLOT_POOL else `audit` (`--repo`'s `tools/verity/check/lean_slot.py`), unless it runs in one already (check's
+lean-audit step, `lean_changed.py --records`); refused, or with the node's slot file but no `lean_slot.py`, it exits 2.
 
 A record holds the statement, not the proof, so a guarantee may be recorded on a `sorry` stub and pass once a proof with
 allowed axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, puts the
@@ -181,6 +183,31 @@ def sibling(name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+#: the node's Lean slot file when `lean_slot.py` can't be loaded (its `SLOTS`)
+LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
+
+
+def lean_slot(repo: Path) -> int | None:
+    """`--build`: one of the node's Lean audit slots for this process (`repo`'s `lean_slot.py`, `hold`), its descriptor or None
+    (no cap here, or a slot held already); RuntimeError when the slots refuse it, or the node caps audits and ``repo`` has no
+    `lean_slot.py` (a copy of this directory elsewhere)."""
+    import importlib.util
+
+    path = repo / "tools" / "verity" / "check" / "lean_slot.py"
+    if not path.is_file():
+        if LEAN_SLOTS.exists() and not os.environ.get("LEAN_SLOT"):
+            raise RuntimeError(f"{LEAN_SLOTS} caps this node's Lean audits, and {path} is missing to take a slot: "
+                               "run it under a `lean_slot.py` from this repository")
+        return None
+    spec = importlib.util.spec_from_file_location("lean_slot_for_audit", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.hold()
+    except module.Refused as e:
+        raise RuntimeError(str(e)) from None
 
 
 def cores() -> int:
@@ -1926,6 +1953,12 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
+    try:
+        if a.build:
+            lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits
+    except RuntimeError as e:
+        print(f"check.py: {e}", file=sys.stderr, flush=True)
+        return 2
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = a.out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-audit-")))
     out.mkdir(parents=True, exist_ok=True)

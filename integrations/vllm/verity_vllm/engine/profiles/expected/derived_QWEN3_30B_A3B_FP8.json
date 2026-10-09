@@ -262,7 +262,7 @@
    "table": null
   },
   {
-   "__type__": "MoEFusedExpertsOrdered",
+   "__type__": "MoEFusedExpertsFp8Ordered",
    "config": {
     "BIAS": false,
     "BN": 64,
@@ -457,7 +457,8 @@
     "BLOCK_SIZE_N": 64,
     "GROUP_SIZE_M": 8
    },
-   "name": "moe.fused_experts.pairwise",
+   "group": 128,
+   "name": "moe.fused_experts.pairwise.fp8",
    "renormalize": true,
    "router_vpt": {
     "128": 8,
