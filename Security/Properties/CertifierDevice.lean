@@ -102,11 +102,13 @@ def linkWrites (acts : List Action) : List Nat :=
 def LinkSchedule : Prop :=
   ∀ (c : Config) (tr : List Event), (outputs (init c) tr).map linkWrites = writeSchedule c (tr.map tickView)
 
-/-- **Content independence.** Traces with the same tick views in the same positions write the link in the same lengths
-at every event. -/
-def ContentIndependent : Prop :=
-  ∀ (c : Config) (tr tr' : List Event), tr.map tickView = tr'.map tickView →
-    (outputs (init c) tr).map linkWrites = (outputs (init c) tr').map linkWrites
+/-- If `tr` and `tr'` have the same tick views in the same positions, they write the link in the same lengths at every
+event. -/
+def SameWrites (c : Config) (tr tr' : List Event) : Prop :=
+  tr.map tickView = tr'.map tickView → (outputs (init c) tr).map linkWrites = (outputs (init c) tr').map linkWrites
+
+/-- **Content independence**, for every pair of traces. -/
+def ContentIndependent : Prop := ∀ (c : Config) (tr tr' : List Event), SameWrites c tr tr'
 
 /-! ## (2) The records -/
 
@@ -133,14 +135,17 @@ def egressActions (c : Config) (ρ : Nat → Slots) (σ : Nat → Status) (k bac
       [.publish ⟨c.egressLink, k / T, Array.ofFn fun j : Fin T => ρ (k / T * T + j), σ (k / T)⟩ c.egress]
     else []
 
-/-- **The records are the rows written.** Some packed row per egress bucket and status per window make every egress
-tick's actions exactly `egressActions`; no other event writes the link or publishes but an ingress record. -/
-def Records : Prop :=
-  ∀ (c : Config) (tr : List Event), ∃ (ρ : Nat → Slots) (σ : Nat → Status),
+/-- **The records of `tr` are the rows written.** Some packed row per egress bucket and status per window make every
+egress tick's actions exactly `egressActions`; no other event writes the link or publishes but an ingress record. -/
+def RowsWritten (c : Config) (tr : List Event) : Prop :=
+  ∃ (ρ : Nat → Slots) (σ : Nat → Status),
     (∀ k, Packed c.egress (ρ k)) ∧
     (∀ n k backlog, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some (egressActions c ρ σ k backlog)) ∧
     ∀ n acts, (outputs (init c) tr)[n]? = some acts → (¬ ∃ k backlog, EgressAt c tr n k backlog) →
       ∀ a ∈ acts, (∀ b, a ≠ .writeLink b) ∧ ∀ r p, a = .publish r p → r.link = c.ingressLink ∧ p = c.ingress
+
+/-- **The records are the rows written**, on every trace. -/
+def Records : Prop := ∀ (c : Config) (tr : List Event), RowsWritten c tr
 
 /-- The frames the shaper hands its certifier at event `ev` from `st`, in order: the canonical positions its handing
 passes, as it held them. -/
@@ -173,11 +178,11 @@ def CompleteRows : Prop := ∀ (c : Config) (tr : List Event), ProgramRows c tr
 
 /-! ## (3) Fail-closed -/
 
-/-- **Fail-closed.** If after the first `n` events the egress certifier holds fault `r`, every later egress tick of the
-same window writes only padding and, at the window's last bucket, publishes the record with status `notEstablished r`,
-its rows from the fault's bucket on padding. -/
-def FailClosed : Prop :=
-  ∀ (c : Config) (tr : List Event) (n : Nat) (r : Reason),
+/-- **`tr` fails closed.** If after its first `n` events the egress certifier holds fault `r`, every later egress tick
+of the same window writes only padding and, at the window's last bucket, publishes the record with status
+`notEstablished r`, its rows from the fault's bucket on padding. -/
+def ClosedAfterFault (c : Config) (tr : List Event) : Prop :=
+  ∀ (n : Nat) (r : Reason),
     let st := after (init c) (tr.take n)
     let T := c.egress.buckets
     st.shaper.certifier.fault = some r →
@@ -188,6 +193,9 @@ def FailClosed : Prop :=
           ((if backlog ≤ 4 * bucketBytes c.egress then
               [.writeLink ⟨Array.replicate (bucketBytes c.egress) 0⟩] else []) ++
             if (k + 1) % T = 0 then [.publish ⟨c.egressLink, k / T, grid, .notEstablished r⟩ c.egress] else [])
+
+/-- **Fail-closed**, on every trace. -/
+def FailClosed : Prop := ∀ (c : Config) (tr : List Event), ClosedAfterFault c tr
 
 /-! ## (4) The issuer -/
 
