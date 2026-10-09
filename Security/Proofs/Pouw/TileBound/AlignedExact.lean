@@ -1,7 +1,6 @@
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Tactic
 import Definitions.Pouw.TileBound.AlignedExactDefs
-import Models.Pouw.Guarantees.AlignedExact
 
 /-!
 # Aligned exactness: from one row to a whole region (the TT_OUT restatements lane)
@@ -181,5 +180,3 @@ theorem region_count_le (f : Fin m → Fin n → ρ → κ → Prop) (a b : ℕ)
         ring
 
 end Pouw.AlignedExact
-
-theorem Pouw.SecurityProofs.AlignedExact.RegionCountGivenLe : Pouw.Guarantees.AlignedExact.RegionCountGivenLe := @Pouw.AlignedExact.region_count_given_le

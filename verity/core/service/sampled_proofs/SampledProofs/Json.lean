@@ -55,6 +55,35 @@ def entries : Json → Array (String × Json)
 /-- A failure code, kept once, in the order first found (`verdict._Collect`). -/
 def addCode (cs : Array String) (code : String) : Array String := if cs.contains code then cs else cs.push code
 
+/-- A check's failures with their details (`verdict._Collect`): each code once, in the order first found, with the detail
+it first failed with. -/
+structure Check where
+  codes : Array String := #[]
+  detail : Array (String × Json) := #[]
+
+def Check.fail (c : Check) (code : String) (what : Json) : Check :=
+  if c.codes.contains code then c else { codes := c.codes.push code, detail := c.detail.push (code, what) }
+
+/-- `Verdict.to_json`. -/
+def Check.toJson (c : Check) : Json :=
+  Json.mkObj [("ok", Json.bool c.codes.isEmpty), ("codes", Json.arr (c.codes.map Json.str)), ("detail", Json.mkObj c.detail.toList)]
+
+private def hexDigits (width n : Nat) : String :=
+  let s := String.ofList (Nat.toDigits 16 n)
+  "".pushn '0' (width - s.length) ++ s
+
+/-- Python's `repr` of a string: single quotes unless it holds one and no double quote, and escapes for the quote,
+backslash, `\n`, `\r`, `\t` and the characters `str.isprintable` refuses among the C0 and C1 controls, DEL, U+00A0 and
+U+00AD; every other character is taken as printable. -/
+def pyRepr (s : String) : String :=
+  let q := if s.contains '\'' && !s.contains '"' then '"' else '\''
+  let body := s.toList.foldl (fun acc c => acc ++
+    if c == q || c == '\\' then "\\" ++ String.singleton c
+    else if c == '\n' then "\\n" else if c == '\r' then "\\r" else if c == '\t' then "\\t"
+    else if c.val < 0x20 || (0x7f ≤ c.val && c.val ≤ 0xa0) || c.val == 0xad then "\\x" ++ hexDigits 2 c.val.toNat
+    else String.singleton c) ""
+  String.singleton q ++ body ++ String.singleton q
+
 def sha512Hex (b : ByteArray) : String := Flock.hexOf (Flock.Sha512.hash b)
 
 /-- SHA-512 of the canonical JSON, hex. -/
@@ -64,5 +93,7 @@ def canonSha512 (j : Json) : V String := do return sha512Hex (← Flock.canon j)
 def isHex (s : String) : Bool := !s.isEmpty && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
 def natsJson (xs : Array Nat) : Json := Json.arr (xs.map fun x => Lean.toJson x)
+
+def intsJson (xs : Array Int) : Json := Json.arr (xs.map fun x => Lean.toJson x)
 
 end SampledProofs
