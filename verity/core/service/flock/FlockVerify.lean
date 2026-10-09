@@ -288,6 +288,25 @@ def recInnerCmd (args : List String) : IO UInt32 := do
   | .ok i => IO.println i.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
+/-- `rec-statements --rec-inner F [--unit NAME --instances N]`: V*'s statements at the inner shape (`RecVStar.statements`), each
+unit name and instance count, as one `RECVSTAR` line; with `--unit` and `--instances`, `RecVStar.check` on them as well. -/
+def recStatementsCmd (args : List String) : IO UInt32 := do
+  let i ← match ← recInnerInput args with
+    | .ok (some i) => pure i
+    | .ok none => IO.eprintln "usage: flock-verify rec-statements --rec-inner F [--unit NAME --instances N]"; return 2
+    | .error e => IO.eprintln e; return 2
+  let res : V Lean.Json := do
+    let ss ← RecVStar.statements i
+    let base := [("statements", Lean.Json.arr (ss.map fun (s, n) => Lean.Json.arr #[Lean.Json.str s, Lean.toJson n]))]
+    match argOf args "--unit", (argOf args "--instances").bind String.toNat? with
+    | some u, some n => do RecVStar.check i u n; pure (Lean.Json.mkObj (base ++ [("checked", Lean.Json.arr #[Lean.Json.str u, Lean.toJson n])]))
+    | _, _ => pure (Lean.Json.mkObj base)
+  let line := match res with
+    | .ok j => j.setObjVal! "ok" (Lean.Json.bool true)
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+  IO.println s!"RECVSTAR {line.compress}"
+  return (if res.toBool then 0 else 1)
+
 /-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
 def recordDraw (record : String) : Option Lean.Json :=
   match Lean.Json.parse record with
@@ -475,10 +494,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
 
-/-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
+/-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. With
+`--rec-inner F`, the statement must be one of V*'s at that inner shape (`RecVStar.checkStmt`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
@@ -502,8 +522,14 @@ def statementCmd (args : List String) : IO UInt32 := do
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
-  match buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
-      (identifier.map Prod.snd) with
+  let recInner ← match ← recInnerInput args with
+    | .ok i => pure i
+    | .error e => IO.eprintln e; return 2
+  match (do
+      let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
+        (identifier.map Prod.snd)
+      if recInner.isSome then RecVStar.checkStmt recInner st
+      pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
     let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), (s!"circuit_{dk}", Lean.Json.str (hexOf st.c.sha)),
@@ -978,6 +1004,7 @@ def main (args : List String) : IO UInt32 := do
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | "rec-inner" :: rest => recInnerCmd rest
+  | "rec-statements" :: rest => recStatementsCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
   | "region-words" :: rest => regionWordsCmd rest
