@@ -9,7 +9,8 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 * **core cases** are the checks `core_check.case` decides, mapped to (params, registration, the service's answer):
   ``receive-honest`` and the registration controls ``receive-foreign``, ``receive-extra``, ``receive-raised`` and
   ``register-extra`` (the request's registration with the calls' shapes added, as `job.sh` asks the committer), each paired
-  with the honest outcome's answer, and every ``outcome-*`` the run wrote (its ``outcome.json`` and ``audit.json``).  The
+  with the honest outcome's answer (in a window stopped before its outcome, the controls with `NO_OUTCOME` and
+  ``receive-honest`` not at all), and every ``outcome-*`` the run wrote (its ``outcome.json`` and ``audit.json``).  The
   params are the request's (`params.json`), the check item and the query the request registration's: ``receive-honest``
   REGISTERED says they were the verifier's own.  A REGISTERED or ACCEPT check must get accept; a REFUSED registration a
   reject by a registration rule (before ``outcome:``); a REJECT outcome a reject.  An accept's public outputs must be the
@@ -21,8 +22,8 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
   receipt, one unit fewer), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
-  `job.sh` made them.  A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is
-  a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
+  `job.sh` made them (a v2 pass's ``receive-unrecorded`` relabelled v1 under a fixed beacon, where `job.sh` drew one).
+  A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
   `COIN_EARLY`).
 * the other checks (coins, the stream's state, the firewall, Lean's tile verifier, replays, shapes) are not core_check's.
 
@@ -56,6 +57,11 @@ REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/core/protocols/pouw/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
 REGISTRATION_RULES = ("window", "public-items", "level", "public-value", "population", "law", "query", "scheme")
+V1_PASS = "verity-vllm/pouw-pearl-c-run/v1"
+#: The evidence a registration control is paired with in a window stopped before its outcome: a registration rule
+#: refuses before PoUW's rule reads it, and a control no rule refused is rejected at ``outcome:``, not by a rule.
+NO_OUTCOME = {"protocol": CC.ONE_STAGE, "verdict": "reject", "reason": "no outcome", "commitment": None, "public": None,
+              "profile": None}
 CONTROLS = {"receive-foreign": "other/registration.json", "receive-extra": "registration-extra.json",
             "receive-raised": "registration-raised.json", "register-extra": None}
 
@@ -120,14 +126,15 @@ def core_cases(out: Path, checks: dict) -> list[tuple[str, dict, str, Any]]:
     cases = []
     for name, rec in sorted(checks.items()):
         if name == "receive-honest" or name in CONTROLS:
-            if honest is None:
+            if honest is None and name == "receive-honest":
                 continue
             path = CONTROLS.get(name)
             r = load(out / path) if path else copy.deepcopy(reg)
             if name == "register-extra":
                 r["window"]["public"]["shapes"] = [[1, 4096, 4096]]
             pub = load(out / "outcome-honest/outcome.json")["public"] if name == "receive-honest" else None
-            cases.append((name, {"params": params, "commitment": hexed(r), "evidence": hexed(honest)}, rec["verdict"], pub))
+            cases.append((name, {"params": params, "commitment": hexed(r), "evidence": hexed(honest or NO_OUTCOME)},
+                          rec["verdict"], pub))
         elif name.startswith("outcome-") and (out / name / "outcome.json").is_file():
             ans = answer_of(out / name, params["delta"])
             pub = load(out / name / "outcome.json")["public"] if ans["verdict"] == "accept" else None
@@ -228,7 +235,10 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
                 v = json.dumps(_variant(man, coins, load(salt), case), sort_keys=True).encode()
                 got.append((f"receive-coin-{case}", "pass", {**x, "raw": v.hex()}, checks[f"receive-coin-{case}"]["verdict"]))
         if "receive-unrecorded" in checks:
-            v = json.dumps({k: w for k, w in man.items() if k not in ("coins", "salt_opening")}).encode()
+            un = {k: w for k, w in man.items() if k not in ("coins", "salt_opening")}
+            if man.get("schema") != V1_PASS:
+                un.update(schema=V1_PASS, beacon=hashlib.sha256(b"replay_core unrecorded").hexdigest())
+            v = json.dumps(un).encode()
             got.append(("receive-unrecorded", "pass", {**x, "raw": v.hex()}, checks["receive-unrecorded"]["verdict"]))
     return got
 
