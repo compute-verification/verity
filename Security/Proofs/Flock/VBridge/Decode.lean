@@ -2,7 +2,7 @@ import Proofs.Flock.Recursive.Stage
 import Proofs.Flock.VBridge.InnerUnit
 import Proofs.Flock.VBridge.Keyed
 import Proofs.Flock.VBridge.PartS
-import Proofs.Flock.VBridge.Algebra.Structure
+import Flock.RecAlgebra
 
 /-!
 # VBridge G item 3: V*'s port columns, decoded from the registered reads

@@ -83,7 +83,7 @@ section Shape
 
 variable {sh : Shape} {comb0 : ℕ}
 
-theorem accTerms_shape {fin ri : ℕ} {l : List (Key × F128)} {st st' : BSt} {acc : Array Algebra.Term}
+theorem accTerms_shape {fin ri : ℕ} {l : List (Key × F128)} {st st' : BSt} {acc : Array RecAlgebra.Term}
     (hr : accTerms sh fin ri l st = .ok (acc, st')) : SameShape st.kappa st'.kappa := by
   unfold accTerms at hr
   split at hr
@@ -103,7 +103,7 @@ theorem accTerms_shape {fin ri : ℕ} {l : List (Key × F128)} {st st' : BSt} {a
           cases hr
           exact hs
 
-theorem buildRes_shape {fin ri : ℕ} {f : Lin} {st st' : BSt} {res : Algebra.Res} (hi : OpsOk sh comb0 st)
+theorem buildRes_shape {fin ri : ℕ} {f : Lin} {st st' : BSt} {res : RecAlgebra.Res} (hi : OpsOk sh comb0 st)
     (hr : buildRes sh fin comb0 ri f st = .ok (res, st')) : SameShape st.kappa st'.kappa := by
   unfold buildRes at hr
   obtain ⟨acc, st1, h1, hr⟩ := bm_bind hr
@@ -125,7 +125,7 @@ theorem buildRes_shape {fin ri : ℕ} {f : Lin} {st st' : BSt} {res : Algebra.Re
   rw [h4k, h3k, h2k]
   exact accTerms_shape h1
 
-theorem buildAll_shape {fin : ℕ} : ∀ (fs : List Lin) (ri : ℕ) (st st' : BSt) (rs : Array Algebra.Res),
+theorem buildAll_shape {fin : ℕ} : ∀ (fs : List Lin) (ri : ℕ) (st st' : BSt) (rs : Array RecAlgebra.Res),
     OpsOk sh comb0 st → buildAll sh fin comb0 fs ri st = .ok (rs, st') → SameShape st.kappa st'.kappa
   | [], ri, st, st', rs, hi, hr => by
     cases hr
