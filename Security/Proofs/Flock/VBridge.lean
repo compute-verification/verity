@@ -14,6 +14,7 @@ import Proofs.Flock.VBridge.InnerUnit
 import Proofs.Flock.VBridge.Pinned
 import Proofs.Flock.VBridge.Renumber
 import Proofs.Flock.VBridge.PartS
+import Proofs.Flock.VBridge.Parts
 import Proofs.Flock.VBridge.Algebra.Sim
 import Proofs.Flock.VBridge.Algebra.Build
 import Proofs.Flock.VBridge.Algebra.Eval
