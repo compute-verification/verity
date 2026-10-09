@@ -22,7 +22,7 @@ if [ -z "${EXPORT_DIR:-}" ]; then
     EXPORT_DIR=$T/export
     research data fetch $EXPORT --to $EXPORT_DIR --path commitments.json --path "$ROW.boolean.json" > $O/fetch.log 2>&1 || { cat $O/fetch.log; exit 1; }
   else
-    EXPORT_DIR=$(dirname $(dirname $RESEARCH_RUN_DIR))/requests/$RESEARCH_RUN_ID/inputs
+    EXPORT_DIR=$RESEARCH_RUN_DIR/inputs
   fi
 fi
 (echo "$EXPORT $ROW"; sha256sum $EXPORT_DIR/commitments.json "$EXPORT_DIR/$ROW.boolean.json") > $O/source.txt
