@@ -48,7 +48,7 @@ theorem regBcCommit_binding (i : ℕ) : (Flock.Guarantees.regBcCommit i).Binding
       ((congrArg (fun l : List UInt8 => (⟨l.toArray⟩ : ByteArray)) (List.append_cancel_left e2)).trans
         (bytes_of_list b2))
   · exact collides_of_bytes (Flock.Registered.opensLeaf_binding r1 i (Hm96.Default512.treeLeaf b1) p1
-      (Hm96.Default512.treeLeaf b2) p2 (Sha512.hash_size _) (Sha512.hash_size _) hl h1 (h2r ▸ h2))
+      (Hm96.Default512.treeLeaf b2) p2 (Sha512.hash_size _) (Sha512.hash_size _) hl h1 h2)
 
 /-- **The recursive audit, as the verifier of record runs it.** -/
 theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
@@ -63,9 +63,10 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
-  · by_cases hc : ∃ o, Game.Outcome (recGame L Reg (innerExec T CT cls regs sch) Cm
+  · by_cases hc : ∃ o, FlockSoundness.Game.Outcome (recGame L Reg (Flock.Guarantees.innerExec T CT cls regs sch) Cm
         fun R ω t => outerV (zs R ω t) dg N) σ o ∧ Flock.Guarantees.VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ∃ i, reads o i ∧ row o i ≠ p i ∧ Binding.Collides ((Flock.Guarantees.regBcCommit i).ext (op o i) (op₀ i))
+        ∃ i, reads o i ∧ row o i ≠ p i ∧
+          FlockSoundness.Binding.Collides ((Flock.Guarantees.regBcCommit i).ext (op o i) (op₀ i))
     · exact Or.inr (Or.inr (Or.inr (Or.inl hc)))
     · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_mono_outcome _ σ fun o hro h => ⟨h.1.1, fun hh => ?_⟩)
         hb))))
