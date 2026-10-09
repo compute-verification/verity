@@ -68,8 +68,9 @@ structure Files where
   partition : Json
   record : String
 
-/-- The inner session: its statement's setup, its record and its table. -/
+/-- The inner session of V*'s unit `unit`: its statement's setup, its record and its table. -/
 structure Inner where
+  unit : String
   setup : Setup
   sess : Session
   table : String
@@ -77,20 +78,20 @@ structure Inner where
 /-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
-def Inner.load (f : Files) : V Inner := do
+def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
     | .ok x => pure x
-    | .error e => throw s!"rec-coins: the inner statement: {e}"
-  let some st := sts[0]? | throw "rec-coins: the inner statement has no table"
+    | .error e => throw s!"rec-coins: {unit}: the inner statement: {e}"
+  let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
   let sess ← match Record.decode spec f.record with
     | .ok s => pure s
-    | .error e => throw s!"rec-coins: the inner session's record: {e}"
-  return ⟨Setup.ofCircuit st, sess, spec.tables[0]!⟩
+    | .error e => throw s!"rec-coins: {unit}: the inner session's record: {e}"
+  return ⟨unit, Setup.ofCircuit st, sess, spec.tables[0]!⟩
 
 /-- Rep `r`'s coins, round by round: its stream's, as `verifyRep` replays them (Verify.lean:40). -/
 def Inner.rounds (inn : Inner) (r : Nat) : V (Array (Array F128)) := do
   let name := s!"{inn.table}/rep{r}"
-  let some s := inn.sess.streams.find? (·.name == name) | throw s!"rec-coins: the inner record has no stream {name}"
+  let some s := inn.sess.streams.find? (·.name == name) | throw s!"rec-coins: {inn.unit}: the inner record has no stream {name}"
   return s.rounds.map (·.coins)
 
 /-- The verifier's shape and extra claims: the inner statement's `m` and `k_log`, its extra claims at the record's link
@@ -98,7 +99,7 @@ points (Verify.lean:41), two claims besides them. -/
 def Inner.algebra (inn : Inner) : V (Shape × Array Claim) := do
   let extras ← inn.setup.extra inn.sess.points
   let some sh := RecResiduals.shape? inn.setup.m inn.setup.kLog (2 + extras.size)
-    | throw s!"rec-coins: the inner statement's shape (m {inn.setup.m}, k_log {inn.setup.kLog}) has no algebra"
+    | throw s!"rec-coins: {inn.unit}: the inner statement's shape (m {inn.setup.m}, k_log {inn.setup.kLog}) has no algebra"
   return (sh, extras)
 
 def ZERO_COMB : Array F128 := Array.replicate 64 0
@@ -114,13 +115,13 @@ def Inner.rep (inn : Inner) (sh : Shape) (extras : Array Claim) (r : Nat) : V Re
   let rounds ← inn.rounds r
   match RecAlgebra.verifierRows sh rounds extras ZERO_COMB with
   | .ok (v, info, kappa) => return ⟨rounds, v, info, kappa⟩
-  | .error e => throw s!"rec-coins: rep {r}: {e}"
+  | .error e => throw s!"rec-coins: {inn.unit}: rep {r}: {e}"
 
 /-- The comb at the rep's fold points (`CircuitFold.folded`, as V*'s `InnerFold.lean` computes it). -/
 def Inner.comb (inn : Inner) (rep : Rep) : V (Array F128) := do
   let f := rep.info.lc.fold
   let comb ← inn.setup.fold.folded f.alpha f.beta f.lw f.rhoIn f.ts
-  if comb.size != 64 then throw s!"rec-coins: a comb of {comb.size}"
+  if comb.size != 64 then throw s!"rec-coins: {inn.unit}: a comb of {comb.size}"
   return comb
 
 /-- Port `port` of the statement is the value `value` the verifier registers itself, of `rows`: the verifier's registered
@@ -214,7 +215,7 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Fil
     | throw s!"rec-coins: {unit}: the verifier holds no registered reads (--registered): its coefficients would be the prover's"
   let some f := files
     | throw s!"rec-coins: {unit}: the verifier holds no inner session (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition, --rec-inner-session), so no coins to check its coefficients against"
-  let inn ← Inner.load f
+  let inn ← Inner.load unit f
   match o, res with
   | some (LANES, H), _ => checkOpen inn st.c st.pub own LANES H
   | _, some (m, k, cl, j) => checkResiduals inn st.c st.pub own m k cl j
