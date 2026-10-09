@@ -107,15 +107,15 @@ def checkBindings (c : Circuit) (partition : Option Json) (program : Option Byte
     | ks => throw s!"{name}: META program_digests names {ks.size} Definitions, not the partition's template {t} alone"
   | _ => throw s!"{name}: META program_digests is not an object"
 
-/-- `check` on a statement's unit and population, with the verifier's own inner shape `inner`, then `checkBindings` against
-its own partition object and program; a statement of V*'s needs all three, and with an inner shape, the statement must be
+/-- `checkBindings` against the verifier's own partition object and program, then `check` on a statement's unit and
+population with its own inner shape `inner`; a statement of V*'s needs all three, and with an inner shape, the statement must be
 V*'s. -/
 def checkStmt (inner : Option Inner) (st : Stmt) (partition : Option Json := none) (program : Option ByteArray := none) :
     V Unit :=
   match inner with
   | some i => do
-    check i st.c.unit.name (population st)
     checkBindings st.c partition program
+    check i st.c.unit.name (population st)
   | none =>
     if isVStar st.c.unit.name then
       throw s!"{st.c.unit.name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"

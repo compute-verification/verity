@@ -95,3 +95,32 @@ def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off
     p = subprocess.run([str(BIN), "statement", *files, "--rec-inner", str(inner)], capture_output=True, text=True)
     assert p.returncode == 1 and p.stdout.startswith(
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape (m 25, k_log 22, claims 8)"), p.stdout
+
+
+def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_program(staged, tmp_path):  # noqa: F811
+    """META's bindings are checked against the verifier's own files before the statement is matched to V*'s: without the
+    verifier's program `verify --rec-inner` refuses, and a partition object naming another template, or another program,
+    is refused by the digest it changes."""
+    d = staged[0]
+    inner = _inner(tmp_path / "inner.json", 25, 22, 8)
+    base = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+            "--registered", str(d / "registered.json"), "--rec-inner", str(inner)]
+    sess = tmp_path / "session"
+    sess.mkdir()
+    (sess / "session.json").write_text("{}")
+    p = subprocess.run([str(BIN), "verify", *base, "--partition", str(d / "partition.json"), "--session", str(sess)],
+                       capture_output=True, text=True)
+    [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+    assert v["why"] == ("setup: rec-open/l8-h1: one of V*'s statements; pass the verifier's own partition object and program "
+                        "(--partition F, --program F)"), v
+    obj = json.loads((d / "partition.json").read_text())
+    obj["query"]["params"]["template"] = "RecOpen_v4{LANES=8,H=2}"
+    (tmp_path / "partition.json").write_text(json.dumps(obj))
+    (tmp_path / "program.json").write_bytes((d / "program.json").read_bytes() + b" ")
+    for part, prog, why in ((tmp_path / "partition.json", d / "program.json",
+                             "setup: partition: the circuit's partition digest is not the verifier's partition object's"),
+                            (d / "partition.json", tmp_path / "program.json",
+                             "setup: partition: the verifier's program is not the one the partition object names")):
+        p = subprocess.run([str(BIN), "statement", *base, "--partition", str(part), "--program", str(prog)],
+                           capture_output=True, text=True)
+        assert p.returncode == 1 and p.stdout.startswith(why), p.stdout
