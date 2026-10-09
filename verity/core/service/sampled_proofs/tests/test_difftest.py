@@ -309,7 +309,7 @@ def _registration(p: dict, rec) -> tuple[str, ...]:
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
-    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R6, the draw's checks, the record's
+    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R7, the draw's checks, the record's
     checks or a verdict that ran and did not accept; undecided when only the verifier of record is missing or has not run;
     accept exactly when `audit_record` accepts, with the drawn and proved units, the bounds and the profile."""
     rec, _ = c
@@ -611,7 +611,7 @@ def _other_setup(a, x):
     return SETUPS[x % len(SETUPS)].desc
 
 
-#: One change each to the record (R1-R6), the parameters (decodable or not) and the evidence (the draw, the record's checks,
+#: One change each to the record (R1-R6; R7's are `ENTRIES`), the parameters (decodable or not) and the evidence (the draw, the record's checks,
 #: the verdicts, its decoding); `x` picks among variants.
 RECORD = [
     _set("record", "format", lambda a, x: [R.FORMAT_V2, "verity/registration/v0"][x % 2]),
