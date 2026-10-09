@@ -1,5 +1,5 @@
 """served_zk's window through the proof service (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
-window of served calls' fp8-p rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
+window of served calls' side rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
 grid level, registered with exactly PoUW's public items, received by a `Stream`, drawn once, each drawn tile's proof
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
 from __future__ import annotations
@@ -10,6 +10,7 @@ import json
 import random
 import shutil
 import stat
+import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -124,7 +125,7 @@ def _codes(e: pytest.ExceptionInfo) -> set[str]:
 def _pub(bca: bytes, bcb: bytes) -> bytes:
     """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header, then instance 0's b || c in port
     order (the A row, the B row, the tile digest's row)."""
-    schemas = {"a0": L.ROW_SCHEMA["fp8-p", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-p", SC.SIDES["b"]],
+    schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
     return json.dumps({"instances": 1, "frame_v3": {"schemas": schemas}}).encode() + b"\n" + bca + bcb + bytes(128)
 
@@ -176,7 +177,7 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
             leaves = SC.side_leaves(dom, schema, priv[e][side]["bcs"])
             root = tree_levels(dom, leaves + [dom.pad(r) for r in range(len(leaves), dom.count)])[-1][0]
             assert root == (entries[e].root_a if side == "a" else entries[e].root_b)
-    assert priv[0]["b"]["bcs"][2] == L.commit("fp8-p", SC.SIDES["b"], Wd.side_row(words["b"][2], 2), priv[0]["b"]["salts"][2])
+    assert priv[0]["b"]["bcs"][2] == L.commit("fp8-pi", SC.SIDES["b"], Wd.side_row(words["b"][2], 2), priv[0]["b"]["salts"][2])
     assert [Wd.side_index(r) for r in priv[0]["a"]["words"]] == advice["records"][0]["keep"]["a"]
     assert (call.tile0, call.cols, call.m, entries[1].tile0) == (5, 1, 16, 9) and filler.m == filler.tile0 == 0
     salts = {e: {s: priv[e][s]["salts"] for s in "ab"} for e in range(3)}
@@ -432,7 +433,7 @@ def _session(t: int) -> str:
 
 
 def _unit(t: int, lean: bool = True, opening: bool = True, session: int | None = None) -> dict:
-    stage = {"definition": "Pc8TileHidden", "circuit_sha512": "11" * 64, "class_sha512": "22" * 64, "ands": 7, "k_log": 3,
+    stage = {"definition": "Pc8TileSide", "circuit_sha512": "11" * 64, "class_sha512": "22" * 64, "ands": 7, "k_log": 3,
              "binding": "hash scratch"}
     return {"unit": t, "statement": SC.statement(stage, b"pub"),
             "verdicts": {"lean": {"of_record": True, "accepted": lean, "why": "", "digest": "33" * 64,
@@ -821,3 +822,32 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
     v = SC.shape(a, c)
     assert not v["same"] and any("msg_len" in x for x in v["diffs"])
     assert not SC.shape(a, _staged(tmp_path / "d", rec, 101))["same"]
+
+
+@pytest.mark.slow
+def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
+    """stage_tile.py stages a call's tile and a filler tile of a committed window as `Pc8TileSide` units, each in its own
+    process, on the committer's side rows and salts: each public file's rows are the side trees' leaves, so the opening
+    accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
+    which only the staged public file shows; about a minute at K = 128."""
+    *_, words = served
+    params, public, advice, priv = _window(words)
+    rec = _register(params, public)
+    (tmp_path / "advice.json").write_text(json.dumps(advice))
+    (tmp_path / "params.json").write_text(json.dumps(params))
+    SC.save(tmp_path / "prover.npz", priv)
+    stage = Path(__file__).resolve().parents[1] / "served_zk" / "stage_tile.py"
+    draw = {"law": "subset", "population": 26, "k": 2, "units": [7, 25]}
+    runs = {t: subprocess.Popen([sys.executable, str(stage), str(tmp_path), str(tmp_path / "params.json"), str(t),
+                                 str(tmp_path / f"u{t}")], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            for t in draw["units"]}
+    for t, p in runs.items():
+        _, err = p.communicate()
+        assert p.returncode == 0, f"unit {t}: {err[-2000:]}"
+        out = tmp_path / f"u{t}"
+        st = json.loads((out / "stage.json").read_text())
+        assert st["definition"] == SC.template(K).id and st["row_schemas"][:2] == [
+            [L.ROW_SCHEMA["fp8-pi", SC.SIDES[s]], 16 * L.ROW_WORDS["fp8-pi"](K)] for s in "ab"]
+        op = json.loads((out / "opening.json").read_text())
+        assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
+    assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"

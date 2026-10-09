@@ -230,8 +230,10 @@ rows  min(64, m − 64·(I div 64)), the tile's height: 64, or the call's short 
 with I < m and J < 64·cols. The pass's tiles are in workload order, then each call's 64 x 64 tiles row-major, so this
 is `audit.tile_refs`'s tile holding (I, J). Up to 4,096 window tiles read one leaf, and the leaf a unit computes is its
 word's 64 x 64 tile's (the output of `Pc8TileLeafH3`, not on main yet, from the word and the tile's other messages as
-advice), not `Pc8TileHidden`'s 1 x 1 digest; `served_zk/stage_tile.py` refuses a window of indexed side rows, which
-`Pc8TileHidden` does not read.
+advice), not `Pc8TileHidden`'s 1 x 1 digest. Until TileRead is a Program, a drawn tile's unit is `Pc8TileSide`
+(`pc8.side_tile`, `served_zk/stage_tile.py`): `Pc8TileHidden`'s 1 x 1 check and digest over the drawn word's two side
+rows, which it reads whole, index field included (`pc8.SIDE_PORTS`, row `fp8-pi`), so its committed inputs are the side
+trees' leaves. It reads I and J as values and uses neither yet, and it reads no -h3 leaf.
 
 The side rows' indices are bound to the record in the window's reference only: the window statement in gates reads the P
 entry rows, not the up to 2^13 + 2^17 side rows under each entry or the record's preimage. `window_problem`, given the
@@ -1101,6 +1103,8 @@ useful    U/(α_A·α_B), glue
     pouw/row-nvfp4-p/v1  k E2M1 codes two per byte (low nibble first), the k/16    k/4 + k/32 + 64   X (A′_i ‖ P_A,i),  seg / v2
                          UE4M3 scale bytes, then P's 64 BF16 words                                   W (B̃_j ‖ P_B,j)
     pouw/row-fp8-p/v1    k E4M3 codes, then P's 64 BF16 words                      k/2 + 64          X, W               seg / v2
+    pouw/row-fp8-pi/v1   an fp8-p row, then its index field (a window's side row,  k/2 + 72          X, W               seg / v2
+                         `window.side_row`): I or J, a u32 low word first, 6 zero
     pouw/row-ok/v1       the row's admission bit, bit 0 of one word, bits 1–15 0   1                 X, W               v2 / v2
     pouw/tile-h0/v1      the tile's 32-byte h0 digest (`pearl_c.leaf` of C̃, U)    16                X                  v2
     pouw/row-sd/v1       a row of A's k/32 salt-dead counts, each 32-bit word as   k/16              X                  seg
