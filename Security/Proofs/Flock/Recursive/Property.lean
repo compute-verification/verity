@@ -90,11 +90,19 @@ def outerParts (m kLog claims : ℕ) : ℕ :=
 abbrev outerStatements (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog))) : ℕ :=
   outerParts cls.m cls.kLog (2 + 2 * regs.length)
 
+/-- **V*'s sessions, their records' custody given** (`Flock.Premises.RecordCustody`): each session's data and checks
+`zs₀ R ω t R₂ j`, with the record (`RecordsLiveZK`) its custody gives. -/
+abbrev custodied {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
+    (zs₀ : A → B → C → D → (j : Fin S) → (Vs j).OuterD Reg') (h : Flock.Premises.RecordCustody zs₀) :
+    A → B → C → D → (j : Fin S) → (Vs j).Outer Reg' :=
+  fun R ω t R₂ j => { toZkOuterD := zs₀ R ω t R₂ j, hRec := And.left (h R ω t R₂ j) }
+
 /-- **The recursive audit, as the verifier of record runs it.**
 
 (i) For every prover `σ` of the recursive audit with C-Flock's compiled table as its inner protocol (`innerExec`): V*'s
 statements `Vs`, as many as V*'s staging lays out over the class and its regions (`outerStatements`), and V*'s sessions
-`zs R ω t R₂ j` under their laws, the hidden statement `x`, the messages V*'s layers hold and the rounds' commitments
+`zs R ω t R₂ j` under their laws (`custodied zs₀ _hCust`: their data and checks `zs₀`, and their records' custody
+`_hCust`), the hidden statement `x`, the messages V*'s layers hold and the rounds' commitments
 (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root `rt`. On an outcome `o` whose sessions
 all verify, `reads o i` says a session read row `i`, `row o i` is the commit string it read there and `op o i` its
 opening of `rt`; `stmt q ω` is the hidden statement at the draw `ω` of the netlist whose rows the commit strings `q`
@@ -119,13 +127,16 @@ def RecursiveAudit : Prop :=
     -- the class of the compiled table, its regions and schedule
     (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
     (sch : Accounting.Schedule)
-    -- V*'s statements over the class, and V*'s sessions at each history and registration `R₂`
+    -- V*'s statements over the class, and V*'s sessions' data at each history and registration `R₂`
     {Vs : Fin (outerStatements cls regs) → VStmt}
-    (zs : Reg → L.Ω → List (Cm × (innerExec T CT cls regs sch).Coin) → Reg₂ →
-      (j : Fin (outerStatements cls regs)) → (Vs j).Outer Reg')
+    (zs₀ : Reg → L.Ω → List (Cm × (innerExec T CT cls regs sch).Coin) → Reg₂ →
+      (j : Fin (outerStatements cls regs)) → (Vs j).OuterD Reg')
+    -- the records' custody
+    (_hCust : Flock.Premises.RecordCustody zs₀)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame L Reg (innerExec T CT cls regs sch) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (σ : Strategy (recGame L Reg (innerExec T CT cls regs sch) Cm fun R ω t =>
+      outerV (custodied zs₀ _hCust R ω t) dg N))
     -- the hidden statement, the messages V*'s layers hold, the rounds' commit strings and commitments
     (x : Reg → L.Ω → Hidden cls)
     (wmsg : ((j : Fin (outerStatements cls regs)) → (Vs j).Bits) → List (innerExec T CT cls regs sch).Msg)
@@ -146,38 +157,41 @@ def RecursiveAudit : Prop :=
     -- V*'s laws' strata
     (_hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     -- the verifier of record's statement check accepts V*'s statements
-    (_hck : ∀ R ω t R₂ j, FailClosed.ScopeZ (zs R ω t R₂ j).I)
+    (_hck : ∀ R ω t R₂ j, FailClosed.ScopeZ (custodied zs₀ _hCust R ω t R₂ j).I)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes Vs)
     -- the compile lemma
     (_hin : Flock.Premises.CompiledForkSound T CT cls regs sch)
     -- at an outcome whose sessions all verify, every read commit string opens `rt`, and the hidden statement is theirs
-    (_hop : ∀ o, VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i →
+    (_hop : ∀ o, VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i →
       (regBcCommit i).Opens rt (row o i) (op o i))
-    (_hx : ∀ o, VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : ℕ → ByteArray, (∀ i, reads o i → q i = row o i) →
-      x o.1 o.2.1 = stmt q o.2.1)
+    (_hx : ∀ o, VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : ℕ → ByteArray,
+      (∀ i, reads o i → q i = row o i) → x o.1 o.2.1 = stmt q o.2.1)
     -- the registered commit strings and the developer's openings
     (p : ℕ → ByteArray) (op₀ : ℕ → Flock.Registered.Port × ByteArray × ByteArray)
     (_hreg : ∀ i, (regBcCommit i).Opens rt (p i) (op₀ i))
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
-    (_hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (_hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (custodied zs₀ _hCust R ω t R₂ j).dj
+      (custodied zs₀ _hCust R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     -- V*'s bridge
-    (_hbr : Flock.Premises.VBridge zs dg N k Rw x wmsg Sk cmt msg),
-    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
-      InnerForkRec zs dg N k Rw σ x wmsg Refine.H512
+    (_hbr : Flock.Premises.VBridge (custodied zs₀ _hCust) dg N k Rw x wmsg Sk cmt msg),
+    RoundFork (custodied zs₀ _hCust) dg N k Rw σ cmt ∨ SessionFork (custodied zs₀ _hCust) dg N k Rw M σ ∨
+      InnerForkRec (custodied zs₀ _hCust) dg N k Rw σ x wmsg Refine.H512
         (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch) ∨
       (∃ o, FlockSoundness.Game.Outcome (recGame L Reg (innerExec T CT cls regs sch) Cm
-          fun R ω t => outerV (zs R ω t) dg N) σ o ∧
-        VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+          fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ o ∧
+        VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((regBcCommit i).ext (op o i) (op₀ i))) ∨
-      prob (fun o => VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+      prob (fun o => VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerExec T CT cls regs sch).holds (stmt p o.2.1))
-          (recGame L Reg (innerExec T CT cls regs sch) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
-        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
-          ((innerExec T CT cls regs sch).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
+          (recGame L Reg (innerExec T CT cls regs sch) Cm fun R ω t =>
+            outerV (custodied zs₀ _hCust R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (custodied zs₀ _hCust σ.1 ω t) dg N
+            (fun R₂ j τ => (custodied zs₀ _hCust σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          ((innerExec T CT cls regs sch).r : ℝ≥0∞) *
+            expAt σ (fun ω t s => sumV (custodied zs₀ _hCust σ.1 ω t) dg N
+              (fun R₂ j τ => (custodied zs₀ _hCust σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩)) ∧
   (∀ {Out Prog Wit Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Inhabited Ωa] [Fintype Ωp] [Inhabited Ωp] [Fintype Ωo]
     [Inhabited Ωo] [Fintype Ωs] [Inhabited Ωs]

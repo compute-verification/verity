@@ -56,15 +56,17 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   swap
   · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
     exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter hKey p₀ o P w hw E
-  intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ cls regs sch Vs zs dg N σ x wmsg Sk cmt msg rt stmt reads row op hS _ hA3
-    hin hop hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
-  rcases zk_sessions_recursive_fork_inner hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr Refine.H512
+  intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ cls regs sch Vs zs₀ hCust dg N σ x wmsg Sk cmt msg rt stmt reads row op hS _
+    hA3 hin hop hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+  rcases zk_sessions_recursive_fork_inner hS hA3 (Flock.Guarantees.custodied zs₀ hCust) dg N hk hRw hM hρ hr σ x wmsg Sk
+    cmt msg hbr Refine.H512
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch) hin with hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
   · by_cases hc : ∃ o, FlockSoundness.Game.Outcome (recGame L Reg (Flock.Guarantees.innerExec T CT cls regs sch) Cm
-        fun R ω t => outerV (zs R ω t) dg N) σ o ∧ Flock.Guarantees.VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+        fun R ω t => outerV (Flock.Guarantees.custodied zs₀ hCust R ω t) dg N) σ o ∧
+        Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zs₀ hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧
           FlockSoundness.Binding.Collides ((Flock.Guarantees.regBcCommit i).ext (op o i) (op₀ i))
     · exact Or.inr (Or.inr (Or.inr (Or.inl hc)))

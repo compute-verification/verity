@@ -49,13 +49,13 @@ open scoped ENNReal
 
 set_option genSizeOfSpec false in
 set_option genInjectivity false in
-/-- **V*'s `--zk --registered` session at one history**: what its soundness takes besides the circuit `c` (fixed: V* is
-public), the law `Lv` of V*'s units, the count curve and the prover's strategy. `rd` is the registrant's record of the
-registered reads: the hidden circuit's rows from its registration, the values of the outer proof's registration `R₂`
-(`outerV`), and the values the verifier registers itself (the draw, the coins, the comb `coef`). `hown`: at an accepted
-outcome, the reads at the rows of the drawn units are the verifier's own (`OwnReads`: its ports, at the positions its
-program reads). -/
-structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
+/-- **V*'s `--zk --registered` session at one history, but for its record's custody**: what its soundness takes besides
+the circuit `c` (fixed: V* is public), the law `Lv` of V*'s units, the record's custody (`ZkOuter.hRec`), the count
+curve and the prover's strategy. `rd` is the registrant's record of the registered reads: the hidden circuit's rows from
+its registration, the values of the outer proof's registration `R₂` (`outerV`), and the values the verifier registers
+itself (the draw, the coins, the comb `coef`). `hown`: at an accepted outcome, the reads at the rows of the drawn units
+are the verifier's own (`OwnReads`: its ports, at the positions its program reads). -/
+structure ZkOuterD (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
     (Lv : Law nv) where
   I : Inputs
   ht : I.tags.typed = false
@@ -69,11 +69,18 @@ structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built 
   hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub
   hDraw : ∀ ω, DrawOkZK I dj mPts (Lv.draw ω)
   hTags : TagsOk I
-  hRec : RecordsLiveZK I dj wr
   rd : FlockSoundness.Registered.Reads (laySh (Reg := Reg') ht dj y₀ hc hU (pub := pub))
     (rowsSh ht dj y₀ hc hU hpub hscope)
   hown : ∀ ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →
     OwnReads own c pub (wr (Lv.draw ω) R' o) (rd.restrict (rowIn (Lv.draw ω))).isRead rd.port rd.readAt
+
+set_option genSizeOfSpec false in
+set_option genInjectivity false in
+/-- **V*'s `--zk --registered` session at one history**: `ZkOuterD`'s, with the record's custody `hRec` (the record
+`verify --zk` reads is the challenger's of the live session, `RecordsLiveZK`). -/
+structure ZkOuter (mPts nv : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit) (hscope : Layout.scopeOk c = true)
+    (Lv : Law nv) extends ZkOuterD mPts nv Reg' c hU hscope Lv where
+  hRec : RecordsLiveZK I dj wr
 
 /-- **The names of a session's strategies**: a registration and, at each of the law's coins, a strategy of the live
 table; they read the same at every history. -/
@@ -372,6 +379,9 @@ namespace VStmt
 
 /-- A session of the verifier's circuit at one history. -/
 abbrev Outer (Q : VStmt) (Reg' : Type) := ZkOuter Q.mPts Q.nv Reg' Q.c Q.hU Q.hscope Q.law.live
+
+/-- A session of the verifier's circuit at one history, but for its record's custody. -/
+abbrev OuterD (Q : VStmt) (Reg' : Type) := ZkOuterD Q.mPts Q.nv Reg' Q.c Q.hU Q.hscope Q.law.live
 
 /-- A value layer of the verifier's circuit. -/
 abbrev Bits (Q : VStmt) : Type := Fin (Layout.keyN Q.c Q.hU Q.nv) → Bool
