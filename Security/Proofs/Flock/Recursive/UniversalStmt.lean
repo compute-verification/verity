@@ -32,20 +32,18 @@ file states that, for `RecursiveAudit`'s (i) and the verifier's refusals, over a
   `argOrder p j` is bit `j` of registered row `0`: description bit `j` is bit `j mod 16` of `p0`'s u16 word `⌊j/16⌋`
   (`descAt_word`), and `descAt_op`, `descAt_src`, `descAt_out` read each place of `UniversalClass.layout` there.
   `srcAt st u a` is bit `a` of instance `u`'s `p1` table row, `outAt st u i` bit `16 i` (u16 word `i`) of its `out`
-  table row, where `tableRow st u q` is the row `Public.digest` reads (`digestsAt_tableRow`). `paramsAt st` is
-  `{G, N_IN, N_OUT}` read off a typed class's unit type (`paramsAt_of_unitType`), and `UnitIsUniversal st` says that
-  type is `uuType` at them: the check T1 would add.
+  table row, where `tableRow st u q` is the row `Public.digest` reads (`digestsAt_tableRow`). `paramsAt program` is
+  `{G, N_IN, N_OUT}` as the program descriptor binds them (`UniversalUnit_v1`'s bindings), and `unitTypeAt st` the
+  unit type a typed statement names, which T1 would compare with the packed universal type at those parameters.
 * **A faulty session** (`SessionFaulty π ρx ρy q qs`): some instance faulty at every opening of the registered rows,
   which equals faulty at the developer's opening unless two openings of a read row collide under SHA-512 (cr/sha-512,
   listed). The description is read from the registered strings `q`, the instance's inputs and outputs from the
   statement's strings `qs` through `ρx u` and `ρy u`. Where every row read opens to exactly one row it is the chosen
   openings' `Faulty` (`sessionFaulty_iff`).
-* **The layout tie** (T4, `not_faulty_of_slot`, `not_faulty_of_class`, `not_sessionFaulty_of`): an instance whose
-  slot satisfies the unit's rows, whose description, input and output columns hold its `p0`, `p1` and `out` rows' bits
-  at `argOrder`, `srcAt` and `outAt`, and whose rows open the statement's strings there is no faulty session's witness.
-  The description's string is the registered `q 0` by T5b's equality. A row's bits at its columns are `rowBit_bytesOf`.
-* `prob_faulty_le`: (i)'s event at a faulty session from (i)'s event at the statement failing, once the statement
-  holding rules out a faulty session at every outcome reached.
+* **The layout tie** (T4, `not_faulty_of_rows`, `not_sessionFaulty_of`): an instance whose rows open the statement's
+  strings at its table rows, the description's being the registered `q 0` (T5b's equality), and whose outputs read
+  there are the decoded circuit's on its description and inputs read there, is no faulty session's witness. A row's bits
+  at its columns are `rowBit_bytesOf`.
 -/
 
 namespace FlockSoundness.Discharge.Recursion.UniversalStmt
@@ -303,35 +301,29 @@ def srcAt (st : Flock.Stmt) (u : Fin st.n) (a : Fin p.nIn) : ℕ × ℕ := (tabl
 /-- **Instance `u`'s output `i`**: bit `16 i` of its `out` table row, bit `0` of the row's u16 word `i`. -/
 def outAt (st : Flock.Stmt) (u : Fin st.n) (i : Fin p.nOut) : ℕ × ℕ := (tableRow st u outPort, 16 * i.val)
 
-/-- **The parameters a unit type's ports name**: `G` from the first port's `2G` bits (`op`), `N_IN` from the fourth's
-(`x`), `N_OUT` from the one output port's. -/
-def paramsOfType (ty : Flock.CircuitType) : Params :=
-  ⟨(ty.ins.getD 0 (0, 0)).2 / 2, (ty.ins.getD 3 (0, 0)).2, (ty.outs.getD 0 (0, 0)).2⟩
+/-- **`{G, N_IN, N_OUT}` a program descriptor binds**: the bindings of its composite `UniversalUnit_v1` (descriptor v1,
+PROTOCOL §4.2 and §4.3), `none` when it holds none. -/
+def paramsOfDescriptor (d : Lean.Json) : Option Params := do
+  let .obj defs ← (d.getObjVal? "definitions").toOption | none
+  defs.toArray.findSome? fun (_, f) => do
+    guard ((f.getObjValAs? String "form").toOption == some "composite" &&
+      (f.getObjValAs? String "id").toOption == some "UniversalUnit_v1")
+    let b ← (f.getObjVal? "bindings").toOption
+    let nat := fun k => (b.getObjValAs? Nat k).toOption
+    return ⟨← nat "G", ← nat "N_IN", ← nat "N_OUT"⟩
 
-theorem paramsOfType_uuType : paramsOfType (uuType p) = p := by
-  obtain ⟨g, nIn, nOut⟩ := p
-  simp [paramsOfType, uuType]
+/-- **The statement's parameters `{G, N_IN, N_OUT}`**, read off its program file (the descriptor META binds by
+`program_sha512`), `none` when the file is no descriptor or binds no `UniversalUnit_v1`. A statement's other files don't
+fix them: META and the header name the class only by digest, and a unit's leaf ports are 16-bit words whichever class
+it is. -/
+def paramsAt (program : ByteArray) : Option Params := do
+  let text ← String.fromUTF8? program
+  paramsOfDescriptor (← (Lean.Json.parse text).toOption)
 
-/-- **The statement's unit type**: the type its class names for the unit's layout, `none` for an untyped statement. -/
+/-- **The statement's unit type**: the type its class names for the unit's layout, `none` for an untyped statement.
+T1 compares it with the universal unit's packed type at `paramsAt`, which Lean doesn't define yet. -/
 def unitTypeAt (st : Flock.Stmt) : Option Flock.CircuitType :=
   st.c.cls.bind fun k => (k.ls.getD k.unit default).type.bind (Flock.Typed.typeIn k.types)
-
-/-- **The statement's parameters `{G, N_IN, N_OUT}`**: its unit type's (`paramsOfType`), `⟨0, 0, 0⟩` for an untyped
-statement. -/
-def paramsAt (st : Flock.Stmt) : Params := ((unitTypeAt st).map paramsOfType).getD ⟨0, 0, 0⟩
-
-theorem paramsAt_of_unitType {st : Flock.Stmt} (h : unitTypeAt st = some (uuType p)) : paramsAt st = p := by
-  simp [paramsAt, h, paramsOfType_uuType]
-
-/-- **T1: the statement's unit is the universal unit at its ports**: its unit type is `uuType` at `paramsAt st`. The
-refusal T1 would add to Lean's verifier on the inner statement; no check makes it yet. -/
-def UnitIsUniversal (st : Flock.Stmt) : Prop := unitTypeAt st = some (uuType (paramsAt st))
-
-/-- **At a typed class, T1 is the class's unit type**: the form `uu_unit_sound`'s `ht` takes. -/
-theorem unitType_of_universal {st : Flock.Stmt} {k : Flock.Typed.Class} (hk : st.c.cls = some k)
-    (hu : UnitIsUniversal st) :
-    (k.ls.getD k.unit default).type.bind (Flock.Typed.typeIn k.types) = some (uuType (paramsAt st)) := by
-  simpa [UnitIsUniversal, unitTypeAt, hk] using hu
 
 /-! ## A faulty session -/
 
@@ -433,24 +425,18 @@ theorem rowsOpen_outAt {st : Flock.Stmt} {u : Fin st.n} {rx ry : ByteArray}
     RowsOpen (outAt (p := p) st u) (digestsAt st) (instRows st u rx ry) := fun _ => by
   simpa [outAt, instRows, hne] using h
 
-/-- **T4 at one instance, from its slot's facts.** Instance `u`'s slot satisfies the unit's rows with `one` at 1, and
-its description, input and output columns hold bits `argOrder`, `srcAt` and `outAt` read from its rows `rd`, `rx`,
-`ry`. Those rows open the statement's strings at its `p0`, `p1` and `out` table rows (T3 with the region tie), and
-the `p0` string is the registered `q 0` (`h5b`, T5b's equality). Its `p1` and `out` table rows differ (`hne`: the
-public file's refs lie below their tables' counts, and the tables are port-major). Then `u` is no faulty session's
-witness. -/
-theorem not_faulty_of_slot {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}
-    {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array DeriveAll.D}
-    (hd : DeriveAll.deriveChecked types ls info words unit = .ok done)
-    (ht : (ls.getD unit default).type.bind types = some (uuType p)) (one : ℕ) (z : ℕ → Bool)
-    (hz : Dag.SatAt (DeriveAll.blockRow words (done.getD unit default) one) z) (h1 : z one = true)
-    {st : Flock.Stmt} {q : ℕ → ByteArray} (u : Fin st.n) {rd rx ry : ByteArray}
+/-- **T4 at one instance, from its rows.** Instance `u`'s rows `rd`, `rx`, `ry` open the statement's strings at its
+`p0`, `p1` and `out` table rows (T3 with the region tie), and the `p0` string is the registered `q 0` (`h5b`, T5b's
+equality). Its `p1` and `out` table rows differ (`hne`: the public file's refs lie below their tables' counts, and the
+tables are port-major). Its outputs, bit `16 i` of `ry`, are the decoded circuit's on its description, bit `j` of `rd`,
+and its inputs, bit `a` of `rx` (`hok`, the unit's soundness at its slot read through T2's copies). Then `u` is no
+faulty session's witness. -/
+theorem not_faulty_of_rows {st : Flock.Stmt} {q : ℕ → ByteArray} (u : Fin st.n) {rd rx ry : ByteArray}
     (h5b : digestsAt st (tableRow st u descPort) = q 0) (hne : tableRow st u outPort ≠ tableRow st u xPort)
     (hod : Opens (digestsAt st (tableRow st u descPort)) rd) (hox : Opens (digestsAt st (tableRow st u xPort)) rx)
     (hoy : Opens (digestsAt st (tableRow st u outPort)) ry)
-    (hdz : ∀ j : Fin p.width, z ((done.getD unit default).inCols.getD j 0) = rowBit rd j)
-    (hxz : ∀ a : Fin p.nIn, z ((done.getD unit default).inCols.getD (p.width + a) 0) = rowBit rx a)
-    (hyz : ∀ i : Fin p.nOut, z ((done.getD unit default).outCols.getD i 0) = rowBit ry (16 * i.val)) :
+    (hok : (fun i : Fin p.nOut => rowBit ry (16 * i.val)) =
+      interpret (UniversalClass.decode fun j : Fin p.width => rowBit rd j.val) fun a => rowBit rx a.val) :
     ¬ ∀ rows srows : ℕ → ByteArray, RowsOpen (argOrder p) q rows → RowsOpen (srcAt (p := p) st u) (digestsAt st) srows →
       RowsOpen (outAt (p := p) st u) (digestsAt st) srows →
       Faulty (rowBits (argOrder p) rows) (rowBits (srcAt st u) srows) (rowBits (outAt st u) srows) := by
@@ -458,25 +444,7 @@ theorem not_faulty_of_slot {types : String → Option Flock.CircuitType} {ls : A
   have hf := h (fun _ => rd) (instRows st u rx ry) (rowsOpen_argOrder (h5b ▸ hod)) (rowsOpen_srcAt hox)
     (rowsOpen_outAt hne hoy)
   rw [rowBits_argOrder, rowBits_srcAt, rowBits_outAt st u rx ry hne] at hf
-  exact not_faulty_of_unit hd ht one z hz h1 hdz hxz hyz hf
-
-/-- **T4 at one instance of a typed class**: `not_faulty_of_slot` at the class's derivation (`Typed.Class.hd`), with T1
-(`UnitIsUniversal`) for its unit type, at the parameters `paramsAt st`. -/
-theorem not_faulty_of_class {st : Flock.Stmt} {k : Flock.Typed.Class} (hk : st.c.cls = some k)
-    (hu : UnitIsUniversal st) (one : ℕ) (z : ℕ → Bool)
-    (hz : Dag.SatAt (DeriveAll.blockRow (Flock.Typed.wordsIn k.held) (k.done.getD k.unit default) one) z)
-    (h1 : z one = true) {q : ℕ → ByteArray} (u : Fin st.n) {rd rx ry : ByteArray}
-    (h5b : digestsAt st (tableRow st u descPort) = q 0) (hne : tableRow st u outPort ≠ tableRow st u xPort)
-    (hod : Opens (digestsAt st (tableRow st u descPort)) rd) (hox : Opens (digestsAt st (tableRow st u xPort)) rx)
-    (hoy : Opens (digestsAt st (tableRow st u outPort)) ry)
-    (hdz : ∀ j : Fin (paramsAt st).width, z ((k.done.getD k.unit default).inCols.getD j 0) = rowBit rd j)
-    (hxz : ∀ a : Fin (paramsAt st).nIn,
-      z ((k.done.getD k.unit default).inCols.getD ((paramsAt st).width + a) 0) = rowBit rx a)
-    (hyz : ∀ i : Fin (paramsAt st).nOut, z ((k.done.getD k.unit default).outCols.getD i 0) = rowBit ry (16 * i.val)) :
-    ¬ ∀ rows srows : ℕ → ByteArray, RowsOpen (argOrder (paramsAt st)) q rows →
-      RowsOpen (srcAt (p := paramsAt st) st u) (digestsAt st) srows → RowsOpen (outAt (p := paramsAt st) st u) (digestsAt st) srows →
-      Faulty (rowBits (argOrder (paramsAt st)) rows) (rowBits (srcAt st u) srows) (rowBits (outAt st u) srows) :=
-  not_faulty_of_slot k.hd (unitType_of_universal hk hu) one z hz h1 u h5b hne hod hox hoy hdz hxz hyz
+  exact hf hok
 
 /-- **T4 over the session**: a session none of whose instances is a witness is not faulty. -/
 theorem not_sessionFaulty_of {st : Flock.Stmt} {q : ℕ → ByteArray}
