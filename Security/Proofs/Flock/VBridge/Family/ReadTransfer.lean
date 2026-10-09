@@ -1,4 +1,4 @@
-import Proofs.Flock.Recursive.Stage
+import Proofs.Flock.Recursive.StageRead
 import Proofs.Flock.Recursive.Statements
 
 /-!
@@ -52,7 +52,7 @@ theorem sessions_stage_le_read
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) → Q Xt)
     (s : Strategy (sessions zs dg N)) :
     prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
-      sumS zs dg N (fun j τ => (zs j).slackCR dg N k Rw M ρ t' qF qS τ) s +
+      sumS zs dg N (fun j τ => (zs j).slackIf dg N k Rw M ρ t' qF qS τ) s +
         ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
@@ -74,13 +74,13 @@ theorem sessions_stage_le_read
           (zs j).layer dg N k Rw ((zs j).ofBase dg N τ₀) g ≠
             bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
         ((zs j).game dg N) ((zs j).ofBase dg N τ₀) ≤
-      (zs j).slackCR dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
+      (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
         ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).s := by
     intro j τ₀
-    unfold ZkOuter.slackCR
+    unfold ZkOuter.slackIf
     split_ifs with hc
     · refine le_trans (prob_auditLive_mono _ _ ?_)
         (((zs j).candTransfer (Vs j).law.St (Vs j).law.Kd (Vs j).law.pop (Vs j).law.Lb (Vs j).law.src dg N hk hRw
@@ -101,7 +101,7 @@ theorem sessions_stage_le_read
       ∃ g, (posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j ∧ ReadW Vs j g) ∧
         (zs j).layer dg N k Rw ((zs j).ofBase dg N r.1) g ≠
           bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
-    (fun j τ₀ => (zs j).slackCR dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
+    (fun j τ₀ => (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
       ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
         prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
           ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
@@ -135,7 +135,7 @@ theorem outerV_stage_le_read
       Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) → Q Xt)
     (s : Strategy (outerV zs dg N)) :
     prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
-      sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s +
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s +
         ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
@@ -203,23 +203,13 @@ theorem zk_sessions_recursive_read
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
-            (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
-    (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
-    (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s)
-    (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
-  refine (outerV_stage_le_read hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
-    (fun j pos => cmt j e.1 pos) (fun R₂ j pos hp R' => hcmt i σ.1 ω t e he R₂ j pos hp R')
-    (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
-    (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
-    (add_le_add le_rfl ?_)
-  rw [Fintype.sum_sigma]
-  exact Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun p _ =>
-    mul_le_mul' le_rfl (trialS_le (zs σ.1 ω t _) dg N k Rw _ j p _ _)
+              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
+            (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin :=
+  FlockSoundness.Discharge.Recursion.zk_sessions_recursive_read hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x
+    wmsg hbr same hsame Sk cmt msg hcmt hdec hfull q hCR hin
 
 /-- **`v-bridge` at the read wires**: `Flock.Assumptions.VBridge` with `VDecodes` and `VFull` at the wires some unit
 reads (`VDecodesR`, `VFullR`): V*'s circuits accept only an accepted inner transcript, their public files register the
@@ -258,10 +248,10 @@ def RecursiveSoundRead : Prop :=
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
+              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin
 
 /-- **The recursive audit is sound at `VBridgeRead`** (`Flock.SecurityProofs.RecursiveSound`'s proof at
