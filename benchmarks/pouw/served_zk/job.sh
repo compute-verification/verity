@@ -80,6 +80,12 @@ expect() { EXPECT[$1]=$2; VERDICT[$1]=$3; log "  $1: $3 (expected $2)"; }
 first() { cut -d' ' -f1; }
 jq_() { "$PY" -c "import json, sys; d = json.load(open(sys.argv[1])); print(eval(sys.argv[2], {'d': d, 'json': json}))" "$@"; }
 mkdir -p "$OUT/request" "$OUT/other"
+# the Lean checks of record (of_record.Record), built here so a failure stops the job before the challenger asks for them
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+{ (cd "$SRC/verity/core/protocols/pouw/lean/check" && lake build pouw-check pouw-check-difftest) \
+  && (cd "$SRC/verity/core/service/sampled_proofs" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
+  || { log "Lean of record build FAILED: $(tail -5 "$OUT/lean-record-build.log")"; exit 3; }
+log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
 # ---- 2-3. params and commit ---------------------------------------------------------------------------------------------------
 for p in request other; do
