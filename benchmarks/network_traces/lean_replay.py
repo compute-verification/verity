@@ -28,6 +28,7 @@ which they differ, fails.
 
     python lean_replay.py traces --calibration REPORT [--recorded VERDICTS.jsonl] --out DIR [--jobs N] TRACE ...
     python lean_replay.py active --out DIR [--jobs N] [--max-frames F] [--budget-gb G] RUN_DIR ...
+    python lean_replay.py summarize OUT PROGRESS.jsonl ...
 
 Each task (a trace, an active configuration) runs in a process of its own. The Lean check holds each frame's payload as
 a list of bits, about 1 MB of memory per 4 KiB frame, so a real active configuration's audit peaks at tens to hundreds of
@@ -154,7 +155,7 @@ def compare_rows(py: Sequence[dict], lean: Sequence[dict], recorded: dict[tuple,
                  audits: Sequence[str]) -> tuple[list[dict], dict]:
     """The link-windows whose verdicts differ between the verifiers (any audit kind) or from the recorded ones (the kinds
     recorded), and the tallies."""
-    diffs, stats = [], Counter()
+    diffs, stats = [], Counter(link_windows=0, same=0)
     if [row_key(r) for r in py] != [row_key(r) for r in lean]:
         raise AssertionError("the two audit paths gave different link-windows")
     for a, b in zip(py, lean, strict=True):
@@ -329,7 +330,8 @@ def trace_job(args: tuple) -> dict:
     rec = None if recorded is None else {row_key(r): r for r in recorded}
     diffs, stats = compare_rows(py, le, rec, TRACE_AUDITS)
     runs = sorted({r["run"] for r in py if r.get("run")})
-    return {"run": runs[0] if len(runs) == 1 else Path(path).name, "kind": "trace", "trace": str(path),
+    name = Path(path).parent.name if Path(path).name == "trace.json" else Path(path).name
+    return {"run": runs[0] if len(runs) == 1 else name, "kind": "trace", "trace": str(path),
             "configurations": len(configs), **stats, "violations": {"python": violation_counts(py, TRACE_AUDITS),
                                                                     "lean": violation_counts(le, TRACE_AUDITS)},
             "seconds": {"python_path": round(t1 - t0, 2), "lean_path": round(t2 - t1, 2)},
@@ -426,20 +428,23 @@ def safe_job(kind: str, args: tuple) -> dict:
 
 def summarize(results: Sequence[dict]) -> dict:
     """Runs, runs whose every link-window has the same verdict on both sides (and the recorded one, where recorded),
-    link-windows compared, violations on each side and the negative controls by kind."""
+    link-windows compared, violations on each side and the negative controls by kind. A run with no link-window to
+    compare (a trace that kept no window) is listed apart, not counted."""
     by_run: dict[str, list[dict]] = {}
     for r in results:
         by_run.setdefault(r["run"], []).append(r)
     s = Counter()
     natural: dict[str, Counter] = {"python": Counter(), "lean": Counter()}
     injected, failed = Counter(), Counter()
-    errors, left_out = [], []
+    errors, left_out, empty = [], [], []
     same_runs = 0
     for run, parts in list(by_run.items()):
         left_out += [{"run": run, "configuration": p.get("configuration"), "why": p["left_out"]}
                      for p in parts if "left_out" in p]
         parts = [p for p in parts if "left_out" not in p]
-        if not parts:
+        if parts and all("error" not in p and not p["link_windows"] for p in parts):
+            empty.append(run)
+        if not parts or run in empty:
             del by_run[run]
             continue
         ok = True
@@ -466,7 +471,7 @@ def summarize(results: Sequence[dict]) -> dict:
             "injected_controls": dict(injected), "injected_failed": dict(failed),
             "K": {"natural": k_natural, "injected": sum(injected.values()), "failed": sum(failed.values())},
             "errors": errors, "left_out": left_out,
-            "runs_left_out": sorted({x["run"] for x in left_out} - set(by_run))}
+            "runs_left_out": sorted({x["run"] for x in left_out} - set(by_run)), "runs_without_link_windows": empty}
 
 
 def write(out: Path, results: Sequence[dict]) -> dict:
@@ -534,6 +539,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["task"]:
         return _task(*argv[1:])
+    if argv[:1] == ["summarize"]:  # summarize OUT PROGRESS.jsonl ...: the outputs again from tasks' results
+        return print_summary(write(Path(argv[1]), [json.loads(line) for f in argv[2:]
+                                                   for line in Path(f).read_text().splitlines()]))
     ap = argparse.ArgumentParser(prog="lean_replay.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="kind", required=True)
     t = sub.add_parser("traces")
@@ -604,11 +612,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             fh.flush()
             print(json.dumps({k: r.get(k) for k in ("run", "configuration", "frames", "link_windows", "same", "seconds",
                                                     "error") if k in r}), flush=True)
-    s = write(args.out, results)
+    return print_summary(write(args.out, results))
+
+
+def print_summary(s: dict) -> int:
     print(f"{s['runs']} runs, {s['runs_same_verdict']} same verdict, {s['K']['natural'] + s['K']['injected']} negative "
           f"controls ({s['K']['natural']} natural, {s['K']['injected']} injected, {s['K']['failed']} failed); "
           f"{s.get('link_windows', 0)} link-windows compared, {s.get('same', 0)} same; errors {len(s['errors'])}; "
-          f"{len(s['left_out'])} configurations left out")
+          f"{len(s['left_out'])} configurations left out; {len(s['runs_without_link_windows'])} runs without link-windows")
     return 0 if s["runs"] == s["runs_same_verdict"] and not s["K"]["failed"] and not s["errors"] else 1
 
 
