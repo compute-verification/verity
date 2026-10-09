@@ -1349,6 +1349,9 @@
    "assumptions": [],
    "type_hash": "258ffa5e095a1e3d8bb0a17f85efd8f136259467a95b03ee876dfa67a33ac85a"
   },
+  "FlockSoundness.Discharge.ZkHidden.witnessV2_scope": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1": {
    "owner": "@proofs",
    "signature": [
@@ -1503,6 +1506,9 @@
    ],
    "assumptions": [],
    "type_hash": "88c41a7508c1fc38a14af0383685a070a2e6a704e11d2b87b418df90b894a291"
+  },
+  "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous_v2": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous": {
    "owner": "@proofs",
