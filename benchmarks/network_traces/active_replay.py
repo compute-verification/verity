@@ -96,7 +96,7 @@ from verity.core.protocols.certifier.active import (
     encode_frame,
     worker,
 )
-from verity.core.protocols.certifier.audit import Audit
+from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.commitment import CommittedRecord, commit
 from verity.core.protocols.certifier.grid import (
