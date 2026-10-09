@@ -52,13 +52,13 @@ abbrev interpret (c : Circ p) (x : Fin p.nIn → Bool) : Fin p.nOut → Bool := 
 
 /-- **The description's outputs are its decoded circuit's**, for every description and input, with no well-formedness
 hypothesis. -/
-theorem eval_eq_interpret (d : Desc p) (x : Fin p.nIn → Bool) : d.eval x = interpret (decode d) x :=
+theorem eval_eq_interpret (d : Desc p) (x : Fin p.nIn → Bool) : d.eval x = interpret (UniversalClass.decode d) x :=
   (eval_decode d x).symm
 
 /-- **What the unit computes, as the decoded circuit**: on any input bits, the type's outputs are
 `interpret (decode d) x` of the description `d` and the data `x` those bits hold. -/
 theorem eval_uuType_interpret (x : ℕ → Bool) :
-    eval (uuType p) x = List.ofFn (interpret (decode (descOf (p := p) x)) (dataOf x)) := by
+    eval (uuType p) x = List.ofFn (interpret (UniversalClass.decode (descOf (p := p) x)) (dataOf x)) := by
   rw [eval_uuType, eval_eq_interpret]
 
 /-- `uu_rows_iff` with the decoded circuit: the unit's rows carry outputs `y` on description `d` and data `x` exactly
@@ -67,26 +67,26 @@ theorem uu_rows_iff_interpret {inSplit outSplit : List ℕ} {dd : Derived}
     (hd : derive (uuType p) inSplit outSplit = .ok dd) (d : Desc p) (xs : Fin p.nIn → Bool) (y : Fin p.nOut → Bool) :
     (∃ z : ℕ → Bool, Sat dd.rows z ∧ z dd.geo.const = true ∧ (∀ j : Fin p.width, z (dd.inCol j) = d j) ∧
       (∀ a : Fin p.nIn, z (dd.inCol (p.width + a)) = xs a) ∧ ∀ i : Fin p.nOut, z (dd.outCol i) = y i) ↔
-      y = interpret (decode d) xs := by
+      y = interpret (UniversalClass.decode d) xs := by
   rw [← eval_eq_interpret]
   exact uu_rows_iff hd d xs y
 
 /-- `uu_unit_sound` with the decoded circuit: a typed statement's unit rows, satisfied with `one` at 1, carry on each
 output column `interpret (decode d) x` of their description columns `d` and data columns `x`. -/
-theorem uu_unit_sound_interpret {types : String → Option CircuitType} {ls : Array Layout}
+theorem uu_unit_sound_interpret {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array DeriveAll.D}
     (hd : DeriveAll.deriveChecked types ls info words unit = .ok done)
     (ht : (ls.getD unit default).type.bind types = some (uuType p)) (one : ℕ) (z : ℕ → Bool)
     (hz : Dag.SatAt (DeriveAll.blockRow words (done.getD unit default) one) z) (h1 : z one = true) (i : Fin p.nOut) :
     z ((done.getD unit default).outCols.getD i 0) =
-      interpret (decode fun j : Fin p.width => z ((done.getD unit default).inCols.getD j 0))
+      interpret (UniversalClass.decode fun j : Fin p.width => z ((done.getD unit default).inCols.getD j 0))
         (fun a => z ((done.getD unit default).inCols.getD (p.width + a) 0)) i :=
   (uu_unit_sound hd ht one z hz h1 i).trans (congrFun (eval_eq_interpret _ _) i)
 
 /-! ## Faulty -/
 
 /-- **A faulty instance**: claimed outputs `y` that differ from the decoded circuit's on the inputs `x`. -/
-def Faulty (d : Desc p) (x : Fin p.nIn → Bool) (y : Fin p.nOut → Bool) : Prop := y ≠ interpret (decode d) x
+def Faulty (d : Desc p) (x : Fin p.nIn → Bool) (y : Fin p.nOut → Bool) : Prop := y ≠ interpret (UniversalClass.decode d) x
 
 theorem faulty_iff_eval {d : Desc p} {x : Fin p.nIn → Bool} {y : Fin p.nOut → Bool} : Faulty d x y ↔ y ≠ d.eval x := by
   rw [Faulty, eval_eq_interpret]
@@ -102,7 +102,7 @@ theorem faulty_iff_unsat {inSplit outSplit : List ℕ} {dd : Derived} (hd : deri
 
 /-- **A typed statement's satisfied unit rows are no faulty instance**: when the unit's description, data and output
 columns hold `d`, `x` and `y`, then `y = interpret (decode d) x`. -/
-theorem not_faulty_of_unit {types : String → Option CircuitType} {ls : Array Layout}
+theorem not_faulty_of_unit {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array DeriveAll.D}
     (hd : DeriveAll.deriveChecked types ls info words unit = .ok done)
     (ht : (ls.getD unit default).type.bind types = some (uuType p)) (one : ℕ) (z : ℕ → Bool)
@@ -323,7 +323,7 @@ which its claimed outputs are `interpret (decode d) x`. -/
 theorem not_faulty_at {ι : Type} {π : Fin p.width → ℕ × ℕ} {ρx : ι → Fin p.nIn → ℕ × ℕ}
     {ρy : ι → Fin p.nOut → ℕ × ℕ} {q qs : ℕ → ByteArray} (u : ι) (rows srows : ℕ → ByteArray)
     (hr : RowsOpen π q rows) (hsx : RowsOpen (ρx u) qs srows) (hsy : RowsOpen (ρy u) qs srows)
-    (hok : rowBits (ρy u) srows = interpret (decode (rowBits π rows)) (rowBits (ρx u) srows)) :
+    (hok : rowBits (ρy u) srows = interpret (UniversalClass.decode (rowBits π rows)) (rowBits (ρx u) srows)) :
     ¬ ∀ rows srows : ℕ → ByteArray, RowsOpen π q rows → RowsOpen (ρx u) qs srows → RowsOpen (ρy u) qs srows →
       Faulty (rowBits π rows) (rowBits (ρx u) srows) (rowBits (ρy u) srows) :=
   fun h => h rows srows hr hsx hsy hok
