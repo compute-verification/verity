@@ -52,13 +52,14 @@ bytes and salts is a SHA-512 collision: of the outer hash, of the salt digest, o
 theorem registered_weights_hm96 (hHm : rs.Computes) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)
     (M : Msg plan tab S R u) (hM : Sat plan tab S R u M) {g : Fin C.N} (hg : g ∈ P.io u) (hrow : rs.isRow (lay.pos g))
     (wv : lay.Val) (ws : List UInt8)
-    (hw : (ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf wv ws = lay.regLeaf R (lay.pos g)) :
+    (hw : (ExplicitLeaf.hm96 (rs.enc (lay.pos g)) (rs.enc_inj (lay.pos g))).leaf wv ws = lay.regLeaf R (lay.pos g)) :
     lay.row S R u M (lay.pos g) = wv ∨
-      Collides (hm96Pair (rs.enc (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g)) (rs.enc wv) ws) := by
+      Collides (hm96Pair (rs.enc (lay.pos g) (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g))
+        (rs.enc (lay.pos g) wv) ws) := by
   by_cases hv : lay.row S R u M (lay.pos g) = wv
   · exact Or.inl hv
-  · refine Or.inr (hm96Pair_spec _ _ _ _ (fun e => hv (rs.enc_inj e)) ?_)
-    have hs : rs.scheme (lay.pos g) = ExplicitLeaf.hm96 rs.enc rs.enc_inj := by
+  · refine Or.inr (hm96Pair_spec _ _ _ _ (fun e => hv (rs.enc_inj _ e)) ?_)
+    have hs : rs.scheme (lay.pos g) = ExplicitLeaf.hm96 (rs.enc (lay.pos g)) (rs.enc_inj (lay.pos g)) := by
       simp only [scheme, hrow, ↓reduceIte]
     have hr := rs.registered hHm S R u hu M hM g hg
     rw [hs] at hr

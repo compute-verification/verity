@@ -595,8 +595,8 @@ noncomputable def keyLayout (encO : BitVal (Finset.univ.sup rowW + 1) → List U
 variable (rowW) in
 /-- **`rs` at `keyProg`'s places**: the readers' rows (`Readers.rows`), from `keyProg_copies`, `keyProg_bcPinned` and
 `keyProg_valPinned`. -/
-noncomputable def keyRows (enc : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
-    (enc_inj : Function.Injective enc) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
+noncomputable def keyRows (enc : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n) → BitVal (Finset.univ.sup rowW + 1) → List UInt8)
+    (enc_inj : ∀ q, Function.Injective (enc q)) (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8)
     (encO_inj : Function.Injective encO)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)

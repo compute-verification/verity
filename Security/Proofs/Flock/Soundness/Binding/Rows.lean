@@ -28,8 +28,8 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
 /-- **A layout's `hm96-sha512/row/v1` or `/row/v2` rows**: which commit strings are rows (`isRow`), the bytes the row
-digest hashes for a row (`enc`, injective: `sha512/row/v1`'s row prefix then its words, or `sha512/row/v2`'s `P(ℓ)` then
-its bits, `v2`), the leaf scheme of the other commit strings (`other`), and
+digest hashes for a row at each commit string (`enc`, injective at each: `sha512/row/v1`'s row prefix then its words, or
+`sha512/row/v2`'s `P(ℓ)` then its bits, `v2`; a circuit's rows may be of either kind, each its own), the leaf scheme of the other commit strings (`other`), and
 where a drawn unit's table's witness holds a row's commit string `b ‖ c`: the addresses of its `hm96` slot's 128 output
 bytes, bit by bit (`bcAt`). Two facts about the layout:
 * `bc_registered`: in a satisfying witness, at each of the unit's wires held by a row, `SHA-512(leaf_prefix ‖ b ‖ c)` of
@@ -39,8 +39,8 @@ bytes, bit by bit (`bcAt`). Two facts about the layout:
 structure HmRows (lay : Layout P plan tab decode) where
   isRow : lay.Pos → Prop
   [decRow : DecidablePred isRow]
-  enc : lay.Val → List UInt8
-  enc_inj : Function.Injective enc
+  enc : lay.Pos → lay.Val → List UInt8
+  enc_inj : ∀ p, Function.Injective (enc p)
   other : lay.Pos → ExplicitLeaf lay.Val
   bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → lay.Pos → Fin 128 → Fin 8 →
     Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m)
@@ -65,8 +65,8 @@ def HmRows.v2 {lay : Layout P plan tab decode} (isRow : lay.Pos → Prop) [Decid
       (other (lay.pos g)).leaf (lay.row S R u M (lay.pos g)) (lay.salt S R u M (lay.pos g)) = lay.regLeaf R (lay.pos g)) :
     HmRows lay where
   isRow := isRow
-  enc v := FlockLevel3.RowV2.enc (bits v).1
-  enc_inj := FlockLevel3.RowV2.enc_inj.comp hbits
+  enc _ v := FlockLevel3.RowV2.enc (bits v).1
+  enc_inj _ := FlockLevel3.RowV2.enc_inj.comp hbits
   other := other
   bcAt := bcAt
   bc_registered := bc_registered
@@ -88,7 +88,7 @@ variable {lay : Layout P plan tab decode} (rs : HmRows lay)
 
 /-- Each commit string's leaf scheme: `hm96-sha512/row/v1` at a row, `other` elsewhere. -/
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
-  if rs.isRow p then ExplicitLeaf.hm96 rs.enc rs.enc_inj else rs.other p
+  if rs.isRow p then ExplicitLeaf.hm96 (rs.enc p) (rs.enc_inj p) else rs.other p
 
 /-- **`HmRowComputes` at the drawn units' rows**: at each wire of a drawn unit held by a row, in a satisfying witness of
 the unit's table, the `b ‖ c` the row's `hm96` slot outputs (the witness's bytes at `bcAt`) is the commit string of the
@@ -97,7 +97,7 @@ def Computes : Prop :=
   Assumptions.HmRowComputes (fun l => digBytes (H512 l)) K512.saltPrefix K512.mask
     (fun w : RowSite plan tab C.N =>
       w.u ∈ w.S ∧ Sat plan tab w.S w.R w.u w.M ∧ w.g ∈ P.io w.u ∧ rs.isRow (lay.pos w.g))
-    (fun w => rs.enc (lay.row w.S w.R w.u w.M (lay.pos w.g)))
+    (fun w => rs.enc (lay.pos w.g) (lay.row w.S w.R w.u w.M (lay.pos w.g)))
     (fun w => lay.salt w.S w.R w.u w.M (lay.pos w.g))
     (fun w => bytesAt (wit plan tab w.S w.R w.u w.M) (rs.bcAt w.S w.R w.u (lay.pos w.g)))
 
@@ -108,7 +108,7 @@ theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
   unfold scheme
   split_ifs with hrow
   · have hc : bytesAt (wit plan tab S R u M) (rs.bcAt S R u (lay.pos g)) =
-        commitString (rs.enc (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g)) :=
+        commitString (rs.enc (lay.pos g) (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g)) :=
       hHm ⟨S, R, u, M, g⟩ ⟨hu, hM, hg, hrow⟩
     have hb := rs.bc_registered S R u hu M hM g hg hrow
     rw [hc] at hb

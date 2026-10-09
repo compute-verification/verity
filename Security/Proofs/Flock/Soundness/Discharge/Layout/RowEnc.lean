@@ -5,14 +5,16 @@ set_option Elab.async false
 /-!
 # The bytes `sha512/row/v1` hashes for a row
 
-`Binding.HmRows.enc` is the byte string `HmRowComputes` says a row's `hm96` slot commits to: for port `p`'s row of
-`words` u16 words, the circuit's `sha512x3` slots hash `rowPrefix words` and the row's `2 · words` bytes at
+`Binding.HmRows.enc` is the byte string `HmRowComputes` says a row's `hm96` slot commits to, per position: for port
+`p`'s row of `words` u16 words, the circuit's `sha512x3` slots hash `rowPrefix words` and the row's `2 · words` bytes at
 `Typed.msgCol` ([e2e-hm]'s `Discharge.Hm.port_commit`). The layout's values carry their width (`BitVal`), so one
 injective `enc` recovers each port's words from its value:
 
 * `rowEnc`: `rowPrefix w ‖ bytes` for a value of `16 w` bits with nothing set past them (`RowShaped`), and a longer code
   of every other value; `rowEnc_inj`;
 * `rowEnc_row`: at a row of `16 k` bits it is `rowPrefix k` and the row's `2 k` bytes;
+* `rowEncP`, `rowEncP_inj`, `rowEncP_row`: the same under any 128-byte prefix of the row's width (`pre w`), such as
+  `HmRow.prefixOf` of a `sha512/row/v2` bit row;
 * `keyRow_enc`: at `keyProg`'s places, row port `q` of `16 · words` bits (`rowW q`) holds a value whose `rowEnc` is
   `rowPrefix words` and the `2 · words` bytes the witness holds at the drawn unit's message columns, `port_commit`'s
   row with the block's bits at the site;
@@ -197,6 +199,82 @@ theorem rowEnc_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → 
   have hj : 8 * j + t.val < K := by simp at h2; omega
   simp only [BitVal.get, show 8 * j + t.val < W by omega, ↓reduceDIte, padBits, hj]
 
+/-! ## Under any 128-byte prefix
+
+`rowEnc` with `HmRow.rowPrefix` replaced by any prefix `pre` of 128 bytes per word count (`rowEncP`): for a row whose
+first block is `HmRow.prefixOf p`, `fun _ => HmRow.prefixOf p`. -/
+
+/-- **The bytes a row's digest hashes for a value under `pre`**: a row of `w` words is `pre w` and its `2 w` bytes; any
+other value is `128 + W` zero bytes and `bitCode`, longer than every row. -/
+def rowEncP (pre : ℕ → ByteArray) (v : BitVal W) : List UInt8 :=
+  if RowShaped v then (pre (v.1.val / 16)).data.toList ++ rowBytes v
+  else List.replicate (128 + W) 0 ++ bitCode v
+
+theorem rowEncP_other_length (pre : ℕ → ByteArray) {v : BitVal W} (h : ¬ RowShaped v) :
+    (rowEncP pre v).length = 128 + W + (2 * W + 1) := by
+  simp only [rowEncP, h, ↓reduceIte, List.length_append, List.length_replicate, bitCode_length]
+
+section Pre
+
+variable {pre : ℕ → ByteArray} (hpre : ∀ w, (pre w).size = 128)
+include hpre
+
+theorem pre_length (w : ℕ) : (pre w).data.toList.length = 128 := by
+  rw [Array.length_toList]
+  exact hpre w
+
+theorem rowEncP_row_length {v : BitVal W} (h : RowShaped v) :
+    (rowEncP pre v).length = 128 + 2 * (v.1.val / 16) := by
+  simp only [rowEncP, h, ↓reduceIte, List.length_append, pre_length hpre, rowBytes, List.length_ofFn]
+
+/-- **`rowEncP` is injective**: `rowEnc_inj`'s argument, which reads the prefix only through its 128 bytes. -/
+theorem rowEncP_inj : Function.Injective (rowEncP (W := W) pre) := by
+  intro v w h
+  have hv1 := v.1.isLt
+  have hw1 := w.1.isLt
+  by_cases hv : RowShaped v <;> by_cases hw : RowShaped w
+  · have hl := congrArg List.length h
+    rw [rowEncP_row_length hpre hv, rowEncP_row_length hpre hw] at hl
+    have hk : v.1 = w.1 := Fin.ext (by have := hv.1; have := hw.1; omega)
+    simp only [rowEncP, hv, hw, ↓reduceIte] at h
+    obtain ⟨-, hb⟩ := List.append_inj h (by rw [pre_length hpre, pre_length hpre])
+    refine Prod.ext hk (funext fun i => ?_)
+    by_cases hi : i.val < v.1.val
+    · exact get_of_rowBytes hv hk hb i hi
+    · rw [hv.2 i (by omega), hw.2 i (by rw [← hk]; omega)]
+  · have hl := congrArg List.length h
+    rw [rowEncP_row_length hpre hv, rowEncP_other_length pre hw] at hl
+    omega
+  · have hl := congrArg List.length h
+    rw [rowEncP_other_length pre hv, rowEncP_row_length hpre hw] at hl
+    omega
+  · simp only [rowEncP, hv, hw, ↓reduceIte] at h
+    exact bitCode_inj (List.append_inj h rfl).2
+
+end Pre
+
+/-- **`rowEncP` of a row of `16 k` bits**: `pre k` and the row's `2 k` bytes, byte `j`'s bit `t` its bit `8 j + t`. -/
+theorem rowEncP_row (pre : ℕ → ByteArray) {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → Bool) :
+    rowEncP pre (widthOf W K, (padBits b : Fin W → Bool)) =
+      (pre k).data.toList ++
+        List.ofFn fun j : Fin (2 * k) => byteOf fun t => b ⟨8 * j.val + t.val, by omega⟩ := by
+  have hw : (widthOf W K).val = K := by simp only [widthOf]; omega
+  have hs : RowShaped (widthOf W K, (padBits b : Fin W → Bool)) :=
+    ⟨by rw [hw, hK]; omega, fun i hi => by
+      change (widthOf W K).val ≤ i.val at hi
+      rw [hw] at hi
+      simp only [padBits, show ¬ i.val < K by omega, ↓reduceDIte]⟩
+  have hk : (widthOf W K).val / 16 = k := by rw [hw, hK]; omega
+  simp only [rowEncP, hs, ↓reduceIte]
+  rw [hk]
+  congr 1
+  refine List.ext_getElem (by simp [rowBytes, hk]) fun j h1 h2 => ?_
+  simp only [rowBytes, List.getElem_ofFn]
+  congr 1
+  funext t
+  have hj : 8 * j + t.val < K := by simp at h2; omega
+  simp only [BitVal.get, show 8 * j + t.val < W by omega, ↓reduceDIte, padBits, hj]
+
 /-! ## At `keyProg`'s rows -/
 
 open Placed
@@ -249,8 +327,8 @@ noncomputable def keyRowsEnc (ho : c.outNet = c.unitNet)
     (hz1 : ((keyProg c hU n).partition outs).ZeroCols plan tab (keyPlace hparse outs)
       {zeroG (c := c) (hU := hU) (n := n)}) :
     Binding.HmRows (keyLayout rowW hparse outs saltCol popOf (outBitOf c hU n outs popOf) bitCode) :=
-  keyRowsOut (outs := outs) (popOf := popOf) (hparse := hparse) (rowW := rowW) (saltCol := saltCol) rowEnc
-    rowEnc_inj bitCode bitCode_inj ho hsite hkeys houts hc1 hz1
+  keyRowsOut (outs := outs) (popOf := popOf) (hparse := hparse) (rowW := rowW) (saltCol := saltCol) (fun _ => rowEnc)
+    (fun _ => rowEnc_inj) bitCode bitCode_inj ho hsite hkeys houts hc1 hz1
 
 /-- `keyRowsEnc`'s `enc` is `rowEnc`. -/
 theorem keyRowsEnc_enc (ho : c.outNet = c.unitNet)
@@ -262,6 +340,6 @@ theorem keyRowsEnc_enc (ho : c.outNet = c.unitNet)
     (hz1 : ((keyProg c hU n).partition outs).ZeroCols plan tab (keyPlace hparse outs)
       {zeroG (c := c) (hU := hU) (n := n)}) :
     (keyRowsEnc (rowW := rowW) (hparse := hparse) (saltCol := saltCol) ho hsite hkeys houts hc1 hz1).enc =
-      rowEnc := rfl
+      fun _ => rowEnc := rfl
 
 end FlockSoundness.Discharge.Layout

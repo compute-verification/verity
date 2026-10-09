@@ -100,9 +100,9 @@ noncomputable def layout (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies 
   ofBits place rd.Pos rd.W rd.pos rd.idx (rd.regLeaf encO) rd.rowBits rd.hidx
     (fun S R u q k => rd.rowAt S R u q k.val) rd.saltAt hcopy
 
-/-- **The layout's rows**: `hm96-sha512/row/v1` at the readers' rows, with `enc` the bytes `sha512/row/v1` hashes, and a
-plain leaf `SHA-512(encO v)` elsewhere. `bc_registered` is `BcPinned` and `other_registered` is `ValPinned`. -/
-noncomputable def rows (enc : BitVal rd.W → List UInt8) (enc_inj : Function.Injective enc)
+/-- **The layout's rows**: `hm96-sha512` at the readers' rows, with `enc q` the bytes commit string `q`'s row hashes,
+and a plain leaf `SHA-512(encO v)` elsewhere. `bc_registered` is `BcPinned` and `other_registered` is `ValPinned`. -/
+noncomputable def rows (enc : rd.Pos → BitVal rd.W → List UInt8) (enc_inj : ∀ q, Function.Injective (enc q))
     (encO : BitVal rd.W → List UInt8) (encO_inj : Function.Injective encO) (hcopy : rd.Copies place)
     (hbc : rd.BcPinned (P := P)) (hval : rd.ValPinned (P := P)) : Binding.HmRows (rd.layout place encO hcopy) where
   isRow := rd.isRow

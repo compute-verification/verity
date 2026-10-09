@@ -57,7 +57,7 @@ theorem keyedRows_enc (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
     (houts : OutsOut c hU n outs) (hkeys : KeysRow c hU (portRowW c)) :
-    (keyedRows hparse saltCol ho hsite houts hkeys).enc = rowEnc := rfl
+    (keyedRows hparse saltCol ho hsite houts hkeys).enc = fun _ => rowEnc := rfl
 
 variable {outs popOf} in
 /-- **`rs` at the production program's places, with `KeysRow` from the parse** (`keysRow_of_parse`): the circuit's unit

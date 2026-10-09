@@ -62,7 +62,7 @@ structure Reads (lay : Layout P plan tab decode) (rs : HmRows lay) where
   ws : lay.Pos → List UInt8
   wpath : lay.Pos → ByteArray
   committed : ∀ p, isRead p →
-    Flock.Registered.opensLeaf (port p) ((ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (wv p) (ws p)).1 (readAt p)
+    Flock.Registered.opensLeaf (port p) ((ExplicitLeaf.hm96 (rs.enc p) (rs.enc_inj p)).leaf (wv p) (ws p)).1 (readAt p)
       (wpath p) = true
 
 namespace Reads
@@ -70,7 +70,7 @@ namespace Reads
 variable {lay : Layout P plan tab decode} {rs : HmRows lay} (rd : Reads lay rs)
 
 /-- The registrant's leaf at `p`: hm96's leaf of the row and salt it committed there. -/
-def leaf (p : lay.Pos) : Dig := (ExplicitLeaf.hm96 rs.enc rs.enc_inj).leaf (rd.wv p) (rd.ws p)
+def leaf (p : lay.Pos) : Dig := (ExplicitLeaf.hm96 (rs.enc p) (rs.enc_inj p)).leaf (rd.wv p) (rd.ws p)
 
 /-- **What the verifier's registered check establishes** at the registration `R` (`Flock.Registered.check_ok`, read at the
 model's leaves): at each registered read `p`, the session's leaf there (`Layout.regLeaf`) opens the root the verifier

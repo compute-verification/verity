@@ -120,8 +120,8 @@ end LayoutZ
 structure HmRowsZ (lay : LayoutZ A P planZ tab decode) where
   isRow : lay.Pos → Prop
   [decRow : DecidablePred isRow]
-  enc : lay.Val → List UInt8
-  enc_inj : Function.Injective enc
+  enc : lay.Pos → lay.Val → List UInt8
+  enc_inj : ∀ p, Function.Injective (enc p)
   other : lay.Pos → ExplicitLeaf lay.Val
   bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → lay.Pos → Fin 128 → Fin 8 →
     Fin (2 ^ (tabOfZ planZ tab S R u).S.m)
@@ -147,7 +147,7 @@ variable {lay : LayoutZ A P planZ tab decode} (rs : HmRowsZ lay)
 
 /-- Each commit string's leaf scheme: `hm96-sha512/row/v1` at a row, `other` elsewhere. -/
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
-  if rs.isRow p then ExplicitLeaf.hm96 rs.enc rs.enc_inj else rs.other p
+  if rs.isRow p then ExplicitLeaf.hm96 (rs.enc p) (rs.enc_inj p) else rs.other p
 
 /-- **`HmRowComputes` at the drawn units' rows of `--zk` tables**: at each wire of a drawn unit held by a row, in a
 satisfying witness of the unit's table, the `b ‖ c` the row's `hm96` slot outputs is the commit string of the row's
@@ -156,7 +156,7 @@ def Computes : Prop :=
   Assumptions.HmRowComputes (fun l => digBytes (H512 l)) K512.saltPrefix K512.mask
     (fun w : RowSiteZ planZ tab C.N =>
       w.u ∈ w.S ∧ SatZ A planZ tab w.S w.R w.u w.M ∧ w.g ∈ P.io w.u ∧ rs.isRow (lay.pos w.g))
-    (fun w => rs.enc (lay.row w.S w.R w.u w.M (lay.pos w.g)))
+    (fun w => rs.enc (lay.pos w.g) (lay.row w.S w.R w.u w.M (lay.pos w.g)))
     (fun w => lay.salt w.S w.R w.u w.M (lay.pos w.g))
     (fun w => bytesAt (witZ A planZ tab w.S w.R w.u w.M) (rs.bcAt w.S w.R w.u (lay.pos w.g)))
 
@@ -166,7 +166,7 @@ theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
   unfold scheme
   split_ifs with hrow
   · have hc : bytesAt (witZ A planZ tab S R u M) (rs.bcAt S R u (lay.pos g)) =
-        commitString (rs.enc (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g)) :=
+        commitString (rs.enc (lay.pos g) (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g)) :=
       hHm ⟨S, R, u, M, g⟩ ⟨hu, hM, hg, hrow⟩
     have hb := rs.bc_registered S R u hu M hM g hg hrow
     rw [hc] at hb

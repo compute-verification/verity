@@ -78,8 +78,8 @@ theorem registered_weights (hHm : rs.Computes) {S : Finset (Fin n)} {R : Reg} {u
     (M : Msg plan tab S R u) (hM : Sat plan tab S R u M) {g : Fin C.N} (hg : g ∈ P.io u)
     (hrd : rd.isRead (lay.pos g)) {path : lay.Pos → ByteArray} (hc : rd.Checked R path) :
     lay.row S R u M (lay.pos g) = rd.wv (lay.pos g) ∨
-      Collides (hm96Pair (rs.enc (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g))
-        (rs.enc (rd.wv (lay.pos g))) (rd.ws (lay.pos g))) ∨
+      Collides (hm96Pair (rs.enc (lay.pos g) (lay.row S R u M (lay.pos g))) (lay.salt S R u M (lay.pos g))
+        (rs.enc (lay.pos g) (rd.wv (lay.pos g))) (rd.ws (lay.pos g))) ∨
       Collides (rd.openings R path (lay.pos g)).pair := by
   rcases rd.regLeaf_eq hc hrd with h | h
   · exact (rs.registered_weights_hm96 hHm hu M hM hg (rd.read_row _ hrd) (rd.wv _) (rd.ws _) h.symm).imp_right Or.inl
