@@ -36,9 +36,11 @@ cd "$tree"
 echo "train: ${sha:0:12} on $machine; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
 setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going "$@" > "$log" 2>&1 < /dev/null &
+pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
 want=1 ids=
 for _ in $(seq 120); do
+  kill -0 "$pid" 2>/dev/null || break
   ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
   on=$(grep -m1 -oE '^check: --on: twins [^ ]+ on [^:]+' "$log" | sed 's/^.* on //') || true
   [ -z "$on" ] || want=$(( $(tr -cd , <<<"$on" | wc -c) + 1 ))
@@ -46,7 +48,13 @@ for _ in $(seq 120); do
   grep -qE "refused|Traceback" "$log" && break
   sleep 5
 done
+ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
 grep -E "^check:|refused|rror" "$log" | head -5 || true
+if [ -z "${ids// /}" ] && ! kill -0 "$pid" 2>/dev/null; then
+  rc=0; wait "$pid" || rc=$?
+  echo "train: check.py exited $rc before launching a run$([ "$rc" = 137 ] && echo ' (killed: SIGKILL, the OOM killer when memory runs out)'); see $log" >&2
+  exit $(( rc ? rc : 1 ))
+fi
 [ -n "${ids// /}" ] || { echo "train: no run launched; see $log" >&2; exit 1; }
 [ "$(wc -w <<<"$ids")" -ge "$want" ] || echo "train: $want twins, but only these launched; see $log" >&2
 echo "RUN ${ids% }"
