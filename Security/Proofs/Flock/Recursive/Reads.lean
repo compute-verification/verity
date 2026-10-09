@@ -48,19 +48,14 @@ theorem StmtRead.opens {own : Array Flock.Registered.Port} {rt : Flock.Registere
     Flock.Registered.opens rt bc i path = true := by
   obtain ⟨t, idx, p, positions, paths, u, ht, hidx, hp, hent, hu, hi, rfl, rfl⟩ := h
   obtain ⟨t', idx', ht', hidx', hports⟩ := ZkReg.check_tables (ZkReg.checkRegistered_ok hck)
-  rw [ht] at ht'
-  cases ht'
-  rw [hidx] at hidx'
-  cases hidx'
+  obtain rfl := Option.some.inj (ht.symm.trans ht')
+  obtain rfl := Except.ok.inj (hidx.symm.trans hidx')
   obtain ⟨p', positions', paths', hp', hent', hall⟩ := ZkReg.checkPort_at (hports rt hrt)
-  rw [hp] at hp'
-  cases hp'
-  rw [hent] at hent'
-  cases hent'
+  obtain rfl := Option.some.inj (hp.symm.trans hp')
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hent.symm.trans hent'))
   obtain ⟨-, hreads, hopens⟩ := hall u hu
-  rw [hi] at hreads
   have hpos : i = positions.getD (Flock.Registered.ref t st.c.ports.size p u) 0 :=
-    Option.some.inj (Option.some.inj hreads)
+    Option.some.inj (Option.some.inj (hi.symm.trans hreads))
   rw [hpos]
   exact hopens
 
@@ -82,8 +77,7 @@ theorem ReadV.opens {zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {rt : Fl
     (h : ReadV zs rt o i bc path) : Flock.Registered.opens rt bc i path = true := by
   obtain ⟨j, spec, sts, k, hk, hrt, hs, hst⟩ := h
   obtain ⟨spec', sts', hs', hreg, -⟩ := (show Accepts (zs o.1) o.2 from hacc) j
-  rw [hs] at hs'
-  cases hs'
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hs.symm.trans hs'))
   exact hst.opens (ZkExec.array_forM_ok hreg k hk) hrt
 
 variable {Reg Ω H : Type} (zs : Reg → Ω → H → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -97,6 +91,11 @@ def readsZ (o : Reg × Ω × H × (Reg₂ × VRec Vs Reg' dg N)) (i : ℕ) : Pro
 /-- One read of row `i` of `rt` at `o`: its commit string and path (any pair when there is none). -/
 noncomputable def readZ (o : Reg × Ω × H × (Reg₂ × VRec Vs Reg' dg N)) (i : ℕ) : ByteArray × ByteArray :=
   Classical.epsilon fun x : ByteArray × ByteArray => ReadV (zs o.1 o.2.1 o.2.2.1) rt o.2.2.2 i x.1 x.2
+
+/-- `readZ` is a read wherever there is one. -/
+theorem readZ_spec (o : Reg × Ω × H × (Reg₂ × VRec Vs Reg' dg N)) (i : ℕ) (hi : readsZ zs rt o i) :
+    ReadV (zs o.1 o.2.1 o.2.2.1) rt o.2.2.2 i (readZ zs rt o i).1 (readZ zs rt o i).2 :=
+  Classical.epsilon_spec (p := fun x : ByteArray × ByteArray => ReadV (zs o.1 o.2.1 o.2.2.1) rt o.2.2.2 i x.1 x.2) hi
 
 /-- **The commit string a run read at row `i`.** -/
 noncomputable def rowZ (o : Reg × Ω × H × (Reg₂ × VRec Vs Reg' dg N)) (i : ℕ) : ByteArray :=
@@ -112,6 +111,6 @@ theorem opens_of_accepts (o : Reg × Ω × H × (Reg₂ × VRec Vs Reg' dg N))
     (hacc : AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2) (i : ℕ) (hi : readsZ zs rt o i) :
     (opZ zs rt o i).1 = rt ∧ (opZ zs rt o i).2.1 = rowZ zs rt o i ∧
       Flock.Registered.opens rt (rowZ zs rt o i) i (opZ zs rt o i).2.2 = true :=
-  ⟨rfl, rfl, ReadV.opens hacc (Classical.epsilon_spec hi)⟩
+  ⟨rfl, rfl, ReadV.opens hacc (readZ_spec zs rt o i hi)⟩
 
 end FlockSoundness.Discharge.Recursion
