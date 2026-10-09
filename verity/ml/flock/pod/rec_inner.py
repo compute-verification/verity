@@ -171,7 +171,9 @@ def _private(B, cls: str, n: int, seed: int, netlist: Path | None) -> tuple:
 def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = None, fast: bool | None = None,
               salt_key: bytes | None = None, outside: bool = False) -> dict:
     """A hidden netlist as the inner statement: ``UniversalUnit_v1{G, N_IN, N_OUT}`` as `program_unit`'s class statement
-    (`class_statement.stage`, words packed, plain leaves), one Call partitioned by ``Q_template_instance``, of a random netlist
+    (`class_statement.stage`, words packed, plain leaves, in argument order: `universal.build`'s gates in its order over the
+    rows ``prog`` then ``x``, each leaf ``j`` bit ``j mod 16`` of word ``j // 16``), one Call partitioned by
+    ``Q_template_instance``, of a random netlist
     of 3/4 of the class's gates over 3/4 of its inputs padded to the class (`universal.pad`), on ``n`` random x. The netlist's
     ``op``, ``src`` and ``out`` are one row every instance opens (committed once: the registered program), ``x`` a row per
     instance, the outputs hidden rows; every salt from the OS (`_os_salts`), or derived from ``salt_key`` when one is given (a
@@ -191,6 +193,7 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
     B = _benchmark()
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
+    from verity_flock import universal_stage as US
 
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.defs import bind
@@ -222,11 +225,9 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
     for name, _nl in nets:
         shutil.rmtree(out / name, ignore_errors=True)
     if fast:
-        from verity_flock import universal_stage as US
-
         gates = US.trace(G, N_IN, N_OUT)
         digests = US.program_digests(gates, program_unit)
-        st = US.stage(gates, US.unit(gates, program_row=True), digests, nets, xs, out, salt_key)
+        st = US.stage(gates, US.unit(gates, program_row=True, argument_order=True), digests, nets, xs, out, salt_key)
         built = digests()[0]
         for name, nl in nets:
             if st[name]["outputs"] != [U.interpret(nl, x) for x in xs]:
@@ -245,7 +246,7 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
             if [[outs[j][t] for j in range(N_OUT)] for t in range(n)] != want:
                 raise AssertionError(f"{name}: the unit's transcript disagrees with universal.interpret")
             d = out / name
-            st = CS.stage(units, B.SPEC, shape, cl, (ins, outs, idents), d, salt_key, packed=True)
+            st = CS.stage(units, B.SPEC, shape, cl, (ins, outs, idents), d, salt_key, packed=True, build=US.build_of(G, N_IN, N_OUT))
             if st["n"] != n:
                 raise AssertionError(f"staging capped the instances at {st['n']}, not {n}")
             (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))

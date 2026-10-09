@@ -193,6 +193,22 @@ def trace(G: int, N_IN: int, N_OUT: int) -> Gates:
     return Gates(G, N_IN, N_OUT, first, E.kind[:n].copy(), E.a[:n].copy(), E.b[:n].copy(), E.depth[:n].copy(), outputs)
 
 
+def build_of(G: int, N_IN: int, N_OUT: int):
+    """`class_statement.class_lowering`'s ``build`` for ``UniversalUnit_v1{G, N_IN, N_OUT}`` (or `rec_inner.program_unit`'s,
+    whose leaves are the same): `universal.build` over the leaves ``(op, src, out, x)``, one bit each."""
+    K = U.index_bits(G, N_IN)
+
+    def build(C, leaves):
+        b = [w[0] for w in leaves]
+        op, src, out, x = (b[:2 * G], b[2 * G:2 * G * (1 + K)], b[2 * G * (1 + K):2 * G * (1 + K) + N_OUT * K],
+                           b[2 * G * (1 + K) + N_OUT * K:])
+        elements = ([op[2 * g:2 * g + 2] for g in range(G)] + [src[i * K:(i + 1) * K] for i in range(2 * G)]
+                    + [out[i * K:(i + 1) * K] for i in range(N_OUT)] + [x])
+        return [[o] for o in U.build(C, G, N_IN, N_OUT, *elements)]
+
+    return build
+
+
 def program(gates: Gates, wrap=None):
     """(the one-Call Program of the unit, its ``Q_template_instance`` query, the partition object, the Program's digest),
     core's own, with `universal.traced` answered from ``gates``: the Program's descriptor is encoded from the emitted body.
@@ -413,15 +429,18 @@ class Unit:
     groups: list[list[int]]    # `class_statement.sources`: per row port, its unit inputs in order
     shape: str
     content_sha256: str        # SHA-256 of the form + "/packed" (`class_statement._shims`)
+    argument_order: bool = False
 
     @property
     def leaf_of_input(self) -> np.ndarray:
         return self.inputs - 2
 
 
-def unit(gates: Gates, program_row: bool = False) -> Unit:
+def unit(gates: Gates, program_row: bool = False, argument_order: bool = False) -> Unit:
     """The unit's class, its row ports ``UniversalUnit``'s parameters (``op``, ``src``, ``out``, ``x``), or with
-    ``program_row`` ``rec_inner.program_unit``'s (``prog``: the first three as one; ``x``)."""
+    ``program_row`` ``rec_inner.program_unit``'s (``prog``: the first three as one; ``x``). Its inputs in first-read order and
+    its ANDs in canonical order (`class_statement.stage`'s), or with ``argument_order`` its inputs in leaf order and its ANDs
+    in trace order (`class_statement.stage`'s with `build_of`)."""
     first = gates.first
     N = len(gates.kind)
     idx = np.arange(N, dtype=np.int64)
@@ -438,9 +457,12 @@ def unit(gates: Gates, program_row: bool = False) -> Unit:
     fo[1::2] = gates.b[order]
     ins = fo < first
     wires, at = np.unique(fo[ins], return_index=True)
-    inputs = wires[np.argsort(at)]
+    first_read = wires[np.argsort(at)]
+    inputs = wires if argument_order else first_read
+    if argument_order and not np.array_equal(wires, np.arange(2, first)):
+        raise ValueError("a leaf no gate reads: the unit in argument order has every leaf an input")
     port = np.full(first, -1, np.int64)
-    port[inputs] = np.arange(len(inputs))
+    port[first_read] = np.arange(len(first_read))
     G, K, N_OUT = gates.G, U.index_bits(gates.G, gates.N_IN), gates.N_OUT
     bounds = np.asarray([first - gates.N_IN] if program_row else [2 + 2 * G, 2 + 2 * G + 2 * G * K, 2 + 2 * G + 2 * G * K + N_OUT * K])
     param = np.searchsorted(bounds, inputs, side="right")
@@ -449,6 +471,8 @@ def unit(gates: Gates, program_row: bool = False) -> Unit:
         groups.setdefault(p, []).append(t)
     out_pos = np.sort(pos[gates.outputs - first])
     outputs = np.argsort(pos[gates.outputs - first])
+    if argument_order and not np.array_equal(outputs, np.arange(len(outputs))):
+        raise AssertionError("the unit's outputs in canonical order are not its return order")
     sha512 = hashlib.sha512(b"verity/partition/v2/shape\0")
     sha256 = hashlib.sha256()
 
@@ -472,7 +496,7 @@ def unit(gates: Gates, program_row: bool = False) -> Unit:
                       ("lit", [b'],["i",', b'],["g",'], refs[1][0]), ("num", refs[1][1]), ("lit", [b"]]],", b"]]]"], last)]))
     feed(b'],"in":[' + b",".join([b"1"] * len(inputs)) + b'],"out":[' + ",".join(map(str, out_pos.tolist())).encode() + b"]}")
     sha256.update(b"/packed")
-    return Unit(gates, order, inputs, outputs, out_pos, list(groups.values()), sha512.hexdigest(), sha256.hexdigest())
+    return Unit(gates, order, inputs, outputs, out_pos, list(groups.values()), sha512.hexdigest(), sha256.hexdigest(), argument_order)
 
 
 def _port_layout(u: Unit) -> tuple[list[int], np.ndarray]:
@@ -535,6 +559,7 @@ def lower(u: Unit, name: str, lanes: Sequence[np.ndarray]) -> tuple[FastLowering
     chunks = []
     nnz_a = nnz_b = 0
     k = 0
+    rank = np.cumsum(gates.kind == AND) - 1 if u.argument_order else None
     for s0, e0 in zip(starts.tolist(), ends.tolist()):
         for lo in range(s0, e0, STEP):
             hi = min(e0, lo + STEP)
@@ -544,11 +569,12 @@ def lower(u: Unit, name: str, lanes: Sequence[np.ndarray]) -> tuple[FastLowering
             lb, cb = st.get(gates.b[t])
             m = hi - lo
             if gates.kind[t[0]] == AND:
-                cols = base + k + np.arange(m)
+                cols = base + (k + np.arange(m) if rank is None else rank[t])
                 k += m
                 st.put(wires, np.ones(m, np.int64), cols.astype(np.int32))
                 z[cols] = _xor_reduce(z, la, ca) & _xor_reduce(z, lb, cb)
-                chunks.append((la, ca, lb, cb))
+                if rank is None:
+                    chunks.append((la, ca, lb, cb))
                 nnz_a += int(la.sum())
                 nnz_b += int(lb.sum())
             else:
@@ -562,6 +588,11 @@ def lower(u: Unit, name: str, lanes: Sequence[np.ndarray]) -> tuple[FastLowering
                 kk = kk[keep]
                 st.put(wires, np.bincount(kk >> 32, minlength=m).astype(np.int64), (kk & 0xFFFFFFFF).astype(np.int32))
     assert k == n_ands
+    if rank is not None:
+        ands = np.flatnonzero(gates.kind == AND)
+        for lo in range(0, n_ands, STEP):
+            t = ands[lo:lo + STEP]
+            chunks.append((*st.get(gates.a[t]), *st.get(gates.b[t])))
     lo_, fo = st.get(gates.outputs[u.outputs])
     zo = _xor_reduce(z, lo_, fo)
     z[out_at + 16 * np.arange(w_out)] = zo

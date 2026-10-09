@@ -29,8 +29,8 @@ def test_inner_fold_hands_the_verifiers_program_to_the_setup():
 @pytest.mark.slow
 def test_universal_staging_hides_the_netlist_but_its_program_row(tmp_path):
     """Two netlists of class ``16,16,8`` staged on the same x and salt key: one circuit (the class's), plain leaves, three
-    regions (x, the program, the outputs: rec-v0's eight claims for V*'s algebra), and public files differing in the program
-    row's root and its 64-byte commitment, nothing else."""
+    regions in argument order (the program, x, the outputs: rec-v0's eight claims for V*'s algebra), and public files
+    differing in the program row's root and its 64-byte commitment, nothing else."""
     root = HERE.parents[3]
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, root / "verity" / "ml" / "flock" / "python")))
     p = subprocess.run([sys.executable, str(POD / "rec_inner.py"), "universal", "--cls", "16,16,8", "--n", "4", "--out",
@@ -40,8 +40,8 @@ def test_universal_staging_hides_the_netlist_but_its_program_row(tmp_path):
     o = r["other"]
     assert r["leaf_scheme"] == "flock-leaf/sha512-unsalted" and (r["m"], r["k_log"]) == (25, 22)
     assert o["same_circuit"] and o["same_outputs"] and o["netlist_gates_differing"] == 1
-    assert r["stage"]["shared_rows"] == {"p0": 4, "p1": 1, "out": 4}
-    assert o["header_differing"] == ["frame_v3.roots.p1"]
+    assert r["stage"]["shared_rows"] == {"p0": 1, "p1": 4, "out": 4}
+    assert o["header_differing"] == ["frame_v3.roots.p0"]
     assert 0 < o["body_bytes_differing"] <= 64
 
 

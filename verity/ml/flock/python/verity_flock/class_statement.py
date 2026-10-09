@@ -150,6 +150,16 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
+def argument_order(uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[int]]:
+    """`sources`' parameter groups in argument order, each group's inputs in leaf order and the groups in parameter order, and
+    the `sources` group each one is."""
+    if any(k >= 0 for k in uc.inputs):
+        raise ValueError(f"{uc.definition}: a unit that reads another unit's outputs has no argument order")
+    leaf = lambda t: -1 - uc.inputs[t]
+    at = sorted(range(len(groups)), key=lambda i: min(map(leaf, groups[i])))
+    return [sorted(groups[i], key=leaf) for i in at], at
+
+
 def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
     scales another, each core's bit row (``verity.ml.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
@@ -308,10 +318,13 @@ def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> 
 
 
 def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
-                   packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
+                   packed: bool | Sequence[bool] = False, blocks: bool = True, build=None) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
     words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
-    SHA-512 blocks (not ``blocks``: the words it uses, a bit row's ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``."""
+    SHA-512 blocks (not ``blocks``: the words it uses, a bit row's ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``.
+    ``build`` (a unit that reads only parameter leaves): ``build(C, leaves) -> words`` writes the unit's gates into C in its own
+    order, from every parameter leaf's bits in leaf order, and returns its output words in ``uc.outputs``' order; else the
+    unit's gates are lowered in canonical order."""
     groups = groups or [list(range(len(uc.inputs)))]
     slots = [_slots([uc.in_widths[t] for t in g], pk) for g, pk in zip(groups, _packs(packed, groups), strict=True)]
     port_words = tuple(_pad(used, BLOCK_WORDS) if blocks else used for _at, used in slots)
@@ -325,10 +338,18 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
             w = uc.in_widths[t]
             wires[act.absolute(uc.inputs[t])] = [b for word in leaves[base + leaf:base + leaf + _words(bit + w)] for b in word][bit:bit + w]
         base += w_port
-    IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
+    if build is None:
+        IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
+        words = [wires[act.absolute(j)] for j in uc.outputs]
+    else:
+        if sorted(-1 - k for k in uc.inputs) != list(range(act.params)):
+            raise ValueError(f"{name}: the unit does not read exactly its parameter leaves, so it has no build order")
+        words = build(C, [wires[act.absolute(-1 - i)] for i in range(act.params)])
+        if [len(w) for w in words] != list(uc.out_widths):
+            raise AssertionError(f"{name}: build returned words of {[len(w) for w in words]} bits, not {list(uc.out_widths)}")
     out_bits = []
-    for j, w in zip(uc.outputs, uc.out_widths):
-        out_bits += list(wires[act.absolute(j)]) + [gf2.ZERO] * (16 * _words(w) - w)
+    for word, w in zip(words, uc.out_widths, strict=True):
+        out_bits += list(word) + [gf2.ZERO] * (16 * _words(w) - w)
     w_out = max(1, len(out_bits) // 16)
     out_bits += [gf2.ZERO] * (16 * w_out - len(out_bits))
     for j in range(w_out):
@@ -588,7 +609,7 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
           packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
           seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, names_definition: bool = False,
-          share_rows: bool = True) -> dict:
+          share_rows: bool = True, build=None) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
@@ -606,7 +627,11 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 
     ``names_definition``: META names the class's Definition as a wired statement's does, with no links (a template-instance
     partition whose staged instances are its units in order, none reading another's outputs). ``share_rows`` False (lanes
-    without source identities): every instance commits its own rows, a public file without shared rows."""
+    without source identities): every instance commits its own rows, a public file without shared rows.
+
+    ``build`` (`class_lowering`'s): the unit in argument order, its gates in build order, each row port one parameter's leaves
+    in leaf order and the ports in parameter order; packed, leaf ``j`` of a one-bit parameter is bit ``j mod 16`` of its row's
+    word ``j // 16``."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -623,6 +648,11 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         idents = [[*ids, *[("filler",)] * fill] for ids in idents] if idents is not None else None
     partition, program = partition_binding(units, spec)
     groups = sources(act, uc, owners_of(units, cl.definition.id))
+    if build is not None:
+        if core_rows or wiring is not None:
+            raise ValueError(f"class {name}: a unit staged in argument order has neither core rows nor links")
+        groups, at = argument_order(uc, groups)
+        idents = [idents[i] for i in at] if idents is not None else None
     bits = None
     if core_rows:
         groups, joins, bits = element_rows(act, uc, groups)
@@ -660,7 +690,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         idents = [idents[o] if s is None else [("link", w, k) if w is not None else ("in", k) for k, w in enumerate(writers[i])]
                   for i, (o, s) in enumerate(zip(origin, spans))]
     links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
-    low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
+    low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows, build=build)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b"") +
                        (b"/links:" + json.dumps(links).encode() if links else b""), len(groups))
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
