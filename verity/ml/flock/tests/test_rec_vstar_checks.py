@@ -112,8 +112,8 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
     p = subprocess.run([str(BIN), "verify", *base, "--partition", str(d / "partition.json"), "--session", str(sess)],
                        capture_output=True, text=True)
     [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
-    assert v["why"] == ("setup: rec-open/l8-h1: one of V*'s statements; pass the verifier's own partition object and program "
-                        "(--partition F, --program F)"), v
+    assert v["why"] == ("setup: registered reads: the statement's units are taken as stated, and a read's position binds only "
+                        "as far as its unit does: the verifier derives them from its own program (--partition, --program)"), v
     obj = json.loads((d / "partition.json").read_text())
     obj["query"]["params"]["template"] = "RecOpen_v4{LANES=8,H=2}"
     (tmp_path / "partition.json").write_text(json.dumps(obj))
