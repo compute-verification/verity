@@ -444,8 +444,276 @@ theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Arr
         rw [hb.2 hv]
         exact hc
     exact key _ _ _ rfl (addCode_ne_nil _ _) hValues
+theorem step_ite {P : Prop} (Q : Prop) (j' j : Unit → Array String → Id (Array String)) (b : Bool) (x : String)
+    (hj : ∀ c, j () c = #[] ↔ c = #[] ∧ P)
+    (hdef : ∀ c, j' () c = if b = true then j () (addCode c x) else j () c)
+    (hb : b = false ↔ Q) : ∀ c, j' () c = #[] ↔ c = #[] ∧ Q ∧ P := by
+  intro c
+  rw [hdef]
+  cases b
+  · simp only [Bool.false_eq_true, ↓reduceIte, hj]
+    exact ⟨fun ⟨a, p⟩ => ⟨a, hb.1 rfl, p⟩, fun ⟨a, _, p⟩ => ⟨a, p⟩⟩
+  · simp only [↓reduceIte, hj, addCode_ne_nil, false_and, false_iff]
+    exact fun ⟨_, q, _⟩ => absurd (hb.2 q) (by decide)
+
+theorem step_ite2 {P R : Prop} (Q1 Q2 : Prop) (j' j8 j7 : Unit → Array String → Id (Array String)) (b1 b2 : Bool)
+    (x y : String)
+    (h8 : ∀ c, j8 () c = #[] ↔ c = #[] ∧ P) (h7 : ∀ c, j7 () c = #[] ↔ c = #[] ∧ R ∧ P)
+    (hdef : ∀ c, j' () c =
+      if b1 = true then j8 () (addCode c x) else if b2 = true then j7 () (addCode c y) else j7 () c)
+    (hb1 : b1 = false ↔ Q1) (hb2 : b2 = false ↔ Q2) :
+    ∀ c, j' () c = #[] ↔ c = #[] ∧ Q1 ∧ Q2 ∧ R ∧ P := by
+  intro c
+  rw [hdef]
+  cases b1
+  · cases b2
+    · simp only [Bool.false_eq_true, ↓reduceIte, h7]
+      exact ⟨fun ⟨a, r, p⟩ => ⟨a, hb1.1 rfl, hb2.1 rfl, r, p⟩, fun ⟨a, _, _, r, p⟩ => ⟨a, r, p⟩⟩
+    · simp only [Bool.false_eq_true, ↓reduceIte, h7, addCode_ne_nil, false_and, false_iff]
+      exact fun ⟨_, _, q, _⟩ => absurd (hb2.2 q) (by decide)
+  · simp only [↓reduceIte, h8, addCode_ne_nil, false_and, false_iff]
+    exact fun ⟨_, q, _⟩ => absurd (hb1.2 q) (by decide)
+
+theorem forIn_list_codes_nil {α : Type} (l : List α) (c0 : Array String)
+    (f : α → Array String → Id (ForInStep (Array String))) (Q : α → Prop)
+    (hc : ∀ x c, yields (f x c) = true ∧ (codesOf (f x c) = #[] ↔ c = #[] ∧ Q x)) :
+    @Eq (Array String) (forIn (m := Id) l c0 f) #[] ↔ c0 = #[] ∧ ∀ x ∈ l, Q x := by
+  induction l generalizing c0 with
+  | nil => simp; rfl
+  | cons a as ih =>
+    rw [List.forIn_cons, yields_eq _ (hc a c0).1]
+    simp only [pure_bind]
+    refine (ih _).trans ?_
+    rw [(hc a c0).2]
+    simp only [List.mem_cons, forall_eq_or_imp, and_assoc]
+
+theorem step_forIn {α : Type} {P : Prop} (Q : α → Prop) (j' j : Unit → Array String → Id (Array String))
+    (xs : Array α) (f : α → Array String → Id (ForInStep (Array String)))
+    (hj : ∀ c, j () c = #[] ↔ c = #[] ∧ P)
+    (hdef : ∀ c, j' () c = j () (forIn xs c f).run)
+    (hf : ∀ x c, yields (f x c) = true ∧ (codesOf (f x c) = #[] ↔ c = #[] ∧ Q x)) :
+    ∀ c, j' () c = #[] ↔ c = #[] ∧ (∀ x ∈ xs, Q x) ∧ P := by
+  intro c; rw [hdef, hj, forIn_codes_nil xs c f Q hf, and_assoc]
+
+theorem reset {P : Prop} {j : Unit → Array String → Id (Array String)} (h : ∀ c, j () c = #[] ↔ c = #[] ∧ P) :
+    ∀ c, j () c = #[] ↔ c = #[] ∧ j () #[] = #[] := by
+  intro c; rw [h c, h #[]]; simp
+
+theorem not_false_iff' (a : Bool) : ((!a) = false) ↔ a = true := by cases a <;> decide
+
+theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
+  rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']
+  simp
+
+theorem hex_ok (j : Json) :
+    ((!match j with | .str s => isHex s | _ => false) = false) ↔ ∃ s, j = .str s ∧ isHex s = true := by
+  cases j <;> simp
+
+theorem isNone_false_iff {α : Type} (o : Option α) : o.isNone = false ↔ ∃ a, o = some a := by
+  cases o <;> simp
+
+theorem not_and_false_iff (x y : Bool) : (!(x && y)) = false ↔ x = true ∧ y = true := by
+  cases x <;> cases y <;> decide
+
+theorem r2loop (g : String → Json) (a : Json) (oq : Flock.V String) (od : Option String) :
+    (∀ x ∈ [("program", some a), ("query", oq.toOption.map Json.str), ("partition", od.map Json.str)],
+      ∀ m, x.2 = some m → jeq (g x.1) m = true) ↔
+    (jeq (g "program") a = true ∧ (∀ q, oq = .ok q → jeq (g "query") (.str q) = true) ∧
+      ∀ d, od = some d → jeq (g "partition") (.str d) = true) := by
+  cases oq <;> cases od <;> simp [Except.toOption]
+
+theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x := rfl
+
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
-    Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := sorry
+    Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
+  unfold Registration.check
+  extract_lets v2 get c0 w program part partDigest mine roots previous j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0 c1
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
+  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
+    intro c
+    simp only [j12]
+    by_cases hv : v2 = true
+    · simp only [hv, ↓reduceIte, true_implies]
+      rw [h13, checkRegistered_nil]
+      exact ⟨fun ⟨⟨a, b⟩, _⟩ => ⟨a, b, trivial⟩, fun ⟨a, b, _⟩ => ⟨⟨a, b⟩, trivial⟩⟩
+    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h13]
+      exact ⟨fun ⟨a, _⟩ => ⟨a, trivial, trivial⟩, fun ⟨a, _⟩ => ⟨a, trivial⟩⟩
+  have h11 := step_ite (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) j11 j12 _ _ h12
+    (fun _ => rfl) (any_false_iff _ _)
+  have h10 := step_ite (jeq (getD rec "previous") previous = true) j10 j11 _ _ h11 (fun _ => rfl) (not_false_iff' _)
+  have h9 := step_ite (jeq (getD rec "anchors") (.arr v.anchors) = true) j9 j10 _ _ h10 (fun _ => rfl)
+    (not_false_iff' _)
+  have h8 := step_ite (R4 rec v) j8 j9 _ _ h9 (fun _ => rfl) (not_false_iff' _)
+  have h7 := step_forIn (fun pw => ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) j7 j8 v.ports _ h8 (fun _ => rfl)
+    (by
+      intro pw c
+      rcases pw with ⟨p, want⟩
+      dsimp (config := {zeta := false}) only []
+      split
+      · rename_i r hfr
+        extract_lets c' jd jl cr
+        have hD : ∀ c, yields (jd () c) = true ∧ (codesOf (jd () c) = #[] ↔ c = #[] ∧
+            jeq (getD r "domain") (getD want "domain") = true) := by
+          intro c
+          simp only [jd]
+          by_cases hb : jeq (getD r "domain") (getD want "domain") = true <;> simp [hb, step_pure, addCode_ne_nil]
+        have hL : ∀ c, yields (jl () c) = true ∧ (codesOf (jl () c) = #[] ↔ c = #[] ∧
+            jeq (getD r "leaves") (getD want "leaves") = true ∧ jeq (getD r "domain") (getD want "domain") = true) := by
+          intro c
+          simp only [jl]
+          by_cases hb : jeq (getD r "leaves") (getD want "leaves") = true <;> simp [hb, hD, addCode_ne_nil]
+        have hQ : (∀ r', rootFor rec p = some r' → RootIs r' want) ↔ RootIs r want := by
+          rw [show rootFor rec p = some r from hfr]
+          exact ⟨fun h => h r rfl, fun h r' he => by cases he; exact h⟩
+        have key : ∀ b : Bool, (b = false ↔ ∃ s, getD r "root" = .str s ∧ isHex s = true) →
+            yields (if b = true then jl () cr else jl () c') = true ∧
+            (codesOf (if b = true then jl () cr else jl () c') = #[] ↔ c = #[] ∧ RootIs r want) := by
+          intro b hb
+          unfold RootIs
+          cases b
+          · have hr' := hb.1 rfl
+            show yields (jl () c') = true ∧ (codesOf (jl () c') = #[] ↔ _)
+            refine ⟨(hL c').1, ?_⟩
+            rw [(hL c').2]
+            exact ⟨fun ⟨a, b, d⟩ => ⟨a, hr', b, d⟩, fun ⟨a, _, b, d⟩ => ⟨a, b, d⟩⟩
+          · show yields (jl () cr) = true ∧ (codesOf (jl () cr) = #[] ↔ _)
+            have hcr : cr ≠ #[] := addCode_ne_nil _ _
+            refine ⟨(hL cr).1, ?_⟩
+            rw [(hL cr).2]
+            refine ⟨fun h => (hcr h.1).elim, fun ⟨_, h1, _⟩ => ?_⟩
+            exact absurd (hb.2 h1) (by decide)
+        show _ ∧ (_ ↔ c = #[] ∧ ∀ r', rootFor rec p = some r' → RootIs r' want)
+        rw [hQ]
+        exact key _ (hex_ok (getD r "root"))
+      · rename_i hfr
+        refine ⟨rfl, ?_⟩
+        show c = #[] ↔ _
+        exact ⟨fun h => ⟨h, fun r hr => (hfr r hr).elim⟩, fun h => h.1⟩)
+  have h6 := step_ite2 (rootsOf rec ≠ #[] ∧ ∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS)
+    ((portsOf rec).size = (rootsOf rec).size ∧ (portsOf rec).size = v.ports.size ∧
+      ∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1) = true) j6 j8 j7 _ _ _ _ h8 h7 (fun _ => rfl)
+    (by
+      simp only [Bool.or_eq_false_iff, Bool.not_eq_false', Array.all_eq_true', beq_iff_eq, Array.isEmpty_eq_false_iff]
+      exact Iff.rfl)
+    (by
+      simp only [Bool.or_eq_false_iff, bne_eq_false_iff_eq, Bool.not_eq_false', Array.all_eq_true', and_assoc]
+      refine and_congr Iff.rfl (and_congr Iff.rfl (forall_congr' fun x => imp_congr_right fun _ => ?_))
+      rcases x with ⟨p, w⟩
+      exact Array.any_eq_true')
+  have h5 := step_ite (jeq (getD rec "scheme") (.str v.scheme) = true) j5 j6 _ _ h6 (fun _ => rfl) (not_false_iff' _)
+  have h5r := reset h5
+  have h4 : ∀ c, j4 () c = #[] ↔ c = #[] ∧ (∀ x ∈ mine, ∀ m, x.2 = some m → jeq (get x.1) m = true) ∧
+      (∃ n, Partition.units v.program v.query = .ok n ∧ jeq (get "population") (Lean.toJson n) = true) ∧
+      j5 () #[] = #[] := by
+    intro c
+    simp only [j4, id_bind]
+    rcases hu : Partition.units v.program v.query with a | n
+    · rw [h5r]
+      simp only [addCode_ne_nil, false_and, false_iff]
+      rintro ⟨_, _, ⟨n, hn, _⟩, _⟩
+      cases hn
+    · simp only []
+      cases hp : jeq (get "population") (Lean.toJson n)
+      · simp only [Bool.not_false, ↓reduceIte]
+        rw [h5r]
+        simp only [addCode_ne_nil, false_and, false_iff]
+        rintro ⟨_, _, ⟨n', hn, hp'⟩, _⟩
+        cases hn
+        rw [hp] at hp'
+        cases hp'
+      · simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+        rw [h5r]
+        refine (and_congr_left' (forIn_list_codes_nil mine c _
+          (fun x => ∀ m, x.2 = some m → jeq (get x.1) m = true) ?_)).trans ?_
+        · intro x c
+          rcases x with ⟨name, m⟩
+          cases m with
+          | none => exact ⟨rfl, Iff.intro (fun h => ⟨h, fun m hm => by cases hm⟩) (fun h => h.1)⟩
+          | some m =>
+            by_cases hj : jeq (get name) m = true <;> simp [hj, step_pure, addCode_ne_nil]
+        · exact ⟨fun ⟨⟨a, b⟩, d⟩ => ⟨a, b, ⟨n, rfl, hp⟩, d⟩, fun ⟨a, b, _, d⟩ => ⟨⟨a, b⟩, d⟩⟩
+  have h3 := step_ite (∃ d, partDigest = some d) j3 j4 _ _ h4 (fun _ => rfl) (isNone_false_iff _)
+  have h2 := step_ite (jeq (getD part "program") (.str program) = true) j2 j3 _ _ h3 (fun _ => rfl)
+    (not_false_iff' _)
+  have h1 := step_ite ((w matches .obj _) = true ∧ ∃ k ∈ Registration.KINDS, jeq (getD w "kind") (.str k) = true)
+    j1 j2 _ _ h2 (fun _ => rfl) (by
+      simp only [Bool.or_eq_false_iff, Bool.not_eq_false', List.any_eq_true]
+      exact Iff.rfl)
+  have h1r := reset h1
+  have h0 : ∀ c, j0 () c = #[] ↔ c = #[] ∧
+      (∃ law, Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (get "law") law = true) ∧
+      j1 () #[] = #[] := by
+    intro c
+    simp only [j0]
+    rcases hd : Draw.derive v.program v.query v.law v.workTable with a | law
+    · rw [h1r]
+      simp only [addCode_ne_nil, false_and, false_iff]
+      rintro ⟨_, ⟨law, hl, _⟩, _⟩
+      cases hl
+    · simp only []
+      have hs : Draw.sameLaw (get "law") law = jeq (get "law") law := rfl
+      rw [hs]
+      cases hl : jeq (get "law") law
+      · simp only [Bool.not_false, ↓reduceIte]
+        rw [h1r]
+        simp only [addCode_ne_nil, false_and, false_iff]
+        rintro ⟨_, ⟨law', hl', hj⟩, _⟩
+        cases hl'
+        rw [hl] at hj
+        cases hj
+      · simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+        rw [h1r]
+        exact ⟨fun ⟨a, b⟩ => ⟨a, ⟨law, rfl, hl⟩, b⟩, fun ⟨a, _, b⟩ => ⟨a, b⟩⟩
+  have top : ∀ (bk bf : Bool),
+      (bk = false ↔ keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS)) →
+      (bf = false ↔ jeq (get "format") (if v2 = true then Json.str Registration.FORMAT_V2 else Json.str Registration.FORMAT) = true ∧
+        jeq (get "protocol") (Json.str Registration.PROTOCOL) = true) →
+      ((if bk = true then pure #["keys"] else if bf = true then j0 () c1 else j0 () c0 : Id (Array String)).run = #[] ↔
+        keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS) ∧
+        (jeq (get "format") (if v2 = true then Json.str Registration.FORMAT_V2 else Json.str Registration.FORMAT) = true ∧
+          jeq (get "protocol") (Json.str Registration.PROTOCOL) = true) ∧
+        (∃ law, Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (get "law") law = true) ∧
+        j1 () #[] = #[]) := by
+    intro bk bf hk hf
+    cases bk
+    · cases bf
+      · show j0 () c0 = #[] ↔ _
+        rw [h0]
+        exact ⟨fun ⟨_, a, b⟩ => ⟨hk.1 rfl, hf.1 rfl, a, b⟩, fun ⟨_, _, a, b⟩ => ⟨rfl, a, b⟩⟩
+      · show j0 () c1 = #[] ↔ _
+        rw [h0]
+        have hc1 : c1 ≠ #[] := addCode_ne_nil _ _
+        exact ⟨fun h => (hc1 h.1).elim, fun ⟨_, h, _⟩ => absurd (hf.2 h) (by decide)⟩
+    · show #["keys"] = #[] ↔ _
+      exact ⟨fun h => by simp at h, fun ⟨h, _⟩ => absurd (hk.2 h) (by decide)⟩
+  refine (top _ _ bne_eq_false_iff_eq (not_and_false_iff _ _)).trans ?_
+  rw [h1 #[], h5 #[]]
+  have hv2 : v2 = !v.registered.isEmpty := rfl
+  have ek : (keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS)) ↔
+      keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) := by
+    rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> exact Iff.rfl
+  have ef : jeq (get "format")
+        (if v2 = true then Json.str Registration.FORMAT_V2 else Json.str Registration.FORMAT) = true ↔
+      jeq (getD rec "format") (.str (if v.registered.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) =
+        true := by
+    rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> exact Iff.rfl
+  have e7 : (v2 = true → R7 rec v) ↔ (ExpectsV2 v → R7 rec v) := by
+    unfold ExpectsV2; rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> simp
+  rw [ek, ef, e7]
+  constructor
+  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
+      h4', h5', h6a, h6b, h7r, _⟩
+    have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
+    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r⟩
+  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r⟩
+    refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
+      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4', h5',
+      h6a, h6b, h7r, trivial⟩
+    have : some d' = some d := hd''.symm.trans hd'
+    cases this
+    exact l3
 theorem ascending_iff (xs : Array Int) :
     ((List.range (xs.size - 1)).all fun i => decide (xs[i]! < xs[i + 1]!)) = true ↔ Ascending xs := by
   simp only [List.all_eq_true, List.mem_range, decide_eq_true_eq, Ascending]
