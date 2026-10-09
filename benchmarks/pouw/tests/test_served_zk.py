@@ -503,7 +503,7 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     ch = _challenger(params)
     o, pub, _ = _through(ch, rec)
     w = ch.witness["honest"]
-    assert [e["check"] for e in w] == ["registered", "pass", "registration", "draw", "answer"]
+    assert [e["check"] for e in w] == ["registered", "pass", "registration", "public", "draw", "answer"]
     assert all(e["same"] and e["of_record"] == "lean" and e["lean"] == e["python"] for e in w)
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
@@ -549,6 +549,67 @@ def test_r1_r6_of_a_window_are_leans(served):
 
 
 @LEAN
+def test_the_public_items_rule_refuses_only_what_r1_r6_refuse(served):
+    """`service.check_public` has no Lean form: R1-R6 decide what it reads of a PoUW registration, so on generated
+    registrations (keys added and dropped, roots renamed, repeated, dropped or given fields, the scheme, query, leaf layer,
+    anchors and registered values changed, several at once) it refuses only what Lean's R1-R6 refuse, and refuses some."""
+    *_, words = served
+    params, public, _, _ = _window(words)
+    rec = _register(params, public)
+    ell, n = SC.level_of(rec), rec["population"]
+    spec = SC.spec_of(params, ell)
+    prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
+    law, ports = SC.law_of(params, ell), SC.ports(params, ell)
+    p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
+    record = OR.Record()
+
+    def mutate(rng: random.Random, r: dict) -> None:
+        roots = r.get("roots")
+        match rng.randrange(12):
+            case 0:
+                r[rng.choice(("tiles", "registered", "values", "extra"))] = rng.choice(([2, 3], [], {"x": 1}, None))
+            case 1:
+                r.pop(rng.choice(sorted(r)), None)
+            case 2 if roots:
+                roots[rng.randrange(len(roots))]["port"] = rng.choice(("W", SC.PORT, "X", "values", 7))
+            case 3 if roots:
+                roots.append(dict(rng.choice(roots)))
+            case 4 if roots:
+                roots.pop(rng.randrange(len(roots)))
+            case 5 if roots:
+                e = roots[rng.randrange(len(roots))]
+                e[rng.choice(("leaves", "domain", "root", "extra", "value"))] = rng.choice((1, "00" * 64, None, "x"))
+            case 6 if roots:
+                roots[rng.randrange(len(roots))].pop(rng.choice(("leaves", "domain", "root", "port")), None)
+            case 7:
+                r["scheme"] = rng.choice(("frame-v3/hm96", S.SCHEME + "x", None))
+            case 8:
+                r["query"] = rng.choice(("00" * 64, None, r.get("query")))
+            case 9:
+                r["leaf_layer"] = rng.choice(("x", "00" * 64, None))
+            case 10:
+                r["anchors"] = rng.choice(([{"x": 1}], [], None))
+            case _:
+                r["population"] = rng.choice((n, n + 1, 0))
+
+    refused = both = 0
+    for seed in range(300):
+        rng = random.Random(seed)
+        r = json.loads(json.dumps(rec))
+        for _ in range(rng.choice((1, 1, 2, 3))):
+            mutate(rng, r)
+        py = list(S.check_public(spec, r).codes)
+        lean = record.registration(p, r, lambda r=r: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None,
+                                                             None).codes)
+        assert record.public(py, lean) == lean, (seed, py, lean)
+        refused += bool(py)
+        both += bool(lean)
+    assert refused >= 100 and both >= refused, (refused, both)
+    assert all(e["same"] for e in record.witness)
+    record.close()
+
+
+@LEAN
 def test_a_disagreement_rejects_the_session(served, monkeypatch):
     """A Python reference that disagrees with Lean, at each check, refuses the session as ``lean-python-disagree: <check>``
     with both verdicts in the witness; nothing is retried, and a refused draw is never redrawn."""
@@ -571,6 +632,8 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
               lambda ch: _held(ch, "honest", rec))
     disagrees("pass", lambda m: m.setattr(OR, "py_pass", lambda x: {"how": "forced"}), lambda ch: _held(ch, "honest", rec))
     disagrees("registration", lambda m: m.setattr(SC.R, "check", lambda *a: SC.Verdict(False, ("R1-law",), {})),
+              lambda ch: _held(ch, "honest", rec))
+    disagrees("public", lambda m: m.setattr(SC.S, "check_public", lambda *a: SC.Verdict(False, ("keys",), {})),
               lambda ch: _held(ch, "honest", rec))
     ch = disagrees("draw", lambda m: m.setattr(OR, "py_draw", lambda x: {"refused": ["draw", "forced"]}),
                    lambda ch: (_held(ch, "honest", rec), ch.select("honest")))

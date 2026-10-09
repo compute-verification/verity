@@ -50,8 +50,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   `public_problem` mirrors for the committer), R1-R6, the pass's epoch, the draw, PoUW's check over the stream's outcome
   (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the window's witness (``outcome.json``'s ``of_record``, the opening
-  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  `service.check_public` and
-  the stream's own state stay Python's: the record's ``keys`` rule has no Lean form yet.
+  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  `service.check_public` runs
+  beside R1-R6, which decide what it reads of the record, and may refuse only what they refuse (``public``); the
+  stream's own state stays Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
   serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
@@ -692,9 +693,9 @@ class Challenger:
             raise _refused(*out["refused"]) if isinstance(out["refused"], list) else _refused("manifest", out["refused"])
         return out["how"]
 
-    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
-        """One-stage's R1-R6 against the challenger's own copies, as `Stream.register` runs them, of record.  Raises
-        `Refused`."""
+    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict, public: list[str]) -> None:
+        """One-stage's R1-R6 against the challenger's own copies, as `Stream.register` runs them, of record, with the
+        public-items rule's codes `public` beside them (`Record.public`).  Raises `Refused`."""
         n = rec["population"]
         law = D.parse_law(st.spec.selection.text)
         prog = PT.population_program(st.unit, n)
@@ -703,6 +704,7 @@ class Challenger:
                                 OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
                                 dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
                                                           None, None).codes)
+        codes = self._of_record(name, self.record.public, public, codes)
         if codes:
             raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6, of record" for c in codes}))
 
@@ -739,10 +741,7 @@ class Challenger:
         st = self.stream(stream, ell, sampler)
         own = ports(self.params, ell)
         st.ready()
-        v = S.check_public(st.spec, rec)
-        if not v.ok:
-            raise S.Refused(v)
-        self.r1_r6(name, st, rec, own)
+        self.r1_r6(name, st, rec, own, list(S.check_public(st.spec, rec).codes))
         reg = st.register(rec, own)
         self.regs[name] = (st, reg)
         self.recorded[name] = bool(recorded)

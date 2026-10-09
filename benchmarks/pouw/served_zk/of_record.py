@@ -4,6 +4,8 @@ its Python reference on one input:
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered`);
 * ``registration``: one-stage's R1-R6 against the challenger's own copies (`sampled-proofs-difftest registration`,
   `registration.check`); R7 (registered values) has no Lean form yet, and a PoUW window registers none;
+* ``public``: the service's public-items rule (`service.check_public`), which has no Lean form of its own: R1-R6 decide
+  what it reads of a PoUW registration, so it may refuse only what they refuse (`Record.public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch`);
 * ``draw``: the drawn units are the draw coin's (`pouw-check-difftest draw`, `core_check.draw`);
 * ``opening``: a drawn unit's opening (`pouw-check-difftest opening`, `core_check.opening`);
@@ -32,7 +34,7 @@ REPO = Path(__file__).resolve().parents[3]
 POUW = REPO / "verity/core/protocols/pouw/lean/check"
 PIECES = REPO / "verity/core/service/sampled_proofs"
 DISAGREE = "lean-python-disagree"
-CHECKS = ("registered", "registration", "pass", "draw", "opening", "answer")
+CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "answer")
 
 
 class Disagree(Exception):
@@ -170,6 +172,18 @@ class Record:
         out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
                           {"params": params, "record": record}, lambda _: {"codes": list(python())})
         return out["codes"] if "codes" in out else ["registration"]
+
+    def public(self, python: list[str], lean: list[str]) -> list[str]:
+        """The service's public-items rule (`service.check_public`'s codes, `python`) beside R1-R6 (`lean`, `registration`'s
+        codes of record), which decide everything it reads of a PoUW registration: its keys exactly, its roots exactly the
+        challenger's ports, its scheme and query; its declared items are the challenger's own Spec's.  They disagree only
+        when the rule refuses a registration R1-R6 accept; the codes of record are `lean`'s."""
+        same = not python or bool(lean)
+        self._note("public", {"codes": list(python)}, {"codes": list(lean)} if self.lean else None,
+                   same if self.lean else None)
+        if self.lean and not same:
+            raise Disagree("public", {"codes": list(lean)}, {"codes": list(python)})
+        return list(lean) if self.lean else list(python) or list(lean)
 
     def pass_epoch(self, x: dict) -> dict:
         return self._piece("pass", "pouw-check-difftest", POUW, "pass", x, py_pass)
