@@ -247,6 +247,7 @@ outer forged-top-$(basename $LAST) $LAST dev
 outer flipped-top-L1 $DD/vf/forged-flipped-top/L1 dev
 for C in $(ls -d $DD/vo/alg/p* | sort -V); do outer other-alg-$(basename $C) $C dev; done
 cp $FWS/record.jsonl $O/firewall-record.jsonl
+bash verity/ml/flock/pod/88-rec-private-public.sh TAG=$TAG > $O/public.log 2>&1; echo "public views exit $?"
 
 python3 - $O <<'EOF'
 import json, re, sys
@@ -286,7 +287,8 @@ def live(d):
             "prove_wall": tv(d / "time-prove.txt", r"Elapsed \(wall clock\) time"), "prover_peak_gb": gb(d / "time-prove.txt")}
 
 s = {"stage": {k: json.loads(text(o / f"stage-{k}.json") or "null") for k in ("universal", "wired")},
-     "cap": json.loads(text(o / "cap.json") or "null"), "inner": {}, "fold": {}, "vstar": {}, "outer": {}}
+     "cap": json.loads(text(o / "cap.json") or "null"), "inner": {}, "fold": {}, "vstar": {}, "outer": {},
+     "public": json.loads(text(o / "public" / "public.json") or "null")}
 for d in sorted(p for p in (o / "inner").iterdir() if p.is_dir() and (p / "prove.txt").exists()):
     s["inner"][d.name] = {**live(d), "replay": up(d / "replay.txt"), "sizes": text(d / "sizes.txt")}
 s["inner"]["honest"]["lean_plain_leaves"] = lean(o / "inner" / "honest" / "lean.log")

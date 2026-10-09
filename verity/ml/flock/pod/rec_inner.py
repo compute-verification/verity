@@ -13,6 +13,7 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py forge --what top|unsalted --inner DIR
                                                              top: flips one byte of rep 0's level-1 top in private.json;
                                                              unsalted: public.json's tops as their clear nodes (no salts)
+    python rec_inner.py differ PUB_A PUB_B                   where two public files differ (header fields, body bytes)
 """
 from __future__ import annotations
 
@@ -85,7 +86,8 @@ def _differing(a: Path, b: Path) -> dict:
         return {k: x for key, sub in v.items() for k, x in flat(sub, f"{at}{key}.").items()} if isinstance(v, dict) else {at[:-1]: v}
 
     fa, fb = flat(json.loads(ha)), flat(json.loads(hb))
-    return {"pub_bytes": len(pa), "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb)),
+    return {"pub_bytes": len(pa), "same_size": len(pa) == len(pb),
+            "pub_bytes_differing": sum(x != y for x, y in zip(pa, pb)) + abs(len(pa) - len(pb)),
             "header_differing": sorted(k for k in fa.keys() | fb.keys() if fa.get(k) != fb.get(k)),
             "body_bytes": len(ba), "body_bytes_differing": sum(x != y for x, y in zip(ba, bb)) + abs(len(ba) - len(bb))}
 
@@ -294,9 +296,14 @@ def main(argv=None) -> int:
     fl = sp.add_parser("flipped")
     for k in ("--inner", "--fold", "--points", "--salts", "--out"):
         fl.add_argument(k, required=True)
+    df = sp.add_parser("differ")
+    df.add_argument("a")
+    df.add_argument("b")
     a = ap.parse_args(argv)
     if a.cmd == "flipped":
         res = flipped(a.inner, a.fold, a.points, a.salts, a.out)
+    elif a.cmd == "differ":
+        res = _differing(Path(a.a), Path(a.b))
     elif a.cmd in ("universal", "wired"):
         res = (universal if a.cmd == "universal" else wired)(a.cls, a.n, Path(a.out), a.seed)
     else:
