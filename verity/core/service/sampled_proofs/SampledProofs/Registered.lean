@@ -37,23 +37,44 @@ def WIDTHS : List Nat := [16, 32]
 def WIDTH_KEY : String := "word_bits"
 def ENTRY_KEYS : Array String := sortStrings #["value", "root", "leaves", "words", "domain"]
 
+/-! A type's element or field is smaller than it: `widthSet`'s and `lower`'s termination. -/
+
+private theorem lt_array (n : Nat) (e : Ty) : sizeOf e < sizeOf (Ty.array n e) := by simp; omega
+
+private theorem lt_tuple {f : Ty} {fs : Array Ty} (h : f ∈ fs) : sizeOf f < sizeOf (Ty.tuple fs) := by
+  have := Array.sizeOf_lt_of_mem h; simp; omega
+
+private theorem lt_record {f : String × Ty} {fs : Array (String × Ty)} (h : f ∈ fs) :
+    sizeOf f.2 < sizeOf (Ty.record fs) := by
+  have := Array.sizeOf_lt_of_mem h; cases f; simp at *; omega
+
 /-- `Type.width_set`: the leaf widths, computed structurally (an `Array` of no elements has none). -/
-partial def widthSet : Ty → List Nat
+def widthSet : Ty → List Nat
   | .value w => [w]
   | .array n e => if n == 0 then [] else widthSet e
-  | .tuple fs => (fs.toList.flatMap widthSet).eraseDups
-  | .record fs => (fs.toList.flatMap (widthSet ·.2)).eraseDups
+  | .tuple fs => (fs.toList.attach.flatMap fun ⟨f, _⟩ => widthSet f).eraseDups
+  | .record fs => (fs.toList.attach.flatMap fun ⟨f, _⟩ => widthSet f.2).eraseDups
+termination_by t => sizeOf t
+decreasing_by
+  · exact lt_array _ _
+  · exact lt_tuple (Array.mem_def.mpr ‹_›)
+  · exact lt_record (Array.mem_def.mpr ‹_›)
 
 /-- §5.1 (`program._lower_input`): the input nodes a parameter of type `t` lowers to, `(width, n)` each: one node when its
 leaves are one width, else each field or element in order. -/
-partial def lower (t : Ty) : Array (Nat × Nat) :=
+def lower (t : Ty) : Array (Nat × Nat) :=
   match widthSet t with
   | [w] => #[(w, t.leaves)]
   | _ => match t with
     | .array n e => let l := lower e; (Array.range n).foldl (fun acc _ => acc ++ l) #[]
-    | .tuple fs => fs.foldl (fun acc f => acc ++ lower f) #[]
-    | .record fs => fs.foldl (fun acc f => acc ++ lower f.2) #[]
+    | .tuple fs => fs.attach.foldl (fun acc ⟨f, _⟩ => acc ++ lower f) #[]
+    | .record fs => fs.attach.foldl (fun acc ⟨f, _⟩ => acc ++ lower f.2) #[]
     | .value _ => #[]
+termination_by sizeOf t
+decreasing_by
+  · exact lt_array _ _
+  · exact lt_tuple ‹_›
+  · exact lt_record ‹_›
 
 /-- A parameter of the verifier's program function: its name, its type, and its Input gates `(first, count)` when they are
 one non-empty interval. -/
