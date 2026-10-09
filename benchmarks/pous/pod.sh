@@ -62,15 +62,20 @@ IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # challenger's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 export PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/tools/research/src:$REPO/verity/core/difftest/python
-# PREPARE=1 builds what a timed run must not compile under its lease, and exits: for p2-v3-mc-gpu, the memory challenger's
-# Lean verdict (memory-challenger-verdict, which live.py's judge serves). Run it from a clone (--cwd clone: the build writes
+# PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
+# p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
+# (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:
 #   research run --on vy-nebius-2 --cwd clone ... -- bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
 #     gpu-lease 1 --on N --max-min M -- vy-pous-quiet env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
-  [ "$IMPL" = p2-v3-mc-gpu ] || exit 0
-  (cd verity/core/devices/memory_challenger/lean && lake build memory-challenger-verdict) > "$O/lean-build.log" 2>&1 \
-    || { tail -30 "$O/lean-build.log"; exit 3; }
+  case $IMPL in
+    p2-v3-mc-gpu) set -- verity/core/devices/memory_challenger/lean memory-challenger-verdict ;;
+    p2-v3-gpu) set -- verity/core/protocols/pous/check pous-timed-audit ;;
+    *) exit 0 ;;
+  esac
+  grep -q "^name = \"$2\"" "$1/lakefile.toml" || exit 0
+  (cd "$1" && lake build "$2") > "$O/lean-build.log" 2>&1 || { tail -30 "$O/lean-build.log"; exit 3; }
   exit 0
 fi
 # the run's GPU for nvidia-smi --id: a UUID, or an index as nvidia-smi counts them (gpu-lease's CUDA_DEVICE_ORDER=PCI_BUS_ID)
