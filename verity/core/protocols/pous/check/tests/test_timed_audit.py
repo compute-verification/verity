@@ -145,5 +145,6 @@ def test_a_replay_judges_a_record_with_blocks_and_names_what_one_without_lacks(t
     assert ta.replay([tmp_path / "r-blocks", tmp_path / "r-old"]) == 0
     out = capsys.readouterr().out
     assert "r-old honest: cannot replay, 105 of 210 answers do not record their block" in out
-    assert "r-old v3: cannot replay, p2-16448/v3 with expander shake256-v1 is not P2 v4" in out
+    assert ("r-old v3: cannot replay, p2-16448/v3 with expander shake256-v1 is not P2 v4; 105 of 210 answers do not record "
+            "their block") in out
     assert out.endswith("2 runs, 2 same verdict, 1 negative controls\n")

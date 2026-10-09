@@ -309,19 +309,17 @@ def replay(runs: list[Path]) -> int:
         for path in docs:
             arm = path.stem.removeprefix("audit-p2-")
             ready_path, leaves_path = bench / f"ready-p2-{arm}.json", bench / "leaves-p2.bin"
-            missing = [p.name for p in (ready_path, leaves_path) if not p.exists()]
-            if missing:
-                print(f"{run.name} {arm}: cannot replay, no {', '.join(missing)}")
-                continue
-            ready, doc = json.loads(ready_path.read_text()), json.loads(path.read_text())
-            if not str(ready.get("scheme", "")).endswith("/v4") or ready.get("params", {}).get("expander") != "sha512-ctr-v4":
-                print(f"{run.name} {arm}: cannot replay, {ready.get('scheme')} with expander "
-                      f"{ready.get('params', {}).get('expander')} is not P2 v4")
-                continue
+            doc = json.loads(path.read_text())
+            lacks = [f"no {p.name}" for p in (ready_path, leaves_path) if not p.exists()]
+            ready = json.loads(ready_path.read_text()) if ready_path.exists() else {}
+            scheme, expander = ready.get("scheme"), (ready.get("params") or {}).get("expander")
+            if ready and (not str(scheme).endswith("/v4") or expander != "sha512-ctr-v4"):
+                lacks.append(f"{scheme} with expander {expander} is not P2 v4")
             answers = [a for rec in doc.get("records", []) for a in rec.get("answers", [])]
-            if any("block" not in a for a in answers):
-                print(f"{run.name} {arm}: cannot replay, {sum('block' not in a for a in answers)} of {len(answers)} "
-                      "answers do not record their block")
+            if unblocked := sum("block" not in a for a in answers):
+                lacks.append(f"{unblocked} of {len(answers)} answers do not record their block")
+            if lacks:
+                print(f"{run.name} {arm}: cannot replay, {'; '.join(lacks)}")
                 continue
             leaves = leaves_path.read_bytes()
             py, lean = canonical(mc.verdict(ready, leaves, doc)), canonical(lean_verdict(ready, leaves, doc))
