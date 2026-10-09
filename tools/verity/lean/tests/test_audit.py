@@ -1348,7 +1348,7 @@ ACCEPTS = hyp("h", 1, ["P.check", "Except.ok"])
 def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_what_follows():
     """The shape rule (`refusals`): one hypothesis that its function accepted, besides premises (a constant of a module
     under `shape.premises`); what follows the first input bound after the acceptance is the conclusion, so a later binder
-    is the conclusion's own; a second acceptance, or a hypothesis that is neither, is refused, and so is a field of a
+    is the conclusion's own; a second acceptance is the first's pair, and a hypothesis that is neither is refused, and so is a field of a
     structure an input ranges over that is neither."""
     entry = {"function": "P.check", "outcome": "accept"}
     fits = part([ACCEPTS, hyp("q", 3, ["P.Q"])], inputs=[("x", 0), ("w", 2)], conclusion=["P.Good"])
@@ -1357,7 +1357,7 @@ def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_w
     assert [w.split(",")[0] for w in A.refusals(entry, [loose], [])] == ["takes q : q"]
     assert A.refusals(entry, [loose], ["P.Other"]) == []
     twice = part([ACCEPTS, hyp("h2", 2, ["P.check"])], inputs=[("x", 0)])
-    assert "a second acceptance" in A.refusals(entry, [twice], [])[0]
+    assert A.refusals(entry, [twice], []) == [], "two acceptances are one, of the pair (a binding property)"
     field = part([hyp("s.hscope", 0, ["P.Scope"], source="field"), ACCEPTS], inputs=[("s", 0)])
     assert "a field of an input it ranges over" in A.refusals(entry, [field], [])[0]
     assert "takes no hypothesis that its function returned accept" in A.refusals(entry, [part(inputs=[("x", 0)])], [])[0]
@@ -1399,5 +1399,14 @@ def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink(
     (tmp_path / "shape-frozen" / "P.z").unlink()
     assert [f.split()[1] for f in A.shape(pol, facts, A.frozen_reasons(tmp_path, pol))] == ["P.b"]
     assert A.shape({"guarantees": {"P.b": {}}}, facts, {}) == [], "a package without a shape block isn't checked"
+    loose = facts | {"spec_definitions": [{"name": "P.A", "module": "P", "kind": "def", "statement": True},
+                                          {"name": "P.Pred", "module": "P", "kind": "def", "statement": False}],
+                     "pins": {"P.a": {"shape": good, "lift": "P.A"}, "P.b": {"shape": good}}}
+    assert A.shape(pol, loose, {}) == []
+    loose["pins"]["P.a"]["lift"] = None
+    assert [f.split()[1] for f in A.shape(pol, loose, {})] == ["P.A"], "a statement no guarantee states fails"
+    assert A.shape(pol, loose, {"P.A": "memory-accounting lists it.\n"}) == [], "until a frozen file names it"
+    loose["pins"]["P.a"]["lift"] = "P.A"
+    assert "neither a guarantee" in A.shape(pol, loose, {"P.A": "listed now"})[0]
     gone = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": {"error": "boom"}}}}
     assert A.shape(pol, gone, {}) == ["shape: P.b has no shape in the facts (boom)"], "a shape Facts couldn't read fails"

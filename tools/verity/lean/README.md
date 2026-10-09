@@ -170,9 +170,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   that reaches `F` (a constant, several, or a field path such as `P.protocol.check`) and, unless `O` is `accept`, a
   constant named `O`, and premises (hypotheses whose head is under `premises`), up to the first input bound after that
   acceptance; what follows is its conclusion. With `O` `none` (a function that always returns) it takes no acceptance and
-  must mention `F`. A `Prop` field of a structure under `meaning` that an input ranges over is a hypothesis. A guarantee
+  must mention `F`. Several acceptances of `F` count as one, of the tuple of their inputs. A `Prop` field of a structure under `meaning` that an input ranges over is a hypothesis. A guarantee
   named by a file under `frozen` (its content: why it doesn't fit yet) is exempt, and fails once it fits, so the list only
-  shrinks. Shape entries are not records: changing one changes no statement and sends no DM.
+  shrinks. Every `def G : Prop` of the spec must be the statement of a listed guarantee, or be named by a file under `frozen`
+  until one is. Shape entries are not records: changing one changes no statement and sends no DM.
 - **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
   policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means what it means
   whatever proves the propositions inside it), followed through `meaning` and where the walk leaves it, must lie in the

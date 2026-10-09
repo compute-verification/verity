@@ -25,7 +25,8 @@ judgement; `audit.py` holds the policy.
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
-  declaration range: what Lean generates for them has none), projections and internal names aside.
+  declaration range: what Lean generates for them has none), projections and internal names aside, each with whether it
+  is a statement (`def G : Prop`).
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -370,6 +371,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (shape : Bool) (axioms : 
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← if shape then shapeInfo env meaning moduleOf ci.type else pure Json.null),
+    ("lift", toJson ((liftOf env meaning ci.type).map (·.1.toString))),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
@@ -445,7 +447,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       counts := counts.insert (kind ci) (counts.getD (kind ci) 0 + 1)
       if under spec m && specDefinition ci && ranges.contains n then
         specDefs := specDefs.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString),
-          ("kind", toJson (kind ci))]
+          ("kind", toJson (kind ci)), ("statement", toJson ci.type.isProp)]
       if let (some r, .str _ s) := (ranges[n]?, privateToUserName n) then
         if s.startsWith "inst" then
           instances := instances.push <| Json.mkObj [("name", toJson (privateToUserName n).toString),

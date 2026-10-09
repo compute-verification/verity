@@ -158,11 +158,12 @@ simp with that.
   rest is its conclusion. In a package with a `shape` block in `lean-audit.json`, each guarantee's entry under
   `shape.properties` names its `function` (a constant or several) and that `outcome`: `accept` by default, `undecided` or
   `reject` where the property is about that outcome, `none` for a function that always returns (a device's `step`, a
-  constant), which takes only the input. A premise is a hypothesis whose head is a constant of a module under
+  constant), which takes only the input; two acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a constant of a module under
   `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis, and a conjunction as its
   conjuncts. A guarantee that doesn't fit yet has a file `shape.frozen/<name>` (default `shape-frozen/`) with one sentence
   on why; the check fails once it fits, until the file goes. Don't add a file: restate the guarantee, or move what isn't
-  a property (an iff's converse, an honest case) to `Proofs/` as completeness.
+  a property (an iff's converse, an honest case) to `Proofs/` as completeness. Every `def G : Prop` of the spec is the
+  statement of a guarantee the lock lists.
 
 ## Before the PR
 

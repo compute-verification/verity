@@ -1041,17 +1041,28 @@ def shape(policy: dict, facts: dict, frozen: dict[str, str]) -> list[str]:
     the outcome its one hypothesis that is not a premise takes (`outcome`, `OUTCOMES`).  Its statement, with a lifted
     definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type reaches the
     function, and with an outcome other than `accept`, a constant named for the outcome), and premises: hypotheses whose
-    head is a constant of a module under `shape.premises`.  A `Prop` field of a structure an input ranges over is a
-    hypothesis too, and a conjunction counts as its conjuncts.  A guarantee in ``frozen`` ({name: its file's reason}, the
-    files under `shape.frozen`) is exempt until it fits, and then its file must go."""
+    head is a constant of a module under `shape.premises`.  Several acceptances of the function are one, of the tuple of
+    their inputs (a binding property).  A `Prop` field of a structure an input ranges over is a hypothesis too, and a
+    conjunction counts as its conjuncts.  A guarantee in ``frozen`` ({name: its file's reason}, the files under
+    `shape.frozen`) is exempt until it fits, and then its file must go.  Every statement (`def G : Prop`) of the spec is
+    one that a listed guarantee states, or has a frozen file until one does."""
     spec = policy.get("shape")
     if spec is None:
         return []
     fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
     where = spec.get("frozen", "shape-frozen")
     guarantees = set(policy.get("guarantees", {}))
-    for name in sorted(set(frozen) - guarantees):
-        fails.append(f"shape: {where}/{name} freezes {name}, which is not a guarantee of this package: delete the file")
+    lifted = {p.get("lift") for p in facts["pins"].values()}
+    unstated = {d["name"]: d["module"] for d in facts.get("spec_definitions", []) if d.get("statement") and d["name"] not in lifted}
+    for name in sorted(set(frozen) - guarantees - set(unstated)):
+        fails.append(f"shape: {where}/{name} freezes {name}, which is neither a guarantee of this package nor a statement "
+                     f"of its spec that none states: delete the file")
+    for name, module in sorted(unstated.items()):
+        if name in frozen and not frozen[name].strip():
+            fails.append(f"shape: {where}/{name} gives no reason: one sentence on why no guarantee states {name} yet")
+        elif name not in frozen:
+            fails.append(f"shape: {name} ({module}) is a statement that no guarantee of this package states: list the "
+                         f"theorem that proves it under `guarantees`, or move it out of the spec")
     for name in sorted(set(entries) - guarantees):
         fails.append(f"shape: shape.properties lists {name}, which is not a guarantee of this package: remove the entry")
     for name in sorted(guarantees):
@@ -1103,11 +1114,11 @@ def part_refusals(entry: dict, got: dict, premises: list[str]) -> list[str]:
         out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
                    f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
     for h in taken:
-        if (h is start and outcome != "none") or premise(h):
+        if (outcome != "none" and about(h)) or premise(h):
             continue
         what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
-        role = "a second acceptance" if outcome != "none" and about(h) else "neither its acceptance nor a premise"
-        out.append(f"takes {h['name']} : {h['type']}, {what} that is {role} (its acceptance: {outcome} by {said}; a premise: "
+        out.append(f"takes {h['name']} : {h['type']}, {what} that is neither its acceptance nor a premise (its acceptance: "
+                   f"{outcome} by {said}; a premise: "
                    f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})")
     if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
         out.append(f"says nothing about {said}, the function its entry names")
