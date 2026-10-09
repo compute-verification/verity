@@ -25,7 +25,9 @@ against C's leaf).
   mapping (`memory_challenger.SCHEMES` for `lms`, the test signer's for `test`): for `test`, every check but the scheme's
   acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
-  (`witness`: the signed session, the reasons, per-round on-time and digest bits), and keeps the responder's reports beside.
+  (`witness`: the signed session, the reasons, C's digests at the blocks the rounds revealed, per-round on-time and digest
+  bits), and keeps the responder's reports beside: with the signer's public key, every input of the verdict, so a record
+  replays.
 
 Exit 0 when every session passes under the signer the run used, 1 otherwise.
 """
@@ -149,6 +151,8 @@ def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trus
                     "public": {"commitment": s["commitment"].to_json(), "verdict": v.public(),
                                "openings": [o.to_json() for o in s["openings"]]},
                     "witness": {"signed": s["signed"].to_json(), "reasons": list(v.reasons),
+                                "expected": {str(r.index): expected(r.index).hex() for r in rounds
+                                             if 0 <= r.index < s["commitment"].blocks},
                                 "reasons_under_signer": list(t.reasons)},
                     "accepted": v.accepted, "accepted_under_signer": t.accepted,
                     "sign_ns": s["sign_ns"]})
