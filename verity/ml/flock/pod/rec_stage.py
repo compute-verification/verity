@@ -9,9 +9,10 @@
         them, under a fresh salt key, phase by phase as ``measure``; RESULT: universal's record, the phases, and the staged
         size beside the class's closed forms
     python rec_stage.py direct --definition MODULE:NAME --n N --out DIR [--seed S]
-        the private circuit's Definition proved directly, as a public circuit: its one-Call program under
-        `Q_template_instance`, N lanes of uniform words, staged as C-Flock stages a class (`class_statement.stage`, packed,
-        its own leaf scheme, OS salts) into DIR with the verifier's partition object and program descriptor
+        the private circuit's Definition proved directly, as a public circuit: N instances of it as one population program
+        under `Q_template_instance`, uniform words, staged as C-Flock stages a class (`class_statement.stage`, packed, its
+        own leaf scheme, every instance's rows its own, OS salts) into DIR with the verifier's partition object and program
+        descriptor
 """
 from __future__ import annotations
 
