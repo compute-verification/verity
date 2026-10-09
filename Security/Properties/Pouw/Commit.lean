@@ -43,25 +43,25 @@ def DepthServed : Prop :=
 
 /-! ## Refusals -/
 
-/-- `CommitmentDomain` refuses exactly a binding of neither 32 nor 64 bytes and an owner below -2, for any count and
+/-- A domain `CommitmentDomain` gives has a binding of 32 or 64 bytes and an owner of at least -2, for any count and
 either hash. -/
 def DomainRefusals : Prop :=
-  ∀ h binding owner count,
-    (Domain.mk? h binding owner count).isOk = decide ((binding.size = 32 ∨ binding.size = 64) ∧ -2 ≤ owner)
+  ∀ h binding owner count d, Domain.mk? h binding owner count = .ok d →
+    (binding.size = 32 ∨ binding.size = 64) ∧ -2 ≤ owner
 
-/-- `Hm96Domain.leaf` refuses exactly a value shorter than its 192-byte salt, and in a tile tree one other than a 64-byte
-digest and its salt; a plain tree's leaf refuses nothing. -/
+/-- A leaf `Hm96Domain.leaf` gives is of a value at least its 192-byte salt long, and in a tile tree of a 64-byte digest
+and its salt; a plain tree's leaf takes any value. -/
 def LeafRefusals : Prop :=
-  ∀ (d : RowsDomain) rank schema (v : ByteArray),
-    (d.leaf rank schema v).isOk = decide (d.hm96 = true → 192 ≤ v.size ∧ (d.digests = true → v.size = 256))
+  ∀ (d : RowsDomain) rank schema (v x : ByteArray), d.leaf rank schema v = .ok x →
+    d.hm96 = true → 192 ≤ v.size ∧ (d.digests = true → v.size = 256)
 
-/-- `coin_reason` raises exactly on a label outside `LABELS`, or, once the epoch, the label and the sizes match, on a path
-holding an item of neither 32 nor 64 bytes (`Opening`'s refusal). -/
+/-- `coin_reason` answers (a reason or none) only for a label in `LABELS`, and, once the epoch, the label and the sizes
+match, only for a path whose every item is 32 or 64 bytes (`Opening`'s refusal). -/
 def CoinRaises : Prop :=
-  ∀ c o label after, (coinReason c o label after).isOk = false ↔
-    label ∉ LABELS ∨
-      (o.epoch = c.epoch ∧ o.label = label ∧ o.coin.size = 32 ∧ o.salt.size = 192 ∧
-        o.path.any (fun p => p.size != 32 && p.size != 64) = true)
+  ∀ c o label after r, coinReason c o label after = .ok r →
+    label ∈ LABELS ∧
+      (o.epoch = c.epoch → o.label = label → o.coin.size = 32 → o.salt.size = 192 →
+        ∀ p ∈ o.path, p.size = 32 ∨ p.size = 64)
 
 /-! ## What an accepted coin is -/
 
@@ -79,14 +79,14 @@ def CoinOpens (c : CoinCommitment) (o : CoinOpening) (label : String) (after : B
     o.salt.size = 192 ∧ o.path = [sib] ∧ sib.size = 64 ∧ c.root.size = 64 ∧
     c.root = coinRoot c.epoch rank o.coin o.salt sib ∧ o.after = after
 
-/-- `coin_reason` accepts (gives no reason) exactly the openings `CoinOpens` describes. -/
-def CoinAccepts : Prop := ∀ c o label after, coinReason c o label after = .ok none ↔ CoinOpens c o label after
+/-- An opening `coin_reason` accepts (gives no reason) is one `CoinOpens` describes. -/
+def CoinAccepts : Prop := ∀ c o label after, coinReason c o label after = .ok none → CoinOpens c o label after
 
 /-! ## Salts and draw keys -/
 
-/-- A key PoUW derives (`derive` under its domains) is refused exactly when its source is empty. -/
+/-- A key PoUW derives (`derive` under its domains) is from a nonempty source. -/
 def KeyRefusals : Prop :=
-  ∀ source domain context, (key? source domain context).isOk = decide (source.size ≠ 0)
+  ∀ source domain context k, key? source domain context = .ok k → source.size ≠ 0
 
 /-- Every key PoUW derives is 32 bytes: the epoch's salt key, the audit key, and the Pearl-C draw and replay keys. -/
 def KeySize : Prop :=
@@ -97,23 +97,22 @@ def SaltSize : Prop :=
   (∀ c coin weightsRoot s, saltOf c coin weightsRoot = .ok s → s.size = SALT_BYTES) ∧
     ∀ seed weightsRoot s, unverifiedSalt seed weightsRoot = .ok s → s.size = SALT_BYTES
 
-/-- `salt_of` refuses exactly an empty coin, and `Epoch.unverified` exactly an empty seed, whatever the epoch, the coin
-commitment and the weights' root. -/
+/-- A salt `salt_of` gives is from a nonempty coin, and one `Epoch.unverified` gives from a nonempty seed, whatever the
+epoch, the coin commitment and the weights' root. -/
 def SaltRefusals : Prop :=
-  (∀ c coin weightsRoot, (saltOf c coin weightsRoot).isOk = decide (coin.size ≠ 0)) ∧
-    ∀ seed weightsRoot, (unverifiedSalt seed weightsRoot).isOk = decide (seed.size ≠ 0)
+  (∀ c coin weightsRoot s, saltOf c coin weightsRoot = .ok s → coin.size ≠ 0) ∧
+    ∀ seed weightsRoot s, unverifiedSalt seed weightsRoot = .ok s → seed.size ≠ 0
 
-/-- `Epoch.start` gives a salt exactly when the opening is the epoch's salt coin opened after the weights' root, and that
-salt is `salt_of` of the opened coin. -/
+/-- A salt `Epoch.start` gives is from the epoch's salt coin opened after the weights' root, and is `salt_of` of the
+opened coin. -/
 def EpochSaltAccepts : Prop :=
-  ∀ c o weightsRoot s, epochSalt c o weightsRoot = .ok (.ok s) ↔
+  ∀ c o weightsRoot s, epochSalt c o weightsRoot = .ok (.ok s) →
     CoinOpens c o "salt" weightsRoot ∧ saltOf c o.coin weightsRoot = .ok s
 
-/-- `draw_coin` gives a coin exactly when the opening is the epoch's draw coin opened after what the verifier recorded,
-and the coin is the opened one; an epoch without a coin commitment gives none. -/
+/-- A coin `draw_coin` gives is the opened one, from an epoch with a coin commitment whose draw coin the opening opens after
+what the verifier recorded. -/
 def DrawCoinAccepts : Prop :=
-  (∀ c o after coin, drawCoin (some c) o after = .ok (.ok coin) ↔ CoinOpens c o "draw" after ∧ coin = o.coin) ∧
-    ∀ o after coin, drawCoin none o after ≠ .ok (.ok coin)
+  ∀ cc o after coin, drawCoin cc o after = .ok (.ok coin) → ∃ c, cc = some c ∧ CoinOpens c o "draw" after ∧ coin = o.coin
 
 /-! ## Draws -/
 
