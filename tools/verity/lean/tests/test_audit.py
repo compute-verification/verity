@@ -1331,3 +1331,70 @@ def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path)
     A.run(["true"], tmp_path)
     A.took(rep, "fresh", 0.0)
     assert rep["peak_gib"]["fresh"] < 0.3                                   # each step's own peak, not the run's so far
+
+
+def hyp(name, at, reaches, module=None, source="binder"):
+    return {"source": source, "name": name, "at": at, "type": name, "head": None, "module": module, "reaches": reaches}
+
+
+def part(hyps=(), inputs=(), conclusion=()):
+    return {"inputs": [{"name": n, "at": a, "head": None} for n, a in inputs], "hypotheses": list(hyps),
+            "conclusion": list(conclusion)}
+
+
+ACCEPTS = hyp("h", 1, ["P.check", "Except.ok"])
+
+
+def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_what_follows():
+    """The shape rule (`refusals`): one hypothesis that its function accepted, besides premises (a constant of a module
+    under `shape.premises`); what follows the first input bound after the acceptance is the conclusion, so a later binder
+    is the conclusion's own; a second acceptance, or a hypothesis that is neither, is refused, and so is a field of a
+    structure an input ranges over that is neither."""
+    entry = {"function": "P.check", "outcome": "accept"}
+    fits = part([ACCEPTS, hyp("q", 3, ["P.Q"])], inputs=[("x", 0), ("w", 2)], conclusion=["P.Good"])
+    assert A.refusals(entry, [fits], []) == []
+    loose = part([ACCEPTS, hyp("q", 2, ["P.Q"], module="P.Other")], inputs=[("x", 0)])
+    assert [w.split(",")[0] for w in A.refusals(entry, [loose], [])] == ["takes q : q"]
+    assert A.refusals(entry, [loose], ["P.Other"]) == []
+    twice = part([ACCEPTS, hyp("h2", 2, ["P.check"])], inputs=[("x", 0)])
+    assert "a second acceptance" in A.refusals(entry, [twice], [])[0]
+    field = part([hyp("s.hscope", 0, ["P.Scope"], source="field"), ACCEPTS], inputs=[("s", 0)])
+    assert "a field of an input it ranges over" in A.refusals(entry, [field], [])[0]
+    assert "takes no hypothesis that its function returned accept" in A.refusals(entry, [part(inputs=[("x", 0)])], [])[0]
+    assert A.refusals({"function": "P.check", "outcome": "reject"}, [fits], [])[0].startswith("takes no hypothesis")
+    assert A.refusals({"function": "P.check", "outcome": "reject"},
+                      [part([hyp("h", 1, ["P.check", "P.reject"])], inputs=[("x", 0)])], []) == []
+    assert A.refusals(None, [fits], [])[0].startswith("has no entry under shape.properties")
+
+
+def test_a_function_that_always_returns_takes_no_acceptance_and_each_conjunct_must_be_about_it():
+    """Outcome `none` (`step`, a constant): no acceptance, the function anywhere in the statement; a conjunction is a
+    property when each conjunct is, so a conjunct of bare arithmetic is refused by its number."""
+    entry = {"function": ["P.step", "P.LIMIT"], "outcome": "none"}
+    assert A.refusals(entry, [part(inputs=[("s", 0)], conclusion=["P.step"]), part(conclusion=["P.LIMIT"])], []) == []
+    out = A.refusals(entry, [part(conclusion=["P.step"]), part(conclusion=["Nat", "LE.le"])], [])
+    assert out == ["(conjunct 2) says nothing about P.step or P.LIMIT, the function its entry names"]
+    assert A.reaches("P.protocol.check", {"P.protocol", "P.Protocol.check"})
+    assert not A.reaches("P.protocol.check", {"P.protocol"})
+
+
+def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink(tmp_path):
+    """`shape` with the files under `shape.frozen` (`frozen_reasons`): a frozen guarantee that doesn't fit passes, one that
+    fits fails until its file goes, a file needs a reason and a guarantee of this package, and an unfrozen misfit fails."""
+    pol = {"guarantees": {"P.a": {}, "P.b": {}}, "shape": {"premises": [], "properties": {
+        "P.a": {"function": "P.check", "outcome": "accept"}, "P.b": {"function": "P.check", "outcome": "accept"}}}}
+    good, bad = [part([ACCEPTS], inputs=[("x", 0)])], [part(inputs=[("x", 0)])]
+    facts = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": bad}}}
+    (tmp_path / "shape-frozen").mkdir()
+    (tmp_path / "shape-frozen" / "P.b").write_text("RESTATE: split the iff.\n")
+    assert A.shape(pol, facts, A.frozen_reasons(tmp_path, pol)) == []
+    (tmp_path / "shape-frozen" / "P.a").write_text(" \n")
+    (tmp_path / "shape-frozen" / "P.z").write_text("gone\n")
+    fails = A.shape(pol, facts, A.frozen_reasons(tmp_path, pol))
+    assert [f.split(":")[1].split()[0] for f in fails] == ["shape-frozen/P.z", "shape-frozen/P.a", "P.a"], fails
+    assert "the frozen list only shrinks" in fails[2]
+    (tmp_path / "shape-frozen" / "P.a").unlink()
+    (tmp_path / "shape-frozen" / "P.b").unlink()
+    (tmp_path / "shape-frozen" / "P.z").unlink()
+    assert [f.split()[1] for f in A.shape(pol, facts, A.frozen_reasons(tmp_path, pol))] == ["P.b"]
+    assert A.shape({"guarantees": {"P.b": {}}}, facts, {}) == [], "a package without a shape block isn't checked"

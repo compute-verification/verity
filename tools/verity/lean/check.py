@@ -170,7 +170,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
@@ -1030,6 +1030,109 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     return out, fails
 
 
+#: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
+#: always returns, whose property takes no such hypothesis, only the input
+OUTCOMES = ("accept", "undecided", "reject", "none")
+
+
+def shape(policy: dict, facts: dict, frozen: dict[str, str]) -> list[str]:
+    """The shape every property has (the lean-proofs skill, "One shape"), as the policy's `shape` declares it: for each
+    guarantee, its entry under `shape.properties` names the function it is about (`function`: a constant, or several) and
+    the outcome its one hypothesis that is not a premise takes (`outcome`, `OUTCOMES`).  Its statement, with a lifted
+    definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type reaches the
+    function, and with an outcome other than `accept`, a constant named for the outcome), and premises: hypotheses whose
+    head is a constant of a module under `shape.premises`.  A `Prop` field of a structure an input ranges over is a
+    hypothesis too, and a conjunction counts as its conjuncts.  A guarantee in ``frozen`` ({name: its file's reason}, the
+    files under `shape.frozen`) is exempt until it fits, and then its file must go."""
+    spec = policy.get("shape")
+    if spec is None:
+        return []
+    fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
+    where = spec.get("frozen", "shape-frozen")
+    guarantees = set(policy.get("guarantees", {}))
+    for name in sorted(set(frozen) - guarantees):
+        fails.append(f"shape: {where}/{name} freezes {name}, which is not a guarantee of this package: delete the file")
+    for name in sorted(set(entries) - guarantees):
+        fails.append(f"shape: shape.properties lists {name}, which is not a guarantee of this package: remove the entry")
+    for name in sorted(guarantees):
+        if name in frozen and not frozen[name].strip():
+            fails.append(f"shape: {where}/{name} gives no reason: one sentence on why {name} doesn't have the shape yet")
+        f = facts["pins"].get(name, {})
+        if "shape" not in f:
+            continue
+        why = refusals(entries.get(name), f["shape"], premises)
+        if name in frozen:
+            if not why:
+                fails.append(f"shape: {name} has the shape now: delete {where}/{name}, the frozen list only shrinks")
+        elif why:
+            fails += [f"shape: {name} {w}" for w in why]
+    return fails
+
+
+def refusals(entry: dict | None, got: list[dict], premises: list[str]) -> list[str]:
+    """Why a statement's shape (`Facts.lean`'s `shapeInfo`, one part per conjunct) isn't a property of the function
+    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one."""
+    if not entry or not entry.get("function") or entry.get("outcome") not in OUTCOMES:
+        return [f"has no entry under shape.properties naming its function and its outcome ({', '.join(OUTCOMES)})"]
+    if len(got) == 1:
+        return part_refusals(entry, got[0], premises)
+    return [f"(conjunct {k + 1}) {w}" for k, part in enumerate(got) for w in part_refusals(entry, part, premises)]
+
+
+def part_refusals(entry: dict, got: dict, premises: list[str]) -> list[str]:
+    """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
+    first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`."""
+    fns = [entry["function"]] if isinstance(entry["function"], str) else list(entry["function"])
+    outcome, said = entry["outcome"], " or ".join(fns)
+
+    def about(h: dict) -> bool:
+        reached = set(h["reaches"])
+        return any(reaches(f, reached) for f in fns) and (
+            outcome == "accept" or any(c.rsplit(".", 1)[-1] == outcome for c in reached))
+
+    def premise(h: dict) -> bool:
+        return bool(h["module"]) and under(premises, h["module"])
+
+    hyps = sorted(got["hypotheses"], key=lambda h: h["at"])
+    start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
+        next(iter(hyps), None)
+    ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
+    taken = [h for h in hyps if ends is None or h["at"] < ends]
+    out = []
+    if outcome != "none" and start is None:
+        out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
+                   f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
+    for h in taken:
+        if (h is start and outcome != "none") or premise(h):
+            continue
+        what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
+        role = "a second acceptance" if outcome != "none" and about(h) else "neither its acceptance nor a premise"
+        out.append(f"takes {h['name']} : {h['type']}, {what} that is {role} (its acceptance: {outcome} by {said}; a premise: "
+                   f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})")
+    if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
+        out.append(f"says nothing about {said}, the function its entry names")
+    return out
+
+
+def reaches(function: str, reached: set[str]) -> bool:
+    """Whether a statement part that reaches the constants ``reached`` applies ``function``: a constant, or a field of one
+    (`PouwCheck.protocol.check`, the `check` field of the structure `PouwCheck.protocol`), whose path is the longest of its
+    prefixes that is a constant, followed by fields, each a constant with that last component (its projection)."""
+    parts = function.split(".")
+    for i in range(len(parts), 0, -1):
+        if ".".join(parts[:i]) in reached:
+            return all(any(c.rsplit(".", 1)[-1] == p for c in reached) for p in parts[i:])
+    return False
+
+
+def frozen_reasons(pkg: Path, policy: dict) -> dict[str, str]:
+    """{guarantee: reason}: the files under the package's `shape.frozen` directory, one per guarantee, named for it."""
+    spec = policy.get("shape")
+    d = pkg / (spec or {}).get("frozen", "shape-frozen")
+    return {p.name: p.read_text() for p in sorted(d.iterdir()) if p.is_file()} if spec is not None and d.is_dir() else {}
+
+
 def unowned(rec: dict | None) -> dict:
     """A guarantee's record without its `owner`: what the build writes and the audit compares."""
     return {k: v for k, v in (rec or {}).items() if k != "owner"}
@@ -1674,7 +1777,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return rep
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current))
+    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts, frozen_reasons(pkg, current))
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)

@@ -275,7 +275,72 @@ def family : Name → Name
   | .str p s => if s.startsWith "_" && !p.isAnonymous then family p else .str p s
   | n => n
 
-def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
+/-- The constants an expression uses and those the definitions under `meaning` it uses read, transitively (`reads`). -/
+def reaches (env : Environment) (meaning : Array Name) (e : Expr) : Array String :=
+  let cs := e.getUsedConstants
+  let (rs, outside) := ((reads env meaning cs).run {}).1
+  let all := (cs ++ rs.map (·.1) ++ outside.map (·.1)).foldl (fun (s : NameSet) c => s.insert c) {}
+  all.toArray.qsort Name.lt |>.map toString
+
+/-- One hypothesis of a statement's shape: where it came from (`binder`, a binder of the statement, or `field`, a `Prop`
+field of a structure the package declares that a binder ranges over), its name, the binder's position (`at`), its type, its head constant and that constant's module, and what it
+reaches (`reaches`). A conjunction counts as each of its conjuncts. -/
+partial def hypothesisJson (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (source name : String)
+    (pos : Nat) (t : Expr) : MetaM (Array Json) := do
+  let t ← instantiateMVars t
+  if t.isAppOfArity ``And 2 then
+    return (← hypothesisJson env meaning moduleOf source s!"{name}.1" pos t.appFn!.appArg!) ++
+      (← hypothesisJson env meaning moduleOf source s!"{name}.2" pos t.appArg!)
+  let head : Option Name := match t.getAppFn with | .const c _ => some c | _ => none
+  return #[Json.mkObj [("source", toJson source), ("name", toJson name), ("at", toJson pos),
+    ("type", toJson (toString (← ppExpr t))),
+    ("head", toJson (head.map toString)), ("module", toJson ((head.bind moduleOf).map toString)),
+    ("reaches", toJson (reaches env meaning t))]]
+
+/-- One part of a statement's shape, for the audit's shape rule: its binders (`inputs`: those that aren't propositions,
+each with its position and its type's head), its hypotheses (`hypothesisJson`: each `Prop` binder, and each `Prop` field
+of a structure an input ranges over), and what its conclusion reaches. -/
+def shapeOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (stmt : Expr) : MetaM Json :=
+  forallTelescope stmt fun xs concl => do
+    let mut inputs := #[]
+    let mut hyps := #[]
+    for h : i in [0:xs.size] do
+      let d ← xs[i].fvarId!.getDecl
+      let t ← instantiateMVars d.type
+      if ← isProp t then
+        hyps := hyps ++ (← hypothesisJson env meaning moduleOf "binder" d.userName.toString i t)
+        continue
+      let head : Option Name := match t.getAppFn with | .const c _ => some c | _ => none
+      inputs := inputs.push <| Json.mkObj [("name", toJson d.userName.toString), ("at", toJson i),
+        ("head", toJson (head.map toString))]
+      let some s := head | continue
+      if !((moduleOf s).map (under meaning ·)).getD false then continue
+      let some (.inductInfo iv) := env.find? s | continue
+      let [ctor] := iv.ctors | continue
+      if iv.numIndices != 0 || iv.isRec then continue
+      let some (.ctorInfo cv) := env.find? ctor | continue
+      let ctorType ← instantiateForall (cv.type.instantiateLevelParams cv.levelParams t.getAppFn.constLevels!)
+        (t.getAppArgs.extract 0 cv.numParams)
+      hyps := hyps ++ (← forallTelescope ctorType fun fs _ => do
+        let mut out := #[]
+        for f in fs do
+          let fd ← f.fvarId!.getDecl
+          if ← isProp fd.type then
+            out := out ++ (← hypothesisJson env meaning moduleOf "field" s!"{d.userName}.{fd.userName}" i fd.type)
+        return out)
+    return Json.mkObj [("inputs", toJson inputs), ("hypotheses", toJson hyps),
+      ("conclusion", toJson (reaches env meaning concl))]
+
+partial def conjuncts (e : Expr) : List Expr :=
+  if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]
+
+/-- The statement's shape, one part per conjunct of a statement that is a conjunction (`shapeOf` each), after a lifted
+definition is unfolded once (`liftOf`) and its `let`s are inlined. -/
+def shapeInfo (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (stmt : Expr) : MetaM Json := do
+  let stmt ← zetaReduce (((liftOf env meaning stmt).map (·.2)).getD stmt)
+  return toJson (← (conjuncts stmt).mapM (shapeOf env meaning moduleOf))
+
+def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
@@ -302,7 +367,8 @@ def pinInfo (env : Environment) (axioms : Std.HashMap Name NameSet)
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
-    ("hypotheses", toJson hypotheses), ("type_hash", toJson (hex ci.type.hash)),
+    ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env meaning moduleOf ci.type),
+    ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
 
@@ -406,7 +472,7 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert p rs
     return acc
   let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
-    return (p.toString, ← pinInfo env axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+    return (p.toString, ← pinInfo env meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write
