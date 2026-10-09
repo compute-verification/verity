@@ -45,6 +45,28 @@ def test_universal_staging_hides_the_netlist_but_its_program_row(tmp_path):
     assert 0 < o["body_bytes_differing"] <= 64
 
 
+@pytest.mark.slow
+def test_direct_stages_the_registered_private_circuit_as_a_public_circuit(tmp_path):
+    """The overhead's baseline (``rec_inner.py direct``): the netlist ``universal`` registers for the same class and seed, as
+    its own one-Call statement with C-Flock's salted leaves (the ``--zk`` form Lean covers) and salts from the OS, in the
+    files rec-private-outer.sh's ``outer`` reads; its unit is the netlist's computing graph (the inputs its live gates read,
+    the outputs no input bit is)."""
+    root = HERE.parents[3]
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, root / "verity" / "ml" / "flock" / "python")))
+    rec = {}
+    for cmd in ("universal", "direct"):
+        p = subprocess.run([sys.executable, str(POD / "rec_inner.py"), cmd, "--cls", "16,16,8", "--n", "4", "--out",
+                            str(tmp_path / cmd)], env=env, capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stderr[-2000:]
+        rec[cmd] = json.loads(p.stdout)
+    u, d = rec["universal"], rec["direct"]
+    assert d["netlist"] == {k: u["netlist"][k] for k in d["netlist"]}
+    assert (d["leaf_scheme"], d["salts"], d["n"]) == ("hm96-sha512/v1", "os", 4)
+    assert d["unit"] == {"inputs_read": 5, "outputs_computed": 4}
+    assert sorted(f.name for f in (tmp_path / "direct").iterdir()) == ["circuit.txt", "inst.bin", "partition.json", "program.json",
+                                                                         "pub.bin"]
+
+
 def _summary():
     spec = importlib.util.spec_from_file_location("rec_private_summary", POD / "rec_private_summary.py")
     m = importlib.util.module_from_spec(spec)

@@ -1,4 +1,5 @@
-# Sourced by 87-rec-private.sh and 89-rec-private-direct.sh after rec-env.sh: V*'s outer --zk sessions. Reads $O, $B,
+# Sourced by 87-rec-private.sh, 89-rec-private-direct.sh and 91-rec-private-baseline.sh after rec-env.sh: V*'s outer --zk
+# sessions (and the baseline's, a statement without registered values). Reads $O, $B,
 # $LEAN_BIN, $T (Lean's tools: core-firewall), and for a session behind the firewall $FWS and $SID.
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
@@ -62,8 +63,10 @@ outer() {
   SESS=$(find $D/sessions -name session.json -printf '%h\n' 2>/dev/null | sort | head -1)
   [ -n "$SESS" ] || { echo "$name: no session"; return 1; }
   du -sb $SESS/*.bin >> $D/sizes.txt
+  local VF=()
+  for f in program registered; do [ -f $C/$f.json ] && VF+=(--$f $C/$f.json); done
   /usr/bin/time -v -o $D/time-lean.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin \
-    --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $SESS > $D/lean.log 2> $D/lean.err
+    --partition $C/partition.json "${VF[@]}" --session $SESS > $D/lean.log 2> $D/lean.err
   echo "$name lean exit $?"
   /usr/bin/time -v -o $D/time-replay.txt $B replay --zk --instances $C/pub.bin --circuit $C/circuit.txt --sessions $SESS > $D/replay.txt 2>&1
   echo "$name replay exit $?"
