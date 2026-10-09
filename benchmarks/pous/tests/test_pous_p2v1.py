@@ -21,6 +21,8 @@ from test_pous_harness import PyResponder  # noqa: E402
 ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
+SEED = "5eed" * 8
+"""`band_gpu/memory_challenger.py --seed` for the `V3` arm: its challenges, and so its controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -358,7 +360,7 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     from verity.core.protocols.pous.verifier import leaf_hash
 
     _, harness, _ = _p2()
-    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small(), research=True)
+    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small(), research=True)
     gates, m = body["gates"], body["metrics"]
     for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "codec", "timed_audit", "value_control",
               "late_control", "recompute_control"):
@@ -379,13 +381,16 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     honest = m["audit"]
     assert honest["scheme"] == "p2-128/v4" and honest["strict"] is False and honest["audits_accepted"] == 2
     assert honest["k"] == 105 and any("no certificate" in g for g in honest["gaps"])
+    from band_gpu.memory_challenger import seeded_source
+    assert honest["seed"] == SEED and [r["source"] for r in honest["records"]] == [
+        seeded_source(bytes.fromhex(SEED), j).hex() for j in range(2)]
     assert m["value_control"]["audits_accepted"] == 0 and m["late_control"]["audits_accepted"] == 0
     assert m["recompute_control"]["wrong"] == 0 and m["recompute_control"]["recomputed_answers"] > 0
     assert body["profile"]["scheme"] == "p2-128/v4" and not body["profile"]["certified"]
 
 
 def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
-    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small())
+    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small())
     gates, honest = body["gates"], body["metrics"]["audit"]
     assert body["implementation"]["memory_challenger_args"] == ["--strict"]
     assert "has no certificate" in honest["refused"] and honest["audits"] == 0 and honest["responder"]["answered"] == 0
@@ -487,7 +492,7 @@ def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_
     def run(name: str) -> dict:
         out = tmp_path / name
         out.mkdir()
-        return _bench().P2V3Gpu().run(_args(out, k=105, p2_c_cache=str(cache)), WS, out, backend=_backend(),
+        return _bench().P2V3Gpu().run(_args(out, k=105, seed=SEED, p2_c_cache=str(cache)), WS, out, backend=_backend(),
                                       params=_small(), research=True)
 
     first = run("first")
