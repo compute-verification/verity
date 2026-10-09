@@ -332,13 +332,14 @@ The draw is the object
 {"law": "work",       "population": N, "k": K, "strata": [work stratum…], "units": [u_0 < u_1 < …], ["closure": [c_0 < c_1 < …]]}
 ~~~
 
-**The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
-the same as `verity.core.protocols.sampled_proofs.one_stage`'s, in `verity/core/protocols/sampled_proofs/README.md`):
+**The stratified sampling design** is the default (Daniel, Sep 27; the encoding is
+`note:20260927T1550Z-handoff-from-stratified-law`, the same as `verity.core.protocols.sampled_proofs.one_stage`'s, in
+`verity/core/protocols/sampled_proofs/README.md`):
 - **Strata.** The verifier derives them from its own program and partition object, never from anyone else
   (`HmRow.stratifiedLaw`, `flock-verify draw --program P --partition Q --stratified K`). It applies the query, groups the
   units by the template descriptor id of their root node, and writes each stratum's units as ascending, disjoint, non-empty
   ranges `[lo, hi)`, adjacent ones merged, the strata in the order of their first unit. Only `Q_template_instance` v0 and
-  `Q_template_instances` v0 define strata; any other query refuses the law.
+  `Q_template_instances` v0 define strata; any other query refuses the sampling design.
 - **Sizes.** For `1 ≤ K ≤ N`, stratum `s` of `n_s` units draws `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)`: `K n_s / N` rounded
   half up, never below one. A stratum is `{"template": id, "units": [[lo, hi], …], "k": k_s}`, and `Σ k_s` units are drawn.
 - **The sampler.** Each stratum draws `subset(k_s, n_s)` on its own stream of the verifier's randomness, of
@@ -348,37 +349,37 @@ the same as `verity.core.protocols.sampled_proofs.one_stage`'s, in `verity/core/
 - A session that proves one template's units is served that template's share as a `subset` draw over its `n_s` units.
 - **The verifier's own `K` and strata.** A draw's `K` and strata set every `k_s`, so `verify` never takes them as stated.
   It refuses a stratified draw unless it holds its own `K` (`--stratified K`), program and partition, refuses one drawn
-  at any other `K`, and then holds the law to its own derivation.
+  at any other `K`, and then holds the sampling design to its own derivation.
 
-**The work law** is the draw law's second version (Daniel approved work-proportional sizing on Sep 28,
-`note:20260929T0340Z-handoff-from-pous-rulings-2`). It keeps the stratified law's strata and sampler; only the sizes
-differ. The stratified law is unchanged.
+**The work sampling design** is the stratified one's second version (Daniel approved work-proportional sizing on Sep 28,
+`note:20260929T0340Z-handoff-from-pous-rulings-2`). It keeps the stratified sampling design's strata and sampler; only
+the sizes differ. The stratified sampling design is unchanged.
 - **Work and floors.** Each template's PoUW work per unit, and its floor, come from the verifier's own work table
   (`--work-table F`: a JSON object from template descriptor id to the work, a natural number in any fixed unit, or to
   `{"work": w, "floor": f}` with `f ≥ 1`; the floor is one when the table gives only the work). Units that do no PoUW
   work, such as dequantization, the quantizer and attention, have work 0. A template the table does not name refuses the
-  law (`HmRow.workLaw`, `flock-verify draw --program P --partition Q --work K --work-table F`). A draw's `K`, works and
-  floors set every `k_s`, so `verify` never takes them as stated. It refuses a work draw unless it holds its own `K`
-  (`--work K`), work table, program and partition, refuses one drawn at any other `K`, and then holds the law to its own
-  derivation.
+  sampling design (`HmRow.workLaw`, `flock-verify draw --program P --partition Q --work K --work-table F`). A draw's
+  `K`, works and floors set every `k_s`, so `verify` never takes them as stated. It refuses a work draw unless it holds
+  its own `K` (`--work K`), work table, program and partition, refuses one drawn at any other `K`, and then holds the
+  sampling design to its own derivation.
 - **Sizes.** With `W = Σ_s w_s n_s ≥ 1` and `1 ≤ K ≤ N`, stratum `s` draws `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`
   (`Draw.workK`). This is its work share of `K`, rounded up. It is never above `n_s`, and never below its floor `f_s`. A
   work stratum is `{"template": id, "units": [[lo, hi], …], "work": w_s, "floor": f_s, "k": k_s}`.
 - **Floors.** Every floor is at least one, and U2 refuses a floor of 0. With every floor one, the integrity floor binds
   exactly for the strata that do no work, and at most `K` plus one unit per stratum are drawn. In general at most
   `K + Σ_s f_s` are drawn. The table sets each stratum's floor by what the stratum needs: a stratum with `b_s` of its
-  `n_s` units wrong escapes with at most `((n_s − b_s)/n_s)^(f_s)`, so `f_s ≈ ln(1/δ)/ε_s` catches a fraction `ε_s`
-  of it wrong up to `δ`. Floors of at least the stratified law's sizes at `C` for the strata that do no work keep that law's
-  guarantee for them.
-- **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Wrong units that do a fraction `ε` of the work
-  escape with probability at most `(1 − ε)^K` (`work_escape_le`), whatever the floors. At the sizing of record,
+  `n_s` units faulty has acceptance probability at most `((n_s − b_s)/n_s)^(f_s)`, so `f_s ≈ ln(1/δ)/ε_s` catches a
+  faulty fraction `ε_s` of it up to `δ`. Floors of at least the stratified sampling design's sizes at `C` for the strata
+  that do no work keep that design's guarantee for them.
+- **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Faulty units that do a fraction `ε` of the work
+  have acceptance probability at most `(1 − ε)^K` (`work_escape_le`), whatever the floors. At the sizing of record,
   `δ = 2^-40` and `ε = 0.1%`, `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not
   (`record_sizing_one_fewer`). Rounding up keeps every unit's inclusion probability at least `K w_s / W`, which the bound
-  needs. Every non-empty stratum draws at least one unit, so a wholly wrong stratum is caught
-  (`audit_work_whole_stratum`). Each stratum's floor gives its own escape bound (`work_escape_floor_le`,
-  `audit_work_floor`). When the strata that do no work have floors of at least the stratified law's sizes at `C`, a set
-  escapes at most as often as its units in those strata escape `stratified:C` (`work_escape_le_count`,
-  `audit_work_rest`).
+  needs. Every non-empty stratum draws at least one unit, so a wholly faulty stratum is caught
+  (`audit_work_whole_stratum`). Each stratum's floor gives its own bound on acceptance probability
+  (`work_escape_floor_le`, `audit_work_floor`). When the strata that do no work have floors of at least the stratified
+  sampling design's sizes at `C`, a set's acceptance probability is at most that of its units in those strata under
+  `stratified:C` (`work_escape_le_count`, `audit_work_rest`).
 - **Closure draws.** A closure draw proves each drawn unit together with its closure: for a tile, the two strips it
   reads and the node units on its X strip's path. The closure comes from the verifier's own closure map (`--closure F`: a
   JSON object from a unit's index to the units its credit depends on).
@@ -387,15 +388,17 @@ differ. The stratified law is unchanged.
   - The statement proves both (`UnitDraw.proved`), and U3 counts both.
   - `verify` refuses a closure draw unless it holds its own closure map, and then the closure must be its own derivation
     from the drawn units. With the map, a plain work draw is refused too, since it lacks its closure.
-  - What it guarantees (`soundness/FlockSoundness/Audit/Closure.lean`): a set's escape under the closure draw is the work
-    law's escape of the set with the units it makes unsound, those whose closure meets it (`closure_escape`). The unsound
-    work is the work of both: the closure map need not list a tile in its own closure, so the wrong units' own work is
-    counted explicitly. A wrong unit's harm is its own work and that of every unit above it, so one that is never drawn on
-    its own, such as a node, is charged all of it (`harm_le_unsoundWork`). At any floors, the audit accepts while the
-    unsound work is at least a fraction `ε` of the work with probability at most `(1 − ε)^K + ε_ks + δ_link`
-    (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40` (`audit_work_closure_of_record`).
-  - `Law.widen`'s `escape_widen_le` is weaker. It carries only the base law's escape bounds, and only to a widening on the
-    same coins, and those bound the wrong units' own work, not the unsound work.
+  - What it guarantees (`soundness/FlockSoundness/Audit/Closure.lean`): a set's acceptance probability under the closure
+    draw is the work sampling design's for the set with the units it makes unsound, those whose closure meets it
+    (`closure_escape`). The unsound work is the work of both: the closure map need not list a tile in its own closure,
+    so the faulty units' own work is counted explicitly. A faulty unit's harm is its own work and that of every unit
+    above it, so one that is never drawn on its own, such as a node, is charged all of it (`harm_le_unsoundWork`). At
+    any floors, the audit accepts while the unsound work is at least a fraction `ε` of the work with probability at most
+    `(1 − ε)^K + ε_ks + ε_bind` (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40`
+    (`audit_work_closure_of_record`).
+  - `Law.widen`'s `escape_widen_le` is weaker. It carries only the base sampling design's bounds on acceptance
+    probability, and only to a widening on the same coins, and those bound the faulty units' own work, not the unsound
+    work.
 
 The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
 and the record keeps it as `unit_draw`. The offline checks:
@@ -403,10 +406,10 @@ and the record keeps it as `unit_draw`. The offline checks:
 | check | rule |
 |---|---|
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
-| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, floor, k}`, a floor of at least one, `W ≥ 1`, each `k` the work rule's above its floor, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, and `verify` refuses a stratified draw without them and its own `K` (`--stratified K`), or at another `K`. A work draw's law must always be its own derivation from them, its work table (works and floors) and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
+| U2 | the draw is well formed: exactly the sampling design's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, floor, k}`, a floor of at least one, `W ≥ 1`, each `k` the work rule's above its floor, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's sampling design must be its own derivation from them, and `verify` refuses a stratified draw without them and its own `K` (`--stratified K`), or at another `K`. A work draw's sampling design must always be its own derivation from them, its work table (works and floors) and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
 
-`stratified_agree.py` checks the Lean verifier's laws, draws and U2 verdicts against core's (#164's
+`stratified_agree.py` checks the Lean verifier's sampling designs, draws and U2 verdicts against core's (#164's
 `verity.core.protocols.sampled_proofs.one_stage.draw`, #161's `Stratified`).
 
 Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
@@ -1233,7 +1236,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     the structure;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
-    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 128 `sha512x3`
+    residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
     slots and 16 residuals it fits, and refuses unless the parts hold every residual once; part `j` must exist;
   - part `j`'s S is the whole S's residuals and the operands their products read, each term renumbered into the part's
     `w` (its row ports' elements, in order) and `v` (the elements it reads, ascending); a term outside them, or a
@@ -1547,15 +1550,16 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
    `sha512/row/v1` row of `16 · words` bits in at least one chunk.
 
-At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's law
-(`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified law, with or without
-`--zk`, and under `--zk` by the subset law (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is `refused: <why>: no
-soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and
-`a subset draw without --zk`. A session without a draw is refused too, since every claim is about a drawn session
-(each claim's record hypothesis reads the record's draw): it is verified against the population's statement, and its
-verdict is `refused: a session without a draw: every soundness claim is about a drawn session (D12)` only once every
-check has passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's
-reason. A claim for the draw of every unit would cover it; none is proved.
+At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
+design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
+design, with or without `--zk`, and under `--zk` by the subset one (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is
+`refused: <why>: no soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`,
+`a work draw with a closure` and `a subset draw without --zk`. A session without a draw is refused too, since every
+claim is about a drawn session (each claim's record hypothesis reads the record's draw): it is verified against the
+population's statement, and its verdict is
+`refused: a session without a draw: every soundness claim is about a drawn session (D12)` only once every check has
+passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's reason. A
+claim for the draw of every unit would cover it; none is proved.
 
 The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
@@ -1643,16 +1647,17 @@ expectation):
   refuses every session once every check has passed, as `verity/ml/flock/live`'s now does. A set marked `lean_refuses`
   in `vectors.json` expects that refusal of each session that upstream accepts, and of every other session its own reason
   (`agree.py --lean-refuses`): a session refused for its form alone passed every check, and is compared as accepted. So,
-  too, a draw by a law no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a closure, and
-  a subset draw without `--zk`), which the Lean verifier alone refuses, at setup (the live server and upstream verify
-  it): a set marked `lean_refuses_drawn` expects that refusal of every drawn session (`agree.py --lean-refuses-drawn`).
-  `verity/ml/flock/tests/test_lean_draw_laws.py` runs each law on the Lean verifier. So, too, a session without a draw
-  (§16.15), which the Lean verifier alone refuses, and only once every check has passed: a set marked
-  `lean_refuses_drawless` expects that refusal of each session without a draw that upstream accepts, and of every other
-  session without a draw its own reason (`agree.py --lean-refuses-drawless`). `agree.py`'s `passed_every_check` counts
-  the sessions refused last and for nothing else. So, too, under `--zk`, a statement
-  whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the live server
-  and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it; `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
+  too, a draw by a sampling design no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a
+  closure, and a subset draw without `--zk`), which the Lean verifier alone refuses, at setup (the live server and
+  upstream verify it): a set marked `lean_refuses_drawn` expects that refusal of every drawn session
+  (`agree.py --lean-refuses-drawn`). `verity/ml/flock/tests/test_lean_draw_laws.py` runs each sampling design on the
+  Lean verifier. So, too, a session without a draw (§16.15), which the Lean verifier alone refuses, and only once every
+  check has passed: a set marked `lean_refuses_drawless` expects that refusal of each session without a draw that
+  upstream accepts, and of every other session without a draw its own reason (`agree.py --lean-refuses-drawless`).
+  `agree.py`'s `passed_every_check` counts the sessions refused last and for nothing else. So, too, under `--zk`, a
+  statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
+  live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
+  `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
 - **D13:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
   unit's net as the file gives it. The spec refuses a `rec-open/` unit whose name is not `rec-open/l<LANES>-h<H>` at valid
   parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector

@@ -3,7 +3,7 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 description = "PoUW's benchmarks and their tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-vllm", "numpy", "blake3>=1.0"]
+dependencies = ["research", "verity", "verity-vllm", "verity-difftest", "numpy", "blake3>=1.0"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -13,6 +13,7 @@ package = false
 verity = { workspace = true }
 research = { workspace = true }
 verity-vllm = { workspace = true }
+verity-difftest = { workspace = true }
 
 [tool.verity.tests]
 # Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python; harness/price_twins.py
@@ -20,6 +21,10 @@ verity-vllm = { workspace = true }
 # in Proofs (`reads_exempt` in the lock).
 inputs = ["verity/ml/flock/python", "Security/Models/Pouw/Guarantees", "Security/Proofs/Pouw/PearlC/FlockTile/Statement.lean",
           "Security/lean-audit.json"]
+# Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
+artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
+             "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",
+             "verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
