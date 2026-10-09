@@ -21,7 +21,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 * **coin cases** go to `core_check.pass_epoch` and `core_check.draw` and Lean's (`of_record`): ``select`` (the recorded
   draw from the challenger's coin commitment, its draw coin's opening, the stream's digest, the receipt and draw.json),
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
-  receipt, one unit fewer), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
+  receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
   `job.sh` made them (a v2 pass's ``receive-unrecorded`` relabelled v1 under a fixed beacon, where `job.sh` drew one).
   A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
@@ -221,7 +221,7 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
                            ("draw-after", {"registration": hashlib.sha512(D.canonical(other).encode()).hexdigest()}),
                            ("draw-stream", {"stream": "00" * 64}),
                            ("draw-receipt", {"receipt": {**receipt, "received": "1"}}),
-                           ("draw-fewer", {"k": x["k"] - 1, "units": x["units"][:-1]})):
+                           ("draw-fewer", {"units": x["units"][:-1]})):
             got.append((name, "draw", {**x, **edit}, "CONTROL"))
     pass_path = passes.get(summary.get("served_run") or "")
     salt = out / "salt-opening.json"
