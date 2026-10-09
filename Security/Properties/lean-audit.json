@@ -15,7 +15,9 @@
   "Properties.NetworkCertifier",
   "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork",
-  "Properties.Proofs.CertifierNetwork"
+  "Properties.Proofs.CertifierNetwork",
+  "Properties.Evaluate",
+  "Properties.Proofs.Evaluate"
  ],
  "proved_in": ["../Proofs"],
  "meaning": [
@@ -56,7 +58,19 @@
   "Properties.CertifierNetwork",
   "Properties.Pous",
   "PousCheck.P2",
-  "PousCheck.Params"
+  "PousCheck.Params",
+  "Properties.Evaluate",
+  "Evaluate.Scalar",
+  "Evaluate.Fp32",
+  "Evaluate.Casts",
+  "Evaluate.TC.Spec",
+  "Evaluate.TC.Dots",
+  "Evaluate.Prims",
+  "Definitions.Core.Scalar",
+  "Definitions.Core.Fp32",
+  "Definitions.Core.Prims",
+  "Definitions.Core.TC.Pipeline",
+  "Definitions.Core.TC.Spec"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -93,6 +107,11 @@
    "imports": ["Properties.CertifierDevice", "Properties.NetworkCertifier"],
    "except": [],
    "why": "the guarantee joins the device's statements and the check's: stated over their definitions, never a proof"
+  },
+  "Properties.Evaluate": {
+   "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
+   "except": [],
+   "why": "the evaluator's equalities are stated against its functions and the `Definitions.Core` modules they copy, which import nothing of Mathlib"
   }
  },
  "reads_exempt": {
@@ -217,6 +236,528 @@
    "signature": ["Properties.CertifierNetwork.deviceOutputAccepted : Properties.CertifierNetwork.DeviceOutputAccepted"],
    "assumptions": [],
    "type_hash": "e60b64d60e57ef470c1c3b410954f8dfa0db434866dc3ea3d91a0c0f618c5e4f"
+  },
+  "Properties.Evaluator.Casts.bf16ToF32": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.bf16ToF32 : Properties.Evaluator.Casts.Bf16ToF32"],
+   "assumptions": [],
+   "type_hash": "e737ebc26ff10b51d74d66ef695698903b2a75dc040ce11434f9123aef918c32"
+  },
+  "Properties.Evaluator.Casts.bitLength": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.bitLength : Properties.Evaluator.Casts.BitLength"],
+   "assumptions": [],
+   "type_hash": "cb621f842a2c3b56729c466ed61f787c6f6a137a4242eeb6a3ff26df82369650"
+  },
+  "Properties.Evaluator.Casts.dyadicLt": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.dyadicLt : Properties.Evaluator.Casts.DyadicLt"],
+   "assumptions": [],
+   "type_hash": "7ed9d899e0033cc0f031b26b8cc63aeddb072d3343d7b9363e75af097ffff9f6"
+  },
+  "Properties.Evaluator.Casts.e2m1NanCode": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.e2m1NanCode : Properties.Evaluator.Casts.E2m1NanCode"],
+   "assumptions": [],
+   "type_hash": "9593aa397715afd0a32bd6fb6636fa1bdb119db6ea6c82e41cc885da2e84bb95"
+  },
+  "Properties.Evaluator.Casts.e2m1Up": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.e2m1Up : Properties.Evaluator.Casts.E2m1Up"],
+   "assumptions": [],
+   "type_hash": "114972b6690c71364e0ab8a1d45ffb7b98634ddd61cff14add55f7478dcd9d1e"
+  },
+  "Properties.Evaluator.Casts.e4m3Nan": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.e4m3Nan : Properties.Evaluator.Casts.E4m3Nan"],
+   "assumptions": [],
+   "type_hash": "1b4c43ce3e40aeefa14e501474e4ad7ff8e16292ac4214dc8cb186157b5e9a9d"
+  },
+  "Properties.Evaluator.Casts.e4m3ToF32": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.e4m3ToF32 : Properties.Evaluator.Casts.E4m3ToF32"],
+   "assumptions": [],
+   "type_hash": "a95e3ac19da7bd08100463b09a76b91689463a1ec1174db35f9378cd1195572c"
+  },
+  "Properties.Evaluator.Casts.f2fpBf16": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.f2fpBf16 : Properties.Evaluator.Casts.F2fpBf16"],
+   "assumptions": [],
+   "type_hash": "81037465146966616967ac4d17cff95a931d73ea1c7699e793430d303f40fbc3"
+  },
+  "Properties.Evaluator.Casts.f32ToBf16Rn": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.f32ToBf16Rn : Properties.Evaluator.Casts.F32ToBf16Rn"],
+   "assumptions": [],
+   "type_hash": "3d63aa5e5d999bd31f04e41317111bb50f1630c39970a1e97045c591fa58ff51"
+  },
+  "Properties.Evaluator.Casts.f32ToE2m1Sat": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.f32ToE2m1Sat : Properties.Evaluator.Casts.F32ToE2m1Sat"],
+   "assumptions": [],
+   "type_hash": "6570ec1ce5ae44a70e58f047298f4e2f85f56c2d4d5541bf044361b7169e5438"
+  },
+  "Properties.Evaluator.Casts.f32ToE4m3Sat": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.f32ToE4m3Sat : Properties.Evaluator.Casts.F32ToE4m3Sat"],
+   "assumptions": [],
+   "type_hash": "2104b7368974b9713dea0a199a95dc5cfe6c6a3bb908607675fc33ea020f1382"
+  },
+  "Properties.Evaluator.Casts.roundEvenDyadic": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Casts.roundEvenDyadic : Properties.Evaluator.Casts.RoundEvenDyadic"],
+   "assumptions": [],
+   "type_hash": "710413398c581daef4afe13d0ae027359dee8b21fcf9babbc20377d761f63159"
+  },
+  "Properties.Evaluator.Fp32.addWith": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.addWith : Properties.Evaluator.Fp32.AddWith"],
+   "assumptions": [],
+   "type_hash": "dbb8456cced6f9014034f98bbc09950abdffd1930d70d5ac61bf60b9b1264877"
+  },
+  "Properties.Evaluator.Fp32.bf16Add": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.bf16Add : Properties.Evaluator.Fp32.Bf16Add"],
+   "assumptions": [],
+   "type_hash": "2b5e213a12c60ac5d75abb51237b422d9be4ac7869131163cd3a4f902a5b0dbb"
+  },
+  "Properties.Evaluator.Fp32.bf16AddF2fp": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.bf16AddF2fp : Properties.Evaluator.Fp32.Bf16AddF2fp"],
+   "assumptions": [],
+   "type_hash": "77e7b57daf2b8b9efaadd4e8699a9bbb58f12fee98f9702f088e0b5dd02b655d"
+  },
+  "Properties.Evaluator.Fp32.bf16MulBf16": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.bf16MulBf16 : Properties.Evaluator.Fp32.Bf16MulBf16"],
+   "assumptions": [],
+   "type_hash": "4c777014dfb1dbdfce179996f0111f06aa5d2946e2a4bcf300607977aa84f162"
+  },
+  "Properties.Evaluator.Fp32.bf16MulF32": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.bf16MulF32 : Properties.Evaluator.Fp32.Bf16MulF32"],
+   "assumptions": [],
+   "type_hash": "b44966fc03974da0b08d6d9cac7082471d4231cd0c3291299de613d244df708f"
+  },
+  "Properties.Evaluator.Fp32.bf16NanF2fp": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.bf16NanF2fp : Properties.Evaluator.Fp32.Bf16NanF2fp"],
+   "assumptions": [],
+   "type_hash": "2b08ffbedaf1c60514887c0f42e5c64ee947718da27b534d30b6e78fd0fc50f8"
+  },
+  "Properties.Evaluator.Fp32.bf16NanTorch": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.bf16NanTorch : Properties.Evaluator.Fp32.Bf16NanTorch"],
+   "assumptions": [],
+   "type_hash": "6d1a750ca21cc60ff4649c5789ddfe3be44e805bab4c7e297c4bfafee12dddca"
+  },
+  "Properties.Evaluator.Fp32.bf16ToF32Bits": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.bf16ToF32Bits : Properties.Evaluator.Fp32.Bf16ToF32Bits"],
+   "assumptions": [],
+   "type_hash": "be8a4d420af60a54ee81a84339dc64200f6bd9e201885787cab6359670d2048b"
+  },
+  "Properties.Evaluator.Fp32.decode": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.decode : Properties.Evaluator.Fp32.Decode"],
+   "assumptions": [],
+   "type_hash": "b2c3f1a82479d4135ed75a5e2da9e613babdff7b114b2191287c50e38700dbe1"
+  },
+  "Properties.Evaluator.Fp32.decodedAddRn": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.decodedAddRn : Properties.Evaluator.Fp32.DecodedAddRn"],
+   "assumptions": [],
+   "type_hash": "a5fee7f0025eadb273b9f3d60320a026854c731b330f4e3ce027cfa76a4044fe"
+  },
+  "Properties.Evaluator.Fp32.decodedMul": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.decodedMul : Properties.Evaluator.Fp32.DecodedMul"],
+   "assumptions": [],
+   "type_hash": "0ee692c5ae343332756d2fc530265264c10ca146552b13e394d96a2a9c32a5c6"
+  },
+  "Properties.Evaluator.Fp32.divWith": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.divWith : Properties.Evaluator.Fp32.DivWith"],
+   "assumptions": [],
+   "type_hash": "c2c52ecd05b60cb4b8dc409b5e3f4343af2fd08ce184bc7723abbddce8a713f5"
+  },
+  "Properties.Evaluator.Fp32.f32AddFtzV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32AddFtzV2 : Properties.Evaluator.Fp32.F32AddFtzV2"],
+   "assumptions": [],
+   "type_hash": "9bd747ef3975ac0a041ce5706e9236fe9c0545a78282414eb2bbce5fb4092aa3"
+  },
+  "Properties.Evaluator.Fp32.f32AddV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32AddV2 : Properties.Evaluator.Fp32.F32AddV2"],
+   "assumptions": [],
+   "type_hash": "94dd89f5a236b52ed31f59832d9b0d13b5739fdc4d876ca9dec1899f394dcd6c"
+  },
+  "Properties.Evaluator.Fp32.f32DivV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32DivV2 : Properties.Evaluator.Fp32.F32DivV2"],
+   "assumptions": [],
+   "type_hash": "e0d28cbb77501392ee6861116eae4a1e2a97dd4006a3c622ee6f9e4356e1f200"
+  },
+  "Properties.Evaluator.Fp32.f32Fma": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32Fma : Properties.Evaluator.Fp32.F32Fma"],
+   "assumptions": [],
+   "type_hash": "b38843adf7c737d351198a6037ddddcb2a275f1f2e89705042a97bcdc4df636d"
+  },
+  "Properties.Evaluator.Fp32.f32FmaBits": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32FmaBits : Properties.Evaluator.Fp32.F32FmaBits"],
+   "assumptions": [],
+   "type_hash": "a483db122b5237f65ec83501d0a8506858c9af5f4494af92f738d962ec9e6a83"
+  },
+  "Properties.Evaluator.Fp32.f32FmaFtz": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32FmaFtz : Properties.Evaluator.Fp32.F32FmaFtz"],
+   "assumptions": [],
+   "type_hash": "748b9a89f7a8d5afbc883b04158c6f6fb46ef64912bb6879ebf2b334d73eda0e"
+  },
+  "Properties.Evaluator.Fp32.f32FmaFtzV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32FmaFtzV2 : Properties.Evaluator.Fp32.F32FmaFtzV2"],
+   "assumptions": [],
+   "type_hash": "71832cfe60369dfa0d9ea9541430f9a1c951c44127c395d529d9a335b849b792"
+  },
+  "Properties.Evaluator.Fp32.f32FmaSubFtz": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32FmaSubFtz : Properties.Evaluator.Fp32.F32FmaSubFtz"],
+   "assumptions": [],
+   "type_hash": "e039c2ae6d5734e318fffc4e2c3d0495fb0e1ea474c31dd96b143016a1ad43bd"
+  },
+  "Properties.Evaluator.Fp32.f32FmaSubFtzV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32FmaSubFtzV2 : Properties.Evaluator.Fp32.F32FmaSubFtzV2"],
+   "assumptions": [],
+   "type_hash": "89dc18ba73ddb87140ee5e590350f5ac2c0d7234f6a5ca8b3e8f5517682fd052"
+  },
+  "Properties.Evaluator.Fp32.f32FmaV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32FmaV2 : Properties.Evaluator.Fp32.F32FmaV2"],
+   "assumptions": [],
+   "type_hash": "a15d5d3c33e198442c1efbcf30ccd56e87709d97d543e8b725ceed9e34e23f77"
+  },
+  "Properties.Evaluator.Fp32.f32GpuNan": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32GpuNan : Properties.Evaluator.Fp32.F32GpuNan"],
+   "assumptions": [],
+   "type_hash": "c207c053789805aa98b113353c9877d525da09f4a52d6cdbf23ecd3903a84b3b"
+  },
+  "Properties.Evaluator.Fp32.f32Gt": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32Gt : Properties.Evaluator.Fp32.F32Gt"],
+   "assumptions": [],
+   "type_hash": "e5fbbb174df7a7620815e55a9283c39b7dd24002dc7485ae749514c429e4a963"
+  },
+  "Properties.Evaluator.Fp32.f32Max": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32Max : Properties.Evaluator.Fp32.F32Max"],
+   "assumptions": [],
+   "type_hash": "03a5880425253e383dd3dfac3e1d02541f27e4a8aedf752fde4c776471b4cd3a"
+  },
+  "Properties.Evaluator.Fp32.f32MaxBits": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32MaxBits : Properties.Evaluator.Fp32.F32MaxBits"],
+   "assumptions": [],
+   "type_hash": "8ed18a89de1ce01fbdc581d2cde13b5c2e462ea1d0495a0bb9cc84b2deb1557d"
+  },
+  "Properties.Evaluator.Fp32.f32MulFtzV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32MulFtzV2 : Properties.Evaluator.Fp32.F32MulFtzV2"],
+   "assumptions": [],
+   "type_hash": "dab17458ece92e9ca687e03dbe01354781f6e06ff347522513c5af0777bc9b2c"
+  },
+  "Properties.Evaluator.Fp32.f32MulV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32MulV2 : Properties.Evaluator.Fp32.F32MulV2"],
+   "assumptions": [],
+   "type_hash": "2194f2ea508398cbea2ea0e48fc23977dd8b9384a931dbdcdb4d04756989ee17"
+  },
+  "Properties.Evaluator.Fp32.f32Nan": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32Nan : Properties.Evaluator.Fp32.F32Nan"],
+   "assumptions": [],
+   "type_hash": "3dc9b7e2361a734dfa08eaf7dc8c704f274aa7894c993213b74094d1b5be6b5b"
+  },
+  "Properties.Evaluator.Fp32.f32SubFtzV2": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32SubFtzV2 : Properties.Evaluator.Fp32.F32SubFtzV2"],
+   "assumptions": [],
+   "type_hash": "e5cc794a7633e7f40685f409a3cc5f9d24fe39a753a010f7275889d81a88d7b3"
+  },
+  "Properties.Evaluator.Fp32.f32ToBf16RnBits": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.f32ToBf16RnBits : Properties.Evaluator.Fp32.F32ToBf16RnBits"],
+   "assumptions": [],
+   "type_hash": "08d27d2c4115e6e457377eb99c9eb1d6954175d455143645aefbaaf9d83ade55"
+  },
+  "Properties.Evaluator.Fp32.fmaWith": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.fmaWith : Properties.Evaluator.Fp32.FmaWith"],
+   "assumptions": [],
+   "type_hash": "60867b7cd48badc93bbe507cc274fbf58c929f45704bc3cbb2491973999e9a9d"
+  },
+  "Properties.Evaluator.Fp32.ftzBits": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.ftzBits : Properties.Evaluator.Fp32.FtzBits"],
+   "assumptions": [],
+   "type_hash": "5155164181d4d1f532ffccb042ca3873ecd559265852447ba1fadafa946007a8"
+  },
+  "Properties.Evaluator.Fp32.guardNegInfZero": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.guardNegInfZero : Properties.Evaluator.Fp32.GuardNegInfZero"],
+   "assumptions": [],
+   "type_hash": "e0b0debd69176aa7bcb0dcd0c93a8a77d5ffa89ca2b95053d70b84a5ccda36d8"
+  },
+  "Properties.Evaluator.Fp32.infWord": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.infWord : Properties.Evaluator.Fp32.InfWord"],
+   "assumptions": [],
+   "type_hash": "b9346abec9ed5d31bc950d98c5a086df54b38a37217c2a93d1f659bc7bf38984"
+  },
+  "Properties.Evaluator.Fp32.mulWith": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.mulWith : Properties.Evaluator.Fp32.MulWith"],
+   "assumptions": [],
+   "type_hash": "7335cbb407c3d9ce03973cf1a5759cd67b2f47044c56c64fd57bcdcb2fb548d8"
+  },
+  "Properties.Evaluator.Fp32.roundRn": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.roundRn : Properties.Evaluator.Fp32.RoundRn"],
+   "assumptions": [],
+   "type_hash": "84fa49a2399bcf0f0938439cbc4019db041765ef4aea49de7d360ad2f5946768"
+  },
+  "Properties.Evaluator.Fp32.roundSum": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.roundSum : Properties.Evaluator.Fp32.RoundSum"],
+   "assumptions": [],
+   "type_hash": "e79128728b26911cb6b4fc13e95f97897d843fa3bd002d59fbb9d43869bf9c58"
+  },
+  "Properties.Evaluator.Fp32.zeroWord": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Fp32.zeroWord : Properties.Evaluator.Fp32.ZeroWord"],
+   "assumptions": [],
+   "type_hash": "04456193bf731e3739a997fc3443041755d818df8c0d0f3ca4030069e505c0ad"
+  },
+  "Properties.Evaluator.Gates.andBits": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Gates.andBits : Properties.Evaluator.Gates.AndBits"],
+   "assumptions": [],
+   "type_hash": "6414033ef67b081c24f8c57c4d7682c9c01d8c5080319b0a9e20264b0e58fb24"
+  },
+  "Properties.Evaluator.Gates.notBit": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Gates.notBit : Properties.Evaluator.Gates.NotBit"],
+   "assumptions": [],
+   "type_hash": "1065a9de0b8517bd41b34e758b406f3b5c1c8d4a5491d1d6b0897387f3dbb5b1"
+  },
+  "Properties.Evaluator.Gates.xorBits": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Gates.xorBits : Properties.Evaluator.Gates.XorBits"],
+   "assumptions": [],
+   "type_hash": "f00f1e62a1c147bd1fda7244de5c9c70b6ab1657d190be297bbcdf7ae537a96d"
+  },
+  "Properties.Evaluator.Scalar.bitAnd": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.bitAnd : Properties.Evaluator.Scalar.BitAnd"],
+   "assumptions": [],
+   "type_hash": "49dfe9b393ae9e1f398a47e2e8e4605e0c1daaa3650a34e40dbd5968a3f8fcb4"
+  },
+  "Properties.Evaluator.Scalar.f32Fabs": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.f32Fabs : Properties.Evaluator.Scalar.F32Fabs"],
+   "assumptions": [],
+   "type_hash": "716352d8c3b31ccda8b9d07a89885c3912d2b09e1cdf0ad77e468989cddc1654"
+  },
+  "Properties.Evaluator.Scalar.f32Fmaxf": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.f32Fmaxf : Properties.Evaluator.Scalar.F32Fmaxf"],
+   "assumptions": [],
+   "type_hash": "a093371e64fc50124c95fd63d99ce925295661aec8cce153ba697e8500b91e2e"
+  },
+  "Properties.Evaluator.Scalar.f32IsNan": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.f32IsNan : Properties.Evaluator.Scalar.F32IsNan"],
+   "assumptions": [],
+   "type_hash": "59c185b2ac487943dacb1ca027ba4ebf08cc0c3974deaf8f29176b7f73d7a45d"
+  },
+  "Properties.Evaluator.Scalar.f32NanPtx": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.f32NanPtx : Properties.Evaluator.Scalar.F32NanPtx"],
+   "assumptions": [],
+   "type_hash": "05c9922edcfb5f428b4a8971074d91ee5b8e17f2c69d69731899e11ab13396b8"
+  },
+  "Properties.Evaluator.Scalar.f32Neg": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.f32Neg : Properties.Evaluator.Scalar.F32Neg"],
+   "assumptions": [],
+   "type_hash": "1935c4d019be9c51a8e75ba7cb5138d003cdc1c53a17999634aa6734c6866d15"
+  },
+  "Properties.Evaluator.Scalar.i32Add": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.i32Add : Properties.Evaluator.Scalar.I32Add"],
+   "assumptions": [],
+   "type_hash": "fa31c92f1325b43752146334793c8eb6dcc3d4ed04517867381e7cc867d9ff65"
+  },
+  "Properties.Evaluator.Scalar.i32Le": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.i32Le : Properties.Evaluator.Scalar.I32Le"],
+   "assumptions": [],
+   "type_hash": "da5726be8cc6f5af5c994803b6ec8d91fd09934e380b400033437edf3b2aa5f3"
+  },
+  "Properties.Evaluator.Scalar.order": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.order : Properties.Evaluator.Scalar.Order"],
+   "assumptions": [],
+   "type_hash": "d1618c370c432c0fcddfc9d76657b07c56214933dd7ee5a774930643df11bc06"
+  },
+  "Properties.Evaluator.Scalar.selectBf16": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.selectBf16 : Properties.Evaluator.Scalar.SelectBf16"],
+   "assumptions": [],
+   "type_hash": "bcd4dc84514186800cd1a4cdd2d52b0e2e08e2d3b5286cbd475d70b286b777c1"
+  },
+  "Properties.Evaluator.Scalar.selectI32": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.Scalar.selectI32 : Properties.Evaluator.Scalar.SelectI32"],
+   "assumptions": [],
+   "type_hash": "6cc1771248f05ea0b1a60c41f1c745298cb995c99c76e86c19f2fc08a5997fa4"
+  },
+  "Properties.Evaluator.TC.ampereBf16Dot16": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.ampereBf16Dot16 : Properties.Evaluator.TC.AmpereBf16Dot16"],
+   "assumptions": [],
+   "type_hash": "3a311a6bd8ca402337aed2ab252eb36d2e221e95df06bddae4d350e9fd69b552"
+  },
+  "Properties.Evaluator.TC.ampereBf16M16n8k16": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.ampereBf16M16n8k16 : Properties.Evaluator.TC.AmpereBf16M16n8k16"],
+   "assumptions": [],
+   "type_hash": "a84ac6e96d8412e7541c4249c5347c8e6032c3c0486e7f802f6971aa2a3f279a"
+  },
+  "Properties.Evaluator.TC.bf16Class": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.bf16Class : Properties.Evaluator.TC.Bf16Class"],
+   "assumptions": [],
+   "type_hash": "7181adeb83a4c74feef2b7f833e46ae1011b370ab1d9330aa35f45ed394e89a9"
+  },
+  "Properties.Evaluator.TC.bf16Product": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.bf16Product : Properties.Evaluator.TC.Bf16Product"],
+   "assumptions": [],
+   "type_hash": "b14107c2b88db0f0c259d82acccf34bf1c4f27a9f79ac931e2e9c2d5def8dbfe"
+  },
+  "Properties.Evaluator.TC.bf16ProductTotal": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.bf16ProductTotal : Properties.Evaluator.TC.Bf16ProductTotal"],
+   "assumptions": [],
+   "type_hash": "dabcde710c78437f74c95caf0808c1033082b0c2af6da21ac5311e886269d973"
+  },
+  "Properties.Evaluator.TC.bitLength": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.bitLength : Properties.Evaluator.TC.BitLength"],
+   "assumptions": [],
+   "type_hash": "9c0afa3e0f484bd3eb297268383b91d6d8ef4f257a9730557f7ae9f31b492c7b"
+  },
+  "Properties.Evaluator.TC.fp32Class": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.fp32Class : Properties.Evaluator.TC.Fp32Class"],
+   "assumptions": [],
+   "type_hash": "16a13ed78dcc460eb1b426eb74266b8a080e7a7c4bccd36779db61bae1241ea7"
+  },
+  "Properties.Evaluator.TC.fp32Term": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.fp32Term : Properties.Evaluator.TC.Fp32Term"],
+   "assumptions": [],
+   "type_hash": "039b00ab1924aaf377e61e289f0bffd3604596d31ffeb6fb6ca46b563f66a6ce"
+  },
+  "Properties.Evaluator.TC.fp32Value": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.fp32Value : Properties.Evaluator.TC.Fp32Value"],
+   "assumptions": [],
+   "type_hash": "4d9ea094a1a274ac3a960fd93093362d888bcfd349f3fd9c3f4c4475cb1b0cf8"
+  },
+  "Properties.Evaluator.TC.groupStepTotal": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.groupStepTotal : Properties.Evaluator.TC.GroupStepTotal"],
+   "assumptions": [],
+   "type_hash": "8b3be56124ccc5760e6849c6b786ec1d09890cbbc432f8af4db6650d0c5a679b"
+  },
+  "Properties.Evaluator.TC.groupSum": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.groupSum : Properties.Evaluator.TC.GroupSum"],
+   "assumptions": [],
+   "type_hash": "158762405b85dab69c2bc18a61635bcab84c64bf57ead6ca94219a6c58f3ae48"
+  },
+  "Properties.Evaluator.TC.hopperBf16Dot16": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.hopperBf16Dot16 : Properties.Evaluator.TC.HopperBf16Dot16"],
+   "assumptions": [],
+   "type_hash": "65104c7e4eec9c665be6f743115d9d10b3699adccfc8b3da961d64838f33810c"
+  },
+  "Properties.Evaluator.TC.hopperBf16WgmmaK16": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.hopperBf16WgmmaK16 : Properties.Evaluator.TC.HopperBf16WgmmaK16"],
+   "assumptions": [],
+   "type_hash": "128d9e9874f35c2acfb5b60e207afdbd61b81bfb88876813c7e858565e6a3306"
+  },
+  "Properties.Evaluator.TC.packFp32": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.packFp32 : Properties.Evaluator.TC.PackFp32"],
+   "assumptions": [],
+   "type_hash": "c702d3e29a70b9c200c60c4741b18e8f5d18ae9dd7b06a8bd17da397fca793f9"
+  },
+  "Properties.Evaluator.TC.packValue": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.packValue : Properties.Evaluator.TC.PackValue"],
+   "assumptions": [],
+   "type_hash": "83f64458d349265f75b416d72d1fcac9c036eec0ef625f6449b44f7c084ae688"
+  },
+  "Properties.Evaluator.TC.pipelineK": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.pipelineK : Properties.Evaluator.TC.PipelineK"],
+   "assumptions": [],
+   "type_hash": "cf33e4334ddc2524697b8bda90bc6eb9a34e30521b26b7ec0dce2db22eae3b0e"
+  },
+  "Properties.Evaluator.TC.runGroups": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.runGroups : Properties.Evaluator.TC.RunGroups"],
+   "assumptions": [],
+   "type_hash": "c57869575f13ccbf8235820b346d91bb86cce19b7b13d8b335501c144311025a"
+  },
+  "Properties.Evaluator.TC.tcDotTotal": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.tcDotTotal : Properties.Evaluator.TC.TcDotTotal"],
+   "assumptions": [],
+   "type_hash": "c6d659fddb34fec6abeb62b08080c5b74900b711880a08abdcf6a2a6ffab9706"
+  },
+  "Properties.Evaluator.TC.valueInfSign": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.valueInfSign : Properties.Evaluator.TC.ValueInfSign"],
+   "assumptions": [],
+   "type_hash": "d15b9f91056cc7d00f05fd1344e7535305242fa44ceb63a48b027ec20958251e"
+  },
+  "Properties.Evaluator.TC.valueIsNaN": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.valueIsNaN : Properties.Evaluator.TC.ValueIsNaN"],
+   "assumptions": [],
+   "type_hash": "9314ed75b11f377f06891e265c00d0987abce2a8750173a570180125996cb9ce"
+  },
+  "Properties.Evaluator.TC.valueTerm": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.valueTerm : Properties.Evaluator.TC.ValueTerm"],
+   "assumptions": [],
+   "type_hash": "d9f71a9a6932b7d50bab91e986d88f36cc36a9a4a79d3c2d55efa29a737f4ad5"
+  },
+  "Properties.Evaluator.TC.zero": {
+   "owner": "@circuits",
+   "signature": ["Properties.Evaluator.TC.zero : Properties.Evaluator.TC.Zero"],
+   "assumptions": [],
+   "type_hash": "d0eca7108f50adac398a16906569bfa75fb2dcccfb86fcf1b546d110f63e1396"
   },
   "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
    "owner": "@network-accounting",
@@ -651,6 +1192,354 @@
    },
    "Properties.CertifierNetwork.deviceOutputAccepted": {
     "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.bf16ToF32": {
+    "function": "Evaluate.Casts.bf16ToF32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.bitLength": {
+    "function": "Evaluate.Casts.bitLength",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.dyadicLt": {
+    "function": "Evaluate.Casts.dyadicLt",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e2m1NanCode": {
+    "function": "Evaluate.Casts.E2M1_NAN_CODE",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e2m1Up": {
+    "function": "Evaluate.Casts.E2M1_UP",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e4m3Nan": {
+    "function": "Evaluate.Casts.E4M3_NAN",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e4m3ToF32": {
+    "function": "Evaluate.Casts.e4m3ToF32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f2fpBf16": {
+    "function": "Evaluate.Casts.f2fpBf16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f32ToBf16Rn": {
+    "function": "Evaluate.Casts.f32ToBf16Rn",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f32ToE2m1Sat": {
+    "function": "Evaluate.Casts.f32ToE2m1Sat",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f32ToE4m3Sat": {
+    "function": "Evaluate.Casts.f32ToE4m3Sat",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.roundEvenDyadic": {
+    "function": "Evaluate.Casts.roundEvenDyadic",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.addWith": {
+    "function": "Evaluate.Fp32.addWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16Add": {
+    "function": "Evaluate.Fp32.bf16Add",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16AddF2fp": {
+    "function": "Evaluate.Fp32.bf16AddF2fp",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16MulBf16": {
+    "function": "Evaluate.Fp32.bf16MulBf16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16MulF32": {
+    "function": "Evaluate.Fp32.bf16MulF32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16NanF2fp": {
+    "function": "Evaluate.Fp32.BF16_NAN_F2FP",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16NanTorch": {
+    "function": "Evaluate.Fp32.BF16_NAN_TORCH",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16ToF32Bits": {
+    "function": "Evaluate.Fp32.bf16ToF32Bits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.decode": {
+    "function": "Evaluate.Fp32.decode",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.decodedAddRn": {
+    "function": "Evaluate.Fp32.Decoded.addRn",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.decodedMul": {
+    "function": "Evaluate.Fp32.Decoded.mul",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.divWith": {
+    "function": "Evaluate.Fp32.divWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32AddFtzV2": {
+    "function": "Evaluate.Fp32.f32AddFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32AddV2": {
+    "function": "Evaluate.Fp32.f32AddV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32DivV2": {
+    "function": "Evaluate.Fp32.f32DivV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Fma": {
+    "function": "Evaluate.Fp32.f32Fma",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaBits": {
+    "function": "Evaluate.Fp32.f32FmaBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaFtz": {
+    "function": "Evaluate.Fp32.f32FmaFtz",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaFtzV2": {
+    "function": "Evaluate.Fp32.f32FmaFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaSubFtz": {
+    "function": "Evaluate.Fp32.f32FmaSubFtz",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaSubFtzV2": {
+    "function": "Evaluate.Fp32.f32FmaSubFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaV2": {
+    "function": "Evaluate.Fp32.f32FmaV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32GpuNan": {
+    "function": "Evaluate.Fp32.f32GpuNan",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Gt": {
+    "function": "Evaluate.Fp32.f32Gt",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Max": {
+    "function": "Evaluate.Fp32.f32Max",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32MaxBits": {
+    "function": "Evaluate.Fp32.f32MaxBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32MulFtzV2": {
+    "function": "Evaluate.Fp32.f32MulFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32MulV2": {
+    "function": "Evaluate.Fp32.f32MulV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Nan": {
+    "function": "Evaluate.Fp32.F32_NAN",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32SubFtzV2": {
+    "function": "Evaluate.Fp32.f32SubFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32ToBf16RnBits": {
+    "function": "Evaluate.Fp32.f32ToBf16RnBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.fmaWith": {
+    "function": "Evaluate.Fp32.fmaWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.ftzBits": {
+    "function": "Evaluate.Fp32.ftzBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.guardNegInfZero": {
+    "function": "Evaluate.Fp32.guardNegInfZero",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.infWord": {
+    "function": "Evaluate.Fp32.infWord",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.mulWith": {
+    "function": "Evaluate.Fp32.mulWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.roundRn": {
+    "function": "Evaluate.Fp32.roundRn",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.roundSum": {
+    "function": "Evaluate.Fp32.roundSum",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.zeroWord": {
+    "function": "Evaluate.Fp32.zeroWord",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Gates.andBits": {
+    "function": "Evaluate.andBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Gates.notBit": {
+    "function": "Evaluate.notBit",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Gates.xorBits": {
+    "function": "Evaluate.xorBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.bitAnd": {
+    "function": "Evaluate.Scalar.bitAnd",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32Fabs": {
+    "function": "Evaluate.Scalar.f32Fabs",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32Fmaxf": {
+    "function": "Evaluate.Scalar.f32Fmaxf",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32IsNan": {
+    "function": "Evaluate.Scalar.f32IsNan",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32NanPtx": {
+    "function": "Evaluate.Scalar.F32_NAN_PTX",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32Neg": {
+    "function": "Evaluate.Scalar.f32Neg",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.i32Add": {
+    "function": "Evaluate.Scalar.i32Add",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.i32Le": {
+    "function": "Evaluate.Scalar.i32Le",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.order": {
+    "function": "Evaluate.Scalar.order",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.selectBf16": {
+    "function": "Evaluate.Scalar.selectBf16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.selectI32": {
+    "function": "Evaluate.Scalar.selectI32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.ampereBf16Dot16": {
+    "function": "Evaluate.TC.ampereBf16Dot16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.ampereBf16M16n8k16": {
+    "function": "Evaluate.TC.Spec.AMPERE_BF16_M16N8K16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bf16Class": {
+    "function": "Evaluate.TC.Spec.bf16Class",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bf16Product": {
+    "function": "Evaluate.TC.Spec.bf16Product",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bf16ProductTotal": {
+    "function": "Evaluate.TC.Spec.bf16ProductTotal",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bitLength": {
+    "function": "Evaluate.TC.Spec.bitLength",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.fp32Class": {
+    "function": "Evaluate.TC.Spec.fp32Class",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.fp32Term": {
+    "function": "Evaluate.TC.Spec.fp32Term",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.fp32Value": {
+    "function": "Evaluate.TC.Spec.fp32Value",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.groupStepTotal": {
+    "function": "Evaluate.TC.Spec.groupStepTotal",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.groupSum": {
+    "function": "Evaluate.TC.Spec.groupSum",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.hopperBf16Dot16": {
+    "function": "Evaluate.TC.hopperBf16Dot16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.hopperBf16WgmmaK16": {
+    "function": "Evaluate.TC.Spec.HOPPER_BF16_WGMMA_K16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.packFp32": {
+    "function": "Evaluate.TC.Spec.packFp32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.packValue": {
+    "function": "Evaluate.TC.Spec.packValue",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.pipelineK": {
+    "function": "Evaluate.TC.Spec.Pipeline.k",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.runGroups": {
+    "function": "Evaluate.TC.Spec.runGroups",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.tcDotTotal": {
+    "function": "Evaluate.TC.Spec.tcDotTotal",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.valueInfSign": {
+    "function": "Evaluate.TC.Spec.Value.infSign?",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.valueIsNaN": {
+    "function": "Evaluate.TC.Spec.Value.isNaN",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.valueTerm": {
+    "function": "Evaluate.TC.Spec.Value.term?",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.zero": {
+    "function": "Evaluate.TC.Spec.ZERO",
     "outcome": "none"
    },
    "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
@@ -1420,6 +2309,98 @@
    },
    "guarantees": ["NciCheck.Properties.SecurityProofs.Reports", "NciCheck.Properties.SecurityProofs.Witnesses"]
   },
+  "Definitions.Core.Fp32": {
+   "digest": "41c8061ea8f55a86ca47a2f556c3adae1584e166307523434642dbeb121699a0",
+   "definitions": {
+    "Verity.Fp32.BF16_NAN_F2FP": "69d88f500649cf66a6df73403e028b0f0c2efa43696e6fc189a2a04743de006f",
+    "Verity.Fp32.BF16_NAN_TORCH": "2c3955c54752009b58f221327220b43ec8fd304090d2ce5837f41b01acacd1aa",
+    "Verity.Fp32.Decoded": "741c1e63abfc5cb6c43b9e5ec0bc66c4472d1baa9693f9cecae0c14e48a82df5",
+    "Verity.Fp32.Decoded.addRn": "6b3ed70637ea01a05dd4ce2b3dd7120f1e77a89d535fca89f6d1fd7faceb254c",
+    "Verity.Fp32.Decoded.casesOn": "daf63c6eaa99e1ca5d928657f38ec77d66598735350c580a8484f196af883bdf",
+    "Verity.Fp32.Decoded.ctorIdx": "41fc017b927613b71609d8d7c944f9cddeaef2d373b4a164a4f7aebf3b58158c",
+    "Verity.Fp32.Decoded.fin": "78e3011e73ab9616703307e0f67dc6702342313d7cf1852c3ae802a294ea4b8f",
+    "Verity.Fp32.Decoded.inf": "fc9758948b0601c0ad6f049c5ced439476d094cfe5631cb46033a8764187bcc2",
+    "Verity.Fp32.Decoded.mul": "310a53b24ce911957f74becdaae8a6451b56ef399a93025d4a429575695d0543",
+    "Verity.Fp32.Decoded.nan": "b586e52182ed0aa4940d75b8b2adeec6709e4b0207cbe70e3113797878c88bab",
+    "Verity.Fp32.Decoded.rec": "2513b3b64c6a3aa90d0e3f14b79e299d66e6841e271d8b3356d6e7c71923bef7",
+    "Verity.Fp32.F32_NAN": "ec7f8909ec6e3ffe9d20b19a3f5f7624185fb6e8809de1d0a3f0d3c1ddbc849c",
+    "Verity.Fp32.F32_NAN_PTX": "40369d5f9de107bc9b269a63500f8e6106b0a4ed4211daafe8e46901faabaa36",
+    "Verity.Fp32.bf16Add": "3df7b46c037cee6402e1a626e11974d679bee05f18304397651da3b58ba46ee7",
+    "Verity.Fp32.bf16AddF2fp": "31e7307c6dee6e23bb416176dd97f71c5202ba3e3eb6efa660db1ea0b38c0bba",
+    "Verity.Fp32.bf16MulBf16": "d7f590c32328e71a3ca404fb949a227116ef4f974628e179c0ab735ad4fd7cb1",
+    "Verity.Fp32.bf16MulF32": "69ea358f47b7c534e456c7238bc645b059aae8cffec9592d68abcd5fe2b465da",
+    "Verity.Fp32.bf16ToF32Bits": "54510383cacd353253909ddf7d0b3426b54b68009a40e95892a2d462c4770a3d",
+    "Verity.Fp32.decode": "03f6dce77ae85123265207bb08e1223ab281bbfad420822f55540d5d9689de0c",
+    "Verity.Fp32.f32AddFtzV2": "8f56f0757c5d4457212de115f57f0a6415415b548dea6ef0be3926bd1273723f",
+    "Verity.Fp32.f32AddV2": "d377537f7bce4362033d09d07c57629c121d9f95761a20a9f0633f1a8a29fb1d",
+    "Verity.Fp32.f32DivV2": "5cf395ef9b2b348328a3165c3ead96fcc72ad0e9fc119762e17cbf3974b2aca6",
+    "Verity.Fp32.f32Fma": "6080dba5b3a2ff6c9f8b5ba796191a1958f2ceea4830e3d656435b10ecc5f673",
+    "Verity.Fp32.f32FmaBits": "43781598fdb4471fa34fe228177053bfd53fde5555a3ff07b8b6b2d1eb24f60a",
+    "Verity.Fp32.f32FmaBits._sparseCasesOn_1": "bf39330eef9b84e9844528b939abc883847b15985bc2e450e9b1f5f60fe4e121",
+    "Verity.Fp32.f32FmaFtz": "6791ad398d164e2b17ca37d240dcd92deea3bce1c653a769f761ad678842a8f9",
+    "Verity.Fp32.f32FmaFtzV2": "09bef8544a10b8763bfbe708a4727de4d883e93ff464602fa1845c5e7e506674",
+    "Verity.Fp32.f32FmaSubFtz": "2003808b380306a29cf93b1c4523973ca11ef4e64d96aabbed9d5de6652c55e8",
+    "Verity.Fp32.f32FmaSubFtzV2": "ad0d2b3a0c5c1a3f91f71f38897952ff07fe5f17fbf677e2103dd4e6fb8fb39c",
+    "Verity.Fp32.f32FmaV2": "c232c1119eb6c72f16b2257e7e22923a77fefd4347d21f4cf8e96db3fec49107",
+    "Verity.Fp32.f32GpuNan": "0690835cc685a32b2d2d35836663dbc96bd05530ba3a9864a845587d53e16878",
+    "Verity.Fp32.f32Gt": "31b884635792ac54f8677bd7919998404ff1791ccdad9f115ecaa43fc76403b0",
+    "Verity.Fp32.f32IsNan": "d64079a365f4260532f720080398ca6c48f105cf60acf4b7ba8b80e435e8d806",
+    "Verity.Fp32.f32Max": "c40113623990c45cd78cb4c3fa37a1970dd11f9c0d320bba8d91b789ca25859a",
+    "Verity.Fp32.f32MaxBits": "b6d6e84dc00a13b85793d279cea2894b5821992af7b18ed389746ac7280fa4db",
+    "Verity.Fp32.f32MulFtzV2": "5aaa5f40d6e7dc0807a9e0cce74afde41ea264a3949c106dc7b9503a9ea0fa55",
+    "Verity.Fp32.f32MulV2": "3b313772670ca8f06e12f4e13cb69e92e2f8945505694a88a72f15fa518c4837",
+    "Verity.Fp32.f32SubFtzV2": "2f44640a4d70f95dbe2fbee60d7a93d728ec27f6f8c5842ee1df035a474099ec",
+    "Verity.Fp32.f32ToBf16RnBits": "87cd938d1bd94115cb24f26b00bf4f803a7b1bafc62638e0ad5876b2b1b6f99d",
+    "Verity.Fp32.ftzBits": "2bc80dd26c461ff17cf3c8bf7ede58ad8a2f5a3aced536759ac9e2f2ae183a52",
+    "Verity.Fp32.guardNegInfZero": "c50ed699a4e63f38c85dfa49d874abd2a987c4707aff621f53d490d08b8669b0",
+    "Verity.Fp32.infWord": "1550d874405f8acf2a697db972ee92ef2ea2f34964b35cfb64df514838e4b9d9",
+    "Verity.Fp32.roundRn": "f25c488365098ea352ac6c5ae4c42bedea3b3f2c912ccd4e215613210cbc4c48",
+    "Verity.Fp32.roundSum": "66df74dade2af5323f74cba3f98a64cae4ac91ed3e62e188a1aa73b881949b6e",
+    "Verity.Fp32.zeroWord": "4750294dac346e7e5769c35c7f019c1f5f3d9e2f6f7b5c957932d6399ffab44c"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Casts.f32ToBf16Rn",
+    "Properties.Evaluator.Fp32.addWith",
+    "Properties.Evaluator.Fp32.bf16Add",
+    "Properties.Evaluator.Fp32.bf16AddF2fp",
+    "Properties.Evaluator.Fp32.bf16MulBf16",
+    "Properties.Evaluator.Fp32.bf16MulF32",
+    "Properties.Evaluator.Fp32.bf16NanF2fp",
+    "Properties.Evaluator.Fp32.bf16NanTorch",
+    "Properties.Evaluator.Fp32.bf16ToF32Bits",
+    "Properties.Evaluator.Fp32.decode",
+    "Properties.Evaluator.Fp32.decodedAddRn",
+    "Properties.Evaluator.Fp32.decodedMul",
+    "Properties.Evaluator.Fp32.divWith",
+    "Properties.Evaluator.Fp32.f32AddFtzV2",
+    "Properties.Evaluator.Fp32.f32AddV2",
+    "Properties.Evaluator.Fp32.f32DivV2",
+    "Properties.Evaluator.Fp32.f32Fma",
+    "Properties.Evaluator.Fp32.f32FmaBits",
+    "Properties.Evaluator.Fp32.f32FmaFtz",
+    "Properties.Evaluator.Fp32.f32FmaFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaSubFtz",
+    "Properties.Evaluator.Fp32.f32FmaSubFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaV2",
+    "Properties.Evaluator.Fp32.f32GpuNan",
+    "Properties.Evaluator.Fp32.f32Gt",
+    "Properties.Evaluator.Fp32.f32Max",
+    "Properties.Evaluator.Fp32.f32MaxBits",
+    "Properties.Evaluator.Fp32.f32MulFtzV2",
+    "Properties.Evaluator.Fp32.f32MulV2",
+    "Properties.Evaluator.Fp32.f32Nan",
+    "Properties.Evaluator.Fp32.f32SubFtzV2",
+    "Properties.Evaluator.Fp32.f32ToBf16RnBits",
+    "Properties.Evaluator.Fp32.fmaWith",
+    "Properties.Evaluator.Fp32.ftzBits",
+    "Properties.Evaluator.Fp32.guardNegInfZero",
+    "Properties.Evaluator.Fp32.infWord",
+    "Properties.Evaluator.Fp32.mulWith",
+    "Properties.Evaluator.Fp32.roundRn",
+    "Properties.Evaluator.Fp32.roundSum",
+    "Properties.Evaluator.Fp32.zeroWord"
+   ]
+  },
   "Definitions.Core.Partition": {
    "digest": "a61efe7bc07bac847495f338197cdbd33a863ef3f0523f100bcb46ef3da67298",
    "definitions": {
@@ -1431,6 +2412,160 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Witnesses"
+   ]
+  },
+  "Definitions.Core.Prims": {
+   "digest": "4312e4a3d0083549f51fbce5cb2aaec7b9ad11629465723400d743378a31d747",
+   "definitions": {
+    "Verity.Prims.E2M1_NAN_CODE": "01dc9e23ba553e60df40b9a49caa1bf0acd64789fccb8750636a05a649f54800",
+    "Verity.Prims.E2M1_UP": "e63e8538ad1d222e1e80630050dad4f730499b75937c7fd6c6212a940552c391",
+    "Verity.Prims.E4M3_NAN": "f8beebdfa0d39bd2585bcc259af7e67d43cbf77b3539a851d826612b29618d50",
+    "Verity.Prims.bf16ToF32": "24e5c35b550fe99c4fefdcb7196a0f54260415afc13da1abe50877da390517c9",
+    "Verity.Prims.dyadicLt": "5ffbd0f8ee6b40af2efb6ebd11c6fe1b64e72a9f8be80e24c5296652732e4e5d",
+    "Verity.Prims.e4m3ToF32": "e29f82581e5e75183cb71f6c325ec3a5004da2c5411cd592671face2ee9d2962",
+    "Verity.Prims.f2fpBf16": "2791ea6d2d43e2094acaae61b4576f35c28ba8a304090d03da41c73b250f5d72",
+    "Verity.Prims.f32ToE2m1Sat": "76d388e406ec63adb5871c3ea7281c89008e41a9fedd548a84c1f2e945c0eaad",
+    "Verity.Prims.f32ToE4m3Sat": "f2a0f375a25f18709497876450c1afa0f02c0ff52b19231b0da9b7c2d934bec0",
+    "Verity.Prims.roundEvenDyadic": "b829aac2724fa97e70ff976045f1bf0042b3bf0a60fd44de01e57c3cac417f0a"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Casts.bf16ToF32",
+    "Properties.Evaluator.Casts.dyadicLt",
+    "Properties.Evaluator.Casts.e2m1NanCode",
+    "Properties.Evaluator.Casts.e2m1Up",
+    "Properties.Evaluator.Casts.e4m3Nan",
+    "Properties.Evaluator.Casts.e4m3ToF32",
+    "Properties.Evaluator.Casts.f2fpBf16",
+    "Properties.Evaluator.Casts.f32ToE2m1Sat",
+    "Properties.Evaluator.Casts.f32ToE4m3Sat",
+    "Properties.Evaluator.Casts.roundEvenDyadic"
+   ]
+  },
+  "Definitions.Core.Scalar": {
+   "digest": "610d6b8751334c2d39892c296a0bfd02a675e56f0570b98f4397cf844c7e4c53",
+   "definitions": {
+    "Verity.Scalar.F32_NAN_PTX": "79b5b0cdecb22ef64de953be389c3bf07013ea9a0c5b126b976e80f9d3784d77",
+    "Verity.Scalar.bitAnd": "420660564f393ac904c702d76e1a90a97a5242f8e6a833e51390f77917e492a1",
+    "Verity.Scalar.f32Fabs": "cac5557f197bc09cc1cd67528fc30da52194659f11ae2b1c1781d20d1b124c1d",
+    "Verity.Scalar.f32Fmaxf": "aba0db8afa9012090655eaafbc5cb3cd98656e6464aac303ba9b159525bad5d0",
+    "Verity.Scalar.f32IsNan": "c4dee75463277621d7f67f2417ea9e224c0211aeb7d930c69eb4e618fc5c1a50",
+    "Verity.Scalar.f32Neg": "242e612ec254fe5aa36a1be9fae9936d1248abe5658785872def84e94c2642ca",
+    "Verity.Scalar.i32Add": "b84549877af74277627ae48383cf96a5f8e92f7dbf2f7b008b685996ddf09ec4",
+    "Verity.Scalar.i32Le": "7f5c95c284b298ff1886b551600a338f95a21d9cfe4ebdd9027699ebd52def2a",
+    "Verity.Scalar.order": "b4195abaf9700312bf5fd53d90fc1fac1996ff7e99e32974eddf77357570af7d",
+    "Verity.Scalar.selectBf16": "805dca972222c5f18663da83f393caab9e82600f00eb339bb2b0551a84b39380",
+    "Verity.Scalar.selectI32": "8d6acb95867e3c09ee6d7cf6bdb8d4c17e68a5e7041d4b42fe949b0ee1170432"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Scalar.bitAnd",
+    "Properties.Evaluator.Scalar.f32Fabs",
+    "Properties.Evaluator.Scalar.f32Fmaxf",
+    "Properties.Evaluator.Scalar.f32IsNan",
+    "Properties.Evaluator.Scalar.f32NanPtx",
+    "Properties.Evaluator.Scalar.f32Neg",
+    "Properties.Evaluator.Scalar.i32Add",
+    "Properties.Evaluator.Scalar.i32Le",
+    "Properties.Evaluator.Scalar.order",
+    "Properties.Evaluator.Scalar.selectBf16",
+    "Properties.Evaluator.Scalar.selectI32"
+   ]
+  },
+  "Definitions.Core.TC.Pipeline": {
+   "digest": "a51a9b5b8518dc8bc949af9ce3528ae65c4976eb685ea10301cbdf3ad74250c1",
+   "definitions": {
+    "Verity.TC.AMPERE_BF16_M16N8K16": "c9c27e113de6ab0ea8ca4d6d27306a3154645e15a1c7d9127701a0985fa4da1c",
+    "Verity.TC.HOPPER_BF16_WGMMA_K16": "d612d96f7fdb50f037ab9c54b054337450bc824fdb5de308390267fcc5d96526",
+    "Verity.TC.Pipeline": "143fcca67ec81ef8e5792a57372efbec1f24784d0bf17ae48634d23c369f3601",
+    "Verity.TC.Pipeline.groups": "757a948e67aa08a064b57e68a04662e0c37915191e6eebfa8fd5064a0d8f9c60",
+    "Verity.TC.Pipeline.k": "6cfe9cca2e7e01e0f042b8223a4a7c288173112e8a8584472e8a649329a8460c",
+    "Verity.TC.Pipeline.width": "35b7d91f2f9767e8153027ca610c7cb3e8feb0497ff2fb9c6898b2c6d93b48c9",
+    "Verity.TC.Pipeline.zeroExponent": "05a7b0bf44a0131d7f07e6b126f9807a026ebc49ad63e3488cbc5d69f85aa24e",
+    "Verity.TC.bitLength": "ccbed7043eb20211951e7bec1eed8b5bb0e5627b258ee4d913d1737c2fbf4162"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Casts.bitLength",
+    "Properties.Evaluator.Casts.e4m3ToF32",
+    "Properties.Evaluator.Casts.f32ToE4m3Sat",
+    "Properties.Evaluator.TC.ampereBf16Dot16",
+    "Properties.Evaluator.TC.ampereBf16M16n8k16",
+    "Properties.Evaluator.TC.bitLength",
+    "Properties.Evaluator.TC.groupStepTotal",
+    "Properties.Evaluator.TC.groupSum",
+    "Properties.Evaluator.TC.hopperBf16Dot16",
+    "Properties.Evaluator.TC.hopperBf16WgmmaK16",
+    "Properties.Evaluator.TC.pipelineK",
+    "Properties.Evaluator.TC.runGroups",
+    "Properties.Evaluator.TC.tcDotTotal"
+   ]
+  },
+  "Definitions.Core.TC.Spec": {
+   "digest": "3436060453a4cf82ddded5ceb52f30d46a7cde921bb33662038f4cec9650a9d7",
+   "definitions": {
+    "Verity.TC.Spec.Cls": "d1840798d9ff6dd67e8750d5451d1c92840b1da5317a9652cb02f3528b3fcd2b",
+    "Verity.TC.Spec.Cls.casesOn": "dff42aa5c257f52822653c5a37edf979600d5b1891fd64e3bde64ea8a8a8d81b",
+    "Verity.TC.Spec.Cls.ctorIdx": "a2ff32d52c0e70c1935c55c3e92667b6cf7e23dc08f88e7011636ec20995cbbc",
+    "Verity.TC.Spec.Cls.finite": "ec657bd6c072f498b499d61a5f8dd9b98fce7391d9794fb5f41ec8db740554c9",
+    "Verity.TC.Spec.Cls.inf": "299053cee93f86325a59be63287bff6fa96b7a08ab2683a63850ced3e5e7dea0",
+    "Verity.TC.Spec.Cls.nan": "ab54cceeb47649b66359bc682f3e96245dff8f263fc95151aba12ea63d97a8bd",
+    "Verity.TC.Spec.Cls.rec": "14230e38f67df43a480b92e2b3129049d77bb1edae92879ca8d55ccb59c4b30d",
+    "Verity.TC.Spec.Cls.zero": "b12c1412ab726a6fcb94359d460363a70c9bcdb08607b9dd4ba376b53c494277",
+    "Verity.TC.Spec.FP32_MAX_EXPONENT": "d17c5629c22db774daf0966bdb92870a0e2d788c4533e6a8e1f145e2d472ab6a",
+    "Verity.TC.Spec.FP32_MIN_NORMAL_EXPONENT": "1bd62cdead25ee37589a304140f1bf71ea9d8804a37c359d03b953813bca88b6",
+    "Verity.TC.Spec.FP32_SIGNIFICAND_WIDTH": "d5ee4ba6f2fe8bd62142237b78a9803fd373ceef41af47a370e80ae1c7df1f1c",
+    "Verity.TC.Spec.Term": "cf17a7f4b5db891e4236ce1910bc05260dd45f34227f7013c5e4766628f3043e",
+    "Verity.TC.Spec.Term.exponent": "0c4ddeced550e74a90ef435981ba4e0c33b2dfcdf3bda00cb74a2880bdf712b9",
+    "Verity.TC.Spec.Term.magnitude": "214d5ab5a4c38761aa7866e7edc6b478aa45accb1d426f2769aacd9c6dac3361",
+    "Verity.TC.Spec.Term.negative": "cdd87f0c46f503f1997307dfd245458ac7f9d614b2a05108e7ba22106a98b7c0",
+    "Verity.TC.Spec.Value": "56e84c324af03ec607401de7ec8febbbff3b5ddf7bc0a0d076b19269bbb09961",
+    "Verity.TC.Spec.Value.casesOn": "41a30fbf38aa85e8407f4328e52a4134da20f522a9da6c1fe76123ac7cea44bc",
+    "Verity.TC.Spec.Value.ctorIdx": "7848291b2304cd5c2715bcf2183bb71296f12bb21832d806fa23477c5c0d0e0e",
+    "Verity.TC.Spec.Value.fin": "293f8dbf9f825b66baa6db77077a41d23d9fa366f2ffe12d494faaa27130c698",
+    "Verity.TC.Spec.Value.inf": "69b624861459176198c5b7680e5101b15597b228e3e07ad8e958d8e4000637d5",
+    "Verity.TC.Spec.Value.infSign?": "e796dd6ffea61a8f81e1376f52d17fd68d956b02b1c913e7de0fddf385253ec9",
+    "Verity.TC.Spec.Value.infSign?._sparseCasesOn_1": "fe76da338b956ab5599707083d37a71b2333cec25dc2bc60d598bb0b6c209a2d",
+    "Verity.TC.Spec.Value.isNaN": "c90bab5ec90eeec782e6c47f0849e5a35de64b09d5e561c5b9008bb20986ea70",
+    "Verity.TC.Spec.Value.isNaN._sparseCasesOn_1": "8c89c0283a9c9c6bdfdecdc3f3fa3b471b36bbbb257515639b024919d1e8a79d",
+    "Verity.TC.Spec.Value.nan": "25f341af0526eaa8ed8480900b90b14674d8af001d15e437871901245249df07",
+    "Verity.TC.Spec.Value.rec": "c34eab71c5e5ad6ee0b0b4f45e26dc471c0d874e00b76bdd19a343da8601b3a6",
+    "Verity.TC.Spec.Value.term?": "d0c3f7994884db1543783b9872fa0500535d54770ad40a60974ec5e8abd4e629",
+    "Verity.TC.Spec.Value.term?._sparseCasesOn_1": "4877f4a4cf95e2afecd3b2b07a3af37c8d7c2ebfaf962fecea84995e474a0b97",
+    "Verity.TC.Spec.ZERO": "72743d3d3e28cd41f880de84758d4376c1cdfc4308e3cb8bc536b616a2a6cc03",
+    "Verity.TC.Spec.bf16Class": "4aaa1b25bbccea480adfa5ae798a5a0a3bb08897ac311d245cfc978163ac3e4e",
+    "Verity.TC.Spec.bf16Product": "c73291cd387f1bbbc1e24dec617fde88226ee97a0cc797b550e003399dc96eda",
+    "Verity.TC.Spec.bf16ProductTotal": "8ae397205551e338c277300d10f53bfc37089fa7e76a505ce5876c795ea18d32",
+    "Verity.TC.Spec.cvtRnBf16F32": "a8f2192006997dada720192020d1d74f8c7bd327d4763be405f5d65c8b531f00",
+    "Verity.TC.Spec.fp32Class": "1b34697b7501cb0a4a85fcd76ec879dd1477b8697ea69efac14faf350b718ca4",
+    "Verity.TC.Spec.fp32Term": "8ada0758d4f2c682486c2ecf70eb2c3df3ebce03a053f4ab70c6c417858092a6",
+    "Verity.TC.Spec.fp32Value": "2526d5ae69cbb29e5ec3e83050e1352bd87f85e3f10dd513224f47b105ab3114",
+    "Verity.TC.Spec.fp32Value._sparseCasesOn_1": "1e682a1f683a61e23ab8ec9b7704b3cefda01c7417c695905bd8d28c54c10e95",
+    "Verity.TC.Spec.groupStepTotal": "e9708af5279f1c0259f2706ec9d8a20848bc54098ed21ce2e4ffeec9b2937ead",
+    "Verity.TC.Spec.groupSum": "ebc380896b7c226c94eaf2347b308aca8f57e4e14eb78ff272c0f360bec409fb",
+    "Verity.TC.Spec.instDecidableEqCls": "3a9f2d9f9dd81a3082dd77b3999150e40665f3ac40f43fa48d032affd3c94223",
+    "Verity.TC.Spec.packFp32": "d9fb76696f516152b1a03245f079e8483f768fde53960a7827aa120651c4f523",
+    "Verity.TC.Spec.packValue": "900ad74c09eb3619e5449a343f67b92cafa44f974e71149a42fb66016cf1af8c",
+    "Verity.TC.Spec.runGroups": "ef93091889404bac9dbd8031400de17fc0d1f6ff9292a697549cdf8fecc8704b",
+    "Verity.TC.Spec.tcDotTotal": "b02bfff4370bb8591d9bb4589ab8f204ae2b2d79ea79448a2db58940865e061b"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Casts.f2fpBf16",
+    "Properties.Evaluator.TC.ampereBf16Dot16",
+    "Properties.Evaluator.TC.bf16Class",
+    "Properties.Evaluator.TC.bf16Product",
+    "Properties.Evaluator.TC.bf16ProductTotal",
+    "Properties.Evaluator.TC.fp32Class",
+    "Properties.Evaluator.TC.fp32Term",
+    "Properties.Evaluator.TC.fp32Value",
+    "Properties.Evaluator.TC.groupStepTotal",
+    "Properties.Evaluator.TC.groupSum",
+    "Properties.Evaluator.TC.hopperBf16Dot16",
+    "Properties.Evaluator.TC.packFp32",
+    "Properties.Evaluator.TC.packValue",
+    "Properties.Evaluator.TC.runGroups",
+    "Properties.Evaluator.TC.tcDotTotal",
+    "Properties.Evaluator.TC.valueInfSign",
+    "Properties.Evaluator.TC.valueIsNaN",
+    "Properties.Evaluator.TC.valueTerm",
+    "Properties.Evaluator.TC.zero"
    ]
   },
   "Definitions.Nci": {
@@ -1512,6 +2647,290 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe"
+   ]
+  },
+  "Evaluate.Casts": {
+   "digest": "0110979fcb42f9bbf5adb4c9f926b00a26170b202fb1785e1c11da17cb30bc61",
+   "definitions": {
+    "Evaluate.Casts.E2M1_NAN_CODE": "38792248f0eaac7f0987b097f367fdfd282aacc8224bda5f41444d6b45cc1852",
+    "Evaluate.Casts.E2M1_UP": "399ced656aeed9a4c7ad9ac973eedfa1b81de0c68d8b9c6a7dd9074d42d01b2e",
+    "Evaluate.Casts.E4M3_NAN": "722e9f17a5d7ab09765632747004896bceacd7c04ff843cec0fc90a2be8444d4",
+    "Evaluate.Casts.bf16ToF32": "185a0aefe3221739580be041657e086ae9c8b55f5cf7d85b69dfb68b3bf1e71f",
+    "Evaluate.Casts.bitLength": "3ca1dff0a850856e0c92d510f90a702865448d6be070afbed678b6dc1a88727b",
+    "Evaluate.Casts.dyadicLt": "d4461b0d740c563d6f8d46e070064d5d2e996122dc5a577d30c5ba7bfde873cc",
+    "Evaluate.Casts.e4m3ToF32": "2f8d6b5bbb7e7ec252cbb6b6c67c0bd2c5e0764e83bc1157b30658a8b0f13ca8",
+    "Evaluate.Casts.f2fpBf16": "e15f67e937397c7739d5109bc9ae671e61c4d3dc2af67e53e7c77f851d300c9e",
+    "Evaluate.Casts.f32ToBf16Rn": "e819e8d7ff1e918b61c37bacd929953ea285b4168bc4c32845acb583976af96d",
+    "Evaluate.Casts.f32ToE2m1Sat": "d101ed97185ce6924773249e73c8dc86b3cdfa0828db5cb5c5b17aecd2b6f4fd",
+    "Evaluate.Casts.f32ToE4m3Sat": "d0e602701b6f7478aeaa4a1b06e6f2a96ca8f4c5f4e778b0f45de4e6fd8aaf07",
+    "Evaluate.Casts.roundEvenDyadic": "b9bae2b1b4d69e5b0e54c1d9a196672d9de22e5c6bbf9ec9842d54d3cbc81940"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Casts.bf16ToF32",
+    "Properties.Evaluator.Casts.bitLength",
+    "Properties.Evaluator.Casts.dyadicLt",
+    "Properties.Evaluator.Casts.e2m1NanCode",
+    "Properties.Evaluator.Casts.e2m1Up",
+    "Properties.Evaluator.Casts.e4m3Nan",
+    "Properties.Evaluator.Casts.e4m3ToF32",
+    "Properties.Evaluator.Casts.f2fpBf16",
+    "Properties.Evaluator.Casts.f32ToBf16Rn",
+    "Properties.Evaluator.Casts.f32ToE2m1Sat",
+    "Properties.Evaluator.Casts.f32ToE4m3Sat",
+    "Properties.Evaluator.Casts.roundEvenDyadic"
+   ]
+  },
+  "Evaluate.Fp32": {
+   "digest": "86396886fabe276ea3a8cef014d0ac7a704a98e06507a9e19d897082d4d52350",
+   "definitions": {
+    "Evaluate.Fp32.BF16_NAN_F2FP": "69c9e3385c491b1830dd2d477a205bb0478f0ca7f1c30df1a5a572515023b959",
+    "Evaluate.Fp32.BF16_NAN_TORCH": "8ddc95f023881f1ad38dcb3b3932beb19d5ef966b2e1ef0202c3802d0814c39f",
+    "Evaluate.Fp32.Decoded": "faf0e809cefc31db2fe404ab743124aca6edd6ff48ba4aa4cf0d03681776b5d6",
+    "Evaluate.Fp32.Decoded.addRn": "6f3d9a8eb3522e22c9aa5987504f376fc0bf11142169a953f5fde85ce06f0385",
+    "Evaluate.Fp32.Decoded.casesOn": "e4d69ae8a3d537cdbb064c088c605882c93fe1af05d8925f6029242717f2d50b",
+    "Evaluate.Fp32.Decoded.ctorIdx": "4451c0fdb9341fbf65d8985e10672947b033dcbe727beefdb38f98fc5b85fd26",
+    "Evaluate.Fp32.Decoded.fin": "93e2012fd4637ac3370213a7a7140cbc6806977178b2bbfab5d8e6a78fcaed2b",
+    "Evaluate.Fp32.Decoded.inf": "f26f324e378ee139655b0fe1c7eceba4521b0f58971ae8d4614cac63b22faae1",
+    "Evaluate.Fp32.Decoded.mul": "5d33679e93da55ac66d1eda80749588464457e729b189796a09bed3198abcd3f",
+    "Evaluate.Fp32.Decoded.nan": "e338826bdfa2b9ecab873487c66abcca9b47ef0fba79de1fd696009b590d1495",
+    "Evaluate.Fp32.Decoded.rec": "530cd8d8bdc914e443216eb6d62314b626598562bb62a52cbb00b9cb2e21e98f",
+    "Evaluate.Fp32.F32_NAN": "a86959afb1d5d5a2d580ed64b31bc004b092d653cea2a3b0cf747ecd4a5f89c4",
+    "Evaluate.Fp32.addWith": "d9c4c0e3f6bbe30386b017a3a605a42693725186143465b64f3cefc6406d42cb",
+    "Evaluate.Fp32.bf16Add": "063f9c21462e7c6b67e749777d77b06cd904f45920bee65be0b5cf93d9fd12b5",
+    "Evaluate.Fp32.bf16AddF2fp": "34cdb4468e11daf43f778ea882bdff146b26fd67d5f67786e6858b19adbc80ca",
+    "Evaluate.Fp32.bf16MulBf16": "7a09faf530cc297aa9b7194eeb7adb7989402b576377bc9f94e1e94aa8ef7921",
+    "Evaluate.Fp32.bf16MulF32": "f2da4b480d009074d156519d7b264e2254ce63b42535656eee6ae6641b309d73",
+    "Evaluate.Fp32.bf16ToF32Bits": "edbc9da063ef4a3e0df23578a2edf88049a6c084af850703ae77d51e26af89b9",
+    "Evaluate.Fp32.decode": "114dc9d0df4c304c128b59ff30332b272270bc6d503ee787b56144aad37d4f4c",
+    "Evaluate.Fp32.divWith": "17f574ddc9462f10d261b0803860701b4f0687cfb0fdab804d73616429fa6805",
+    "Evaluate.Fp32.f32AddFtzV2": "cfdffe01cadc7b8acf09f824570e006d42753ff2ca60fc994ed71cae6305a1b9",
+    "Evaluate.Fp32.f32AddV2": "179b9d64f3dc304267d61c96021bddf9539e1f199b1431f78812d8db297ced27",
+    "Evaluate.Fp32.f32DivV2": "ad35648f1a5d22fde2dfdb7584fbd9f008b7df58b68653bb2a3770f4b9a0f420",
+    "Evaluate.Fp32.f32Fma": "c3071a12468a11f416448395034efc4535d0beaa213c9b3196abb922291505a2",
+    "Evaluate.Fp32.f32FmaBits": "ecdfe404685c4331e0bd290a4647a46702387d8abca09c742a24bc63c8ff1e3f",
+    "Evaluate.Fp32.f32FmaFtz": "d42bd9b93ab417a16cae99c27afcd629dcbeca7c8ff553c7e9208b34b3a3a605",
+    "Evaluate.Fp32.f32FmaFtzV2": "d23d623cbb4e9fcd6e5563f6b63736ba042cbc3e178a1e14ad5fd852a54b0f5d",
+    "Evaluate.Fp32.f32FmaSubFtz": "d4dd4775073b427963691caec1de61b0ee7a5043190403a30985a0bd873bd089",
+    "Evaluate.Fp32.f32FmaSubFtzV2": "3a8d34e0881b8f1e54c929935c6394dafd0430084cecb64907f114886f599cfc",
+    "Evaluate.Fp32.f32FmaV2": "f7e9c9e1690f186bd75ab0b02f7c8a23ede2dd730eab029bfb09126fb5591ed6",
+    "Evaluate.Fp32.f32GpuNan": "06aaf8f15997b6622ae4962464f7880e7a7298af8f5a23b147ed233e360443ca",
+    "Evaluate.Fp32.f32Gt": "d917b6bd8c1bf48863f4e5d4accc12ffd5d44652f7c4221acf830f062d8d658d",
+    "Evaluate.Fp32.f32Max": "8fef9403c6efcb99db33a8334a59f23da72a8779574bfece0fcc046435330ed2",
+    "Evaluate.Fp32.f32MaxBits": "07a1892b3ff788f28156f8c5721ad3d6b38f839229731e1995157a9734eef95f",
+    "Evaluate.Fp32.f32MulFtzV2": "0becf2c0ac811dd88e61cb7578eff34b6f1210d0627c0c17ab5d7a38b553bcc7",
+    "Evaluate.Fp32.f32MulV2": "d8713dd609efa3601b4692fbbc1e1f006302d2e6bf8b20ccd23f62923b2ad816",
+    "Evaluate.Fp32.f32SubFtzV2": "5417b79d59a73a3f393807eed10637785c53b3ee958d461c2d92130acfa6b0da",
+    "Evaluate.Fp32.f32ToBf16RnBits": "c8b4c25afe92b5b05e0baa4188511b20ed29081d85afc961eebb3b7c0863e618",
+    "Evaluate.Fp32.fmaWith": "3831206652dcd32aa80c819ff39e70a4752008a951826b5ec925ab42f8cdd803",
+    "Evaluate.Fp32.fmaWith._sparseCasesOn_1": "b34f2176b146e3cea42e9ad015d505007ffb67e766ce0413d8459136c603241f",
+    "Evaluate.Fp32.ftzBits": "d7be4b69f096f100240f32bd1df7b1e7aa896fa8f969b6d2f724f303b1e9c8ab",
+    "Evaluate.Fp32.guardNegInfZero": "61c886fe079ace750cb63c0496f770b09fcd388db9540c0a967d12038f2765ce",
+    "Evaluate.Fp32.infWord": "32d716cac0e7e4e3a493163af121e36c06791c203eee68a9aca957c8995d0398",
+    "Evaluate.Fp32.mulWith": "44af189a625e0f4fff260d04579606e2c24da406e92febc2405740af3e8fbfbc",
+    "Evaluate.Fp32.roundRn": "f183e17a64d51a0a74998560f25ed21e783cc121c86b9f61dba99a51d23b688e",
+    "Evaluate.Fp32.roundSum": "2af760b5c3c33eeb541a0bc49e2cb95066bfc2054696b23be6d8c0978e8559bf",
+    "Evaluate.Fp32.zeroWord": "bc4fd99b5482045763c59e567270e30d0d4d042387f04bcb85ff0a07742b2cb6"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Casts.f2fpBf16",
+    "Properties.Evaluator.Casts.f32ToBf16Rn",
+    "Properties.Evaluator.Fp32.addWith",
+    "Properties.Evaluator.Fp32.bf16Add",
+    "Properties.Evaluator.Fp32.bf16AddF2fp",
+    "Properties.Evaluator.Fp32.bf16MulBf16",
+    "Properties.Evaluator.Fp32.bf16MulF32",
+    "Properties.Evaluator.Fp32.bf16NanF2fp",
+    "Properties.Evaluator.Fp32.bf16NanTorch",
+    "Properties.Evaluator.Fp32.bf16ToF32Bits",
+    "Properties.Evaluator.Fp32.decode",
+    "Properties.Evaluator.Fp32.decodedAddRn",
+    "Properties.Evaluator.Fp32.decodedMul",
+    "Properties.Evaluator.Fp32.divWith",
+    "Properties.Evaluator.Fp32.f32AddFtzV2",
+    "Properties.Evaluator.Fp32.f32AddV2",
+    "Properties.Evaluator.Fp32.f32DivV2",
+    "Properties.Evaluator.Fp32.f32Fma",
+    "Properties.Evaluator.Fp32.f32FmaBits",
+    "Properties.Evaluator.Fp32.f32FmaFtz",
+    "Properties.Evaluator.Fp32.f32FmaFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaSubFtz",
+    "Properties.Evaluator.Fp32.f32FmaSubFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaV2",
+    "Properties.Evaluator.Fp32.f32GpuNan",
+    "Properties.Evaluator.Fp32.f32Gt",
+    "Properties.Evaluator.Fp32.f32Max",
+    "Properties.Evaluator.Fp32.f32MaxBits",
+    "Properties.Evaluator.Fp32.f32MulFtzV2",
+    "Properties.Evaluator.Fp32.f32MulV2",
+    "Properties.Evaluator.Fp32.f32Nan",
+    "Properties.Evaluator.Fp32.f32SubFtzV2",
+    "Properties.Evaluator.Fp32.f32ToBf16RnBits",
+    "Properties.Evaluator.Fp32.fmaWith",
+    "Properties.Evaluator.Fp32.ftzBits",
+    "Properties.Evaluator.Fp32.guardNegInfZero",
+    "Properties.Evaluator.Fp32.infWord",
+    "Properties.Evaluator.Fp32.mulWith",
+    "Properties.Evaluator.Fp32.roundRn",
+    "Properties.Evaluator.Fp32.roundSum",
+    "Properties.Evaluator.Fp32.zeroWord"
+   ]
+  },
+  "Evaluate.Prims": {
+   "digest": "43c5a05d30a22bf65ca187fbcd02e8c21e632d76825e871b2cf5bacc6d6935d7",
+   "definitions": {
+    "Evaluate.andBits": "6db22f22afcfa06d64c61b2c343f428eb3db1d32124d8c492bed7aaa53832bdc",
+    "Evaluate.notBit": "fb6d7d82b108fd9d2b443f1e97d26bade88ad83c6f72c3378c1f32200ad077f8",
+    "Evaluate.xorBits": "ef7503cff845db65c1d347eda8ca5534dddb37a46124a7a8df445759a578c2e9"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Gates.andBits",
+    "Properties.Evaluator.Gates.notBit",
+    "Properties.Evaluator.Gates.xorBits"
+   ]
+  },
+  "Evaluate.Scalar": {
+   "digest": "d5b80fe82064112207de24a123f49efd14d13400693e22c394d936ba6258e183",
+   "definitions": {
+    "Evaluate.Scalar.F32_NAN_PTX": "61f37858d3e76c24b14d807868ccf87baf15f62fc85ab2fdec32b323b0140a9d",
+    "Evaluate.Scalar.M32": "377ed01d3148ee95bfd469c067b57ca5f33d9004c0540b942bd17c09f759861a",
+    "Evaluate.Scalar.bitAnd": "bf2cc172302740995e4a245f19f016ca0c9b8a322ab410186d3cd5cfdf5db52e",
+    "Evaluate.Scalar.f32Fabs": "008e7035e698d36907e23d6752d4af15cbc2847436cab5a2ea7e4b77b29a3320",
+    "Evaluate.Scalar.f32Fmaxf": "1aa3dd0cca9d76ed32e35256d657ecc70f667a80dc0af64fa96fca51b61ee1ac",
+    "Evaluate.Scalar.f32IsNan": "0f9dce425dd2719e5a31dbb291e44b03c734c9552ec05bbfa58066d2a85b67d8",
+    "Evaluate.Scalar.f32Neg": "a779a2e1576900c43d54488535ed624b74e059c4fb7ed444893d55d94511ac23",
+    "Evaluate.Scalar.fmaxmin": "17824e7c887688e16a9605440667e4565d979600304b05b90930230e47a93bd4",
+    "Evaluate.Scalar.i32Add": "2984fbac5ceeb777d1435aa4e3393ebf5d2f34c06440d4a0b43b1977c85c5f2b",
+    "Evaluate.Scalar.i32Le": "63dcd360f6e1f096a9ba73a6ef2af83658de0de550a593eae7046b4628a6fb26",
+    "Evaluate.Scalar.order": "e59a96fdc4d7bd6e116dda77809cd4bd8a1f13dccc04cf0769135211d0d7d7e9",
+    "Evaluate.Scalar.selectBf16": "a87be9b19b4e1cb43aac8e15ebca5e96220d38afffcd8f471816a0d272c7f047",
+    "Evaluate.Scalar.selectI32": "a5f96e4efbde98b267ac14b8b7caa7cab0c63a0812565ae9f66be6e21c16a10d"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Fp32.addWith",
+    "Properties.Evaluator.Fp32.bf16Add",
+    "Properties.Evaluator.Fp32.bf16AddF2fp",
+    "Properties.Evaluator.Fp32.bf16MulBf16",
+    "Properties.Evaluator.Fp32.bf16MulF32",
+    "Properties.Evaluator.Fp32.decode",
+    "Properties.Evaluator.Fp32.divWith",
+    "Properties.Evaluator.Fp32.f32AddFtzV2",
+    "Properties.Evaluator.Fp32.f32AddV2",
+    "Properties.Evaluator.Fp32.f32DivV2",
+    "Properties.Evaluator.Fp32.f32Fma",
+    "Properties.Evaluator.Fp32.f32FmaBits",
+    "Properties.Evaluator.Fp32.f32FmaFtz",
+    "Properties.Evaluator.Fp32.f32FmaFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaSubFtz",
+    "Properties.Evaluator.Fp32.f32FmaSubFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaV2",
+    "Properties.Evaluator.Fp32.f32GpuNan",
+    "Properties.Evaluator.Fp32.f32Gt",
+    "Properties.Evaluator.Fp32.f32Max",
+    "Properties.Evaluator.Fp32.f32MaxBits",
+    "Properties.Evaluator.Fp32.f32MulFtzV2",
+    "Properties.Evaluator.Fp32.f32MulV2",
+    "Properties.Evaluator.Fp32.f32SubFtzV2",
+    "Properties.Evaluator.Fp32.fmaWith",
+    "Properties.Evaluator.Fp32.mulWith",
+    "Properties.Evaluator.Scalar.bitAnd",
+    "Properties.Evaluator.Scalar.f32Fabs",
+    "Properties.Evaluator.Scalar.f32Fmaxf",
+    "Properties.Evaluator.Scalar.f32IsNan",
+    "Properties.Evaluator.Scalar.f32NanPtx",
+    "Properties.Evaluator.Scalar.f32Neg",
+    "Properties.Evaluator.Scalar.i32Add",
+    "Properties.Evaluator.Scalar.i32Le",
+    "Properties.Evaluator.Scalar.order",
+    "Properties.Evaluator.Scalar.selectBf16",
+    "Properties.Evaluator.Scalar.selectI32"
+   ]
+  },
+  "Evaluate.TC.Dots": {
+   "digest": "c0a77d30d6f64c1df4e180a21ffedbaf4f98a492d2477a9529e58cd033729ae9",
+   "definitions": {
+    "Evaluate.TC.ampereBf16Dot16": "52d1a3f35c200e8608f85faf9ef8d1075adfc9b6555c304123093255d0b9cf24",
+    "Evaluate.TC.hopperBf16Dot16": "ac26f127f93a318d63cec499769e2058fd4891ed0b9c4493e30a94e51e599fd8"
+   },
+   "guarantees": ["Properties.Evaluator.TC.ampereBf16Dot16", "Properties.Evaluator.TC.hopperBf16Dot16"]
+  },
+  "Evaluate.TC.Spec": {
+   "digest": "ed1b201f2e3309d00ba6cd3f53662be53ee63f8edaf8e5ade5b28237392351b1",
+   "definitions": {
+    "Evaluate.TC.Spec.AMPERE_BF16_M16N8K16": "6dd8037abaa688da8f889a12ccfe84c785615b96951bff33b2ead4d259d79d66",
+    "Evaluate.TC.Spec.Cls": "e031233bc7eb6356c0625d16d832dc0bc922d96f0f5e7c3ccbaf0c9644a9c9ff",
+    "Evaluate.TC.Spec.Cls.casesOn": "74777490b078050801fbcd9100db8b9f553a4e73f5187bba7fc2500cf52e1d8d",
+    "Evaluate.TC.Spec.Cls.ctorIdx": "f68df72c5bc9a2b487d79bffa81629c2a6bdcb8163caedbe77a3bcb8cd71291a",
+    "Evaluate.TC.Spec.Cls.finite": "436834032b98d3a99606cb2c305e9b4398fd00d57f965c4ccc6e9add8643e597",
+    "Evaluate.TC.Spec.Cls.inf": "217ace709604ed2b2682f52ba606094dc441843000792f87e080b100c5ed7824",
+    "Evaluate.TC.Spec.Cls.nan": "013fe345ddfa4cb26580fb85a580f5bf46e508a019b670f57e371894f7606002",
+    "Evaluate.TC.Spec.Cls.rec": "b96b447f7a564b1188b9f91ad438c2547259ecaecf67ee6ca9b6bafd5753877f",
+    "Evaluate.TC.Spec.Cls.zero": "206cb0caab8d2061b0a94d07ece12db86cf95c0680182d088f694218ff3a3ecc",
+    "Evaluate.TC.Spec.FP32_MAX_EXPONENT": "6a8b4166a6496710f388509e29afcd53242d44d1438e15dbe3df10afcb1e8a30",
+    "Evaluate.TC.Spec.FP32_MIN_NORMAL_EXPONENT": "bdd12318098a3aafe763e0e828d2a353f6eeb3359285e2450801057af8523569",
+    "Evaluate.TC.Spec.FP32_SIGNIFICAND_WIDTH": "fdc2554f8007c339dbe0f718fa923946e48e5deeb5e41740096689f543460122",
+    "Evaluate.TC.Spec.HOPPER_BF16_WGMMA_K16": "3cb508457f1e346707bf6b00d32145f77916927e351fdcffa4a536cff9ec125d",
+    "Evaluate.TC.Spec.Pipeline": "7a0b7efeb27f839cecb083fbaf1c88e0d2769a5248d222a1b2a7a22cc44c2da3",
+    "Evaluate.TC.Spec.Pipeline.groups": "a8dddeaf050dba08c31d28dc7cb77c015bbbf3c6efa23aa21cdebd1fb08b2c00",
+    "Evaluate.TC.Spec.Pipeline.k": "ffc46453ad4ae02a7f069ac399b1be08764b7eca2efe8e0b2670190785e81286",
+    "Evaluate.TC.Spec.Pipeline.width": "d93e6255e60a5b83b724519bcfc58847d6d8ea025fdb3c93c738636306cbdc31",
+    "Evaluate.TC.Spec.Pipeline.zeroExponent": "f766e2f70b3bfd9552f442ee3e81c00a249168fab22f41454e460b38a7a8a975",
+    "Evaluate.TC.Spec.Term": "57f6ee5978226dc5efa22051a6aa0b58715b8bc114eb339cd1c433c1d193837c",
+    "Evaluate.TC.Spec.Term.exponent": "d4daf595613ae3974ce7ca345e40ab4bc4f0d81d0d943f81fbe02384549ca590",
+    "Evaluate.TC.Spec.Term.magnitude": "bda02ccbe53156b4cec9c73c4b3ff0bffef756b2e6267c1108ac1b421af2a043",
+    "Evaluate.TC.Spec.Term.negative": "a4a80ee3a2e9379279ad0d882c1c91847bc8e8ad8472885195e485d4c075d296",
+    "Evaluate.TC.Spec.Value": "09281b275e58a744db50b68219aa3056853f1196c1c2fcced4ab3bca969d25d2",
+    "Evaluate.TC.Spec.Value.casesOn": "ea127d55f2f4773e30c1f8f8abb96a85f19ceca0da2edc7909f808df39a432d4",
+    "Evaluate.TC.Spec.Value.ctorIdx": "d3cc81b2f354270b6a4ca9019fc390a56f19adf999cd80cff2919c31a4da77bb",
+    "Evaluate.TC.Spec.Value.fin": "4326918825c581ae890296f02f05e8c4787c4c41fbf12d3f9120e66f43b6d76a",
+    "Evaluate.TC.Spec.Value.inf": "7effe9370e2310c51c9ed1efef88fd318a3f6083d30fef18e3e23cd15223dabc",
+    "Evaluate.TC.Spec.Value.infSign?": "342aed2faf612954e73602bd2a8a911f7f29b08c8713bb6c2a87e2ecec2739a8",
+    "Evaluate.TC.Spec.Value.infSign?._sparseCasesOn_1": "2bdb8f811e52c0f72bd5dcefdb18904ce8f3f302e596b58f7ebc51f8a48f4761",
+    "Evaluate.TC.Spec.Value.isNaN": "41aa7f321e28d68d01a8d416803eb8a78542bd2063967ac9351367b6349c6f40",
+    "Evaluate.TC.Spec.Value.isNaN._sparseCasesOn_1": "c12b3ab08069bca3deb7c3c8ed914e9067d4cc7cb9ea5bc0f5a3a6f934a347d7",
+    "Evaluate.TC.Spec.Value.nan": "625b13861622aa355657af12d6999c0f01892a1b15be45a8886ad1627fe1e31b",
+    "Evaluate.TC.Spec.Value.rec": "70b6f9729ee8237b4f27105de10eb55542a3311b0211ed91030d04c70a68cd48",
+    "Evaluate.TC.Spec.Value.term?": "56978c8129157af367efe11f93768c12262a502b4787856fc6fce1b6ac5d53ce",
+    "Evaluate.TC.Spec.Value.term?._sparseCasesOn_1": "5c0ab83947c342d66f87e6a4998fc9e07daa7a5946c19acb942c2b0088ec37c2",
+    "Evaluate.TC.Spec.ZERO": "3bad91c4f4e969a52e63854498bbc1bd1d21f65d0dd8424ffa3fc9fc05a695c1",
+    "Evaluate.TC.Spec.bf16Class": "af06767f0b023607bbef6ecde5bc37e77388060fe3e6c8fedc43375d4f48c3f1",
+    "Evaluate.TC.Spec.bf16Product": "c355d6fcdb29465b281f38e3a13a61f5f7e4348dcf75bc75adcd72e0b84e463f",
+    "Evaluate.TC.Spec.bf16ProductTotal": "e0318755ba4491dd1850c107080f719f7b66db061b6ce8599cffe88f92e3216a",
+    "Evaluate.TC.Spec.bitLength": "1601623e9dff5f1ff60ac94e070979ad958efedd53d342123c90f7d4c8df6833",
+    "Evaluate.TC.Spec.fp32Class": "1ebac13150dcdd577190a070505d467fec061f2775ff99bfd2337abf46505a5c",
+    "Evaluate.TC.Spec.fp32Term": "e6840c2a3a9c3f84f3edf3023a990dcf65ec95fcf8535625c4960cf5f875131b",
+    "Evaluate.TC.Spec.fp32Value": "faf7f289599016ea9a398df09e054d280371bb00550e3f2e89c644850449f159",
+    "Evaluate.TC.Spec.fp32Value._sparseCasesOn_1": "0f51f2447cf8d39f0c2e5477af55334d94f69fef51aae4658400632cb9c33b62",
+    "Evaluate.TC.Spec.groupStepTotal": "06db34ec30ba2ece52830dd37eb18630affed4404711bddd3689e7ad3ce7ed2e",
+    "Evaluate.TC.Spec.groupSum": "b0f7455e8c580d5a9e07b838f5831e2333057483032d52130e400e36f65436ad",
+    "Evaluate.TC.Spec.instDecidableEqCls": "61997a759dd13bd4ffb207bfad2f3470481052cffd4f191a7887dd55ab3ff0a6",
+    "Evaluate.TC.Spec.packFp32": "ec127b5a6e38af73a4cf3e8e0ee08fd5238063116f50ed07c5ad3fb880ea4038",
+    "Evaluate.TC.Spec.packValue": "888546fba658d744c5d9808b82d394330c877db18306f45ed77fed1b64138ecc",
+    "Evaluate.TC.Spec.runGroups": "1bc52d981605a0586a4be97907374d2b71c10bb8357e9c0f2f48e81a493d8f04",
+    "Evaluate.TC.Spec.tcDotTotal": "8ca85a071f91dc4261a945f75419d85fbfa8c51b32843e181e1f269758648d55"
+   },
+   "guarantees": [
+    "Properties.Evaluator.TC.ampereBf16Dot16",
+    "Properties.Evaluator.TC.ampereBf16M16n8k16",
+    "Properties.Evaluator.TC.bf16Class",
+    "Properties.Evaluator.TC.bf16Product",
+    "Properties.Evaluator.TC.bf16ProductTotal",
+    "Properties.Evaluator.TC.bitLength",
+    "Properties.Evaluator.TC.fp32Class",
+    "Properties.Evaluator.TC.fp32Term",
+    "Properties.Evaluator.TC.fp32Value",
+    "Properties.Evaluator.TC.groupStepTotal",
+    "Properties.Evaluator.TC.groupSum",
+    "Properties.Evaluator.TC.hopperBf16Dot16",
+    "Properties.Evaluator.TC.hopperBf16WgmmaK16",
+    "Properties.Evaluator.TC.packFp32",
+    "Properties.Evaluator.TC.packValue",
+    "Properties.Evaluator.TC.pipelineK",
+    "Properties.Evaluator.TC.runGroups",
+    "Properties.Evaluator.TC.tcDotTotal",
+    "Properties.Evaluator.TC.valueInfSign",
+    "Properties.Evaluator.TC.valueIsNaN",
+    "Properties.Evaluator.TC.valueTerm",
+    "Properties.Evaluator.TC.zero"
    ]
   },
   "Flock.Bytes": {
@@ -2875,6 +4294,192 @@
     "Properties.CertifierNetwork.unitParams": "be94e89979a4e1e7a32b0cdfe1e7b1280083df617657cd292a9868b65f663342"
    },
    "guarantees": ["Properties.CertifierNetwork.deviceOutputAccepted"]
+  },
+  "Properties.Evaluate": {
+   "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",
+   "definitions": {
+    "Properties.Evaluator.Casts.Bf16ToF32": "45725008114b2cadff57d7e33f2744581392d840f6fcb3d9001f52dc00bbc928",
+    "Properties.Evaluator.Casts.BitLength": "23fa8a42f9e476d0dbcbdc3d130f7c701302e142a1535f03000eff51c566c1a5",
+    "Properties.Evaluator.Casts.DyadicLt": "769470484948ba47f482ae6a1601219fb9d4d0b648f92888c73420a2c47d1728",
+    "Properties.Evaluator.Casts.E2m1NanCode": "57cb38c63a4aa7100a8676584b5f55b800624c239499c9a5c356773d0432ffde",
+    "Properties.Evaluator.Casts.E2m1Up": "7a5121ceb337727abc622041984901c7101a3fd0ca2e1b1c9321a7441163bc15",
+    "Properties.Evaluator.Casts.E4m3Nan": "994689090df5e2397c2a3fe552016f31beb27dcb541cacf4e2dd073da2879909",
+    "Properties.Evaluator.Casts.E4m3ToF32": "508c42b9312d2074f9eabd0d2b1ef965066fa6677940bcb0af67fdcf3de7965c",
+    "Properties.Evaluator.Casts.F2fpBf16": "b2d9ca6a00d3f510029f29eca1d31a6051c7cd5daa330ed016f152a3b984d39f",
+    "Properties.Evaluator.Casts.F32ToBf16Rn": "92966fd635de1e943dc0262a12f518e750f056b33cd5889e20efaa8ff5bdb537",
+    "Properties.Evaluator.Casts.F32ToE2m1Sat": "688f7fe86cfe89d0eb3f4e25b6462300d926fd4559dab67121503006dc4de845",
+    "Properties.Evaluator.Casts.F32ToE4m3Sat": "ce7a7b946f75e19dce6d7322a96bea9400dd203dae10d9c2cd917f757f67f215",
+    "Properties.Evaluator.Casts.RoundEvenDyadic": "51df312edcf5695683e82687c4900b4df7d38ac3763a19cc8bd82ca8678a39f9",
+    "Properties.Evaluator.Fp32.AddWith": "aeb2f7d35d217d55c28c7f635f17bfcee5836fb48688d0191d0583a6ea931cb8",
+    "Properties.Evaluator.Fp32.Bf16Add": "afaa9d9c7ba1d6aabfb13fca0f34b89ded892a59c82f9d9cbe9cabff63b97256",
+    "Properties.Evaluator.Fp32.Bf16AddF2fp": "2ba07d86eadfbc7b073781d3bfd726bbd43715f30736552923f9ac60d51e8200",
+    "Properties.Evaluator.Fp32.Bf16MulBf16": "b3fdc8ac24211efe05ed882995a2017aa561318a5410790c9b321ad80bbce812",
+    "Properties.Evaluator.Fp32.Bf16MulF32": "0386016eb3d09e32c79eec8827930e5d87cc09ff109d00e0d090ecc434deef19",
+    "Properties.Evaluator.Fp32.Bf16NanF2fp": "8b9810de54bf24db504f9638839aaef2de5aca64a7680958aaf2faafa2a73490",
+    "Properties.Evaluator.Fp32.Bf16NanTorch": "9be09922783a6cd6aef71e1f2777ba09751f23903d6a182e9137a1476ebc741c",
+    "Properties.Evaluator.Fp32.Bf16ToF32Bits": "d04eebdca09f61ed3b681cb2794279be7102f3504fa8f6708a84791028058b83",
+    "Properties.Evaluator.Fp32.Decode": "e565666198b837f743f291c1b4fb8535f1d56e6d4cc210d8f53f7a754648929d",
+    "Properties.Evaluator.Fp32.Decoded.toCore": "de4ac895bb5e70e1ab3abf6ab7e5e7e4de7a4a0dbf669f14d2e0bb4be73c668b",
+    "Properties.Evaluator.Fp32.DecodedAddRn": "c8f47897f1a687cdbd3e05ae2d6e586df7d4ae69da627f9a99d67c8d1626e6a1",
+    "Properties.Evaluator.Fp32.DecodedMul": "ac5d8c39a4d6c3019696fc974c3ad4deef1173640bae96dee574d843cadecfa4",
+    "Properties.Evaluator.Fp32.DivWith": "374500fbf24fd3b1adbe33b2cbdb5162018e0003359ebd3b2f11e077044c1360",
+    "Properties.Evaluator.Fp32.F32AddFtzV2": "be29fa1068b64676308d1dbba6bf2d1b08078dc4522b16af42a8df2a2af8b7d2",
+    "Properties.Evaluator.Fp32.F32AddV2": "754802685a23d54076977dcd9dd63119e02de133cf1be7b30b0848331d0f4b56",
+    "Properties.Evaluator.Fp32.F32DivV2": "a60e17ea568605ebf6d34152a0e014e6fd4bd8bab2bf838ce04507cc0fc5b8bf",
+    "Properties.Evaluator.Fp32.F32Fma": "fc858911fd28cd258579a7f26b667174614cc203208f355d6320b64c29c94618",
+    "Properties.Evaluator.Fp32.F32FmaBits": "5a94a1f698f1b0479385f7dd293aac0a69f138e01f85339ec77e0160c7b01651",
+    "Properties.Evaluator.Fp32.F32FmaFtz": "7783776530dcff9adc5a89cd5cda0e6208fd59cb89ae840a07ee5eb657c6bb68",
+    "Properties.Evaluator.Fp32.F32FmaFtzV2": "6219c3a090fa359a59542792cfe5e78c5115aff473a757d0af47b63f7f175f5f",
+    "Properties.Evaluator.Fp32.F32FmaSubFtz": "023592447db9373254708a9d6591895815eef060acd5c7a2373c5533572e6e72",
+    "Properties.Evaluator.Fp32.F32FmaSubFtzV2": "c99e5daf63a624579899852c1d56b35f2f3b54460feabe5d7d4e7fea0584eeda",
+    "Properties.Evaluator.Fp32.F32FmaV2": "0ecc72c7ba2532c6bdd1a32725c84313092a5c1ee4f9f0c9c4a3cf1701b6b6fa",
+    "Properties.Evaluator.Fp32.F32GpuNan": "7332199792b01cf2dcfdc00ab17280d1aed5db53cface907294627affeaa322c",
+    "Properties.Evaluator.Fp32.F32Gt": "f56361444cc4ee1c6cf4d41202415d3ae66e9a0180171ad78242f28fcfeec492",
+    "Properties.Evaluator.Fp32.F32Max": "ac5541e4b3d7e6d1200b4b9b58f1b6ccd350b0085c9bdef899ed80cb06360216",
+    "Properties.Evaluator.Fp32.F32MaxBits": "7ac3b18dabc1f31b87a02dc0edef8494ab396cc420ad0aa889b071bb882d771d",
+    "Properties.Evaluator.Fp32.F32MulFtzV2": "4e5cb56f392d8712ec44ac014a052ebd454734532c6a240ab83780ebd1f92a56",
+    "Properties.Evaluator.Fp32.F32MulV2": "deef0b1e4ccb276227a83ee71dc5b82eba526db071265b9104b771ffbff057e8",
+    "Properties.Evaluator.Fp32.F32Nan": "af3e67f9f9a09f83fabd183684ae916b9cb82f0452ca31a21c9695d449bfa237",
+    "Properties.Evaluator.Fp32.F32SubFtzV2": "e17982bc5cb6f4690e5eb737ab43c0ca6943c26283ffc0b82fcbf79c2bb55ff5",
+    "Properties.Evaluator.Fp32.F32ToBf16RnBits": "68ee28e5c3a674f78df8de1f2180daaea355afa0c091de7d368aa45cb1a738f5",
+    "Properties.Evaluator.Fp32.FmaWith": "94ebdf57246ed64e0d7626ce8c74b5f8d790a9a9734669e8968beeed6e07c431",
+    "Properties.Evaluator.Fp32.FtzBits": "734da232ed1425d5f853d5026396aa85d51e6114535f1627b1bc8f053b3956f8",
+    "Properties.Evaluator.Fp32.GuardNegInfZero": "d43f073bc543fcd89e9e0368576a59d8b13c330a9a1301260885207c6c6bee47",
+    "Properties.Evaluator.Fp32.InfWord": "3637a2402c381275d8e4ce7d6b57f242ea4fe710d3a46a7a9a8ff1a7ee8b1996",
+    "Properties.Evaluator.Fp32.MulWith": "5746da02f288b481f22f7349cb506a7cf81a8fb39592d548d8286355649eac0b",
+    "Properties.Evaluator.Fp32.RoundRn": "fb4c69f0c73fc52453fd18e4a07fc120cf008e39ef65caa24362dc46decc684d",
+    "Properties.Evaluator.Fp32.RoundSum": "e030a11d8c569801a98cb5023507a31abd281544d5cb5404434ffe3e2afe2c85",
+    "Properties.Evaluator.Fp32.ZeroWord": "64a088bafd577abb6a7b54089da950145288fd99eb56fb72e3ab2bbc847e5d51",
+    "Properties.Evaluator.Gates.AndBits": "54c8c21867fffde3874a4599b82aa5e33e25d7416d91d7f8078bd22e3ec24f80",
+    "Properties.Evaluator.Gates.NotBit": "8f8bd2666a4d71633ff07191604733dfd5424a49a6b9616c0f5c9e4419e40313",
+    "Properties.Evaluator.Gates.XorBits": "a40d37d3cd055bc5ae9a2d606070c289f539236a8757bef60e5fb48ad6671aca",
+    "Properties.Evaluator.Scalar.BitAnd": "57b6514844aaaa04cf6ef93ea12b7deda6fc4531357114520af8f0baa2d4a196",
+    "Properties.Evaluator.Scalar.F32Fabs": "c99e6fa326b1e7d662f2e8f92bd568abbaa43e6b352a3bfb7e2a5feac4c1fa7a",
+    "Properties.Evaluator.Scalar.F32Fmaxf": "709921259ebfe91a3a8e85dcb2490b5797a1b357d71880bf6118b12efc174b54",
+    "Properties.Evaluator.Scalar.F32IsNan": "147e365c78eca673cbfb056139ccede61048d8983cacce0f0b03ce6faabf7ea1",
+    "Properties.Evaluator.Scalar.F32NanPtx": "c6881b27126d6dc054d1b4e2be90b7da175a287e408f336e39fbd4d0f6776ed1",
+    "Properties.Evaluator.Scalar.F32Neg": "81ae351ab6e47028e3dcd7df127c905d346c46b9317d7ef278359c2075c880d9",
+    "Properties.Evaluator.Scalar.I32Add": "7891d2384ca434a56562683376ece75177b70d776d4aad2855365b9c22720cc2",
+    "Properties.Evaluator.Scalar.I32Le": "d37dcbc5aaf79f68e717e2332baa6f33c625d94a3021afacfd9a703950b261f7",
+    "Properties.Evaluator.Scalar.Order": "ad438fb24e8c0898e4ba7bcc9ce9f5a15d500d244a14f3f5ce813c343641f222",
+    "Properties.Evaluator.Scalar.SelectBf16": "6a35cf9f36078799b1796a95d9d5978a2b34076e6129fadeecb2129cc9c5ba7b",
+    "Properties.Evaluator.Scalar.SelectI32": "35f51901f24e3eed4f212ef7c5a4198df220372849baf30714584ab31220b19b",
+    "Properties.Evaluator.TC.AmpereBf16Dot16": "73dabea92492eef59b6f741354a1a63b659138b365db0763e016b9adfee597eb",
+    "Properties.Evaluator.TC.AmpereBf16M16n8k16": "07939d002f6623a1fed8f5669636d85780b778aa5a0435dd0408251fd188f4b1",
+    "Properties.Evaluator.TC.Bf16Class": "c712cc820cb9a8c2359a58901533aef9dc85cab06851c8a836ff6d83d3b9e9fc",
+    "Properties.Evaluator.TC.Bf16Product": "90cd87ad725f5e3451b6d93a1eb40683d646d9ae095b2ecba525b3de42b5d925",
+    "Properties.Evaluator.TC.Bf16ProductTotal": "2bfe54031a8bbc38d57d1090befdcf6b12d259ebfd7268d8b25dd966b2e8c5e2",
+    "Properties.Evaluator.TC.BitLength": "5dd8e9aba085b29a9a5f4dc067dd5045123f6883ac60dea0df42a4c3d23438db",
+    "Properties.Evaluator.TC.Cls.toCore": "04235951a4085608f958982da293d8ec6bd5943f4e2753d8b546e7175aa5dd18",
+    "Properties.Evaluator.TC.Fp32Class": "8435a457e9f765a732925d50f92eb764ce86da27dcf4eeb1be08542097b6a639",
+    "Properties.Evaluator.TC.Fp32Term": "e2d6073bc27fd59cd087aa141f59ba870e4d458ed186e1d35d0abaf308c494c8",
+    "Properties.Evaluator.TC.Fp32Value": "daafccb0769d7c0e9a4c4cb1bfba55c86e8a8d3a56a76949b8ad11b2d7af706e",
+    "Properties.Evaluator.TC.GroupStepTotal": "5ff93fc4511cebff5a106e79376912f86e1a509b564b31ffedf14c5bb3ed3965",
+    "Properties.Evaluator.TC.GroupSum": "e95a6346a11f166cc91c3adcc8c9947819226e8a28a6784d7a5fce7d87c58569",
+    "Properties.Evaluator.TC.HopperBf16Dot16": "9f3686d0a29e1a52448ba2c022ed907cb161c036d8c01bda7ac88f37671be081",
+    "Properties.Evaluator.TC.HopperBf16WgmmaK16": "4803e6fbd7c395a961cac39821992588dac93a108cf27f274271feba92360490",
+    "Properties.Evaluator.TC.PackFp32": "480cecfc626e86114829da07158f1732cca0cb431b50f22ab12f523f62d5fb5b",
+    "Properties.Evaluator.TC.PackValue": "8f39f08ad3efaa3de731060498ac98ad86749df4fdbb9f6e5337821c9668574f",
+    "Properties.Evaluator.TC.Pipeline.toCore": "08c38194b9947bea2bce8b78ff4be22af3ff151551d74f75adfccb81ee4c9e34",
+    "Properties.Evaluator.TC.PipelineK": "6c61e963fe82458a2555e7d9e283dc37cc1007fb966db5efc89bdec562822f15",
+    "Properties.Evaluator.TC.RunGroups": "fc6522896b62fe83c2688e4bd34299d9dc453787c749938aaa391b81486473c5",
+    "Properties.Evaluator.TC.TcDotTotal": "a267e0531526fa85f4b2ce146370cd5992f2d875b1bf4d5c93ab943bd0fe2db4",
+    "Properties.Evaluator.TC.Term.toCore": "2852d6acf28aaf74b0eef5f7dfc6fb037e3af99054f65dd69ebe27b318fdf5c0",
+    "Properties.Evaluator.TC.Value.toCore": "a0441aa3b669dec9ea9b0f5400494cfb6f18fe242e361c9506f07208898a4b47",
+    "Properties.Evaluator.TC.ValueInfSign": "6bb9c59ccb6ab5209edfdcf221577143c46c4290b645c5296acc629d3f8b9617",
+    "Properties.Evaluator.TC.ValueIsNaN": "6d686ada66136874670855009b7994bfec438f217b889af6275d4ce62383195a",
+    "Properties.Evaluator.TC.ValueTerm": "dff678e869ada7da5c452587cf537b495de44446c4fd5fd7d73764bb8a2d0d51",
+    "Properties.Evaluator.TC.Zero": "1e836b72afe67465ab6c26cb325573c718fcdcd42404a103f94f94ebca3b0912"
+   },
+   "guarantees": [
+    "Properties.Evaluator.Casts.bf16ToF32",
+    "Properties.Evaluator.Casts.bitLength",
+    "Properties.Evaluator.Casts.dyadicLt",
+    "Properties.Evaluator.Casts.e2m1NanCode",
+    "Properties.Evaluator.Casts.e2m1Up",
+    "Properties.Evaluator.Casts.e4m3Nan",
+    "Properties.Evaluator.Casts.e4m3ToF32",
+    "Properties.Evaluator.Casts.f2fpBf16",
+    "Properties.Evaluator.Casts.f32ToBf16Rn",
+    "Properties.Evaluator.Casts.f32ToE2m1Sat",
+    "Properties.Evaluator.Casts.f32ToE4m3Sat",
+    "Properties.Evaluator.Casts.roundEvenDyadic",
+    "Properties.Evaluator.Fp32.addWith",
+    "Properties.Evaluator.Fp32.bf16Add",
+    "Properties.Evaluator.Fp32.bf16AddF2fp",
+    "Properties.Evaluator.Fp32.bf16MulBf16",
+    "Properties.Evaluator.Fp32.bf16MulF32",
+    "Properties.Evaluator.Fp32.bf16NanF2fp",
+    "Properties.Evaluator.Fp32.bf16NanTorch",
+    "Properties.Evaluator.Fp32.bf16ToF32Bits",
+    "Properties.Evaluator.Fp32.decode",
+    "Properties.Evaluator.Fp32.decodedAddRn",
+    "Properties.Evaluator.Fp32.decodedMul",
+    "Properties.Evaluator.Fp32.divWith",
+    "Properties.Evaluator.Fp32.f32AddFtzV2",
+    "Properties.Evaluator.Fp32.f32AddV2",
+    "Properties.Evaluator.Fp32.f32DivV2",
+    "Properties.Evaluator.Fp32.f32Fma",
+    "Properties.Evaluator.Fp32.f32FmaBits",
+    "Properties.Evaluator.Fp32.f32FmaFtz",
+    "Properties.Evaluator.Fp32.f32FmaFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaSubFtz",
+    "Properties.Evaluator.Fp32.f32FmaSubFtzV2",
+    "Properties.Evaluator.Fp32.f32FmaV2",
+    "Properties.Evaluator.Fp32.f32GpuNan",
+    "Properties.Evaluator.Fp32.f32Gt",
+    "Properties.Evaluator.Fp32.f32Max",
+    "Properties.Evaluator.Fp32.f32MaxBits",
+    "Properties.Evaluator.Fp32.f32MulFtzV2",
+    "Properties.Evaluator.Fp32.f32MulV2",
+    "Properties.Evaluator.Fp32.f32Nan",
+    "Properties.Evaluator.Fp32.f32SubFtzV2",
+    "Properties.Evaluator.Fp32.f32ToBf16RnBits",
+    "Properties.Evaluator.Fp32.fmaWith",
+    "Properties.Evaluator.Fp32.ftzBits",
+    "Properties.Evaluator.Fp32.guardNegInfZero",
+    "Properties.Evaluator.Fp32.infWord",
+    "Properties.Evaluator.Fp32.mulWith",
+    "Properties.Evaluator.Fp32.roundRn",
+    "Properties.Evaluator.Fp32.roundSum",
+    "Properties.Evaluator.Fp32.zeroWord",
+    "Properties.Evaluator.Gates.andBits",
+    "Properties.Evaluator.Gates.notBit",
+    "Properties.Evaluator.Gates.xorBits",
+    "Properties.Evaluator.Scalar.bitAnd",
+    "Properties.Evaluator.Scalar.f32Fabs",
+    "Properties.Evaluator.Scalar.f32Fmaxf",
+    "Properties.Evaluator.Scalar.f32IsNan",
+    "Properties.Evaluator.Scalar.f32NanPtx",
+    "Properties.Evaluator.Scalar.f32Neg",
+    "Properties.Evaluator.Scalar.i32Add",
+    "Properties.Evaluator.Scalar.i32Le",
+    "Properties.Evaluator.Scalar.order",
+    "Properties.Evaluator.Scalar.selectBf16",
+    "Properties.Evaluator.Scalar.selectI32",
+    "Properties.Evaluator.TC.ampereBf16Dot16",
+    "Properties.Evaluator.TC.ampereBf16M16n8k16",
+    "Properties.Evaluator.TC.bf16Class",
+    "Properties.Evaluator.TC.bf16Product",
+    "Properties.Evaluator.TC.bf16ProductTotal",
+    "Properties.Evaluator.TC.bitLength",
+    "Properties.Evaluator.TC.fp32Class",
+    "Properties.Evaluator.TC.fp32Term",
+    "Properties.Evaluator.TC.fp32Value",
+    "Properties.Evaluator.TC.groupStepTotal",
+    "Properties.Evaluator.TC.groupSum",
+    "Properties.Evaluator.TC.hopperBf16Dot16",
+    "Properties.Evaluator.TC.hopperBf16WgmmaK16",
+    "Properties.Evaluator.TC.packFp32",
+    "Properties.Evaluator.TC.packValue",
+    "Properties.Evaluator.TC.pipelineK",
+    "Properties.Evaluator.TC.runGroups",
+    "Properties.Evaluator.TC.tcDotTotal",
+    "Properties.Evaluator.TC.valueInfSign",
+    "Properties.Evaluator.TC.valueIsNaN",
+    "Properties.Evaluator.TC.valueTerm",
+    "Properties.Evaluator.TC.zero"
+   ]
   },
   "Properties.Nci": {
    "digest": "4b3d77855a2e124826e7a66b941d25fed75466b4c80308bbf134a764603d1ed0",
