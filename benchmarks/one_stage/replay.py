@@ -21,9 +21,14 @@ run recorded.
 * **Verdicts.** Lean (`serve`), today's Python (`registration.check`, `draw.check_draw`, `audit.audit_record`, written
   as `OneStage.check` writes its outcome) and the recorded verdict, compared by verdict, stage (registration, draw,
   checks, verdict) and codes.
+* **No recorded verdict.** A run that recorded no verdict (a serving bundle no verifier audited in its own run, an A2
+  or A4 run that stopped before its audit record) compares Lean with today's Python on the stages it holds: the whole
+  audit where it kept the session, else the registration alone (its `stages`; each outcome read up to them, one that
+  got past them a pass). Its own line in the counts (`no_recorded_verdict`); a run that holds nothing either side reads
+  is listed with why.
 
-Writes `replay.json` (every case's three verdicts and provenance, the runs neither reads or that miss an input, and the
-counts by driver and format) and `cases/<run>.jsonl` (the cases themselves) under `--out`.
+Writes `replay.json` (every case's three verdicts and provenance, the runs neither reads or that miss an input, the
+counts by driver and format, and the summary's lines) and `cases/<run>.jsonl` (the cases themselves) under `--out`.
 """
 from __future__ import annotations
 
@@ -60,7 +65,11 @@ SERVED_BINDINGS = {"sha512": identity_digest_sha512, "v1": lambda tag, doc: byte
 #: `registration.SERVED_DOMAIN`, today's and before it
 SERVED_TAGS = (R.SERVED_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
+REGISTRATION = ("registration",)
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
+#: the evidence of a case that holds the registration alone: no draw, so both sides stop at the draw's check
+NO_DRAW = {"draw": None, "instances": 0, "proved_units": [], "receipt": {}, "served": None, "session_registered": None,
+           "session_roots": None, "sessions": [], "statement": {}, "verdicts": {}}
 
 
 class Missing(Exception):
@@ -210,6 +219,8 @@ class Run:
     outside: list[dict] = field(default_factory=list)
     fetch: Callable[[str], None] | None = None
     records: Records = field(default_factory=Records)
+    #: the replayed audit cases of the runs that recorded a verdict, by their record's digest
+    audits: dict[str, list] = field(default_factory=dict)
 
     @property
     def id(self) -> str:
@@ -448,19 +459,21 @@ class Case:
     params: dict
     rec: dict
     evidence: dict
-    recorded: dict
+    recorded: dict | None     # None: the run recorded no verdict
     provenance: dict = field(default_factory=dict)
     r7: bool = False
+    stages: tuple[str, ...] = STAGES   # the stages of `OneStage.check` the run's files hold
 
     def case(self) -> dict:
         return {"commitment": DT.canonical(self.rec).encode().hex(),
                 "evidence": DT.canonical(strings(self.evidence)).encode().hex(), "params": _json(self.params)}
 
-    def but(self, name: str, kind: str, recorded_: dict, *, params: dict | None = None, rec: dict | None = None,
+    def but(self, name: str, kind: str, recorded_: dict | None, *, params: dict | None = None, rec: dict | None = None,
             evidence: dict | None = None, program: Any = None, provenance: dict | None = None) -> Case:
         return Case(self.run, self.driver, self.format, name, kind, program if program is not None else self.program,
                     {**self.params, **(params or {})}, rec if rec is not None else self.rec,
-                    {**self.evidence, **(evidence or {})}, recorded_, {**self.provenance, **(provenance or {})}, self.r7)
+                    {**self.evidence, **(evidence or {})}, recorded_, {**self.provenance, **(provenance or {})}, self.r7,
+                    self.stages)
 
 
 def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: str, *, partition: dict | None = None,
@@ -550,7 +563,7 @@ def python(c: Case) -> dict:
 def stage_of(outcome: dict) -> tuple[str | None, list[str] | None]:
     """The stage of `OneStage.check` an outcome's reason names, and its codes."""
     v, reason = outcome.get("verdict"), outcome.get("reason") or ""
-    if v == "accept":
+    if v in ("accept", "pass"):
         return None, None
     if v == "undecided":
         return "verdict", None
@@ -565,8 +578,20 @@ def stage_of(outcome: dict) -> tuple[str | None, list[str] | None]:
     return "decode", [reason]
 
 
+def held(c: Case, outcome: dict) -> dict:
+    """The outcome on the stages the case holds: one that got past them is a pass; a refusal at one of them, a decode
+    failure or an error stays as it is."""
+    if c.stages == STAGES:
+        return outcome
+    stage, _ = stage_of(outcome)
+    if outcome.get("verdict") == "accept" or (stage in STAGES and stage not in c.stages):
+        return {"verdict": "pass", "stages": list(c.stages)}
+    return outcome
+
+
 def against(c: Case, outcome: dict) -> str:
     """An outcome against the recorded verdict: the same verdict, stage and codes (`same`), the verdict only, or not."""
+    outcome = held(c, outcome)
     stage, codes = stage_of(outcome)
     r = c.recorded
     if outcome.get("verdict") != r["verdict"]:
@@ -578,12 +603,15 @@ def against(c: Case, outcome: dict) -> str:
 
 def compare(c: Case, lean: dict | None, py: dict) -> dict:
     if lean is None:
-        return {"python_recorded": against(c, py)}
+        return {"python_recorded": against(c, py)} if c.recorded is not None else {}
+    hl, hp = held(c, lean), held(c, py)
     strip = lambda o: {k: v for k, v in o.items() if k != "reason"}  # noqa: E731
-    lp = "same" if lean == py else ("same-verdict" if strip(lean) == strip(py) else "differ")
-    stage, codes = stage_of(lean)
-    return {"lean_python": lp, "lean_recorded": against(c, lean), "python_recorded": against(c, py), "lean_stage": stage,
-            "lean_codes": codes}
+    lp = "same" if hl == hp else ("same-verdict" if strip(hl) == strip(hp) else "differ")
+    stage, codes = stage_of(hl)
+    out = {"lean_python": lp, "lean_stage": stage, "lean_codes": codes}
+    if c.recorded is not None:
+        out.update(lean_recorded=against(c, lean), python_recorded=against(c, py))
+    return out
 
 
 # --- drivers -----------------------------------------------------------------------------------------------------------
@@ -777,14 +805,24 @@ def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable
                                 "why": OUTSIDE.get(name, "UNHANDLED: the replay has no case for it")})
 
 
-def a2(run: Run) -> Iterator[Case]:
-    """A2 (`a2.py`): A0's template over serving's own commitment (vllm-serving-commit's rows): served domains recomputed
-    from the record's program, partition and run, and the verifier's partition object passed as it is."""
-    base = "out/a2"
-    a = run.json(f"{base}/audit.json")
-    summary = run.json(f"{base}/summary.json")
-    rec = a["registration"]
-    n = summary["n"]
+@dataclass
+class A2Copies:
+    """A2's verifier copies of a record: the population program over the template set, the partition object the run
+    passed, the served domains over the window's run, the leaf layer the SHA-512 of serving's public file."""
+    template: Any
+    program: Any
+    query: dict
+    part: dict
+    layout: dict
+    window_run: str
+    ports: dict
+    form: tuple[str, str]
+    leaf_layer: str
+    public: Callable[[], bytes]
+    prov: dict
+
+
+def a2_copies(run: Run, base: str, rec: dict, n: int) -> A2Copies:
     s, set_from = run.input_set("rope101")
     template = s.subcircuit.definition()
     program = P.population_program(template, n)
@@ -814,10 +852,23 @@ def a2(run: Run) -> Iterator[Case]:
     except Missing:
         leaf_layer = hashlib.sha512(public()).hexdigest()
         prov["leaf_layer"] = f"SHA-512 of serving's pub-{n}.bin in inputs/served.tar (the run did not keep {pub})"
+    return A2Copies(template, program, query, part, layout, window_run, ports, form, leaf_layer, public, prov)
+
+
+def a2(run: Run) -> Iterator[Case]:
+    """A2 (`a2.py`): A0's template over serving's own commitment (vllm-serving-commit's rows): served domains recomputed
+    from the record's program, partition and run, and the verifier's partition object passed as it is."""
+    base = "out/a2"
+    a = run.json(f"{base}/audit.json")
+    summary = run.json(f"{base}/summary.json")
+    rec = a["registration"]
+    n = summary["n"]
+    v2 = a2_copies(run, base, rec, n)
+    program, part, prov = v2.program, v2.part, v2.prov
     live = live_line(run.path(f"{base}/session/prove.log")) or {}
     sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{base}/session")
     law = {"k": summary["k"], "law": "subset"}
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=part)
+    p = params(program, v2.query, law, v2.ports, v2.leaf_layer, delta_of(summary["delta"]), partition=part)
     e = evidence(a, instances=live.get("instances", -1), sessions=sessions, session_roots=live.get("roots") or {},
                  served=None)
     prov["evidence"] = "audit.json; instances and session roots from session/prove.log's LIVE line"
@@ -827,14 +878,14 @@ def a2(run: Run) -> Iterator[Case]:
     yield c
     src = f"{base}/negatives.json"
     draw = a["draw"]
-    smaller = P.population_program(template, n - 1)
+    smaller = P.population_program(v2.template, n - 1)
     cases: dict[str, Callable[[dict], Case]] = {
         "public-file-b||c-byte-flipped (R4)": lambda v: c.but(
             "public-file-b||c-byte-flipped (R4)", "negative", recorded_codes(v, "registration", src),
-            params={"leaf_layer": hashlib.sha512(flipped(public())).hexdigest()}),
+            params={"leaf_layer": hashlib.sha512(flipped(v2.public())).hexdigest()}),
         "domains-of-another-run (R3)": lambda v: c.but(
             "domains-of-another-run (R3)", "negative", recorded_codes(v, "registration", src),
-            params={"ports": served_ports(form, part, layout, window_run + "-other")}),
+            params={"ports": served_ports(v2.form, part, v2.layout, v2.window_run + "-other")}),
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=smaller,
             params={"program": descriptor(smaller)}),
@@ -844,6 +895,103 @@ def a2(run: Run) -> Iterator[Case]:
     }
     yield from _negatives(run, c, run.json(src), src, cases, base_instances=len(a["proved_units"]),
                           session_roots=live.get("roots") or {})
+
+
+def traced_argv(run: Run, script: str) -> list[str]:
+    """The arguments `pod.sh` (under `set -x`) passed `script`, from the run's `stderr.log`."""
+    for line in reversed(run.path("stderr.log").read_text().splitlines()):
+        words = line.split()
+        if words[:1] == ["+"] and script in words:
+            return words[words.index(script) + 1:]
+    raise Missing(f"stderr.log: {script}'s command line")
+
+
+def option(argv: list[str], name: str, default: Any) -> Any:
+    return argv[argv.index(name) + 1] if name in argv else default
+
+
+#: the tools `a0.audit_session` names in its verdicts (neither side reads them)
+A0_TOOLS = {"m0-verifier": "flock-circuit serve (M0, PR #83 eb90718f)",
+            "lean-draw-u1-u3": "flock-verify draw-test (PR #113 9d0d53df)",
+            "lean-verify": "flock-verify verify --archive (PR #118)"}
+
+
+def copies_against(p: dict, rec: dict, run: Run) -> dict[str, str]:
+    """Each replayed audit of the same record (by run): its copies equal `p`, or the parameters in which they differ."""
+    out = {}
+    for x in run.audits.get(R.digest(rec), []):
+        differ = sorted(k for k in set(p) | set(x.params) if p.get(k) != x.params.get(k))
+        out[x.run] = "equal" if not differ else f"differ in {', '.join(differ)}"
+    return out
+
+
+def a2_unaudited(run: Run) -> Iterator[Case]:
+    """An A2 run that stopped before its audit record: the record served it (`inputs/served.tar`'s `registration.json`,
+    the receipt's) under A2's copies, the law and δ the `--k` and `--delta` `pod.sh` passed `a2.py` (its defaults 256 and
+    2^-20 where it passed none), and the evidence `a0.audit_session` handed `audit_record`, rebuilt from the session's
+    files: the draw the session recorded (`session.json`'s `unit_draw`), the statement from the LIVE line and the
+    session's coin seed, the verdicts (M0's from `session.json`, `flock-verify draw-test`'s DRAWCHECK lines, `flock-verify
+    verify`'s VERDICT line as the verifier of record), the sessions' SHA-512, and the proved units through the public
+    header's unit indices. The run recorded no verdict and no negatives."""
+    base = "out/a2"
+    rec = json.loads(tar_member(run, "inputs/served.tar", "registration.json"))
+    receipt = run.json(f"{base}/receipt.json")
+    if receipt.get("registration") != R.digest(rec):
+        raise Gap(f"{base}/receipt.json does not name inputs/served.tar's registration.json")
+    argv = traced_argv(run, "benchmarks/one_stage/a2.py")
+    k, delta = int(option(argv, "--k", 256)), float(option(argv, "--delta", 2.0 ** -20))
+    n = int(rec["population"])
+    v2 = a2_copies(run, base, rec, n)
+    prov = v2.prov
+    prov["record"] = "inputs/served.tar's registration.json (the receipt's)"
+    prov["law"] = f"subset:{k} and delta {delta!r}, a2.py's --k and --delta in stderr.log's trace (its defaults where absent)"
+    sess = sorted(f["path"] for f in run.files if re.fullmatch(rf"{base}/session/sessions/[^/]+/session\.json", f["path"]))
+    if not sess:
+        raise Missing(f"{base}/session/sessions/*/session.json")
+    record = run.json(sess[-1])
+    draw = record.get("unit_draw")
+    if draw is None:
+        raise Gap(f"{sess[-1]}: the session recorded no draw")
+    live = live_line(run.path(f"{base}/session/prove.log")) or {}
+    statement = {"circuit_sha512": live.get("circuit_sha512"), "statement_digest": live.get("statement_digest"),
+                 "public_sha512": live.get("public_sha512"), "sigma": live.get("sigma"), "roots": live.get("roots"),
+                 "coin_commitment": (record.get("coin_seed") or {}).get("commitment"),
+                 "roots_are_registered": live.get("roots") == {r["port"]: r["root"] for r in rec["roots"]}}
+    m0 = record.get("verdict") or {}
+    drawcheck = [json.loads(x.split(" ", 1)[1]) for x in run.path(f"{base}/session/u1-u3.lean.log").read_text().splitlines()
+                 if x.startswith("DRAWCHECK ")]
+    log = run.path(f"{base}/session/lean-verify.log").read_text()
+    line = next((x for x in log.splitlines() if x.startswith("VERDICT ")), None)
+    if line is None:
+        raise Gap(f"{base}/session/lean-verify.log: no VERDICT line")
+    lv = json.loads(line.split(" ", 1)[1])
+    took = re.search(r"^# rc \S+ in ([0-9.]+) s$", log, re.M)
+    verdicts = {
+        "m0-verifier": {"accepted": m0.get("accepted") is True and statement["roots_are_registered"], "why": m0.get("why"),
+                        "tool": A0_TOOLS["m0-verifier"]},
+        "lean-draw-u1-u3": {"accepted": bool(drawcheck) and all(x["ok"] for x in drawcheck), "detail": drawcheck,
+                            "tool": A0_TOOLS["lean-draw-u1-u3"]},
+        "lean-verify": {"accepted": lv.get("accepted") is True, "why": lv.get("why"), "of_record": True,
+                        "verify_s": float(took.group(1)) if took else None, "digest": hashlib.sha512(line.encode()).hexdigest(),
+                        "tool": A0_TOOLS["lean-verify"]},
+    }
+    header = json.loads(v2.public().split(b"\n", 1)[0])
+    proved = [header["units"]["indices"][u] for u in (live.get("unit_draw") or {}).get("units", [])]
+    a = {"draw": draw, "proved_units": proved, "receipt": receipt, "statement": statement, "verdicts": verdicts}
+    p = params(v2.program, v2.query, {"k": k, "law": "subset"}, v2.ports, v2.leaf_layer, delta_of(delta), partition=v2.part)
+    e = evidence(a, instances=live.get("instances", -1), sessions=session_digests(run, f"{base}/session"),
+                 session_roots=live.get("roots") or {}, served=None)
+    prov["evidence"] = (f"rebuilt as a0.audit_session builds it: the draw from {sess[-1]}; the statement from "
+                        "session/prove.log's LIVE line and the session's coin seed; the verdicts from session.json, "
+                        "session/u1-u3.lean.log and session/lean-verify.log (verify_s from its timing line); the proved units "
+                        f"through the unit indices of the header of {base}/stage/pub-{n}.bin (the re-headered copy keeps them); "
+                        "instances and session roots from the LIVE line")
+    if "--unbind" in argv:
+        prov["unbound"] = "the session ran on the verifier's re-headered copies for M0's unbound statement"
+    stopped = [x for x in run.path("out/a2.log").read_text().splitlines() if x.strip()] if run.has("out/a2.log") else []
+    prov["stopped"] = f"out/a2.log: {stopped[-1].strip() if stopped else '?'}; the run wrote no audit.json or negatives.json"
+    prov["copies_against"] = copies_against(p, rec, run)
+    yield Case(run.id, "a2-unaudited", rec["format"], "audit", "audit", v2.program, p, rec, e, None, prov)
 
 
 def _proved_check(v: dict, src: str) -> dict:
@@ -979,17 +1127,9 @@ def a4_member_layouts(s, n: int, row_map: dict | None) -> dict[str, dict[str, tu
                       **{p.name: ("u16", n * p.words) for p in s.subcircuit.outputs}}}
 
 
-def a4(run: Run) -> Iterator[Case]:
-    """A4 (`a4.py`): #101's layer 0 on serving's own roots: the layout of record's members as one population (the
-    canonical `Q_template_instances` partition), serving's registration (or, with `--reaudit`, a new record naming it under
-    the agreement's law, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
-    SHA-512 of the map from template to its public file's SHA-512, one draw by the verifier's law with each member served
-    its share. Before 9515b4d4f the audit took neither the served draw nor the sessions' roots (and the run recorded no
-    `audit_negatives`)."""
-    base = "out/a4"
-    a = run.json(f"{base}/audit.json")
-    summary = run.json(f"{base}/summary.json")
-    rec = a["registration"]
+def a4_copies(run: Run, base: str, summary: dict, rec: dict) -> tuple[Any, dict, dict | None, dict, str, list, list[str], dict]:
+    """A4's verifier copies of `rec` under the run's layout of record (`summary.json`'s layout and members): the
+    program, query, partition, served domains and leaf layer; the members and their template ids; the provenance."""
     lay, layout_from = a4_layout(run, summary["layout"])
     prov: dict = {"commit": run.commit(), "layout": f"{summary['layout']} from {layout_from}", "sets": {},
                   "program": "P.mixed_population_program(each layout member's set template, count)"}
@@ -1031,6 +1171,21 @@ def a4(run: Run) -> Iterator[Case]:
         publics[tid], prov["leaf_layer"][tid] = public_digest(run, f"{base}/m{k}/pub-{cnt}.bin",
                                                               f"{base}/session-m{k}/archive-put.log")
     leaf_layer = hashlib.sha512(DT.canonical(publics).encode()).hexdigest()
+    return program, query, partition, ports, leaf_layer, mem, tids, prov
+
+
+def a4(run: Run) -> Iterator[Case]:
+    """A4 (`a4.py`): #101's layer 0 on serving's own roots: the layout of record's members as one population (the
+    canonical `Q_template_instances` partition), serving's registration (or, with `--reaudit`, a new record naming it under
+    the agreement's law, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
+    SHA-512 of the map from template to its public file's SHA-512, one draw by the verifier's law with each member served
+    its share. Before 9515b4d4f the audit took neither the served draw nor the sessions' roots (and the run recorded no
+    `audit_negatives`)."""
+    base = "out/a4"
+    a = run.json(f"{base}/audit.json")
+    summary = run.json(f"{base}/summary.json")
+    rec = a["registration"]
+    program, query, partition, ports, leaf_layer, mem, tids, prov = a4_copies(run, base, summary, rec)
     neg = run.json(f"{base}/negatives.json")
     with_served = "verifier-of-record-did-not-run (C2)" in neg
     counts = a.get("draw_counts") or {}
@@ -1116,6 +1271,76 @@ def a4(run: Run) -> Iterator[Case]:
             rec={**rec, "window": served_rec["window"]})
     yield from _negatives(run, c, neg, src, cases, base_instances=len(a["proved_units"]),
                           session_roots=session_roots if with_served else None, served=served)
+
+
+def a4_unaudited(run: Run) -> Iterator[Case]:
+    """An A4 run refused before its draw: the record served it (`inputs/served.tar`'s `registration.json`, the
+    receipt's) under A4's copies (`summary.json`'s layout, members, k and δ), the registration alone, since the run holds
+    no draw. The run's own registration check (`summary.json`'s `checks.registration`) is the recorded result of that
+    stage; its other refusals before the draw are M0's checks of each member's served files (pin, classes, bindings),
+    which the protocol does not make."""
+    base = "out/a4"
+    summary = run.json(f"{base}/summary.json")
+    rec = json.loads(tar_member(run, "inputs/served.tar", "registration.json"))
+    if R.digest(rec) != summary.get("registration") or R.digest(rec) != run.json(f"{base}/receipt.json").get("registration"):
+        raise Gap(f"inputs/served.tar's registration.json is not the one {base}/summary.json and receipt.json name")
+    program, query, partition, ports, leaf_layer, _, _, prov = a4_copies(run, base, summary, rec)
+    prov["record"] = "inputs/served.tar's registration.json (the receipt's)"
+    stratified = (summary.get("law") or "").startswith("stratified")
+    law = {"k": summary["k"], "law": "stratified" if stratified else "subset"}
+    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    checks = summary.get("checks") or {}
+    reg, src = checks.get("registration"), f"{base}/summary.json's checks.registration"
+    rv = None if reg is None else recorded("pass", source=src) if reg["ok"] else recorded("reject", "registration", reg["codes"], src)
+    others = {k: v["codes"] for k, v in checks.items() if k not in ("registration", "source") and not v["ok"]}
+    if others:
+        prov["refused_before_draw"] = f"{others}: M0's checks of the members' served files, not the protocol's"
+    prov["copies_against"] = copies_against(p, rec, run)
+    yield Case(run.id, "a4-unaudited", rec["format"], "registration", "audit", program, p, rec, dict(NO_DRAW), rv, prov,
+               stages=REGISTRATION)
+
+
+def bundle_leaf_layer(run: Run) -> tuple[str, str | dict]:
+    """A serving bundle's leaf layer: the SHA-512 of the map from each member's template to its public file's SHA-512
+    (`members.json`, #101's layers), or of its one public file (`compare.json`); each SHA-512 the file's where the
+    bundle holds it, else the one serving recorded of it."""
+    if run.has("members.json"):
+        publics, how = {}, {}
+        for m in run.json("members.json")["members"]:
+            f = f"m{m['k']}-pub-{m['n']}.bin"
+            if run.has(f):
+                publics[m["template"]], how[m["template"]] = sha512_file(run.path(f)), f"SHA-512 of {f}"
+            else:
+                publics[m["template"]], how[m["template"]] = m["pub"]["file_sha512"], "members.json's pub.file_sha512"
+        return hashlib.sha512(DT.canonical(publics).encode()).hexdigest(), how
+    return run.json("compare.json")["pub"]["file_sha512"], "compare.json's pub.file_sha512 (serving's SHA-512 of its public file)"
+
+
+def serving_bundle(run: Run) -> Iterator[Case]:
+    """A serving bundle (`vllm-serving-commit`'s files: `registration.json`, `window.json`, `index.json`, and
+    `compare.json` for one template or `members.json` and the members' public files for #101's layers) that no verifier
+    audited in its own run: the registration alone, under the copies of each replayed audit of the same record (its
+    digest) with the leaf layer from the bundle itself, and no draw. Its `registration-v0.json`, the window's record in
+    `verity/one-stage/registration/v0`, is a format neither side reads."""
+    rec = run.json("registration.json")
+    audits = run.audits.get(R.digest(rec)) or []
+    if not audits:
+        raise Gap(f"no replayed run audited registration {R.digest(rec)[:16]}, whose verifier's copies would read it")
+    leaf_layer, how = bundle_leaf_layer(run)
+    groups: dict[str, list[Case]] = {}
+    for b in audits:
+        groups.setdefault(DT.canonical({**b.params, "leaf_layer": leaf_layer}), []).append(b)
+    for b, *rest in groups.values():
+        prov = {"record": f"registration.json, the record run {b.run} audited (the same digest)",
+                "copies": f"run {b.run}'s audit case" + (f" (equal to {', '.join(x.run for x in rest)}'s)" if rest else ""),
+                "leaf_layer": how,
+                "leaf_layer_against": f"equal to run {b.run}'s" if leaf_layer == b.params["leaf_layer"] else
+                                      f"run {b.run}'s is {b.params['leaf_layer']}"}
+        if run.has("registration-v0.json"):
+            prov["registration-v0.json"] = "the window's record in verity/one-stage/registration/v0, which neither side reads"
+        name = "registration" if len(groups) == 1 else f"registration ({b.run}'s copies)"
+        yield Case(run.id, "serving-bundle", rec["format"], name, "audit", b.program, {**b.params, "leaf_layer": leaf_layer},
+                   rec, dict(NO_DRAW), None, prov, b.r7, REGISTRATION)
 
 
 def registered_gemm(run: Run) -> Iterator[Case]:
@@ -1520,7 +1745,14 @@ def session_digests(run: Run, session: str) -> list[str]:
 
 DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a0-lean": a0_lean, "a2": a2, "a3": a3, "a4": a4,
                                                        "registered-gemm": registered_gemm, "served-audit": served_audit,
-                                                       "served-window": served_window}
+                                                       "served-window": served_window, "serving-bundle": serving_bundle,
+                                                       "a2-unaudited": a2_unaudited, "a4-unaudited": a4_unaudited}
+#: the runs that recorded no verdict, read after the others (a serving bundle reads under their copies)
+READS_NOTHING = {"no-registration-record": "run/summary.json's windows is empty: the run timed the registered GEMM's "
+                                           "sessions (run/zk/, M0 and zk, W registered in the Lean statement only) under "
+                                           "no window, so it holds no registration record, the commitment OneStage.check "
+                                           "reads first, and no draw"}
+UNRECORDED = {"serving-bundle", "a2-unaudited", "a4-unaudited", "no-recorded-verdict", *READS_NOTHING}
 
 
 # --- main --------------------------------------------------------------------------------------------------------------
@@ -1598,19 +1830,15 @@ def main() -> int:
     servers = {False: DT.Server([a.lean, "serve"])}
     if a.r7_lean:
         servers[True] = DT.Server([a.r7_lean, "serve"])
-    results, runs_out, outside = [], [], []
-    for r in rows:
-        rid = r["art"][4:12]
-        run = Run(r, runs_root / rid, lists[rid], sets, programs, outside,
-                  (lambda rel, art=r["art"], d=runs_root / rid: research_fetch(art, d, [rel])) if a.fetch else None, records)
-        info = {"run": rid, "art": r["art"], "id": r.get("run"), "drivers": r.get("drivers"),
-                "formats": r.get("registration_formats"), "python_verdicts": len(r.get("python_verdicts") or [])}
-        driver = classify(run)
-        info["driver"] = driver
+    results, runs_out, outside, audits = [], [], [], defaultdict(list)
+
+    def replay(run: Run, info: dict) -> None:
+        driver = info["driver"]
         if driver not in DRIVERS:
             info["status"] = driver
-            runs_out.append(info)
-            continue
+            if driver in READS_NOTHING:
+                info["why"] = READS_NOTHING[driver]
+            return
         cases: list[Case] = []
         try:
             cases.extend(DRIVERS[driver](run))
@@ -1620,7 +1848,7 @@ def main() -> int:
             info["status"], info["gap"] = "reconstruction-gap", str(e)
         else:
             info["status"] = "replayed"
-        with open(out / "cases" / f"{rid}.jsonl", "w") as f:
+        with open(out / "cases" / f"{run.id}.jsonl", "w") as f:
             for c in cases:
                 case = c.case()
                 lean = None
@@ -1636,21 +1864,42 @@ def main() -> int:
                 results.append(_row(c, lean, py, {**compare(c, lean, py),
                                                   **({"pending": "R7: no --r7-lean"} if lean is None else {})}))
                 f.write(json.dumps({"name": c.name, "r7": c.r7, "case": case}) + "\n")
+                if c.kind == "audit" and driver not in UNRECORDED:
+                    audits[R.digest(c.rec)].append(c)
         info["cases"] = len(cases)
+        print(f"{run.id} {driver}: {info['status']} {len(cases)} cases", file=sys.stderr, flush=True)
+
+    late: list[tuple[Run, dict]] = []
+    for r in rows:
+        rid = r["art"][4:12]
+        run = Run(r, runs_root / rid, lists[rid], sets, programs, outside,
+                  (lambda rel, art=r["art"], d=runs_root / rid: research_fetch(art, d, [rel])) if a.fetch else None, records,
+                  audits)
+        info = {"run": rid, "art": r["art"], "id": r.get("run"), "drivers": r.get("drivers"),
+                "formats": r.get("registration_formats"), "python_verdicts": len(r.get("python_verdicts") or [])}
+        info["driver"] = classify(run)
         runs_out.append(info)
-        print(f"{rid} {driver}: {info['status']} {len(cases)} cases", file=sys.stderr, flush=True)
+        if info["driver"] in UNRECORDED:
+            late.append((run, info))
+        else:
+            replay(run, info)
+    for run, info in late:
+        replay(run, info)
     for s in servers.values():
         s.close()
     report = {"format": "verity/one-stage-replay/v0", "index": a.index, "lean": a.lean, "r7_lean": a.r7_lean,
               "runs": runs_out, "cases": results, "outside": outside, "counts": counts(runs_out, results, outside)}
+    report["summary"] = summary_lines(report["counts"])
     (out / "replay.json").write_text(json.dumps(report, indent=1, sort_keys=True))
     print(json.dumps(report["counts"], indent=1, sort_keys=True))
+    print("\n".join(report["summary"]))
     return 0
 
 
 def _row(c: Case, lean: dict | None, py: dict | None, cmp: dict) -> dict:
     return {"run": c.run, "driver": c.driver, "format": c.format, "name": c.name, "kind": c.kind, "r7": c.r7,
-            "recorded": c.recorded, "lean": lean, "python": py, **cmp, "provenance": c.provenance}
+            "recorded": c.recorded, "lean": lean, "python": py, **cmp, "provenance": c.provenance,
+            **({"stages": list(c.stages)} if c.stages != STAGES else {})}
 
 
 def classify(run: Run) -> str:
@@ -1663,7 +1912,7 @@ def classify(run: Run) -> str:
             any(re.fullmatch(r"out/audit-[^/]+\.json", f["path"]) for f in run.files):
         return "served-audit"
     if not run.row.get("python_verdicts"):
-        return "no-recorded-verdict"
+        return unrecorded(run)
     if len(drivers) == 1 and drivers[0] in DRIVERS:
         return drivers[0]
     if run.has("out/flock-audit.argv.json"):
@@ -1673,22 +1922,60 @@ def classify(run: Run) -> str:
     return "unhandled"
 
 
-def counts(runs: list[dict], results: list[dict], outside: list[dict]) -> dict:
+def unrecorded(run: Run) -> str:
+    """The driver of a run that recorded no verdict, by the stages its files hold, or why neither side reads it."""
+    if run.has("registration.json") and run.has("index.json"):
+        return "serving-bundle"
+    if run.has("out/a2/receipt.json") and not run.has("out/a2/audit.json"):
+        return "a2-unaudited"
+    if run.has("out/a4/summary.json") and not run.has("out/a4/audit.json"):
+        return "a4-unaudited"
+    if run.has("run/summary.json") and not run.json("run/summary.json").get("windows"):
+        return "no-registration-record"
+    return "no-recorded-verdict"
+
+
+def _by_driver_format(runs: list[dict], results: list[dict], outcome: str) -> dict:
     by: dict = defaultdict(Counter)
     for r in results:
-        key = f"{r['driver']} {r['format']}"
-        by[key][r["lean_recorded"] if r.get("lean_recorded") else "pending"] += 1
+        by[f"{r['driver']} {r['format']}"][r.get(outcome) or "pending"] += 1
     for r in runs:
         if r["status"] != "replayed":
             by[f"{r['driver']} {','.join(sorted(r.get('formats') or {})) or '-'}"][r["status"]] += 1
-    return {"runs": len(runs), "cases": len(results),
-            "same_verdict": sum(1 for r in results if r.get("lean_recorded") in ("same", "same-verdict")),
-            "pending_r7": sum(1 for r in results if r.get("pending")),
-            "negatives": sum(1 for r in results if r["kind"] == "negative"),
-            "analogs": sum(1 for r in results if r["kind"] == "analog"), "outside": len(outside),
-            "lean_python": dict(Counter(r.get("lean_python", "pending") for r in results)),
-            "python_recorded": dict(Counter(r.get("python_recorded", "-") for r in results)),
-            "by_driver_format": {k: dict(v) for k, v in sorted(by.items())}}
+    return {k: dict(v) for k, v in sorted(by.items())}
+
+
+def counts(runs: list[dict], results: list[dict], outside: list[dict]) -> dict:
+    """The runs that recorded a verdict against it (`runs` counts every run in the index), and those that recorded none
+    as their own line (`no_recorded_verdict`, Lean against Python)."""
+    mine = [r for r in results if r["driver"] not in UNRECORDED]
+    none = [r for r in results if r["driver"] in UNRECORDED]
+    none_runs = [r for r in runs if r["driver"] in UNRECORDED]
+    return {"runs": len(runs), "cases": len(mine),
+            "same_verdict": sum(1 for r in mine if r.get("lean_recorded") in ("same", "same-verdict")),
+            "pending_r7": sum(1 for r in mine if r.get("pending")),
+            "negatives": sum(1 for r in mine if r["kind"] == "negative"),
+            "analogs": sum(1 for r in mine if r["kind"] == "analog"), "outside": len(outside),
+            "lean_python": dict(Counter(r.get("lean_python", "pending") for r in mine)),
+            "python_recorded": dict(Counter(r.get("python_recorded", "-") for r in mine)),
+            "by_driver_format": _by_driver_format([r for r in runs if r["driver"] not in UNRECORDED], mine, "lean_recorded"),
+            "no_recorded_verdict": {
+                "runs": len(none_runs), "cases": len(none),
+                "lean_python": dict(Counter(r.get("lean_python", "pending") for r in none)),
+                "negatives": sum(1 for r in none if r["kind"] == "negative"),
+                "registration_only": sum(1 for r in none if r.get("stages") == list(REGISTRATION)),
+                "recorded_registration": dict(Counter(r["lean_recorded"] for r in none if r.get("lean_recorded"))),
+                "reads_nothing": [{"run": r["run"], "why": r["why"]} for r in none_runs if r["driver"] in READS_NOTHING],
+                "by_driver_format": _by_driver_format(none_runs, none, "lean_python")}}
+
+
+def summary_lines(c: dict) -> list[str]:
+    n = c["no_recorded_verdict"]
+    return [f"{c['runs']} runs in the index; {c['cases']} cases, {c['lean_python'].get('same', 0)} Lean = Python, "
+            f"{c['same_verdict']} Lean = recorded, {c['negatives']} negative controls, {c['analogs']} analogs, "
+            f"{c['outside']} outside",
+            f"{n['runs']} runs, {n['cases']} cases, {n['lean_python'].get('same', 0)} Lean = Python, {n['negatives']} "
+            f"negative controls, no recorded verdict"]
 
 
 if __name__ == "__main__":
