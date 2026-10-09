@@ -1,4 +1,5 @@
 import Proofs.Flock.Recursive.Target
+import Proofs.Flock.Recursive.ForkInner
 import Proofs.Flock.Soundness.Assumptions.Recursive
 
 /-!
@@ -173,7 +174,14 @@ theorem zk_sessions_recursive_fork_inner
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
-  sorry
+  by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
+  · exact Or.inr (Or.inr (Or.inl hf))
+  rcases zk_sessions_recursive_fork_on hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun _ _ a b => a = b)
+      (fun _ _ _ _ h => h) Sk cmt msg hbr.2.1 hbr.2.2.1 hbr.2.2.2
+      (innerAtLeavesV_of_forkOn zs dg N k Rw σ x wmsg H pick hin hf) with h | h | h
+  · exact Or.inl h
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr (Or.inr h))
 
 end Chain
 
