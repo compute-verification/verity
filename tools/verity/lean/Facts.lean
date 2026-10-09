@@ -337,10 +337,12 @@ partial def conjuncts (e : Expr) : List Expr :=
 /-- The statement's shape, one part per conjunct of a statement that is a conjunction (`shapeOf` each), after a lifted
 definition is unfolded once (`liftOf`) and its `let`s are inlined. -/
 def shapeInfo (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (stmt : Expr) : MetaM Json := do
-  let stmt ← zetaReduce (((liftOf env meaning stmt).map (·.2)).getD stmt)
-  return toJson (← (conjuncts stmt).mapM (shapeOf env meaning moduleOf))
+  try
+    let stmt ← zetaReduce (((liftOf env meaning stmt).map (·.2)).getD stmt)
+    return toJson (← (conjuncts stmt).mapM (shapeOf env meaning moduleOf))
+  catch e => return Json.mkObj [("error", toJson (← e.toMessageData.toString))]
 
-def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
+def pinInfo (env : Environment) (meaning : Array Name) (shape : Bool) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
@@ -367,7 +369,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
-    ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env meaning moduleOf ci.type),
+    ("hypotheses", toJson hypotheses), ("shape", ← if shape then shapeInfo env meaning moduleOf ci.type else pure Json.null),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
@@ -399,6 +401,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let cfg ← IO.ofExcept (Json.parse (← IO.FS.readFile cfgPath))
   let roots := names cfg "roots"
   let meaning := names cfg "meaning"
+  let shape := ((cfg.getObjValD "shape").getBool?.toOption).getD false
   let allowed := names cfg "allowed"
   let pins := names cfg "pins"
   let spec := names cfg "spec"
@@ -472,7 +475,7 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert p rs
     return acc
   let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
-    return (p.toString, ← pinInfo env meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+    return (p.toString, ← pinInfo env meaning shape axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write

@@ -567,11 +567,11 @@
     "outcome": "accept"
    },
    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
-    "function": [],
+    "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
    "Proofs.NetworkCertifier.encardAcceptedObservationsLe": {
-    "function": [],
+    "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
    "Properties.CertifierDevice.completeRows": {

@@ -50,6 +50,8 @@ STAMPED = re.compile(r"^\d{8}T\d{4}Z[-_.]")
 REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status|^results?_", re.IGNORECASE)
 #: Source files are exempt from the basename rule (``report.py`` is a script, not a report).
 SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".lock"})
+#: directories whose files are named for Lean declarations (a Lean package's frozen shape list: `NciCheck.….Reports`)
+DECLARATION_NAMED = "shape-frozen"
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
@@ -98,7 +100,8 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
 
 def test_no_report_genre_basenames() -> None:
     offenders = [p for p in _tracked() if REPORT_GENRE.search(os.path.basename(p))
-                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES and p not in PINNED_EVIDENCE]
+                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES and p not in PINNED_EVIDENCE
+                 and os.path.basename(os.path.dirname(p)) != DECLARATION_NAMED]
     assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\n" + "\n".join(offenders)
 
 

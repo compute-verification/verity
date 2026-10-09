@@ -715,7 +715,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     config = work / "facts-config.json"
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
-                                  "spec": spec_of(policy),
+                                  "spec": spec_of(policy), "shape": "shape" in policy,
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
@@ -1057,10 +1057,9 @@ def shape(policy: dict, facts: dict, frozen: dict[str, str]) -> list[str]:
     for name in sorted(guarantees):
         if name in frozen and not frozen[name].strip():
             fails.append(f"shape: {where}/{name} gives no reason: one sentence on why {name} doesn't have the shape yet")
-        f = facts["pins"].get(name, {})
-        if "shape" not in f:
-            continue
-        why = refusals(entries.get(name), f["shape"], premises)
+        got = facts["pins"].get(name, {}).get("shape")
+        why = refusals(entries.get(name), got, premises) if isinstance(got, list) else \
+            [f"has no shape in the facts ({(got or {}).get('error', 'not computed')})"]
         if name in frozen:
             if not why:
                 fails.append(f"shape: {name} has the shape now: delete {where}/{name}, the frozen list only shrinks")
@@ -1323,7 +1322,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}
+                     | ({"shape": policy["shape"]} if "shape" in policy else {}), qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(Path(o).resolve().relative_to(lib).with_suffix("").parts) for o in qf["oleans"]
                   if Path(o).resolve().is_relative_to(lib)}

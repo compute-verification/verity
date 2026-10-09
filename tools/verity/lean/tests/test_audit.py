@@ -1380,7 +1380,8 @@ def test_a_function_that_always_returns_takes_no_acceptance_and_each_conjunct_mu
 
 def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink(tmp_path):
     """`shape` with the files under `shape.frozen` (`frozen_reasons`): a frozen guarantee that doesn't fit passes, one that
-    fits fails until its file goes, a file needs a reason and a guarantee of this package, and an unfrozen misfit fails."""
+    fits fails until its file goes, a file needs a reason and a guarantee of this package, and an unfrozen misfit fails, as
+    does a guarantee whose shape `Facts.lean` couldn't compute."""
     pol = {"guarantees": {"P.a": {}, "P.b": {}}, "shape": {"premises": [], "properties": {
         "P.a": {"function": "P.check", "outcome": "accept"}, "P.b": {"function": "P.check", "outcome": "accept"}}}}
     good, bad = [part([ACCEPTS], inputs=[("x", 0)])], [part(inputs=[("x", 0)])]
@@ -1398,3 +1399,5 @@ def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink(
     (tmp_path / "shape-frozen" / "P.z").unlink()
     assert [f.split()[1] for f in A.shape(pol, facts, A.frozen_reasons(tmp_path, pol))] == ["P.b"]
     assert A.shape({"guarantees": {"P.b": {}}}, facts, {}) == [], "a package without a shape block isn't checked"
+    gone = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": {"error": "boom"}}}}
+    assert A.shape(pol, gone, {}) == ["shape: P.b has no shape in the facts (boom)"], "a shape Facts couldn't read fails"
