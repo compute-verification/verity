@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Statements
 import Proofs.Flock.Recursive.Premises
 import Proofs.Flock.Recursive.ExecClass
+import Proofs.Flock.Recursive.Reads
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Flock.RecResiduals
 
@@ -123,16 +124,15 @@ abbrev custodied {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
 recursive audit with C-Flock's compiled table there as its inner protocol (`innerAt`): V*'s statements `Vs`, as many
 as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each with its model read off its
 executable strata (`execStmts Vs`: `VStmt.exec`, which keeps its live law and so its sessions), and V*'s sessions
-`zs R ω t R₂ j` under
-their laws (`custodied zs₀ _hCust`: their data and checks `zs₀`, and their records' custody `_hCust`), the hidden
-statement `x`, the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`, as in
-`RecursiveSound`), and the registration's root `rt`. On an outcome `o` whose sessions all verify, `reads o i` says a
-session read row `i`, `row o i` is the commit string it read there and `op o i` its opening of `rt`; `stmt q ω` is the
-hidden statement at the draw `ω` of the private circuit whose rows the commit strings `q` commit to. Taken: the
-statement check accepting V*'s statements (`_hck`), A3 (`_hA3`), every read string opening `rt` at an accepted
-outcome (`_hop`), and the run's hidden statement being the read strings' (`_hx`). Then for the registered commit
-strings `p` (the
-developer's openings `op₀`), for every count curve `(k, R_w, M, ρ)` that bounds every session's rate, given V*'s
+`zs R ω t R₂ j` under their laws (`custodied zs₀ _hCust`: their data and checks `zs₀`, and their records' custody
+`_hCust`), the hidden statement `x`, the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`,
+`msg`, as in `RecursiveSound`), and the registration's root `rt`. At an outcome `o`, `readsZ zs rt o i` says a session
+whose verifier holds `rt` read row `i` of it, `rowZ zs rt o i` is the commit string it read there and `opZ zs rt o i`
+its opening of `rt` (`Proofs.Flock.Recursive.Reads`; at an outcome whose sessions all verify, each opens `rt`:
+`zk_reads_open`); `stmt q ω` is the hidden statement at the draw `ω` of the private circuit whose rows the commit
+strings `q` commit to. Taken: the statement check accepting V*'s statements (`_hck`), A3 (`_hA3`), and the run's hidden
+statement being the read strings' (`_hx`). Then for the registered commit strings `p` (the developer's openings `op₀`),
+for every count curve `(k, R_w, M, ρ)` that bounds every session's rate, given V*'s
 bridge (VBridge): a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded transcripts play the
 compiled table to outcomes that clash; or a run `σ` reaches whose sessions all verify having read at some row a commit
 string other than `p i`, whose opening and the developer's collide; or
@@ -171,24 +171,17 @@ def RecursiveAudit : Prop :=
     (msg : ℕ → ((j : Fin (outerStatementsAt st)) →
       PosK (execStmts Vs j).c (execStmts Vs j).hU (execStmts Vs j).nv → ValK (execStmts Vs j).c) →
       (innerAt T CT st).Msg)
-    -- the registration's root; a private circuit's statement by its rows' commit strings; the rows a run read, and the
-    -- commit strings and openings of `rt` it carries
+    -- the registration's root, and a private circuit's statement by its rows' commit strings
     (rt : Flock.Registered.Port) (stmt : (ℕ → ByteArray) → L.Ω → Hidden (execClassAt st).cls)
-    (reads : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec (execStmts Vs) Reg' dg N) → ℕ →
-      Prop)
-    (row : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec (execStmts Vs) Reg' dg N) → ℕ →
-      ByteArray)
-    (op : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec (execStmts Vs) Reg' dg N) → ℕ →
-      Flock.Registered.Port × ByteArray × ByteArray)
     -- the verifier of record's statement check accepts V*'s statements
     (_hck : ∀ R ω t R₂ j, FailClosed.ScopeZ (custodied zs₀ _hCust R ω t R₂ j).I)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes (execStmts Vs))
-    -- at an outcome whose sessions all verify, every read commit string opens `rt`, and the hidden statement is theirs
-    (_hop : ∀ o, VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i →
-      (regBcCommit i).Opens rt (row o i) (op o i))
-    (_hx : ∀ o, VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : ℕ → ByteArray,
-      (∀ i, reads o i → q i = row o i) → x o.1 o.2.1 = stmt q o.2.1)
+    -- at an outcome whose sessions all verify, the hidden statement is the read commit strings'
+    (_hx : ∀ o : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec (execStmts Vs) Reg' dg N),
+      VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : ℕ → ByteArray,
+      (∀ i, readsZ (custodied zs₀ _hCust) rt o i → q i = rowZ (custodied zs₀ _hCust) rt o i) →
+        x o.1 o.2.1 = stmt q o.2.1)
     -- the registered commit strings and the developer's openings
     (p : ℕ → ByteArray) (op₀ : ℕ → Flock.Registered.Port × ByteArray × ByteArray)
     (_hreg : ∀ i, (regBcCommit i).Opens rt (p i) (op₀ i))
@@ -205,7 +198,8 @@ def RecursiveAudit : Prop :=
       (∃ o, FlockSoundness.Game.Outcome (recGame L Reg (innerAt T CT st) Cm
           fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ o ∧
         VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((regBcCommit i).ext (op o i) (op₀ i))) ∨
+        ∃ i, readsZ (custodied zs₀ _hCust) rt o i ∧ rowZ (custodied zs₀ _hCust) rt o i ≠ p i ∧
+          FlockSoundness.Binding.Collides ((regBcCommit i).ext (opZ (custodied zs₀ _hCust) rt o i) (op₀ i))) ∨
       prob (fun o => AcceptsStmt st ∧ VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (stmt p o.2.1))
           (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ ≤

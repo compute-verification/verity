@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.Property
 import Proofs.Flock.Recursive.Private
+import Proofs.Flock.Recursive.ReadsOpen
 
 /-!
 # The recursive audit's property: its proof and what it rests on
@@ -14,11 +15,12 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`)
   (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
 * `_hS` at V*'s statements with their models read off their strata (`execStmts`), from one session of each
   (`nonempty_reg₂`: the prover sends a registration) whose draw file custody ties to the strata over `[0, nv)`
-  (`RecordCustody`'s `DrawFileZK`, `VStmt.tiles_of_session`, `VStmt.exec_execStrata`).
+  (`RecordCustody`'s `DrawFileZK`, `VStmt.tiles_of_session`, `VStmt.exec_execStrata`);
+* the read commit strings opening the root at an outcome whose sessions all verify (`Recursion.zk_reads_open`, at the
+  reads `readsZ`/`rowZ`/`opZ` read off the outcome).
 
-Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the read commit
-strings opening the root (`_hop`, gap 3a: `Recursion.zk_reads_open` discharges it where `hop` is used below) and the
-run's hidden statement being theirs (`_hx`), the law's field `L.nonempty`, and in (ii) V*'s sessions' zero knowledge
+Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the run's hidden
+statement being the read strings' (`_hx`), the law's field `L.nonempty`, and in (ii) V*'s sessions' zero knowledge
 (`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
 -/
 
@@ -66,8 +68,8 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   swap
   · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
     exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter hKey p₀ o P w hw E
-  intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ st Vs zs₀ hCust dg N σ x wmsg Sk cmt msg rt stmt reads row op _ hA3 hop
-    hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+  intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ st Vs zs₀ hCust dg N σ x wmsg Sk cmt msg rt stmt _ hA3 hx p op₀ hreg
+    k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hacc : AcceptsStmt st
   swap
   · exact Or.inr (Or.inr (Or.inr (Or.inr (((prob_mono_outcome _ σ fun o _ h => absurd h.1 hacc).trans
@@ -88,15 +90,19 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · by_cases hc : ∃ o, FlockSoundness.Game.Outcome (recGame L Reg (Flock.Guarantees.innerAt T CT st) Cm
         fun R ω t => outerV (Flock.Guarantees.custodied zs₀ hCust R ω t) dg N) σ o ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zs₀ hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ∃ i, reads o i ∧ row o i ≠ p i ∧
-          FlockSoundness.Binding.Collides ((Flock.Guarantees.regBcCommit i).ext (op o i) (op₀ i))
+        ∃ i, readsZ (Flock.Guarantees.custodied zs₀ hCust) rt o i ∧
+          rowZ (Flock.Guarantees.custodied zs₀ hCust) rt o i ≠ p i ∧
+          FlockSoundness.Binding.Collides ((Flock.Guarantees.regBcCommit i).ext
+            (opZ (Flock.Guarantees.custodied zs₀ hCust) rt o i) (op₀ i))
     · exact Or.inr (Or.inr (Or.inr (Or.inl hc)))
     · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_mono_outcome _ σ fun o hro h => ⟨h.2.1.1, fun hh => ?_⟩)
         hb))))
-      have hagree : ∀ i, reads o i → p i = row o i := fun i hi => by
+      have hagree : ∀ i, readsZ (Flock.Guarantees.custodied zs₀ hCust) rt o i →
+          p i = rowZ (Flock.Guarantees.custodied zs₀ hCust) rt o i := fun i hi => by
         by_contra hne
         exact hc ⟨o, hro, h.2.1, i, hi, fun he => hne he.symm,
-          regBcCommit_binding i rt (row o i) (p i) (op o i) (op₀ i) (hop o h.2.1 i hi) (hreg i) fun he => hne he.symm⟩
+          regBcCommit_binding i rt _ (p i) _ (op₀ i)
+            (zk_reads_open (Flock.Guarantees.custodied zs₀ hCust) rt o h.2.1 i hi) (hreg i) fun he => hne he.symm⟩
       rw [hx o h.2.1 p hagree] at hh
       exact h.2.2 hh
 
