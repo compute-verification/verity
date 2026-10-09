@@ -20,7 +20,7 @@ two distinct strings of `runStrings`, the strings the check and the device hash,
 (`cr/sha-512`), or a certificate of the commitment whose signature verifies under the device's key over its message
 (`certMessage`) though the device never signed that message (`Signed`, `euf-cma/lms-sha512-n64`).
 
-`Properties.Proofs.NetworkCertifier.Run` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
+`Properties.Proofs.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
 count it gives, `EncardAcceptedObservationsLe`.
 -/

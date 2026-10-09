@@ -52,4 +52,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Proofs.Pouw.Check", "Properties.Proofs.Pouw.Commit", "Properties.Nci", "Properties.Proofs.Nci",
   "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice", "Properties.Pous", "Properties.Proofs.Pous",
   "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier", "Properties.CertifierNetwork",
-  "Properties.Proofs.CertifierNetwork", "Properties.Identity", "Properties.Proofs.Identity"]
+  "Properties.Proofs.CertifierNetwork", "Properties.CertifierNetwork.Runs", "Properties.Proofs.CertifierNetwork.Runs",
+  "Properties.Identity", "Properties.Proofs.Identity"]

@@ -16,6 +16,8 @@
   "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork",
   "Properties.Proofs.CertifierNetwork",
+  "Properties.CertifierNetwork.Runs",
+  "Properties.Proofs.CertifierNetwork.Runs",
   "Properties.Identity",
   "Properties.Proofs.Identity"
  ],
@@ -90,20 +92,20 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
+   "imports": ["NetworkCheck.Check", "Properties.Identity"],
+   "except": [],
+   "why": "the properties are stated against the check's own functions, never a proof"
+  },
+  "Properties.CertifierNetwork": {
    "imports": [
-    "NetworkCheck.Check",
-    "Properties.Identity",
-    "Models.Core.Assumptions",
+    "Properties.CertifierDevice",
+    "Properties.NetworkCertifier",
+    "Properties.CertifierNetwork",
     "Definitions.NetworkCertifier",
     "Mathlib.Data.Set.Card"
    ],
    "except": [],
-   "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
-  },
-  "Properties.CertifierNetwork": {
-   "imports": ["Properties.CertifierDevice", "Properties.NetworkCertifier"],
-   "except": [],
-   "why": "the guarantee joins the device's statements and the check's: stated over their definitions, never a proof"
+   "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   }
  },
  "reads_exempt": {
@@ -243,11 +245,8 @@
    "assumptions": [],
    "type_hash": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101"
   },
-  "Properties.NetworkCertifier.acceptsIff": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.acceptsIff : Properties.NetworkCertifier.AcceptsIff"],
-   "assumptions": [],
-   "type_hash": "c918838470ab95e7f8e713ddc765255f2c8d1caacb939c8ba8d35b8c55754155"
+  "Properties.NetworkCertifier.acceptsLinkWindows": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkCertifier.acceptsOneRecordEach": {
    "owner": "@network-accounting",
@@ -267,12 +266,6 @@
    "assumptions": [],
    "type_hash": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df"
   },
-  "Properties.NetworkCertifier.honestAccepted": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.honestAccepted : Properties.NetworkCertifier.HonestAccepted"],
-   "assumptions": [],
-   "type_hash": "50b7d88417346839f0002732214cf0086dddcb10bbfd8228ed1ffda6afaa42a1"
-  },
   "Properties.NetworkCertifier.malformedEvidenceRejects": {
    "owner": "@network-accounting",
    "signature": [
@@ -281,11 +274,8 @@
    "assumptions": [],
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
   },
-  "Properties.NetworkCertifier.undecidedIff": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.undecidedIff : Properties.NetworkCertifier.UndecidedIff"],
-   "assumptions": [],
-   "type_hash": "c7b54ece9fbec0f22f390f210dfc18d345537ba8ea79f01872a04b1da772112f"
+  "Properties.NetworkCertifier.undecidedPending": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkCertifier.undigestedParamsReject": {
    "owner": "@network-accounting",

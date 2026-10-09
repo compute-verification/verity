@@ -9,8 +9,8 @@ against its functions as they run, each in one shape: for every input, if the fu
 doesn't reject; for the undecided outcome, is undecided), its named conclusion holds. They say what `answer` and the
 check refuse, what an acceptance establishes about each link-window and what an undecided outcome means.
 `Properties.Proofs.NetworkCertifier` proves them; the converses (that the check accepts, or is undecided on, what
-these conclusions describe) and the honest transcript's acceptance are completeness, in
-`Properties.Proofs.NetworkCertifier.Complete`. What an accepted run of the certifier device is, is
+these conclusions describe) and the honest transcript's acceptance are completeness, at the end of
+`Properties.Proofs.NetworkCertifier.Outcomes`, each with one instance in `Properties.Proofs.NetworkCertifier.Instance`. What an accepted run of the certifier device is, is
 `Properties.CertifierNetwork.Runs`.
 
 The predicates below say what a link-window's records, certificate and digests are, in the check's own terms; none
@@ -123,7 +123,7 @@ def DecodedAccepted (a b c : ByteArray) : Prop :=
     protocol.evidence c = .ok e ∧ protocol.Accepts p cm e
 
 /-- **What `answer` accepts decodes, and the check accepts it.** (Its converse, that `answer` accepts such bytes, is
-completeness: `Properties.Proofs.NetworkCertifier.Complete`.) -/
+completeness: `answer_of_decodedAccepted`.) -/
 def AnswerAccepts : Prop :=
   ∀ a b c : ByteArray, (protocol.answer a b c).verdict = .accept → DecodedAccepted a b c
 
@@ -158,7 +158,7 @@ def LinkWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :=
     ∀ l ∈ p.ingress.toList, ∀ w < p.windows, IngressAccepted p c ig l w
 
 /-- **An accepted unit has every link-window accepted** (`LinkWindowsAccepted`). (Its converse, that the check accepts
-such a unit, is completeness: `Properties.Proofs.NetworkCertifier.Complete`.) -/
+such a unit, is completeness: `accepts_of_linkWindowsAccepted`.) -/
 def AcceptsLinkWindows : Prop :=
   ∀ (p : Params) c e, protocol.Accepts p c e → LinkWindowsAccepted p c e
 
@@ -174,7 +174,7 @@ def SomePending (p : Params) (c : Commitment) (e : Evidence) : Prop :=
     ∃ d, ∃ l ∈ linkNames p d, ∃ w < p.windows, Pending p c d l w
 
 /-- **An undecided unit has no link-window refused and some awaiting its record** (`SomePending`). (Its converse, that
-such a unit is undecided, is completeness: `Properties.Proofs.NetworkCertifier.Complete`.) -/
+such a unit is undecided, is completeness: `undecided_of_somePending`.) -/
 def UndecidedPending : Prop :=
   ∀ (p : Params) c e, (∃ why, protocol.check p c e = .undecided why) → SomePending p c e
 
