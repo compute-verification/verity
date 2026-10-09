@@ -182,6 +182,27 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-08 (5:11 PM PDT): every property in `Properties/` has one shape: for every input, if the function it's about
+  accepts, the conclusion holds, given premises from the list. Its only arguments are the input, the acceptance and
+  those premises, so the check enforces the premises rule with no judgment call. A premise is an assumption about the
+  world that the function can't see, such as `DeviceIntact`. Where the code can see something, it checks it instead: a
+  device that sees a late frame refuses to mark the record complete, and `HonestTiming` is no premise. A condition that
+  picks out what the conclusion talks about, such as "this event is an egress tick", goes inside the conclusion; a name,
+  such as a parameters digest, becomes a definition; any other condition on the input is a scope condition, which the
+  function refuses, so it follows from acceptance. Completeness theorems aren't claims: they live in `Proofs/`, their
+  honest-case hypotheses as written, each with one concrete instance where that case holds, which shows the soundness
+  property it pairs with isn't vacuous. Properties that don't fit yet are on a frozen list, one file per property with
+  its reason. The list only shrinks, and adding to it is a claims change.
+- 2026-10-08 (4:30 PM PDT): for a commit-then-coin step, the break tied to the run is the fork form: two runs of the
+  prover's own strategy that share a commitment and hash `x ≠ y` to one SHA-512 digest along their paths to it. A single
+  run never holds the collision, since a cheater opens one table per run. The `∃` ranges over the strategy's
+  continuations, visibly in the statement, never over arbitrary strings. `RecursiveSound` takes this form. Its bound is
+  exact for a strategy that never collides on a fork and says nothing about one that collides on a single pair, so it
+  is never called tighter than a bound under `cr/sha-512`. The quantitative forking version comes next: a strategy that
+  beats the bound by δ yields, from two runs off one commitment, a collision with probability about δ².
+- 2026-10-08 (4:30 PM PDT): a property's hypotheses come only from the named premises in `Security/Definitions/`
+  (physical premises, and VBridge until it's proved). The Lean check refuses any other, and adding a premise messages
+  Daniel like any `Definitions/` change. A theorem whose hypotheses can't all hold for the real system says nothing.
 - 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. Its conclusion is the property or a break
   tied to the run: for SHA-512, `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`, over the
   inputs the run itself hashed; for LMS, a signature in the run that verifies on a message missing from the device's
