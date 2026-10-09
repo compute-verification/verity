@@ -135,6 +135,44 @@ def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, ca
     assert calls[-1][calls[-1].index("--on") + 1] == N1
 
 
+def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_can_run_it(monkeypatch, capsys):
+    """9 Oct: four checks waited up to 54 min in node 1's line while a node 2 slot was free, each placed when no slot was free
+    and moved by hand. Now such a check waits in each line as twins (`slot.py --twin`) and runs in the first slot to free."""
+    docs = {N1: machine([slot("c", HOLDER)], [waiter()], pools=lean()), N2: machine([slot("d", HOLDER)])}
+    monkeypatch.setattr(CHECK, "read_slots", lambda names: {n: docs[n] for n in names})
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
+    monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
+    calls, launched, rcs = [], [], []
+    monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+
+    class Popen:
+        def __init__(self, cmd, **kw):
+            launched.append(cmd)
+            self.rc = rcs[len(launched) - 1]
+
+        def wait(self):
+            return self.rc
+
+    monkeypatch.setattr(CHECK.subprocess, "Popen", Popen)
+    rcs[:] = [CHECK.SLOT.NOT_STARTED, 0]
+    assert CHECK.record(["--on", "auto"]) == 0                                    # the twin that ran passed
+    assert [c[c.index("--on") + 1] for c in launched] == [N2, N1]                  # choose's pick (fewest ahead) holds the claims
+    pair = launched[0][launched[0].index("--twin") + 1]
+    assert [c[c.index("--") + 1:][:5] for c in launched] == [["python3", "tools/verity/check/slot.py", "--twin", t, "--"]
+                                                             for t in (pair, f"{pair}@{N2}")]
+    assert f"check: --on: twins {pair} on {N2}, {N1}: the first to take a check slot runs" in capsys.readouterr().out
+    launched.clear()
+    rcs[:] = [1, CHECK.SLOT.NOT_STARTED]
+    assert CHECK.record(["--on", "auto"]) == 1                                    # it ran and failed
+    launched.clear()
+    docs[N1] = "exit 255: no route to host"                                       # one machine left: it waits there alone
+    assert CHECK.record(["--on", "auto"]) == 0 and launched == [] and "--twin" not in calls[-1]
+    docs[N1], docs[N2] = machine([slot("c")], pools=lean()), machine([slot("d", HOLDER)])
+    assert CHECK.record(["--on", "auto"]) == 0 and launched == []                 # a slot free: no twins
+    assert calls[-1][calls[-1].index("--on") + 1] == N1
+
+
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
     """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots (#1344). The quick
     tier takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
