@@ -108,11 +108,11 @@ open Classical in
 /-- **The schedule's simulation at one statement**: against every prover on the schedule, the run on the schedule's
 steps ends at an outcome of `g` satisfying `p` no more often than `g`'s value. `sched_sound`'s body. -/
 theorem sched_prob_le_value {α : Type} (g : Game α) (p : α → Prop)
-    (s : Strategy (rounds (List (SMsg T)) ((k : Fin r) → CT k) r .ret)) :
-    prob (fun t => ∃ a, PlaysT g (schedSteps T CT 0 t) a ∧ p a) (rounds (List (SMsg T)) ((k : Fin r) → CT k) r .ret)
-      s ≤ value p g := by
-  refine le_trans (le_of_eq ?_) (leafAvg_plays_le T CT p r 0 (by omega) .ret s g)
-  exact prob_rounds _ r _ s
+    (s : Strategy (rounds (List (SMsg T)) ((k : Fin r) → CT k) (r + 1) .ret)) :
+    prob (fun t => ∃ a, PlaysT g (schedSteps T CT 0 t) a ∧ p a)
+      (rounds (List (SMsg T)) ((k : Fin r) → CT k) (r + 1) .ret) s ≤ value p g := by
+  refine le_trans (le_of_eq ?_) (leafAvg_plays_le T CT p (r + 1) 0 (by omega) .ret s g)
+  exact prob_rounds _ (r + 1) _ s
 
 /-- **The outcomes of the runs satisfying `G`**: the outcomes the compiled table ends at on the transcripts `s` reaches
 that satisfy `G`. -/
