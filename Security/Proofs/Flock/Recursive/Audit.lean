@@ -17,7 +17,7 @@ Open, each a lemma whose proof is `sorry` (on tonight's path, owner proofs):
 Still taken by the property, each to become a lemma at the executable (V*'s session row, the universal unit's class,
 the firewall's schedule) or a refusal of the verifier: the class's schedule and layout (`_hsch`, `_hlay`), V*'s laws'
 strata (`_hS`), the read commit strings opening the root (`_hop`) and the run's hidden statement being theirs (`_hx`),
-the fields of the Merkle encoding, leaf, class and law it ranges over, and in (ii) V*'s sessions' zero knowledge
+the fields of the class and law it ranges over, and in (ii) V*'s sessions' zero knowledge
 (`_hOuter`, from `ZeroKnowledgeHidden`) and the honest witnesses (`honest`).
 -/
 
@@ -54,14 +54,15 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   swap
   · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
     exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter hKey p₀ o P w hw E
-  intro D Sl _ _ nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ H E Lf cls regs sch zs dg N σ x wmsg Sk cmt msg rt stmt reads
-    row op hsch hlay hS _ hA3 hop hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
-  rcases recursive_sound_compiled T CT execArith execArith_correct H E Lf cls regs sch hsch hlay hS hA3 zs dg N hk hRw
-    hM hρ hr σ x wmsg Sk cmt msg hbr with hf | hf | hf | hb
+  intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ cls regs sch zs dg N σ x wmsg Sk cmt msg rt stmt reads row op hsch hlay
+    hS _ hA3 hop hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+  haveI : Inhabited Refine.Dig := ⟨Refine.H512 []⟩
+  rcases recursive_sound_compiled T CT execArith execArith_correct Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch
+    hsch hlay hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr with hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
-  · by_cases hc : ∃ o, Game.Outcome (recGame L Reg (flockInnerCL T CT execArith H E Lf cls regs sch) Cm
+  · by_cases hc : ∃ o, Game.Outcome (recGame L Reg (innerExec T CT cls regs sch) Cm
         fun R ω t => outerV (zs R ω t) dg N) σ o ∧ Flock.Guarantees.VerifiesV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, reads o i ∧ row o i ≠ p i ∧ Binding.Collides ((Flock.Guarantees.regBcCommit i).ext (op o i) (op₀ i))
     · exact Or.inr (Or.inr (Or.inr (Or.inl hc)))
