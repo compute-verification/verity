@@ -745,4 +745,31 @@ theorem verifierRows_ok {sh : Shape} {rounds : Array (Array F128)} {extras : Arr
     obtain ⟨lins₀, info₀⟩ := p
     exact verifierRows_ok_of_skel hS hz hl (residualLins_skel hz hl)
 
+/-- `verifierRows` returns exactly when `structureOf` does and `run` succeeds at the rep's coins. -/
+theorem verifierRows_ok_iff {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128} :
+    (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
+      (∃ S, structureOf sh = .ok S) ∧ ∃ r, residualLins sh (Coins.ofRounds rounds) extras = .ok r := by
+  constructor
+  · rintro ⟨x, hx⟩
+    unfold verifierRows at hx
+    cases hl : residualLins sh (Coins.ofRounds rounds) extras with
+    | error e => rw [hl] at hx; cases hx
+    | ok p =>
+      refine ⟨?_, p, rfl⟩
+      cases hS : structureOf sh with
+      | ok S => exact ⟨S, rfl⟩
+      | error e =>
+        exfalso
+        obtain ⟨lins, info⟩ := p
+        rw [hl] at hx
+        simp only [bind, Except.bind] at hx
+        cases hb : build sh lins with
+        | error e' => rw [hb] at hx; cases hx
+        | ok b =>
+          rw [hb, hS] at hx
+          simp [Except.toOption] at hx
+  · rintro ⟨⟨S, hS⟩, ⟨lins, info⟩, hl⟩
+    obtain ⟨b, -, -, h⟩ := verifierRows_ok (comb := comb) hS hl
+    exact ⟨_, h⟩
+
 end Flock.RecAlgebra
