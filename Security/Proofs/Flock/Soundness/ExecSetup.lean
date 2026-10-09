@@ -8,13 +8,14 @@ namespace FlockSoundness
 
 /-- **What `Stmt.setupH` accepted** (an untyped `hm96-sha512/row/v1` statement, `tags.typed = false`, which `setupH`
 reads with `HmRow.parse` rather than `parseTyped`): the circuit `HmRow.parse` accepted, the pin
-`HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 27`. -/
+`HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl`, `k_log ≤ 27`, and the range `checkInRange` accepted
+(k_log, the region count and `m_pts`). -/
 theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     HmRow.parse tags cf tables = .ok st.c ∧ HmRow.pin st.c = .ok st.pin ∧
       st.da = (HmRow.delta st.c st.pin).1 ∧ st.db = (HmRow.delta st.c st.pin).2 ∧
-      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 27 := by
+      st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 27 ∧ checkInRange st.c.kLog st.regions.size st.mPts = .ok () := by
   unfold Stmt.setupH at h
   simp (config := { zeta := false }) only [ht, Bool.false_eq_true, ↓reduceIte] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨c, hc, h⟩ := hh)
@@ -62,7 +63,7 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   (have hh := except_bind_ok h; clear h; obtain ⟨pin, hpin, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
-  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨⟨⟩, hin, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
@@ -72,7 +73,7 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   have hs := Except.ok.inj h
   subst hs
-  refine ⟨hc, hpin, rfl, rfl, rfl, ?_⟩
+  refine ⟨hc, hpin, rfl, rfl, rfl, ?_, hin⟩
   simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hk
   exact Nat.le_of_not_lt hk.1
 
@@ -471,7 +472,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
 `HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta`. -/
 theorem setupH_layout (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     Layout st :=
-  let ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec ht h
+  let ⟨hp, hpin, hda, hdb, hm, hk, _⟩ := setupH_spec ht h
   layout_of (parse_facts hp) hpin hda hdb hm hk
 
 /-- **The lowering's placement, from the executable's accept step.** When `Stmt.setupH` accepts a statement, every

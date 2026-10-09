@@ -268,7 +268,7 @@ theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkE
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
   have ht' : (ZkExec.zkInputs I).tags.typed = false := (ZkExec.zkTags_typed I).trans ht
-  have hk := (setupH_spec ht' x.h).2.2.2.2.2
+  have hk := (setupH_spec ht' x.h).2.2.2.2.2.1
   have h0 : sch.k0 ≤ 35 := by
     have := hshape.2.2.1
     simp only [schedOf] at this hmsch

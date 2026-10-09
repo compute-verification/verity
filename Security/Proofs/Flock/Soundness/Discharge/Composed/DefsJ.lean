@@ -588,7 +588,7 @@ theorem drawSetupZJ_of (ht' : I'.tags.typed = false) (x : DrawSetup I' mPts S d)
     ∃ y : DrawSetupZJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
-  have hk := (setupH_spec ht' x.h).2.2.2.2.2
+  have hk := (setupH_spec ht' x.h).2.2.2.2.2.1
   have h0 : sch.k0 ≤ 35 := by
     have := hshape.2.2.1
     simp only [schedOf] at this hmsch
