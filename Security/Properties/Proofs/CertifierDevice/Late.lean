@@ -466,4 +466,149 @@ theorem step_hinv {c : Config} {st : State} {hp : List (Frame × Nat)} {S : Arra
     rw [r2, r4]
     exact hi.queue (by rw [← r1.of_none hx]; exact hx)
 
+theorem hinv (c : Config) (tr : List Event) {N : Nat} (hN : N ≤ tr.length) :
+    ∀ m ≤ N, HInv c (pre c tr N).shaper.syncs (handed (init c) (tr.take m)) (pre c tr m).shaper := by
+  intro m hm
+  induction m with
+  | zero => rw [List.take_zero]; exact init_hinv c _
+  | succ m ih =>
+    have hm' : m < tr.length := by omega
+    rw [handed_take_succ c tr m hm']
+    have hS := pre_extends c tr hm hN
+    rw [pre_succ c tr m hm'] at hS ⊢
+    exact step_hinv (prefix_good c tr m).1 (fifo_inv c tr m (by omega)) (ih (by omega)) _ hS
+
+/-! ## A complete window -/
+
+/-- **A complete window's ticks are clean.** If egress bucket `k`, its window's last, closes the window complete, every
+egress tick of that window up to `k` is clean. -/
+theorem clean_of_complete {c : Config} {tr : List Event} {n k backlog : Nat} (hE : EgressAt c tr n k backlog)
+    (hc : (k + 1) % c.egress.buckets = 0) (hso : statusOf c tr (k / c.egress.buckets) = .complete)
+    {m t b' now' : Nat} (hEm : EgressAt c tr m t b') (he' : tr[m]'(egressAt_lt hEm) = .tick .egress now' b')
+    (htk : t ≤ k) (hwin : t / c.egress.buckets = k / c.egress.buckets) :
+    Clean c.egress.buckets (egressMid (pre c tr m) now' b') (egressMid (pre c tr m) now' b').tick := by
+  have hgm := (prefix_good c tr m).1
+  have htm := egressAt_t hEm
+  have hth : (pre c tr m).shaper.t < horizon c := htm ▸ hEm.2.2
+  have hm := egressAt_lt hEm
+  obtain ⟨l, hl⟩ := step_egress_shaper hgm hth (now := now') (backlog := b')
+  have hpre : (pre c tr (m + 1)).shaper = { (egressMid (pre c tr m) now' b').tick.1 with prover := l } := by
+    rw [pre_succ c tr m hm, he', hl]
+  have hmid : (egressMid (pre c tr m) now' b').t = t := by rw [(egressMid_rel _ now' b').2.1, htm]
+  have ht1 : (pre c tr (m + 1)).shaper.t = t + 1 := by
+    rw [hpre]
+    change (egressMid (pre c tr m) now' b').tick.1.t = _
+    rw [(tick_spec _ (hgm.shaper.rel (egressMid_rel _ now' b'))).2.1, hmid]
+  obtain ⟨hT0, hkm, -⟩ := mod_last hc
+  unfold Clean
+  rw [hmid]
+  by_cases htk' : t = k
+  · subst htk'
+    obtain rfl : m = n := egressAt_unique hEm hE
+    simp only [hc, ↓reduceIte]
+    obtain ⟨-, -, row, status, -, -, hs, -⟩ := egress_spec hgm now' b'
+    have hs' := hs (by rw [htm]; exact hc)
+    have hso' := statusOf_eq hE (t / c.egress.buckets) (by have := Nat.div_add_mod t c.egress.buckets; rw [Nat.mul_comm]; omega)
+    rw [hso, he'] at hso'
+    simp only [evStatus, hs', Option.getD_some] at hso'
+    rw [hs', ← hso']
+  · have hmod : ¬ (t + 1) % c.egress.buckets = 0 := by
+      intro h
+      have h1 := (mod_last h).2.1
+      have h2 := Nat.div_add_mod t c.egress.buckets
+      have h3 := Nat.div_add_mod k c.egress.buckets
+      rw [hwin] at h2
+      omega
+    simp only [hmod, ↓reduceIte]
+    cases hf : (egressMid (pre c tr m) now' b').tick.1.certifier.fault with
+    | none => rfl
+    | some r =>
+      exfalso
+      have hf' : (after (init c) (tr.take (m + 1))).shaper.certifier.fault = some r := by
+        change (pre c tr (m + 1)).shaper.certifier.fault = _
+        rw [hpre]
+        exact hf
+      have hmn : m < n := by
+        by_contra hnm
+        have := t_mono c tr n (m - n) (by omega)
+        rw [show n + (m - n) = m by omega, egressAt_t hE, htm] at this
+        omega
+      have hwin' : k / c.egress.buckets = (after (init c) (tr.take (m + 1))).shaper.t / c.egress.buckets := by
+        change _ = (pre c tr (m + 1)).shaper.t / _
+        rw [ht1, succ_div_of_not_mod hmod, hwin]
+      obtain ⟨grid, -, hout⟩ := failClosed_proof c tr (m + 1) r hf' n k backlog (by omega) hE hwin'
+      rw [egress_acts hE] at hout
+      have := Option.some.inj hout
+      unfold egressActions at this
+      simp only [hc, ↓reduceIte] at this
+      split at this
+      · simp only [List.cons_append, List.nil_append, List.cons.injEq, Action.publish.injEq,
+          Record.mk.injEq] at this
+        simp [hso] at this
+      · simp only [List.nil_append, List.cons.injEq, Action.publish.injEq, Record.mk.injEq] at this
+        simp [hso] at this
+
+/-- **The handing buckets of a complete window**: every frame handed by its close at a bucket of the window was handed
+at its handing bucket. -/
+theorem window_hands {c : Config} {tr : List Event} {n k backlog : Nat} (hE : EgressAt c tr n k backlog)
+    (hc : (k + 1) % c.egress.buckets = 0) (hso : statusOf c tr (k / c.egress.buckets) = .complete) :
+    ∀ m ≤ n + 1, List.Forall₂ (fun h a => k / c.egress.buckets * c.egress.buckets ≤ a → h = a)
+      (hlist c.egress.buckets (pre c tr (n + 1)).shaper.syncs (handed (init c) (tr.take m)))
+      ((handed (init c) (tr.take m)).map Prod.snd) := by
+  have hn := egressAt_lt hE
+  intro m hm
+  induction m with
+  | zero => simp [hlist, hfrom, NetworkCertifier.handingFrom, handed]
+  | succ m ih =>
+    have hm' : m < tr.length := by omega
+    have ih := ih (by omega)
+    have hi := hinv c tr (N := n + 1) (by omega) m (by omega)
+    rw [handed_take_succ c tr m hm']
+    rw [hlist, List.map_append, hfrom_append, ← hi.h, List.map_append]
+    refine forall₂_append ih ?_
+    have hgm := (prefix_good c tr m).1
+    by_cases hl : ∃ now b', tr[m] = .tick .egress now b' ∧ (pre c tr m).shaper.t < horizon c
+    · obtain ⟨now', b', he', ht⟩ := hl
+      have hr := egressMid_rel (pre c tr m) now' b'
+      have hgs := hgm.shaper.rel hr
+      rw [he', handedAt_egress hgm ht]
+      simp only [List.map_map, Function.comp_def]
+      by_cases hw : k / c.egress.buckets * c.egress.buckets ≤ (pre c tr m).shaper.t
+      · have hEm := egressAt_of hm' he' ht
+        have htk : (pre c tr m).shaper.t ≤ k := by
+          by_contra hlt
+          have := t_mono c tr m (n - m) (by omega)
+          have hmn : m ≤ n := by omega
+          rcases Nat.lt_or_ge m n with h | h
+          · have h1 := t_mono c tr (m + 1) (n - (m + 1)) (by omega)
+            rw [show m + 1 + (n - (m + 1)) = n by omega, egressAt_t hE, t_succ c tr m hm', he'] at h1
+            simp only [run, tickView, Option.map_some, ht, and_true, ↓reduceIte] at h1
+            omega
+          · obtain rfl : m = n := by omega
+            rw [egressAt_t hE] at hlt
+            omega
+        have hwin : (pre c tr m).shaper.t / c.egress.buckets = k / c.egress.buckets := by
+          obtain ⟨hT0, -, -⟩ := mod_last hc
+          apply le_antisymm (Nat.div_le_div_right htk)
+          exact (Nat.le_div_iff_mul_le hT0).2 hw
+        have hcl := clean_of_complete hE hc hso hEm he' htk hwin
+        have hS : Extends (pre c tr (n + 1)).shaper.syncs (egressMid (pre c tr m) now' b').tick.1.syncs := by
+          have := pre_extends c tr (m := m + 1) (N := n + 1) (by omega) (by omega)
+          rw [pre_succ c tr m hm', he'] at this
+          obtain ⟨l, hl⟩ := step_egress_shaper hgm ht (now := now') (backlog := b')
+          rw [hl] at this
+          exact this
+        obtain ⟨-, -, th3⟩ := tick_hand _ hgs _ hS
+        rw [hr.2.2.2.2.1, hr.2.1] at th3
+        refine forall₂_const _ _ _ (by rw [hfrom_length, List.length_map]) fun y hy _ => ?_
+        obtain ⟨h1, h2⟩ := th3 y hy
+        by_contra hne
+        exact (h2 (by omega)).1 hcl
+      · refine forall₂_const _ _ _ (by rw [hfrom_length, List.length_map]) fun y _ h => absurd h hw
+    · obtain ⟨q, -⟩ := step_quiet hgm tr[m] (by
+        rintro ⟨now, b', he, ht⟩
+        exact hl ⟨now, b', he, ht⟩)
+      rw [handedAt_quiet q.2.1.2.2.1]
+      simp [hfrom, NetworkCertifier.handingFrom]
+
 end Properties.CertifierDevice.Proofs
