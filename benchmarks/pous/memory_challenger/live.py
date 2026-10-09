@@ -148,9 +148,7 @@ def binding_of(salt: bytes, digests: bytes) -> bytes:
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
           signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Each session's verdict under `memory_challenger.SCHEMES` and under the signer's own mapping."""
-    from verity.core.protocols.pous import memory_challenger as mc
-
-    verdict = mc.verdict
+    from verity.core.protocols.pous.memory_challenger import verdict
     out = []
     for s in sessions:
         v = verdict(s["signed"], s["commitment"], s["openings"], expected, trusted=trusted)
