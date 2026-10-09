@@ -12,6 +12,7 @@ up for V*'s native side, read once, since the inner circuit can be tens of GB; `
 printed.
 -/
 import Flock.HmRow
+import Flock.Registered
 import VStar.Compose
 import VStar.Stage
 
@@ -146,19 +147,54 @@ def checkBindings (c : Circuit) (partition : Option Json) (program : Option Byte
 
 /-- `check` on the unit of `c`, parsed from the circuit file `circuitB`, over `n` instances at the inner shape `i`, then
 `checkFile` on `circuitB` under its META bindings. -/
-def checkCircuit (i : Inner) (c : Circuit) (n : Nat) (circuitB : ByteArray) : V Unit := do
+def checkCircuit (i : Inner) (c : Circuit) (n : Nat) (circuitB : ByteArray) : V VStar.Stmt := do
   let s ← check i c.unit.name n
   checkFile s (← bindingsOf c) circuitB
+  pure s
+
+/-- `m<k>`'s `k`. -/
+def mIndex (name : String) : Option Nat := if name.startsWith "m" then (name.drop 1).toString.toNat? else none
+
+/-- `rec-c<k>`'s `k`. -/
+def cIndex (value : String) : Option Nat := if value.startsWith "rec-c" then (value.drop 5).toString.toNat? else none
+
+/-- A reads file's message-round ports, those named `m<k>` or registering a `rec-c<k>`: each one's name, value and reads. -/
+def msgPorts (ports : Array Registered.Port) : List (String × String × Array (Option Nat)) :=
+  (ports.toList.filter fun p => (mIndex p.name).isSome || (cIndex p.value).isSome).map fun p => (p.name, p.value, p.reads)
+
+/-- A statement's message-round ports: a part's ports `m<k>` (`VStar/Algebra.lean:385-387`), each under `rec-c<k>` read
+at rows `0` and `1`, the two reps' (`rec_residuals.write`, `rec_residuals.py:452-454`); a level has none. -/
+def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
+  | .inner _ _ p => p.S.ports.filterMap fun (nm, _) => (mIndex nm).map fun k => (nm, s!"rec-c{k}", #[some 0, some 1])
+  | .recOpen .. => []
+
+def showPort (q : String × String × Array (Option Nat)) : String :=
+  s!"{q.1} under {q.2.1} reading {q.2.2.toList.map fun r => (r.map toString).getD "null"}"
+
+/-- **The verifier's reads file has the statement's message-round ports**: `msgPorts` of the `--registered` file and
+`ownPorts` of the statement hold the same ports, compared by membership (`Registered.ofJson` lists a file's ports in its
+object's key order). -/
+def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
+  let file := msgPorts registered
+  let own := ownPorts s
+  if let some q := file.find? (!own.contains ·) then
+    let theirs := match own.find? (·.1 == q.1) with
+      | some o => s!"the statement's is {showPort o}"
+      | none => s!"the statement has no port {q.1} ({own.length} message-round ports)"
+    throw s!"{s.name}: the registered reads' port {showPort q} is not the statement's: {theirs}"
+  if let some q := own.find? (!file.contains ·) then
+    throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
 
 /-- `checkBindings` against the verifier's own partition object and program, then `checkCircuit` on a statement's
-circuit and population with its own inner shape `inner`; a statement of V*'s needs all three files, and with an inner
-shape, the statement must be V*'s. -/
+circuit and population with its own inner shape `inner`, and `checkOwn` on the verifier's own registered reads; a
+statement of V*'s needs all three files, and with an inner shape, the statement must be V*'s. -/
 def checkStmt (inner : Option Inner) (st : Stmt) (circuitB : ByteArray) (partition : Option Json := none)
-    (program : Option ByteArray := none) : V Unit :=
+    (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) : V Unit :=
   match inner with
   | some i => do
     discard <| checkBindings st.c partition program
-    checkCircuit i st.c (population st) circuitB
+    let s ← checkCircuit i st.c (population st) circuitB
+    if let some r := registered then checkOwn s r
   | none =>
     if isVStar st.c.unit.name then
       throw s!"{st.c.unit.name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
