@@ -46,6 +46,12 @@ def _rule(spec: S.Spec, rec) -> tuple[Verdict, Verdict]:
                           [p.item for p in spec.public]), py
 
 
+def _held(verdicts: dict, outputs: tuple = ()) -> tuple[Verdict, Verdict]:
+    """The outcome's hold on the verdicts by the verifier of record, and the service's Python."""
+    py = S.check_verdicts(verdicts, [SESSION], outputs)
+    return V.check_verdicts(py, verdicts, [SESSION], outputs), py
+
+
 def test_every_check_runs_both_and_records_them():
     _, reg, draw = _drawn()
     program, law = P.population_program(PAIR, 6), {"law": "subset", "k": 2}
@@ -62,7 +68,9 @@ def test_every_check_runs_both_and_records_them():
                   (V.matches_public(reg.record, "frame-v3/blake3", *_public(reg.record)[1:]),
                    R.matches_public(reg.record, "frame-v3/blake3", *_public(reg.record)[1:])),
                   _rule(_spec(), _record()), _rule(_spec(), {**_record(), "tiles": [2, 3]}),
-                  _rule(_spec(public=()), _record()), _rule(_spec(), "a record")):
+                  _rule(_spec(public=()), _record()), _rule(_spec(), "a record"),
+                  _held(_lean()), _held(_lean(None)), _held(_lean(sessions=())), _held(_lean(public={"n": 1}), ("n",)),
+                  _held({**_lean(public={"n": 1}), "b": _lean(public={"n": 2})["lean"]}, ("n",))):
         side = {"ok": py.ok, "codes": list(py.codes)}
         assert v == py and v.verifiers == {"of_record": "lean", "lean": side, "python": side}
     rec = V.audit_record(**_args(reg, draw))
@@ -116,6 +124,18 @@ def test_a_public_items_disagreement_refuses_the_registration(monkeypatch):
     v = e.value.verdict
     assert v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE]["lean"]["codes"] == ["undeclared"]
     assert v.verifiers["lean"] == {"ok": False, "codes": ["undeclared"]} and v.verifiers["python"] == {"ok": True, "codes": []}
+
+
+def test_an_outcome_whose_verdicts_disagree_is_refused(monkeypatch):
+    stream, _, draw = _drawn()
+    stream.deliver(draw, [SESSION])
+    _lean_answering(monkeypatch, "check_verdicts", lambda got: {"ok": False, "codes": ["pending"],
+                                                                "detail": {"pending": "the verifier of record hasn't run"}})
+    with pytest.raises(S.Refused) as e:
+        stream.outcome(draw, _lean(), {"statement": "stub"})
+    assert e.value.verdict.codes == (V.DISAGREE,) and e.value.verdict.verifiers["python"] == {"ok": True, "codes": []}
+    monkeypatch.undo()
+    assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
 
 
 def test_lean_that_cannot_run_fails_closed(monkeypatch):

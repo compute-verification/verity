@@ -430,6 +430,25 @@ def check_public(spec: Spec, record: Any, values: Sequence[Value] | None = None)
     return c.verdict()
 
 
+def check_verdicts(verdicts: Mapping[str, Mapping[str, Any]], sessions: Sequence[str], outputs: Sequence[str]) -> Verdict:
+    """What an outcome holds the verifiers' verdicts to before the audit record, on the verdicts in key order, the first
+    failure only: `pending` (no verdict of record, or one that hasn't run: `accepted` null), `sessions` (verdicts of
+    record about other sessions than the delivered `sessions`) and `public` (the check's public `outputs` not reported
+    alike by every verdict of record)."""
+    of_record = [(k, verdicts[k]) for k in sorted(verdicts) if verdicts[k].get("of_record")]
+    if not of_record or any(v.get("accepted") is None for _, v in of_record):
+        return Verdict(False, ("pending",), {"pending": "the verifier of record hasn't run"})
+    wrong = [k for k, v in of_record if list(v.get("sessions") or ()) != list(sessions)]
+    if wrong:
+        return Verdict(False, ("sessions",), {"sessions": {"verdicts": wrong, "delivered": list(sessions)}})
+    if outputs:
+        reported = [v.get("public") for _, v in of_record]
+        if not all(isinstance(r, Mapping) and set(r) == set(outputs) for r in reported) or \
+                any(_sha512(dict(r)) != _sha512(dict(reported[0])) for r in reported):
+            return Verdict(False, ("public",), {"public": {"outputs": list(outputs), "reported": reported}})
+    return Verdict(True)
+
+
 Sampler = Callable[[Mapping[str, Any], int], Sequence[int]]
 
 
@@ -656,7 +675,8 @@ class Stream:
                 session_roots: Mapping[str, str] | None = None) -> Outcome:
         """The draw's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
-        record names the delivered `sessions`; then one-stage's audit record by its verifier of record
+        record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by its verifier of
+        record, `verifier.check_verdicts`); then one-stage's audit record by its verifier of record
         (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
         its, and the registered roots it reads are the verdicts' own) decides accept or reject. Under `TwoStage` with interiors, the interior registration's audit record (all of its units proved, by
         the same statement and verdicts) must accept too, and `session_roots` (`{port: root}` from the sessions'
@@ -671,20 +691,14 @@ class Stream:
             if self._late(e):
                 return self._finish(e, LATE, None, {})
             raise Pending("no proof delivered")
-        of_record = [v for v in verdicts.values() if v.get("of_record")]
-        if not of_record or any(v.get("accepted") is None for v in of_record):
-            raise Pending("the verifier of record hasn't run")
-        wrong = [k for k, v in verdicts.items() if v.get("of_record") and list(v.get("sessions") or ()) != e.sessions]
-        if wrong:
-            raise _refuse("sessions", {"verdicts": wrong, "delivered": e.sessions})
         outputs = self.spec.check.public_outputs
-        public: dict[str, Any] = {}
-        if outputs:
-            reported = [v.get("public") for v in of_record]
-            if not all(isinstance(r, Mapping) and set(r) == set(outputs) for r in reported) or \
-                    any(_sha512(dict(r)) != _sha512(dict(reported[0])) for r in reported):
-                raise _refuse("public", {"outputs": list(outputs), "reported": reported})
-            public = dict(reported[0])
+        v = V.check_verdicts(check_verdicts(verdicts, e.sessions, outputs), verdicts, e.sessions, outputs)
+        if v.codes == ("pending",):
+            raise Pending(v.detail["pending"])
+        if not v.ok:
+            raise Refused(v)
+        of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))
+        public = dict(verdicts[of_record[0]]["public"]) if outputs else {}
         proved = list(proved_units) if proved_units is not None else D.proved(draw.draw)
         instances = len(proved) if instances is None else instances
         roots, interior_roots = session_roots, None
@@ -741,4 +755,4 @@ def _why(symbol: str, audit: Mapping[str, Any] | None, interior: Mapping[str, An
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "HIDING", "KINDS", "LATE", "Law", "Outcome", "PHASES", "Pending",
            "Public", "REJECT", "Refused", "Registration", "SCHEME", "SOURCES", "Selection", "Sequential", "Spec", "Stream",
-           "Terms", "TwoStage", "Value", "check_public"]
+           "Terms", "TwoStage", "Value", "check_public", "check_verdicts"]
