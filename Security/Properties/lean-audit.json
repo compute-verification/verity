@@ -14,6 +14,7 @@
   "Properties.Proofs.Pous",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
+  "Properties.Proofs.Pous.TimedAudit",
   "Properties.Proofs.Pous.MemoryChallenger",
   "Properties.NetworkCertifier",
   "Properties.Proofs.NetworkCertifier",
