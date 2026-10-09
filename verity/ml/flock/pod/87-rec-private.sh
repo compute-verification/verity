@@ -14,8 +14,9 @@
 #                against the registered statement: V*'s algebra over the inner's claims at the registered statement's fold
 #                (alg parts; outer sessions sent though the witness fails, FC_ZK_SELF_CHECK=skip)
 #   made-up      --wired's cheater (universal.run_wired: layer 1 reads a made-up input): the verifier's Linking check on
-#                the inner statement's public file, in V*'s fold (InnerFold.lean --program, the setup Lean's verify runs);
-#                the honest wired statement passes it, and neither passes without the verifier's program
+#                the inner statement's public file, live (statement --links, before any session) and in V*'s fold
+#                (InnerFold.lean --program, the setup Lean's verify runs) over a session recorded under no links; the
+#                honest wired statement passes both, and neither passes the fold without the verifier's program
 #   flipped-top  rec_inner.py forge --what top: V*'s reference (rec_vstar) refuses it by name; staged by a prover that skips
 #                its own top checks (rec_inner.py flipped), the level-1 statement, refused by Lean's verify --zk
 #   forged-top   rec_vstage --forge top: an opening that climbs to a node other than its committed top (the last level)
@@ -84,15 +85,17 @@ pub_of() { ls $1/pub-*.bin | head -1; }
 cp $DD/u/stage/partition.json $O/
 U=$DD/u/stage; PUB=$(pub_of $U)
 
-# inner NAME STMT INST [firewall]: the inner session of statement STMT (its circuit and public file: the schedule of its public
-# shape) proved from the prover's file INST against the rec proxy, into $DD/inner-NAME; the live build's replay of it, and
-# V*'s points from its coins (rec_vstage points) into $DD/points-NAME.json
+# inner NAME STMT INST [firewall|-] [LINKS]: the inner session of statement STMT (its circuit and public file: the schedule of
+# its public shape, Linking checked on that file under the verifier's LINKS when the circuit declares links) proved from the
+# prover's file INST against the rec proxy, into $DD/inner-NAME; the live build's replay of it, and V*'s points from its coins
+# (rec_vstage points) into $DD/points-NAME.json
 inner() {
-  local name=$1 st=$2 inst=$3 fw=${4:-} D=$O/inner/$1 I=$DD/inner-$1 pub=$(pub_of $2) FWA=() ADDR= PP
+  local name=$1 st=$2 inst=$3 fw=${4:--} D=$O/inner/$1 I=$DD/inner-$1 pub=$(pub_of $2) FWA=() LKA=() ADDR= PP
+  [ -n "${5:-}" ] && LKA=(--links $5)
   mkdir -p $D; rm -rf $I
-  $B statement --instances $pub --circuit $st/circuit.txt > $D/statement.txt 2>&1 || { tail -5 $D/statement.txt; return 1; }
+  $B statement --instances $pub --circuit $st/circuit.txt "${LKA[@]}" > $D/statement.txt 2>&1 || { tail -5 $D/statement.txt; return 1; }
   python3 -m verity_flock.rec_live --schedule-for $D/statement.txt > $D/schedule.json || return 1
-  [ -n "$fw" ] && FWA=(--firewall $FWS --parts $PARTS)
+  [ $fw = firewall ] && FWA=(--firewall $FWS --parts $PARTS)
   python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $I --schedule $D/schedule.json "${FWA[@]}" > $D/proxy.log 2>&1 &
   PP=$!
   for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $D/proxy.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done
@@ -102,7 +105,7 @@ inner() {
   echo "$name inner prove exit $?"
   wait $PP; echo "$name proxy exit $?"
   [ -f $I/session/session.json ] || { tail -20 $D/proxy.log $D/prove.err; return 1; }
-  $B replay --instances $pub --circuit $st/circuit.txt --sessions $I/session > $D/replay.txt 2>&1
+  $B replay --instances $pub --circuit $st/circuit.txt "${LKA[@]}" --sessions $I/session > $D/replay.txt 2>&1
   cp $I/public.json $D/ && du -sb $I/session/* $I/*.json > $D/sizes.txt
   python3 -m verity_flock.rec_vstage points $I $st/circuit.txt $pub > $DD/points-$name.json 2> $D/points.err || { tail -5 $D/points.err; return 1; }
 }
@@ -220,13 +223,18 @@ vstage flipped-checked $F $DD/fold-honest.json $DD/vf-checked --points $DD/point
 python3 $PY flipped --inner $F --fold $DD/fold-honest.json --points $DD/points-honest.json --salts $V/acc-salts.bin --out $DD/vf \
   > $O/vstar/flipped.json 2> $O/vstar/flipped.err; echo "flipped stage exit $?"
 
-# the wired circuit: the honest statement's and the cheater's inner sessions, then V*'s fold with the verifier's program
-# (Linking), and the honest one's without it
-inner wired $DD/w/stage $(ls $DD/w/stage/inst-*.bin) || exit 1
-fold wired $DD/w/stage --program $DD/w/stage/program.desc
+# the wired circuit: the honest statement's inner session under the verifier's links, V*'s fold with the verifier's program
+# (Linking) and without it; the cheater's public file under the verifier's links (the live build's Linking refuses it before
+# any session), its inner session under none (a verifier that checks no Linking records it), and V*'s fold of it with the program
+W=$DD/w/stage
+inner wired $W $(ls $W/inst-*.bin) - $W/links.json || exit 1
+fold wired $W --program $W/program.desc
 cp $DD/points-wired.json $DD/points-wired-noprogram.json
-fold wired-noprogram $DD/w/stage
-inner made-up $DD/w/made-up-input $(ls $DD/w/made-up-input/inst-*.bin) || exit 1
+fold wired-noprogram $W
+mkdir -p $O/inner/made-up
+$B statement --instances $(pub_of $DD/w/made-up-input) --circuit $DD/w/made-up-input/circuit.txt --links $W/links.json \
+  > $O/inner/made-up/own-links.txt 2>&1; echo "made-up statement under the verifier's links exit $?"
+inner made-up $DD/w/made-up-input $(ls $DD/w/made-up-input/inst-*.bin) - $DD/w/no-links.json || exit 1
 fold made-up $DD/w/made-up-input --program $DD/w/made-up-input/program.desc
 
 # the outer sessions: honest through the firewall in the recursive session's order, then the controls'
@@ -282,6 +290,10 @@ s = {"stage": {k: json.loads(text(o / f"stage-{k}.json") or "null") for k in ("u
 for d in sorted(p for p in (o / "inner").iterdir() if p.is_dir() and (p / "prove.txt").exists()):
     s["inner"][d.name] = {**live(d), "replay": up(d / "replay.txt"), "sizes": text(d / "sizes.txt")}
 s["inner"]["honest"]["lean_plain_leaves"] = lean(o / "inner" / "honest" / "lean.log")
+if "made-up" in s["inner"]:
+    s["inner"]["made-up"]["under_the_verifiers_links"] = next(
+        (json.loads(l.split("\t", 1)[1]) for l in text(o / "inner" / "made-up" / "own-links.txt").splitlines() if l.startswith("REFUSED\t")),
+        text(o / "inner" / "made-up" / "own-links.txt")[-400:])
 s["inner"]["honest"]["firewall_contract"] = {"result": json.loads(text(o / "inner" / "firewall-contract" / "result.json") or "null"),
                                              "agreement": text(o / "inner" / "firewall-contract" / "agreement.tsv")}
 for f in sorted((o / "vstar").glob("fold-*.exit")):

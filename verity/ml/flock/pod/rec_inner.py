@@ -181,7 +181,9 @@ def wired(cls: str, n: int, out: Path, seed: int = 0) -> dict:
     the Program's, public) on ``n`` instances as one class statement of ``4 n`` instances with link rows
     (`class_statement.Wiring`), plain leaves: the honest staging in ``out/stage`` and the cheating prover's, whose layer 1
     reads a made-up input in place of layer 0's outputs, every unit correct on what it is given, in ``out/made-up-input``,
-    each with the verifier's program descriptor and partition object (`universal.run_wired`, ``--stage-only``)."""
+    each with the verifier's program descriptor and partition object (`universal.run_wired`, ``--stage-only``); the
+    verifier's own links in ``out/stage/links.json``, and none (``out/no-links.json``: a live verifier that checks no
+    Linking, so it records the cheater's session)."""
     B = _benchmark()
     G, N_IN, N_OUT = (int(v) for v in cls.split(","))
     row = B.run_wired(argparse.Namespace(n=n, seed=seed, stage_only=True, keep_stage=True, lean=None), G, N_IN, N_OUT, out)
@@ -191,6 +193,7 @@ def wired(cls: str, n: int, out: Path, seed: int = 0) -> dict:
         shutil.move(d / name, out / name)
     for f in ("partition.json", "program.desc"):
         shutil.copyfile(out / "stage" / f, out / "made-up-input" / f)
+    shutil.move(d / "no-links.json", out / "no-links.json")
     shutil.rmtree(d)
     return row | _shape(out / "stage", 4 * n) | {
         "made_up_public": _differing(out / "stage" / f"pub-{4 * n}.bin", out / "made-up-input" / f"pub-{4 * n}.bin")}
