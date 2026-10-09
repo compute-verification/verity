@@ -13,7 +13,7 @@ returns the outputs (`ho`), and every input a unit row reads is a port bit (`Por
 
 `scopeOk` also checks the unit's `unitLog ≤ 32`, under which the net's sparse rows are `Rows.ofNet`'s
 (`Rows.ofNet_a`). Every accepted statement has it (`Layout.unitLog_le`), so it narrows nothing. And it checks that every
-row is a `sha512/row/v1` row of `16 · words` bits in at least one chunk (`scopeOk_ports`): `rowEnc` is that row's bytes,
+row is an unsegmented `sha512/row/v1` row of `16 · words` bits in at least one chunk (`scopeOk_ports`): `rowEnc` is that row's bytes,
 and a bit row (`sha512/row/v2`) commits other bytes.
 
 `scopeOkH` is the hidden-output headlines' scope: `scopeOk`'s conditions on the unit, and every row a `sha512/row/v1`
@@ -32,9 +32,9 @@ def portReadsB (net : Net) : Bool :=
         (net.b.row (min (net.inWords * WORD) net.constPos + i)).toList).all fun x =>
       decide (x < min (net.inWords * WORD) net.constPos → x ∈ portBits net.inGroups)
 
-/-- **Every row is a `sha512/row/v1` row**: `16 · words` bits in at least one chunk. -/
+/-- **Every row is an unsegmented `sha512/row/v1` row**: `16 · words` bits in at least one chunk. -/
 def v1Ports (c : Circuit) : Bool :=
-  c.ports.all fun p => !p.v2 && p.bits == 16 * p.words && 0 < p.chunks
+  c.ports.all fun p => !p.v2 && p.segs.isNone && p.bits == 16 * p.words && 0 < p.chunks
 
 /-- **The circuits `rs` covers**: the unit reads only its leaf group, returns the outputs, and reads only port bits among
 its inputs, and every row is a `sha512/row/v1` row. -/
@@ -71,7 +71,8 @@ theorem scopeOk_ports {c : Circuit} (h : scopeOk c = true) :
   unfold scopeOk v1Ports at h
   simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
   intro p hp
-  exact and_assoc.1 (h.2 p (Array.mem_toList_iff.1 hp))
+  obtain ⟨⟨⟨hv, -⟩, hb⟩, hc⟩ := h.2 p (Array.mem_toList_iff.1 hp)
+  exact ⟨hv, hb, hc⟩
 
 /-! ## The hidden-output headlines' scope -/
 
@@ -117,7 +118,8 @@ theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
     unfold v1Ports at h1
     simp only [Array.all_eq_true', Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h1
     intro p hp
-    exact and_assoc.1 (h1 p (Array.mem_toList_iff.1 hp))
+    obtain ⟨⟨⟨hv, -⟩, hb⟩, hc⟩ := h1 p (Array.mem_toList_iff.1 hp)
+    exact ⟨hv, hb, hc⟩
   · right
     unfold v2Rows v2Row at h2
     simp only [Bool.and_eq_true, Array.all_eq_true', beq_iff_eq, decide_eq_true_eq, Option.isNone_iff_eq_none] at h2

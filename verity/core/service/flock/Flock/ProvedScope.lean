@@ -21,9 +21,9 @@ def portReadsB (net : Net) : Bool :=
   (List.range (net.constPos - n)).all fun i =>
     ((net.a.row (n + i)).toList ++ (net.b.row (n + i)).toList).all fun x => decide (x < n → mask.getD x false = true)
 
-/-- Every row is a `sha512/row/v1` row: `16 · words` bits in at least one chunk. -/
+/-- Every row is an unsegmented `sha512/row/v1` row: `16 · words` bits in at least one chunk. -/
 def v1Ports (c : Circuit) : Bool :=
-  c.ports.all fun p => !p.v2 && p.bits == 16 * p.words && 0 < p.chunks
+  c.ports.all fun p => !p.v2 && p.segs.isNone && p.bits == 16 * p.words && 0 < p.chunks
 
 /-- The circuits the headlines cover: the unit reads only its leaf group, returns the outputs, has at most `2^32` rows and
 reads only port bits among its inputs, and every row is a `sha512/row/v1` row. -/
