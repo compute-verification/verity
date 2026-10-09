@@ -569,6 +569,10 @@
     "function": "NciCheck.evaluate",
     "outcome": "accept"
    },
+   "PousCheck.Properties.SecurityProofs.deployed": {
+    "function": "PousCheck.P2.Params.deployed",
+    "outcome": "none"
+   },
    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
@@ -843,13 +847,8 @@
    "NciCheck.Properties.SecurityProofs.RejectsExactly": "restatable: Split the iff: keep the refusal half as evaluate j = .ok out -> no Malformed j k; move 'a refusal is malformed' (an honest input is never refused) to Proofs as completeness.",
    "NciCheck.Properties.SecurityProofs.Reports": "restatable: Move Parses, decode, LaysOut, Names and Divides, which pick out what the conclusion talks about, into a named conclusion.",
    "NciCheck.Properties.SecurityProofs.Witnesses": "restatable: As Reports, and also move complies = true into the named conclusion.",
-   "PousCheck.Properties.AcceptsIff": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
-   "PousCheck.Properties.AcceptsIffDeployed": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
-   "PousCheck.Properties.DecodeIsModel": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
-   "PousCheck.Properties.DecodeIsModelDeployed": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
-   "PousCheck.Properties.Deployed": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
+   "PousCheck.Properties.AcceptsDecodes": "unstated: No lock lists a guarantee that states it: @memory-accounting's #1598 restates PoUS's properties and lists only `deployed` so far.",
    "PousCheck.Properties.PublishesRoot": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
-   "PousCheck.Properties.PublishesRootDeployed": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": "restatable: As AcceptedRowsAreProgramRows, and make ss a definition of p.syncSet; move o's agreement with the device, its length, linkOf's range and the opened-frames condition into the conclusion.",
    "Proofs.NetworkCertifier.encardAcceptedObservationsLe": "restatable: Make ss a definition of p.syncSet and move linkOf's range into the conclusion; acceptance sits inside the counted set, as in a Pr statement (question for top).",
    "Properties.CertifierDevice.completeRows": "frozen (scope,world-unlisted): It takes honest timing (each frame handed at the bucket the Program gives it, Security/Properties/CertifierDevice.lean:166) as a hypothesis; it leaves the list once the device refuses to mark a record complete after a late frame, which network-accounting is doing.",
