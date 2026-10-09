@@ -1,9 +1,9 @@
-import Proofs.Flock.VBridge.Family
+import Proofs.Flock.VBridge.Family.Rep
 
 /-!
 # VBridge G at V*'s family: the openings' rows, `α` and `rec-acc`'s running sums
 
-`Family.lean`'s `HU` asks every opening's unit for `OpensAt`, whose input facts are `RegBit`: each input column a
+`vbridge_of_reps` asks every opening's unit for `OpensAt`, whose input facts are `RegBit`: each input column a
 registered read whose registrant value is the opening's. V*'s openings read two private rows, the opened row and its
 siblings `aux`, under fresh salts (`rec_outer.stage`, rec_outer.py:8-10, 239-242: only `out`, `acc`, `coef`, `dirs` and
 `acc_out` are registered, `row` only with `link_rows`), so `OpensAt`'s `aux` conjunct fails at V*'s registration
@@ -14,7 +14,8 @@ whenever a level climbs (`H ≥ 1`). This file reads the openings from the layer
   columns and the bytes of `A` on the first 256 columns of its `acc_out` output, at the verifier's layout
   (`keyProg_parse`). The siblings and the position are whatever the columns hold. Then `A`'s first two elements are the
   opening's consistency terms (`unitSum_of_opensAtL`), with nothing asked of the registrant; `unitSums_of_opensAtL`
-  assembles `UnitSums`, and `vbridge_of_familyL` is `vbridge_of_family` with `HUL`, `HU` at `OpensAtL`.
+  assembles `UnitSums`, and `vbridge_of_family` composes `vbridge_of_reps`' per-rep lemmas at `HUL` (`OpensAtL`) and
+  `HResL` (`ResZeroAtL`, `algebraHolds_of_decodeL`).
 * The family's openings, read off the layers (`rowsOf`, `accOf`) and the verifier's coins (`alphaOf`): opening `j` of
   level `ℓ` of rep `r` is copy 0 of unit `unO ℓ r j`; its row the first `levelLanes` elements of its columns, the chain
   (`chainOf`, `rec_outer.chain_order`: rep-major, then level, then query) position `p`'s row of `rec-acc` the `acc`
@@ -33,7 +34,6 @@ open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Mod
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 open Flock.RecResiduals (portSizes groups)
 open Flock.RecAlgebra (structureOf verifierRows el valOf)
-open FlockVBridge.OfVStar (ResZeroAt)
 open FlockVBridge.AccChain (Openings CoefsAre ConsAre ReadsEnds UnitSums levelLanes)
 open FlockSoundness.Discharge.Hm (bitL)
 
@@ -500,7 +500,7 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-- **`HU` at the layers** (`OpensAtL` in place of `OpensAt`): at every accepted outer proof, rep `r`'s instance of
+/-- **`hu` at the layers** (`OpensAtL` in place of `OpensAt`): at every accepted outer proof, rep `r`'s instance of
 opening `j` of level `ℓ` opens the rep's row at the verifier's coefficients, from `rec-acc`'s row at its chain position
 to the next, in the layer. -/
 def HUL : Prop :=
@@ -701,11 +701,14 @@ theorem hEnds_of (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → �
 
 end VStarFamily
 
-/-- **VBridge G at V*'s statement family, its openings read in the layers**: `vbridge_of_family` with `HUL` in place of
-`HU` (`unitSums_of_opensAtL` in place of `unitSums_of_decode`). -/
-theorem vbridge_of_familyL (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
+/-- **VBridge G at V*'s statement family, the parts' and openings' outputs read in the layers**:
+`Flock.Assumptions.VBridge` at the family's sessions, statement, messages, commit strings and digests, from its
+obligations (`vbridge_of_reps`' composition at `HResL`, `algebraHolds_of_decodeL`, and `HUL`, `unitSums_of_opensAtL`;
+`CoefsAre` and `ConsAre` hold by definition) and `VFull`, which `HFull` (`vFull_of_hFull`) or U4 (`vFull_of_hU4`)
+gives. -/
+theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
-    (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw)
+    (hsh : F.HShape dg N k Rw GS) (hres : F.HResL dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw)
     (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
     (hdec : F.HDecodes) (hfull : VFull (ℐ).r F.Sk) :
     Flock.Assumptions.VBridge (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
@@ -713,7 +716,7 @@ theorem vbridge_of_familyL (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
     (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).accepts regs (F.x R ω) T CT sch (hsch R ω t _) _
       (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
         obtain ⟨⟨v, info, kappa, hv, hvs⟩, hw, hc⟩ := hsh R ω t R₂ τ o h r
-        exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decode (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
+        exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decodeL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
             (fun s => (h s).2) hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hv hw hc hvs hst.2 F.sess
             (fun p => F.un p r) (fun p => cp p r) (hres R ω t R₂ τ o h r),
           FlockVBridge.AccChain.accHolds_of_units
@@ -722,18 +725,18 @@ theorem vbridge_of_familyL (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
             (F.coefsAre R ω t _ r) (F.consAre R ω t _ r) (hrd R ω t R₂ τ o h r)⟩),
     hcm, hdec, hfull⟩
 
-/-- **VBridge G at V*'s statement family whose openings are read off the layers**: `vbridge_of_familyL` at `rows`
+/-- **VBridge G at V*'s statement family whose openings are read off the layers**: `vbridge_of_family` at `rows`
 and `acc` the layers' (`rowsOf`, `accOf`), `HUL` from `hUL_of` and `HReads` from `hReads_of`. -/
 theorem vbridge_of_openings (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hrows : F.rows = F.rowsOf) (hacc : F.acc = F.accOf) (hst : F.HStruct GS gs)
-    (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hU : F.HOpenUnits) (hone : F.HOneOpen dg N k Rw)
+    (hsh : F.HShape dg N k Rw GS) (hres : F.HResL dg N k Rw gs) (hU : F.HOpenUnits) (hone : F.HOneOpen dg N k Rw)
     (hcoef : F.HCoefCols dg N k Rw) (hn : 0 < F.nOpen)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : F.HEnds dg N k Rw V) (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw)
     (hcm : F.HCommits) (hdec : F.HDecodes) (hfull : VFull (ℐ).r F.Sk) :
     Flock.Assumptions.VBridge (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
-  vbridge_of_familyL F dg N k Rw hst hsh hres (F.hUL_of dg N k Rw hrows hacc hU hone hcoef V hV)
+  vbridge_of_family F dg N k Rw hst hsh hres (F.hUL_of dg N k Rw hrows hacc hU hone hcoef V hV)
     (F.hReads_of dg N k Rw hacc hn V hV hE) hsch hfiles hruns hcm hdec hfull
 
 end family

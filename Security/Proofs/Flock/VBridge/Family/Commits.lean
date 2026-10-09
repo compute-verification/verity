@@ -1,4 +1,5 @@
-import Proofs.Flock.VBridge.Family
+import Proofs.Flock.VBridge.Family.Rep
+import Proofs.Flock.VBridge.Family.Openings
 import Proofs.Flock.VBridge.Family.ReadTransfer
 import Proofs.Flock.Soundness.Audit.FlockPublic
 
@@ -266,26 +267,25 @@ theorem vFullRead_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (s
 end VStarFamily
 
 /-- **`v-bridge` at the read wires, at V*'s statement family**: `VBridgeRead` at the family, from the obligations
-`vbridge_of_family` takes for its first conjunct (whose proof is `vbridge_of_reps`'s first component at the family),
-`HCommits`, and `VDecodesRead` and `VFullRead`, which `vDecodesRead_of` and `vFullRead_of` give. -/
+`vbridge_of_family` takes for its first conjunct (the parts' and openings' outputs read in the layers: `HResL`, through
+`algebraHolds_of_decodeL`, and `HUL`, through `unitSums_of_opensAtL`), `HCommits`, and `VDecodesRead` and `VFullRead`,
+which `vDecodesRead_of` and `vFullRead_of` give. -/
 theorem vbridgeRead_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
-    (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw)
+    (hsh : F.HShape dg N k Rw GS) (hres : F.HResL dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw)
     (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
     (hdec : F.VDecodesRead) (hfull : F.VFullRead) :
     VBridgeRead (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
   ⟨fun R ω t R₂ τ o h =>
     (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).accepts regs (F.x R ω) T CT sch (hsch R ω t _) _
       (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
-        obtain ⟨v, info, kappa, hv, hvs⟩ := (hsh R ω t R₂ τ o h r).1
-        obtain ⟨hw, hc⟩ := (hsh R ω t R₂ τ o h r).2
-        exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decode (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
+        obtain ⟨⟨v, info, kappa, hv, hvs⟩, hw, hc⟩ := hsh R ω t R₂ τ o h r
+        exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decodeL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
             (fun s => (h s).2) hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hv hw hc hvs hst.2 F.sess
             (fun p => F.un p r) (fun p => cp p r) (hres R ω t R₂ τ o h r),
           FlockVBridge.AccChain.accHolds_of_units
-            (FlockVBridge.AccChain.unitSums_of_decode (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)
-              (fun s => (h s).2) F.sh _ _ F.sessO (fun ℓ j => F.unO ℓ r j) (fun ℓ j => cpO ℓ r j)
-              (hu R ω t R₂ τ o h r))
+            (unitSums_of_opensAtL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) F.sh _ _ F.sessO
+              (fun ℓ j => F.unO ℓ r j) (fun ℓ j => cpO ℓ r j) (hu R ω t R₂ τ o h r))
             (F.coefsAre R ω t _ r) (F.consAre R ω t _ r) (hrd R ω t R₂ τ o h r)⟩),
     hcm, hdec, hfull⟩
 

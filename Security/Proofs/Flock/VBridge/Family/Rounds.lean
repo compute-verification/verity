@@ -304,7 +304,7 @@ theorem u4Passes_own (hown : F.HOwn) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ
 (`u4Passes_own`, `vFullRead_of`, `SelRounds` by `sel`'s definition). -/
 theorem vbridgeRead_of_rounds (dg : ByteArray → ByteArray) (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs) (hsh : F.HShape dg N k Rw GS)
-    (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw) (hsch : F.HSch)
+    (hres : F.HResL dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw) (hsch : F.HSch)
     (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (cOf : Cm → List UInt8)
     (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg) (hSk : F.Sk = skOf F.Vs F.own F.sel)
     (hcmt : F.cmt = cmtOf F.Vs (F.bc cOf)) (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec)
