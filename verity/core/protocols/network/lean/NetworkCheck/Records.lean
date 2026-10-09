@@ -172,34 +172,40 @@ def single (r : Certified) : Check.Commitment := ⟨#[r], .empty⟩
 
 def statusViolation (s : Option String) : Option String := s.map (s!"status:{·}")
 
-/-- `expected_grids(frames, syncs, params)`: the link's grid in each of the `W` windows, `Check.expectedGrid` of every
-window at once, as `schedule.py` computes it: the handing buckets in one pass (`handingFrom`), the enqueue counts, the
-FIFO's release counts (`queue`, `released`), and the frames filled in order (`fill`). -/
-def expectedGrids (g : Grid) (W : Nat) (l : Link) : Array RawGrid := Id.run do
+/-- `handingFrom` with the hand times so far reversed in `acc`, so a run of any length takes no stack. -/
+def handingRev (T W : Nat) (syncs : Fin W → ClockSync) : Nat → List NetworkCertifier.LogicalFrame → List Nat → List Nat
+  | _, [], acc => acc
+  | last, f :: fs, acc =>
+    let h := if hw : f.anchor / T < W then max (NetworkCertifier.eligible f (syncs ⟨f.anchor / T, hw⟩)) last
+      else max (max last (W * T)) f.anchor
+    handingRev T W syncs h fs (h :: acc)
+
+/-- The enqueue counts of buckets `0 … H − 1`: bucket `t` counts the hand times `t` of `hs`. -/
+def enqueueCounts (H : Nat) (hs : List Nat) : Array Nat :=
+  hs.foldl (fun a h => a.modify h (· + 1)) (Array.replicate H 0)
+
+/-- The FIFO's release counts of `c` buckets from bucket `t` with `q` frames queued: `released` and `queue`, carried. -/
+def releases (S : Nat) (enq : Nat → Nat) : Nat → Nat → Nat → List Nat
+  | _, _, 0 => []
+  | t, q, c + 1 => min (q + enq t) S :: releases S enq (t + 1) (q + enq t - min (q + enq t) S) c
+
+/-- `fill` of the buckets releasing `ns`, the first from the `k`-th frame on: a bucket releasing `n` holds frames in slots
+`0 … n − 1`. -/
+def rows (S : Nat) (pay : Nat → ByteArray) : Nat → List Nat → List (Array (Option ByteArray))
+  | _, [] => []
+  | k, n :: ns => Array.ofFn (fun s : Fin S => if s.1 < n then some (pay (k + s.1)) else none) :: rows S pay (k + n) ns
+
+/-- `expected_grids(frames, syncs, params)`: the link's grid in each of the `W` windows, as `schedule.py` computes it, in
+time linear in the frames and the buckets: the hand times, the enqueue counts, the release counts, and the frames filled
+in order. Window `w`'s is `Check.expectedGrid`'s (`RecordsGrid.expectedGrids_eq`). -/
+def expectedGrids (g : Grid) (W : Nat) (l : Link) : Array RawGrid :=
   let T := g.buckets
-  let S := g.allocation
-  let horizon := W * T
-  let mut enq : Array Nat := Array.replicate horizon 0
-  let mut last := 0
-  for f in l.frames do
-    let h := if f.anchor / T < W then max (NetworkCertifier.eligible f (l.syncs.getD (f.anchor / T) Check.noSync)) last
-      else max (max last horizon) f.anchor
-    last := h
-    if h < horizon then enq := enq.modify h (· + 1)
+  let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 Check.noSync
+  let enq := enqueueCounts (W * T) (handingRev T W syncs 0 l.frames []).reverse
   let payloads := l.frames.toArray.map fun f => Check.bytesOfBits f.payload
-  let mut q := 0
-  let mut k := 0
-  let mut grids := #[]
-  for w in [0:W] do
-    let mut grid := #[]
-    for i in [0:T] do
-      let n := min (q + enq.getD (w * T + i) 0) S
-      q := q + enq.getD (w * T + i) 0 - n
-      grid := grid.push ((Array.range S).map fun s =>
-        if s < n then some (payloads.getD (k + s) (Check.bytesOfBits [])) else none)
-      k := k + n
-    grids := grids.push grid
-  pure grids
+  let all := (rows g.allocation (fun k => payloads.getD k (Check.bytesOfBits [])) 0
+    (releases g.allocation (fun t => enq.getD t 0) 0 0 (W * T))).toArray
+  (Array.range W).map fun w => all.extract (w * T) (w * T + T)
 
 /-- An egress link-window's violation (`check_link`), none when it is accepted; `expected` is the Program's grid of the
 link-window. A certified record's is v2's `Check.egressVerdict`. -/
