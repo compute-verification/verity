@@ -230,6 +230,220 @@ theorem verdictOf_accept (vs : Array (String × Json)) :
           revert this
           cases getD x.2 "accepted" <;> simp
 
+/-- A loop step's codes, and whether it continues. -/
+def codesOf (x : Id (ForInStep (Array String))) : Array String :=
+  match x.run with
+  | .yield c => c
+  | .done c => c
+def yields (x : Id (ForInStep (Array String))) : Bool :=
+  match x.run with
+  | .yield _ => true
+  | .done _ => false
+
+theorem yields_eq (x : Id (ForInStep (Array String))) (h : yields x = true) : x = pure (.yield (codesOf x)) := by
+  revert h
+  cases x with
+  | yield a => intro _; rfl
+  | done a => intro h; simp [yields, Id.run] at h
+
+theorem forIn_codes_nil {α : Type} (xs : Array α) (c0 : Array String)
+    (f : α → Array String → Id (ForInStep (Array String))) (Q : α → Prop)
+    (hc : ∀ x c, yields (f x c) = true ∧ (codesOf (f x c) = #[] ↔ c = #[] ∧ Q x)) :
+    (forIn xs c0 f).run = #[] ↔ c0 = #[] ∧ ∀ x ∈ xs, Q x := by
+  rw [← Array.forIn_toList]
+  have : ∀ x, x ∈ xs ↔ x ∈ xs.toList := fun x => Array.mem_toList_iff.symm
+  simp only [this]
+  generalize xs.toList = l
+  induction l generalizing c0 with
+  | nil => simp
+  | cons a as ih =>
+    rw [List.forIn_cons, yields_eq _ (hc a c0).1]
+    simp only [pure_bind]
+    refine (ih _).trans ?_
+    rw [(hc a c0).2]
+    simp only [List.mem_cons, forall_eq_or_imp, and_assoc]
+
+theorem step_pure (c : Array String) : yields (pure (.yield c)) = true ∧ codesOf (pure (.yield c)) = c := ⟨rfl, rfl⟩
+
+theorem root_ok (j : Json) :
+    ((!match j with | .str s => s.length == 128 && isHex s | _ => false) = false) ↔
+      ∃ s, j = .str s ∧ s.length = 128 ∧ isHex s = true := by
+  cases j <;> simp
+
+theorem width_ok (e : Json) (want : Registered.Entry) :
+    ((match field? e Registered.WIDTH_KEY with
+      | none => want.wordBits != Registered.WORD_BITS
+      | some j => match int? j with
+        | some w => w != (want.wordBits : Int) || w == (Registered.WORD_BITS : Int)
+        | none => true) = false) ↔
+    (match field? e Registered.WIDTH_KEY with
+      | none => want.wordBits = Registered.WORD_BITS
+      | some j => int? j = some (want.wordBits : Int) ∧ (want.wordBits : Int) ≠ Registered.WORD_BITS) := by
+  cases field? e Registered.WIDTH_KEY with
+  | none => simp
+  | some j =>
+    simp only []
+    generalize int? j = o
+    cases o with
+    | none => simp
+    | some w =>
+      simp only [Bool.or_eq_false_iff, bne_eq_false_iff_eq, beq_eq_false_iff_ne, Option.some.injEq]
+      constructor
+      · rintro ⟨rfl, h⟩; exact ⟨rfl, h⟩
+      · rintro ⟨rfl, h⟩; exact ⟨rfl, h⟩
+
+theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
+    (held : Array (String × String)) :
+    Registration.checkRegistered c got mine held = #[] ↔ c = #[] ∧ ∃ mine' es, mine = .ok mine' ∧ got = .arr es ∧
+      (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
+        keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
+      ValuesAre es mine' ∧
+      ∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+        EntryIs e want held := by
+  unfold Registration.checkRegistered
+  extract_lets widthKeys
+  rcases mine with err | mine
+  · simp [addCode_ne_nil]
+  rcases got with _ | _ | _ | _ | es | _
+  all_goals try (simp [addCode_ne_nil]; done)
+  simp (config := {zeta := false}) only []
+  by_cases hk : (!es.all fun e => keys? e == some Registered.ENTRY_KEYS || keys? e == some widthKeys) = true
+  · simp only [hk, ↓reduceIte, Id.run_pure, addCode_ne_nil, false_iff, not_and, not_exists]
+    intro _ mine' es' hm he hkeys
+    cases hm
+    cases he
+    intro _ _
+    have hall : (es.all fun e => keys? e == some Registered.ENTRY_KEYS || keys? e == some widthKeys) = true := by
+      apply Array.all_eq_true'.2
+      intro e he
+      rcases hkeys e he with h | h
+      · simp only [h, beq_self_eq_true, Bool.true_or]
+      · show (keys? e == some Registered.ENTRY_KEYS || keys? e == some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) = true
+        simp only [h, beq_self_eq_true, Bool.or_true]
+    rw [hall] at hk
+    cases hk
+  simp (config := {zeta := false}) only [hk, Bool.false_eq_true, ↓reduceIte]
+  extract_lets values names distinct jp
+  simp (config := {zeta := false, failIfUnchanged := false}) only [↓jp_ite, ↓jp_ite']
+  simp (config := {zeta := false}) only [jp]
+  show (forIn mine _ _ : Id (Array String)).run = #[] ↔ _
+  refine (forIn_codes_nil _ _ _ (fun want => ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+    EntryIs e want held) ?_).trans ?_
+  · intro want c
+    split
+    · rename_i e hfe
+      extract_lets c1 bw jh jw jd jwo jl cr
+      have hH : ∀ c, yields (jh () c) = true ∧ (codesOf (jh () c) = #[] ↔ c = #[] ∧
+          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+        intro c
+        simp only [jh]
+        cases hf : held.find? (·.1 == want.value) with
+        | none => simp [step_pure]
+        | some x =>
+          rcases x with ⟨fst, r⟩
+          simp only []
+          cases hj : jeq (getD e "root") (.str r) <;> simp [step_pure, hj, addCode_ne_nil]
+      have hW : ∀ c, yields (jw () c) = true ∧ (codesOf (jw () c) = #[] ↔ c = #[] ∧ bw = false ∧
+          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+        intro c
+        simp only [jw]
+        by_cases hb : bw = true <;> simp [hb, hH, addCode_ne_nil]
+      have hD : ∀ c, yields (jd () c) = true ∧ (codesOf (jd () c) = #[] ↔ c = #[] ∧
+          jeq (getD e "domain") (.str want.domain) = true ∧ bw = false ∧
+          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+        intro c
+        simp only [jd]
+        by_cases hb : jeq (getD e "domain") (.str want.domain) = true <;> simp [hb, hW, addCode_ne_nil]
+      have hWo : ∀ c, yields (jwo () c) = true ∧ (codesOf (jwo () c) = #[] ↔ c = #[] ∧
+          int? (getD e "words") = some (want.words : Int) ∧
+          jeq (getD e "domain") (.str want.domain) = true ∧ bw = false ∧
+          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+        intro c
+        simp only [jwo]
+        by_cases hb : int? (getD e "words") = some (want.words : Int) <;> simp [hb, hD, addCode_ne_nil]
+      have hL : ∀ c, yields (jl () c) = true ∧ (codesOf (jl () c) = #[] ↔ c = #[] ∧
+          int? (getD e "leaves") = some (want.leaves : Int) ∧
+          int? (getD e "words") = some (want.words : Int) ∧
+          jeq (getD e "domain") (.str want.domain) = true ∧ bw = false ∧
+          ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+        intro c
+        simp only [jl]
+        by_cases hb : int? (getD e "leaves") = some (want.leaves : Int) <;> simp [hb, hWo, addCode_ne_nil]
+      have hR := root_ok (getD e "root")
+      have hBw : bw = false ↔ _ := width_ok e want
+      have hQ : (∀ e', Array.find? (fun e => jeq (getD e "value") (Json.str want.value)) es.reverse = some e' →
+          EntryIs e' want held) ↔ EntryIs e want held := by
+        rw [hfe]
+        constructor
+        · intro h; exact h e rfl
+        · intro h e' he; cases he; exact h
+      rw [hQ]
+      unfold EntryIs
+      have key : ∀ b : Bool, (b = false ↔ ∃ s, getD e "root" = .str s ∧ s.length = 128 ∧ isHex s = true) →
+          yields (if b = true then jl () cr else jl () c1) = true ∧
+          (codesOf (if b = true then jl () cr else jl () c1) = #[] ↔ c = #[] ∧
+            (∃ s, getD e "root" = .str s ∧ s.length = 128 ∧ isHex s = true) ∧
+            int? (getD e "leaves") = some (want.leaves : Int) ∧ int? (getD e "words") = some (want.words : Int) ∧
+            jeq (getD e "domain") (.str want.domain) = true ∧
+            (match field? e Registered.WIDTH_KEY with
+              | none => want.wordBits = Registered.WORD_BITS
+              | some j => int? j = some (want.wordBits : Int) ∧ (want.wordBits : Int) ≠ Registered.WORD_BITS) ∧
+            ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)) := by
+        intro b hb
+        cases b
+        · have hr' := hb.1 rfl
+          show yields (jl () c1) = true ∧ (codesOf (jl () c1) = #[] ↔ _)
+          refine ⟨(hL c1).1, ?_⟩
+          rw [(hL c1).2, hBw]
+          exact ⟨fun ⟨a, b, c, d, f, g⟩ => ⟨a, hr', b, c, d, f, g⟩, fun ⟨a, _, b, c, d, f, g⟩ => ⟨a, b, c, d, f, g⟩⟩
+        · show yields (jl () cr) = true ∧ (codesOf (jl () cr) = #[] ↔ _)
+          have hcr : cr ≠ #[] := addCode_ne_nil _ _
+          refine ⟨(hL cr).1, ?_⟩
+          rw [(hL cr).2]
+          refine ⟨fun h => (hcr h.1).elim, fun ⟨_, h1, _⟩ => ?_⟩
+          exact absurd (hb.2 h1) (by decide)
+      exact key _ hR
+    · rename_i hfe
+      refine ⟨rfl, ?_⟩
+      show c = #[] ↔ _
+      exact ⟨fun h => ⟨h, fun e he => (hfe e he).elim⟩, fun h => h.1⟩
+  · have hnames : names = namesOf es := by
+      simp only [names, values, namesOf, Array.filterMap_map]; rfl
+    have hValues : ((names.size != values.size || distinct.length != values.size || distinct.length != mine.size ||
+        !distinct.all fun v => mine.any fun x => x.value == v) = false) ↔ ValuesAre es mine := by
+      simp only [distinct, values]
+      rw [hnames]
+      simp only [Array.size_map, Bool.or_eq_false_iff, bne_eq_false_iff_eq, Bool.not_eq_false', List.all_eq_true,
+        Array.any_eq_true', beq_iff_eq, ValuesAre, and_assoc]
+    have hkeys : ∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
+        keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY)) := by
+      intro e he
+      have := Array.all_eq_true'.1 (Bool.not_eq_false' _ ▸ (Bool.eq_false_iff.2 hk)) e he
+      simp only [Bool.or_eq_true, beq_iff_eq] at this
+      exact this
+    have key : ∀ (b : Bool) (u v : Array String), v = c → u ≠ #[] → (b = false ↔ ValuesAre es mine) →
+        (((if b = true then u else v) = #[] ∧ ∀ x ∈ mine, ∀ e,
+          es.reverse.find? (fun e => jeq (getD e "value") (.str x.value)) = some e → EntryIs e x held) ↔
+        c = #[] ∧ ∃ mine' es', (Except.ok mine : Flock.V (Array Registered.Entry)) = .ok mine' ∧ Json.arr es = .arr es' ∧
+          (∀ e ∈ es', keys? e = some Registered.ENTRY_KEYS ∨
+            keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
+          ValuesAre es' mine' ∧
+          ∀ want ∈ mine', ∀ e, es'.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+            EntryIs e want held) := by
+      intro b u v hv hu hb
+      subst hv
+      constructor
+      · rintro ⟨h1, h2⟩
+        cases b
+        · exact ⟨h1, mine, es, rfl, rfl, hkeys, hb.1 rfl, h2⟩
+        · exact (hu h1).elim
+      · rintro ⟨hc, mine', es', hm, he, _, hv, h2⟩
+        cases hm
+        cases he
+        refine ⟨?_, h2⟩
+        rw [hb.2 hv]
+        exact hc
+    exact key _ _ _ rfl (addCode_ne_nil _ _) hValues
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := sorry
 theorem ascending_iff (xs : Array Int) :
