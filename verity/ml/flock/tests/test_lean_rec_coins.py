@@ -1,12 +1,12 @@
 """V*'s verifier-registered values against the verifier's own coins (`Flock/RecCoins.lean`, `verify --rec-inner-*`): the
 smallest level of a recorded recursive session (`r20261009-111638-6720`, class (16,16,8) at 64 instances: level 3,
-`rec-open/l16-h4`, 106 openings), restaged here by `rec_vstage.stage` from the fetched fixture `rec-coins/16-16-8-n64` (the
-inner statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
-recorded `pub.bin` and `registered.json`, and its recorded outer session). The honest level is accepted at the honest inner
+`rec-open/l16-h4`, 106 openings), restaged by `rec_vstage.stage` from the fetched fixture `rec-coins/16-16-8-n64`: the inner
+statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
+recorded `pub.bin` and `registered.json`, and its recorded outer session. The honest level is accepted at the honest inner
 session and refused without it, and a level whose `rec-coef` V* registered one bit off is refused at that opening, though
-its registration is consistent. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the module is slow; it
-catches what no test before it can: the Lean verifier's coefficients, positions and salts at real coins, against the ones
-V*'s Python registers."""
+its registration is consistent. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the
+module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
+coins, against the ones V*'s Python registers."""
 from __future__ import annotations
 
 import hashlib
