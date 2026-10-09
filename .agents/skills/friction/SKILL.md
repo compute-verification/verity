@@ -102,6 +102,11 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (5:59 PM PDT, relayed by top): a named conjecture is a premise in a section of its own, with a falsification
+  test that runs, and a claim resting on one is listed as conditional. A model of how a device computes, such as
+  `TTOutPearlC`, is an assumption about the world, checked by measurement. Claims resting on a falsified premise come off
+  the list, and until the shape check unfolds `def G : Prop` bodies, the audit's past "no assumptions" results are
+  unverified (`.agents/skills/lean-proofs/SKILL.md`).
 - 2026-10-08 (5:11 PM PDT, relayed by top): the premises rule is mechanical. A property's only arguments are the input,
   the function's acceptance and premises from the list, a premise being an assumption about the world that the function
   can't see. Completeness theorems move to `Proofs/`, each with one concrete instance of its honest case, and
