@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import importlib
 import json
+import os
 import pkgutil
 import re
 import subprocess
@@ -91,6 +92,34 @@ def descriptor(program) -> dict:
 def decode(desc: dict):
     from verity.ml.circuits.defs import REGISTRY
     return codec.decode_program(desc, REGISTRY)
+
+
+def decode_opaque(desc: dict) -> tuple[Any, list[str]]:
+    """`decode`, each primitive the descriptor names that today's registry lacks standing in by the descriptor's own
+    signature, never evaluated (the registration's checks and the draw read the program's shape only); and their ids."""
+    from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
+    from verity.ml.circuits.types import type_from_json
+
+    def opaque(*_: Any) -> int:
+        raise RuntimeError("an opaque stand-in is never evaluated")
+    stubs: dict[str, Any] = {}
+    for fid, d in desc["definitions"].items():
+        if d.get("form") != "primitive":
+            continue
+        try:
+            codec.lookup_primitive(REGISTRY, fid)
+        except KeyError:
+            name, _, ver = fid.rpartition("_v")
+            stubs[fid] = PrimitiveDefinition(name, int(ver), tuple((n, type_from_json(t)) for n, t in d["params"]),
+                                             type_from_json(d["ret"]), opaque, register=False)
+
+    class Registry:
+        def __contains__(self, fid: str) -> bool:
+            return fid in REGISTRY or fid in stubs
+
+        def __getitem__(self, fid: str) -> Any:
+            return REGISTRY[fid] if fid in REGISTRY else stubs[fid]
+    return codec.decode_program(desc, Registry()), sorted(stubs)
 
 
 class Programs:
@@ -288,13 +317,6 @@ def flipped(body: bytes) -> bytes:
 
 
 # --- the verifier's copies ---------------------------------------------------------------------------------------------
-
-def template_ids(desc: dict) -> list[str]:
-    """The templates a population program instantiates: its root's batch callees, in node order."""
-    root = desc["definitions"][desc["root"]]
-    ids = [desc["callees"][n["fn"]] for n in root["body"]["nodes"] if n.get("op") == "batch"]
-    return [t if isinstance(t, str) else t.get("id", "") for t in ids]
-
 
 def partition_form(program, query: dict, rec: dict, era_templates: list[str]) -> tuple[dict | None, str]:
     """The verifier's partition object for `rec`: the canonical one over `program` and `query` (null); the canonical
@@ -1037,12 +1059,214 @@ def a4(run: Run) -> Iterator[Case]:
                           session_roots=session_roots if with_served else None, served=served)
 
 
+#: what the era's code imports from a run's commit
+ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "benchmarks/pouw/served_zk")
+
+
+def era_tree(run: Run, commit: str) -> Path:
+    """The run's commit's own code (`ERA_PATHS`, from git history), for a verifier's copy today's code can't build."""
+    out = run.sets.root.parent / "_trees" / commit[:12]
+    if (out / ".done").exists():
+        return out
+    out.mkdir(parents=True, exist_ok=True)
+    for sub in ERA_PATHS:
+        a = subprocess.run(["git", "-C", str(REPO), "archive", commit, sub], capture_output=True)
+        if a.returncode != 0:
+            raise Missing(f"{sub} at {commit[:9]} (git history)")
+        subprocess.run(["tar", "-x", "-C", str(out)], input=a.stdout, check=True)
+    (out / ".done").write_text(commit)
+    return out
+
+
+def era_python(tree: Path, code: str, *args: str) -> Any:
+    """`code` run on the era's tree, its last stdout line read as JSON."""
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(tree / p) for p in ("", "catalog", "kernels"))}
+    p = subprocess.run([sys.executable, "-c", code, *args], capture_output=True, text=True, env=env, cwd=tree)
+    if p.returncode != 0:
+        raise Gap(f"the code at {tree.name}: {(p.stderr.strip().splitlines() or ['?'])[-1]}")
+    return json.loads(p.stdout.strip().splitlines()[-1])
+
+
+#: served_zk's verifier copies at each level, by the era's own `served_commit`
+SERVED_ZK_ERA = r'''
+import json, sys
+sys.path.insert(0, "benchmarks/pouw/served_zk")
+import served_commit as SC
+from verity.protocols.verification.sampled_proofs.one_stage import partition as PT
+from verity.primitives.circuits.codec import encode_program
+params, levels = json.loads(sys.argv[1]), json.loads(sys.argv[2])
+t = SC.template(params["k"])
+out = {"template": t.id, "tid": PT.template_id(t), "levels": {}}
+for ell in levels:
+    n = SC.work_at(params, ell).n
+    out["levels"][str(ell)] = {"n": n, "program": encode_program(PT.population_program(t, n)), "ports": SC.ports(params, ell)}
+print(json.dumps(out))
+'''
+#: served_zk's registered scheme before the proof service (`served_commit.SCHEME`); in it, the service's (`SCHEME`)
+SERVED_ZK_SCHEME = "verity/pouw/served-zk/window/hm96-sha512+frame-v3-sha512/v1"
+SERVED_ZK_W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
+#: served windows' recorded refusals that are not the protocol's, by name, with why
+SERVED_OUTSIDE = (
+    (r"register-extra", "the service's public-items rule at registration (`public_problem`), before any record exists"),
+    (r"receive-extra", "the service's public-items rule (`public_problem`): one-stage's record carries the window's items "
+                       "without reading them"),
+    (r"receive-foreign", "the service's public-context rule (`public_problem`), before one-stage's checks; analog: the "
+                         "registration under the request's own copies, which R3 refuses (its served domain binds the context)"),
+    (r"receive-raised", "PoUW's rule (`public_problem`: public-value, population), before one-stage's checks; analog: the "
+                        "verifier's copies at the raised level, which R2 and R3 refuse"),
+    (r"receive-open", "the stream's rule: one registration open at a time (`Stream.register`)"),
+    (r"receive-(coin-.*|unrecorded)", "PoUW's epoch coins (`pouw.coins`), the challenger's, before one-stage's checks"),
+    (r"select-again", "the service draws once per receipt and never redraws (`select`); the protocol checks the draw it is handed"),
+    (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
+    (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
+    (r"lean-.*", "the verifier of record (Lean `flock-verify verify --zk`) on one unit's session; the protocol reads its verdict"),
+    (r"firewall-.*", "the firewall's checks on a delivered proof, before the outcome"),
+)
+
+
+def served_window(run: Run) -> Iterator[Case]:
+    """served_zk's window through the proof service (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
+    tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
+    under the verifier's own copies (its `params.json`: the program at the record's level, the law of `pouw.window.sampling`,
+    the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
+    (`outcome-<case>/`: honest, the selftest build's cases, the other request's proof), each its own audit record of the
+    request's registration (a stream of its own, order 0). Before the proof service (`verity/one-stage/audit/v0`) the
+    scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
+    is the service's and the audit took the delivered sessions. Neither took the served draw, the sessions' roots or
+    registered reads."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
+    pv = run.json("out/request/params.json")
+    rec = run.json("out/request/registration.json")
+    commit = run.commit()
+    prov: dict = {"commit": commit, "params": "out/request/params.json (the verifier's own)"}
+    outcomes = sorted(f["path"] for f in run.files if re.fullmatch(r"out/outcome-[^/]+/audit\.json", f["path"]))
+    if not outcomes:
+        raise Missing("out/outcome-*/audit.json")
+    raised = run.json("out/registration-raised.json") if run.has("out/registration-raised.json") else None
+    levels = [rec["window"]["public"]["work"]["level"]] + ([raised["window"]["public"]["work"]["level"]] if raised else [])
+    tile_work = pv["k"]
+
+    def law_at(ell: int) -> dict:
+        return Wd.sampling(Fraction(pv["eps"]), Fraction(pv["delta"]), Wd.Work.at(ell, pv["grid_bits"]), tile_work,
+                           pv["grid_bits"])["law"]
+    t = pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]
+    era = None
+    if PO.program_sha512(P.population_program(t, Wd.Work.at(levels[0], pv["grid_bits"]).n)) != rec["program"]:
+        if commit is None:
+            raise Gap("today's tile template does not give the record's program, and the run names no commit")
+        era = era_python(era_tree(run, commit), SERVED_ZK_ERA, json.dumps(pv), json.dumps(levels))
+        prov["program"] = f"the era's `served_commit.template` at {commit[:9]} (today's code has no {era['template']})"
+    else:
+        prov["program"] = "P.population_program(pc8 tile template, N at the registered level)"
+    stubs: list[str] = []
+
+    def program_at(ell: int):
+        if era is None:
+            return P.population_program(t, Wd.Work.at(ell, pv["grid_bits"]).n)
+        prog, ids = decode_opaque(era["levels"][str(ell)]["program"])
+        stubs.extend(x for x in ids if x not in stubs)
+        return prog
+    program = program_at(levels[0])
+    if PO.program_sha512(program) != rec["program"]:
+        raise Gap(f"the window's program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
+    tid = era["tid"] if era is not None else P.template_id(t)
+    query = PO.template_instance_query(tid)
+    partition, prov["partition"] = partition_form(program, query, rec, [tid])
+    port = next(r["port"] for r in rec["roots"] if r["port"] != "W")
+
+    def ports_at(ell: int, prog, part: dict | None, form: tuple[str, str], wb: str) -> dict:
+        if era is not None:
+            return era["levels"][str(ell)]["ports"]
+        pd = P.digest(part if part is not None else P.partition(prog, query))
+        wdoc = {"template": t.id, "port": "W", "schema": L.ROW_SCHEMA["bf16", ROLE_W], "leaves": pv["w_rows"],
+                "deployment": pv["deployment"]}
+        return {port: {"leaves": pv["entries"], "domain": served_domain(form, PO.program_sha512(prog), pd, port,
+                                                                       SCHEMA_HM96_SHA512_ROW_V2, pv["entries"],
+                                                                       pv["context"])},
+                "W": {"leaves": pv["w_rows"], "domain": _domain(SERVED_BINDINGS[wb](SERVED_ZK_W_DOMAIN, wdoc), pv["w_rows"])}}
+    if era is not None:
+        form, wb = SERVED_FORMS[0], "sha512"
+        ports = ports_at(levels[0], program, partition, form, wb)
+        prov["ports"] = "the era's `served_commit.ports`"
+        if not matches(ports, rec):
+            prov["ports"] = "GAP: the era's ports are not the record's"
+    else:
+        found = [(f, wb) for f in SERVED_FORMS for wb in SERVED_BINDINGS
+                 if matches(ports_at(levels[0], program, partition, f, wb), rec)]
+        form, wb = found[0] if found else (SERVED_FORMS[0], "sha512")
+        ports = ports_at(levels[0], program, partition, form, wb)
+        prov["ports"] = (f"served_domain {form[0]} {form[1]} ({port}), W's domain {wb}" if found else
+                         "GAP: no derivation matches the record's ports; today's")
+    law = law_at(levels[0])
+    first = run.json(outcomes[0])
+    service = first.get("format") == "verity/proof-service/outcome/v0"
+    scheme = SCHEME if service else SERVED_ZK_SCHEME
+    prov["scheme"] = "the proof service's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof service)"
+    p = params(program, query, law, ports, None, delta_of(pv["delta"]), partition=partition, scheme=scheme)
+    base = None
+    for path in outcomes:
+        body = run.json(path)
+        a = body["audit"] if service else body
+        if a is None:
+            raise Gap(f"{path}: an outcome without an audit (late)")
+        if service and body.get("order") != 0:
+            raise Gap(f"{path}: order {body.get('order')}, a log the run did not keep")
+        if R.digest(a["registration"]) != R.digest(rec):
+            raise Gap(f"{path}: not the request's registration")
+        sessions = list(body.get("sessions") or []) if service else []
+        e = evidence(a, instances=len(a["proved_units"]), sessions=sessions, session_roots=None, served=None)
+        e["session_registered"] = None
+        name = path.split("/")[1]
+        honest = name in ("outcome-honest", "outcome-st-honest")
+        c = Case(run.id, "served-window", first.get("format", ""), name, "audit" if honest else "negative", program, p,
+                 rec, e, recorded_audit(a, path),
+                 {**prov, "evidence": f"{path}; instances the proved units; sessions "
+                                      + ("the delivered ones" if service else "none (before the proof service)")})
+        if stubs:
+            c.provenance["opaque"] = stubs
+        base = base or (c if name == "outcome-honest" else None)
+        yield c
+    if base is None:
+        raise Missing("out/outcome-honest/audit.json")
+    checks = run.json("out/summary.json").get("checks") or {}
+    ours: list[str] = []
+    if raised is not None and "receive-raised" in checks:
+        ell = levels[1]
+        prog_r = program_at(ell)
+        part_r = with_program(partition, prog_r)
+        out = run.path("out/receive-raised.out").read_text() if run.has("out/receive-raised.out") else ""
+        got = json.loads(out.split(" ", 1)[1]) if out.startswith("REFUSED {") else {}
+        ours = [x for x in got.get("codes") or [] if re.match(r"R\d", x)]
+        rv = recorded("reject", "registration", ours, "out/receive-raised.out (its R codes)") if ours else \
+            recorded("reject", None, None, "out/receive-raised.out")
+        yield base.but("receive-raised", "negative" if ours else "analog", rv, program=prog_r, rec=raised,
+                       params={"program": descriptor(prog_r), "partition": part_r, "law": law_at(ell),
+                               "ports": ports_at(ell, prog_r, part_r, form, wb)},
+                       provenance={"change": f"out/registration-raised.json under the verifier's copies at level {ell}"})
+    if "receive-foreign" in checks and run.has("out/other/registration.json"):
+        yield base.but("receive-foreign", "analog", recorded("reject", None, None, "out/receive-foreign.out"),
+                       rec=run.json("out/other/registration.json"),
+                       provenance={"change": "out/other/registration.json under the request's copies"})
+    for name, v in sorted(checks.items()):
+        if v.get("expected") not in ("REFUSED", "REJECT") or name.startswith("outcome-"):
+            continue
+        if name == "receive-raised" and ours:
+            run.outside.append({"run": run.id, "driver": "served-window", "name": "receive-raised (public-value)",
+                                "why": "PoUW's rule (`public_problem`) beside one-stage's R2 and R3, which are replayed"})
+            continue
+        why = next((w for pat, w in SERVED_OUTSIDE if re.fullmatch(pat, name)), "UNHANDLED: the replay has no case for it")
+        run.outside.append({"run": run.id, "driver": "served-window", "name": name, "why": why})
+
+
 def session_digests(run: Run, session: str) -> list[str]:
     return sorted(f["sha256"] and sha512_file(run.path(f["path"])) for f in run.files
                   if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
 
 
-DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a2": a2, "a3": a3, "a4": a4}
+DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a2": a2, "a3": a3, "a4": a4,
+                                                       "served-window": served_window}
 
 
 # --- main --------------------------------------------------------------------------------------------------------------
