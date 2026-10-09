@@ -81,7 +81,7 @@ theorem vbridge_of_vstar
         AccHolds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r)) →
       (files (layers zs dg N k Rw R ω t R₂ τ)).Runs)
     -- V*'s public files
-    (hcm : VCommits zs Sk cmt) (hdec : VDecodes wmsg (fun _ _ a b => a = b) Sk msg)
+    (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)
     -- `VFull` for sessions drawn whole
     (hks : ∀ j t, (Law.stratum (Vs j).law.σs t).card ≤ (Vs j).law.ks t)
     (hio : ∀ i < (ℐ).r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →

@@ -137,10 +137,11 @@ theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     (halg : AlgebraDecodes zs dg N k Rw sh rep) (hacc : AccChains zs dg N k Rw sh rep)
     (hst : StagesAccept zs dg N k Rw sh rep x wmsg)
     -- V*'s public files and laws (G item 6)
-    (hcm : VCommits zs Sk cmt) (hdec : VDecodes wmsg (fun _ _ a b => a = b) Sk msg)
+    (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)
     (hfull : VFull (flockInnerCL T CT A H E Lf cls regs sch).r Sk) :
     Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg :=
-  ⟨fun R ω t R₂ τ o h => hst R ω t R₂ τ o h fun r => ⟨halg R ω t R₂ τ o h r, hacc R ω t R₂ τ o h r⟩, hcm, hdec, hfull⟩
+  ⟨fun R ω t R₂ τ o h => hst R ω t R₂ τ o h fun r => ⟨halg R ω t R₂ τ o h r, hacc R ω t R₂ τ o h r⟩, hcm, hdec,
+    fun i hi j g hg _ => hfull i hi j g hg⟩
 
 end target
 

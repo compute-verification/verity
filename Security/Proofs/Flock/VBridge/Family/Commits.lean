@@ -151,7 +151,7 @@ registers the stages' commitments where its public files hold their `b ‖ c` (`
 theorem hCommits_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
     (hSk : F.Sk = skOf F.Vs own sel) (hcmt : F.cmt = cmtOf F.Vs bc) (hpub : F.PubCommits bc) : F.HCommits := by
-  intro i R ω t e he R₂ j pos hpos R'
+  intro i R ω t e he R₂ j _ pos hpos R'
   rcases pos with ⟨u, q⟩ | g
   · rw [hcmt]
     exact (vb_cs_inl (F.zs R ω t R₂ j) R' u q).trans
@@ -185,7 +185,7 @@ theorem vDecodesRead_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits
 strings. -/
 theorem hDecodes_of (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec) (hm : F.msg = msgOf F.Vs F.Sk dec) : F.HDecodes :=
-  vDecodes_of_vDecodesR (F.vDecodesRead_of dec hw hm)
+  F.vDecodesRead_of dec hw hm
 
 /-- **The stage selector names round commitments**: every value whose row holds a round's message is a round's
 commitment (`rec-c<k>` or `rec-top-L<l>`, `Flock.Registered.roundCommitment`, `Registered.lean:180-182`), the values

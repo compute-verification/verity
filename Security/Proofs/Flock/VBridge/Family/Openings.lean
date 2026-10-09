@@ -720,7 +720,7 @@ theorem vbridge_of_familyL (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
             (unitSums_of_opensAtL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ) F.sh _ _ F.sessO
               (fun ℓ j => F.unO ℓ r j) (fun ℓ j => cpO ℓ r j) (hu R ω t R₂ τ o h r))
             (F.coefsAre R ω t _ r) (F.consAre R ω t _ r) (hrd R ω t R₂ τ o h r)⟩),
-    hcm, hdec, hfull⟩
+    hcm, hdec, fun i hi j g hg _ => hfull i hi j g hg⟩
 
 /-- **VBridge G at V*'s statement family whose openings are read off the layers**: `vbridge_of_familyL` at `rows`
 and `acc` the layers' (`rowsOf`, `accOf`), `HUL` from `hUL_of` and `HReads` from `hReads_of`. -/
