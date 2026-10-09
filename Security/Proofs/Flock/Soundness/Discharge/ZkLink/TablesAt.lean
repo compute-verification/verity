@@ -156,7 +156,8 @@ variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 /-- **A draw `verify --zk` sets up**: a `DrawSetup` at `zkInputs I` (setupH accepts the draw under the `--zk` tags and
 coin tree), `Zk.schedule`'s schedule and `t_pad` at its `m`, and the facts of them the `--zk` table needs: the schedule's
 shape and `m`, `t_pad`'s padding, the inner code's length (below `2^64`, so `codeAt`'s points are distinct, and at least
-the pads message's), and its query positions' uniformity. -/
+the pads message's), and its query positions' uniformity; and the statement passes the `--zk` shape check, as
+`verify --zk` checks at setup (`Zk.shapeOk`). -/
 structure DrawSetupZK (S : Finset (Fin n)) (d : Lean.Json) where
   x : DrawSetup (zkInputs I) mPts S d
   sch : Flock.Schedule
@@ -172,6 +173,7 @@ structure DrawSetupZK (S : Finset (Fin n)) (d : Lean.Json) where
   hpos : ∀ D : Finset (Fin (innerN (layOf x.st sch))),
     prCoin (fun w => innerPos _ (lt_of_lt_of_le (by simp [Zk.K_PAD]) hL) w ∈ D) ≤
       (D.card : ℝ≥0∞) / innerN (layOf x.st sch)
+  hzk : Zk.shapeOk x.st = .ok ()
 
 variable {I mPts}
 
@@ -258,9 +260,10 @@ theorem drawSetup_of_setupH_g (ht : I.tags.typed = false) {st : Flock.Stmt}
   exact ⟨⟨st, h, D, hD, hS, hg, hblk, st.m, k0, l₀, l₁, rest, ext, hsch,
     by have := exec_fast100_ge hf; omega, hmPts⟩, rfl⟩
 
-/-- A `DrawSetup` at `zkInputs I` with `Zk.schedule`'s schedule at its `m` is a `DrawSetupZK`. -/
+/-- A `DrawSetup` at `zkInputs I` whose statement passes `Zk.shapeOk`, with `Zk.schedule`'s schedule at its `m`, is a
+`DrawSetupZK`. -/
 theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkExec.zkInputs I) mPts S d)
-    {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    (hzk : Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZK I mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
@@ -279,7 +282,7 @@ theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkE
     rw [layOf, hk']
     exact Nat.pow_dvd_pow 2 (by omega)
   exact ⟨⟨x, sch, tPad, hz, hshape, hmsch, hpad, hN, innerN_ge _,
-    fun D => prCoin_innerPos_le _ _ hd D⟩, rfl, rfl, rfl⟩
+    fun D => prCoin_innerPos_le _ _ hd D, hzk⟩, rfl, rfl, rfl⟩
 
 /-- A draw's `--zk` table is the same at every `DrawSetupZK` of it: setupH and `Zk.schedule` are functions. -/
 theorem tableZK_eq (y₁ y₂ : DrawSetupZK I mPts S d) : y₁.table = y₂.table := by
@@ -354,7 +357,7 @@ def TablesAtZKLive : Prop :=
 
 theorem tablesAtZK_live : TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) := by
   intro I ht dj S₀ y₀ wr hh hc1 hrec S R o hdraw hacc
-  obtain ⟨st, hst, -, hv⟩ := ZkExec.acceptsZK_one I _ hh hc1 hacc
+  obtain ⟨st, hst, hsh, hv⟩ := ZkExec.acceptsZK_one I _ hh hc1 hacc
   rw [(hrec S R o hacc).1] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := ZkExec.zk_verify_ok _ _ _ _ hv
   obtain ⟨hs, c, hz, -⟩ := hall 0 (by simp)
@@ -367,7 +370,7 @@ theorem tablesAtZK_live : TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) :=
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
   obtain ⟨x, rfl⟩ := drawSetup_of_setupH_g (I := ZkExec.zkInputs I) (S := S) ht' hst hf hD (hdraw.1 D hD)
     (hdraw.2 _ hst)
-  obtain ⟨y, rfl, rfl, rfl⟩ := drawSetupZK_of ht x hz'
+  obtain ⟨y, rfl, rfl, rfl⟩ := drawSetupZK_of ht x hsh hz'
   have hwf := setupH_wf hst
   refine ⟨y.x.st, y.sch, y.tPad, hwf.1, hwf.2, hst, hz', y, rfl, rfl, rfl, ?_, ?_⟩
   · show tableAtZK dj y₀ S = y.table

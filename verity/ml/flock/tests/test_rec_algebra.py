@@ -37,6 +37,10 @@ LEAN = HERE.parents[2] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the set was recorded under f5df3bbc's identity, which the unversioned name no longer is (test_lean_hidden_outputs.py)
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
+#: the fixture's unit reads two input groups, a form the soundness proof does not cover (verifier PROTOCOL.md §16.15), so
+#: `verify` refuses every session of it once every check has passed: this verdict is a pass, as `agree.py --lean-refuses`
+#: judges it
+PASSED = "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover"
 FLIP = 1 << 17
 
 #: a message element changed (by FLIP), and the residuals that move off zero when T is the inner verifier's own: 0 is the
@@ -323,8 +327,9 @@ def _write_session(d: Path, record: dict, proofs: list[bytes]) -> None:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_lean_verifier_rejects_exactly_the_mutations_with_a_nonzero_residual(session, tmp_path):
     """Each entry of MUTATIONS as a session (the proof's bytes and the round that retained them, with their digests), judged
-    by the Lean verifier of record: it accepts exactly the sessions whose residuals are all zero (the honest one, and a
-    changed last Ligerito message), and rejects each other one at the check of its first nonzero residual. It catches a
+    by the Lean verifier of record: exactly the sessions whose residuals are all zero (the honest one, and a changed last
+    Ligerito message) pass every check, so their verdict is the form's refusal (`PASSED`), and it rejects each other one at
+    the check of its first nonzero residual. It catches a
     reference that is zero where the inner verifier rejects, or that sees a check fail where the inner verifier sees none,
     which tests against the reference alone cannot; about 18 s a session, four at a time."""
     record, reps = session
@@ -356,6 +361,7 @@ def test_the_lean_verifier_rejects_exactly_the_mutations_with_a_nonzero_residual
             [v] = [json.loads(ln[8:]) for ln in out.splitlines() if ln.startswith("VERDICT ")]
             verdicts[c] = v
     for c, want in cases.items():
-        assert verdicts[c]["accepted"] == (want == []), (c, want, verdicts[c]["why"])
+        assert not verdicts[c]["accepted"], (c, want)
+        assert (verdicts[c]["why"] == PASSED) == (want == []), (c, want, verdicts[c]["why"])
         if want:
             assert verdicts[c]["why"].startswith(_reason(want[0], rep.shape.claims)), (c, want, verdicts[c]["why"])

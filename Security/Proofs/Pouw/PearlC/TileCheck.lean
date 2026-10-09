@@ -27,7 +27,7 @@ theorem TileCheck.computes_of (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : 
     (D : Layout → Prop) (hc : TC.ComputesCap P TR D) (hw : TC.ComputesWords P TR D) : TC.Computes P TR D := by
   intro U hU H s g hg c X hX
   rcases hw U hU H s g hg c X hX with h | h
-  · exact Or.inl ⟨hc U hU H s g hg c X hX, hX.2.2.2, h⟩
+  · exact Or.inl ⟨hc U hU H s g hg c X hX, hX.2.2.2.2, h⟩
   · exact Or.inr h
 
 theorem TileCheck.mem_of_computes (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S)

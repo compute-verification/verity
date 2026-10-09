@@ -30,7 +30,7 @@ WIDEN = bind(BC.Bf16ToF32)
 ONE_CALL = CompositeDefinition("TestOneCall", 1, ("FN",), lambda S: S.FN.signature(), lambda B, S, *args: B.call(S.FN, *args),
                                register=False)
 #: (And, Xor, Not gates, standalone program digest)
-PIN = (0, 0, 0, "39168eff727f5ef51d263a418e3473c7037d1f03e3c93afc8d9a219958f21eaf")
+PIN = (0, 0, 0, "4455f054cb3eecec9e611f77120ac07d4cca117bdf9ad07af18df7f0ea6ac01b0dbd68b9e3fa5d97e44b4c190470c5e0c61d9c455990627f5362e3704c21672a")
 
 
 def test_the_widening_is_pinned() -> None:

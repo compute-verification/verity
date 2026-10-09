@@ -1,7 +1,10 @@
 """Hidden outputs (PROTOCOL.md §16.13): the Lean verifier reads M0's hidden-output statements, `verity/flock-circuit` and
 `verity/flock-circuit/types`, as the Rust prover writes them, on its recorded CPU selftest sessions: flat RoPE (the unit
 returns its output), flat GEMM (a tail stage returns it, one BF16 word in a 64-word row), typed RoPE (a flat class) and typed
-GEMM (a template). Each public file holds only roots, hiding leaves and structure.
+GEMM (a template). Each public file holds only roots, hiding leaves and structure. Flat GEMM (its unit reads two input
+groups) and both typed sets are forms the soundness proof does not cover (§16.15), which `verify` refuses after every check
+has passed. No session has a draw, which `verify` refuses after that (D12). So the honest session gets the form's refusal
+(`REFUSED`), on flat RoPE the draw-less one (`DRAWLESS`), and each false statement the check that catches it.
 
 It is the one test in `check` of the default statements against the prover's sessions: check's agreement step replays only
 upstream's pinned builds, none of which has hidden outputs. So it catches a verifier that disagrees with the prover on the
@@ -34,6 +37,12 @@ SETS = {("flat", "rope-head"): "verity/flock-circuit@f5df3bbc+seed-injection",
         ("typed", "rope-head"): "verity/flock-circuit/types@f5df3bbc+seed-injection",
         ("typed", "gemm-coordinate"): "verity/flock-circuit/types@f5df3bbc+seed-injection"}
 CASES = {"honest": True, "output_claim_false": False, "output_row_committed_false": False, "digest_claim_false": False}
+DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+#: the sets whose form the soundness proof does not cover, and the reason the verifier refuses a case of them that passes
+#: every check for
+REFUSED = {("flat", "gemm-coordinate"): "a unit reading 2 input groups",
+           ("typed", "rope-head"): "verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement",
+           ("typed", "gemm-coordinate"): "verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement"}
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -73,7 +82,10 @@ def test_it_gives_the_provers_sessions_their_verdicts(store, form, name, tmp_pat
                             "--public", str(pub), *tables, "--session", str(s)], capture_output=True, text=True)
         [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
         got[case] = v
-    assert {c: v["accepted"] for c, v in got.items()} == CASES, {c: v["why"] for c, v in got.items()}
+    last = (f"refused: {REFUSED[form, name]}: a statement form the soundness proof does not cover" if (form, name) in REFUSED
+            else DRAWLESS)
+    assert not any(v["accepted"] for v in got.values())
+    assert {c: v["why"] == last for c, v in got.items()} == CASES, {c: v["why"] for c, v in got.items()}
     # each false statement is refused by the proof against its own public file, not by the session parameters
     assert all(not v["why"].startswith("S2") for c, v in got.items() if c != "honest"), {c: v["why"] for c, v in got.items()}
 
@@ -117,3 +129,31 @@ def test_a_block_with_no_vu_is_refused(store, tmp_path):
     p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit", str(bad),
                         "--public", str(d / "pub-4.bin")], capture_output=True, text=True)
     assert p.returncode == 1 and "vus_per_block is 0: a block of no VU" in p.stdout, (p.stdout, p.stderr)
+
+
+@pytest.mark.slow
+def test_a_block_of_three_vus_is_refused(store, tmp_path):
+    """`vus_per_block = 3` is refused as the circuit is read, though a tail returns the outputs (PROTOCOL.md §16.10, D9;
+    the Rust side is `circuit.rs`'s `a_block_of_three_vus_is_refused`): the Digest region's VU bits, `Nat.log2 3 = 1` here
+    and `trailing_zeros(3) = 0` in Rust, would pin VUs 0 and 1 here, VU 0 there, and VU 2 in neither. The statement is flat
+    GEMM's composed for three VUs a block, with its public file of three instances."""
+    pytest.importorskip("verity_numerical")
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    from verity_flock import circuit as FC
+    from verity_flock import ir_lower as IL
+
+    s = InputSet.open(generate(TM.parse_subcircuit_id("gemm-coordinate/k64/sm80-mma-bf16"), 3, 20260926, tmp_path)["path"])
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit, vus_per_block=3, statics=FC.set_statics(s))
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    assert meta["vus_per_block"] == 3 and meta["out_net"] != "unit" and low.units.cut
+    (tmp_path / "circuit.txt").write_text(text)
+    IL.write_tables(tmp_path / "tables")
+    FC.write(text, s, 0, 3, tmp_path / "inst-3.bin", tmp_path / "pub-3.bin", salt_key=b"fail-closed/vus-per-block-3")
+    p = subprocess.run([str(BIN), "statement", "--statement", SETS["flat", "gemm-coordinate"], "--circuit",
+                        str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub-3.bin"), "--tables",
+                        str(tmp_path / "tables")], capture_output=True, text=True)
+    assert p.returncode == 1 and "vus_per_block is not a power of two" in p.stdout, (p.stdout, p.stderr)

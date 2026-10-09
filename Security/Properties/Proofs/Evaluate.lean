@@ -62,7 +62,9 @@ end Scalar
 
 namespace Fp32
 
-theorem decodedCorresponds : DecodedCorresponds :=
+/-- `toCore` and `ofCore` are inverse to each other, so the `toCore` equalities say the two `Decoded` agree. -/
+theorem decodedCorresponds :
+    (∀ d, Decoded.ofCore (Decoded.toCore d) = d) ∧ ∀ d, Decoded.toCore (Decoded.ofCore d) = d :=
   ⟨fun d => by cases d <;> rfl, fun d => by cases d <;> rfl⟩
 
 theorem f32Nan : F32Nan := rfl
@@ -248,7 +250,12 @@ end Casts
 
 namespace TC
 
-theorem typesCorrespond : TypesCorrespond :=
+/-- Each `toCore` has the inverse `ofCore`, so the `toCore` equalities say the two pipelines, terms, values and classes agree. -/
+theorem typesCorrespond :
+    ((∀ p, Pipeline.ofCore (Pipeline.toCore p) = p) ∧ ∀ p, Pipeline.toCore (Pipeline.ofCore p) = p) ∧
+    ((∀ t, Term.ofCore (Term.toCore t) = t) ∧ ∀ t, Term.toCore (Term.ofCore t) = t) ∧
+    ((∀ v, Value.ofCore (Value.toCore v) = v) ∧ ∀ v, Value.toCore (Value.ofCore v) = v) ∧
+    ((∀ c, Cls.ofCore (Cls.toCore c) = c) ∧ ∀ c, Cls.toCore (Cls.ofCore c) = c) :=
   ⟨⟨fun _ => rfl, fun _ => rfl⟩, ⟨fun _ => rfl, fun _ => rfl⟩,
     ⟨fun v => by cases v <;> rfl, fun v => by cases v <;> rfl⟩, ⟨fun c => by cases c <;> rfl, fun c => by cases c <;> rfl⟩⟩
 

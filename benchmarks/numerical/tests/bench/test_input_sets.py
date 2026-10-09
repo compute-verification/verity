@@ -79,7 +79,7 @@ def test_synthetic_set_has_the_captured_layout(synthetic, template):
     sub = s.subcircuit
     assert sub.id == TM.subcircuit(template, **SMALL[template]).id and s.name == sub.set_name
     digests = s.provenance["program_digests"]
-    assert digests and all(len(v) == 64 for v in digests.values())
+    assert digests and all(len(v) == 128 for v in digests.values())
     rec = s.provenance["recipe"]
     assert rec["seed"] == 11 and rec["subcircuit"] == sub.id and rec["n"] == s.n == 6
 

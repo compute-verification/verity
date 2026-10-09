@@ -67,10 +67,6 @@ def Decoded.ofCore : Verity.Fp32.Decoded → Evaluate.Fp32.Decoded
   | .inf s => .inf s
   | .fin s m => .fin s m
 
-/-- `Evaluate.Fp32.Decoded` is `Verity.Fp32.Decoded`: `toCore` and `ofCore` are inverse to each other. -/
-def DecodedCorresponds : Prop :=
-  (∀ d, Decoded.ofCore (Decoded.toCore d) = d) ∧ ∀ d, Decoded.toCore (Decoded.ofCore d) = d
-
 def F32Nan : Prop := Evaluate.Fp32.F32_NAN = Verity.Fp32.F32_NAN
 def Bf16NanTorch : Prop := Evaluate.Fp32.BF16_NAN_TORCH = Verity.Fp32.BF16_NAN_TORCH
 def Bf16NanF2fp : Prop := Evaluate.Fp32.BF16_NAN_F2FP = Verity.Fp32.BF16_NAN_F2FP
@@ -191,13 +187,6 @@ def Cls.ofCore : Verity.TC.Spec.Cls → Cls
   | .inf => .inf
   | .zero => .zero
   | .finite => .finite
-
-/-- `Evaluate.TC.Spec`'s `Pipeline`, `Term`, `Value` and `Cls` are Security's: each `toCore` has the inverse `ofCore`. -/
-def TypesCorrespond : Prop :=
-  ((∀ p, Pipeline.ofCore (Pipeline.toCore p) = p) ∧ ∀ p, Pipeline.toCore (Pipeline.ofCore p) = p) ∧
-  ((∀ t, Term.ofCore (Term.toCore t) = t) ∧ ∀ t, Term.toCore (Term.ofCore t) = t) ∧
-  ((∀ v, Value.ofCore (Value.toCore v) = v) ∧ ∀ v, Value.toCore (Value.ofCore v) = v) ∧
-  ((∀ c, Cls.ofCore (Cls.toCore c) = c) ∧ ∀ c, Cls.toCore (Cls.ofCore c) = c)
 
 def BitLength : Prop := Evaluate.TC.Spec.bitLength = Verity.TC.bitLength
 def PipelineK : Prop := ∀ p, Evaluate.TC.Spec.Pipeline.k p = Verity.TC.Pipeline.k (Pipeline.toCore p)

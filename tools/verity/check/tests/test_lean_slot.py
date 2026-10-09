@@ -272,7 +272,38 @@ def test_check_s_lean_audit_takes_a_slot_only_when_it_will_audit_a_package(tmp_p
     (tmp_path / "lean-audit" / "kq.json").write_text("{}")
     assert check.lean_slot(cmd) == cmd                                                         # every pass reused
     assert check.lean_slot([*cmd, "--fresh"])[:len(check.LEAN_SLOT_WRAP)] == check.LEAN_SLOT_WRAP
-    monkeypatch.setattr(check.os, "execv", lambda f, argv: (_ for _ in ()).throw(Exec(argv)))
+    monkeypatch.setattr(check.os, "execve", lambda f, argv, env: (_ for _ in ()).throw(Exec(argv, env)))
     with pytest.raises(Exec) as e:
         check.main(["--lean-slot", *cmd])
-    assert e.value.args[0] == cmd
+    assert e.value.args[0] == cmd and e.value.args[1]["LEAN_SLOT_POOL"] == "check"
+
+
+def _audit_py():
+    s = importlib.util.spec_from_file_location("repo_lean_check_slot", ROOT / "tools" / "verity" / "lean" / "check.py")
+    m = importlib.util.module_from_spec(s)
+    s.loader.exec_module(m)
+    return m
+
+
+def test_the_lean_audit_run_by_hand_with_build_takes_a_slot_of_pool_audit(slots, monkeypatch):
+    """`tools/verity/lean/check.py --build` outside check and lean_changed: a full audit that took no slot overran the cap."""
+    audit = _audit_py()
+    monkeypatch.setenv("LEAN_SLOTS", str(slots / "lean-slots"))
+    held = [_hold(slots / "lean-audit-0.lock")]
+    fd = audit.lean_slot(ROOT)
+    assert os.environ.pop(LS.HELD) == "audit/1" and fd is not None
+    os.close(fd)
+    monkeypatch.setenv(LS.HELD, "check/0")
+    assert audit.lean_slot(ROOT) is None                                 # nested: check's step or lean_changed holds one
+    monkeypatch.delenv(LS.HELD)
+    (slots / "lean-slots").write_text("check 2\n")
+    with pytest.raises(RuntimeError):
+        audit.lean_slot(ROOT)                                            # neither `audit` nor `any`: refused, never run
+    assert audit.main(["--build", "--out", str(slots / "out"), str(slots)]) == 2
+    monkeypatch.setattr(audit, "LEAN_SLOTS", slots / "lean-slots")
+    with pytest.raises(RuntimeError, match="missing"):
+        audit.lean_slot(slots)                                           # a repository without lean_slot.py, on a capped node
+    monkeypatch.setattr(audit, "LEAN_SLOTS", slots / "absent")
+    assert audit.lean_slot(slots) is None                                # a laptop
+    for h in held:
+        os.close(h)

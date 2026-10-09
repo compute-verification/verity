@@ -25,8 +25,14 @@
 #ifdef P2_FAST
 #include "p2sq.cuh"
 #endif
+#if defined(P2_KEYS) && defined(P2_KEYS4)
+#error "P2_KEYS (v1's SHAKE256 keys) and P2_KEYS4 (v4's SHA-512 keys) are one or the other"
+#endif
 #ifdef P2_KEYS
 #include "p2keys.cuh"
+#endif
+#ifdef P2_KEYS4
+#include "p2keys4.cuh"
 #endif
 
 #ifdef __CUDA_ARCH__
@@ -247,6 +253,22 @@ extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32
   const uint32_t per = 32 * p2keys::WARPS;
   p2keys::keys_kernel<<<(count + per - 1) / per, per, 0, (cudaStream_t)stream>>>(mid, first, count, per_segment, (uint64_t *)k,
                                                                                   (uint64_t *)t);
+  return (int)cudaGetLastError();
+}
+#endif
+
+#ifdef P2_KEYS4
+// the key framing p2v1_keys expands (reference.keys, under reference.expand_prefix's 256-byte prefix)
+extern "C" int p2v1_keys_version() { return 4; }
+
+extern "C" int p2v1_keys(const uint8_t *prefix, int plen, uint64_t first, uint32_t count, uint64_t per_segment, void *k, void *t,
+                         void *stream) {
+  p2keys4::Mid mid;
+  if (!p2keys4::midstate(prefix, plen, mid)) return -1;
+  if (count == 0) return 0;
+  const uint64_t per = p2keys4::threads_per_purpose(count);
+  p2keys4::keys_kernel<<<(uint32_t)((2 * per + P2K4_TPB - 1) / P2K4_TPB), P2K4_TPB, 0, (cudaStream_t)stream>>>(
+      mid, first, count, per_segment, per, (uint64_t *)k, (uint64_t *)t);
   return (int)cudaGetLastError();
 }
 #endif

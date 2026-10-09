@@ -140,7 +140,8 @@ UNKEYED_PREFIX = "VERITY_SUITE_"
 RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
-AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "verity-core-composition", "verity-core-evaluate", "verity-core-firewall",
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
+              "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity-core-sampled-proofs",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest")

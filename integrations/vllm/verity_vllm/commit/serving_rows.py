@@ -44,6 +44,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
+from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
 
 from .hiding import HidingLeaves
@@ -456,7 +457,6 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     return {"pub": str(o / f"m{k}-pub-{n}.bin"), "inst": str(o / f"m{k}-inst-{n}.bin"), "circuit_sha512": head["circuit_sha512"], "class": cls}
 
 
-def program_sha512(program_dir: str | Path) -> str:
-    """SHA-512 over the canonical descriptor bytes core's ``program_digest`` hashes with SHA-256."""
-    desc = json.loads(gzip.open(Path(program_dir) / "descriptor.json.gz").read())
-    return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+def program_digest(program_dir: str | Path) -> str:
+    """Core's ``program_digest`` of the Build's ``descriptor.json.gz``."""
+    return codec.program_digest(json.loads(gzip.open(Path(program_dir) / "descriptor.json.gz").read()))
