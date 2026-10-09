@@ -551,7 +551,6 @@
   }
  },
  "reads_exempt": {
-  "Proofs.Pouw.PearlC.Gamma": "the non-vacuity witness ttOutPearlCWitness, which the assumptions table cites, reads its witness definitions; the other witnesses here left the lock in PoUW's lock reduction and stay as checked tests in security_proofs",
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
@@ -2445,99 +2444,11 @@
    "assumptions": [],
    "type_hash": "a7362ea74a7037fe8af6f390997f4cf697055cf410f55bde27c35526c4b2b7c4"
   },
-  "Pouw.Dimension.Embed.a1fpIff": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.Dimension.Embed.a1fpIff : Pouw.Dimension.Embed.A1fpIff"],
-   "assumptions": [],
-   "type_hash": "6865fa167278bf2f5c10d45c9d992ea8ca5e2b490120e8e58ed6221f853a1697"
-  },
-  "Pouw.Dimension.Embed.a1fpOnRangeGap": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.Dimension.Embed.a1fpOnRangeGap : Pouw.Dimension.Embed.A1fpOnRangeGap"],
-   "assumptions": [],
-   "type_hash": "3afa356bbc5edb6e62a59df68f9d16af087b035175782947fe1ce918a8965f18"
-  },
-  "Pouw.Dimension.Embed.ttNCPM4090NanGap": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.Dimension.Embed.ttNCPM4090NanGap : Pouw.Dimension.Embed.TTNCPM4090NanGap"],
-   "assumptions": [],
-   "type_hash": "8315bd5deecafc5b76af99162514caca771c38edd46baadf70f3f81f7056d095"
-  },
-  "Pouw.Dimension.Forest.a1CostQuadHolds": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.Dimension.Forest.a1CostQuadHolds : Pouw.Dimension.Forest.A1CostQuadHolds"],
-   "assumptions": [],
-   "type_hash": "fee0632201b97e529ba60ae72dcbc0acd340330c669949298b8c4f9182326264"
-  },
-  "Pouw.Dimension.H100.distinctWritesMH100": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.Dimension.H100.distinctWritesMH100 : Pouw.Dimension.H100.DistinctWritesMH100"],
-   "assumptions": [],
-   "type_hash": "56caae8cff0cd314a27e810edc10895966c4a7534f1aa847f8fad6305b0a2b6c"
-  },
-  "Pouw.Fp8Atom.H1T.Proofs.h1tDistinctLive": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.Fp8Atom.H1T.Proofs.h1tDistinctLive (hR : Pouw.Fp8Atom.H1T.H1TRunningWords) : Pouw.Fp8Atom.H1T.DistinctLiveH1T"
-   ],
-   "assumptions": ["Pouw.Fp8Atom.H1T.H1TRunningWords"],
-   "type_hash": "2ecbc66f74a5d89b42d8e23ed19b1e45799ac185d3f99f8c57928e8fdb6af8a8"
-  },
-  "Pouw.Fp8Atom.H1T.Proofs.h1tOneFlip": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.Fp8Atom.H1T.Proofs.h1tOneFlip : Pouw.Fp8Atom.H1T.H1TOneFlip"],
-   "assumptions": [],
-   "type_hash": "1f1f561a4615a27cb7283c0168f9b7e02f6545b687bb2e1afd092baa9bc70c08"
-  },
-  "Pouw.Fp8Atom.H1T.Proofs.h1tRunningOfDistinct": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.Fp8Atom.H1T.Proofs.h1tRunningOfDistinct (hD : Pouw.Fp8Atom.H1T.DistinctLiveH1T) : Pouw.Fp8Atom.H1T.H1TRunningWords"
-   ],
-   "assumptions": ["Pouw.Fp8Atom.H1T.DistinctLiveH1T"],
-   "type_hash": "8ffa3f52339d742184667f088377dd1c3e2872d964a6e9d58125456c253bedd1"
-  },
-  "Pouw.NCP.ChainProofs.int7Int32": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.NCP.ChainProofs.int7Int32 : Pouw.NCP.Chain.Int7Int32"],
-   "assumptions": [],
-   "type_hash": "40cbf02870ceb93e800abcd0c7a88da12ec8626b09da1fe80bf0b2887ba6d51c"
-  },
-  "Pouw.NCP.ChainProofs.wrapFinalOnlyInd": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.NCP.ChainProofs.wrapFinalOnlyInd : Pouw.NCP.Chain.WrapFinalOnlyInd"],
-   "assumptions": [],
-   "type_hash": "8b649ba2a02ee42791155775491757fd968218c7267914dbe8f0ce05e1b8f55f"
-  },
   "Pouw.NCP.GameProofs.gammaFromTTNCP": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.NCP.GameProofs.gammaFromTTNCP : Pouw.NCP.GamePinned.GammaFromTTNCP"],
    "assumptions": [],
    "type_hash": "e8d8ccd856c8cb29719d2714fdfe6713d8855da6e5e15d936521d8bd5fccbae6"
-  },
-  "Pouw.NCP.Proofs.wrap": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.NCP.Proofs.wrap : Pouw.NCP.Pinned.Wrap"],
-   "assumptions": [],
-   "type_hash": "9facf9f2ef83e1c8ea54e949e68da5a4550c03130e12c90c2605aac6f7ec3931"
-  },
-  "Pouw.NCP.RelationWitness.ncpWordFloorInd": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.NCP.RelationWitness.ncpWordFloorInd : Pouw.NCP.Relation.NCPWordFloorInd"],
-   "assumptions": [],
-   "type_hash": "f0ac2c6061cc88100a7cc1afc187a30ed47f7e9cc2882330240efc3e53a00915"
-  },
-  "Pouw.PearlC.gammaHidden_of_sampled_all": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.PearlC.gammaHidden_of_sampled_all {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]",
-    "  (CM : Pouw.PearlC.CostModel Q R S) (P : Pouw.PearlC.Protocol Q R S) (TR : Pouw.PearlC.TileRules Q R S)",
-    "  (D : Pouw.PearlC.Layout → Prop) (HA : Pouw.PearlC.HiddenAudit Q R S) (γ : Real) (η : Nat → Nat → Real)",
-    "  (ηzk : Nat → Real) (h : Pouw.PearlC.GγSampled CM P TR D γ η)",
-    "  (hzk : Pouw.PearlC.Assumptions.TileProofSoundAll P TR D HA ηzk) : Pouw.PearlC.GγHidden CM P TR D HA γ η ηzk"
-   ],
-   "assumptions": [],
-   "type_hash": "d2d98e210c98f4156bfe241bebae0964d87a0ac020cf2d925c6fd334673bd91d"
   },
   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -2671,74 +2582,6 @@
    "assumptions": [],
    "type_hash": "e93bbee92713b5b69adc87eed0a21be26519fb98fd49c63e94869b34619db632"
   },
-  "Pouw.PearlC.ttOutPearlCWitness": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.PearlC.ttOutPearlCWitness :",
-    "  And",
-    "    (Pouw.PearlC.AdmitsRef",
-    "      (Pouw.PearlC.witnessCM (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)))",
-    "      (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400))",
-    "      (Pouw.PearlC.pearlCDomain Pouw.PearlC.Params.pi) fun x => 0)",
-    "    (And",
-    "      (Pouw.PearlC.Assumptions.TTOutPearlC",
-    "        (Pouw.PearlC.witnessCM (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)))",
-    "        Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400))",
-    "      (And",
-    "        (Pouw.PearlC.Workload.InDomain",
-    "          (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400))",
-    "          (Pouw.PearlC.pearlCDomain Pouw.PearlC.Params.pi) Pouw.PearlC.witnessWorkload)",
-    "        (And",
-    "          (Pouw.PearlC.Workload.WeightsOK",
-    "            (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400))",
-    "            Pouw.PearlC.witnessWorkload)",
-    "          (And",
-    "            ((Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)).capOK",
-    "              (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload 0 (Pouw.PearlC.witnessAct 0))",
-    "            (Real.instLT.lt 0",
-    "              ((Finset.range Pouw.PearlC.witnessWorkload.layout.N).sum fun u =>",
-    "                (Pouw.PearlC.pearlCProtocol Pouw.PearlC.witnessSem Pouw.PearlC.Costs.adopted (1 / 400)).credit",
-    "                  (fun x => Unit.unit) Unit.unit Pouw.PearlC.witnessWorkload u (Pouw.PearlC.witnessAct u)))))))"
-   ],
-   "assumptions": [],
-   "type_hash": "e7d386bd3d6e42f4ea9fda7137833931c7a9acb4868534b3918aeaeb0252d328"
-  },
-  "Pouw.PearlC.ttOutRowSeedCode_of_ttOut": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.PearlC.ttOutRowSeedCode_of_ttOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]",
-    "  {CM : Pouw.PearlC.CostModel Q R S} {d : Pouw.PearlC.PearlCDevice} {sem sem' semC : Pouw.PearlC.PearlCSem Q R S}",
-    "  {π : Pouw.PearlC.Layout → Equiv Q Q} {ρ : Rat} (hTT : Pouw.PearlC.Assumptions.TTOutPearlCDevRev1 CM d sem ρ)",
-    "  (hN : Pouw.PearlC.RowSeedNoise sem sem') (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed)",
-    "  (hCM' : CM.RelabelClosed) (hd : d.RowLocal) (hρ : Rat.instLE.le ρ 1) (hadd : Rat.instLE.le 0 d.prices.add)",
-    "  (hbf : Rat.instLE.le 0 d.prices.bf16) :",
-    "  Pouw.PearlC.TTOutRowSeed CM (Pouw.PearlC.pearlCProtocolDevRev1RowCap d semC ρ) (Pouw.PearlC.pearlCDomainDev d)",
-    "    (1 / 400)"
-   ],
-   "assumptions": [],
-   "type_hash": "5d30ce51b53c627434c2e5a35376afce5f3ba85cd36b9bd2ef94b4698fb2d403"
-  },
-  "Pouw.PearlC.ttOutRowSeed_code": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.PearlC.ttOutRowSeed_code {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]",
-    "  {CM : Pouw.PearlC.CostModel Q R S} {d : Pouw.PearlC.PearlCDevice} {sem' semC : Pouw.PearlC.PearlCSem Q R S}",
-    "  {π : Pouw.PearlC.Layout → Equiv Q Q} {ρ : Rat} {D : Pouw.PearlC.Layout → Prop} {γ₀ : Real}",
-    "  (h : Pouw.PearlC.TTOutRowSeed CM (Pouw.PearlC.pearlCProtocolDevRev1RowCap d sem' ρ) D γ₀)",
-    "  (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.RelabelClosed) :",
-    "  Pouw.PearlC.TTOutRowSeed CM (Pouw.PearlC.pearlCProtocolDevRev1RowCap d semC ρ) D γ₀"
-   ],
-   "assumptions": [],
-   "type_hash": "cde5b175e711e993fa5706f60a1c9790ce7637b4917e4130830f021d003917cb"
-  },
-  "Pouw.SecurityProofs.AlignedExact.RegionCountGivenLe": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.AlignedExact.RegionCountGivenLe.{u_1, u_2} : Pouw.Guarantees.AlignedExact.RegionCountGivenLe"
-   ],
-   "assumptions": [],
-   "type_hash": "3a681787f19ce2463b1843bed9673dcfd81aa8388e13d1463838508efac6051c"
-  },
   "Pouw.SecurityProofs.Barrier.Generic": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Barrier.Generic : Pouw.Guarantees.Barrier.Generic"],
@@ -2750,18 +2593,6 @@
    "signature": ["Pouw.SecurityProofs.Dimension.A2WordsIff : Pouw.Guarantees.Dimension.A2WordsIff"],
    "assumptions": [],
    "type_hash": "d70e520ee34caac86538e78234078690949ecaa654bf5728b7fa184fdd70bee7"
-  },
-  "Pouw.SecurityProofs.Dimension.H100.H32LoopFree": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Dimension.H100.H32LoopFree : Pouw.Guarantees.Dimension.H100.H32LoopFree"],
-   "assumptions": [],
-   "type_hash": "51e17f50d673775b573768e266dea6b860fdb154b4a367a731662c462ddb0f9d"
-  },
-  "Pouw.SecurityProofs.Dimension.H100.H32Measured": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Dimension.H100.H32Measured : Pouw.Guarantees.Dimension.H100.H32Measured"],
-   "assumptions": [],
-   "type_hash": "ff16149ca431fc4fb18fb2c2c10ad301e18827f9fdb9d4d42e000cce101ec706"
   },
   "Pouw.SecurityProofs.EndToEnd": {
    "owner": "@compute-accounting",
@@ -2894,24 +2725,6 @@
    "signature": ["Pouw.SecurityProofs.NCP.YUChecked : Pouw.Guarantees.NCP.YUChecked"],
    "assumptions": [],
    "type_hash": "07e56fe9f88102f6281f1a4a536410aae27868252a8f1755aaf703c795446802"
-  },
-  "Pouw.SecurityProofs.PearlC.ChainCapFlaggedLe": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.ChainCapFlaggedLe : Pouw.Guarantees.PearlC.ChainCapFlaggedLe"],
-   "assumptions": [],
-   "type_hash": "cb3a1be4c8f98199dc9759131f381554e5f035c478cdd2cd4c7aa87da3daa180"
-  },
-  "Pouw.SecurityProofs.PearlC.DomainDevUnpromoted": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.DomainDevUnpromoted : Pouw.Guarantees.PearlC.DomainDevUnpromoted"],
-   "assumptions": [],
-   "type_hash": "569679a651cd14e7c0511c407d1b95911eeefa411714405aa17a3bec1b3adfe0"
-  },
-  "Pouw.SecurityProofs.PearlC.FragSkipSavingLe": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.FragSkipSavingLe : Pouw.Guarantees.PearlC.FragSkipSavingLe"],
-   "assumptions": [],
-   "type_hash": "0f3301df597483b60a4a1dfaf762f04c0e3dacb66790c8056fd34d0ce82bfb9f"
   },
   "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": {
    "owner": "@compute-accounting",
@@ -3253,12 +3066,6 @@
    "assumptions": [],
    "type_hash": "8a852a0fbce487aae23bf668ee488b971102910d6e08c667cdbb70c05e3466cf"
   },
-  "Pouw.SecurityProofs.PearlC.GammaUImpliesGamma": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.GammaUImpliesGamma : Pouw.Guarantees.PearlC.GammaUImpliesGamma"],
-   "assumptions": [],
-   "type_hash": "b7356d1bd4292d7a51333e242bd416d08f63e3c239c0309ed324f9ad112998a3"
-  },
   "Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GammaUOnlySm120Rev1_8192 : Pouw.Guarantees.PearlC.GammaUOnlySm120Rev1_8192"],
@@ -3436,63 +3243,11 @@
    "assumptions": [],
    "type_hash": "6ee5dc9229274fc71f39aaccd8980b0237c45f7ee6a9a074b3beabd25cf36469"
   },
-  "Pouw.SecurityProofs.PearlC.TTOutPearlCDevCapAnti": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.TTOutPearlCDevCapAnti : Pouw.Guarantees.PearlC.TTOutPearlCDevCapAnti"],
-   "assumptions": [],
-   "type_hash": "6e817bcedd9322de4c41e25c18a46a6976b5ff1de34e8f19dfaca29f040fac98"
-  },
-  "Pouw.SecurityProofs.PearlC.TTOutPearlCDevChainCapOfCap": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.PearlC.TTOutPearlCDevChainCapOfCap : Pouw.Guarantees.PearlC.TTOutPearlCDevChainCapOfCap"
-   ],
-   "assumptions": [],
-   "type_hash": "bb8c5e3799b715484cb16557d06d3d751b26f8e422ca481e05006abe6fd5426c"
-  },
-  "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1CapAnti": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1CapAnti : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1CapAnti"
-   ],
-   "assumptions": [],
-   "type_hash": "deb5b890bc1086c80bceb2d0694c454dc1c392b09340ad6187d753f71c5e5ee8"
-  },
-  "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfUOnly": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.PearlC.TTOutPearlCDevRev1OfUOnly : Pouw.Guarantees.PearlC.TTOutPearlCDevRev1OfUOnly"
-   ],
-   "assumptions": [],
-   "type_hash": "8fbb55edfacb277fb71f6ecfc4c6417a42e282b04127cf279f0cec55fd74139d"
-  },
   "Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut : Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut"],
    "assumptions": [],
    "type_hash": "4376d1b7244afc0e6add64629503afb09686c3886a87b15a03da5d634c2786aa"
-  },
-  "Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.PearlC.TTOutRowSeedSkipClass : Pouw.Guarantees.PearlC.TTOutRowSeedSkipClass"],
-   "assumptions": [],
-   "type_hash": "7d0ea893b5e0df7c5c8ebcfdd90e050895803e4af968e4760ccba16a85905695"
-  },
-  "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.PearlC.TTOutTilePearlCDevChainCapOfCap : Pouw.Guarantees.PearlC.TTOutTilePearlCDevChainCapOfCap"
-   ],
-   "assumptions": [],
-   "type_hash": "d391b64f2d51e14267986916aa3757cf43161fb557311a100ed02485e5b4d796"
-  },
-  "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.PearlC.TTOutTileRowSeedOfTTOutTile : Pouw.Guarantees.PearlC.TTOutTileRowSeedOfTTOutTile"
-   ],
-   "assumptions": [],
-   "type_hash": "0bcb8659637b845cc57e38ca30dcc285989ec9ad108ddbd6832a23df70d6ede7"
   },
   "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
    "owner": "@compute-accounting",
@@ -3512,196 +3267,11 @@
    "assumptions": [],
    "type_hash": "e6732e29262cf85d911761ff4fe2600b68d006d5f040ac74e4c98ca358d8e8f5"
   },
-  "Pouw.SecurityProofs.TileBound.Bf16OpenAt8": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Bf16OpenAt8 : Pouw.Guarantees.TileBound.Bf16OpenAt8"],
-   "assumptions": [],
-   "type_hash": "2d0bc4524d35a8ded4689a562e5b592c7b99cb58ac629562fffe3ca5cdf0bbf2"
-  },
-  "Pouw.SecurityProofs.TileBound.Bf16PaysIff": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Bf16PaysIff : Pouw.Guarantees.TileBound.Bf16PaysIff"],
-   "assumptions": [],
-   "type_hash": "f2348cee543ef64e54d4c0a9a72ceec5cb07ff870b2e0ffe5e95186c564bd111"
-  },
-  "Pouw.SecurityProofs.TileBound.Bf16RegionOfPays": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Bf16RegionOfPays : Pouw.Guarantees.TileBound.Bf16RegionOfPays"],
-   "assumptions": [],
-   "type_hash": "3cea84f9abad3fd9209b495e914956da7335498b3b5cedea15c29e5a8bab46f0"
-  },
-  "Pouw.SecurityProofs.TileBound.BilinSupport": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.BilinSupport.{u_1, u_2, u_3} : Pouw.Guarantees.TileBound.BilinSupport"],
-   "assumptions": [],
-   "type_hash": "b9acb71b37619d32a5e4f1ebf3c06e9c0fdae23014d29e933f5146b25229fc1f"
-  },
-  "Pouw.SecurityProofs.TileBound.BlockCount": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.BlockCount.{u_1, u_2, u_3} : Pouw.Guarantees.TileBound.BlockCount"],
-   "assumptions": [],
-   "type_hash": "29ec2d2d590b45bc116cb62ce5575bd9e63d0e0f5f294976f2d74025c739c634"
-  },
-  "Pouw.SecurityProofs.TileBound.CostGe": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.CostGe.{u_1, u_2, u_3, u_4} : Pouw.Guarantees.TileBound.CostGe"],
-   "assumptions": [],
-   "type_hash": "c5caa29d238ba5f11791aa9eb7efa311123078a29517cf17816913d370ebe0ee"
-  },
-  "Pouw.SecurityProofs.TileBound.CostGe8": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.CostGe8.{u_1, u_2, u_3, u_4} : Pouw.Guarantees.TileBound.CostGe8"],
-   "assumptions": [],
-   "type_hash": "c14796009ab8a223a8259f5ed51ead1d9a5fcbe33c72c2137e235991ed2dc8cd"
-  },
-  "Pouw.SecurityProofs.TileBound.CostGeSupport": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.TileBound.CostGeSupport.{u_1, u_2, u_3, u_4} : Pouw.Guarantees.TileBound.CostGeSupport"
-   ],
-   "assumptions": [],
-   "type_hash": "5dd30d84759e43495fe7d6437f9846d19e19bca0d383acd14492c094531378d2"
-  },
-  "Pouw.SecurityProofs.TileBound.CostGeSupportAt": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.TileBound.CostGeSupportAt.{u_1, u_2, u_3, u_4} : Pouw.Guarantees.TileBound.CostGeSupportAt"
-   ],
-   "assumptions": [],
-   "type_hash": "0f74f5199f3ffa99e9ab1cac4a7672c6ad3c551e7e0740a858f7d0f6c84d8adb"
-  },
-  "Pouw.SecurityProofs.TileBound.CrossOnOfEval": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.CrossOnOfEval.{u_1, u_2} : Pouw.Guarantees.TileBound.CrossOnOfEval"],
-   "assumptions": [],
-   "type_hash": "720b44cf1f9e85c8a5d9c20eba9c0783b4c80e0d67ce093a108928a45debc0ee"
-  },
-  "Pouw.SecurityProofs.TileBound.CrossXCount": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.CrossXCount.{u_1, u_2, u_3} : Pouw.Guarantees.TileBound.CrossXCount"],
-   "assumptions": [],
-   "type_hash": "35d4d8f321801886dd7a6b39dcadeed1cae33ee2b2d7d29cbb35bdc82650c350"
-  },
-  "Pouw.SecurityProofs.TileBound.CrossYCount": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.CrossYCount.{u_1, u_2, u_4} : Pouw.Guarantees.TileBound.CrossYCount"],
-   "assumptions": [],
-   "type_hash": "6802e6a6283d0e8dedaa1cfcec6443f5af77a52ba7f35eb83d6e3aee7b07f69e"
-  },
-  "Pouw.SecurityProofs.TileBound.Fmt8ClosedIff": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Fmt8ClosedIff : Pouw.Guarantees.TileBound.Fmt8ClosedIff"],
-   "assumptions": [],
-   "type_hash": "02b12a241b0f6a43ed98ff103b6e15c6efbab12cca4a32967ceb316f779a1831"
-  },
-  "Pouw.SecurityProofs.TileBound.FmtClosedIff": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.FmtClosedIff : Pouw.Guarantees.TileBound.FmtClosedIff"],
-   "assumptions": [],
-   "type_hash": "618dd579edb42b0082986e54ea0ca6b4b530b1c76b3196bac64713f0c128cc2c"
-  },
-  "Pouw.SecurityProofs.TileBound.Fp32ClosedUpto": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Fp32ClosedUpto : Pouw.Guarantees.TileBound.Fp32ClosedUpto"],
-   "assumptions": [],
-   "type_hash": "66a232bc5ec735f8f96098d1c8a0d395ecd5eb58949ccdce66d113030111764e"
-  },
-  "Pouw.SecurityProofs.TileBound.Fp32OpenAt": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Fp32OpenAt : Pouw.Guarantees.TileBound.Fp32OpenAt"],
-   "assumptions": [],
-   "type_hash": "30d081a53528e549584a55bf8cbbc12738dc9ff14782889e963959a045f7358b"
-  },
-  "Pouw.SecurityProofs.TileBound.Fp32OpenAt8": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Fp32OpenAt8 : Pouw.Guarantees.TileBound.Fp32OpenAt8"],
-   "assumptions": [],
-   "type_hash": "bd531fc586b82ea17dd09d1bd3b627330ac88b2c990acd6652eec7cffa3155b2"
-  },
-  "Pouw.SecurityProofs.TileBound.Fp32RegionOfPays": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Fp32RegionOfPays : Pouw.Guarantees.TileBound.Fp32RegionOfPays"],
-   "assumptions": [],
-   "type_hash": "6e16ef478ea09f3d5a244f4bd1436d8e938d10583098d2549204c4b8e8a18d8f"
-  },
-  "Pouw.SecurityProofs.TileBound.NLiveAll": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.NLiveAll : Pouw.Guarantees.TileBound.NLiveAll"],
-   "assumptions": [],
-   "type_hash": "d87d6e321e34e81ed38549103b9d1d5ac21d6931a07a6688f383669769e90790"
-  },
-  "Pouw.SecurityProofs.TileBound.OpenFp32": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.OpenFp32 : Pouw.Guarantees.TileBound.OpenFp32"],
-   "assumptions": [],
-   "type_hash": "db8b6665b2a2bb4c1da623d81dbe66e1e9753ae075d1e38629c4c4e073e43cbe"
-  },
-  "Pouw.SecurityProofs.TileBound.OpenTf32": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.OpenTf32 : Pouw.Guarantees.TileBound.OpenTf32"],
-   "assumptions": [],
-   "type_hash": "06419ceca0087a19b37809925c4c677c90288d56a506b961223108b099723a64"
-  },
-  "Pouw.SecurityProofs.TileBound.QuadSupport": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.QuadSupport.{u_1, u_2, u_3, u_4} : Pouw.Guarantees.TileBound.QuadSupport"],
-   "assumptions": [],
-   "type_hash": "512b97786ca284e27b572c4da7baa6d9c1d4d536c66e2201432e85bdc7e3a949"
-  },
-  "Pouw.SecurityProofs.TileBound.Tf32ClosedUpto": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Tf32ClosedUpto : Pouw.Guarantees.TileBound.Tf32ClosedUpto"],
-   "assumptions": [],
-   "type_hash": "6ceddc5c87cda269ce1bdbe610f8327c141b1ac792a2a5173a17264c9e9ba5b8"
-  },
-  "Pouw.SecurityProofs.TileBound.Tf32OpenAt": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Tf32OpenAt : Pouw.Guarantees.TileBound.Tf32OpenAt"],
-   "assumptions": [],
-   "type_hash": "70fe5baa4722d50343848344fe210e0beba8e11e5a31065f10f1c52b76f91c88"
-  },
-  "Pouw.SecurityProofs.TileBound.Tf32OpenAt8": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Tf32OpenAt8 : Pouw.Guarantees.TileBound.Tf32OpenAt8"],
-   "assumptions": [],
-   "type_hash": "98b6b2256b74edcd6366ddc52f9e426a840778251f7515fcaa1dba635dd84638"
-  },
-  "Pouw.SecurityProofs.TileBound.Tf32RegionOfPays": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.Tf32RegionOfPays : Pouw.Guarantees.TileBound.Tf32RegionOfPays"],
-   "assumptions": [],
-   "type_hash": "a4e921cbde04b45a9c3bf5cb3767e63ae488b5cc2aa6b9ed64f09db95752847a"
-  },
-  "Pouw.SecurityProofs.TileBound.TileCostGe": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.TileCostGe.{u_1, u_3} : Pouw.Guarantees.TileBound.TileCostGe"],
-   "assumptions": [],
-   "type_hash": "182d7c8e283334afb7744ff6f053525d78a7b58ae40d3adac97798d709c73d21"
-  },
-  "Pouw.SecurityProofs.TileBound.TileCount": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.TileBound.TileCount.{u_1, u_3} : Pouw.Guarantees.TileBound.TileCount"],
-   "assumptions": [],
-   "type_hash": "d0850deb9458d9bb03fe3fa8e2bdd574d5cfb53241c635fffde4230782676593"
-  },
   "Pouw.SecurityProofs.WorkWeightedSampling": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Pouw.TileBound.support_admits_open": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.TileBound.support_admits_open {f : Pouw.TileBound.Fmt} {s : Nat}",
-    "  (hf : Rat.instLT.lt (Pouw.TileBound.price f) (instHMul.hMul s.cast (Pouw.TileBound.price Pouw.TileBound.Fmt.fp4)))",
-    "  (M : Nat) (hM : instLTNat.lt 0 M) :",
-    "  And (instLENat.le (instHMul.hMul 2 (instHMul.hMul s M)) (Finset.univ.sum fun _t => instHAdd.hAdd s s))",
-    "    (Rat.instLT.lt (Finset.univ.sum fun _t => Pouw.TileBound.price f)",
-    "      (instHMul.hMul (Pouw.TileBound.price Pouw.TileBound.Fmt.fp4) (instHMul.hMul s M).cast))"
-   ],
-   "assumptions": [],
-   "type_hash": "e1844cd106692dbebbcca6b7fd74f893ac002495c349f323a0d57a292acb1be7"
   }
  },
  "reads": {
