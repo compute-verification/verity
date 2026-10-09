@@ -30,6 +30,7 @@ import json
 import os
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 
 SKIP = {"check": {"lean-deps", "lean-changed", "lean-records"}, "tests": {"logs", "durations.json"}}
@@ -143,13 +144,19 @@ def import_(pack: Path) -> tuple[int, int]:
 def combine(packs: list[Path], out: Path) -> int:
     """Write one pack at `out` holding every entry of ``packs``, the first pack's where two hold one path (an entry's path is its
     key, so both say the same); the number written.  A pack `import` would refuse is refused here too, and nothing is written."""
-    found: dict[str, bytes] = {}
-    for pack in packs:
-        with tarfile.open(pack, "r:gz") as tar:
-            for m in _members(tar):
-                if m.name not in found:
-                    found[m.name] = tar.extractfile(m).read()
-    return _write(out, sorted(found.items()))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    # each entry is staged on disk, never held: a dozen recorded checks' packs exceed an agent VM's memory together
+    with tempfile.TemporaryDirectory(dir=out.parent, prefix=out.name + ".") as tmp:
+        names: set[str] = set()
+        for pack in packs:
+            with tarfile.open(pack, "r:gz") as tar:
+                for m in _members(tar):
+                    if m.name not in names:
+                        names.add(m.name)
+                        dst = Path(tmp) / m.name
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        dst.write_bytes(tar.extractfile(m).read())
+        return _write(out, ((k, (Path(tmp) / k).read_bytes()) for k in sorted(names)))
 
 
 def main(argv: list[str]) -> int:
