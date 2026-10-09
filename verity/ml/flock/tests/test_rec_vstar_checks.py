@@ -3,7 +3,8 @@ the verifier restates them, are the ones `rec_vstage.stage` writes (each level's
 openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over two reps, `rec_shape.outer`'s), and a
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
-verifier's own inner shape (`--rec-inner`). The honest sessions themselves are replayed on the pod: their statements are
+verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
+byte the one V* writes for its statement by the byte it differs at. The honest sessions themselves are replayed on the pod: their statements are
 hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
 from __future__ import annotations
 
