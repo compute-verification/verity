@@ -33,6 +33,7 @@ import Flock.HmRow
 import Flock.ProvedScope
 import Flock.Registered
 import Flock.Keccak
+import Flock.RecCoins
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
