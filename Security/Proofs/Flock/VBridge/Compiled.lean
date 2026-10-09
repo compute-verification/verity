@@ -8,8 +8,9 @@ import Proofs.Flock.VBridge.Algebra.Lincheck
 # VBridge G: `Flock.Assumptions.VBridge` at the compiled inner protocol
 
 `vbridge_compiled` concludes `Flock.Assumptions.VBridge` with the inner protocol C-Flock's compiled table
-(`flockInnerCL`: round messages are the level-0 cap, each round's proof messages and Merkle tops, then the openings with
-their salts, which is what the firewall commits and V* registers). Its hypotheses are the pieces still open, each a
+(`flockInnerCL`: round messages are the level-0 cap, each round's proof messages and Merkle tops with the prover's
+choices of rep, then, in the round after the last coin, the openings with their salts, which is what the firewall
+commits and V* registers). Its hypotheses are the pieces still open, each a
 statement about V* or the verifier, so that each can be proved on its own against this interface:
 
 * `AlgebraDecodes` (G items 1–3): at an accepted outer proof whose layers are all `Good`, each rep's values in V*'s
