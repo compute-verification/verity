@@ -5,7 +5,8 @@ import Properties.SampledProofs
 Each check of `OneStage.check` is a pipeline of failure codes (`addCode`, `push`) written with `let mut` and `if`, which
 `do` elaborates into join points. A proof lifts the join points out (`extract_lets`), moves each `if` into the argument of
 the join point it calls (`jp_ite`, `jp_ite'`), unfolds the join points one at a time, and reads the codes' emptiness off
-the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`).
+the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts and
+that it accepts all of it; `acceptMeans` is its first half and `acceptMeans_complete` the converse.
 -/
 
 open Lean (Json)
@@ -902,8 +903,13 @@ theorem checkDraw_nil (draw pop law : Json) : Draw.checkDraw draw pop law = #[] 
 theorem registered_law {v : Registration.Verifier} {rec law : Json} (h : Registered v rec law) :
     Draw.derive v.program v.query v.law v.workTable = .ok law := h.1.2.2.2.1
 
-theorem acceptMeans : AcceptMeans := by
-  intro p c e pub prof
+/-- The check accepts exactly what `AcceptMeans` says it accepts. -/
+theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
+    OneStage.check p c e = .accept pub prof ↔
+      ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
+        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+        pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
   unfold OneStage.check
   simp only []
   by_cases h1 : Registration.check c.record p.verifier = #[]
@@ -968,6 +974,18 @@ theorem acceptMeans : AcceptMeans := by
     rintro ⟨law', d', n', hreg', -⟩
     exact h1 ((registration_nil _ _).2 ⟨law', hreg'⟩)
 
+theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
+
+/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a draw of the agreed law over the
+registered population, its units proved and served as drawn, and verdicts that accept, is accepted, publishing
+`publicOf` and the profile `profileOf`. -/
+theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat)
+    (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)
+    (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
+    (hn : nat? (getD c.record "population") = some n) :
+    OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
+  (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
+
 theorem digestIsRecord's : DigestIsRecord's := by
   intro b c h
   unfold OneStage.commitmentOf at h
@@ -984,7 +1002,7 @@ theorem digestIsRecord's : DigestIsRecord's := by
 
 theorem bernoulliBoundsNothing : BernoulliBoundsNothing := by
   intro p c e pub prof r h hl
-  obtain ⟨law, d, n, -, -, -, -, -, -, rfl, rfl⟩ := (acceptMeans p c e pub prof).1 h
+  obtain ⟨law, d, n, -, -, -, -, -, -, rfl, rfl⟩ := acceptMeans p c e pub prof h
   obtain ⟨l, hl, hd⟩ := hl
   simp only [profileOf, List.mem_toArray, List.mem_singleton] at hl
   subst hl

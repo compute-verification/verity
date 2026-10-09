@@ -1052,6 +1052,18 @@
    "Properties.Pouw.Window.publicItems_eq": {
     "function": "PouwWindow.publicItems",
     "outcome": "none"
+   },
+   "Properties.SampledProofs.acceptMeans": {
+    "function": "SampledProofs.OneStage.check",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.bernoulliBoundsNothing": {
+    "function": "SampledProofs.OneStage.check",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.digestIsRecord's": {
+    "function": "SampledProofs.OneStage.commitmentOf",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -1591,7 +1603,7 @@
    "definitions": {
     "Verity.Declaration": "38f50370a42a6c7f146e8c556c0a240cde4cc1f8e025e5357cd49a5ae354f56f",
     "Verity.Declaration.D": "4796f04f2ae9193027263ff5a3e82a079e0104c069845088e0b6666b007fc552",
-    "Verity.Declaration.\u03b8": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
+    "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
    "guarantees": [
     "NciCheck.Properties.SecurityProofs.Reports",

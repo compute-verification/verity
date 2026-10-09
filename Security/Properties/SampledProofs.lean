@@ -5,9 +5,9 @@ import SampledProofs.OneStage
 
 The property of the executable audit (`verity/core/service/sampled_proofs/`, the port of `one_stage.audit.audit_record`
 with `registration.check` before it), stated against `OneStage.check` as it runs, for every input of the types its
-decoders produce. It takes no premise: the check is a function of its three inputs, and `AcceptMeans` says which.
+decoders produce. It takes no premise: the check is a function of its three inputs, and `AcceptMeans` says what it accepts.
 
-`AcceptMeans`: the check accepts exactly when
+`AcceptMeans`: what the check accepts is a commitment and evidence for which
 
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
@@ -23,7 +23,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * the law has a profile's draw and the population is a natural number;
 
 and it then publishes the drawn and proved units with the exact bounds at δ (`publicOf`), and the profile of one level
-`unit`, the partition's units, drawn by the law at δ (`profileOf`).
+`unit`, the partition's units, drawn by the law at δ (`profileOf`). That the check accepts every such commitment and
+evidence is completeness, `Properties.SampledProofs.acceptMeans_complete`.
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
 as `Registration.digest` of the record it decodes (`DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
@@ -274,14 +275,14 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : 
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
     delta := p.delta, drawn := #[(Record.LEVEL, (drawnNats e.draw).size)] }
 
-/-- The check accepts exactly when the registration keeps R1–R7 with `law` the verifier's agreed law as derived, the draw
-is a draw of `law` over the registered population, the units were proved and served as drawn under the registered roots
-and values with the receipt naming the commitment's digest, and the verdicts accept; `law` then has a profile's draw `d`
+/-- What the check accepts: the registration keeps R1–R7 with `law` the verifier's agreed law as derived, the draw is a
+draw of `law` over the registered population, the units were proved and served as drawn under the registered roots and
+values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's draw `d`
 (`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
 the profile `profileOf`. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
-    OneStage.check p c e = .accept pub prof ↔
+    OneStage.check p c e = .accept pub prof →
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
         UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
