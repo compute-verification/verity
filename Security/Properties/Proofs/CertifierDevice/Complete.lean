@@ -164,4 +164,88 @@ theorem completeRows_proof : CompleteRows := by
     rfl
   · rfl
 
+/-! ## Honest timing -/
+
+/-- **Every egress bucket the shaper has passed ran**: an egress tick of bucket `t` is among the first `N` events if the
+shaper's `t` after them is past `t`. -/
+theorem egressAt_of_lt {c : Config} {tr : List Event} {N : Nat} (hN : N ≤ tr.length) {t : Nat}
+    (ht : t < (pre c tr N).shaper.t) : ∃ m b', m < N ∧ EgressAt c tr m t b' := by
+  have hex : ∃ i, t < (pre c tr i).shaper.t := ⟨N, ht⟩
+  have hi : t < (pre c tr (Nat.find hex)).shaper.t := Nat.find_spec hex
+  have hle : Nat.find hex ≤ N := Nat.find_min' hex ht
+  have h0 : Nat.find hex ≠ 0 := by
+    intro h
+    rw [h] at hi
+    simp [pre, after, init_t] at hi
+  obtain ⟨m, hm⟩ : ∃ m, Nat.find hex = m + 1 := ⟨Nat.find hex - 1, by omega⟩
+  have hnot : ¬ t < (pre c tr m).shaper.t := Nat.find_min hex (by omega)
+  rw [hm] at hi hle
+  have hm' : m < tr.length := by omega
+  have hs := t_succ c tr m hm'
+  unfold run at hs
+  split at hs
+  · rename_i hv
+    obtain ⟨hv1, hv2⟩ := hv
+    have htm : (pre c tr m).shaper.t = t := by omega
+    rw [← htm]
+    cases he : tr[m] with
+    | tick g now b' =>
+      cases g
+      · exact ⟨m, b', by omega, egressAt_of hm' he hv2⟩
+      · rw [he] at hv1; simp [tickView] at hv1
+    | _ => rw [he] at hv1; simp [tickView] at hv1
+  · omega
+
+/-- **Honest timing from complete windows.** If every egress tick's window closes with a complete record, every frame
+the shaper handed was handed at its handing bucket under the syncs it declared by the trace's end. -/
+theorem hands_honest {c : Config} {tr : List Event}
+    (hall : ∀ m t b', EgressAt c tr m t b' → ∃ n k b, EgressAt c tr n k b ∧ (k + 1) % c.egress.buckets = 0 ∧
+      t / c.egress.buckets = k / c.egress.buckets ∧ statusOf c tr (k / c.egress.buckets) = .complete) :
+    ∀ m ≤ tr.length, List.Forall₂ (· = ·)
+      (hlist c.egress.buckets (pre c tr tr.length).shaper.syncs (handed (init c) (tr.take m)))
+      ((handed (init c) (tr.take m)).map Prod.snd) := by
+  intro m hm
+  induction m with
+  | zero => simp [hlist, hfrom, NetworkCertifier.handingFrom, handed]
+  | succ m ih =>
+    have hm' : m < tr.length := by omega
+    have ih := ih (by omega)
+    have hi := hinv c tr (N := tr.length) le_rfl m (by omega)
+    rw [handed_take_succ c tr m hm']
+    rw [hlist, List.map_append, hfrom_append, ← hi.h, List.map_append]
+    refine forall₂_append ih ?_
+    have hgm := (prefix_good c tr m).1
+    by_cases hl : ∃ now b', tr[m] = .tick .egress now b' ∧ (pre c tr m).shaper.t < horizon c
+    · obtain ⟨now', b', he', ht⟩ := hl
+      have hr := egressMid_rel (pre c tr m) now' b'
+      have hgs := hgm.shaper.rel hr
+      rw [he', handedAt_egress hgm ht]
+      simp only [List.map_map, Function.comp_def]
+      have hEm := egressAt_of hm' he' ht
+      obtain ⟨n, k, b, hE, hc, hwin, hso⟩ := hall _ _ _ hEm
+      have htk : (pre c tr m).shaper.t ≤ k := by
+        obtain ⟨hT0, -, hkl⟩ := mod_last hc
+        have h1 := Nat.div_add_mod (pre c tr m).shaper.t c.egress.buckets
+        have h2 := Nat.mod_lt (pre c tr m).shaper.t hT0
+        rw [hwin, Nat.mul_comm] at h1
+        omega
+      have hcl := clean_of_complete hE hc hso hEm he' htk hwin
+      have hS : Extends (pre c tr tr.length).shaper.syncs (egressMid (pre c tr m) now' b').tick.1.syncs := by
+        have := pre_extends c tr (m := m + 1) (N := tr.length) (by omega) le_rfl
+        rw [pre_succ c tr m hm', he'] at this
+        obtain ⟨l, hl⟩ := step_egress_shaper hgm ht (now := now') (backlog := b')
+        rw [hl] at this
+        exact this
+      obtain ⟨-, -, th3⟩ := tick_hand _ hgs _ hS
+      rw [hr.2.2.2.2.1, hr.2.1] at th3
+      refine forall₂_const _ _ _ (by rw [hfrom_length, List.length_map]) fun y hy => ?_
+      obtain ⟨h1, h2⟩ := th3 y hy
+      by_contra hne
+      exact (h2 (by omega)).1 hcl
+    · obtain ⟨q, -⟩ := step_quiet hgm tr[m] (by
+        rintro ⟨now, b', he, ht⟩
+        exact hl ⟨now, b', he, ht⟩)
+      rw [handedAt_quiet q.2.1.2.2.1]
+      simp [hfrom, NetworkCertifier.handingFrom]
+
 end Properties.CertifierDevice.Proofs
