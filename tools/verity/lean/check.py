@@ -170,7 +170,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
@@ -1030,6 +1030,166 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     return out, fails
 
 
+#: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
+#: always returns, whose property takes no such hypothesis, only the input
+OUTCOMES = ("accept", "undecided", "reject", "none")
+
+#: what a `shape.frozen` reason starts with (`restatable: …`, `frozen (hash): …`): a guarantee that a restatement makes fit,
+#: one frozen on a question still open, one leaving the list (a lemma, a completeness theorem, one resting on a falsified
+#: premise), and a spec statement that no guarantee states
+CATEGORIES = ("restatable", "frozen", "lemma", "completeness", "falsified", "unstated")
+
+#: a `shape.conjectures` entry's status: an open conjecture is a premise of the properties that rest on it, a falsified
+#: one refuses them
+CONJECTURE = ("open", "falsified")
+
+
+def category(why: str) -> str | None:
+    """The category a `shape.frozen` reason starts with, or None."""
+    head = why.split(":", 1)[0].split(" (", 1)[0].strip()
+    return head if head in CATEGORIES and ":" in why else None
+
+
+def shape(policy: dict, facts: dict) -> list[str]:
+    """The shape every property has (the lean-proofs skill, "One shape"), as the policy's `shape` declares it: for each
+    guarantee, its entry under `shape.properties` names the function it is about (`function`: a constant, or
+    several) and the outcome its one hypothesis that is not a premise takes (`outcome`, `OUTCOMES`). Its statement,
+    with a lifted definition unfolded once, takes its inputs, that hypothesis (`acceptance`: a hypothesis whose type
+    reaches the function, and with an outcome other than `accept`, a constant named for the outcome), and premises:
+    hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
+    one, of the tuple of their inputs (a binding property). A `Prop` field of a structure an input ranges over is a
+    hypothesis too, and a conjunction counts as its conjuncts. A guarantee under `shape.frozen` ({name: why it
+    doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
+    spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
+    component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
+    one does. Each reason starts with its category (`CATEGORIES`). A named conjecture under `shape.conjectures`
+    ({name: {status, test, why}}, a named assumption of the package) is a premise too, of a property that is then
+    conditional and lists it under its entry's `rests_on`; one marked falsified refuses every property resting on it.
+    An open conjecture names its falsification test, which a suite runs, so a counterexample fails `check` until it is
+    marked falsified. Every package is checked: one without a `shape` section has no entries, so each of its
+    guarantees is frozen or fails. The landing DM shows each entry added to `shape.frozen`."""
+    spec = policy.get("shape", {})
+    fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
+    frozen, where = spec.get("frozen", {}), "shape.frozen"
+    conjectures = spec.get("conjectures", {})
+    for name, c in sorted(conjectures.items()):
+        c = c if isinstance(c, dict) else {}
+        if name not in policy.get("assumptions", {}):
+            fails.append(f"shape: shape.conjectures lists {name}, which is not a named assumption of this package")
+        if c.get("status") not in CONJECTURE:
+            fails.append(f"shape: shape.conjectures[{name}] has no status ({', '.join(CONJECTURE)})")
+        if not str(c.get("why", "")).strip():
+            fails.append(f"shape: shape.conjectures[{name}] gives no reason: one sentence on what it says and its status")
+        if c.get("status") == "open" and not str(c.get("test", "")).strip():
+            fails.append(f"shape: shape.conjectures[{name}] is open and names no falsification test that runs")
+    for name, why in sorted(frozen.items()):
+        if why.strip() and category(why) is None:
+            fails.append(f"shape: {where}[{name}] starts with no category: `<category>: why`, one of {', '.join(CATEGORIES)}")
+    guarantees = set(policy.get("guarantees", {}))
+    lifted = {(p.get("lift") or {}).get("head") for p in facts["pins"].values()}
+    homes = spec.get("statements")
+    held = (lambda m: under(homes, m)) if homes is not None else (lambda m: "Guarantees" in m.split("."))
+    unstated = {d["name"]: d["module"] for d in facts.get("spec_definitions", []) if d.get("statement") and held(d["module"])
+                and d["name"] not in lifted and d["name"] not in policy.get("assumptions", {})}
+    for name in sorted(set(frozen) - guarantees - set(unstated)):
+        fails.append(f"shape: {where} lists {name}, which is neither a guarantee of this package nor a statement of its "
+                     f"spec that none states: remove the entry")
+    for name, module in sorted(unstated.items()):
+        if name in frozen and not frozen[name].strip():
+            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why no guarantee states {name} yet")
+        elif category(frozen.get(name, "")) not in (None, "unstated"):
+            fails.append(f"shape: {where}[{name}] is a statement no guarantee states: its reason's category is `unstated`")
+        elif name not in frozen:
+            fails.append(f"shape: {name} ({module}) is a statement that no guarantee of this package states: list the "
+                         f"theorem that proves it under `guarantees`, or move it out of the spec")
+    for name in sorted(set(entries) - guarantees):
+        fails.append(f"shape: shape.properties lists {name}, which is not a guarantee of this package: remove the entry")
+    for name in sorted(guarantees):
+        if name in frozen and not frozen[name].strip():
+            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why {name} doesn't have the shape yet")
+        got = facts["pins"].get(name, {}).get("shape")
+        why = refusals(entries.get(name), got, premises, set(conjectures)) if isinstance(got, list) else \
+            [f"has no shape in the facts ({(got or {}).get('error', 'not computed')})"]
+        rests = sorted({c for part in got for h in part["hypotheses"] for c in [h.get("head"), *h["reaches"]]
+                        if c in conjectures}) if isinstance(got, list) else []
+        why += [f"rests on {c}, which shape.conjectures marks falsified ({conjectures[c].get('why', '')}): it comes off "
+                f"the list" for c in rests if conjectures[c].get("status") == "falsified"]
+        if not why and entries.get(name) and sorted(entries[name].get("rests_on", [])) != rests:
+            why.append(f"rests on {', '.join(rests) or 'no conjecture'}, but its entry's `rests_on` lists "
+                       f"{', '.join(sorted(entries[name].get('rests_on', []))) or 'none'}: a conditional property lists "
+                       f"each conjecture it rests on")
+        if name in frozen and why and category(frozen[name]) == "unstated":
+            fails.append(f"shape: {where}[{name}] is a guarantee: its reason's category is not `unstated`")
+        dead = [c for c in rests if conjectures[c].get("status") == "falsified"]
+        if name in frozen and dead and category(frozen[name]) != "falsified":
+            fails.append(f"shape: {where}[{name}] rests on {', '.join(dead)}, which is falsified: its reason's category "
+                         f"is `falsified`")
+        if name in frozen:
+            if not why:
+                fails.append(f"shape: {name} has the shape now: remove it from {where}, which only shrinks")
+        elif why:
+            fails += [f"shape: {name} {w}" for w in why]
+    return fails
+
+
+def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+    """Why a statement's shape (`Facts.lean`'s `shapeInfo`, one part per conjunct) isn't a property of the function
+    ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one."""
+    if not entry or not entry.get("function") or entry.get("outcome") not in OUTCOMES:
+        return [f"has no entry under shape.properties naming its function and its outcome ({', '.join(OUTCOMES)})"]
+    if len(got) == 1:
+        return part_refusals(entry, got[0], premises, conjectures)
+    return [f"(conjunct {k + 1}) {w}" for k, part in enumerate(got)
+            for w in part_refusals(entry, part, premises, conjectures)]
+
+
+def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[str] = frozenset()) -> list[str]:
+    """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
+    first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`."""
+    fns = [entry["function"]] if isinstance(entry["function"], str) else list(entry["function"])
+    outcome, said = entry["outcome"], " or ".join(fns)
+
+    def about(h: dict) -> bool:
+        reached = set(h["reaches"])
+        return any(reaches(f, reached) for f in fns) and (
+            outcome == "accept" or any(c.rsplit(".", 1)[-1] == outcome for c in reached))
+
+    def premise(h: dict) -> bool:
+        return h.get("head") in conjectures or bool(h["module"]) and under(premises, h["module"])
+
+    hyps = sorted(got["hypotheses"], key=lambda h: h["at"])
+    start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
+        next(iter(hyps), None)
+    ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
+    taken = [h for h in hyps if ends is None or h["at"] < ends]
+    out = []
+    if outcome != "none" and start is None:
+        out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
+                   f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
+    for h in taken:
+        if (outcome != "none" and about(h)) or premise(h):
+            continue
+        what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
+        out.append(f"takes {h['name']} : {h['type']}, {what} that is neither its acceptance nor a premise (its acceptance: "
+                   f"{outcome} by {said}; a premise: "
+                   f"a constant of {', '.join(premises) or 'a premise module, which this package names none of'})")
+    if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
+        out.append(f"says nothing about {said}, the function its entry names")
+    return out
+
+
+def reaches(function: str, reached: set[str]) -> bool:
+    """Whether a statement part that reaches the constants ``reached`` applies ``function``: a constant, or a field of one
+    (`PouwCheck.protocol.check`, the `check` field of the structure `PouwCheck.protocol`), whose path is the longest of its
+    prefixes that is a constant, followed by fields, each a constant with that last component (its projection)."""
+    parts = function.split(".")
+    for i in range(len(parts), 0, -1):
+        if ".".join(parts[:i]) in reached:
+            return all(any(c.rsplit(".", 1)[-1] == p for c in reached) for p in parts[i:])
+    return False
+
+
 def unowned(rec: dict | None) -> dict:
     """A guarantee's record without its `owner`: what the build writes and the audit compares."""
     return {k: v for k, v in (rec or {}).items() if k != "owner"}
@@ -1674,7 +1834,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return rep
     files = lean_modules(pkg)
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current))
+    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
