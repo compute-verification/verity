@@ -1,0 +1,207 @@
+import Proofs.Flock.VBridge.Family.Rep
+import Proofs.Flock.VBridge.Family.Openings
+
+/-!
+# VBridge G at V*'s family: what a session's acceptance says of its registered reads
+
+A session's acceptance (`Accepted`: `LiveAcceptsZKR` and a `Good` layer) constrains its registered reads `zo.rd` in one
+direction only: every registered read is a row of a port `own` names, at a drawn unit (`ZkOuter.hown`, `OwnReads`), and
+the layer agrees with the registrant there (`RegAgree`). It never says that a row is read, and `rd` is a field of the
+session the family builds, so which rows are registered reads, and what the registrant's value there is, are the
+family's choice.
+
+* `rd_isLeft`, `not_read_unit`, `not_regOut`: a registered read is a row of a unit's port (`read_row`: `rowsSh`'s rows
+  are `posK`'s `.inl`), and a unit's computed gate is no row bit (`keyRowOf` is `some` only at input gates), so no
+  output column is ever a registered read: `RegOut` at a column past the inputs is `False`. Hence `not_resZeroAt` and `not_opensAt`:
+  `ResZeroAt` and `OpensAt`, whose last conjuncts are `RegOut` at the residuals' and `acc_out`'s output columns, never
+  hold; `hRes_false`, `hZero_false`: at an accepted outer proof with a part, `HRes` and `HZero` are false; `not_accOut`:
+  `hAccRows_of`'s `hout` is never satisfiable.
+* `oneAt_keyProg`: every unit's constant is the program's input gate `Layout.oneG`; `hOne_of`, `hOneOpen_of`: `HOne` and
+  `HOneOpen` from `OneInLayer`, the layers carrying 1 at that gate.
+-/
+
+namespace FlockVBridge.Family
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
+open Flock.RecResiduals (portSizes groups)
+open Flock.RecAlgebra (structureOf verifierRows el)
+open FlockVBridge.OfVStar (ResZeroAt partBase)
+open FlockVBridge.AccChain (RegOut OpensAt)
+
+/-! ## A session's registered reads -/
+
+section Reads
+
+variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+
+/-- **A registered read is a row** (`Reads.read_row`; `rowsSh`'s rows are the commit strings `.inl (u, q)`,
+`Readers.ofRows`' `isRow`). -/
+theorem rd_isLeft {p : PosK c hU nv} (h : zo.rd.isRead p) : p.isLeft = true :=
+  zo.rd.read_row p h
+
+/-- **A unit's computed gate is no row bit**: `keyRowOf` is `some` only below `2 + n · B`, where `uniform` places the
+program's inputs, which are no unit's (`unit_uniform_input`). -/
+theorem keyRowOf_unit {g : Fin (Layout.keyN c hU nv)} {u : Fin nv}
+    (hu : ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).unit g = some u) :
+    Layout.keyRowOf c hU nv (Layout.portRowW c) g = none := by
+  rcases h : Layout.keyRowOf c hU nv (Layout.portRowW c) g with _ | ⟨u', q, k⟩
+  · rfl
+  · obtain ⟨-, hlt, -, -⟩ := Layout.keyRowOf_spec h
+    have hnone : (Placed.keyProg c hU nv).unit g = none :=
+      Layout.unit_uniform_input (k := Placed.inGates nv (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+        (ins := Placed.insOf nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+        (one := Placed.oneGate nv (Layout.keyB c hU))
+        (hone := Placed.insOf_ne_one nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) nv g
+        (by show _ < 2 + nv * Layout.keyB c hU; omega)
+    have hu' : (Placed.keyProg c hU nv).unit g = some u := hu
+    rw [hnone] at hu'
+    cases hu'
+
+/-- **A unit's computed gate is no registered read**: its commit string is the single gate `.inr` (`keyRowOf_unit`,
+`lay_pos`), and a registered read is a row (`rd_isLeft`). -/
+theorem not_read_unit {g : Fin (Layout.keyN c hU nv)} {u : Fin nv}
+    (hu : ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).unit g = some u) :
+    ¬ zo.rd.isRead (zo.lay.pos g) := by
+  intro hread
+  have hp : posK c hU nv g = .inr g := by
+    unfold posK
+    rw [keyRowOf_unit hu]
+  have h : (zo.lay.pos g).isLeft = true := rd_isLeft zo hread
+  rw [Decode.lay_pos zo, hp] at h
+  exact Bool.false_ne_true h
+
+/-- **No output column is a registered read.** Copy `j`'s gate at a column past the inputs is a computed gate of unit
+`u` (`stackCol_comp`), so no registered read (`not_read_unit`), and `RegOut` there, which asks for one, never holds. -/
+theorem not_regOut {u : Fin nv} {j : ℕ} (hj : j < c.upv) {col : ℕ} (hnIn : (Rows.ofNet hU).nIn ≤ col) (b : Bool) :
+    ¬ RegOut zo u hj col b := by
+  rintro ⟨hcol, -, hread, -⟩
+  obtain ⟨i, hi⟩ := Decode.stackCol_comp (Rows.ofNet hU) c.upv hj ⟨col, hcol⟩ hnIn
+  have hu : ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).unit
+      ((keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨col, hcol⟩)) = some u := by
+    rw [hi]
+    exact (keyInst hU nv (Layout.outsOf c hU nv) u).mem i
+  exact not_read_unit zo hu hread
+
+/-- **`ResZeroAt` never holds**: its outputs are `RegOut` at the part's output columns, past the inputs
+(`inRows_le_outStart`, as in `partCols_of_resZeroAt`), and there are `16 · RES_OUT_WORDS > 0` of them. -/
+theorem not_resZeroAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j : ℕ) (sh : Shape)
+    (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (p : ℕ) (w : ℕ → F128) (rounds : Array (Array F128))
+    (extras : Array Claim) (comb : Array F128) : ¬ ResZeroAt zo bits u j sh gs p w rounds extras comb := by
+  rintro ⟨-, hj, -, hc, -, m, k, cl, hp, hsh, S, ns, nv', hpart, -, -, hz⟩
+  obtain ⟨S1, ns1, nv1, hpart1, hn⟩ := OfVStar.check_part hc hp hsh
+  rw [hpart] at hpart1
+  cases hpart1
+  have hbase : (Rows.ofNet hU).nIn ≤ partBase S ns nv' := by
+    rw [Layout.ofNet_nIn_eq, OfVStar.inWords_unitLaid hn]
+    exact Decode.inRows_le_outStart _ _ _
+  exact not_regOut zo hj (by omega) false (hz 0 (by show 0 < 16 * 128; omega))
+
+/-- **`OpensAt` never holds**: its last conjunct is `RegOut` at `acc_out`'s columns, past the inputs (as in
+`unitSum_of_decode`). -/
+theorem not_opensAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES : ℕ) (r a cf A : Array F128) :
+    ¬ OpensAt zo bits u j LANES r a cf A := by
+  rintro ⟨hj, -, -, -, H, p, outBits, name, -, -, -, -, hl, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, haout⟩
+  have hnIn : (Rows.ofNet hU).nIn ≤
+      Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits := by
+    rw [Layout.ofNet_nIn_eq, inWords_recOpen hl]
+    exact Decode.inRows_le_outStart _ _ _
+  exact not_regOut zo hj (by omega) _ (haout 0 (by omega))
+
+end Reads
+
+section Reg
+
+variable {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg')
+
+/-- **`hAccRows_of`'s `hout` is never satisfiable**: the `acc_out` columns of an opening are past its inputs (as in
+`accOut_of_regOut`), so none is a registered read (`not_regOut`). -/
+theorem not_accOut {u : Fin Q.nv} (hj : 0 < Q.c.upv) {LANES H : ℕ}
+    (hp : Flock.RecOpen.params Q.c.unit.name = some (LANES, H)) (t : ℕ) (b : Bool) :
+    ¬ AccChain.RegOut zo u hj (outCol LANES H + 1024 + t) b := by
+  have hnIn : (Rows.ofNet Q.hU).nIn ≤ outCol LANES H := by
+    rw [Layout.ofNet_nIn_eq, inWords_unit (Flock.RecOpen.check_ok (parse_facts zo.hc).recNet hp).2]
+    exact Decode.inRows_le_outStart _ _ _
+  exact not_regOut zo hj (by omega) b
+
+end Reg
+
+/-! ## The constant -/
+
+/-- **Every unit's constant is the program's gate `oneG`** (`oneAt_uniform_val`). -/
+theorem oneAt_keyProg (c : Flock.Circuit) (hU : Built c.unit) (nv : ℕ) (u : Fin nv) :
+    Const.Prog.oneAt (Placed.keyProg c hU nv) u = Layout.oneG (c := c) (hU := hU) (n := nv) :=
+  Fin.ext (Layout.oneAt_uniform_val (k := Placed.inGates nv (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+    (ins := Placed.insOf nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+    (one := Placed.oneGate nv (Layout.keyB c hU))
+    (hone := Placed.insOf_ne_one nv (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) nv u)
+
+section family
+
+variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
+variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+
+namespace VStarFamily
+
+variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+
+/-- **The layers carry 1 at the constant gate.** At every accepted outer proof, each session's layer is `true` at
+`Layout.oneG`, the input gate every unit's constant is wired to (`oneAt_keyProg`). Acceptance does not give it: the
+layer is `XplurZC`'s plurality of the prover's openings, `oneG` is no unit's gate and its commit string `.inr oneG` is no
+registered read, so neither `wrong = ∅` nor `RegAgree` reads it; the public-file layer `Xpub` pins it
+(`FlockPublic.lean`), the `--zk` layer does not. Established by `ZkOuter.Good` (or `ZkOuter.layer`) carrying the
+constant, a restatement for the lane that owns `Recursive/Flock.lean`. -/
+def OneInLayer : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j,
+    layers F.zs dg N k Rw R ω t R₂ τ j (Layout.oneG (c := (F.Vs j).c) (hU := (F.Vs j).hU) (n := (F.Vs j).nv)) = true
+
+/-- **`HOne` from `OneInLayer`**. -/
+theorem hOne_of (h : F.OneInLayer dg N k Rw) : F.HOne dg N k Rw := by
+  intro R ω t R₂ τ o ha r p _
+  rw [oneAt_keyProg]
+  exact h R ω t R₂ τ o ha (F.sess p)
+
+/-- **`HOneOpen` from `OneInLayer`**. -/
+theorem hOneOpen_of (h : F.OneInLayer dg N k Rw) : F.HOneOpen dg N k Rw := by
+  intro R ω t R₂ τ o ha r ℓ _ j _
+  rw [oneAt_keyProg]
+  exact h R ω t R₂ τ o ha (F.sessO ℓ)
+
+/-- **`HRes` is false at an accepted outer proof with a part** (`not_resZeroAt`). -/
+theorem hRes_false {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (h : F.HRes dg N k Rw gs) {R ω t R₂ τ o}
+    (ha : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (hgs : 0 < gs.size) : False :=
+  not_resZeroAt _ _ _ _ _ _ _ _ _ _ _ (h R ω t R₂ τ o ha 0 0 hgs)
+
+/-- **`HZero` is false at an accepted outer proof with a part** whose statement is V*'s residual unit: its output
+columns are past the unit's inputs (`check_part`, as in `hRes_of`), so none is a registered read (`not_regOut`). -/
+theorem hZero_false {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
+    (hcov : F.HCover) (hname : F.HUnitName) (h : F.HZero dg N k Rw) {R ω t R₂ τ o}
+    (ha : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (hgs : 0 < gs.size) : False := by
+  have hP : partsOf F.sh = gs := partsOf_eq hst.1 hst.2
+  have hpP : 0 < (partsOf F.sh).size := by rw [hP]; exact hgs
+  obtain ⟨j, nm, pt, hj⟩ := hcov 0 hpP
+  have hsj : F.sess 0 = j := F.hsess 0 j ⟨nm, pt, hj⟩
+  have hjs : F.stmts[F.sess 0] = .inner 0 nm pt := by subst hsj; exact hj
+  have hnm : (F.Vs (F.sess 0)).c.unit.name = RecResiduals.unitName F.vsh.m F.vsh.kLog F.vsh.claims 0 :=
+    (hname _ 0 nm pt hjs).trans (statements_name F.hstmts _ hjs)
+  have hchk : RecResiduals.check (F.Vs (F.sess 0)).c = .ok () :=
+    (parse_facts (F.zs R ω t R₂ (F.sess 0)).hc).recResiduals
+  have hpar := resParams_of_check hchk hnm
+  have hupv : 0 < (F.Vs (F.sess 0)).c.upv := upv_pos (F.zs R ω t R₂ (F.sess 0)).hc (F.Vs (F.sess 0)).hscope
+  obtain ⟨S, ns, nv, hpart, hn⟩ := OfVStar.check_part hchk hpar F.hsh
+  have hbase : (Rows.ofNet (F.Vs (F.sess 0)).hU).nIn ≤ partBase S ns nv := by
+    rw [Layout.ofNet_nIn_eq, OfVStar.inWords_unitLaid hn]
+    exact Decode.inRows_le_outStart _ _ _
+  exact not_regOut _ hupv (by omega) false
+    (h R ω t R₂ τ o ha 0 0 hpP S ns nv hpart hupv 0 (by show 0 < 16 * 128; omega))
+
+end VStarFamily
+
+end family
+
+end FlockVBridge.Family
