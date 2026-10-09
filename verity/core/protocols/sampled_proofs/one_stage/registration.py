@@ -112,7 +112,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
     own (`registered_entries`) and a value an earlier record of the log registered to that record's root (`held_roots`):
-    a value is committed once, and the log is the only place the verifier holds its roots."""
+    a value is committed once, and the log is the only place the verifier holds its roots.  R3 reads `ports` by name, so
+    its codes come in the ports' sorted order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
     keys = _KEYS | {"registered"} if v2 else _KEYS
@@ -160,7 +161,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         got = {r["port"]: r for r in roots}
         if len(got) != len(roots) or set(got) != set(ports):
             c.fail("R3-ports", {"registered": [r["port"] for r in roots], "verifier": sorted(ports)})
-        for p, want in ports.items():
+        for p, want in sorted(ports.items()):
             r = got.get(p)
             if r is None:
                 continue
