@@ -28,8 +28,8 @@
     uv run python tools/verity/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/verity/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
-                                                            the steps; with --record --on, the pack travels with the run;
-                                                            without it, --record gathers one from the newest recorded checks
+                                                            the steps; with --record, added to the pack it gathers from the
+                                                            newest recorded checks, and with --on that pack travels with the run
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
@@ -121,9 +121,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
-`--verdicts-in`.  `--record` without `--verdicts-in` or `--no-cache` sends one pack of the newest recorded checks' packs
-(`gather_verdicts`), so every machine reuses every pass a recorded check earned; the pack imported is named in the result's
-`verdicts`.
+`--verdicts-in`.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs (`gather_verdicts`), with a
+`--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
+imported is named in the result's `verdicts`.
 
 The evidence store.  A recorded check runs the store-backed tests (integrations/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -836,8 +836,12 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
-    if not combining and "--verdicts-in" not in rest and "--no-cache" not in rest:
-        if pack := gather_verdicts(d):
+    if not combining and "--no-cache" not in rest:
+        given = None
+        if "--verdicts-in" in rest[:-1]:
+            i = rest.index("--verdicts-in")
+            given, rest = Path(rest[i + 1]).resolve(), rest[:i] + rest[i + 2:]
+        if pack := gather_verdicts(d, given=given):
             rest += ["--verdicts-in", str(pack)]
     if on:
         cmd += ["--on", on, "--source", "."]
@@ -854,33 +858,37 @@ def record(argv: list[str]) -> int:
 GATHER = 12
 
 
-def gather_verdicts(d: Path, store=None, limit: int = GATHER) -> Path | None:
+def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
     """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
     `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
-    recorded runs' packs are taken.  None when the store has none, or can't be read (the check then runs on its own cache)."""
+    recorded runs' packs are taken.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
+    flag turns reuse off but `--no-cache`.  None when there is no pack at all (the check then runs on its own cache)."""
     from research.store.local import LocalStore
 
+    if given is not None and not given.is_file():
+        raise SystemExit(f"check: --verdicts-in {given}: no such pack")
+    packs = [given] if given is not None else []
     try:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
         rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state = 'done' ORDER BY start_utc DESC LIMIT ?",
                                (4 * limit,))
-        packs = []
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
                 packs.append(store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz")
-                if len(packs) == limit:
+                if len(packs) == limit + (given is not None):
                     break
-        if not packs:
-            return None
-        n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
-    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes)
+    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)
         print(f"check: no verdicts gathered from the store ({type(e).__name__}: {e})", flush=True)
+        del packs[given is not None:]
+    if not packs:
         return None
-    print(f"check: verdicts: {n} entries gathered from {len(packs)} recorded checks ({', '.join(p.parent.name for p in packs)})",
-          flush=True)
+    n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
+    names = [*([f"{given.name} (given)"] if given is not None else []), *(p.parent.name for p in packs[given is not None:])]
+    print(f"check: verdicts: {n} entries gathered from {len(packs) - (given is not None)} recorded checks"
+          f"{' and the pack given' if given is not None else ''} ({', '.join(names)})", flush=True)
     return d / "verdicts-gathered.tar.gz"
 
 
@@ -1364,6 +1372,55 @@ def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
     return found
 
 
+def reuse(out: Path, done: list[dict]) -> dict:
+    """Per step that can reuse a kept pass, how many of its parts this check reused and how many it ran again: suites
+    (`suites.json`, `suites-lean.json`; each suite run again with the inputs that forced it, `suites.forced_by`), circuit-check
+    targets (its step's cache), Lean packages (`lean-audit/audit.json`'s `cached`), and the steps cached whole (`STEP_KEYS`)."""
+    got: dict[str, dict] = {}
+    for f, step in (("suites.json", "pytest"), ("suites-lean.json", "lean-suites")):
+        try:
+            rows = [r for r in json.loads((out / f).read_text()) if r.get("status") != "skipped"]
+        except (OSError, ValueError):
+            continue
+        ran = sorted((r for r in rows if r.get("status") != "cached"), key=lambda r: -(r.get("seconds") or 0))
+        got[step] = {"of": "suites", "reused": len(rows) - len(ran), "rerun": len(ran),
+                     "reran": [{"suite": r["suite"], "seconds": r.get("seconds"),
+                                "forced_by": ((r.get("forced_by") or {}).get("why") or ["not recorded"])[:3]} for r in ran]}
+    for s in done:
+        c = s.get("cache") or {}
+        if s["step"] == "circuit-check" and "hits" in c:
+            misses = {"untraced": len(c.get("untraced") or []), "errors": len(c.get("errors") or []),
+                      "changed": len(c.get("changed") or [])}
+            got["circuit-check"] = {"of": "targets", "reused": c["hits"], "rerun": c.get("stored", 0) + sum(misses.values()),
+                                    "not_stored": misses}
+        elif s["step"] in STEP_KEYS and s["status"] in ("passed", "failed"):
+            got[s["step"]] = {"of": "step", "reused": int("hit" in c), "rerun": int("hit" not in c)}
+        elif s["step"] == "lean-audit" and s["status"] in ("passed", "failed"):
+            try:
+                a = json.loads((out / "lean-audit" / "audit.json").read_text())
+            except (OSError, ValueError):
+                continue
+            hit = set(a.get("cached") or {})
+            every = hit | {p["package"] for p in a.get("packages") or [] if isinstance(p, dict) and "package" in p}
+            got["lean-audit"] = {"of": "packages", "reused": len(hit), "rerun": len(every - hit), "reran": sorted(every - hit)}
+    for g in got.values():
+        g["rate"] = round(g["reused"] / (g["reused"] + g["rerun"]), 3) if g["reused"] + g["rerun"] else None
+    return {"summary": ", ".join(f"{step} {g['reused']}/{g['reused'] + g['rerun']} {g['of']}" for step, g in got.items()),
+            "steps": got}
+
+
+def reuse_lines(r: dict) -> list[str]:
+    """`reuse` as the log prints it: per step in one line (no rate across steps: thousands of circuit-check targets would hide
+    every suite run again), then each step's, then each suite run again with what forced it."""
+    lines = [f"check: reused {r['summary'] or 'nothing'}"]
+    for step, g in r["steps"].items():
+        lines.append(f"check: reuse   {step}: {g['reused']} {g['of']} reused, {g['rerun']} run again")
+        for x in g.get("reran") or []:
+            if isinstance(x, dict):
+                lines.append(f"check: reuse     {x['suite']} ({x['seconds']} s): {'; '.join(x['forced_by'])[:300]}")
+    return lines
+
+
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
@@ -1373,7 +1430,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
     doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
-           "workload_fingerprint": {"steps": [s["step"] for s in done]},
+           "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
@@ -1483,6 +1540,7 @@ def main(argv: list[str]) -> int:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded)
+    print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1
