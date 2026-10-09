@@ -97,6 +97,15 @@ controls() {
     $T/inner-fold --plain-leaves --partition $W0/partition.json verity/flock-circuit $W0/circuit.txt \
       $(pub_of $W0) $DD/points-wired-noprogram.json os > $E/fold-wired-noprogram.json 2> $E/fold-wired-noprogram.err
     echo $? > $E/fold-wired-noprogram.exit
+    # the setup's Linking check as flock-verify runs it (verify --program), on the wired cheater's inner session and the
+    # honest one's: the form (plain leaves) is refused only after every other check
+    for n in made-up wired; do
+      local st=$W0; [ $n = made-up ] && st=$MU
+      [ -d $DD/inner-$n/session ] || continue
+      $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $st/circuit.txt --public $(pub_of $st) \
+        --partition $st/partition.json --program $st/program.desc --coins os --session $DD/inner-$n/session \
+        > $E/verify-$n.log 2> $E/verify-$n.err; echo $? > $E/verify-$n.exit
+    done
   fi
   if [ -d $DD/inner-honest/session ]; then
     python3 verity/ml/flock/verifier/firewall_agree.py --lean $T/flock-firewall --out $E/firewall-contract --sessions $DD/inner-honest \
@@ -172,6 +181,9 @@ for r in runs:
     for n in ("made-up", "wired", "wired-noprogram"):
         if fold(c, n) is not None:
             rows[f"fold-{n}"] = {"recorded": fold(o / "vstar", n), "now": fold(c, n)}
+    for n in ("made-up", "wired"):
+        if (c / f"verify-{n}.exit").exists():
+            rows[f"verify-{n}"] = {"recorded": fold(o / "vstar", n), "now": S.lean(c / f"verify-{n}.log")["verdict"]}
     for n in ("coins-contract", "firewall-contract"):
         now = contract(c / n / "result.json")
         if now is not None or (c / f"{n}.txt").exists():
