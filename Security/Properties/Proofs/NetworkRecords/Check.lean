@@ -1,4 +1,5 @@
 import Properties.Proofs.NetworkRecords.Commit
+import NetworkCheck.RecordsBytes
 import Properties.Proofs.NetworkCertifier
 
 /-!
@@ -19,6 +20,7 @@ open Properties.NetworkCertifier (EvidenceFits ParamsDigests Declares SyncAdmitt
 open Properties.NetworkCertifier.CheckProofs (ba_beq bind_ok syncTest_iff not_not_true not_true declares_declared
   expectedGrid_eq verifies_iff screen_ok declares_unique)
 open Properties.NetworkCertifier.Bytes (error_ne_ok)
+open NetworkCheck.RecordsBytes (expectedGridsOfBytes_eq unitSync_toEvidence)
 
 set_option maxRecDepth 20000
 
@@ -97,25 +99,34 @@ theorem head_or {h H : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) (e' 
     by_contra hne
     exact hc ⟨x, hx, y, hy, hne, he⟩
 
+theorem mem_toLinks {e : Records.ByteEvidence} {link : Records.ByteLink} (h : link ∈ e.links.toList) :
+    link.toLink ∈ e.toEvidence.links.toList := by
+  simp only [Records.ByteEvidence.toEvidence, Array.toList_map]
+  exact List.mem_map.mpr ⟨link, h, rfl⟩
+
 /-- The Program's grid of an egress link-window, as `verdicts` reads it, under the syncs the link declares. -/
-theorem expected_eq {p : Params} {link : Link} {syncs : Fin p.windows → ClockSync} (h : Declares link syncs) {w : Nat}
-    (hw : w < p.windows) :
-    (Records.expectedGrids p.grid p.windows link).getD w #[] = programGrid p syncs link.frames w := by
+theorem expected_eq {p : Params} {link : Records.ByteLink} {syncs : Fin p.windows → ClockSync}
+    (h : Declares link.toLink syncs) {w : Nat} (hw : w < p.windows) :
+    (Records.expectedGridsOfBytes p.grid p.windows link).getD w #[] = programGrid p syncs link.toLink.frames w := by
   rw [Array.getD_eq_getD_getElem?,
-    show (Records.expectedGrids p.grid p.windows link)[w]? = some (Check.expectedGrid p.grid p.windows link w) from
-      RecordsGrid.expectedGrids_eq _ _ _ ⟨w, hw⟩, Option.getD_some, expectedGrid_eq h]
+    show (Records.expectedGridsOfBytes p.grid p.windows link)[w]? =
+        some (Check.expectedGrid p.grid p.windows link.toLink w) from
+      expectedGridsOfBytes_eq _ _ _ ⟨w, hw⟩, Option.getD_some, expectedGrid_eq h]
 
 /-- **An egress link-window with no violation has its one complete record, the Program's.** -/
-theorem egress_none {p : Params} {c : Records.Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : Link}
-    {w : Nat} (hfit : EvidenceFits p e) (hl : link ∈ e.links.toList) (hw : w < p.windows)
-    (hv : Records.egressVerdict p c e eg l link ((Records.expectedGrids p.grid p.windows link).getD w #[]) w = none) :
-    EgressRecord p c e eg l link w := by
-  have hd := declares_declared (hfit.2.1 link hl)
-  have hsz := programGrid_sizes (p := p) (syncs := Properties.NetworkCertifier.declared p.windows link) (w := w)
-    (hfit.2.2 link hl)
+theorem egress_none {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {eg : ByteArray} {l : String}
+    {link : Records.ByteLink} {w : Nat} (hfit : EvidenceFits p e.toEvidence) (hl₀ : link ∈ e.links.toList)
+    (hw : w < p.windows)
+    (hv : Records.egressVerdict p c e eg l link ((Records.expectedGridsOfBytes p.grid p.windows link).getD w #[]) w =
+      none) :
+    EgressRecord p c e.toEvidence eg l link.toLink w := by
+  have hl := mem_toLinks hl₀
+  have hd := declares_declared (hfit.2.1 _ hl)
+  have hsz := programGrid_sizes (p := p) (syncs := Properties.NetworkCertifier.declared p.windows link.toLink) (w := w)
+    (hfit.2.2 _ hl)
   rw [expected_eq hd hw] at hv
   unfold Records.egressVerdict at hv
-  rw [found_toList] at hv
+  rw [found_toList, unitSync_toEvidence] at hv
   generalize hR : recordsAt c .egress l w = R at hv
   match R, hR, hv with
   | [], _, hv => simp at hv
@@ -131,8 +142,8 @@ theorem egress_none {p : Params} {c : Records.Commitment} {e : Evidence} {eg : B
       · cases hv
       rename_i hsync
       have hadm := (syncTest_iff hfit hl hw).mp (by rw [← Bool.and_assoc]; exact not_not_true hsync)
-      cases hrd : (recordHead l .egress w (programGrid p (Properties.NetworkCertifier.declared p.windows link)
-          link.frames w) none p.grid eg true >>= RecordHead.digest) with
+      cases hrd : (recordHead l .egress w (programGrid p (Properties.NetworkCertifier.declared p.windows link.toLink)
+          link.toLink.frames w) none p.grid eg true >>= RecordHead.digest) with
       | error _ => simp [hrd] at hv
       | ok d =>
         simp only [hrd] at hv
@@ -203,18 +214,21 @@ theorem ingress_none {p : Params} {c : Records.Commitment} {ig : ByteArray} {l :
   | _ :: _ :: _, _, hv => simp at hv
 
 /-- An egress link-window whose record is the Program's has no violation. -/
-theorem egress_none_of {p : Params} {c : Records.Commitment} {e : Evidence} {eg : ByteArray} {l : String}
-    {link : Link} {w : Nat} (hfit : EvidenceFits p e) (hl : link ∈ e.links.toList) (hw : w < p.windows)
-    (h : EgressRecord p c e eg l link w) :
-    Records.egressVerdict p c e eg l link ((Records.expectedGrids p.grid p.windows link).getD w #[]) w = none := by
+theorem egress_none_of {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {eg : ByteArray} {l : String}
+    {link : Records.ByteLink} {w : Nat} (hfit : EvidenceFits p e.toEvidence) (hl₀ : link ∈ e.links.toList)
+    (hw : w < p.windows) (h : EgressRecord p c e.toEvidence eg l link.toLink w) :
+    Records.egressVerdict p c e eg l link ((Records.expectedGridsOfBytes p.grid p.windows link).getD w #[]) w =
+      none := by
+  have hl := mem_toLinks hl₀
   obtain ⟨r, hR, hC, hadm, hP⟩ := h
-  have hd := declares_declared (hfit.2.1 link hl)
+  have hd := declares_declared (hfit.2.1 _ hl)
   have hP := hP _ hd
   have hs := (syncTest_iff hfit hl hw).mpr hadm
   rw [← Bool.and_assoc] at hs
+  dsimp only [Records.ByteLink.toLink] at hs
   rw [expected_eq hd hw]
   unfold Records.egressVerdict
-  rw [found_toList, hR]
+  rw [found_toList, hR, unitSync_toEvidence]
   cases r with
   | raw l' w' st grid =>
     change st = none at hC
@@ -239,8 +253,8 @@ theorem egress_none_of {p : Params} {c : Records.Commitment} {e : Evidence} {eg 
     dsimp only [Except.map]
     rw [hs]
     simp only [Bool.not_true, Bool.false_eq_true, ite_false]
-    have hb : (recordHead l .egress w (programGrid p (Properties.NetworkCertifier.declared p.windows link)
-        link.frames w) none p.grid eg true >>= RecordHead.digest) = .ok dg := by rw [hH]; exact hHd
+    have hb : (recordHead l .egress w (programGrid p (Properties.NetworkCertifier.declared p.windows link.toLink)
+        link.toLink.frames w) none p.grid eg true >>= RecordHead.digest) = .ok dg := by rw [hH]; exact hHd
     simp only [hb]
     rw [ite_eq_left (ba_beq.mpr hcv.2.1)]
 

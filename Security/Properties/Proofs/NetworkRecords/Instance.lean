@@ -33,7 +33,13 @@ def p₀ : Params where
 
 def link₀ : Link := ⟨[], #[sync₀]⟩
 
-def e₀ : Evidence := ⟨#[link₀]⟩
+def ev₀ : Evidence := ⟨#[link₀]⟩
+
+/-- The evidence as the check reads it, its one link's payloads (none) kept as bytes. -/
+def e₀ : Records.ByteEvidence := ⟨#[⟨[], #[sync₀]⟩]⟩
+
+theorem toEvidence₀ : e₀.toEvidence = ev₀ := by
+  simp [Records.ByteEvidence.toEvidence, Records.ByteLink.toLink, e₀, ev₀, link₀]
 
 def grid₀ : Records.RawGrid := programGrid p₀ (fun _ => sync₀) [] 0
 
@@ -42,18 +48,19 @@ def c₀ : Records.Commitment := ⟨#[.raw "out" 0 none grid₀, .raw "in" 0 non
 /-- The Program's grid of `out` in window 0: one row, its one slot padding. -/
 theorem program₀ : grid₀ = #[#[none]] := by decide +kernel
 
-theorem programRecords₀ {eg ig : ByteArray} (hpd : ParamsDigests p₀ eg ig) : ProgramRecords p₀ c₀ e₀ := by
+theorem programRecords₀ {eg ig : ByteArray} (hpd : ParamsDigests p₀ eg ig) : ProgramRecords p₀ c₀ e₀.toEvidence := by
+  rw [toEvidence₀]
   refine ⟨⟨rfl, ?_, ?_⟩, eg, ig, hpd, ?_, ?_⟩
   · intro link hl
-    simp only [e₀, List.mem_singleton] at hl
+    simp only [ev₀, List.mem_singleton] at hl
     subst hl
     rfl
   · intro link hl f hf
-    simp only [e₀, List.mem_singleton] at hl
+    simp only [ev₀, List.mem_singleton] at hl
     subst hl
     cases hf
   · intro l link hm w hw
-    have hm' : (l, link) = ("out", link₀) := by simpa [p₀, e₀] using hm
+    have hm' : (l, link) = ("out", link₀) := by simpa [p₀, ev₀] using hm
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj hm'
     obtain rfl : w = 0 := by simp only [p₀] at hw; omega
     refine ⟨.raw "out" 0 none grid₀, rfl, rfl, ⟨sync₀, rfl, by simp [p₀, sync₀], by simp [p₀, sync₀], link₀, sync₀,

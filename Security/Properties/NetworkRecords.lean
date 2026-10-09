@@ -8,11 +8,13 @@ import Properties.NetworkCertifier
 certified records. `AcceptMeans` is what its acceptance establishes about the unit's records, stated over the check's
 inputs (the parameters, the published records, the evidence) and never over its internals: every link-window of the
 unit has exactly one record, complete, and it is the Program's (`ProgramRecords`). `AnswerAcceptMeans` is the same for
-the bytes `Core.Protocol.answer` decodes. `Properties.Proofs.NetworkRecords` proves both, and that the check accepts
+the bytes `Core.Protocol.answer` decodes. The check keeps each payload as its bytes (`Records.ByteEvidence`), and the
+conclusion reads that evidence as v2 reads the same JSON (`ByteEvidence.toEvidence`, each payload its bits, which
+`RecordsBytes.evidenceOf_toEvidence` proves is `Check.evidenceOf`). `Properties.Proofs.NetworkRecords` proves both, and that the check accepts
 every unit whose records are the Program's (`programRecords_accepted`, completeness).
 
 The Program's grid of an egress link-window is `programGrid`, rows of `NetworkCertifier.expectedRow` under the syncs
-the link declares, which the check reads through `Records.expectedGrids` (`RecordsGrid.expectedGrids_eq`). Nothing is
+the link declares, which the check reads through `Records.expectedGridsOfBytes` (`RecordsBytes.expectedGridsOfBytes_eq`). Nothing is
 assumed of SHA-256, SHA-512 or LMS. A committed record's digest is the one `commitment.py` gives the Program's grid,
 and any grid of `B`-byte frames with that digest holds the Program's frames, or two distinct strings the two digests
 hash have one SHA-256 digest. A certified record's certificate verifies under the parameters' key (LMS's verifier
@@ -150,16 +152,17 @@ def ProgramRecords (p : Params) (c : Records.Commitment) (e : Evidence) : Prop :
 /-! ## Acceptance -/
 
 /-- **What the records check's acceptance means.** If `NetworkCheck.Records.protocol` accepts the parameters, the
-published records and the evidence, the unit's records are the Program's. -/
+published records and the evidence `e`, the unit's records are the Program's under `e`, its payloads read as bits. -/
 def AcceptMeans : Prop :=
-  ∀ (p : Params) (c : Records.Commitment) (e : Evidence) (pub : Unit) (prof : Profile),
-    Records.protocol.check p c e = .accept pub prof → ProgramRecords p c e
+  ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (pub : Unit) (prof : Profile),
+    Records.protocol.check p c e = .accept pub prof → ProgramRecords p c e.toEvidence
 
 /-- **The same, from the bytes.** If `answer` accepts parameters `a`, commitment `b` and evidence `v`, they decode, and
 the records they decode to are the Program's. -/
 def AnswerAcceptMeans : Prop :=
   ∀ a b v : ByteArray, (Records.protocol.answer a b v).verdict = .accept →
-    ∃ p c e, (Core.canonicalJson a >>= Records.protocol.params) = .ok p ∧ Records.protocol.commitment b = .ok c ∧
-      Records.protocol.evidence v = .ok e ∧ ProgramRecords p c e
+    ∃ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence),
+      (Core.canonicalJson a >>= Records.protocol.params) = .ok p ∧
+      Records.protocol.commitment b = .ok c ∧ Records.protocol.evidence v = .ok e ∧ ProgramRecords p c e.toEvidence
 
 end Properties.NetworkRecords
