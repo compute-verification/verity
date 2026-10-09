@@ -17,8 +17,10 @@ row is an unsegmented `sha512/row/v1` row of `16 · words` bits in at least one 
 and a bit row (`sha512/row/v2`) commits other bytes.
 
 `scopeOkH` is the hidden-output headlines' scope: `scopeOk`'s conditions on the unit, and every row a `sha512/row/v1`
-row or every row an unsegmented `sha512/row/v2` row of `16 · words` bits whose bytes end in its `hm96` slot's block, one
-output port each (`scopeOkH_rows`). Those headlines commit each row under its own prefix (`Hidden.rowPre`).
+row, or every row an unsegmented `sha512/row/v2` row of `16 · words` bits whose bytes end in its `hm96` slot's block or a
+`sha512/row-seg/v1` row of `16 · words` bits as `HmRow.segShape` cuts it, each segment's bytes ending in its last block,
+of any mix, the output rows `sha512/row/v2` rows of one output port each (`scopeOkH_rows`). Those headlines commit each
+row under its own bytes (`Hidden.Any.rowMsg`).
 -/
 
 namespace FlockSoundness.Discharge.Layout
@@ -82,14 +84,28 @@ def v2Row (p : Port) : Bool :=
   p.v2 && p.segs.isNone && p.bits == 16 * p.words && decide (128 * p.chunks ≤ 2 * p.words) &&
     decide (2 * p.words + 17 ≤ 128 * (p.chunks + 1))
 
-/-- **Every row is a `v2Row`**, and each output row holds one output port. -/
-def v2Rows (c : Circuit) : Bool := c.ports.all v2Row && c.outRowPorts.all (· == 1)
+/-- **A `sha512/row-seg/v1` row the hidden-output headlines cover**: segmented as `HmRow.segShape` cuts its bits,
+`16 · words` bits, its compressions its segments' and then its outer message's, and each segment's bytes ending, with
+SHA-512's 17 bytes of padding, in its last compression's block. -/
+def segRow (p : Port) : Bool :=
+  let s := (p.bits + HmRow.ROW_SEG_BITS - 1) / HmRow.ROW_SEG_BITS
+  p.segs == some (HmRow.segShape p.bits).1 && p.bits == 16 * p.words &&
+    p.chunks == (((HmRow.segShape p.bits).1.toList.take s).map Prod.snd).sum + ((64 * s + 17 + 127) / 128 - 1) &&
+    (List.range s).all fun j =>
+      let m := min (p.bits - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS
+      decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
+
+/-- **Every row is a `v2Row` or a `segRow`**, of any mix, and each output row is a `v2Row` holding one output port. -/
+def bitRows (c : Circuit) : Bool :=
+  c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
+    (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
 
 /-- **The circuits the hidden-output headlines cover**: `scopeOk`'s conditions on the unit, and every row a
-`sha512/row/v1` row (`v1Ports`) or every row a `v2Row`, one output port each (`v2Rows`). -/
+`sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
+(`bitRows`). -/
 def scopeOkH (c : Circuit) : Bool :=
   c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
-    (v1Ports c || v2Rows c)
+    (v1Ports c || bitRows c)
 
 theorem scopeOkH_of_scopeOk {c : Circuit} (h : scopeOk c = true) : scopeOkH c = true := by
   unfold scopeOk at h
@@ -105,12 +121,35 @@ theorem scopeOkH_spec {c : Circuit} (hU : Built c.unit) (h : scopeOkH c = true) 
   obtain ⟨⟨⟨⟨h1, ho⟩, hu⟩, hpr⟩, -⟩ := h
   exact ⟨h1, ho, portReads_of_portReadsB hU hu hpr⟩
 
-/-- **`scopeOkH`'s rows**: all `sha512/row/v1` rows, or all unsegmented `sha512/row/v2` rows of `16 · words` bits
-ending in their `hm96` slot's block, each output row of one output port. -/
+/-- **A `v2Row`**: an unsegmented `sha512/row/v2` row of `16 · words` bits ending in its `hm96` slot's block. -/
+theorem v2Row_spec {p : Port} (h : v2Row p = true) :
+    p.v2 = true ∧ p.segs = none ∧ p.bits = 16 * p.words ∧ 128 * p.chunks ≤ 2 * p.words ∧
+      2 * p.words + 17 ≤ 128 * (p.chunks + 1) := by
+  unfold v2Row at h
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Option.isNone_iff_eq_none] at h
+  obtain ⟨⟨⟨⟨hv, hs⟩, hb⟩, h1⟩, h2⟩ := h
+  exact ⟨hv, hs, hb, h1, h2⟩
+
+/-- **A `segRow`**: segmented as `HmRow.segShape` cuts its bits, `16 · words` bits, its compressions its segments' and
+its outer message's, each segment's bytes ending in its last block. -/
+theorem segRow_spec {p : Port} (h : segRow p = true) :
+    p.segs = some (HmRow.segShape p.bits).1 ∧ p.bits = 16 * p.words ∧
+      p.chunks = (((HmRow.segShape p.bits).1.toList.take ((p.bits + HmRow.ROW_SEG_BITS - 1) / HmRow.ROW_SEG_BITS)).map
+        Prod.snd).sum + ((64 * ((p.bits + HmRow.ROW_SEG_BITS - 1) / HmRow.ROW_SEG_BITS) + 17 + 127) / 128 - 1) ∧
+      ∀ j < (p.bits + HmRow.ROW_SEG_BITS - 1) / HmRow.ROW_SEG_BITS,
+        128 * (((min (p.bits - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS + 7) / 8 + 17 + 127) / 128 - 1) ≤
+          (min (p.bits - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS + 7) / 8 := by
+  unfold segRow at h
+  simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨hs, hb⟩, hn⟩, hf⟩ := h
+  exact ⟨hs, hb, hn, hf⟩
+
+/-- **`scopeOkH`'s rows**: all `sha512/row/v1` rows, or each row a `v2Row` or a `segRow`, each output row a `v2Row` of
+one output port. -/
 theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
     (∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) ∨
-      ((∀ p ∈ c.ports.toList, p.v2 = true ∧ p.segs = none ∧ p.bits = 16 * p.words ∧ 128 * p.chunks ≤ 2 * p.words ∧
-        2 * p.words + 17 ≤ 128 * (p.chunks + 1)) ∧ ∀ r ∈ c.outRowPorts.toList, r = 1) := by
+      ((∀ p ∈ c.ports.toList, v2Row p = true ∨ segRow p = true) ∧ (∀ r ∈ c.outRowPorts.toList, r = 1) ∧
+        ∀ j < c.outRowPorts.size, v2Row (c.ports.getD (HmOut.nIn c + j) default) = true) := by
   unfold scopeOkH at h
   simp only [Bool.and_eq_true, Bool.or_eq_true] at h
   rcases h.2 with h1 | h2
@@ -121,10 +160,10 @@ theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
     obtain ⟨⟨⟨hv, -⟩, hb⟩, hc⟩ := h1 p (Array.mem_toList_iff.1 hp)
     exact ⟨hv, hb, hc⟩
   · right
-    unfold v2Rows v2Row at h2
-    simp only [Bool.and_eq_true, Array.all_eq_true', beq_iff_eq, decide_eq_true_eq, Option.isNone_iff_eq_none] at h2
-    refine ⟨fun p hp => ?_, fun r hr => h2.2 r (Array.mem_toList_iff.1 hr)⟩
-    obtain ⟨⟨⟨⟨hv, hs⟩, hb⟩, h1⟩, h2'⟩ := h2.1 p (Array.mem_toList_iff.1 hp)
-    exact ⟨hv, hs, hb, h1, h2'⟩
+    unfold bitRows at h2
+    simp only [Bool.and_eq_true, Array.all_eq_true', Bool.or_eq_true, beq_iff_eq, List.all_eq_true,
+      List.mem_range] at h2
+    obtain ⟨⟨hp, hr⟩, ho⟩ := h2
+    exact ⟨fun p hm => hp p (Array.mem_toList_iff.1 hm), fun r hm => hr r (Array.mem_toList_iff.1 hm), ho⟩
 
 end FlockSoundness.Discharge.Layout
