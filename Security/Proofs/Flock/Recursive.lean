@@ -21,6 +21,7 @@ import Proofs.Flock.Recursive.ExecClass
 import Proofs.Flock.Recursive.ReadsOpen
 import Proofs.Flock.Recursive.UniversalLower
 import Proofs.Flock.Recursive.UniversalStmt
+import Proofs.Flock.Recursive.UniversalAudit
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its soundness at the compiled inner
@@ -29,5 +30,6 @@ strata's tiling from the verifier's U2 check (`VStarU2`), the compile premise at
 `fast100`'s (`Universal`), the universal unit's class of private circuits, its descriptions read in gate order
 (`UniversalClass`), the class, regions and schedule of an executable statement (`ExecClass`), the registered reads
 read off an outcome, whose commit strings open the registration's root when every session verifies (`Reads`,
-`ReadsOpen`), the unit's lowering, which computes that class's interpretation (`UniversalLower`), and the statement
-read off the description's rows, with when a session is faulty (`UniversalStmt`). -/
+`ReadsOpen`), the unit's lowering, which computes that class's interpretation (`UniversalLower`), the statement read
+off the description's rows, with when a session is faulty (`UniversalStmt`), and what `RecursiveAudit`'s (i) reads of
+the registered private circuit at the executable's class (`UniversalAudit`). -/
