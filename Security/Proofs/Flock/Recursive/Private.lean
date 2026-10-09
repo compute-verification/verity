@@ -38,8 +38,8 @@ theorem prCoin_add_compl {C : Type} [Fintype C] [Nonempty C] (P : C → Prop) :
         by_cases hc : P c <;> simp [hc]
     _ = 1 := avg_const _
 
-/-- **A bound on every complement is a bound the other way**: `Pr_X[¬f] ≤ Pr_Y[¬g] + δ` gives `Pr_Y[g] ≤ Pr_X[f] + δ`. -/
-theorem prCoin_flip {X Y : Type} [Fintype X] [Nonempty X] [Fintype Y] [Nonempty Y] (f : X → Prop) (g : Y → Prop)
+/-- **A bound on every complement is a bound the other way**: `Pr_A[¬f] ≤ Pr_B[¬g] + δ` gives `Pr_B[g] ≤ Pr_A[f] + δ`. -/
+theorem prCoin_flip {A B : Type} [Fintype A] [Nonempty A] [Fintype B] [Nonempty B] (f : A → Prop) (g : B → Prop)
     {δ : ℝ≥0∞} (h : prCoin (fun x => ¬ f x) ≤ prCoin (fun y => ¬ g y) + δ) : prCoin g ≤ prCoin f + δ := by
   have a1 := prCoin_add_compl f
   have a2 := prCoin_add_compl g
@@ -70,6 +70,7 @@ noncomputable def realAt (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → 
       view P w r z.1.1.1 (fun i => Flock.Guarantees.firewallLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i))
         z.1.1.2 z.1.2 z.2)
 
+omit [Fintype Rr] [Nonempty Rr] in
 /-- **`RecursiveZK` at one registration salt, both ways.** -/
 theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
@@ -123,7 +124,7 @@ theorem RecursiveCircuitIndist : Flock.Guarantees.RecursiveCircuitIndist := by
     _ = _ := by ring
 
 /-- The unit, dropped from an experiment's randomness. -/
-def unitProd (X : Type) : Unit × X ≃ X where
+def unitProd (T : Type) : Unit × T ≃ T where
   toFun p := p.2
   invFun x := ((), x)
   left_inv _ := rfl
@@ -173,7 +174,6 @@ theorem RecursiveCircuitPrivateLeaves : Flock.Guarantees.RecursiveCircuitPrivate
 
 end Private
 
-/-- **The recursive audit ran the registered netlist.** -/
 /-- **A bound at every outcome the strategy reaches is a bound**: if every reached outcome with `E` has `F`, then
 `Pr[E] ≤ Pr[F]`. -/
 theorem prob_mono_outcome {α : Type} {E F : α → Prop} :
@@ -206,15 +206,16 @@ theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
   · by_cases hc : ∃ o, Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
         AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ prog o ≠ p ∧ Binding.Collides (com.ext (op o) op₀)
     · exact Or.inr (Or.inr (Or.inl hc))
-    · refine Or.inr (Or.inr (Or.inr (le_trans (prob_mono_outcome
-        (E := fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
-        (F := fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1)) _ σ ?_) hb)))
-      rintro o hro ⟨hacc, hnp⟩
-      refine ⟨hacc, fun hh => ?_⟩
-      rw [hx o hacc] at hh
-      by_cases hp : prog o = p
-      · rw [hp] at hh
-        exact hnp hh
-      · exact hc ⟨o, hro, hacc, hp, hbind rt (prog o) p (op o) op₀ (hop o hacc) hreg hp⟩
+    · have hmono : prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
+            (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+          prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+            (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ := by
+        refine prob_mono_outcome _ σ fun o hro h => ⟨h.1, fun hh => ?_⟩
+        rw [hx o h.1] at hh
+        by_cases hp : prog o = p
+        · rw [hp] at hh
+          exact h.2 hh
+        · exact hc ⟨o, hro, h.1, hp, hbind rt (prog o) p (op o) op₀ (hop o h.1) hreg hp⟩
+      exact Or.inr (Or.inr (Or.inr (hmono.trans hb)))
 
 end Flock.SecurityProofs
