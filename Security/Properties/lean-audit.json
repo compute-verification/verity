@@ -17,7 +17,9 @@
   "Properties.CertifierNetwork",
   "Properties.Proofs.CertifierNetwork",
   "Properties.Identity",
-  "Properties.Proofs.Identity"
+  "Properties.Proofs.Identity",
+  "Properties.NetworkRecords",
+  "Properties.Proofs.NetworkRecords"
  ],
  "proved_in": ["../Proofs"],
  "meaning": [
@@ -55,6 +57,7 @@
   "Lms",
   "Properties.Identity",
   "Properties.NetworkCertifier",
+  "Properties.NetworkRecords",
   "Definitions.NetworkCertifier",
   "Properties.CertifierNetwork",
   "Properties.Pous",
@@ -102,6 +105,11 @@
    ],
    "except": [],
    "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
+  },
+  "Properties.NetworkRecords": {
+   "imports": ["NetworkCheck.RecordsGrid", "Properties.NetworkCertifier"],
+   "except": [],
+   "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
   },
   "Properties.CertifierNetwork": {
    "imports": ["Properties.CertifierDevice", "Properties.NetworkCertifier"],
@@ -303,6 +311,12 @@
    ],
    "assumptions": [],
    "type_hash": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5"
+  },
+  "Properties.NetworkRecords.acceptMeans": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkRecords.answerAcceptMeans": {
+   "owner": "@network-accounting"
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
@@ -677,6 +691,14 @@
    },
    "Properties.NetworkCertifier.undigestedParamsReject": {
     "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.acceptMeans": {
+    "function": "NetworkCheck.Records.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.answerAcceptMeans": {
+    "function": "NetworkCheck.Records.protocol.answer",
     "outcome": "accept"
    },
    "Properties.Pouw.Check.acceptMeans": {
