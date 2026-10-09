@@ -34,6 +34,9 @@
    "owner": "@proofs",
    "digest": "ff4f8f0ffda4d6bbc622adca36f997c60f66dbe90c654a3f9441bb22c98739c4"
   },
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZK": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ": {
    "owner": "@proofs",
    "digest": "167287a3a7f1c1def8a44226e55431613ce209de3d6f812bd506108d9fd257e4"

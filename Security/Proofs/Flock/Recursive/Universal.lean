@@ -6,7 +6,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 /-!
 # Recursion: the compile premise at a class (gap 4, its first part)
 
-`RecursiveAudit` takes `_hin : Flock.Premises.CompiledForkSound T CT cls regs sch` at the class it ranges over. Gap 4
+`RecursiveAudit` took `_hin : Flock.Premises.CompiledForkSound T CT cls regs sch` at the class it ranged over; it now
+takes the statement, and `compiledForkSound_execClassAt` (`ExecClass`) discharges the premise at its class. Gap 4
 fixes the class at `UniversalUnit_v1{G, N_IN, N_OUT}`'s, and there the premise is the compile lemma's conclusion:
 
 * `fast100_some`: `fast100 m` is a schedule for every `22 ≤ m ≤ 35`.
