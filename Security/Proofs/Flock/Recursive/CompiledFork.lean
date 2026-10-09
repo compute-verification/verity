@@ -108,7 +108,7 @@ theorem Inner.fork_of_outcomes {D : Type} {H : List UInt8 → D} {I : Inner}
 /-- With no round, the inner game's one run is the empty transcript. -/
 theorem prob_rounds_zero (p : List (M × C) → Prop) (s : Strategy (rounds M C 0 .ret)) (h : ¬ p []) :
     prob p (rounds M C 0 .ret) s = 0 := by
-  show prob p (.ret []) PUnit.unit = 0
+  show prob p (.ret []) s = 0
   simp [prob, h]
 
 end Runs
