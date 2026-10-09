@@ -18,10 +18,12 @@ import Proofs.Flock.Recursive.VStarU2
 import Proofs.Flock.Recursive.Universal
 import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.UniversalLower
+import Proofs.Flock.Recursive.UniversalStmt
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered netlist's in `Private`), its soundness at the compiled inner
 protocol with the compile lemma open (`Compile`), V*'s laws from their executable strata (`VStarStrata`) and those
 strata's tiling from the verifier's U2 check (`VStarU2`), the compile premise at a class whose schedule is
 `fast100`'s (`Universal`), the universal unit's class of private circuits, its descriptions read in gate order
-(`UniversalClass`), and the unit's lowering, which computes that class's interpretation (`UniversalLower`). -/
+(`UniversalClass`), the unit's lowering, which computes that class's interpretation (`UniversalLower`), and the
+statement read off the description's rows, with when a session is faulty (`UniversalStmt`). -/
