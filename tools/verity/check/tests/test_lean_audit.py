@@ -278,23 +278,82 @@ def test_a_kept_build_keeps_the_outputs_of_a_package_whose_sources_are_above_it(
     assert LA.prune(top) == len(_outputs(top, "Proofs.Core")) and all(p.is_file() for p in spec)
 
 
-def test_a_kept_build_of_each_real_package_keeps_every_module(tmp_path):
-    """Every audited package's own modules survive `prune`, whatever its `srcDir`, and an output of no module goes."""
-    files = LA.COMMON.tracked_files(ROOT)
-    for f in files:
-        if f.endswith(".lean") or f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean"):
-            (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
-            (tmp_path / f).write_bytes((ROOT / f).read_bytes() if f.endswith("lakefile.toml") else b"")
-    for pkg in LA.packages(files):
-        modules = sorted(LA.AUDIT.lean_modules(ROOT / pkg))
-        assert modules, pkg
-        outs = [p for m in modules for p in _outputs(tmp_path / pkg, m)]
-        stale = _outputs(tmp_path / pkg, f"{modules[0].split('.')[0]}.NoSuchModule")
-        for p in outs + stale:
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text("built")
-        assert LA.prune(tmp_path / pkg) == len(stale), pkg
-        assert all(p.is_file() for p in outs), pkg
+#: a spec and, nested in it, a package of proofs about it with `srcDir = ".."`, as `Security` and `Security/Proofs` are
+NESTED = {
+    "Spec/lakefile.toml": 'name = "spec"\ndefaultTargets = ["Defs"]\n\n[[lean_lib]]\nname = "Defs"\n',
+    "Spec/lean-audit.json": json.dumps({"roots": ["Defs"]}),
+    "Spec/Defs.lean": "def Defs.double (n : Nat) : Nat := 2 * n\n",
+    "Spec/Proofs/lakefile.toml": 'name = "proofs"\nsrcDir = ".."\ndefaultTargets = ["Proofs"]\n\n[[require]]\nname = "spec"\n'
+                                 'path = ".."\n\n[[lean_lib]]\nname = "Proofs"\nroots = ["Proofs.Core", "Proofs.Extra"]\n',
+    "Spec/Proofs/lean-audit.json": json.dumps({"roots": ["Proofs.Core", "Proofs.Extra"]}),
+    "Spec/Proofs/Core.lean": "import Defs\nimport Proofs.Core.Deep\n\n"
+                             "theorem Proofs.double_eq (n : Nat) : Defs.double n = n + n := by\n  unfold Defs.double\n  omega\n",
+    "Spec/Proofs/Core/Deep.lean": "theorem Proofs.add_zero (n : Nat) : n + 0 = n := rfl\n",
+    "Spec/Proofs/Extra.lean": "import Proofs.Core\n\ntheorem Proofs.double_zero : Defs.double 0 = 0 := rfl\n",
+    "Spec/lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [], "name": "spec",
+                                           "lakeDir": ".lake", "fixedToolchain": False}),
+    "Spec/Proofs/lake-manifest.json": json.dumps({
+        "version": "1.2.0", "packagesDir": ".lake/packages", "name": "proofs", "lakeDir": ".lake", "fixedToolchain": False,
+        "packages": [{"type": "path", "scope": "", "name": "spec", "manifestFile": "lake-manifest.json", "inherited": False,
+                      "dir": "..", "configFile": "lakefile.toml"}]}),
+}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None and not (Path.home() / ".elan" / "bin" / "lake").exists(),
+                    reason="no Lean toolchain")
+def test_an_audit_from_a_kept_build_is_the_audit_of_a_cold_one(tmp_path):
+    """The audit of a package with `srcDir = ".."` from the build its last passing audit kept is the audit of a cold build:
+    the same report and the same record written by `--update`, byte for byte, with nothing rebuilt; and a `sorry` planted in
+    any one of its modules fails it. The prune tests stand in for Lake; this one builds and audits with it."""
+    toolchain = (ROOT / "tools" / "verity" / "lean" / "tests" / "fixtures" / "control" / "lean-toolchain").read_text()
+    store, logged = LA.WarmBuilds(tmp_path / "kept"), []
+
+    def tree(name: str, plant: str | None = None) -> Path:
+        work = tmp_path / name
+        for f, text in {**NESTED, "Spec/lean-toolchain": toolchain, "Spec/Proofs/lean-toolchain": toolchain}.items():
+            (work / f).parent.mkdir(parents=True, exist_ok=True)
+            (work / f).write_text(text)
+        if plant:
+            with open(work / plant, "a") as f:
+                f.write("\ntheorem Proofs.planted : 1 = 2 := by sorry\n")
+        return work
+
+    def audited(work: Path, warm: bool, update: bool = False) -> tuple[dict, str]:
+        """The report of ``work``'s `Spec/Proofs` (its timings aside, ``work`` named `<tree>`) and what its build compiled."""
+        if warm:
+            for p in ("Spec", "Spec/Proofs"):
+                store.take(work, p, audited=p == "Spec/Proofs", log=logged.append)
+        out = tmp_path / f"{work.name}-out{'-update' if update else ''}"
+        rep = LA.AUDIT.audit(work / "Spec" / "Proofs", out, build=True, update=update, log=lambda *_: None)
+        built = sorted(re.findall(r"Built (Proofs\S*|Defs\S*)", (out / "audit-Proofs" / "build.log").read_text()))
+        return json.loads(json.dumps({k: v for k, v in rep.items() if k != "seconds"}).replace(str(work), "<tree>")), built
+
+    cold = tree("cold")
+    first, built = audited(cold, warm=False, update=True)
+    assert first["failures"] == [] and "Proofs.Extra" in built
+    record = (cold / "Spec/Proofs/lean-audit.json").read_bytes()
+    again, _ = audited(cold, warm=False)
+    assert again["failures"] == []
+    store.give_back(cold, {cold / "Spec", cold / "Spec/Proofs"})
+
+    warm = tree("warm")
+    assert audited(warm, warm=True, update=True) == (first, [])
+    assert (warm / "Spec/Proofs/lean-audit.json").read_bytes() == record
+    assert audited(warm, warm=False) == (again, [])
+    assert [ln for ln in logged if "Spec/Proofs" in ln] == [f"lean-audit: Spec/Proofs: build warm "
+                                                             f"({LA.build_key('Spec/Proofs', warm)[:12]}); 0 stale output(s) removed"]
+    store.give_back(warm, {warm / "Spec", warm / "Spec/Proofs"})
+    kept = tmp_path / "kept-pristine"
+    shutil.copytree(store.store, kept)
+    for module in ("Spec/Proofs/Core.lean", "Spec/Proofs/Core/Deep.lean", "Spec/Proofs/Extra.lean"):
+        shutil.rmtree(store.store)
+        shutil.copytree(kept, store.store)
+        bad = tree(f"planted-{module.replace('/', '_')}", plant=module)
+        (bad / "Spec/Proofs/lean-audit.json").write_bytes(record)
+        rep, built = audited(bad, warm=True)
+        assert "sorry: sorryAx is used by Proofs.planted" in rep["failures"], (module, rep["failures"])
+        assert built and "Defs" not in built, (module, built)
 
 
 def test_a_moved_package_takes_the_build_it_left(tmp_path, monkeypatch):
