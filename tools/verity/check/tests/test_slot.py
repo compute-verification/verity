@@ -586,3 +586,86 @@ def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, 
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: free.pop(0))
     assert ran["slot"] == "a" and free == [600]
     assert "a: 300 GB of memory free, under the 560 GB a check here may peak at" in capsys.readouterr().err
+
+
+def _twin_ssh(monkeypatch, here: Path, home: Path, sent: list):
+    """slot.py's ssh to HOME, run by sh on this machine with HOME's lock directory in place of this one's (both nodes keep their
+    locks at the same path)."""
+    real = subprocess.run
+
+    def run(argv, **kw):
+        if argv[:1] != ["ssh"]:
+            return real(argv, **kw)
+        sent.append(argv[:-1])
+        return real(["sh", "-c", argv[-1].replace(str(here), str(home))], **kw)
+
+    monkeypatch.setattr(SLOT.subprocess, "run", run)
+
+
+def test_a_twin_runs_only_if_it_claims_its_pair_first_and_its_twins_then_leave_their_lines(tmp_path, monkeypatch, capsys):
+    """9 Oct: four checks waited up to 54 min in node 1's line while a node 2 slot was free, until each was moved by hand. Twins
+    wait in both lines; the first to hold a slot claims the pair on HOME and runs, and the other leaves its line (75)."""
+    n1, n2 = tmp_path / "n1", tmp_path / "n2"
+    for d in (n1, n2):
+        d.mkdir()
+        (d / "slots").write_text("a 0\n")
+    peers = tmp_path / "peers"
+    peers.write_text("# machine, ssh options and destination\nvy-nebius-1 -i /k -o IdentitiesOnly=yes research@10.0.0.1\n")
+    monkeypatch.setattr(SLOT, "PEERS", peers)
+    sent = []
+    _twin_ssh(monkeypatch, n2, n1, sent)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: (_ for _ in ()).throw(Exec()))
+    held = _hold(n1 / "check-a.lock")                                              # node 1's slot is busy: its twin waits there
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-n2")
+    monkeypatch.setattr(SLOT, "SLOTS", n2 / "slots")
+    with pytest.raises(Exec):                                                      # node 2's frees first: its twin claims and runs
+        SLOT.main(["--twin", "p1@vy-nebius-1", "--", "check"], now=lambda: NOW, sleep=lambda s: None)
+    assert sent[-1] == ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-i", "/k", "-o", "IdentitiesOnly=yes", "research@10.0.0.1"]
+    claim = json.loads((n1 / "twins" / "p1" / "who").read_text())
+    assert (claim["run"], claim["twin"], claim["took"]) == ("r-n2", "p1@vy-nebius-1", "2026-10-01T09:00Z")
+    assert not (n2 / "twins").exists()
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-n1")
+    monkeypatch.setattr(SLOT, "SLOTS", n1 / "slots")
+    assert SLOT.main(["--twin", "p1", "--", "check"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+    assert "slot: not started: its twin took a slot first (run r-n2, " in capsys.readouterr().err
+    assert list((n1 / SLOT.LINE).iterdir()) == []
+    os.close(held)
+
+
+def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_lets_the_slot_go(tmp_path, monkeypatch, capsys):
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "PEERS", tmp_path / "absent-peers")
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    assert SLOT.main(["--twin", "p2@vy-nebius-1", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
+    assert (f"slot: not started: twin p2@vy-nebius-1 can't be claimed (vy-nebius-1 isn't in {tmp_path / 'absent-peers'}), "
+            "so its twin there runs instead; exit 75") in capsys.readouterr().err
+    monkeypatch.setattr(SLOT, "twin_here", lambda *a: ("unreachable", {"why": "PermissionError: twins"}))
+    assert SLOT.main(["--twin", "p2", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
+    assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
+            in capsys.readouterr().err)
+    monkeypatch.undo()
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
+    t = [NOW]
+    peeks = []
+    real = SLOT.twin
+
+    def twin(op, spec, who):
+        peeks.append(op)
+        return ("free", {}) if op == "peek" else real(op, spec, who)              # the claim lands between a peek and the take
+
+    monkeypatch.setattr(SLOT, "twin", twin)
+    assert SLOT.main(["--twin", "p3", "--", "check"], now=lambda: t[0], sleep=lambda s: None) == SLOT.NOT_STARTED
+    assert peeks == ["peek", "claim"] and "its twin took a slot first (run r-other)" in capsys.readouterr().err
+    slot, fd = SLOT.take(SLOT.parse("a 0"), tmp_path, NOW)                         # the slot it held is free again
+    os.close(fd)
+
+
+def test_twin_is_parsed_and_shown_and_a_bad_pair_is_refused(tmp_path, capsys):
+    assert SLOT.options(["--by", "x", "--twin", "20261009T0440Z-ab12@vy-nebius-2"])[4] == "20261009T0440Z-ab12@vy-nebius-2"
+    with pytest.raises(SystemExit, match="is not PAIR or PAIR@HOME"):
+        SLOT.options(["--twin", "p;rm -rf /"])
+    assert "twin p1" in SLOT.describe({"run": "r1", "twin": "p1"})

@@ -97,7 +97,7 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 #: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
-#: `--priority` and `--by NAME` when given, then `--`
+#: `--priority`, `--by NAME` and `--twin PAIR[@HOME]` when given, then `--`
 SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`
@@ -118,6 +118,7 @@ def invocation(argv, command) -> tuple[str, object]:
         opts = argv[2:]
         opts = opts[1:] if opts[:1] == ["--priority"] else opts
         opts = opts[2:] if opts[:1] == ["--by"] and len(opts) > 1 else opts
+        opts = opts[2:] if opts[:1] == ["--twin"] and len(opts) > 1 else opts
         run = opts[1:] if opts[:1] == ["--"] else argv
     if run[:len(command)] != list(command):
         return "refused", f"its command `{shlex.join(argv)}` isn't the target's declared `{shlex.join(command)}`"
