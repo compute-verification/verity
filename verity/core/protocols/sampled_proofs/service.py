@@ -59,7 +59,7 @@ from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.program import Program
 from verity.core.protocols.profile import IntegrityProfile
 
-from .one_stage import audit as A, draw as D, partition as P, registration as R
+from .one_stage import audit as A, draw as D, partition as P, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .two_stage import OwnRandomness, closure_of, draw_first
 
@@ -501,8 +501,8 @@ class Stream:
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
                  work_table: Mapping[str, Any] | None = None) -> Registration:
-        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`)
-        against the challenger's own copies: the population program it builds from `unit` and the record's N, the check's
+        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`, by
+        its verifier of record, `verifier.check`) against the challenger's own copies: the population program it builds from `unit` and the record's N, the check's
         query, the selection rule's law (a two-stage rule's `replay`), `SCHEME`, the stream's log, and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes
         them). Under `TwoStage` its roots are the boundary values'. Then the receipt. Raises `Refused`: when the stream
@@ -521,7 +521,7 @@ class Stream:
         rule = self.spec.selection
         law = {"law": "subset", "k": n} if isinstance(rule, All) else D.parse_law(
             (rule.replay if isinstance(rule, TwoStage) else rule).text)
-        v = R.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, self._log, None,
+        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, self._log, None,
                     work_table, registered)
         if not v.ok:
             raise Refused(v)
@@ -552,7 +552,7 @@ class Stream:
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work law only: the draw carries the
         drawn units' closure (`two_stage.closure_of`), which `draw.proved` and `draw.check_proved` count. Raises `Refused`
         for a registration drawn before (nothing redraws), a closure map on another law or outside [0, N) (before any
-        coin is read), and a draw that isn't well formed under the law (`draw.check_draw`)."""
+        coin is read), and a draw that isn't well formed under the law (`draw.check_draw`, by `verifier.check_draw`)."""
         e = self._entry(registration)
         if e.draw is not None:
             raise _refuse("drawn", {"order": registration.order})
@@ -569,7 +569,7 @@ class Stream:
         obj = {**e.law, "population": n, "units": units}
         if closure is not None and closure_of(closure, units):
             obj["closure"] = closure_of(closure, units)
-        v = D.check_draw(obj, registration.record, e.law)
+        v = V.check_draw(obj, registration.record, e.law)
         if not v.ok:
             raise Refused(v)
         e.draw, e.drawn_at = Draw(registration, e.law, obj), self._clock()
@@ -609,7 +609,7 @@ class Stream:
         if record.get("population") != n:
             raise _refuse("interior-population", {"registered": record.get("population"), "proved": n})
         law = {"law": "subset", "k": n}
-        v = R.check(record, P.population_program(self.unit, n), self.spec.check.query, law, SCHEME, ports, leaf_layer,
+        v = V.check(record, P.population_program(self.unit, n), self.spec.check.query, law, SCHEME, ports, leaf_layer,
                     anchors, self._log)
         if not v.ok:
             raise Refused(v)
@@ -643,13 +643,12 @@ class Stream:
 
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
-                session_roots: Mapping[str, str] | None = None,
-                session_registered: Mapping[str, str] | None = None) -> Outcome:
+                session_roots: Mapping[str, str] | None = None) -> Outcome:
         """The draw's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
-        record names the delivered `sessions`; then one-stage's audit record (`audit.audit_record`; `proved_units` and
-        `instances` default to the draw's, and `served`, `session_roots` and `session_registered` are its) decides accept
-        or reject. Under `TwoStage` with interiors, the interior registration's audit record (all of its units proved, by
+        record names the delivered `sessions`; then one-stage's audit record by its verifier of record
+        (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. Under `TwoStage` with interiors, the interior registration's audit record (all of its units proved, by
         the same statement and verdicts) must accept too, and `session_roots` (`{port: root}` from the sessions'
         statements) is split between the two by value. Raises `Refused` for a second outcome, a verdict of record about
         other sessions, or public outputs the verdicts of record don't report alike."""
@@ -683,12 +682,12 @@ class Stream:
             inner = {v.name for v in self._values(interior=True)}
             roots = {p: r for p, r in session_roots.items() if p not in inner}
             interior_roots = {p: r for p, r in session_roots.items() if p in inner}
-        rec = A.audit_record(draw.registration.record, draw.registration.receipt, draw.draw, draw.law, proved, instances,
-                             statement, verdicts, self.delta, e.sessions, served, roots, session_registered)
+        rec = V.audit_record(draw.registration.record, draw.registration.receipt, draw.draw, draw.law, proved, instances,
+                             statement, verdicts, self.delta, e.sessions, served, roots)
         inner_rec = None
         if e.interior is not None:
             assert e.interior_draw is not None
-            inner_rec = A.audit_record(e.interior.record, e.interior.receipt, e.interior_draw, D.law_of(e.interior_draw),
+            inner_rec = V.audit_record(e.interior.record, e.interior.receipt, e.interior_draw, D.law_of(e.interior_draw),
                                        list(e.interior_draw["units"]), instances, statement, verdicts, self.delta,
                                        e.sessions, None, interior_roots)
         accepted = rec["accepted"] and (inner_rec is None or inner_rec["accepted"])
