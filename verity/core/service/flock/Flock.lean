@@ -32,6 +32,7 @@ import Flock.RecResiduals
 import Flock.HmRow
 import Flock.ProvedScope
 import Flock.Registered
+import Flock.Keccak
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
