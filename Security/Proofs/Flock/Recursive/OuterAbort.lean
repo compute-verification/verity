@@ -10,8 +10,8 @@ commitment). The stop reads the witness, so the simulator could not reproduce it
 real view never stops; this module shows the honest prover's transmission with the stop in it is that view.
 
 * `Table.Stops`: rep `r`'s self-check fails, `⟨λ, h⟩ ≠ θ` (in characteristic 2 the same as `⟨c, h⟩ + t ≠ 0`), and
-  `Table.not_stops`: never, under `InnerHolds`. `Coined.viewExe_pre`: the check reads only what the executable prover
-  sent before `τ`.
+  `Table.not_stops`: never, under `InnerHolds`. `Table.viewWith_pre`, `Coined.viewExe_pre`: the check reads only what
+  the executable prover sent before `τ`.
 * `sendsJ`: the session's honest prover at `J` tables: what a stopped run sends (`stopped`, any function of the prover's
   randomness) if some table's self-check stops, else the joint view.
 * `stopsJ_never`, `prCoin_stopsJ`, `sendsJ_honest`: at `Admits` coins, valid witnesses and public registered values,
@@ -25,6 +25,8 @@ they are `CoinedSetup.Admits`, which `ZkViewAtJ` assumes.
 
 namespace FlockSoundness.ZK.Table
 
+section Stops
+
 variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL) [CharP F 2]
 
 /-- **The honest prover's self-check stops** (`zk_veil.rs`'s `SelfCheck::Stop`): at some rep `r`, its pads miss the
@@ -35,6 +37,18 @@ def Stops (w : W) (ω : T.Rand) : Prop :=
 /-- Under `InnerHolds` the self-check never stops. -/
 theorem not_stops {w : W} (h : T.InnerHolds w) (ω : T.Rand) : ¬ T.Stops w ω := fun ⟨r, hr⟩ => hr (h ω r)
 
+end Stops
+
+section Leaves
+
+variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B]
+  (T : Table F K W Salt (B × Salt) D Hi VL) [CharP F 2]
+
+/-- `viewWith` changes only the hidden leaves: its messages before `τ` are `view`'s. -/
+theorem viewWith_pre (w : W) (ω : T.Rand) (L : T.Hid → D) : (T.viewWith w ω L).pre = (T.view w ω).pre := rfl
+
+end Leaves
+
 end FlockSoundness.ZK.Table
 
 namespace FlockSoundness.Discharge.ZkView
@@ -43,7 +57,9 @@ variable {K W Hi VL : Type} [Field K] {z : Sizes}
 
 /-- The executable prover's messages before `τ` are `Table.view`'s, which `Table.Stops` reads. -/
 theorem Coined.viewExe_pre (T : Coined K W Hi VL z) (w : W) (ω : T.tab.Rand) (ys : T.tab.Hid → Salt) :
-    (T.viewExe w ω ys).pre = (T.tab.view w ω).pre := rfl
+    (T.viewExe w ω ys).pre = (T.tab.view w ω).pre := by
+  unfold Coined.viewExe
+  exact FlockSoundness.ZK.Table.viewWith_pre _ _ _ _
 
 end FlockSoundness.Discharge.ZkView
 
