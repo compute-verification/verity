@@ -12,9 +12,9 @@
 #   MODE=direct   the private circuit's DEFINITION (MODULE:NAME) proved directly as a public circuit (rec_stage.py direct, N
 #                 lanes): one --zk session on the CPU (M0) served with the verifier's draw (subset:N, every unit), Lean's
 #                 verify --zk and the live build's replay --zk: $OUT/direct/, summary.json
-#   MODE=reverify every outer session an 87-rec-private.sh run kept (RUN_OUT, its statements under DATA) verified again by
-#                 this tree's flock-verify (rec-env.sh builds it): $OUT/view/ (the run's records, each session's Lean files
-#                 this build's), rec_private_summary.py's summary.json and summary.txt of the view
+#   MODE=reverify every outer session an 87-rec-private.sh run kept (RUN_OUT, its statements under DATA) verified again, all
+#                 at once, by this tree's flock-verify (rec-env.sh builds it): $OUT/view/ (the run's records, each session's
+#                 Lean files this build's), rec_private_summary.py's summary.json and summary.txt of the view
 # Run from the verity tree (research run --cwd source). Big files under $FLOCK_WORK (default /workspace/jobs/rec-stage).
 # env: LADDER="128,64,32 256,64,32 512,64,32 1024,64,32 2048,64,32"  PROFILE_G=128  N=8  CPUS=16  TIMEOUT=10800 (seconds, per class)
 #      CLS NETLIST TAG (default CLS-nN)  (MODE=fast)  DEFINITION (MODE=direct)  RUN_OUT DATA (MODE=reverify)
@@ -205,10 +205,11 @@ if [ $MODE = reverify ]; then
     [ -n "$C" ] && [ -f $C/circuit.txt ] && [ -n "$SESS" ] || { echo "$n: no statement or session"; continue; }
     D=$O/view/outer/$n; mkdir -p $D
     for f in $d*; do case ${f##*/} in lean.log|lean.err|time-lean.txt) ;; *) ln -s $f $D/ ;; esac; done
-    /usr/bin/time -v -o $D/time-lean.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin \
-      --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $SESS > $D/lean.log 2> $D/lean.err
-    echo "$n lean exit $?"
+    ( /usr/bin/time -v -o $D/time-lean.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $C/circuit.txt --public $C/pub.bin \
+        --partition $C/partition.json --program $C/program.json --registered $C/registered.json --session $SESS > $D/lean.log 2> $D/lean.err
+      echo "$n lean exit $?" ) &
   done
+  wait
   python3 verity/ml/flock/pod/rec_private_summary.py $O/view | tee $O/summary.txt; cp $O/view/summary.json $O/summary.json
   exit 0
 fi
