@@ -80,7 +80,7 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
       εo + εP + ∑ k ∈ Finset.range I.r, εb k + εin := by
   classical
   rw [prob_recGame]
-  set Z : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → ℝ≥0∞ := fun ω t s =>
+  set zLeaf : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → ℝ≥0∞ := fun ω t s =>
     if ¬ I.holds (x σ.1 ω) ∧ I.accepts (x σ.1 ω) (relabel (ref ω) t) ∧
         ∃ b, Game.Outcome (outer σ.1 ω t) s b ∧ Acc σ.1 ω t b ∧
           (wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd) = relabel (ref ω) t then 1 else 0
@@ -91,7 +91,7 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
         prob (fun b => Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) (outer σ.1 ω t) s +
         ∑ k ∈ Finset.range I.r, prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
           (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) (outer σ.1 ω t) s +
-        Z ω t s := by
+        zLeaf ω t s := by
     intro ω t s ht
     refine (prob_mono_reached (outer σ.1 ω t) s
       (F := fun b => (Acc σ.1 ω t b ∧
@@ -117,7 +117,7 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
       · exact Or.inr (Or.inl ⟨hb.1, h2⟩)
     · exact Or.inl ⟨hb.1, h1⟩
   have hZle : ∀ ω, leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
-      (fun t s => Z ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) ≤ εin := hin
+      (fun t s => zLeaf ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) ≤ εin := hin
   unfold probAt expAt
   calc avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
         (fun t s => prob (fun b => Acc σ.1 ω t b ∧ ¬ I.holds (x σ.1 ω)) (outer σ.1 ω t)
@@ -131,7 +131,7 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
             ∑ k ∈ Finset.range I.r, prob (fun b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
               (wmsg (dec σ.1 ω t (Strategy.ofMap _ _ s) b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1))
               (outer σ.1 ω t) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s) +
-            Z ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) :=
+            zLeaf ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω) :=
         avg_mono fun ω => leafAvg_mono_len (fun t s ht => hleaf ω t _ ht) _
     _ = probAt σ (fun ω t s b => Acc σ.1 ω t b ∧
           ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) +
@@ -139,7 +139,7 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
         ∑ k ∈ Finset.range I.r, probAt σ (fun ω t s b => Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
           (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) +
         avg (fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
-          (fun t s => Z ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)) := by
+          (fun t s => zLeaf ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)) := by
         simp only [leafAvg_add, leafAvg_sum, avg_add, avg_finset_sum]
         rfl
     _ ≤ εo + εP + ∑ k ∈ Finset.range I.r, εb k + εin := by
