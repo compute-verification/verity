@@ -2339,6 +2339,39 @@
    "assumptions": [],
    "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
   },
+  "NetTiming.SecurityProofs.CardCountsEqLe": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.CardFree": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.CardLeftPacked": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeSync": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -2356,6 +2389,18 @@
    "assumptions": [],
    "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816"
   },
+  "NetTiming.SecurityProofs.EncardFifoGrids": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
    "owner": "@network-accounting",
    "signature": [
@@ -2363,6 +2408,12 @@
    ],
    "assumptions": [],
    "type_hash": "2ca793f68266f5d8b633599df98d5a44b14180caa908bc4ed29f780257ee184a"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": {
+   "owner": "@network-accounting"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": {
    "owner": "@network-accounting",
@@ -2372,6 +2423,9 @@
    ],
    "assumptions": [],
    "type_hash": "13ea83921034e1ee1dc0cb725f2a74c0c928d20fccf7e71f6d962b726f735fa1"
+  },
+  "NetTiming.SecurityProofs.ExpectedRowCausal": {
+   "owner": "@network-accounting"
   },
   "Pous.SecurityProofs.BandMultiMeetsFamily": {
    "owner": "@memory-accounting",
@@ -3826,41 +3880,28 @@
    "Nci.SecurityProofs.ReadBound": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMul": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
-   "NetTiming.Guarantees.CardCountsEqLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.CardCountsLeLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.CardFree": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.CardLeftPacked": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeAdvice": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeBlocks": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRate": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeFixedClock": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeSync": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAcceptedRunsLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardDecodableLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardDecodableLeBlocks": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardFifoGrids": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardFifoGridsLeOfAvailable": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressDecodableLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressDecodableLeContents": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressObsDecodableLeContents": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardLeProdOfBranching": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardObsDecodableLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.ExistsFillOfLeftPacked": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.ExpectedRowCausal": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.FillInjective": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.NoFaultOfAccepted": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.RecordedRowEqFill": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.ReleasedSelf": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.SumReleasedLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeSync": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardFifoGrids": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.EncardIngressDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check.",
    "Pous.Guarantees.A1CompressionCard": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pous.Guarantees.A1CompressionPr": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pous.Guarantees.A2LemmaAM1": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
