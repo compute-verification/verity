@@ -374,7 +374,7 @@ theorem sessions_stage_le
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
         (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u))
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (hcs : ∀ j, ∀ pos ∈ Sk j, ∀ R' : Reg', (zs j).vb.cs R' pos = cs j pos)
+    (hcs : ∀ j, (∃ tr, AcceptsZKR (zs j).I (zs j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg', (zs j).vb.cs R' pos = cs j pos)
     (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (wv : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c)
     (hQ : ∀ Xt : (j : Fin S) → (Vs j).Bits, (∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
@@ -408,6 +408,9 @@ theorem sessions_stage_le
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).s := by
     intro j τ₀
+    by_cases hj : ∃ tr, AcceptsZKR (zs j).I (zs j).own tr
+    swap
+    · exact ((prob_mono (fun a ha => (hj ⟨a.2.2, ha.1⟩).elim) _ _).trans (prob_false _ _).le).trans (zero_le ..)
     unfold ZkOuter.slackCR
     split_ifs with hc
     · refine le_trans (prob_auditLive_mono _ _ ?_)
@@ -421,7 +424,7 @@ theorem sessions_stage_le
         rw [ZkOuter.vb_pos, ZkOuter.vb_bit]
         exact ⟨hg, hne⟩
       · by_cases hp : pos ∈ Sk j
-        · rw [hcs j pos hp]
+        · rw [hcs j hj pos hp]
         · simp [candWeightK, hp]
     · exact (prob_le_one _ _ _).trans le_self_add
   refine ((prob_mono hmono _ _).trans (prob_seqC_exists_le S _ _
@@ -460,7 +463,8 @@ theorem outerV_stage_le
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
         (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u))
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (hcs : ∀ R₂ j, ∀ pos ∈ Sk j, ∀ R' : Reg', (zs R₂ j).vb.cs R' pos = cs j pos)
+    (hcs : ∀ R₂ j, (∃ tr, AcceptsZKR (zs R₂ j).I (zs R₂ j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg',
+      (zs R₂ j).vb.cs R' pos = cs j pos)
     (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (wv : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c)
     (hQ : ∀ Xt : (j : Fin S) → (Vs j).Bits, (∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
@@ -481,13 +485,14 @@ theorem outerV_stage_le
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **V*'s public files register the stages' commitments**: at every history `t` and registration `R₂`, where `t`'s
-stage-`i` commitment is `e.1`, the digest session `j`'s value binding registers at each commit string of `Sk i j` (`cs`,
-the public file's leaf there) is `cmt j e.1`'s. -/
+stage-`i` commitment is `e.1` and session `j` accepts some transcript, the digest session `j`'s value binding registers
+at each commit string of `Sk i j` (`cs`, the public file's leaf there) is `cmt j e.1`'s. A session that accepts nothing
+may be another history's, registering that history's commitments; the transfer reads only accepting sessions. -/
 def VCommits (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg) : Prop :=
-  ∀ i R ω t (e : Cm × I.Coin), t[i]? = some e → ∀ R₂ j, ∀ pos ∈ Sk i j, ∀ R' : Reg',
-    (zs R ω t R₂ j).vb.cs R' pos = cmt j e.1 pos
+  ∀ i R ω t (e : Cm × I.Coin), t[i]? = some e → ∀ R₂ j, (∃ tr, AcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own tr) →
+    ∀ pos ∈ Sk i j, ∀ R' : Reg', (zs R ω t R₂ j).vb.cs R' pos = cmt j e.1 pos
 
 /-- **V*'s circuits decode each stage's message from its commit strings**: layers whose bits on the wires of each
 `Sk i j` are those of the values `v j` hold a round-`i` message the inner verifier reads as `msg i v`, at any coins. -/
@@ -579,7 +584,7 @@ theorem zk_sessions_recursive_full
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
   refine (outerV_stage_le hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
-    (fun j pos => cmt j e.1 pos) (fun R₂ j pos hp R' => hcmt i σ.1 ω t e he R₂ j pos hp R')
+    (fun j pos => cmt j e.1 pos) (fun R₂ j hj pos hp R' => hcmt i σ.1 ω t e he R₂ j hj pos hp R')
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
     (add_le_add le_rfl ?_)

@@ -35,7 +35,7 @@ theorem sessions_stage_le_read
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
         (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u))
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (hcs : ∀ j, ∀ pos ∈ Sk j, ∀ R' : Reg', (zs j).vb.cs R' pos = cs j pos)
+    (hcs : ∀ j, (∃ tr, AcceptsZKR (zs j).I (zs j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg', (zs j).vb.cs R' pos = cs j pos)
     (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (wv : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c)
     (hQ : ∀ Xt : (j : Fin S) → (Vs j).Bits, (∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j → ReadW Vs j g →
@@ -70,6 +70,9 @@ theorem sessions_stage_le_read
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).s := by
     intro j τ₀
+    by_cases hj : ∃ tr, AcceptsZKR (zs j).I (zs j).own tr
+    swap
+    · exact ((prob_mono (fun a ha => (hj ⟨a.2.2, ha.1⟩).elim) _ _).trans (prob_false _ _).le).trans (zero_le ..)
     unfold ZkOuter.slackCR
     split_ifs with hc
     · refine le_trans (prob_auditLive_mono _ _ ?_)
@@ -83,7 +86,7 @@ theorem sessions_stage_le_read
         rw [ZkOuter.vb_pos, ZkOuter.vb_bit]
         exact ⟨hg, hne⟩
       · by_cases hp : pos ∈ Sk j
-        · rw [hcs j pos hp]
+        · rw [hcs j hj pos hp]
         · simp [candWeightK, hp]
     · exact (prob_le_one _ _ _).trans le_self_add
   refine ((prob_mono hmono _ _).trans (prob_seqC_exists_le S _ _
@@ -118,7 +121,8 @@ theorem outerV_stage_le_read
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
         (Law.stratum (Vs j).law.σs ((Vs j).law.σs u)).card ≤ (Vs j).law.ks ((Vs j).law.σs u))
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (hcs : ∀ R₂ j, ∀ pos ∈ Sk j, ∀ R' : Reg', (zs R₂ j).vb.cs R' pos = cs j pos)
+    (hcs : ∀ R₂ j, (∃ tr, AcceptsZKR (zs R₂ j).I (zs R₂ j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg',
+      (zs R₂ j).vb.cs R' pos = cs j pos)
     (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (wv : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c)
     (hQ : ∀ Xt : (j : Fin S) → (Vs j).Bits, (∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j → ReadW Vs j g →
@@ -185,7 +189,7 @@ theorem zk_sessions_recursive_read
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
   refine (outerV_stage_le_read hS (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
-    (fun j pos => cmt j e.1 pos) (fun R₂ j pos hp R' => hcmt i σ.1 ω t e he R₂ j pos hp R')
+    (fun j pos => cmt j e.1 pos) (fun R₂ j hj pos hp R' => hcmt i σ.1 ω t e he R₂ j hj pos hp R')
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
     (add_le_add le_rfl ?_)

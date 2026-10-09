@@ -37,7 +37,8 @@ sessions read that the history does not fix, its running sums `rec-acc` and with
   `x R ω` at the rounds' coins;
 * **their public files register the firewall's commitments** (`VCommits`): the digest session `j`'s value binding
   registers at each commit string of stage `i`'s `Sk i j` is the firewall's stage-`i` commitment's, `cmt j`, at every
-  `R₂`;
+  `R₂` where session `j` accepts some transcript (the verifier ties a public file's rows to its registration only on an
+  accepted run);
 * **they decode each round's message from those commit strings** (`VDecodesR`, at equality): layers whose bits on the
   wires of each `Sk i j` that some unit reads (`ReadW`) are those of the values `v j` hold `msg i v` as their round-`i`
   message;
