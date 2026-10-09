@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 import Proofs.Flock.Verifier.Registered
 
 /-!
-# Proofs of the recursive audit's circuit privacy, and that it ran the registered netlist
+# Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
 
 * `Flock.SecurityProofs.RecursiveCircuitPrivate` is `circuit_private_of_zk`'s argument with `RecursiveZK` as the step:
   at each registration salt `r`, `RecursiveZK` (and, for the other way, `RecursiveZK` on the event's complement) moves
@@ -11,12 +11,12 @@ import Proofs.Flock.Verifier.Registered
   registration's view `reg P r`; then the registration's hiding, as a test with values in `[0, 1]` (`Hides.avg_le`),
   moves `reg P r` to `reg p₀ r`.
 * `RecursiveCircuitIndist` is the two ways of `RecursiveCircuitPrivate` through the simulator at `p₀ = P`.
-* `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·2^-193`, `ideal_leaves_swap` from each netlist to the
+* `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·2^-193`, `ideal_leaves_swap` from each private circuit to the
   ideal leaves and back (on the complement); `RecursiveCircuitPrivateLeaves` is `RecursiveCircuitPrivate` with it.
 * `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
   registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.
 * `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at each row the run read
-  (its opening and the developer's) gives that the registered netlist has the rows the run read, so the hidden statement
+  (its opening and the developer's) gives that the registered private circuit has the rows the run read, so the hidden statement
   is `p`'s (`_hx`).
 * `regRowCommit_binding`: `RecursiveRanRegistered`'s `_hbind` for the executable's registered rows. An opening of row
   `i` is the verifier's check of a registered read (`regRowCommit_opens`: `Flock.Registered.opens` of the row's commit
@@ -117,7 +117,7 @@ theorem RecursiveCircuitPrivate : Flock.Guarantees.RecursiveCircuitPrivate := by
       _ = avg (realAt reg nh msgs view P w E) + (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
           rw [avg_add, avg_const]; ring
 
-/-- **Two netlists of a class are indistinguishable in the recursive audit.** -/
+/-- **Two private circuits of a class are indistinguishable in the recursive audit.** -/
 theorem RecursiveCircuitIndist : Flock.Guarantees.RecursiveCircuitIndist := by
   intro Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ _ _ reg ε hreg honest nh msgs view sim εo hOuter hKey o P P'
     w w' hw hw' E
@@ -136,7 +136,7 @@ def unitProd (T : Type) : Unit × T ≃ T where
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- **T1 for a netlist's rows**: the leaves of `Q`'s rows under fresh salts are within `n_r·2^-193` of ideal leaves, at
+/-- **T1 for a private circuit's rows**: the leaves of `Q`'s rows under fresh salts are within `n_r·2^-193` of ideal leaves, at
 every event `G` of the leaves. -/
 theorem rowLeaves_swap {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
     (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) (Q : Prog) (G : (Fin nr → ByteArray) → Prop) :
@@ -157,7 +157,7 @@ theorem rowLeaves_swap {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
         congrArg (· + nr * (2 : ℝ≥0∞) ^ (-193 : ℤ)) (prCoin_congr_equiv (unitProd _)
           (fun u : Fin nr → ZkView.Bits × ZkView.Salt => G fun i => Flock.Guarantees.idealLeaf (u i)))
 
-/-- **A registration by hm96 leaves hides**, at `2·n_r·2^-193` under `hash-derived-key`: each netlist's leaves are within
+/-- **A registration by hm96 leaves hides**, at `2·n_r·2^-193` under `hash-derived-key`: each private circuit's leaves are within
 `n_r·2^-193` of ideal ones (`rowLeaves_swap`), the second way on the complement. -/
 theorem regLeaves_hides {nr : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :
@@ -172,7 +172,7 @@ theorem regLeaves_hides {nr : ℕ} (rows : Prog → Fin nr → ByteArray) (pub :
           nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) := add_le_add h2 le_rfl
     _ = prCoin (fun r => E (Flock.Guarantees.regLeaves rows pub P' r)) + 2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) := by ring
 
-/-- **The recursive audit is circuit private, the netlist registered by hm96 leaves.** -/
+/-- **The recursive audit is circuit private, the private circuit registered by hm96 leaves.** -/
 theorem RecursiveCircuitPrivateLeaves : Flock.Guarantees.RecursiveCircuitPrivateLeaves := by
   intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
   exact RecursiveCircuitPrivate (Flock.Guarantees.regLeaves rows pub) (regLeaves_hides rows pub hKey) honest nh msgs

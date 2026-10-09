@@ -3200,7 +3200,7 @@
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.RanRegisteredRun": "lemma: the one-session registration break, which RecursiveAudit's (i) uses at the commit strings V* checks; it leaves the list for RecursiveAudit, the one property.",
-   "Flock.SecurityProofs.RecursiveCircuitIndist": "lemma: the two-netlist form of RecursiveCircuitPrivate; it leaves the list for RecursiveAudit, whose (ii) is RecursiveCircuitPrivateLeaves.",
+   "Flock.SecurityProofs.RecursiveCircuitIndist": "lemma: the two-circuit form of RecursiveCircuitPrivate; it leaves the list for RecursiveAudit, whose (ii) is RecursiveCircuitPrivateLeaves.",
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "lemma: the reduction RecursiveCircuitPrivateLeaves applies at a registration by hm96 leaves; it leaves the list for RecursiveAudit.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "lemma: RecursiveAudit's (ii), stated there; it leaves the list for RecursiveAudit, the one property.",
    "Flock.SecurityProofs.RecursiveRanRegistered": "lemma: RecursiveAudit's (i) restates it at C-Flock's compiled table and the commit strings V* checks, with the inner fork; it leaves the list for RecursiveAudit.",
