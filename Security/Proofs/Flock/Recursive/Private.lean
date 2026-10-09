@@ -12,8 +12,10 @@ import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 * `RecursiveCircuitIndist` is the two ways of `RecursiveCircuitPrivate` through the simulator at `p₀ = P`.
 * `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·2^-193`, `ideal_leaves_swap` from each netlist to the
   ideal leaves and back (on the complement); `RecursiveCircuitPrivateLeaves` is `RecursiveCircuitPrivate` with it.
-* `RecursiveRanRegistered`: an accepted run off the registered netlist whose openings don't collide is a run on which
-  the hidden statement fails (the binding, at the run's opening and the developer's), so `RecursiveSound` bounds it.
+* `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
+  registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.
+* `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at the run's opening and
+  the developer's moves the hidden statement from the run's netlist to `p`.
 -/
 
 namespace Flock.SecurityProofs
@@ -172,15 +174,47 @@ theorem RecursiveCircuitPrivateLeaves : Flock.Guarantees.RecursiveCircuitPrivate
 end Private
 
 /-- **The recursive audit ran the registered netlist.** -/
+/-- **A bound at every outcome the strategy reaches is a bound**: if every reached outcome with `E` has `F`, then
+`Pr[E] ≤ Pr[F]`. -/
+theorem prob_mono_outcome {α : Type} {E F : α → Prop} :
+    ∀ (g : Game α) (s : Strategy g), (∀ a, Game.Outcome g s a → E a → F a) → prob E g s ≤ prob F g s
+  | .ret a, _, h => by
+      classical
+      simp only [prob]
+      by_cases hE : E a
+      · simp [hE, h a rfl hE]
+      · simp [hE]
+  | .send _ k, s, h => prob_mono_outcome (k s.1) s.2 h
+  | @Game.coin _ _ _ _ k, s, h =>
+      Finset.sum_le_sum fun c _ => mul_le_mul_right (prob_mono_outcome (k c) (s c) fun a ha => h a ⟨c, ha⟩) _
+
+theorem RanRegisteredRun : Flock.Guarantees.RanRegisteredRun := by
+  intro Root P Op com hbind rt p op₀ h₀ β G σ acc Q prog op hacc B hB
+  by_cases hb : ∃ b, Game.Outcome G σ b ∧ acc b ∧ prog b ≠ p ∧ Binding.Collides (com.ext (op b) op₀)
+  · exact Or.inl hb
+  · refine Or.inr (le_trans (prob_mono_outcome (E := fun b => acc b ∧ (Q b ∨ prog b ≠ p))
+      (F := fun b => acc b ∧ Q b) G σ ?_) hB)
+    rintro b hr ⟨ha, hq⟩
+    exact ⟨ha, hq.resolve_right fun hne => hb ⟨b, hr, ha, hne, hbind rt _ _ _ _ (hacc b ha) h₀ hne⟩⟩
+
 theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
-  intro n L Reg I Cm S Vs Reg' Reg₂ hS hA3 zs dg N k Rw M hk hRw hM ρ hρ hr t' ht' qF qS qW qR σ x wmsg Sk cmt msg hbr q
-    hCR εin hin Root Prog Op com hbind rt p op₀ hreg stmt prog op hop hx
-  refine (prob_mono (fun o h => ⟨h.1, fun hh => ?_⟩) _ σ).trans
-    (RecursiveSound hS hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg Sk cmt msg hbr q hCR hin)
-  obtain ⟨hacc, hnp, hnc⟩ := h
-  rw [hx o hacc] at hh
-  by_cases hp : prog o = p
-  · exact hnp (hp ▸ hh)
-  · exact hnc (hbind rt (prog o) p (op o) op₀ (hop o hacc) hreg hp)
+  intro n L Reg I Cm S Vs Reg' Reg₂ hS hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
+    Root Prog Op com hbind rt p op₀ hreg stmt prog op hop hx
+  rcases RecursiveSound hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hb
+  · exact Or.inl hf
+  · exact Or.inr (Or.inl hf)
+  · by_cases hc : ∃ o, Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
+        AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ prog o ≠ p ∧ Binding.Collides (com.ext (op o) op₀)
+    · exact Or.inr (Or.inr (Or.inl hc))
+    · refine Or.inr (Or.inr (Or.inr (le_trans (prob_mono_outcome
+        (E := fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
+        (F := fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1)) _ σ ?_) hb)))
+      rintro o hro ⟨hacc, hnp⟩
+      refine ⟨hacc, fun hh => ?_⟩
+      rw [hx o hacc] at hh
+      by_cases hp : prog o = p
+      · rw [hp] at hh
+        exact hnp hh
+      · exact hc ⟨o, hro, hacc, hp, hbind rt (prog o) p (op o) op₀ (hop o hacc) hreg hp⟩
 
 end Flock.SecurityProofs

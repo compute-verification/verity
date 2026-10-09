@@ -29,9 +29,11 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   registration's hiding gap plus `RecursiveZK`'s. `RecursiveCircuitIndist` is its two-netlist form, and
   `RecursiveCircuitPrivateLeaves` the registration as hm96 leaves of the netlist's rows, its hiding gap from
   `hash-derived-key`.
-* `RecursiveRanRegistered`, for the auditor: on `RecursiveSound`'s hypotheses and a binding program commitment, when
-  every one of V*'s sessions accepts, the hidden statement holds of the registered netlist, or the run's opening of the
-  registration and the developer's give a SHA-512 collision along their paths, except with `RecursiveSound`'s bound.
+* `RecursiveRanRegistered`, for the auditor, in `RecursiveSound`'s fork form: on its hypotheses and a binding program
+  commitment, a round or session fork, or a run the prover reaches whose sessions all accept on another netlist and
+  whose opening of the registration collides with the developer's, or the auditor accepts every session while the
+  registered netlist's hidden statement fails with probability at most `RecursiveSound`'s bound. `RanRegisteredRun` is
+  the one-session form, `PrivateCircuit.RanRegistered` with its `cr/sha-512` hypothesis replaced by the same break.
 
 C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
@@ -270,19 +272,43 @@ def RecursiveCircuitPrivateLeaves : Prop :=
         recSimPr (regLeaves rows pub) nh sim o p₀ E ≤ recRealPr (regLeaves rows pub) nh msgs view P w E +
           (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ))
 
-/-- **The recursive audit ran the registered netlist.** On `RecursiveSound`'s hypotheses (the same prover `σ`, V*'s laws
-and sessions, the bridge `Flock.Assumptions.VBridge`, the fork finders' `cr/sha-512` and `ε_in`), let the registration
-commit the netlist `p` at the root `rt` of a binding program commitment `com` (`PrivateCircuit.Commit.Binding`: two
-openings of one root to different netlists give a SHA-512 collision between inputs hashed along their paths,
-`com.ext`), the developer's opening of it being `op₀`. On a run `o` whose sessions all accept, `prog o` and `op o` are a
-netlist and an opening of `rt` to it that the run carries (`_hop`; the run's output holds the strategy the prover names
-for each session), and the hidden statement the inner verifier ran on is that netlist's at the draw (`_hx`:
-`x R ω = stmt (prog o) ω`). Then
-$$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the statement of } p \text{ holds} \wedge
-  \neg\,\text{the openings } op(o), op_0 \text{ collide}]$$
-is at most `RecursiveSound`'s bound. The break is tied to the run: two inputs that SHA-512 hashes along the run's
-opening of `rt` and along the registration's (`Binding.Collides (com.ext (op o) op₀)`); nothing is assumed of SHA-512
-for it, and it adds no term. -/
+/-- **A session ran the registered program**, with its break tied to the run: `PrivateCircuit.RanRegistered` without its
+`cr/sha-512` hypothesis. The root `rt` commits to a registered program `p` (for a private circuit, `pad C c`) through
+the registrant's opening `op₀`, and the commitment binds (`PrivateCircuit.Commit.Binding`: two openings of one root to
+two different programs give the extractor's pair `com.ext`, two different strings SHA-512 maps to one digest). Take a
+session, a game `G` against any prover `σ`, whose acceptance `acc` shows that the program of its committed values
+(`prog b`) opens `rt` (through `op b`), and suppose protocol 1's soundness bounds accepting with its bad event `Q` (at
+least `K` wrong units of the committed values, say) by `B`. Then either some outcome `σ` reaches accepts a program other
+than `p`, and its opening and the registrant's collide (`Binding.Collides (com.ext (op b) op₀)`), or accepting with `Q`,
+or with a program other than `p`, has probability at most `B`. `RanRegistered`'s finder plays the session once and
+outputs the extractor's pair, so the first is a run of that finder finding a collision; nothing is assumed of SHA-512,
+and the bound has no `q²/2^513`. -/
+def RanRegisteredRun : Prop :=
+  ∀ {Root P Op : Type} (com : PrivateCircuit.Commit Root P Op), com.Binding →
+    ∀ (rt : Root) (p : P) (op₀ : Op), com.Opens rt p op₀ →
+    ∀ {β : Type} (G : Game β) (σ : Strategy G) (acc Q : β → Prop) (prog : β → P) (op : β → Op),
+      (∀ b, acc b → com.Opens rt (prog b) (op b)) →
+    ∀ (B : ℝ≥0∞), prob (fun b => acc b ∧ Q b) G σ ≤ B →
+      (∃ b, FlockSoundness.Game.Outcome G σ b ∧ acc b ∧ prog b ≠ p ∧
+          FlockSoundness.Binding.Collides (com.ext (op b) op₀)) ∨
+        prob (fun b => acc b ∧ (Q b ∨ prog b ≠ p)) G σ ≤ B
+
+/-- **The recursive audit ran the registered netlist**, in fork form. On `RecursiveSound`'s hypotheses (the same prover
+`σ`, V*'s laws and sessions, the bridge `Flock.Assumptions.VBridge` and `ε_in`), let the registration commit the netlist
+`p` at the root `rt` of a binding program commitment `com` (`PrivateCircuit.Commit.Binding`: two openings of one root to
+two different netlists give the extractor's pair `com.ext`, two different strings SHA-512 maps to one digest), the
+developer's opening of it being `op₀`. On a run `o` whose sessions all accept, `prog o` and `op o` are a netlist and an
+opening of `rt` to it that the run carries (`_hop`; the run's output holds the strategy the prover names for each
+session, and with it the registered reads of the hidden circuit's rows), and the hidden statement the inner verifier
+ran on is that netlist's at the draw (`_hx`: `x R ω = stmt (prog o) ω`). Then one of four holds.
+
+* `RecursiveSound`'s round fork (`RoundFork`) or session fork (`SessionFork`).
+* A registration break: some outcome `o` that `σ` reaches has all of V*'s sessions accepting on a netlist `prog o`
+  other than `p`, and its opening of `rt` and the developer's collide (`Binding.Collides (com.ext (op o) op₀)`).
+* $$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the statement of } p \text{ holds}]$$
+  is at most `RecursiveSound`'s bound, unchanged.
+
+Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (_hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
@@ -291,16 +317,12 @@ def RecursiveRanRegistered : Prop :=
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
-    {t' : ℝ} (_ht' : 0 ≤ t') (qF qS qW qR : ℝ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
-    (q : ℕ → ℝ)
-    (_hCR : ∀ i < I.r, ∀ ω pos,
-      (forkAt (obS Vs) σ (cmtS cmt) (fun R ω t s => trialV (zs R ω t) dg N k Rw s) i ω pos).CR H512 (q i))
     {εin : ℝ≥0∞} (_hin : InnerSound I εin)
     -- the registration's program commitment, the registered netlist, and the developer's opening of it
     {Root Prog Op : Type} (com : PrivateCircuit.Commit Root Prog Op) (_hbind : com.Binding)
@@ -311,14 +333,15 @@ def RecursiveRanRegistered : Prop :=
     (op : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Op)
     (_hop : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → com.Opens rt (prog o) (op o))
     (_hx : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → x o.1 o.2.1 = stmt (prog o) o.2.1),
-    prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1) ∧
-        ¬ FlockSoundness.Binding.Collides (com.ext (op o) op₀))
-        (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
-      expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
-        ∑ i ∈ Finset.range I.r,
-          (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-              (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ t' qF qS τ) s) +
-            (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin
+    RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      (∃ o, FlockSoundness.Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
+        AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ prog o ≠ p ∧
+        FlockSoundness.Binding.Collides (com.ext (op o) op₀)) ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
 end Flock.Guarantees

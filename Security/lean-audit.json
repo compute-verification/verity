@@ -665,6 +665,9 @@
   "Flock.SecurityProofs.RecursiveRanRegistered": {
    "owner": "@proofs"
   },
+  "Flock.SecurityProofs.RanRegisteredRun": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden"],
