@@ -101,7 +101,9 @@ theorem head_or {h H : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) (e' 
 theorem expected_eq {p : Params} {link : Link} {syncs : Fin p.windows → ClockSync} (h : Declares link syncs) {w : Nat}
     (hw : w < p.windows) :
     (Records.expectedGrids p.grid p.windows link).getD w #[] = programGrid p syncs link.frames w := by
-  rw [Array.getD_eq_getD_getElem?, RecordsGrid.expectedGrids_eq _ _ _ _ hw, Option.getD_some, expectedGrid_eq h]
+  rw [Array.getD_eq_getD_getElem?,
+    show (Records.expectedGrids p.grid p.windows link)[w]? = some (Check.expectedGrid p.grid p.windows link w) from
+      RecordsGrid.expectedGrids_eq _ _ _ ⟨w, hw⟩, Option.getD_some, expectedGrid_eq h]
 
 /-- **An egress link-window with no violation has its one complete record, the Program's.** -/
 theorem egress_none {p : Params} {c : Records.Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : Link}
