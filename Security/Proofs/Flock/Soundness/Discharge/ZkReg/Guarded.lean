@@ -174,7 +174,8 @@ theorem drawOkZKHJ_of_accepts (I : Inputs) {c : Flock.Circuit}
     (hRec : RecordsLiveZKJ I dj Jf wr) (ω : Ω) (R : Reg)
     (o : LiveOutJ (Jf ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
     (hacc : AcceptsZK I (wr ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
-    DrawOkZKHJ I dj (mPtsOf c.g (∑ s, ks s)) ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+    DrawOkZKHJ I dj (mPtsOf c.g (∑ s, ks s))
+      ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
   by_cases h1 : I.count ≤ 1
   · exact drawOkZKHJ_of_exec_one I h1 hc σs ks hks St hS Kd pop Lb src dj hdj ω
   · exfalso
