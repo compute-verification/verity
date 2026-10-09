@@ -1061,6 +1061,56 @@ def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_r
     assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
 
 
+def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_path, monkeypatch):
+    """`a` and `b` both require `d` by path, as four of flock's dependents did in check 4cd5, whose builds rebuilt flock's
+    stale modules into its one `.lake/build` at once, so that one's `clang` read a `.c` file another was rewriting. The first
+    fake build holds on until the other package's build has started or waits for it: without the wait, the two overlap."""
+    d, a, b = tmp_path / "d", tmp_path / "a", tmp_path / "b"
+    for p in (d, a, b):
+        p.mkdir()
+    for p in (a, b):
+        (p / A.POLICY).write_text(json.dumps({"roots": [p.name.upper()]}))
+        (p / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "d", "dir": "../d"}]}))
+    state = threading.Condition()
+    building, done, overlaps, waits = set(), set(), [], {}
+
+    def fake_run(argv, cwd, log=None, timeout=0):
+        me, other = cwd.name, ({"a", "b"} - {cwd.name}).pop()
+        with state:
+            if building:
+                overlaps.append((me, sorted(building)))
+            building.add(me)
+            state.notify_all()
+            state.wait_for(lambda: other in building or other in waits or other in done)
+            building.discard(me)
+            done.add(me)
+            state.notify_all()
+        return 1, "fake build"
+
+    def log_for(name):
+        def log(line):
+            with state:
+                waits[name] = line
+                state.notify_all()
+        return log
+
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    reps = {}
+    threads = [threading.Thread(target=lambda p=p: reps.__setitem__(
+        p.name, A.audit(p, tmp_path / "out", build=True, log=log_for(p.name), runs=False))) for p in (a, b)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert overlaps == []
+    [(second, line)] = waits.items()
+    assert line == f"build: {tmp_path / second} waits for a build that writes the .lake of {d.resolve()}"
+    assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
+
+
 def test_a_guarantee_is_proved_by_exactly_one_package():
     spec = facts(modules=["P.Defs"], pins={"P.t": {"kind": "missing"}, "P.u": fact() | {"module": "P.Defs"},
                                             "P.v": {"kind": "missing"}, "P.w": {"kind": "missing"}})
