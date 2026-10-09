@@ -1151,8 +1151,8 @@ SPEC = {"assumptions": ["Core.Assumptions"], "meaning": ["Core.Protocol", "Core.
                    "Core.Guarantees": {"imports": ["Core.Protocol", "Core.Assumptions", "Core.Guarantees"],
                                        "why": "a guarantee is stated over the spec"}},
         "guarantees": {"Core.SecurityProofs.main": {"owner": "@lean"}, "Core.SecurityProofs.inline": {"owner": "@lean"}},
-        "shape": {"frozen": {"Core.SecurityProofs.main": "a test of moving proofs, not of the shape",
-                             "Core.SecurityProofs.inline": "a test of moving proofs, not of the shape"}}}
+        "shape": {"frozen": {"Core.SecurityProofs.main": "frozen: a test of moving proofs, not of the shape",
+                             "Core.SecurityProofs.inline": "frozen: a test of moving proofs, not of the shape"}}}
 
 
 def _package(d: Path, files: dict[str, str], lakefile: str, policy: dict) -> None:
@@ -1394,13 +1394,13 @@ def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink(
     pol = lambda frozen: {"guarantees": {"P.a": {}, "P.b": {}}, "shape": {"premises": [], "properties": entries, "frozen": frozen}}
     good, bad = [part([ACCEPTS], inputs=[("x", 0)])], [part(inputs=[("x", 0)])]
     facts = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": bad}}}
-    assert A.shape(pol({"P.b": "RESTATE: split the iff."}), facts) == []
-    fails = A.shape(pol({"P.b": "RESTATE", "P.a": " ", "P.z": "gone"}), facts)
+    assert A.shape(pol({"P.b": "restatable: split the iff."}), facts) == []
+    fails = A.shape(pol({"P.b": "restatable: split it", "P.a": " ", "P.z": "frozen: gone"}), facts)
     assert [f.split()[1] for f in fails] == ["shape.frozen", "shape.frozen[P.a]", "P.a"], fails
     assert "which only shrinks" in fails[2]
     assert [f.split()[1] for f in A.shape(pol({}), facts)] == ["P.b"]
     assert [f.split()[1] for f in A.shape({"guarantees": {"P.b": {}}}, facts)] == ["P.b"], "no shape section: still checked"
-    assert A.shape({"guarantees": {"P.b": {}}, "shape": {"frozen": {"P.b": "not swept yet"}}}, facts) == []
+    assert A.shape({"guarantees": {"P.b": {}}, "shape": {"frozen": {"P.b": "frozen: not swept yet"}}}, facts) == []
     loose = facts | {"spec_definitions": [{"name": "P.A", "module": "P.Guarantees", "kind": "def", "statement": True},
                                           {"name": "P.Pred", "module": "P.Guarantees", "kind": "def", "statement": False},
                                           {"name": "P.Cond", "module": "P.Defs", "kind": "def", "statement": True}],
@@ -1410,8 +1410,51 @@ def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink(
     assert [f.split()[1] for f in A.shape(pol({}), loose)] == ["P.A"], "a statement no guarantee states fails"
     held = pol({}) | {"shape": pol({})["shape"] | {"statements": ["P.Defs"]}}
     assert [f.split()[1] for f in A.shape(held, loose)] == ["P.Cond"], "where shape.statements says statements are"
-    assert A.shape(pol({"P.A": "memory-accounting lists it."}), loose) == [], "until shape.frozen names it"
+    assert A.shape(pol({"P.A": "unstated: memory-accounting lists it."}), loose) == [], "until shape.frozen names it"
     loose["pins"]["P.a"]["lift"] = {"head": "P.A"}
-    assert "neither a guarantee" in A.shape(pol({"P.A": "listed now"}), loose)[0]
+    assert "neither a guarantee" in A.shape(pol({"P.A": "unstated: listed now"}), loose)[0]
     gone = {"pins": {"P.a": {"shape": good}, "P.b": {"shape": {"error": "boom"}}}}
     assert A.shape(pol({}), gone) == ["shape: P.b has no shape in the facts (boom)"], "a shape Facts couldn't read fails"
+
+
+def test_a_frozen_reason_starts_with_its_category_and_an_unstated_statement_is_unstated():
+    """Each `shape.frozen` reason starts with one of `CATEGORIES`, so a record counts its guarantees by category: a
+    guarantee's isn't `unstated`, and a statement no guarantee states has only that one."""
+    pol = {"guarantees": {"P.b": {}}, "shape": {"frozen": {"P.b": "RESTATE: split the iff"}}}
+    facts = {"pins": {"P.b": {"shape": [part(inputs=[("x", 0)])]}},
+             "spec_definitions": [{"name": "P.A", "module": "P.Guarantees", "kind": "def", "statement": True}]}
+    out = A.shape(pol | {"shape": {"frozen": {"P.b": "RESTATE: split the iff", "P.A": "unstated: owed"}}}, facts)
+    assert [f.split()[1] for f in out] == ["shape.frozen[P.b]"] and "starts with no category" in out[0]
+    out = A.shape(pol | {"shape": {"frozen": {"P.b": "unstated: x", "P.A": "lemma: y"}}}, facts)
+    assert sorted(f.split()[1] for f in out) == ["shape.frozen[P.A]", "shape.frozen[P.b]"], out
+    assert A.category("falsified (conjecture): rests on P.C") == "falsified" and A.category("lemmas") is None
+
+
+def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_comes_off():
+    """`shape.conjectures`: a hypothesis whose head is a named conjecture is a premise, and a property resting on one
+    (a hypothesis reaching it, even inside an existential) lists it under `rests_on`, so it is listed as conditional; a
+    conjecture marked falsified refuses every property resting on it, which stays frozen only as `falsified`; an open
+    conjecture names its falsification test, and every entry is a named assumption with a reason."""
+    entry = {"function": "P.check", "outcome": "accept"}
+    rests = part([ACCEPTS, hyp("c", 2, ["P.Conj"]) | {"head": "P.Conj"}], inputs=[("x", 0)])
+    pol = lambda status, frozen=None, rests_on=("P.Conj",): {
+        "assumptions": {"P.Conj": {}}, "guarantees": {"P.a": {}},
+        "shape": {"properties": {"P.a": entry | {"rests_on": list(rests_on)}}, "frozen": frozen or {},
+                  "conjectures": {"P.Conj": {"status": status, "test": "tests/test_conj.py", "why": "open since Oct 8"}}}}
+    facts = {"pins": {"P.a": {"shape": [rests]}}}
+    assert A.shape(pol("open"), facts) == []
+    assert "but its entry's `rests_on` lists none" in A.shape(pol("open", rests_on=()), facts)[0]
+    out = A.shape(pol("falsified"), facts)
+    assert len(out) == 1 and "which shape.conjectures marks falsified" in out[0], out
+    assert A.shape(pol("falsified", {"P.a": "falsified (conjecture): rests on P.Conj"}), facts) == []
+    out = A.shape(pol("falsified", {"P.a": "frozen: rests on P.Conj"}), facts)
+    assert out and "its reason's category is `falsified`" in out[0], out
+    deep = {"pins": {"P.a": {"shape": [part([ACCEPTS, hyp("e", 2, ["Exists", "P.Conj"])], inputs=[("x", 0)])]}}}
+    assert "marks falsified" in " ".join(A.shape(pol("falsified", {}), deep)), "a conjecture inside a hypothesis counts"
+    bad = pol("open") | {"assumptions": {}}
+    bad["shape"]["conjectures"]["P.Conj"] = {"status": "open"}
+    out = A.shape(bad, facts)
+    assert ["not a named assumption" in out[0], "gives no reason" in out[1], "names no falsification test" in out[2]] \
+        == [True] * 3, out
+    bad["shape"]["conjectures"]["P.Conj"] = {"status": "maybe", "why": "x"}
+    assert "has no status" in A.shape(bad, facts)[1]

@@ -156,13 +156,13 @@
   "premises": [],
   "properties": {},
   "frozen": {
-   "Flock.Firewall.Contract.commitLeaf_eq": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_coins": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_commit": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_computed": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_finish": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_fixed": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_masked": "not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement"
+   "Flock.Firewall.Contract.commitLeaf_eq": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_coins": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_commit": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_computed": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_finish": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_fixed": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
+   "Flock.Firewall.Contract.holds_masked": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement"
   }
  },
  "reads": {

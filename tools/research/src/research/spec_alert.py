@@ -71,6 +71,12 @@ def _frozen(doc: dict) -> dict[str, str]:
     return f if isinstance(f, dict) else {}
 
 
+def _conjectures(doc: dict) -> dict[str, dict]:
+    """{name: {status, test, why}}: the record's `shape.conjectures`, the named conjectures properties may rest on."""
+    c = (doc.get("shape") or {}).get("conjectures") or {}
+    return {n: e for n, e in c.items() if isinstance(e, dict)} if isinstance(c, dict) else {}
+
+
 def _signature(rec: dict) -> str:
     lines = rec.get("signature") or ["(no signature recorded)"]
     lines = [lines] if isinstance(lines, str) else list(lines)
@@ -94,7 +100,8 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
     The kinds are `changed`, `removed`, `definition`, `frozen` (an entry added to `shape.frozen`, the guarantees and
-    statements exempt from the shape rule, matched by name across records like a guarantee) and `new`, in that order (what an existing guarantee says comes first,
+    statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
+    `shape.conjectures` added or with a new status) and `new`, in that order (what an existing guarantee says comes first,
     so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
     another package's record under its name, counted in that package's tally. A guarantee under another name with its type
     hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's changed hash is
@@ -124,6 +131,10 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     fa = {n for d in olds.values() for n in _frozen(d)}
     out += [(_package(p), "frozen", f"• frozen `{n}` (doesn't have the shape yet): {why}")
             for p, d in news.items() for n, why in sorted(_frozen(d).items()) if n not in fa]
+    ca = {n: c.get("status") for d in olds.values() for n, c in _conjectures(d).items()}
+    out += [(_package(p), "conjecture", f"• conjecture `{n}` {c.get('status')}"
+             + (f" (was {ca[n]})" if n in ca else "") + f": {c.get('why', '')}")
+            for p, d in news.items() for n, c in sorted(_conjectures(d).items()) if ca.get(n, "") != c.get("status")]
     out += [(b[n][0], "new", f"• new guarantee `{n}`\n{_signature(r)}")
             for n, r in sorted(came.items()) if r.get("type_hash") not in renamed]
     out += [(b[n][0], "moved", "") for n in sorted(set(a) & set(b)) if a[n][0] != b[n][0] and not _restated(a[n][1], b[n][1])]
@@ -146,7 +157,9 @@ def _tally(kinds: list[str]) -> str:
     g = ", ".join(f"{kinds.count(k)} {k}" for k in ("changed", "removed", "new") if k in kinds)
     g = ", ".join(([g] if g else []) + ([f"{kinds.count('moved')} moved here"] if "moved" in kinds else []))
     d = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("definition", "changed"), ("rehashed", "rehashed")) if k in kinds)
-    f = f"shape: {kinds.count('frozen')} frozen" if "frozen" in kinds else ""
+    f = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("frozen", "frozen"), ("conjecture", "conjectures marked"))
+                  if k in kinds)
+    f = f"shape: {f}" if f else ""
     return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else []) + ([f] if f else []))
 
 

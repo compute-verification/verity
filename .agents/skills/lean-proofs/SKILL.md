@@ -161,7 +161,10 @@ simp with that.
   acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
   constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
   and a conjunction as its conjuncts. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
-  with one sentence on why; the check fails once it fits, until the entry goes. Every `def G : Prop` of a `Guarantees` module (or a module
+  with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
+  `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
+  `shape.conjectures` (open with a falsification test that runs, or falsified, with why); a property resting on one
+  lists it under `rests_on`, and a falsified one takes every property resting on it off the list. Every `def G : Prop` of a `Guarantees` module (or a module
   under `shape.statements`) is the statement of a guarantee the lock lists, or is under `shape.frozen` until it is. Adding an entry is a claims change the
   landing DM shows Daniel: rather restate the guarantee, or move what isn't a property (an iff's converse, an honest
   case) to `Proofs/` as completeness.
