@@ -87,8 +87,10 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 `--jobs` is how many test processes run at once, by default the CPUs this process may use but at most one per
 `TEST_PROCESS_GB` of available memory. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
-kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. Parallel suites run first, one
-at a time, then the others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
+kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run one at a
+time, beside the others, which run side by side on as few of the processes as let them finish about when the longest of them
+does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
+suite runs in one process.
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
@@ -1385,6 +1387,20 @@ class Slots:
                 self.cond.notify_all()
 
 
+def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
+    """How many of the ``jobs`` slots the suites that run in one process share (``seconds``: each one's last duration, None when
+    none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
+    the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration:
+    the parallel suites keep every slot the others couldn't use."""
+    if not parallel:
+        return jobs
+    if not seconds:
+        return 0
+    timed = [s for s in seconds if s is not None]
+    need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + len(seconds) - len(timed)
+    return max(1, min(int(need), jobs - 1))
+
+
 def select(suites: list[Suite], names: list[str]) -> list[Suite]:
     if not names:
         return suites
@@ -1514,7 +1530,7 @@ def main(argv: list[str] | None = None) -> int:
     forced = {s: forced_by(s, components(s, ids_of[s], env, args, deps), here.get(s.name, []),
                            any(map(cached, keys)), a.fresh) for s, _paths, keys, deps in todo}
     known = _durations()
-    todo.sort(key=lambda t: (not t[0].parallel, -known.get(t[0].name, float("inf"))))
+    todo.sort(key=lambda t: -known.get(t[0].name, float("inf")))
     for r in results:
         if r.status == "cached":
             print(f"cached  {r.suite.name:28} passed at {_since(r.since)}")
@@ -1524,7 +1540,13 @@ def main(argv: list[str] | None = None) -> int:
     spread = jobs if XDIST else 1
     if spread == 1 and jobs > 1 and any(t[0].parallel for t in todo):
         print("pytest-xdist is not installed: each parallel suite runs in one process")
-    slots = Slots(jobs)
+    wide = [t[0] for t in todo if t[0].parallel and spread > 1]
+    one = [t[0] for t in todo if t[0] not in wide]
+    r = serial_slots([known.get(s.name) for s in one], len(wide), jobs)
+    lanes = {False: Slots(r), True: Slots(jobs - r)}
+    turns = {s: lane.index(s) for lane in (wide, one) for s in lane}
+    if wide and one:
+        print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
     per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree)
            for s, _paths, _keys, deps in todo if not a.no_per_test}
@@ -1532,9 +1554,9 @@ def main(argv: list[str] | None = None) -> int:
     hit_of = {s: hit for s, _paths, _keys, hit, _deps in plan}
     stopping = threading.Event()
 
-    def start(turn: int, s: Suite, paths: list[str]) -> Result:
-        n = spread if s.parallel else 1
-        with slots.take(turn, n):
+    def start(s: Suite, paths: list[str]) -> Result:
+        n = jobs - r if s in wide else 1
+        with lanes[s in wide].take(turns[s], n):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not _under(m, paths)], reuse.get(s, []),
@@ -1600,7 +1622,7 @@ def main(argv: list[str] | None = None) -> int:
             print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(todo))) as pool:
-        futures = {pool.submit(start, i, s, paths): (s, keys[0], paths, deps) for i, (s, paths, keys, deps) in enumerate(todo)}
+        futures = {pool.submit(start, s, paths): (s, keys[0], paths, deps) for s, paths, keys, deps in todo}
         handled = set()
         try:
             for fut in concurrent.futures.as_completed(futures):
