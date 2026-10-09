@@ -38,6 +38,7 @@ theorem rowOf_spec {Ω P V : Type} [Nonempty V] (op : Ω → P → Option V) (W 
   rw [dif_pos h]
   exact ⟨h.choose, h.choose_spec.choose_spec.1, h.choose_spec.choose_spec.2⟩
 
+omit [Fintype F] [DecidableEq F] in
 /-- A run in `W` that opens a position off `W`'s rows conflicts there with a run in `W`. -/
 theorem conflict_of_off {n d : ℕ} (op : OutCL F D Sl → Fin (2 ^ d) → Option (Fin (2 ^ n) → F))
     (W : OutCL F D Sl → Prop) {b : OutCL F D Sl} {p : Fin (2 ^ d)} (hb : W b)
@@ -264,7 +265,7 @@ theorem table_prob_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] (H :
       (((fun _ => none), (fun _ => none)) : IRep F D × IRep F D) s = some (t, d) →
       t = tabRW H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ W s d := by
     intro s t d h
-    simp [Lock.getPair, getRep, Option.orElse_none] at h
+    simp [Lock.getPair, getRep] at h
   have hbad : Lock.leafE (fun s d _ _ => tabRW H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ W s d)
       (fun (i : IRep F D × IRep F D) (out : OutCL F D Sl) => ind (fun out : OutCL F D Sl =>
         out.accepted = true ∧ W out ∧
