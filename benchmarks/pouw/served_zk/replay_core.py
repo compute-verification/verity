@@ -21,7 +21,9 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
   receipt, one unit fewer), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
-  `job.sh` made them.  A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.
+  `job.sh` made them.  A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is
+  a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
+  `COIN_EARLY`).
 * the other checks (coins, the stream's state, the firewall, Lean's tile verifier, replays, shapes) are not core_check's.
 
 A run of an older record version (no registration, or another scheme) and the v2 registrations run through both sides
@@ -182,7 +184,7 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
     if not (ch / "coins.json").is_file() or not (out / "draw.json").is_file():
         return []
     coins = load(ch / "coins.json")
-    recorded = coins.get("scheme") != Co.SCHEME
+    recorded = True
     reg, receipt, d = load(out / "request/registration.json"), load(out / "receipt.json"), load(out / "draw.json")
     openings = [json.loads(x) for x in (ch / "openings.jsonl").read_text().splitlines() if x]
     drawn = next((o for o in openings if o["label"] == "draw"), None)
