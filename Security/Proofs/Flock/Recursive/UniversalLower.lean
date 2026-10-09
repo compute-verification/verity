@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Types.Flat
+import Proofs.Flock.Soundness.Types.Dag
 import Proofs.Flock.Recursive.UniversalClass
 
 /-!
@@ -23,6 +23,9 @@ computes.
   runs it, with the format's rules, at the classes the digests pin), column values
   that satisfy the rows with the constant at 1 carry `Desc.eval` of their description columns on their data columns; and
   outputs `y` are carried by some satisfying assignment with description `d` and data `x` exactly when `y = d.eval x`.
+* **On a typed statement's unit rows** (`uu_unit_sound`): when `deriveChecked` accepts the layouts and the unit's type is
+  `uuType p`, the unit's rows as the block holds them carry `Desc.eval` the same way (`Dag.unit_sound`, with
+  `Dag.evalT_flat` at `flatOk_uuType`).
 * **The tie to Python** (the `#guard`s at the end): the type's digest is the one `circuit_types.from_gf2` gives for
   `universal.build` over the same four input ports, at six classes up to `{16, 16, 8}`; `test_circuit_types.py` reads
   these pins and recomputes them in Python. Past them it is one construction: both builders are the same recursion in
@@ -31,7 +34,8 @@ computes.
   gather or an output's), so both make `universal.and_count` ANDs, in one order, at every width.
 
 The staged statement's unit type is not this one byte for byte: `class_statement` lowers the traced Definition's body, its
-gates in level order and its inputs one port a leaf. It is the same circuit up to renaming wires.
+gates in level order and its inputs one port a leaf. It is the same circuit up to renaming wires, and `uu_unit_sound`
+reaches it once it is staged as `uuType p`.
 -/
 
 namespace FlockSoundness.Discharge.Recursion.UniversalLower
@@ -832,6 +836,21 @@ theorem uu_rows_iff {inSplit outSplit : List ℕ} {dd : Derived} (hd : derive (u
       simp [inputs, a.isLt]
     · rw [hout i (by rw [size_outputs]; exact i.isLt), eval_uuType, getD_ofFn, dite_eq_left i.isLt, descOf_inputs,
         dataOf_inputs]
+
+/-- **On a typed statement's unit rows.** When `deriveChecked` accepts a statement's layouts and its unit's type is
+`uuType p`, column values that satisfy the unit's rows as the block holds them (Δ applied), with the block's `one` at 1,
+carry `Desc.eval` of their description columns on their data columns. -/
+theorem uu_unit_sound {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array DeriveAll.D}
+    (hd : DeriveAll.deriveChecked types ls info words unit = .ok done)
+    (ht : (ls.getD unit default).type.bind types = some (uuType p)) (one : ℕ) (z : ℕ → Bool)
+    (hz : Dag.SatAt (DeriveAll.blockRow words (done.getD unit default) one) z) (h1 : z one = true) (i : Fin p.nOut) :
+    z ((done.getD unit default).outCols.getD i 0) =
+      Desc.eval (fun j : Fin p.width => z ((done.getD unit default).inCols.getD j 0))
+        (fun a => z ((done.getD unit default).inCols.getD (p.width + a) 0)) i := by
+  rw [Dag.unit_sound hd ht one z hz h1 (unit + 1) (Nat.lt_succ_self unit) i (by rw [size_outputs]; exact i.isLt),
+    Dag.evalT_flat types words flatOk_uuType unit, eval_uuType, getD_ofFn, dite_eq_left i.isLt]
+  rfl
 
 /-! ## The tie to Python
 
