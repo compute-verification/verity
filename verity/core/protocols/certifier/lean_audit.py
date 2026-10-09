@@ -15,14 +15,16 @@ The grid parameters, Σ_sync and key the call doesn't read (the ingress grid of 
 certified record of the link is in it) are placeholders. Anything the Lean protocol can't state (a key other than an
 `LmsKey` for a certified record, a raw grid that isn't a tuple of tuples of bytes or `None`, a window or a grid field
 outside its integer width, a frame of other than B bytes) raises `ValueError`, as does a call `audit.Audit` refuses; the
-exe missing raises `FileNotFoundError`. Nothing is computed in Python instead. `VERITY_NETWORK_RECORDS_EXE` names the
-executable; by default it is the one `lake build network-records` builds in that package.
+exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
+`VERITY_NETWORK_RECORDS_EXE` names the executable; by default the first request runs `lake build network-records` in that
+package and starts what it builds.
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import struct
@@ -39,7 +41,10 @@ from verity.core.protocols.certifier.commitment import CommittedRecord
 from verity.core.protocols.certifier.grid import GridParams, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 
-EXE = Path(__file__).resolve().parents[1] / "network" / "lean" / ".lake" / "build" / "bin" / "network-records"
+PACKAGE = Path(__file__).resolve().parents[1] / "network" / "lean"
+EXE = PACKAGE / ".lake" / "build" / "bin" / "network-records"
+# `verity_difftest.build`'s lock: no two `lake build`s of a package overlap, across processes and suites.
+BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"
 RAW, COMMITTED, CERTIFIED = 0, 1, 2
 _KEY = LmsKey(lms.Params(8, 8, 1, toy=True), bytes(24))
 _SYNC_SET = SyncSet((0,), (1,))
@@ -124,11 +129,28 @@ def case(egress: Sequence[tuple[str, Sequence[LogicalFrame], Sequence[ClockSync]
             "evidence": json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode().hex(), "params": params}
 
 
+def build() -> Path:
+    """`lake build network-records` in its package, so the executable is the source's; the executable's path."""
+    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(BUILD_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            p = subprocess.run(["lake", "build", "network-records"], cwd=PACKAGE, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"lake is not on the PATH, so network-records in {PACKAGE} cannot be built; "
+                                    "set VERITY_NETWORK_RECORDS_EXE to a built one") from None
+    if p.returncode != 0:
+        raise RuntimeError(f"lake build network-records in {PACKAGE} failed ({p.returncode}):\n{p.stdout}{p.stderr}")
+    return EXE
+
+
 class Server:
-    """One `network-records verdicts` process, started at the first request and answering in order."""
+    """One `network-records verdicts` process, started at the first request and answering in order. The executable is
+    `exe`, else `VERITY_NETWORK_RECORDS_EXE`, else the package's, built (`build`) before the first start."""
 
     def __init__(self, exe: Path | str | None = None):
-        self.exe = Path(exe or os.environ.get("VERITY_NETWORK_RECORDS_EXE") or EXE)
+        named = exe or os.environ.get("VERITY_NETWORK_RECORDS_EXE")
+        self.exe = Path(named) if named else None
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
 
@@ -137,6 +159,8 @@ class Server:
         `ValueError` when the Lean check refuses the case."""
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
+                if self.exe is None:
+                    self.exe = build()
                 if not self.exe.is_file():
                     raise FileNotFoundError(f"{self.exe}: build it with `lake build network-records` in "
                                             f"verity/core/protocols/network/lean, or set VERITY_NETWORK_RECORDS_EXE")

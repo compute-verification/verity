@@ -161,8 +161,8 @@ def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatc
 
 def test_outside_the_domain_it_refuses(lean, tmp_path):
     """A certified record under a key the Lean can't verify, a certified record with no key, a raw grid that isn't tuples,
-    a frame of other than B bytes and a missing executable each raise; none gets a verdict computed in Python, and the
-    audit keeps no verdict or sync of a call that raised."""
+    a frame of other than B bytes, a missing executable and no `lake` to build one each raise; none gets a verdict computed
+    in Python, and the audit keeps no verdict or sync of a call that raised."""
     g = GridParams(1, 1, 1)
     ss = SyncSet((0,), (Fraction(1),))
     sync = [ClockSync(0, Fraction(1))]
@@ -190,4 +190,9 @@ def test_outside_the_domain_it_refuses(lean, tmp_path):
         a.check_link("a", [rec], [LogicalFrame(b"xy", 0, 0)], sync, ss, g)
     with pytest.raises(FileNotFoundError, match="lake build network-records"):
         lean_audit.Audit(server=lean_audit.Server(tmp_path / "missing")).check_link("a", [rec], [], sync, ss, g)
+    with pytest.MonkeyPatch.context() as m:
+        m.delenv("VERITY_NETWORK_RECORDS_EXE", raising=False)
+        m.setenv("PATH", str(tmp_path))
+        with pytest.raises(FileNotFoundError, match="lake is not on the PATH"):
+            lean_audit.Audit(server=lean_audit.Server()).check_link("a", [rec], [], sync, ss, g)
     assert a.verdicts == [audit.Verdict("b", 0, "no-verdict")]
