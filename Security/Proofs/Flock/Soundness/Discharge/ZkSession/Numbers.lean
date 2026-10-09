@@ -6,7 +6,8 @@ import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 
 `TabZK.bound` is `padLinkError + (padRepError + εInner)²`. At C-Flock ZK's parameters it is at most `2^-203`
 (`TabZK.bound_le_m1`):
-* the padded level 0 at `m = 25, 26, 27`: `padLinkError + padRepError² ≤ 2^-205` (`padTableError_le_m1`);
+* the padded level 0 at every `m` the verifier serves, `25 ≤ m ≤ 35`: `padLinkError + padRepError² ≤ 2^-205`
+  (`padTableError_le_m1`);
 * the inner proof over `F` of order `2^128` with 168 queries, `N ≤ 2^13` and radius `δ ≥ 7/16`:
   `εInner = (N + 3)/|F| + (1 − δ)^168 ≤ 2^-114` (`εInner_le_m1`);
 * `(a + b)² ≤ 2a² + 2b²` puts them together: `2·2^-205 + 2·2^-228 ≤ 2^-203`.
@@ -111,11 +112,11 @@ theorem εInner_le_m1 {N : ℕ} (hF : Fintype.card F = 2 ^ 128) (hN : N ≤ 2 ^ 
 
 /-! ## One table -/
 
-/-- A `--zk` table at C-Flock ZK's parameters: the padded level 0 of `m1Schedule m`, `m = 25, 26, 27`, with C-Flock ZK's
+/-- A `--zk` table at C-Flock ZK's parameters: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, with C-Flock ZK's
 padding and two extra lanes on a statement in `fast100`'s range, and the inner proof with 168 queries, `N ≤ 2^13`
 and `δ ≥ 7/16`. -/
 def TabZK.M1 (T : TabZK F mPts) : Prop :=
-  ∃ m, 25 ≤ m ∧ m ≤ 27 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRange ∧
+  ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRange ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ
 
 /-- **A `--zk` table's bound at C-Flock ZK's parameters** is at most `2^-203`. -/
