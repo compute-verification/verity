@@ -102,6 +102,13 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
+  evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
+  recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
+  Python keeps running beside it as the reference, the switch is a one-line change that can be reversed, and it moves
+  that protocol's properties from `Models/` to `Properties/`. The same day: lanes don't pick up rule changes on their
+  own, so each lane rereads AGENTS.md and the rulings here and in `.agents/skills/lean-proofs/SKILL.md` at the start of
+  every night, and each assignment from the coordinator lists the rules changed since that lane last read them.
 - 2026-10-08 (5:59 PM PDT, relayed by top): a named conjecture is a premise in a section of its own, with a falsification
   test that runs, and a claim resting on one is listed as conditional. A model of how a device computes, such as
   `TTOutPearlC`, is an assumption about the world, checked by measurement. Claims resting on a falsified premise come off
