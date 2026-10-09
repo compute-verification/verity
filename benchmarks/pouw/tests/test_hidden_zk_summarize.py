@@ -24,8 +24,9 @@ def _staged(out: Path) -> Path:
 
 #: a tile's verdict when every check has passed: its rows are a form the soundness proof does not cover
 TILE_FORM = ("refused: rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all "
-             "unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block, one output port each: a statement "
-             "form the soundness proof does not cover")
+             "unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of "
+             "16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each: a "
+             "statement form the soundness proof does not cover")
 
 
 def _proved(d: Path, verdicts: dict[str, bool | str | None]) -> None:

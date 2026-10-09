@@ -7,9 +7,9 @@ set_option Elab.async false
 /-!
 # The hidden-output headlines over `sha512/row/v2` rows hold of a circuit
 
-`Layout.scopeOkH` widens `Layout.scopeOk` by circuits whose rows are all `sha512/row/v2` rows. The pins here say the
-widening is not empty and the widened headlines' premises meet there, so their guarantees over v2 rows hold of
-something.
+`Layout.scopeOkH` widens `Layout.scopeOk` by circuits whose rows are `sha512/row/v2` or `sha512/row-seg/v1` rows. The
+pins here say the widening by v2 rows alone is not empty and the widened headlines' premises meet there, so their
+guarantees over v2 rows hold of something (row-seg rows and a mix: `NonVacuousSeg.lean`).
 
 * `witnessV2`: a unit of one 1,024-bit input row whose one computed row is the AND of the row's bits 0 and 1, with its
   input row `w` and its output row `y` each a `sha512/row/v2` row of 64 u16 words (1,024 bits) in one compression, one
