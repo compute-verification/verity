@@ -168,6 +168,17 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-08 (5:59 PM PDT): a named conjecture can be a premise, in a section of the list of its own, and a claim that
+  rests on one is listed as conditional, apart from the rest. Sort first: a statement that models how a specific device
+  computes, such as `TTOutPearlC` (falsified by what the hardware does, and dependent on G), is an assumption about the
+  world, scoped by device and checked by measurement. Only genuine math goes in the conjectures section, and a statement
+  that mixes the two is split into the device model and the math that remains. Each conjecture carries a falsification
+  test that runs, not only a status, and one about finite objects is decided by computation instead. Incompressibility
+  of fixed data is false in Lean, since a decompressor can hard-code the data (the trap collision resistance has), so it
+  is stated over random inputs or as a reduction. A claim resting on a falsified premise says nothing: `Gamma16384` and
+  `Gamma8192` come off the guarantee list, and `TTOutPearlCDevRev1OfGranted` is stated for G=0 only, each device setting
+  getting its own claim. Until the shape check unfolds `def G : Prop` bodies, no past "no assumptions" result of the
+  audit counts as checked.
 - 2026-10-08 (5:11 PM PDT): every property in `Properties/` has one shape: for every input, if the function it's about
   accepts, the conclusion holds, given premises from the list. Its only arguments are the input, the acceptance and
   those premises, so the check enforces the premises rule with no judgment call. A premise is an assumption about the
