@@ -15,7 +15,7 @@ namespace MemoryChallenger.Properties.SecurityProofs
 open MemoryChallenger
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
-local instance : LawfulBEq ByteArray where
+local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 

@@ -15,7 +15,7 @@ namespace PousCheck.Properties.SecurityProofs
 open Lean (Json)
 open Flock PousCheck.Properties
 
-local instance : LawfulBEq ByteArray where
+local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
