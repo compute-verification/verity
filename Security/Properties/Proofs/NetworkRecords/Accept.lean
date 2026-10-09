@@ -127,4 +127,23 @@ theorem answerAcceptMeans : AnswerAcceptMeans := by
         | reject _ => rw [hch] at h; cases h
         | undecided _ => rw [hch] at h; cases h
 
+/-! ## Completeness -/
+
+/-- **The check accepts every unit whose records are the Program's.** -/
+theorem programRecords_accepted {p : Params} {c : Records.Commitment} {e : Evidence} (h : ProgramRecords p c e) :
+    ∃ pub prof, Records.check p c e = .accept pub prof := by
+  obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := h
+  obtain ⟨hA, -, -⟩ := check_digested (c := c) hfit hpd
+  have hall : ∀ v ∈ (Records.verdicts p c e eg ig).toList, v.violation = none :=
+    (verdicts_all (fun v => v.violation = none)).mpr ⟨fun l link hm w hw =>
+      egress_none_of hfit (List.of_mem_zip hm).2 hw (he l link hm w hw), fun l hl w hw => ingress_none_of (hi l hl w hw)⟩
+  refine hA (Array.find?_eq_none.mpr fun v hv => ?_) (Array.find?_eq_none.mpr fun v hv => ?_)
+  · rw [hall v (Array.mem_def.mp hv)]; simp
+  · rw [hall v (Array.mem_def.mp hv)]; simp
+
+/-- The check accepts exactly the units whose records are the Program's. -/
+theorem acceptMeans_iff {p : Params} {c : Records.Commitment} {e : Evidence} :
+    (∃ pub prof, Records.protocol.check p c e = .accept pub prof) ↔ ProgramRecords p c e :=
+  ⟨fun ⟨pub, prof, h⟩ => acceptMeans p c e pub prof h, programRecords_accepted⟩
+
 end Properties.NetworkRecords

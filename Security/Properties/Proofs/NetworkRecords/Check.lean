@@ -200,4 +200,61 @@ theorem ingress_none {p : Params} {c : Records.Commitment} {ig : ByteArray} {l :
   | [.committed l' w' st dg], hR, hv => exact ⟨_, hR, statusViolation_none.mp hv, trivial⟩
   | _ :: _ :: _, _, hv => simp at hv
 
+/-- An egress link-window whose record is the Program's has no violation. -/
+theorem egress_none_of {p : Params} {c : Records.Commitment} {e : Evidence} {eg : ByteArray} {l : String}
+    {link : Link} {w : Nat} (hfit : EvidenceFits p e) (hl : link ∈ e.links.toList) (hw : w < p.windows)
+    (h : EgressRecord p c e eg l link w) :
+    Records.egressVerdict p c e eg l link ((Records.expectedGrids p.grid p.windows link).getD w #[]) w = none := by
+  obtain ⟨r, hR, hC, hadm, hP⟩ := h
+  have hd := declares_declared (hfit.2.1 link hl)
+  have hP := hP _ hd
+  have hs := (syncTest_iff hfit hl hw).mpr hadm
+  rw [← Bool.and_assoc] at hs
+  rw [expected_eq hd hw]
+  unfold Records.egressVerdict
+  rw [found_toList, hR]
+  cases r with
+  | raw l' w' st grid =>
+    change st = none at hC
+    subst hC
+    dsimp only [Records.statusViolation, Option.map]
+    rw [hs]
+    simp only [Bool.not_true, Bool.false_eq_true, ite_false]
+    rw [ite_eq_left (beq_iff_eq.mpr (hP : grid = _).symm)]
+  | committed l' w' st dg =>
+    change st = none at hC
+    subst hC
+    dsimp only [Records.statusViolation, Option.map]
+    rw [hs]
+    simp only [Bool.not_true, Bool.false_eq_true, ite_false]
+    rw [ite_eq_left (beq_iff_eq.mpr (Properties.NetworkCertifier.toOption_eq_some.mpr hP.1))]
+  | certified r =>
+    obtain ⟨hst, hdl⟩ := hC
+    obtain ⟨dg, H, hcv, hH, hHd, -⟩ := hP
+    have hver := (verifies_cert (certified_names hR)).mpr ⟨dg, hcv⟩
+    dsimp only
+    rw [screen_single_of hver hdl hst]
+    dsimp only [Except.map]
+    rw [hs]
+    simp only [Bool.not_true, Bool.false_eq_true, ite_false]
+    have hb : (recordHead l .egress w (programGrid p (Properties.NetworkCertifier.declared p.windows link)
+        link.frames w) none p.grid eg true >>= RecordHead.digest) = .ok dg := by rw [hH]; exact hHd
+    simp only [hb]
+    rw [ite_eq_left (ba_beq.mpr hcv.2.1)]
+
+/-- An ingress link-window with its one complete record, a certified one's head of the ingress grid, has no
+violation. -/
+theorem ingress_none_of {p : Params} {c : Records.Commitment} {ig : ByteArray} {l : String} {w : Nat}
+    (h : IngressRecord p c ig l w) : Records.ingressVerdict p c ig l w = none := by
+  obtain ⟨r, hR, hC, hH⟩ := h
+  unfold Records.ingressVerdict
+  rw [found_toList, hR]
+  cases r with
+  | raw _ _ st _ => exact statusViolation_none.mpr hC
+  | committed _ _ st _ => exact statusViolation_none.mpr hC
+  | certified r =>
+    obtain ⟨dg, hcv, h1, h2, h3, h4, h5⟩ := hH
+    exact Properties.NetworkCertifier.CheckProofs.ingress_none.mpr
+      ⟨r, dg, ⟨⟨single_records (certified_names hR), hcv⟩, hC.1, hC.2⟩, h1, h2, h3, h4, h5⟩
+
 end Properties.NetworkRecords.CheckProofs
