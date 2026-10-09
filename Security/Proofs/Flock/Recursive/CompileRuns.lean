@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.Target
 import Proofs.Flock.Recursive.ForkRuns
+import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
 # Recursion: the compile lemma on the runs of one prover
@@ -12,8 +13,10 @@ level-0 cap and a conflict at a rep's recorded cap each imply, so that `Compile`
 * `RunOut`: the outcomes the compiled table ends at on the runs of `s` that satisfy `G`.
 * `sched_prob_le_value`: the schedule's simulation at one statement, the body of `sched_sound`: against `s`, the run on
   the schedule's steps ends at an outcome satisfying `p` no more often than the game's `value`.
-* `table_value_clashFree` (**open**): the compiled table's value on a set of outcomes no two of which clash is at most
-  `tableError`.
+* `table_value_clashFree`: the compiled table's value on a set of outcomes no two of which clash is at most
+  `tableError`, from `table_prob_clashFree`, the same against one prover (the coupling with the oracle table, `W`'s rows
+  as the tables, open), since every message type of the table is inhabited (`allInh_tableCL`) and so its value is
+  reached by strategies (`value_le_of_forall_prob`).
 * `compiled_runs_sound`: the lemma, from the three. With no clash between two runs satisfying `G`, `RunOut` is clash
   free, every accepted run satisfying `G` ends in it, and the simulation reads the table's value there.
 -/
@@ -27,21 +30,92 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 section Clash
 
-/-- **The compiled table on a clash-free set of outcomes.** On a statement no witness satisfies, for every set `W` of
-outcomes none of which self-clashes, no two of which open a position of the first's level-0 cap to different rows, and no
-two of which open a position of a rep's level-`ℓ` cap that the first records to different rows: every prover makes the
-compiled table end accepted in `W` with probability at most `tableError`.
+open Classical in
+/-- A finite sum of suprema is at most the supremum, over the choices of one index per summand, of the sum. -/
+theorem sum_iSup_le_iSup_pi {C : Type} [Fintype C] {ι : C → Type} (f : (c : C) → ι c → ℝ≥0∞)
+    (hne : ∀ c, Nonempty (ι c)) : ∑ c, ⨆ i, f c i ≤ ⨆ s : (c : C) → ι c, ∑ c, f c (s c) := by
+  let s₀ : (c : C) → ι c := fun c => Classical.choice (hne c)
+  calc ∑ c, ⨆ i, f c i ≤ ∑ c, ⨆ s : (c : C) → ι c, f c (s c) :=
+        Finset.sum_le_sum fun c _ => iSup_le fun i =>
+          le_iSup_of_le (Function.update s₀ c i) (by rw [Function.update_self])
+    _ = ⨆ s : (c : C) → ι c, ∑ c, f c (s c) := ENNReal.finsetSum_iSup (f := fun c s => f c (s c)) fun s s' =>
+        ⟨fun c => if f c (s c) ≤ f c (s' c) then s' c else s c, fun c => by
+          by_cases hle : f c (s c) ≤ f c (s' c)
+          · simp only [if_pos hle]
+            exact ⟨hle, le_rfl⟩
+          · simp only [if_neg hle]
+            exact ⟨le_rfl, le_of_lt (not_le.mp hle)⟩⟩
 
-Its proof is open. It is `table_sound_compiledL`'s argument with the plurality chooser replaced by `W`'s: the level-0
-table at a cap `c` is the row a `W`-outcome with `cap₀ = c` opens at each position (any row where none does), and a rep's
-table at `(slot, d)` the row a `W`-outcome recording `d` there opens. By the hypotheses an accepted run in `W` is off
-none of these tables and does not self-clash, so `bad_splitL` leaves it agreeing with the oracle run that
-`lockTableL` couples to it (the chooser's table is the one `Lock.getPair` records at each slot), and
-`Lock.expect_le_coupled` with `table_sound` bounds it by `tableError` with no bad term, as in `compiled_le_badL`. Needs:
-the chooser, the lemma that a lockstep run records the chooser's table at each slot it fills, the agreement from the
-three hypotheses, and the conversions between `prob`, `expect` and `value` (`prob_le_value` in reverse is `iSup` over
-the cap, then `prob_toReal`). -/
-theorem table_value_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)
+open Classical in
+/-- Where every message type is inhabited, the optimal prover's value is reached by strategies. -/
+theorem value_le_iSup_prob {α : Type} (p : α → Prop) :
+    ∀ {g : Game α}, AllInh g → value p g ≤ ⨆ s : Strategy g, prob p g s
+  | .ret _, _ => le_iSup_of_le PUnit.unit le_rfl
+  | .send M k, .send _ h => by
+      rw [value_send]
+      exact iSup_le fun m => (value_le_iSup_prob p (h m)).trans
+        (iSup_le fun s' => le_iSup (fun s : Strategy (Game.send M k) => prob p _ s) ⟨m, s'⟩)
+  | @Game.coin _ C iF iN k, .coin h => by
+      rw [value_coin]
+      calc ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * value p (k c)
+          ≤ ∑ c : C, ⨆ sc : Strategy (k c), (Fintype.card C : ℝ≥0∞)⁻¹ * prob p (k c) sc :=
+            Finset.sum_le_sum fun c _ => by
+              rw [← ENNReal.mul_iSup]
+              exact mul_le_mul_right (value_le_iSup_prob p (h c)) _
+        _ ≤ ⨆ s : (c : C) → Strategy (k c), ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * prob p (k c) (s c) :=
+            sum_iSup_le_iSup_pi (fun c sc => (Fintype.card C : ℝ≥0∞)⁻¹ * prob p (k c) sc) fun c => (h c).strategy
+        _ = ⨆ s : Strategy (@Game.coin _ C iF iN k), prob p (@Game.coin _ C iF iN k) s := rfl
+
+/-- **A game's value is reached by strategies**: where every message type is inhabited, if every strategy's
+probability is at most `ε`, so is the value. -/
+theorem value_le_of_forall_prob {α : Type} {p : α → Prop} {ε : ℝ≥0∞} {g : Game α} (hg : AllInh g)
+    (h : ∀ s : Strategy g, prob p g s ≤ ε) : value p g ≤ ε :=
+  (value_le_iSup_prob p hg).trans (iSup_le h)
+
+/-- Every message the compiled table receives has an inhabited type. -/
+theorem allInh_tableCL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+    (ptLocal mPts : ℕ) : AllInh (tableCL A H E Lf S sch hm ptLocal mPts) := by
+  unfold tableCL
+  repeat' (first
+    | exact AllInh.interleave (allInh_repC A 0 S sch hm _) (allInh_repC A 1 S sch hm _)
+    | exact AllInh.pure' _
+    | exact AllInh.recv' _
+    | exact AllInh.draw' _
+    | refine AllInh.bind' ?_ fun _ => ?_
+    | intro _
+    | dsimp only)
+
+/-- **The compiled table on a clash-free set of outcomes, against one prover.** On a statement no witness satisfies, for
+every set `W` of outcomes none of which self-clashes, no two of which open a position of the first's level-0 cap to
+different rows, and no two of which open a position of a rep's level-`ℓ` cap that the first records to different rows:
+every prover makes the compiled table end accepted in `W` with probability at most `tableError`.
+
+Its proof is open (about 250–350 lines). It is `table_sound_compiledL`'s argument with the plurality chooser replaced by
+`W`'s, which needs no rewinding: the level-0 table at a cap `c` is the row a `W`-outcome with `cap₀ = c` opens at each
+position (any row where none does), and a rep's table at `(slot, d)` the row a `W`-outcome recording `d` there opens. By
+the hypotheses an accepted run in `W` is off none of these tables and does not self-clash, so `bad_splitL` leaves it
+agreeing with the oracle run `lockTableL` couples to it, and `Lock.expect_le_coupled` with `table_sound` bounds it by
+`tableError` with no bad term, as in `compiled_le_badL`. Needs: the chooser, an invariant along `Lock.leafE` that the
+table `Lock.getPair` records at each slot is the chooser's at the recorded cap (true at the root, kept by `hset` and
+`hkeep`), the agreement from the three hypotheses, and `prob_toReal` between `prob` and `expect`. -/
+theorem table_prob_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule)
+    (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
+    (hno : ¬ ∃ z, S.Satisfies z) (W : OutCL F D Sl → Prop)
+    (hW₀ : ∀ o, W o → ¬ SelfClashL H E Lf sch o)
+    (hW₁ : ∀ o o', W o → W o' → ∀ p, ¬ Rewinding.ConflictAt (op₀L H E Lf sch o.cap₀) (o, o') p)
+    (hW₂ : ∀ o o', W o → W o' → ∀ i < 2, ∀ ℓ, 1 ≤ ℓ → ∀ cap,
+      (if i = 0 then o.pend.1 else o.pend.2).caps[ℓ - 1]? = some cap →
+      ∀ p, ¬ Rewinding.ConflictAt (opRL H E Lf sch i ℓ cap) (o, o') p)
+    (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts)) :
+    prob (fun o : OutCL F D Sl => o.accepted = true ∧ W o) (tableCL A H E Lf S sch hm ptLocal mPts) σ ≤
+      ENNReal.ofReal (tableError sch (S.shape mPts)) := by
+  sorry
+
+/-- **The compiled table's value on a clash-free set of outcomes** is at most `tableError`: `table_prob_clashFree` for
+every prover. -/
+theorem table_value_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
     (hno : ¬ ∃ z, S.Satisfies z) (W : OutCL F D Sl → Prop)
@@ -51,8 +125,9 @@ theorem table_value_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] (H 
       (if i = 0 then o.pend.1 else o.pend.2).caps[ℓ - 1]? = some cap →
       ∀ p, ¬ Rewinding.ConflictAt (opRL H E Lf sch i ℓ cap) (o, o') p) :
     value (fun o : OutCL F D Sl => o.accepted = true ∧ W o) (tableCL A H E Lf S sch hm ptLocal mPts) ≤
-      ENNReal.ofReal (tableError sch (S.shape mPts)) := by
-  sorry
+      ENNReal.ofReal (tableError sch (S.shape mPts)) :=
+  value_le_of_forall_prob (allInh_tableCL A H E Lf S sch hm ptLocal mPts) fun σ =>
+    table_prob_clashFree A hA H E Lf S sch hsch hm ptLocal mPts hlay hno W hW₀ hW₁ hW₂ σ
 
 end Clash
 
@@ -82,7 +157,7 @@ def RunOut (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (L
 or `s` makes the inner verifier accept a transcript satisfying `G` with probability at most `tableError`. `Cl` is any
 relation that a self-clash of either outcome, a conflict at the first's level-0 cap and a conflict at a rep's cap the
 first records each imply. -/
-theorem compiled_runs_sound (A : Arith F K) (hA : A.Correct) [Inhabited D]
+theorem compiled_runs_sound (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
