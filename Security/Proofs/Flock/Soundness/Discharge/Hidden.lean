@@ -19,6 +19,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 
 /-!
 # Hidden outputs: `Stmt.setupHidden`'s soundness at the protocol as Lean defines it
@@ -63,6 +64,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
   (`Any.outputs_committed_seg'`, `Any.outputs_binding_seg_of`);
 * `Wide.SegPort`: a segmented row's `b ‖ c` at its columns, the commit string of `RowSeg.enc` of its bytes, from its
   slots' rows and the midstates, chain copies, constants and digest copies Δ writes (`Any.port_commit_seg`);
+* `Wide.SegTgt`: those copies from Δ at a segmented row's columns (`Any.seg_copies_tgt`), so a segmented row's `b ‖ c`
+  in a satisfying witness of the untyped statement (`Any.seg_bc_tgt`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
