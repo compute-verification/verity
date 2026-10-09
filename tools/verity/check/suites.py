@@ -1390,14 +1390,15 @@ class Slots:
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
     """How many of the ``jobs`` slots the suites that run in one process share (``seconds``: each one's last duration, None when
     none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
-    the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration:
-    the parallel suites keep every slot the others couldn't use."""
+    the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
+    up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
+    every slot the others couldn't use."""
     if not parallel:
         return jobs
     if not seconds:
         return 0
     timed = [s for s in seconds if s is not None]
-    need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + len(seconds) - len(timed)
+    need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + min(len(seconds) - len(timed), jobs // 4)
     return max(1, min(int(need), jobs - 1))
 
 

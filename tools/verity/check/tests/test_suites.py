@@ -1210,6 +1210,8 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
     assert S.serial_slots([2730.0, 231.0, 203.0, 138.0, 98.0, 94.0, 36.0], 8, 32) == 2
     assert S.serial_slots([527.0, 289.0, 62.0, 52.0, 46.0, 42.0, 7.0], 1, 32) == 2
     assert S.serial_slots([100.0, 100.0, 100.0, None], 1, 32) == 4, "a suite never timed gets a slot of its own"
+    assert S.serial_slots([None] * 40, 2, 32) == 8, "a fresh test cache times none: the parallel lane keeps 24 of 32"
+    assert S.serial_slots([100.0, 100.0] + [None] * 40, 2, 32) == 10
     assert S.serial_slots([100.0] * 40, 1, 32) == 31, "the parallel suites keep a slot"
     assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
 
