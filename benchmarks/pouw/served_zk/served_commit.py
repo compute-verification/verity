@@ -82,6 +82,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.randomness import Key, derive
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.circuit import pc8
@@ -310,14 +311,7 @@ def path(levels, index: int) -> list[str]:
     return out
 
 
-def verify_path(dom: CommitmentDomain, root: bytes, index: int, leaf: bytes, sibs: list[bytes]) -> bool:
-    if not 0 <= index < dom.count or len(sibs) != merkle_depth(dom.count):
-        return False
-    digest = leaf
-    for level, s in enumerate(sibs):
-        digest = dom.node(level, index >> 1, *((digest, s) if index % 2 == 0 else (s, digest)))
-        index >>= 1
-    return digest == root
+verify_path = CC.verify_path
 
 
 def side_leaves(dom: CommitmentDomain, schema: str, bcs: list[bytes]) -> list[bytes]:
@@ -459,7 +453,9 @@ def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
 
 
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True) -> str | None:
-    """None if the proof's public file opens unit `unit`'s rows under the registered window root, else why not."""
+    """None if the proof's public file opens unit `unit`'s rows under the registered window root, else why not: the unit
+    drawn (unless not `drawn`), the registered level the window's, its entries' domain the window's served one, and
+    PoUW's rule on the opening (`core_check.opening`)."""
     if drawn and unit not in draw.get("units", ()):
         return f"unit {unit} is not drawn"
     try:
@@ -468,42 +464,10 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
     except ValueError as e:
         return str(e)
     roots = {r["port"]: r for r in rec["roots"]}
-    dom = window_domain(params, ell)
-    if roots.get(PORT, {}).get("domain") != dom.domain_id.hex():
+    if roots.get(PORT, {}).get("domain") != window_domain(params, ell).domain_id.hex():
         return "the registered window domain is not the window's served domain"
-    e = op.get("entry")
-    try:
-        entry = Wd.Entry.from_json(op["entry_value"])
-        entry.row()
-    except (KeyError, TypeError, ValueError):
-        return "the opening names no entry"
-    if not isinstance(e, int):
-        return "the opening names no entry"
-    leaf = entry_leaf(dom, e, entry_bc(entry, bytes.fromhex(op["entry_salt"])))
-    if not verify_path(dom, bytes.fromhex(roots[PORT]["root"]), e, leaf, [bytes.fromhex(x) for x in op["window_path"]]):
-        return f"entry {e} is not the registered window's entry"
-    try:
-        at = dict(zip(("a", "b"), Wd.tile_in(entry, unit)))
-    except (ValueError, KeyError, IndexError) as x:
-        return f"entry {e}: {x}"
-    head, body = pub.split(b"\n", 1)
-    h = json.loads(head)
-    if h.get("instances") != 1:
-        return f"the proof has {h.get('instances')} instances, not one tile"
-    want = [L.ROW_SCHEMA["fp8-p", SIDES[s]] for s in ("a", "b")]
-    if [s for _p, s in list(h["frame_v3"]["schemas"].items())[:2]] != want:
-        return "the proof's first rows are not an A row and a B row of the registered schemas"
-    bc = {"a": body[0:128], "b": body[128:256]}
-    for side in ("a", "b"):
-        o = op[side]
-        if o["index"] != at[side]:
-            return f"side {side}: the opening is of row {o['index']}, not the unit's row {at[side]}"
-        sdom, schema = side_domain(params, ell, side)
-        leaf = row_leaf(sdom, at[side], L.tree_leaf(bc[side]), schema)
-        root = entry.root_a if side == "a" else entry.root_b
-        if not verify_path(sdom, root, at[side], leaf, [bytes.fromhex(x) for x in o["path"]]):
-            return f"side {side}: the proof's committed row is not entry {e}'s row {at[side]}"
-    return None
+    return CC.opening({"check": {"entries": params["entries"]}, "context": params["context"]}, {"record": rec}, None, unit,
+                      pub, op)
 
 
 # ---- verdicts --------------------------------------------------------------------------------------------------------------

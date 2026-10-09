@@ -806,7 +806,9 @@ def test_finish_requires_the_push_only_when_asked(tmp_path, repo):
     assert rc == 0 and "  pushed    lane/q on origin" in text
 
 
-def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path, repo):
+def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path, repo, monkeypatch):
+    git = notes._git
+    monkeypatch.setattr(notes, "_git", lambda p, *a, **kw: git(p, *a, timeout=None))   # a loaded pod can't time a status out here
     root = tmp_path / "notes"
     origin = tmp_path / "origin.git"
     _git(tmp_path, "init", "-q", "--bare", str(origin))
@@ -832,6 +834,9 @@ def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path
         "busy": "lane busy is open", "dirty": "dirty (1 paths)", "done": None, "local": "branch tip not on origin",
         "pred": "lane pred-2 is open", "scratch": "no lane"}
     assert (tmp_path / "done").exists()                                             # listing removes nothing
+    with monkeypatch.context() as m:                                                # a failed status keeps it, and says so
+        m.setattr(notes, "_git", lambda p, *a, **kw: None if a[0] == "status" else git(p, *a, timeout=None))
+        assert {Path(r["worktree"]).name: r["keep"] for r in notes.gc_worktrees(root, repo, now=NOW)}["done"] == "git status failed"
     rows = {Path(r["worktree"]).name: r for r in notes.gc_worktrees(root, repo, now=NOW, apply=True)}
     assert rows["done"]["removed"] is True and "removed" not in rows["dirty"]
     assert not (tmp_path / "done").exists() and (tmp_path / "dirty" / "wip.py").exists()
