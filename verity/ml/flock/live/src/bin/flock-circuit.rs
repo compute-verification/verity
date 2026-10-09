@@ -2891,8 +2891,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
-    // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
-    // tree a fresh id (table j's from j << 32). The device expands its own trees' salts; a CPU proof takes host expansions.
+    // hm96-sha512 leaf salts, read from the OS: the level-0 tree is id 0 (both reps bind one root), every later tree a fresh
+    // id (table j's from j << 32). The device takes the host's salts tree by tree, as a CPU proof does.
     let salts_t: Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>> = {
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
