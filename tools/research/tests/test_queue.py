@@ -497,7 +497,9 @@ FAKE_SUITES = """\
 import json, os, shutil, sys
 from pathlib import Path
 a = sys.argv[1:]
+umask = os.umask(0)
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
+                                                     "umask": umask, "cores": sorted(os.sched_getaffinity(0)),
                                                      "pythonpath": os.environ.get("PYTHONPATH"),
                                                      "built": Path("verity/core/service/flock/.lake/built").is_file(),
                                                      "lake": shutil.which("lake"),
@@ -529,6 +531,8 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     assert tier(world.gh.prs[1]) is None
     s = json.loads(seen.read_text())
     assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None   # from the PR's merge base, in its own tree
+    cores = os.sched_getaffinity(0)
+    assert s["umask"] == 0o002 and s["cores"] == sorted(cores - {min(cores)} if len(cores) > 1 else cores)   # a node's umask, off core 0
     [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
     assert _git(wt, "rev-parse", "HEAD") == h1
     (wt / "stray.txt").write_text("left by the last PR\n")

@@ -60,6 +60,31 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize("workers", [1, 2])
+def test_every_test_starts_without_the_machines_markers_caches_and_slot(tmp_path, monkeypatch, workers):
+    """Host-dependent tests failed five full checks in 16 h, each fixed one test at a time: cpu-1's /etc/vy/runs-via-slot, node 1's
+    real check caches, a slot's CHECK_SLOT. In every suite a test module sees, at import and in each test, every marker the
+    guard names pointed at a path that doesn't exist, each cache an empty directory of its own and no CHECK_SLOT."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    monkeypatch.delenv("VERITY_SUITE_REPORT", raising=False)
+    G = _load(monkeypatch, "guard_under_test", HERE / "guard" / "verity_suite_guard.py")
+    for k in (*G.HOST_FILES, *G.HOST_CACHES, *G.HOST_SLOT):
+        monkeypatch.setenv(k, str(tmp_path / "pkg" / "data.txt"))
+    names = sorted({*G.HOST_FILES, *G.HOST_CACHES, *G.HOST_SLOT})
+    (tmp_path / "pkg" / "tests" / "test_host.py").write_text(
+        f"import os\nAT_IMPORT = {{k: os.environ.get(k) for k in {names!r}}}\n\n"
+        "def _host(env):\n"
+        f"    for k in {sorted(G.HOST_FILES)!r}:\n        assert not os.path.exists(env[k]), k\n"
+        f"    for k in {sorted(G.HOST_CACHES)!r}:\n        assert os.listdir(env[k]) == [], k\n"
+        f"    assert {list(G.HOST_SLOT)!r} and all(env.get(k) is None for k in {list(G.HOST_SLOT)!r})\n\n"
+        "def test_at_import():\n    _host(AT_IMPORT)\n\n"
+        "def test_in_the_test():\n    _host(os.environ)\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
+    assert (r.status, r.counts["passed"]) == ("passed", 6), r.log.read_text()
+
+
+@pytest.mark.parametrize("workers", [1, 2])
 @pytest.mark.parametrize("required", [False, True])
 def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, monkeypatch, workers, required):
     """A recorded check's Lean tests passed without running: their fixture skipped because the store was out of reach (#757's
