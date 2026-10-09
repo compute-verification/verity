@@ -108,6 +108,8 @@ controls() {
 }
 export -f one controls outdir data_of pub_of
 export O LEAN_BIN T ROOT RESTORED=${RESTORED:-}
+mkdir -p $O/reverify
+for kv in ${RESTORED//,/ }; do (cd ${kv#*=} && find out -type f | LC_ALL=C sort | xargs sha256sum) > $O/reverify/restored-${kv%%=*}.sha256; done
 python3 verity/ml/flock/verifier/firewall_agree.py --lean $T/flock-firewall --out $O/reverify/firewall-cases --cases \
   > $O/reverify/firewall-cases.txt 2>&1; echo "firewall cases exit $?"
 for R in ${RUNS//,/ }; do
