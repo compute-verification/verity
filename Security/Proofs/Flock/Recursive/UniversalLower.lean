@@ -17,6 +17,8 @@ computes.
   ascending wire lists `forms` makes, all with constant `0` (the fill is `0`, and nothing negates a form).
 * **What it computes** (`eval_uuType`): on any input bits, the type's outputs are `Desc.eval` of the description those bits
   hold on the data they hold, for every `p`. Each source and each output is the gather lemma at `cur = Desc.wiresTo`.
+* **Flat at every width** (`flatOk_uuType`): the type passes `flatOk`, `derive`'s first check, for every `p`: each AND
+  reads ascending wires below its own, and each output ascending wires below the last.
 * **Its rows** (`uu_sound`, `uu_rows_iff`): whenever `derive` lays the type out (the verifier's own check; `accepted`
   runs it, with the format's rules, at the classes the digests pin), column values
   that satisfy the rows with the constant at 1 carry `Desc.eval` of their description columns on their data columns; and
@@ -591,6 +593,199 @@ theorem eval_uuType (x : ℕ → Bool) : eval (uuType p) x = List.ofFn ((descOf 
 
 theorem size_outputs : (uuType p).outputs.size = p.nOut := by
   simp [uuType, length_outsAll]
+
+/-! ## Flat at every width
+
+`flatOk`, the type's half of `derive`'s check, holds for every `p`: each AND reads ascending wires below its own, and each
+output ascending wires below the last. -/
+
+section Flat
+
+variable {n : ℕ}
+
+/-- A good form whose wires ascend. -/
+def Ok (n : ℕ) (its : Array Item) (l : List ℕ) : Prop := Good n its l ∧ l.Pairwise (· < ·)
+
+/-- Every item so far is an AND of two forms whose wires ascend and lie below its own. -/
+def ItemsOk (n : ℕ) (its : Array Item) : Prop :=
+  ∀ k (hk : k < its.size), ∃ a b, its[k] = .and (form a) (form b) ∧ a.Pairwise (· < ·) ∧ b.Pairwise (· < ·) ∧
+    (∀ j ∈ a, j < n + k) ∧ (∀ j ∈ b, j < n + k)
+
+theorem pairwise_symm {l m : List ℕ} (hl : l.Pairwise (· < ·)) (hm : m.Pairwise (· < ·)) :
+    (symm l m).Pairwise (· < ·) := by
+  fun_induction symm l m with
+  | case1 m => exact hm
+  | case2 a l => exact hl
+  | case3 a l b m hab ih =>
+    have hl' := List.pairwise_cons.1 hl
+    refine List.pairwise_cons.2 ⟨fun y hy => ?_, ih hl'.2 hm⟩
+    rcases mem_symm hy with hy | hy
+    · exact hl'.1 y hy
+    · rcases List.mem_cons.1 hy with rfl | hy
+      · exact hab
+      · exact lt_trans hab ((List.pairwise_cons.1 hm).1 y hy)
+  | case4 a l b m _ hba ih =>
+    have hm' := List.pairwise_cons.1 hm
+    refine List.pairwise_cons.2 ⟨fun y hy => ?_, ih hl hm'.2⟩
+    rcases mem_symm hy with hy | hy
+    · rcases List.mem_cons.1 hy with rfl | hy
+      · exact hba
+      · exact lt_trans hba ((List.pairwise_cons.1 hl).1 y hy)
+    · exact hm'.1 y hy
+  | case5 a l b m _ _ ih => exact ih (List.pairwise_cons.1 hl).2 (List.pairwise_cons.1 hm).2
+
+theorem formOk_form {l : List ℕ} (hs : l.Pairwise (· < ·)) (hl : ∀ j ∈ l, j < n) :
+    CircuitType.formOk n (form l) = true := by
+  simp only [CircuitType.formOk, form, zero_le, decide_true, List.size_toArray, List.all_toArray', Bool.true_and,
+    List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Nat.default_eq_zero, Bool.and_eq_true, List.all_eq_true,
+    decide_eq_true_eq, List.mem_range]
+  refine ⟨hl, fun i hi => ?_⟩
+  rw [List.getElem?_eq_getElem (by omega), List.getElem?_eq_getElem (by omega)]
+  exact List.pairwise_iff_getElem.1 hs i (i + 1) (by omega) (by omega) (by omega)
+
+theorem Ok.ext {its its' : Array Item} {l : List ℕ} (h : Ext its its') (hl : Ok n its l) : Ok n its' l :=
+  ⟨hl.1.ext h, hl.2⟩
+
+theorem Ok.symm {its : Array Item} {l m : List ℕ} (hl : Ok n its l) (hm : Ok n its m) :
+    Ok n its (UniversalLower.symm l m) :=
+  ⟨hl.1.symm hm.1, pairwise_symm hl.2 hm.2⟩
+
+theorem ok_nil (its : Array Item) : Ok n its [] := ⟨good_nil its, List.Pairwise.nil⟩
+
+theorem andL_ok {its : Array Item} {a b : List ℕ} (hI : ItemsOk n its) (ha : Ok n its a) (hb : Ok n its b) :
+    ItemsOk n (andL n its a b).2 ∧ Ok n (andL n its a b).2 (andL n its a b).1 := by
+  refine ⟨fun k hk => ?_, (andL_spec (x := fun _ => false) (n := n) its a b).2.1, List.pairwise_singleton _ _⟩
+  simp only [andL, Array.size_push] at hk ⊢
+  rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hk | rfl
+  · rw [Array.getElem_push_lt hk]; exact hI k hk
+  · rw [Array.getElem_push_eq]
+    exact ⟨a, b, rfl, ha.2, hb.2, ha.1, hb.1⟩
+
+theorem muxL_ok {its : Array Item} {s hi lo : List ℕ} (hI : ItemsOk n its) (hs : Ok n its s) (hh : Ok n its hi)
+    (hl : Ok n its lo) : ItemsOk n (muxL n its s hi lo).2 ∧ Ok n (muxL n its s hi lo).2 (muxL n its s hi lo).1 := by
+  obtain ⟨hI', hr⟩ := andL_ok hI hs (hh.symm hl)
+  have e := (andL_spec (x := fun _ => false) (n := n) its s (symm hi lo)).1
+  exact ⟨hI', (hl.ext e).symm hr⟩
+
+theorem levelL_ok {s : List ℕ} : ∀ (cur : List (List ℕ)) (its : Array Item), ItemsOk n its → Ok n its s →
+    (∀ l ∈ cur, Ok n its l) →
+    ItemsOk n (levelL n s cur its).2 ∧ ∀ l ∈ (levelL n s cur its).1, Ok n (levelL n s cur its).2 l
+  | [], its, hI, _, _ => ⟨hI, fun _ h => absurd h List.not_mem_nil⟩
+  | [a], its, hI, hs, hc => by
+    obtain ⟨hI', hr⟩ := muxL_ok hI hs (ok_nil its) (hc a (List.mem_singleton_self _))
+    exact ⟨hI', fun l hl => by rw [List.mem_singleton.1 hl]; exact hr⟩
+  | a :: b :: rest, its, hI, hs, hc => by
+    have ha := hc a (by simp)
+    have hb := hc b (by simp)
+    have hr : ∀ l ∈ rest, Ok n its l := fun l hl => hc l (by simp [hl])
+    obtain ⟨hI1, hm⟩ := muxL_ok hI hs hb ha
+    have e := (muxL_spec (x := fun _ => false) (n := n) (s := s) (hi := b) its ha.1).1
+    obtain ⟨hI2, hq⟩ := levelL_ok rest _ hI1 (hs.ext e) (fun l hl => (hr l hl).ext e)
+    have e' := (levelL_spec (x := fun _ => false) (n := n) rest _ (hs.1.ext e) (fun l hl => (hr l hl).1.ext e)).1
+    refine ⟨hI2, fun l hl => ?_⟩
+    rcases List.mem_cons.1 hl with rfl | hl
+    · exact hm.ext e'
+    · exact hq l hl
+
+theorem gatherL_ok : ∀ (idx cur : List (List ℕ)) (its : Array Item), ItemsOk n its → (∀ l ∈ idx, Ok n its l) →
+    (∀ l ∈ cur, Ok n its l) →
+    ItemsOk n (gatherL n idx cur its).2 ∧ Ok n (gatherL n idx cur its).2 (gatherL n idx cur its).1
+  | [], cur, its, hI, _, hc => by
+    refine ⟨hI, ?_⟩
+    cases cur with
+    | nil => exact ok_nil its
+    | cons a _ => exact hc a (List.mem_cons_self ..)
+  | s :: idx, cur, its, hI, hi, hc => by
+    have hs := hi s (List.mem_cons_self ..)
+    obtain ⟨hI1, hq⟩ := levelL_ok cur its hI hs hc
+    have e := (levelL_spec (x := fun _ => false) (n := n) cur its hs.1 (fun l hl => (hc l hl).1)).1
+    exact gatherL_ok idx _ _ hI1 (fun l hl => (hi l (List.mem_cons_of_mem _ hl)).ext e) hq
+
+theorem gateL_ok {its : Array Item} {t nn a b : List ℕ} (hI : ItemsOk n its) (ht : Ok n its t) (hn : Ok n its nn)
+    (ha : Ok n its a) (hb : Ok n its b) :
+    ItemsOk n (gateL n its t nn a b).2 ∧ Ok n (gateL n its t nn a b).2 (gateL n its t nn a b).1 := by
+  obtain ⟨hI1, hab⟩ := andL_ok hI ha hb
+  have e1 := (andL_spec (x := fun _ => false) (n := n) its a b).1
+  have hs : Ok n its (symm a b) := ha.symm hb
+  obtain ⟨hI2, hr⟩ := andL_ok hI1 (ht.ext e1) (hab.symm (hs.ext e1))
+  have e2 := (andL_spec (x := fun _ => false) (n := n) (andL n its a b).2 t (symm (andL n its a b).1 (symm a b))).1
+  exact ⟨hI2, ((hs.ext (e1.trans e2)).symm hr).symm (hn.ext (e1.trans e2))⟩
+
+theorem outsL_ok (ws : List (List ℕ)) : ∀ (idxs : List (List (List ℕ))) (its : Array Item), ItemsOk n its →
+    (∀ l ∈ ws, Ok n its l) → (∀ idx ∈ idxs, ∀ l ∈ idx, Ok n its l) →
+    ItemsOk n (outsL n ws idxs its).2 ∧ ∀ l ∈ (outsL n ws idxs its).1, Ok n (outsL n ws idxs its).2 l
+  | [], its, hI, _, _ => ⟨hI, fun _ h => absurd h List.not_mem_nil⟩
+  | idx :: rest, its, hI, hw, hi => by
+    have hi0 := hi idx (List.mem_cons_self ..)
+    have hi' : ∀ i ∈ rest, ∀ l ∈ i, Ok n its l := fun i h => hi i (List.mem_cons_of_mem _ h)
+    obtain ⟨hI1, hr⟩ := gatherL_ok idx ws its hI hi0 hw
+    have e := (gatherL_spec (x := fun _ => false) (n := n) idx ws its (fun l hl => (hi0 l hl).1) (fun l hl => (hw l hl).1)).1
+    obtain ⟨hI2, hq⟩ := outsL_ok ws rest _ hI1 (fun l hl => (hw l hl).ext e) (fun i h l hl => (hi' i h l hl).ext e)
+    have e' := (outsL_spec (x := fun _ => false) (n := n) ws rest _ (fun l hl => (hw l hl).1.ext e)
+      (fun i h l hl => (hi' i h l hl).1.ext e)).1
+    refine ⟨hI2, fun l hl => ?_⟩
+    rcases List.mem_cons.1 hl with rfl | hl
+    · exact hr.ext e'
+    · exact hq l hl
+
+end Flat
+
+theorem gatesL_ok : ∀ g, g ≤ p.g →
+    ItemsOk (nIns p) (gatesL p g).2 ∧ ∀ l ∈ (gatesL p g).1, Ok (nIns p) (gatesL p g).2 l
+  | 0, _ => by
+    refine ⟨fun k hk => absurd hk (by simp [gatesL]), fun l hl => ?_⟩
+    obtain ⟨i, rfl⟩ := List.mem_ofFn.1 hl
+    exact ⟨good_input _ (by simp only [nIns]; omega), List.pairwise_singleton _ _⟩
+  | g + 1, hg => by
+    have hlt : g < p.g := hg
+    obtain ⟨hI, hq⟩ := gatesL_ok g (Nat.le_of_succ_le hg)
+    set q := gatesL p g with hqdef
+    have hsrc : ∀ (s : Fin 2) (its : Array Item), ∀ l ∈ srcIdx p g s, Ok (nIns p) its l := fun s its l hl =>
+      ⟨goods_srcIdx its ⟨g, hlt⟩ s l hl, by obtain ⟨j, rfl⟩ := List.mem_ofFn.1 hl; exact List.pairwise_singleton _ _⟩
+    obtain ⟨hIa, ha⟩ := gatherL_ok (srcIdx p g 0) q.1 q.2 hI (hsrc 0 q.2) hq
+    have ea := (gatherL_spec (x := fun _ => false) (n := nIns p) (srcIdx p g 0) q.1 q.2 (goods_srcIdx q.2 ⟨g, hlt⟩ 0)
+      (fun l hl => (hq l hl).1)).1
+    set a := gatherL (nIns p) (srcIdx p g 0) q.1 q.2 with hadef
+    obtain ⟨hIb, hb⟩ := gatherL_ok (srcIdx p g 1) q.1 a.2 hIa (hsrc 1 a.2) (fun l hl => (hq l hl).ext ea)
+    have eb := (gatherL_spec (x := fun _ => false) (n := nIns p) (srcIdx p g 1) q.1 a.2 (goods_srcIdx a.2 ⟨g, hlt⟩ 1)
+      (fun l hl => (hq l hl).1.ext ea)).1
+    set b := gatherL (nIns p) (srcIdx p g 1) q.1 a.2 with hbdef
+    have ht : Ok (nIns p) b.2 (opW g 0) := ⟨(opW_spec (p := p) (fun _ => false) b.2 ⟨g, hlt⟩ 0).1, List.pairwise_singleton _ _⟩
+    have hn : Ok (nIns p) b.2 (opW g 1) := ⟨(opW_spec (p := p) (fun _ => false) b.2 ⟨g, hlt⟩ 1).1, List.pairwise_singleton _ _⟩
+    obtain ⟨hIr, hr⟩ := gateL_ok hIb ht hn (ha.ext eb) hb
+    have er := (gateL_spec (x := fun _ => false) (n := nIns p) b.2 ht.1 hn.1 (ha.1.ext eb) hb.1).1
+    set r := gateL (nIns p) b.2 (opW g 0) (opW g 1) a.1 b.1 with hrdef
+    have hstep : gatesL p (g + 1) = (q.1 ++ [r.1], r.2) := by
+      rw [gatesL, ite_eq_left hlt]
+    rw [hstep]
+    refine ⟨hIr, fun l hl => ?_⟩
+    rcases List.mem_append.1 hl with hl | hl
+    · exact (hq l hl).ext (ea.trans (eb.trans er))
+    · rw [List.mem_singleton.1 hl]; exact hr
+
+theorem outsAll_ok : ItemsOk (nIns p) (outsAll p).2 ∧ ∀ l ∈ (outsAll p).1, Ok (nIns p) (outsAll p).2 l := by
+  obtain ⟨hI, hq⟩ := gatesL_ok (p := p) p.g le_rfl
+  refine outsL_ok _ _ _ hI hq fun idx h l hl => ?_
+  obtain ⟨i, rfl⟩ := List.mem_ofFn.1 h
+  exact ⟨goods_outIdx _ i l hl, by obtain ⟨j, rfl⟩ := List.mem_ofFn.1 hl; exact List.pairwise_singleton _ _⟩
+
+/-- **`flatOk` at every width**: every item of `uuType p` is an AND of two forms whose wires ascend below its own, and
+its `N_OUT` outputs' wires ascend below the last. -/
+theorem flatOk_uuType : flatOk (uuType p) = true := by
+  obtain ⟨hI, hO⟩ := outsAll_ok (p := p)
+  unfold flatOk
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, beq_iff_eq, uuType_inBits]
+  refine ⟨⟨fun k hk => ?_, ?_⟩, ?_⟩
+  · obtain ⟨a, b, he, hsa, hsb, ha, hb⟩ := hI k hk
+    have hi : (uuType p).items[k]? = some (.and (form a) (form b)) := by
+      simp only [uuType] at hk ⊢
+      rw [Array.getElem?_eq_getElem hk, he]
+    rw [hi]
+    simp only [formOk_form hsa ha, formOk_form hsb hb, Bool.and_self]
+  · rw [size_outputs]
+    simp [uuType, CircuitType.outBits, CircuitType.portBits]
+  · simp only [uuType, List.all_toArray', List.all_map, List.all_eq_true, Function.comp]
+    exact fun l hl => formOk_form (hO l hl).2 (hO l hl).1
 
 /-! ## Its rows -/
 
