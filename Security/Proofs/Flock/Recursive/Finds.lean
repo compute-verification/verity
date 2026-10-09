@@ -89,6 +89,7 @@ section Cost
 
 variable {τ Val : Type} [Fintype Val] [DecidableEq Val] (rd : τ → Finset Val)
 
+omit [Fintype Val] [DecidableEq Val] in
 theorem loopCost_nonneg {c : τ → ℝ} (hc : ∀ e, 0 ≤ c e) : ∀ es, 0 ≤ loopCost rd c es
   | [] => le_rfl
   | e :: es => by
@@ -177,6 +178,7 @@ openings are a collision of `Hc` (`regFinderZC`). -/
 def RegForkZC (k Rw : ℕ) : Prop :=
   ∃ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), (regFinderZC A Hs P planZ tab vb wo R τ c k Rw).Finds Hc
 
+omit [Fintype K] in
 theorem regCRZC_of_not_fork {k Rw : ℕ} (h : ¬ RegForkZC A Hs P planZ tab vb wo R τ k Rw) :
     RegCRZC A Hs P planZ tab vb wo R τ k Rw 0 :=
   fun c _ => Finder.cr_of_not_finds (fun hf => h ⟨c, inferInstance, hf⟩) 0
@@ -189,6 +191,7 @@ def LinkForkZC (k Rw M : ℕ) : Prop :=
     FindsColl Hc (finderG (trialGZC A Hs P planZ tab vb R τ c k Rw) M)
       (finderStrat _ (trialStratZC A Hs P planZ tab vb R τ c k Rw) M) (outCZC A Hs P planZ tab vb R τ c)
 
+omit [Fintype K] in
 theorem linkCRZC_of_not_fork {k Rw M : ℕ} (h : ¬ LinkForkZC A Hs P planZ tab vb R τ k Rw M) :
     LinkCRZC A Hs P planZ tab vb R τ k Rw M 0 :=
   fun c _ => crExpected_of_not_finds (fun hf => h ⟨c, inferInstance, hf⟩)
@@ -207,19 +210,22 @@ noncomputable def linkErrZC (L : Law n) (k Rw M : ℕ) (ρ : ℝ) : ℝ≥0∞ :
 noncomputable def waitErrZC (L : Law n) (k Rw : ℕ) (ρ : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal (qsZC A P planZ tab vb L * (k / (Real.exp 1 * Rw)) / (1 - ρ))
 
+omit [Fintype K] in
 theorem linkBoundZC_zero {k Rw M : ℕ} {ρ : ℝ} (h : LinkCRZC A Hs P planZ tab vb R τ k Rw M 0) :
     linkBoundZC A Hs P planZ tab vb k Rw M ρ 0 R τ = linkErrZC A P planZ tab vb L k Rw M ρ := by
   unfold linkBoundZC linkErrZC qsZC
-  rw [if_pos h]
+  rw [ite_eq_left h]
   congr 1
   ring
 
+omit [Fintype K] [DecidableEq K] in
 theorem regTermZC_zero (L : Law n) (k Rw : ℕ) (ρ : ℝ) :
     regTermZC A P planZ tab vb L k Rw ρ 0 = waitErrZC A P planZ tab vb L k Rw ρ := by
   unfold regTermZC waitErrZC qsZC
   congr 1
   ring
 
+omit [Fintype K] [DecidableEq K] in
 theorem candSlackZC_eq (L : Law n) (k Rw : ℕ) (ρ : ℝ) :
     candSlackZC (L := L) A P planZ tab vb k Rw ρ = waitErrZC A P planZ tab vb L k Rw ρ := rfl
 
@@ -261,7 +267,7 @@ theorem allAt_of_not_exAt {σ : Strategy (recGame L Reg I Cm outer)}
 theorem AllAt.mono {σ : Strategy (recGame L Reg I Cm outer)}
     {P Q : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → Prop} (h : AllAt σ P)
     (hPQ : ∀ ω t s, P ω t s → Q ω t s) : AllAt σ Q :=
-  fun ω => (h ω).mono fun t s' _ hp => hPQ ω t _ hp
+  fun ω => (h ω).mono fun t _ _ hp => hPQ ω t _ hp
 
 theorem expAt_mono_all {σ : Strategy (recGame L Reg I Cm outer)}
     {F G : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → ℝ≥0∞}
