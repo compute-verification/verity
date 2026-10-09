@@ -952,7 +952,6 @@ def a3(run: Run) -> Iterator[Case]:
 
 
 #: A commit on main whose `benchmarks/one_stage/a4_layout.json` is every A4 era's (the file never changed)
-A4_LAYOUT_COMMIT = "13241ce9270c85d1a7ff0e89219e4ccca176fc75"
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -962,12 +961,12 @@ def a4_layout(run: Run, name: str) -> tuple[dict, str]:
     file = run.pod_args().get("LAYOUT_FILE")
     if file:
         return json.loads(tar_member(run, "inputs/served.tar", Path(file).name))[name], f"inputs/served.tar's {file}"
-    for commit in dict.fromkeys(c for c in (run.commit(), A4_LAYOUT_COMMIT) if c):
-        p = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/one_stage/a4_layout.json"],
-                           capture_output=True, text=True)
-        if p.returncode == 0:
-            return json.loads(p.stdout)[name], f"benchmarks/one_stage/a4_layout.json at {commit[:9]}"
-    raise Missing(f"benchmarks/one_stage/a4_layout.json at {run.commit()} (git history)")
+    commit = run.commit()
+    p = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/one_stage/a4_layout.json"],
+                       capture_output=True, text=True) if commit else None
+    if p is None or p.returncode != 0:
+        raise Missing(f"benchmarks/one_stage/a4_layout.json at {commit} (git history)")
+    return json.loads(p.stdout)[name], f"benchmarks/one_stage/a4_layout.json at {commit[:9]}"
 
 
 def a4_member_layouts(s, n: int, row_map: dict | None) -> dict[str, dict[str, tuple[str, int]]]:
