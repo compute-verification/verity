@@ -485,6 +485,13 @@ theorem hSomePart : F.HSomePart := by
   obtain ⟨j, nm, pt, hj⟩ := statements_inner F.hstmts hsp hps (parts_size hps (spec_res hsp))
   exact ⟨j, 0, nm, pt, hj⟩
 
+/-- **The setup's schedule is `fast100`'s at its `m`**, where V*'s shape is the setup's (`ShapeIs`): `hsh` is at a
+`fast100` schedule. `setupRealizes_ofCircuit`'s `hf`. -/
+theorem fast100_of_shapeIs {st : Setup} {sch' : Flock.Schedule} (hS : ShapeIs F.sh st sch') :
+    Flock.fast100 st.m = some sch' := by
+  obtain ⟨hf, hm, -⟩ := shape?_eq F.hsh
+  rw [← hS.1, hm, hf, hS.2.2]
+
 /-- **The family's structure facts**: `HSomePart`, `HCover`, `HOpenUnits` and `0 < nOpen`, from the openings' unit
 names (`HOpenName`) and V*'s part count (`HPartCount`). -/
 theorem structure_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hcount : F.HPartCount) :
