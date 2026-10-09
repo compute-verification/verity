@@ -48,9 +48,10 @@ import Proofs.Pous.Rebuild.Exclusion
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Models/Pous/Guarantees.lean`,
-`Security/Models/Pous/Guarantees/P2.lean` and `Security/Models/Pous/Guarantees/SecureErasure.lean` that has
-a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a definition it reads, changes their
-records. The open statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
+`Security/Models/Pous/Guarantees/P2.lean`, `Security/Models/Pous/Guarantees/SecureErasure.lean` (the frozen statements)
+and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
+change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
+`A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
 
 Two proofs were written against a prover's copy of a trusted recursive definition, and a bridge lemma shows the copy
 equal to the trusted one: `PousPebbling.chain` (`Pous.HashChain.chain`) and `PousThm1.seqState`
@@ -194,7 +195,7 @@ theorem P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond := by
 
 theorem P2SlackFamilyFreeBlocks : Pous.Guarantees.P2SlackFamilyFreeBlocks := Pous.FreeBlocks.p2_slack_family_free_blocks
 
-/-! ## Proved results cited outside the package (`Security/Models/Pous/Guarantees.lean`) -/
+/-! ## Proved results cited outside the package (`Security/Models/Pous/Guarantees.lean`, `Statements.lean`) -/
 
 theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
 theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64
