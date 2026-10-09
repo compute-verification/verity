@@ -71,6 +71,11 @@ slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit
 the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
 refuse.
 
+`--records` takes a `build` slot of its own even inside one (it drops `LEAN_SLOT`), so `lean_slot.py --pool build` around it
+waits on itself for good where the pool has one slot, as on vy-nebius-1. To ask Lean about what it built, import the scratch
+probe from a root on a commit you don't push and read its output in `lean-audit/audit-*/build.log` (Lake replays a cached
+module's messages): a probe run after it, in a slot of its own, may find `lean-records/build-I` re-synced to another run's files.
+
 To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python3
 tools/verity/lean/check.py --build --update PKG` with no wrapper around it (vy-nebius-1 has no `python`, exit 127). It exits 0 when the Lean check passes, whether or not the
 record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
