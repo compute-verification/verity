@@ -54,6 +54,7 @@ import Proofs.Flock.VBridge.Family.Files
 import Proofs.Flock.VBridge.Family.Runs
 import Proofs.Flock.VBridge.Family.Tape
 import Proofs.Flock.VBridge.Family.Join
+import Proofs.Flock.VBridge.Family.Assembly
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/
