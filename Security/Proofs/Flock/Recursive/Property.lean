@@ -16,7 +16,8 @@ private circuit registered by hm96 leaves. It is a conjunction:
 
 * (i) soundness in fork form, at an inner statement `st` whose class, regions and schedule are `execClassAt st`: a
   round fork, a session fork or an inner fork of the prover's own runs, a run of the prover's whose sessions all verify
-  having read a commit string other than the registered one at a row whose opening collides with the developer's, or
+  having read a commit string other than the registered one at a row whose opening collides with the developer's, two
+  such runs at one registration and draw having read different commit strings at a row whose openings collide, or
   Lean's verifier accepts `st` and the verifier of record every session while the registered private circuit's hidden
   statement fails with probability at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
 * (ii) zero knowledge with circuit privacy, `RecursiveCircuitPrivateLeaves`' form: a simulator that reads only the
@@ -130,12 +131,15 @@ executable strata (`execStmts Vs`: `VStmt.exec`, which keeps its live law and so
 whose verifier holds `rt` read row `i` of it, `rowZ zs rt o i` is the commit string it read there and `opZ zs rt o i`
 its opening of `rt` (`Proofs.Flock.Recursive.Reads`; at an outcome whose sessions all verify, each opens `rt`:
 `zk_reads_open`); `stmt q ω` is the hidden statement at the draw `ω` of the private circuit whose rows the commit
-strings `q` commit to. Taken: the statement check accepting V*'s statements (`_hck`), A3 (`_hA3`), and the run's hidden
-statement being the read strings' (`_hx`). Then for the registered commit strings `p` (the developer's openings `op₀`),
-for every count curve `(k, R_w, M, ρ)` that bounds every session's rate, given V*'s
+strings `q` commit to. Taken: the statement check accepting V*'s statements (`_hck`), A3 (`_hA3`), and the hidden
+statement of a run `σ` reaches whose sessions all verify being the read strings' (`_hx`), unless another such run at its
+registration and draw read another commit string at a row both read, the two openings colliding (two distinct SHA-512
+preimages with one hash, `(regBcCommit i).ext`). Then for the registered commit strings `p` (the developer's openings
+`op₀`), for every count curve `(k, R_w, M, ρ)` that bounds every session's rate, given V*'s
 bridge (VBridge): a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded transcripts play the
 compiled table to outcomes that clash; or a run `σ` reaches whose sessions all verify having read at some row a commit
-string other than `p i`, whose opening and the developer's collide; or
+string other than `p i`, whose opening and the developer's collide; or two such runs at one registration and draw that
+read different commit strings at a row both read, whose openings collide; or
 $$\Pr[\text{Lean's verifier accepts } st \wedge \text{every session verifies} \wedge
   \neg\,\text{the statement of } p \text{ holds}]$$
 is at most V*'s sessions' expected statistical errors under the models read off their executable strata, `r` times
@@ -177,11 +181,21 @@ def RecursiveAudit : Prop :=
     (_hck : ∀ R ω t R₂ j, FailClosed.ScopeZ (custodied zs₀ _hCust R ω t R₂ j).I)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes (execStmts Vs))
-    -- at an outcome whose sessions all verify, the hidden statement is the read commit strings'
+    -- at an outcome `σ` reaches whose sessions all verify, the hidden statement is the read commit strings', unless
+    -- another such outcome at its registration and draw read another string at a row both read, the openings colliding
     (_hx : ∀ o : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec (execStmts Vs) Reg' dg N),
+      FlockSoundness.Game.Outcome (recGame L Reg (innerAt T CT st) Cm
+        fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ o →
       VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : ℕ → ByteArray,
       (∀ i, readsZ (custodied zs₀ _hCust) rt o i → q i = rowZ (custodied zs₀ _hCust) rt o i) →
-        x o.1 o.2.1 = stmt q o.2.1)
+        x o.1 o.2.1 = stmt q o.2.1 ∨
+        ∃ o', FlockSoundness.Game.Outcome (recGame L Reg (innerAt T CT st) Cm
+            fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ o' ∧ o'.1 = o.1 ∧ o'.2.1 = o.2.1 ∧
+          VerifiesV (custodied zs₀ _hCust o'.1 o'.2.1 o'.2.2.1) o'.2.2.2 ∧
+          ∃ i, readsZ (custodied zs₀ _hCust) rt o i ∧ readsZ (custodied zs₀ _hCust) rt o' i ∧
+            rowZ (custodied zs₀ _hCust) rt o i ≠ rowZ (custodied zs₀ _hCust) rt o' i ∧
+            FlockSoundness.Binding.Collides ((regBcCommit i).ext (opZ (custodied zs₀ _hCust) rt o i)
+              (opZ (custodied zs₀ _hCust) rt o' i)))
     -- the registered commit strings and the developer's openings
     (p : ℕ → ByteArray) (op₀ : ℕ → Flock.Registered.Port × ByteArray × ByteArray)
     (_hreg : ∀ i, (regBcCommit i).Opens rt (p i) (op₀ i))
@@ -200,6 +214,16 @@ def RecursiveAudit : Prop :=
         VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ∃ i, readsZ (custodied zs₀ _hCust) rt o i ∧ rowZ (custodied zs₀ _hCust) rt o i ≠ p i ∧
           FlockSoundness.Binding.Collides ((regBcCommit i).ext (opZ (custodied zs₀ _hCust) rt o i) (op₀ i))) ∨
+      (∃ o o', FlockSoundness.Game.Outcome (recGame L Reg (innerAt T CT st) Cm
+          fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ o ∧
+        FlockSoundness.Game.Outcome (recGame L Reg (innerAt T CT st) Cm
+          fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ o' ∧ o'.1 = o.1 ∧ o'.2.1 = o.2.1 ∧
+        VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+        VerifiesV (custodied zs₀ _hCust o'.1 o'.2.1 o'.2.2.1) o'.2.2.2 ∧
+        ∃ i, readsZ (custodied zs₀ _hCust) rt o i ∧ readsZ (custodied zs₀ _hCust) rt o' i ∧
+          rowZ (custodied zs₀ _hCust) rt o i ≠ rowZ (custodied zs₀ _hCust) rt o' i ∧
+          FlockSoundness.Binding.Collides ((regBcCommit i).ext (opZ (custodied zs₀ _hCust) rt o i)
+            (opZ (custodied zs₀ _hCust) rt o' i))) ∨
       prob (fun o => AcceptsStmt st ∧ VerifiesV (custodied zs₀ _hCust o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (stmt p o.2.1))
           (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerV (custodied zs₀ _hCust R ω t) dg N) σ ≤
