@@ -225,6 +225,140 @@ theorem recursive_sound_on [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos
 
 end Sound
 
+section Leaf
+
+theorem ite_one_zero_iff {p q : Prop} {dp : Decidable p} {dq : Decidable q} (h : p ↔ q) :
+    (if p then (1 : ℝ≥0∞) else 0) = if q then 1 else 0 := by
+  by_cases hp : p
+  · rw [if_pos hp, if_pos (h.1 hp)]
+  · rw [if_neg hp, if_neg (mt h.2 hp)]
+
+theorem outcome_bind {α β : Type} {f : α → Game β} : ∀ (g : Game α) (s : Strategy g) (t : (a : α) → Strategy (f a))
+    {a : α} {b : β}, Game.Outcome g s a → Game.Outcome (f a) (t a) b → Game.Outcome (g.bind f) (Strategy.bind g f s t) b
+  | .ret _, _, _, _, _, ha, hb => by
+      have ha' : _ = _ := ha
+      subst ha'
+      exact hb
+  | .send _ k, s, t, _, _, ha, hb => outcome_bind (k s.1) s.2 t ha hb
+  | @Game.coin _ _ _ _ k, s, t, _, _, ha, hb => by
+      obtain ⟨c, ha⟩ := ha
+      exact ⟨c, outcome_bind (k c) (s c) t ha hb⟩
+
+theorem outcome_of_bind {α β : Type} {f : α → Game β} : ∀ (g : Game α) (s : Strategy g) (t : (a : α) → Strategy (f a))
+    {b : β}, Game.Outcome (g.bind f) (Strategy.bind g f s t) b → ∃ a, Game.Outcome g s a ∧ Game.Outcome (f a) (t a) b
+  | .ret a, _, _, _, hb => ⟨a, rfl, hb⟩
+  | .send _ k, s, t, _, hb => outcome_of_bind (k s.1) s.2 t hb
+  | @Game.coin _ _ _ _ k, s, t, _, hb => by
+      obtain ⟨c, hb⟩ := hb
+      obtain ⟨a, ha, hb⟩ := outcome_of_bind (k c) (s c) t hb
+      exact ⟨a, ⟨c, ha⟩, hb⟩
+
+theorem outcome_map {α β : Type} (f : α → β) (g : Game α) (s : Strategy g) {a : α} (ha : Game.Outcome g s a) :
+    Game.Outcome (g.map f) (Strategy.map f g s) (f a) :=
+  outcome_bind (f := fun a => .ret (f a)) g s (fun _ => PUnit.unit) ha (rfl : f a = f a)
+
+theorem outcome_of_map {α β : Type} (f : α → β) (g : Game α) (s : Strategy g) {b : β}
+    (h : Game.Outcome (g.map f) (Strategy.map f g s) b) : ∃ a, Game.Outcome g s a ∧ f a = b :=
+  outcome_of_bind (f := fun a => .ret (f a)) g s (fun _ => PUnit.unit) h
+
+theorem outcome_twoRuns {β γ : Type} (g : Game β) (s : Strategy g) (pick : β → β → γ) {a a' : β}
+    (ha : Game.Outcome g s a) (ha' : Game.Outcome g s a') :
+    Game.Outcome (StrictCR.twoRuns g s pick).g (StrictCR.twoRuns g s pick).s (pick a a') :=
+  outcome_bind (f := fun b => g.map (pick b)) g s (fun b => Strategy.map (pick b) g s) ha (outcome_map (pick a) g s ha')
+
+theorem outcome_of_twoRuns {β γ : Type} (g : Game β) (s : Strategy g) (pick : β → β → γ) {p : γ}
+    (h : Game.Outcome (StrictCR.twoRuns g s pick).g (StrictCR.twoRuns g s pick).s p) :
+    ∃ a a', Game.Outcome g s a ∧ Game.Outcome g s a' ∧ pick a a' = p := by
+  obtain ⟨a, ha, h⟩ := outcome_of_bind (f := fun b => g.map (pick b)) g s (fun b => Strategy.map (pick b) g s) h
+  obtain ⟨a', ha', h⟩ := outcome_of_map (pick a) g s h
+  exact ⟨a, a', ha, ha', h⟩
+
+variable {M C β : Type} [Fintype C] [Nonempty C]
+
+/-- **`V` at the leaf of `s` that the coins of `u` reach**, read at `u`: down the rounds, the message is the one `s`
+sends and the coin is `u`'s, and `V` sees the leaf's transcript, its strategy and `u`. -/
+def AtLeaf {N : Type} : (r : ℕ) → (f : List (M × C) → Game β) →
+    ((t : List (M × C)) → Strategy (f t) → List (N × C) → Prop) → Strategy (rounds M C r f) → List (N × C) → Prop
+  | 0, _, V, s, u => V [] s u
+  | _ + 1, _, _, _, [] => False
+  | r + 1, f, V, s, (a, ρ) :: u =>
+      AtLeaf r (fun t => f ((s.1, ρ) :: t)) (fun t s' u' => V ((s.1, ρ) :: t) s' ((a, ρ) :: u')) (s.2 ρ) u
+
+open Classical in
+/-- **The simulation, with a predicate of the leaf**: averaged over the round coins, the indicator that the relabelled
+transcript satisfies `Q` and the leaf's `V` is the average, against the simulated inner prover, of the indicator that
+its transcript satisfies `Q` and `V` at the leaf of `s` its coins reach (`leafAvg_relabel` with `V` true). -/
+theorem leafAvg_relabel_at {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f : List (M × C) → Game β)
+    (ref : List (M × C) → M → N) (h : List (N × C) → δ)
+    (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop) (s : Strategy (rounds M C r f)),
+    leafAvg r f (fun t s' => if Q (h (relabel ref t)) ∧ V t s' (relabel ref t) then 1 else 0) s =
+      leafAvg r (fun t => .ret (h t)) (fun u _ => if Q (h u) ∧ AtLeaf r f V s u then 1 else 0)
+        (refStrat r f ref h s)
+  | 0, _, _, _, _, _ => rfl
+  | r + 1, f, ref, h, V, s =>
+      congrArg avg (funext fun ρ => leafAvg_relabel_at Q r (fun t => f ((s.1, ρ) :: t))
+        (fun p c => ref ((s.1, ρ) :: p) c) (fun t => h ((ref [] s.1, ρ) :: t))
+        (fun t s' u' => V ((s.1, ρ) :: t) s' ((ref [] s.1, ρ) :: u')) (s.2 ρ))
+
+/-- **An outcome of the simulated inner prover's run that satisfies `G` is one of the recursive prover's**, when `G` of
+a transcript says `V` holds at the leaf its coins reach and `V` there says the leaf's trial reaches that transcript. -/
+theorem outcome_contF_ref {N δ : Type} (G : δ → Prop) : ∀ (r : ℕ) (f : List (M × C) → Game β)
+    (ref : List (M × C) → M → N) (h : List (N × C) → δ)
+    (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop)
+    (T : (t : List (M × C)) → Strategy (f t) → StrictCR.Finder δ) (s : Strategy (rounds M C r f)),
+    (∀ t s' u, V t s' u → Game.Outcome (T t s').g (T t s').s (h u)) →
+    (∀ u, G (h u) → AtLeaf r f V s u) → ∀ d,
+    Game.Outcome (contF r (fun t => .ret (h t)) (fun t _ => ⟨.ret (h t), PUnit.unit⟩) (refStrat r f ref h s)).g
+      (contF r (fun t => .ret (h t)) (fun t _ => ⟨.ret (h t), PUnit.unit⟩) (refStrat r f ref h s)).s d →
+    G d → Game.Outcome (contF r f T s).g (contF r f T s).s d
+  | 0, _, _, h, _, _, s, hVT, hG, d, hd, hGd => by
+      have hd' : h [] = d := hd
+      subst hd'
+      exact hVT [] s [] (hG [] hGd)
+  | r + 1, f, ref, h, V, T, s, hVT, hG, d, hd, hGd => by
+      obtain ⟨ρ, hd⟩ := hd
+      exact ⟨ρ, outcome_contF_ref G r (fun t => f ((s.1, ρ) :: t)) (fun p c => ref ((s.1, ρ) :: p) c)
+        (fun t => h ((ref [] s.1, ρ) :: t)) (fun t s' u' => V ((s.1, ρ) :: t) s' ((ref [] s.1, ρ) :: u'))
+        (fun t => T ((s.1, ρ) :: t)) (s.2 ρ) (fun t s' u hv => hVT _ s' _ hv) (fun u hu => hG _ hu) d hd hGd⟩
+
+/-- **A fork of the simulated inner prover on transcripts satisfying `G` is a fork of the recursive prover**: at the
+same round and coins, its two trials reach the two transcripts (`outcome_contF_ref`), so `pick` reads the same
+collision. -/
+theorem finds_forkG_ref {D N δ : Type} (H : List UInt8 → D) (pk : δ → δ → StrictCR.Pair) (G : δ → Prop) :
+    ∀ (k r : ℕ) (f : List (M × C) → Game β) (ref : List (M × C) → M → N) (h : List (N × C) → δ)
+    (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop)
+    (T : (t : List (M × C)) → Strategy (f t) → StrictCR.Finder δ) (s : Strategy (rounds M C r f)),
+    (∀ t s' u, V t s' u → Game.Outcome (T t s').g (T t s').s (h u)) →
+    (∀ u, G (h u) → AtLeaf r f V s u) →
+    (forkG (pickOn G pk) k r (fun t => .ret (h t)) (fun t _ => ⟨.ret (h t), PUnit.unit⟩)
+      (refStrat r f ref h s)).Finds H →
+    (forkG pk k r f T s).Finds H
+  | 0, 0, _, _, _, _, _, _, _, _, hF => hF
+  | _ + 1, 0, _, _, _, _, _, _, _, _, hF => hF
+  | 0, r + 1, f, ref, h, V, T, s, hVT, hG, hF => by
+      classical
+      obtain ⟨p, hp, hc⟩ := hF
+      obtain ⟨d, d', hd, hd', rfl⟩ := outcome_of_twoRuns _ _ _ hp
+      have hGG : G d ∧ G d' := by
+        by_contra hn
+        have hnone : pickOn G pk d d' = none := if_neg hn
+        rw [hnone] at hc
+        obtain ⟨_, _, he, _⟩ := hc
+        exact absurd he (by simp)
+      have hpk : pickOn G pk d d' = pk d d' := if_pos hGG
+      rw [hpk] at hc
+      exact ⟨pk d d', outcome_twoRuns _ _ pk (outcome_contF_ref G (r + 1) f ref h V T s hVT hG d hd hGG.1)
+        (outcome_contF_ref G (r + 1) f ref h V T s hVT hG d' hd' hGG.2), hc⟩
+  | k + 1, r + 1, f, ref, h, V, T, s, hVT, hG, hF => by
+      obtain ⟨p, ⟨ρ, hp⟩, hc⟩ := hF
+      obtain ⟨p', hp', hc'⟩ := finds_forkG_ref H pk G k r (fun t => f ((s.1, ρ) :: t))
+        (fun p c => ref ((s.1, ρ) :: p) c) (fun t => h ((ref [] s.1, ρ) :: t))
+        (fun t s' u' => V ((s.1, ρ) :: t) s' ((ref [] s.1, ρ) :: u')) (fun t => T ((s.1, ρ) :: t)) (s.2 ρ)
+        (fun t s' u hv => hVT _ s' _ hv) (fun u hu => hG _ hu) ⟨p, hp, hc⟩
+      exact ⟨p', ⟨ρ, hp'⟩, hc'⟩
+
+end Leaf
+
 section Chain
 
 open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL Composed
@@ -423,7 +557,36 @@ theorem innerAtLeavesV_of_forkOn (zs : Reg → L.Ω → List (Cm × I.Coin) → 
           (fun o => (wmsg (layers (zs σ.1 ω t o.1) dg N k Rw o.2)).zip (t.map Prod.snd)))
         (σ.2 ω)).Finds H) :
     ∀ ref, InnerAtLeavesV zs dg N k Rw σ x wmsg ref εin := by
-  sorry
+  classical
+  intro ref ω
+  by_cases hx : I.holds (x σ.1 ω)
+  · refine le_trans (leafAvg_mono (G := fun _ _ => 0) (fun t s => ?_) _) ?_
+    · exact le_of_eq (if_neg fun h => h.1 hx)
+    · exact (leafAvg_const 0 _).le.trans zero_le
+  let f := fun t : List (Cm × I.Coin) => (outerV (zs σ.1 ω t) dg N).map fun b => (σ.1, ω, t, b)
+  let V : (t : List (Cm × I.Coin)) → Strategy (f t) → List (I.Msg × I.Coin) → Prop := fun t s u =>
+    ∃ b, Game.Outcome (outerV (zs σ.1 ω t) dg N)
+        (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outerV (zs σ.1 ω t) dg N) s) b ∧
+      AcceptsV (zs σ.1 ω t) b ∧ (wmsg (layers (zs σ.1 ω t b.1) dg N k Rw b.2)).zip (t.map Prod.snd) = u
+  let T : (t : List (Cm × I.Coin)) → Strategy (f t) → StrictCR.Finder (List (I.Msg × I.Coin)) := fun t s =>
+    StrictCR.oneRun (outerV (zs σ.1 ω t) dg N) (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outerV (zs σ.1 ω t) dg N) s)
+      (fun o => (wmsg (layers (zs σ.1 ω t o.1) dg N k Rw o.2)).zip (t.map Prod.snd))
+  let G : List (I.Msg × I.Coin) → Prop := AtLeaf I.r f V (σ.2 ω)
+  have hVT : ∀ t s' u, V t s' u → Game.Outcome (T t s').g (T t s').s (id u) := by
+    rintro t s' u ⟨b, hb, -, rfl⟩
+    exact outcome_map (fun o => (wmsg (layers (zs σ.1 ω t o.1) dg N k Rw o.2)).zip (t.map Prod.snd)) _ _ hb
+  rcases hin (x σ.1 ω) hx G (refStrat I.r f (ref ω) id (σ.2 ω)) with ⟨i, hi, hF⟩ | hle
+  · exact (hno ⟨ω, i, hi, finds_forkG_ref H (pick (x σ.1 ω)) G i I.r f (ref ω) id V T (σ.2 ω) hVT
+      (fun _ hu => hu) hF⟩).elim
+  refine Eq.trans_le ?_ hle
+  refine Eq.trans (leafAvg_congr_len (G := fun t s => if I.accepts (x σ.1 ω) (id (relabel (ref ω) t)) ∧
+      V t s (relabel (ref ω) t) then 1 else 0) (fun t s _ => ?_) _) ?_
+  · exact ite_one_zero_iff ⟨fun h => h.2, fun h => ⟨hx, h⟩⟩
+  refine Eq.trans (leafAvg_relabel_at (fun u => I.accepts (x σ.1 ω) u) I.r f (ref ω) id V (σ.2 ω)) ?_
+  refine Eq.trans (leafAvg_congr_len (G := fun u s' => prob (fun u => I.accepts (x σ.1 ω) u ∧ G u) (.ret (id u)) s')
+    (fun u s' _ => ?_) _) ?_
+  · exact ite_one_zero_iff Iff.rfl
+  exact (prob_rounds _ _ _ _).symm
 
 end Chain
 
