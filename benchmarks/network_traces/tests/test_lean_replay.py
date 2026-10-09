@@ -4,6 +4,7 @@ verifier is caught, as failed controls or as differing verdicts."""
 
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import importlib.util
 import json
@@ -99,6 +100,27 @@ def test_a_broken_verifier_is_caught(tmp_path: Path) -> None:
     assert r["violations"]["lean"]["certified"] == r["violations"]["lean"]["link_windows"] == {"advice": 1}
     s = lr.summarize([r])
     assert s["runs_same_verdict"] == 0 and s["natural_controls"] == {"python": {}, "lean": {"advice": 1}}
+
+
+def test_the_checks_behind_the_status_one_fire_on_a_window_made_clean() -> None:
+    doc = trace()
+    calls: list = []
+    lr._replay_trace(doc["configurations"], lr.replay.Setup(calibration.calibrate(doc)), "hindsight", False,
+                     lr.recording(audit.Audit, calls))
+    tag, _, (link, records, *rest), _ = next(c for c in calls if c[1] == "egress")
+    refused = lr.Status(lr.Reason.DELIVERY_REFUSED)
+    args = (link, [dataclasses.replace(r, status=refused) if isinstance(r, lr.Record) else r for r in records], *rest)
+    vs = audit.Audit().check_link(*args)
+    assert {v.violation for v in vs} == {"status:delivery-refused"}
+    out = {c["control"]: c for c in lr.injected_controls([(tag, "egress", args, vs)], audit.Audit)}
+    for name in ("raw-slot", "committed-digest-byte", "sync-outside-set", "sync-not-units"):
+        c = out[name]
+        assert c["clean"] == "made" and c["baseline"] == {"python": None, "lean": None}, c
+        assert c["passed"] and c["expected_kind"] and c["python"] == c["expected"], c
+    s = lr.summarize([{"run": "r0", "kind": "trace", "link_windows": 3, "same": 3, "diffs": [], "controls": list(
+        out.values()), "violations": {k: {"link_windows": {}} for k in ("python", "lean")}}])
+    assert s["clean_windows"] == {"made": 1} and not s["baselines_not_accepted"]
+    assert s["injected_own_kind"]["raw-slot"] == 1
 
 
 def active_run(root: Path) -> None:

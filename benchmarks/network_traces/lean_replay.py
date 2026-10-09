@@ -65,8 +65,8 @@ from verity.core.protocols.certifier import audit as py_audit  # noqa: E402
 from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, Issuer,  # noqa: E402
                                                           certificate_message, parameters_digest)
 from verity.core.protocols.certifier.commitment import commit  # noqa: E402
-from verity.core.protocols.certifier.grid import Reason, Record, Status  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
+from verity.core.protocols.certifier.grid import COMPLETE, Reason, Record, Status  # noqa: E402
+from verity.core.protocols.certifier.schedule import ClockSync, expected_grids  # noqa: E402
 
 TRACE_AUDITS = ("raw", "committed", "certified")
 ACTIVE_AUDITS = ("raw", "committed")
@@ -203,12 +203,26 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
     if not egress:
         return []
     owner, _, (link, records, frames, syncs, sync_set, params, key), vs = egress[0]
-    w = next((v.window for v in vs if v.accepted), 0)
+    w = next((v.window for v in vs if v.accepted), None)
+    clean = "accepted"
+    if w is None:
+        # No window was accepted, so a check behind the status one would see the natural violation first: window 0 is
+        # made clean, its sync one of Σ_sync and its record the Program's grid with a complete status.
+        w, clean, syncs = 0, "made", list(syncs)
+        if syncs[0] not in sync_set:
+            syncs[0] = ClockSync(min(sync_set.deltas), syncs[0].rho if syncs[0].rho in sync_set.rhos else
+                                 min(sync_set.rhos))
+        expected = expected_grids(frames, syncs, params)
+        records = [r for r in records if not (r.link == link and r.window == 0)] + \
+            [Record(link, 0, expected[0], COMPLETE)]
     raw = [r for r in records if r.link == link and isinstance(r, Record)]
     signer = replay.ReplaySigner()
     parameters = parameters_digest(params, sync_set)
     tests: list[tuple[str, str, list]] = []
     target = next((r for r in raw if r.window == w), None)
+    honest = [("egress", (link, records, frames, syncs, sync_set, params, key))]
+    baseline = {side: next((v for l, x, v in _verdicts(cls, honest) if l == link and x == w), "absent")
+                for side, cls in (("python", py_audit.Audit), ("lean", lean_cls))}
     if raw and target is not None:
         others = [r for r in raw if r is not target]
         tests += [
@@ -256,18 +270,19 @@ def injected_controls(calls: list, lean_cls: type) -> list[dict]:
     out = []
     for name, expected, mutated in tests:
         tw, tlink = (w_in, ilink) if name.startswith("ingress") else (w, link)
+        where = {} if name.startswith("ingress") else {"clean": clean, "baseline": baseline}
         py = _verdicts(py_audit.Audit, mutated)
         try:
             le = _verdicts(lean_cls, mutated)
         except (ValueError, RuntimeError) as e:
             out.append({"control": name, "expected": expected, "window": tw, "python": None, "lean": None,
-                        "error": str(e)[:300], "passed": False})
+                        "error": str(e)[:300], "passed": False} | where)
             continue
         pv = next((v for l, x, v in py if l == tlink and x == tw), "absent")
         lv = next((v for l, x, v in le if l == tlink and x == tw), "absent")
         out.append({"control": name, "expected": expected, "window": tw, "python": pv, "lean": lv,
                     "same": py == le, "passed": py == le and pv is not None and lv is not None and pv != "absent",
-                    "expected_kind": pv == expected})
+                    "expected_kind": pv == expected and lv == expected} | where)
     return out
 
 
@@ -407,7 +422,7 @@ def summarize(results: Sequence[dict]) -> dict:
         by_run.setdefault(r["run"], []).append(r)
     s = Counter()
     natural: dict[str, Counter] = {"python": Counter(), "lean": Counter()}
-    injected, failed = Counter(), Counter()
+    injected, failed, own_kind, clean, unclean = Counter(), Counter(), Counter(), Counter(), []
     errors, left_out, empty = [], [], []
     same_runs = 0
     for run, parts in list(by_run.items()):
@@ -436,11 +451,18 @@ def summarize(results: Sequence[dict]) -> dict:
                 natural[side].update(p["violations"][side]["link_windows"])
             for c in p["controls"]:
                 (injected if c["passed"] else failed)[c["control"]] += 1
+                own_kind[c["control"]] += bool(c.get("expected_kind"))
+            egress = [c for c in p["controls"] if "clean" in c]
+            if egress:
+                clean[egress[0]["clean"]] += 1
+                if any(v is not None for v in egress[0]["baseline"].values()):
+                    unclean.append({"run": run, "configuration": p.get("configuration"), "baseline": egress[0]["baseline"]})
         same_runs += ok
     k_natural = sum(natural["python"].values())
     return {"runs": len(by_run), "runs_same_verdict": same_runs, **dict(s),
             "natural_controls": {k: dict(v) for k, v in natural.items()},
-            "injected_controls": dict(injected), "injected_failed": dict(failed),
+            "injected_controls": dict(injected), "injected_failed": dict(failed), "injected_own_kind": dict(own_kind),
+            "clean_windows": dict(clean), "baselines_not_accepted": unclean,
             "K": {"natural": k_natural, "injected": sum(injected.values()), "failed": sum(failed.values())},
             "errors": errors, "left_out": left_out,
             "runs_left_out": sorted({x["run"] for x in left_out} - set(by_run)), "runs_without_link_windows": empty}
@@ -484,20 +506,36 @@ def run_tasks(kind: str, tasks: Sequence[tuple], jobs: int, costs: Sequence[floa
                 src.write_bytes(pickle.dumps((kind, tasks[i])))
                 p = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "task", str(src), str(dst)])
                 running[p.pid] = (i, p)
-            pid, status = os.wait()
+            pid, status, usage = os.wait4(-1, 0)
             if pid not in running:
                 continue
             i, p = running.pop(pid)
             p.returncode = os.waitstatus_to_exitcode(status)
             dst = Path(tmp) / f"{i}.out"
+            peak = {"max_rss_gb": round(usage.ru_maxrss / 2 ** 20, 3)}
             if dst.exists():
-                yield json.loads(dst.read_text())
+                yield json.loads(dst.read_text()) | peak
             else:
-                yield _label(kind, tasks[i]) | {"error": f"its process exited {p.returncode} without a result"}
+                yield _label(kind, tasks[i]) | peak | {"error": f"its process exited {p.returncode} without a result"}
+
+
+def _exe_rss(log: str, exe: str, *args: str) -> int:
+    """`exe args`, its standard streams this process's, then a line of its peak memory and its time appended to `log`
+    under the task's label (`LEAN_REPLAY_TASK`): what `VERITY_NETWORK_RECORDS_EXE` names to measure the Lean check
+    apart from the audit around it."""
+    t0 = time.monotonic()
+    p = subprocess.Popen([exe, *args])
+    _, status, usage = os.wait4(p.pid, 0)
+    with open(log, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"task": json.loads(os.environ.get("LEAN_REPLAY_TASK", "null")), "exe": exe,
+                             "max_rss_gb": round(usage.ru_maxrss / 2 ** 20, 3), "user_s": round(usage.ru_utime, 2),
+                             "sys_s": round(usage.ru_stime, 2), "wall_s": round(time.monotonic() - t0, 2)}) + "\n")
+    return os.waitstatus_to_exitcode(status)
 
 
 def _task(src: str, dst: str) -> int:
     kind, args = pickle.loads(Path(src).read_bytes())
+    os.environ["LEAN_REPLAY_TASK"] = json.dumps(_label(kind, args))
     result = safe_job(kind, args)
     Path(dst + ".part").write_text(json.dumps(result))
     os.replace(dst + ".part", dst)
@@ -511,6 +549,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["task"]:
         return _task(*argv[1:])
+    if argv[:1] == ["exe-rss"]:  # exe-rss LOG EXE ARGS...: EXE's peak memory and time, appended to LOG
+        return _exe_rss(*argv[1:])
     if argv[:1] == ["summarize"]:  # summarize OUT PROGRESS.jsonl ...: the outputs again from tasks' results
         return print_summary(write(Path(argv[1]), [json.loads(line) for f in argv[2:]
                                                    for line in Path(f).read_text().splitlines()]))
@@ -531,6 +571,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.add_argument("--controls-up-to", type=int, metavar="FRAMES",
                    help="inject a run's controls only if its smallest configuration reads at most this many frames "
                         "(each control checks the whole link again)")
+    a.add_argument("--only", action="append", metavar="RUN/CONFIGURATION",
+                   help="only the configurations whose RUN/CONFIGURATION (as progress.jsonl names them) ends with this; "
+                        "repeatable")
     a.add_argument("--budget-gb", type=float,
                    help=f"run configurations at once only while their estimated peak memory ({LEAN_GB_PER_FRAME * 1e3:g} "
                         "MB per frame, the Lean check's evidence) stays under this")
@@ -560,7 +603,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         sized, results = [], []
         for root in args.runs:
-            configurations = {c: active_frames(c) for c in active_configurations(root)}
+            configurations = {c: active_frames(c) for c in active_configurations(root)
+                              if not args.only or any(f"{root.name}/{c.relative_to(root)}".endswith(o) for o in args.only)}
             kept = {c: n for c, n in configurations.items() if args.max_frames is None or n <= args.max_frames}
             least = min(configurations, key=configurations.get, default=None)
             if least is not None and not kept and configurations[least] <= args.each_run_up_to:
