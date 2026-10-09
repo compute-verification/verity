@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 import verity_difftest
-from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _stream
+from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
 from verity.ml.circuits.codec import canonical_json
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V
@@ -39,6 +39,13 @@ def _public(rec: dict) -> tuple:
             rec["population"])
 
 
+def _rule(spec: S.Spec, rec) -> tuple[Verdict, Verdict]:
+    """The public-items rule by the verifier of record, and the service's Python."""
+    py = S.check_public(spec, rec)
+    return V.check_public(py, rec, S.SCHEME, spec.check.query, [(v.name, v.registered) for v in spec.values],
+                          [p.item for p in spec.public]), py
+
+
 def test_every_check_runs_both_and_records_them():
     _, reg, draw = _drawn()
     program, law = P.population_program(PAIR, 6), {"law": "subset", "k": 2}
@@ -53,7 +60,9 @@ def test_every_check_runs_both_and_records_them():
                   (V.check_proved(draw.draw, draw.units[:1], 2), D.check_proved(draw.draw, draw.units[:1], 2)),
                   (V.matches_public(reg.record, *_public(reg.record)), R.matches_public(reg.record, *_public(reg.record))),
                   (V.matches_public(reg.record, "frame-v3/blake3", *_public(reg.record)[1:]),
-                   R.matches_public(reg.record, "frame-v3/blake3", *_public(reg.record)[1:]))):
+                   R.matches_public(reg.record, "frame-v3/blake3", *_public(reg.record)[1:])),
+                  _rule(_spec(), _record()), _rule(_spec(), {**_record(), "tiles": [2, 3]}),
+                  _rule(_spec(public=()), _record()), _rule(_spec(), "a record")):
         side = {"ok": py.ok, "codes": list(py.codes)}
         assert v == py and v.verifiers == {"of_record": "lean", "lean": side, "python": side}
     rec = V.audit_record(**_args(reg, draw))
@@ -97,6 +106,16 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     stream.deliver(draw, [SESSION])
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
+
+
+def test_a_public_items_disagreement_refuses_the_registration(monkeypatch):
+    _lean_answering(monkeypatch, "check_public", lambda got: {**got, "ok": False, "codes": ["undeclared"],
+                                                              "detail": {"undeclared": ["leaves:x"]}})
+    with pytest.raises(S.Refused) as e:
+        _stream().register(_record(), _ports(6))
+    v = e.value.verdict
+    assert v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE]["lean"]["codes"] == ["undeclared"]
+    assert v.verifiers["lean"] == {"ok": False, "codes": ["undeclared"]} and v.verifiers["python"] == {"ok": True, "codes": []}
 
 
 def test_lean_that_cannot_run_fails_closed(monkeypatch):

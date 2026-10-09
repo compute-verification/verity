@@ -4,8 +4,8 @@ on drawn programs, laws, records, draws and verdicts, valid ones and one or two 
 
 The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
-Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), and for the `draw` piece `two_stage.draw_first` on
-`OwnRandomness` over the given bytes. Records are v1 and, on the programs with root parameters to register
+Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `two_stage.draw_first` on
+`OwnRandomness` over the given bytes, and for `check_public` the proof service's public-items rule (`service.check_public`). Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
@@ -23,6 +23,8 @@ import shutil
 from fractions import Fraction
 from math import gcd
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 from hypothesis import strategies as st
@@ -30,6 +32,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Stratified, Stratum
+from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registered as G, registration as R
 from verity.core.protocols.sampled_proofs.two_stage import OwnRandomness, draw_first
 from verity.ml.circuits import codec, partition_object as PO
@@ -532,6 +535,36 @@ def session_registered(j):
                 isinstance(e, dict) and isinstance(e.get("value"), str) for e in reg["registered"])):
             raise D.Reject("a registered value has no string value")
     return {"registered": audit.session_registered(vs, reg)}
+
+
+def check_public(j):
+    """The service's public-items rule (`service.check_public`) on `{"record", "scheme", "query", "values", "public"}`, over a
+    Spec holding only what the rule reads, with `scheme` the service's. Rejected where the Lean refuses: a malformed scheme,
+    query, value or declared item, and where Python raises or would write a `repr` (an entry named by a list or an object,
+    a stratum's template one)."""
+    j = _json(j)
+    if not (isinstance(j, dict) and isinstance(j.get("scheme"), str) and isinstance(j.get("query"), dict)):
+        raise D.Reject("scheme is not a string or query not an object")
+    vs, ps, rec = j.get("values"), j.get("public"), j.get("record")
+    if not (isinstance(vs, list) and all(isinstance(v, dict) and isinstance(v.get("name"), str)
+                                         and isinstance(v.get("registered"), bool) for v in vs)):
+        raise D.Reject("a value is not a string name with a boolean")
+    if not (isinstance(ps, list) and all(isinstance(i, str) for i in ps)):
+        raise D.Reject("a declared item is not a string")
+    if isinstance(rec, dict):
+        law = rec.get("law")
+        strata = law.get("strata") if isinstance(law, dict) else None
+        if isinstance(strata, list) and any(isinstance(t.get("template") if isinstance(t, dict) else t, (list, dict))
+                                            for t in strata):
+            raise D.Reject("a stratum's template is a list or an object")
+        for field_, key in (("roots", "port"), ("registered", "value")):
+            es = rec.get(field_) if isinstance(rec.get(field_), list) else [rec.get(field_)]
+            if field_ in rec and any(isinstance(e, dict) and isinstance(e.get(key), (list, dict)) for e in es):
+                raise D.Reject("an entry named by a list or an object")
+    spec = SimpleNamespace(check=SimpleNamespace(query=j["query"]), public=[SimpleNamespace(item=i) for i in ps])
+    values = [SimpleNamespace(name=v["name"], registered=v["registered"]) for v in vs]
+    with mock.patch.object(service, "SCHEME", j["scheme"]):
+        return _json(service.check_public(spec, rec, values).to_json())
 
 
 RECORD_INPUT_KEYS = {"delta", "draw", "instances", "law", "proved_units", "receipt", "registration", "served", "session_roots",
@@ -1146,6 +1179,53 @@ MATCHES_PUBLIC = D.Port(PIECES, "matches_public", matches_public, st.one_of(
     JSON), package=PACKAGE)
 
 
+def _public_items(a: dict, change, x: int) -> dict:
+    """`check_public`'s input from an audit: its record, the check's query, the verifier's ports and registered values as
+    the Spec's values, and every item they and the templates may show declared; maybe changed."""
+    p = a["params"]
+    values = [{"name": n, "registered": False} for n in sorted(p["ports"])] + [
+        {"name": n, "registered": True} for n in sorted(p.get("registered") or {})]
+    public = ["population", "window", "leaf_layer", "anchors", *(f"population:{t}" for t in PROGRAMS_TEMPLATES),
+              *(f"{k}:{v['name']}" for v in values for k in ("leaves", "domain", *(("words", "word_bits") if v["registered"] else ())))]
+    return change({"public": public, "query": p["query"], "record": a["record"], "scheme": SCHEME, "values": values}, x)
+
+
+def _record_with(c: dict, **fields) -> dict:
+    return {**c, "record": {**c["record"], **fields}}
+
+
+#: One change each to the rule's input: a declared item or every one dropped, a value dropped, added, twice or the other
+#: kind, another query or scheme, a record that is not one, a stratified law's templates, and entries the rule names.
+PUBLIC_ITEMS = [
+    lambda c, x: c,
+    lambda c, x: {**c, "public": [i for n, i in enumerate(c["public"]) if n != x % len(c["public"])]},
+    lambda c, x: {**c, "public": []},
+    lambda c, x: {**c, "values": [v for n, v in enumerate(c["values"]) if n != x % len(c["values"])]},
+    lambda c, x: {**c, "values": [*c["values"], {"name": ["z", "W", "x"][x % 3], "registered": x % 2 == 0}]},
+    lambda c, x: {**c, "values": [*c["values"], c["values"][x % len(c["values"])]]},
+    lambda c, x: {**c, "values": [{**v, "registered": not v["registered"]} if n == x % len(c["values"]) else v
+                                  for n, v in enumerate(c["values"])]},
+    lambda c, x: {**c, "query": QUERIES[x % len(QUERIES)]},
+    lambda c, x: {**c, "scheme": "frame-v3/blake3"},
+    lambda c, x: {**c, "record": [None, "a record", [], 5][x % 4]},
+    lambda c, x: _record_with(c, law={"law": "stratified", "strata": [
+        {"k": 1, "template": [PAIR.id, None, 5, True, "x", -2, [1], {"a": 1}, 0][x % 9]}, [TRIPLE.id, None, False, 7][x % 4]]}),
+    lambda c, x: _record_with(c, law={"law": "stratified", "strata": "s"}),
+    lambda c, x: _record_with(c, roots=[[{"port": [1]}, {"port": {"a": 1}}, {"port": 5}, {"port": None}, {"root": "r"}, "x",
+                                         {"port": "x", "call": 1, "root": "r"}][x % 7], *c["record"]["roots"]]),
+    lambda c, x: _record_with(c, registered=[{"value": [["W"], {}, 1, None, "W", "out"][x % 6], "leaves": 1, "root": "r"}]),
+    lambda c, x: _record_with(c, roots={"port": "x", "root": "r"}),
+]
+CHECK_PUBLIC = D.Port(PIECES, "check_public", check_public, st.one_of(
+    st.builds(_public_items, changed_audits(most=0), st.sampled_from(PUBLIC_ITEMS), st.integers(0, 63)),
+    st.builds(_public_items, changed_audits([RECORD], most=1, least=1), st.sampled_from(PUBLIC_ITEMS[:3]), st.integers(0, 63)),
+    st.builds(_public_items, changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS), st.sampled_from(PUBLIC_ITEMS[:3]),
+              st.integers(0, 63)),
+    st.builds(lambda c, k: {kk: v for kk, v in _public_items(c, PUBLIC_ITEMS[0], 0).items() if kk != k}, changed_audits(most=0),
+              st.sampled_from(["public", "query", "record", "scheme", "values"])),
+    JSON), package=PACKAGE)
+
+
 def _reads_input(a: dict, with_registration: bool) -> dict:
     out = {"verdicts": a["evidence"].get("verdicts")}
     return out | {"registration": a["record"]} if with_registration else out
@@ -1189,7 +1269,7 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300), (MATCHES_PUBLIC, 400),
-              (SESSION_REGISTERED, 400), (RECORD_PORT, 600)]
+              (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -1236,6 +1316,21 @@ def test_every_r7_code_is_reached(pieces):
                 kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
                 seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
     assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_every_public_items_code_is_reached(pieces):
+    """Each change to the rule's input on a v1 audit and a v2 one, Lean and Python agreeing on each: together they reach
+    every code of `check_public` and a reject, which the drawn runs only probably do, and the unchanged audits none."""
+    s = REGISTERED_SETUPS[0]
+    v1 = {"params": {"ports": SETUPS[2].ports, "query": SETUPS[2].query}, "record": FIXED[0]}
+    seen: set[str] = set()
+    for a in (_json(v1), _v2_audit(s, s.values[1])):
+        assert D.replay(CHECK_PUBLIC, _public_items(a, PUBLIC_ITEMS[0], 0), pieces) == (
+            "output", D.canonical({"codes": [], "detail": {}, "ok": True}))
+        for change, x in ((c, x) for c in PUBLIC_ITEMS for x in range(9)):
+            kind, out = D.replay(CHECK_PUBLIC, _public_items(copy.deepcopy(a), change, x), pieces)
+            seen |= set(json.loads(out)["codes"]) if kind == "output" else {kind}
+    assert seen == {"keys", "unsalted", "query", "roots", "undeclared", "reject"}, sorted(seen)
 
 
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
