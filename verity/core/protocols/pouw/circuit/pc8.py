@@ -15,7 +15,8 @@ r × TN (`Shape.tile_rows`, `tile_templates`).  The partition is `Q_template_ins
 every value is computed in exactly one unit.  Forming v0 (#311's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
 place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, the row its ``sha512/row-seg/v1`` leaf
-hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet), and the rows are
+hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet; and an audit window's tile,
+`Pc8TileSide`, is `Pc8TileHidden` on the window's side rows, each carrying its index field: `SIDE_PORTS`), and the rows are
 C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j; `leaves`) and each
 row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the per-tile cap to the hiding call,
 cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row unit along k into a head, a form
@@ -285,6 +286,35 @@ Pc8TileHiddenH3Def = CompositeDefinition(
     doc="`Pc8TileHidden` under hashing -h3: `Pc8Tile`'s checked words as the tile's messages (`pearl_c.messages`, "
         "`leaves.tile_messages`), whose bits are the row `Sha512RowSeg_v1{N_BITS = 64·TM·TN}` hashes into `pearl_c.leaf`; "
         "a value for that unit, not a public output.", conformance="protocol-defined")
+
+
+# ---- the audit window's tile ------------------------------------------------------------------------------------------------
+
+def _tile_side_sig(S_):
+    return _tile_sig(S_)[0] + (("ia", Array(S_.TM, L.INDEX)), ("jb", Array(S_.TN, L.INDEX))), L.DIGEST
+
+
+def _tile_side_body(B, S_, ac, bc, pa, pb, ia, jb):
+    return B.call(templates(S_.K, (S_.TM, S_.TN), S_.DEV, True)["tile"], ac, bc, pa, pb)
+
+
+Pc8TileSideDef = CompositeDefinition(
+    "Pc8TileSide", 1, ("K", "TM", "TN", "DEV"), _tile_side_sig, _tile_side_body,
+    doc="`Pc8TileHidden` on an audit window's side rows (`window.side_row`): each A row A′_i ‖ P_A,i ‖ I and B row "
+        "B̃_j ‖ P_B,j ‖ J carries its place in its call, I or J, in an index field (`leaves.INDEX`) that the unit reads as a "
+        "value of its committed row; its tile digest is `Pc8TileHidden`'s.", conformance="protocol-defined")
+
+#: `Pc8TileSide`'s ports, as `PORTS["tile"]`: its rows are fp8-pi rows, each index field a value in its row, so the rows a
+#: unit commits are the side trees' leaves (`window.side_row`)
+SIDE_PORTS = {"rows": (("fp8-pi", ROLE_X, ("ac", "pa", "ia")), ("fp8-pi", ROLE_W, ("bc", "pb", "jb")), ("tile", ROLE_X, (0,))),
+              "regions": {}, "advice": ()}
+
+
+@lru_cache(maxsize=8)
+def side_tile(k: int, tile: tuple[int, int] = (1, 1), dev: str = "sm120") -> SpecializedDefinition:
+    """The audit window's tile unit at depth ``k``: `Pc8TileSide`."""
+    return bind(Pc8TileSideDef, K=k, TM=tile[0], TN=tile[1], DEV=dev)
+
 
 #: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
 #: advice: parameters the prover supplies that no unit computes and nothing binds (the cap word's certificates,
@@ -606,6 +636,6 @@ def unit_cut(fn: SpecializedDefinition):
     return pc4.unit_cut(fn, _role_of())
 
 
-__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE",
-           "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query", "templates",
-           "tile_templates", "unit_cut", "units", "weight"]
+__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS",
+           "SIDE_PORTS", "TILE", "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query",
+           "side_tile", "templates", "tile_templates", "unit_cut", "units", "weight"]
