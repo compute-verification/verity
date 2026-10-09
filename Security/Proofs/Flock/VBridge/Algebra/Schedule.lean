@@ -56,7 +56,7 @@ theorem Zero.get {rounds : Array (Array F128)} (hz : Zero rounds) {k : Nat} {r :
   obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.mp h
   exact hz k hk
 
-theorem ofRounds_round {rounds : Array (Array F128)} {k n : Nat} {v : Array F128}
+theorem ofRounds_get? {rounds : Array (Array F128)} {k n : Nat} {v : Array F128}
     (h : (Coins.ofRounds rounds).round k n = .ok v) : rounds[k]? = some v ∧ v.size = n := by
   simp only [Coins.ofRounds] at h
   cases hr : rounds[k]? with
@@ -293,7 +293,7 @@ theorem coinVec_z {t : Nat} (n : Nat) : Z t (coinVec n) := by
       simp
     · rcases coinVec_ok h' with ⟨hn', -, -⟩ | ⟨-, hb, rfl⟩
       · exact absurd hn' hn
-      · obtain ⟨hk, hsz⟩ := ofRounds_round hb
+      · obtain ⟨hk, hsz⟩ := ofRounds_get? hb
         refine ⟨?_, rfl, fun i hi => ?_⟩
         · rw [hz.get hk, hsz]
         · have hi0 : i = 0 := by simp at hi; omega
