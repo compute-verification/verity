@@ -136,16 +136,21 @@ def checkBindings (c : Circuit) (partition : Option Json) (program : Option Byte
     | ks => throw s!"{name}: META program_digests names {ks.size} Definitions, not the partition's template {t} alone"
   | _ => throw s!"{name}: META program_digests is not an object"
 
-/-- `checkBindings` against the verifier's own partition object and program, then `check` on a statement's unit and
-population with its own inner shape `inner`, then `checkFile` on the circuit file `circuitB` the statement was parsed
-from; a statement of V*'s needs all three files, and with an inner shape, the statement must be V*'s. -/
+/-- `check` on the unit of `c`, parsed from the circuit file `circuitB`, over `n` instances at the inner shape `i`, then
+`checkFile` on `circuitB` under its META bindings. -/
+def checkCircuit (i : Inner) (c : Circuit) (n : Nat) (circuitB : ByteArray) : V Unit := do
+  let s ← check i c.unit.name n
+  checkFile s (← bindingsOf c) circuitB
+
+/-- `checkBindings` against the verifier's own partition object and program, then `checkCircuit` on a statement's
+circuit and population with its own inner shape `inner`; a statement of V*'s needs all three files, and with an inner
+shape, the statement must be V*'s. -/
 def checkStmt (inner : Option Inner) (st : Stmt) (circuitB : ByteArray) (partition : Option Json := none)
     (program : Option ByteArray := none) : V Unit :=
   match inner with
   | some i => do
-    let b ← checkBindings st.c partition program
-    let s ← check i st.c.unit.name (population st)
-    checkFile s b circuitB
+    discard <| checkBindings st.c partition program
+    checkCircuit i st.c (population st) circuitB
   | none =>
     if isVStar st.c.unit.name then
       throw s!"{st.c.unit.name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"

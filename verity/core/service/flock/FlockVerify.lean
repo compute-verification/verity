@@ -288,19 +288,28 @@ def recInnerCmd (args : List String) : IO UInt32 := do
   | .ok i => IO.println i.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
-/-- `rec-statements --rec-inner F [--unit NAME --instances N]`: V*'s statements at the inner shape (`RecVStar.statements`), each
-unit name and instance count, as one `RECVSTAR` line; with `--unit` and `--instances`, `RecVStar.check` on them as well. -/
+/-- `rec-statements --rec-inner F [--unit NAME | --circuit F] [--instances N]`: V*'s statements at the inner shape
+(`RecVStar.statements`), each unit name and instance count, as one `RECVSTAR` line; with `--unit` and `--instances`,
+`RecVStar.check` on them as well, and with `--circuit` and `--instances`, `RecVStar.checkCircuit` on that circuit file. -/
 def recStatementsCmd (args : List String) : IO UInt32 := do
+  let usage := "usage: flock-verify rec-statements --rec-inner F [--unit NAME | --circuit F] [--instances N]"
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
-    | .ok none => IO.eprintln "usage: flock-verify rec-statements --rec-inner F [--unit NAME --instances N]"; return 2
+    | .ok none => IO.eprintln usage; return 2
     | .error e => IO.eprintln e; return 2
+  let circuitB ← (argOf args "--circuit").mapM IO.FS.readBinFile
   let res : V Lean.Json := do
     let ss ← RecVStar.statements i
     let base := [("statements", Lean.Json.arr (ss.map fun s => Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson s.instances]))]
-    match argOf args "--unit", (argOf args "--instances").bind String.toNat? with
-    | some u, some n => do discard <| RecVStar.check i u n; pure (Lean.Json.mkObj (base ++ [("checked", Lean.Json.arr #[Lean.Json.str u, Lean.toJson n])]))
-    | _, _ => pure (Lean.Json.mkObj base)
+    let checked := fun (u : String) (n : Nat) => Lean.Json.mkObj (base ++ [("checked", Lean.Json.arr #[Lean.Json.str u, Lean.toJson n])])
+    match argOf args "--unit", circuitB, (argOf args "--instances").bind String.toNat? with
+    | some u, none, some n => do discard <| RecVStar.check i u n; pure (checked u n)
+    | none, some b, some n => do
+      let c ← HmRow.parse Tags.circuit b []
+      RecVStar.checkCircuit i c n b
+      pure (checked c.unit.name n)
+    | none, none, _ => pure (Lean.Json.mkObj base)
+    | _, _, _ => throw usage
   let line := match res with
     | .ok j => j.setObjVal! "ok" (Lean.Json.bool true)
     | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
