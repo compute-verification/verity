@@ -61,8 +61,9 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   if i.claims != 2 + 2 * i.regions then
     throw s!"the inner session's claims {i.claims}, not two and two per region of its {i.regions} ({2 + 2 * i.regions})"
   let vsh : VStar.Algebra.Shape := { m := i.m, kLog := i.kLog, claims := i.claims }
-  let ps ← VStar.parts (← VStar.Algebra.spec vsh)
-  let gs ← RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)
+  let ps ← (do VStar.parts (← VStar.Algebra.spec vsh)).mapError (s!"V*'s parts: " ++ ·)
+  let gs ← (do RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)).mapError
+    (s!"the verifier's groups: " ++ ·)
   if ps.size != gs.size then
     throw s!"at the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): V* has {ps.size} parts, the verifier's algebra {gs.size} groups"
   VStar.statements vsh
