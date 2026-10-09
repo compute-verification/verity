@@ -15,6 +15,9 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py direct --cls G,N_IN,N_OUT --n N --out DIR [--seed S] [--netlist FILE]
                                                              the private circuit `universal` registers, on the same x, as a
                                                              public circuit (`direct`: the overhead's baseline)
+    python rec_inner.py partition --cls G,N_IN,N_OUT --circuit FILE --out FILE
+                                                             the partition object of the unit itself as the one Call (a
+                                                             staging with no program row: stage_class.py's), as FILE binds it
     python rec_inner.py faulty --stage DIR --n N --out DIR2  DIR's prover file with instance 0's output row one bit off
     python rec_inner.py wired --cls G,N_IN,N_OUT --n N --out DIR [--seed S]
                                                              four linked units (`wired`): DIR/stage, DIR/made-up-input
@@ -319,6 +322,28 @@ def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = No
             "unit": {"inputs_read": len(uc.inputs), "outputs_computed": len(uc.outputs)}} | {k: st[k] for k in KEYS} | _shape(out, n)
 
 
+def partition(cls: str, circuit: Path, out: Path) -> dict:
+    """The partition object of ``UniversalUnit_v1{cls}`` itself as the program's one Call, ``Q_template_instance``: a staging
+    of the unit with no program row (``benchmarks/private_circuit/stage_class.py``'s, which writes none), into ``out``, once
+    its digest is the one ``circuit`` binds (META ``partition``)."""
+    from verity_flock import partition_units as PU
+
+    from verity.ml.circuits import partition_object as PO
+    from verity.ml.circuits.defs import bind
+    from verity.ml.private_circuits import universal as U
+
+    G, N_IN, N_OUT = (int(v) for v in cls.split(","))
+    fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
+    built = PO.build(PU.one_call(fn), PO.template_instance_query(fn))
+    with open(circuit) as f:
+        f.readline()
+        bound = json.loads(f.readline()[5:])["partition"]["digest"]
+    if PO.digest(built) != bound:
+        raise SystemExit(f"{circuit} binds partition {bound[:16]}…, not {fn.id}'s one Call ({PO.digest(built)[:16]}…)")
+    out.write_text(json.dumps(built, sort_keys=True))
+    return {"unit": fn.id, "partition": str(out), "digest": bound}
+
+
 def faulty(stage_dir: Path, n: int, out: Path, instance: int = 0) -> dict:
     """A faulty unit's prover file: ``stage_dir/inst-n.bin`` with instance ``instance``'s output row one bit off (bit 0 of its
     first word), every other row, salt and ``b || c`` as staged, in ``out/inst-n.bin``: proved against the registered
@@ -455,6 +480,10 @@ def main(argv=None) -> int:
         if cmd == "universal":
             u.add_argument("--fast", action="store_true", default=None)
             u.add_argument("--outside", action="store_true")
+    pt = sp.add_parser("partition")
+    pt.add_argument("--cls", required=True, help="G,N_IN,N_OUT")
+    pt.add_argument("--circuit", required=True)
+    pt.add_argument("--out", required=True)
     fy = sp.add_parser("faulty")
     fy.add_argument("--stage", required=True)
     fy.add_argument("--n", type=int, required=True)
@@ -476,6 +505,8 @@ def main(argv=None) -> int:
         res = _differing(Path(a.a), Path(a.b))
     elif a.cmd == "faulty":
         res = faulty(Path(a.stage), a.n, Path(a.out))
+    elif a.cmd == "partition":
+        res = partition(a.cls, Path(a.circuit), Path(a.out))
     elif a.cmd == "universal":
         res = universal(a.cls, a.n, Path(a.out), a.seed, a.netlist, a.fast, outside=a.outside)
     elif a.cmd == "wired":
