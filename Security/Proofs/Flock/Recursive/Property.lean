@@ -167,8 +167,11 @@ their expected stage slack, and the compiled table's error.
 
 (ii) `RecursiveCircuitPrivateLeaves`: for the class's private circuits registered by hm96 leaves, when V*'s sessions
 are zero knowledge within `ε_o` with a simulator reading the owed outputs, the registration's view, the auditor's tape and the
-commitments, under `hash-derived-key`, the auditor's whole view and the simulated one (reading only the class and the
-owed outputs) give every event probabilities within `2 n_r·2^-193 + ε_o + n_h·2^-193` both ways. -/
+commitments, the auditor's whole view and the simulated one (reading only the class and the owed outputs) give every
+event probabilities within `2 n_r·δ_{K*} + ε_o + n_h·δ_{K*}` both ways, where `δ_{K*}` is the commitments' hiding gap at
+hm96-sha512's pinned key (`CROnly.hidingGap ZkView.My ZkView.saltHash`). It is below `2^-193` for all but `2^-64` of
+keys (`CROnly.hm96_sha512_tail`); that the pinned key is not one of the others is unproved, and no premise is taken on
+the key. -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     {n : ℕ} {L : Law n} {Reg Cm : Type} {Reg' Reg₂ : Type}
@@ -252,12 +255,13 @@ def RecursiveAudit : Prop :=
       prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs =>
             E (sim o (regLeaves rows pub P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    (_hKey : Flock.Premises.HashDerivedKeyHm96)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit), honest o P w →
     ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
       recRealPr (regLeaves rows pub) nh msgs view P w E ≤ recSimPr (regLeaves rows pub) nh sim o p₀ E +
-          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) + εo +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) ∧
         recSimPr (regLeaves rows pub) nh sim o p₀ E ≤ recRealPr (regLeaves rows pub) nh msgs view P w E +
-          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)))
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) + εo +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)))
 
 end Flock.Guarantees
