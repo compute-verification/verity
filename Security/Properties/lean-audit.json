@@ -19,9 +19,7 @@
   "Properties.SampledProofs",
   "Properties.Proofs.SampledProofs"
  ],
- "proved_in": [
-  "../Proofs"
- ],
+ "proved_in": ["../Proofs"],
  "meaning": [
   "Properties.Pouw",
   "PouwWindow.Grid",
@@ -66,72 +64,42 @@
  ],
  "layers": {
   "Properties.Pouw": {
-   "imports": [
-    "PouwWindow",
-    "PouwCheck",
-    "PouwCommit"
-   ],
+   "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
    "except": [],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.Commit": {
-   "imports": [
-    "PouwCommit"
-   ],
+   "imports": ["PouwCommit"],
    "except": [],
    "why": "the commitments' properties are stated against the port's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Nci": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Nci",
-    "NciCheck.Check",
-    "Properties.Nci"
-   ],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "NciCheck.Check", "Properties.Nci"],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.CertifierDevice": {
-   "imports": [
-    "CertifierDevice.Device",
-    "CertifierDevice.Issuer"
-   ],
+   "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
    "except": [],
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pous": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Pous",
-    "PousCheck",
-    "Properties.Pous"
-   ],
+   "imports": ["Mathlib", "Definitions.Pous", "PousCheck", "Properties.Pous"],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.NetworkCertifier": {
-   "imports": [
-    "NetworkCheck.Check",
-    "Models.Core.Assumptions",
-    "Definitions.NetworkCertifier",
-    "Mathlib.Data.Set.Card"
-   ],
+   "imports": ["NetworkCheck.Check", "Models.Core.Assumptions", "Definitions.NetworkCertifier", "Mathlib.Data.Set.Card"],
    "except": [],
    "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
   },
   "Properties.CertifierNetwork": {
-   "imports": [
-    "Properties.CertifierDevice",
-    "Properties.NetworkCertifier"
-   ],
+   "imports": ["Properties.CertifierDevice", "Properties.NetworkCertifier"],
    "except": [],
    "why": "the guarantee joins the device's statements and the check's: stated over their definitions, never a proof"
   },
   "Properties.SampledProofs": {
-   "imports": [
-    "SampledProofs"
-   ],
+   "imports": ["SampledProofs"],
    "except": [],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   }
@@ -143,65 +111,49 @@
  "guarantees": {
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
-   "signature": [
-    "NciCheck.Properties.SecurityProofs.AcceptsExactly : NciCheck.Properties.AcceptsExactly"
-   ],
+   "signature": ["NciCheck.Properties.SecurityProofs.AcceptsExactly : NciCheck.Properties.AcceptsExactly"],
    "assumptions": [],
    "type_hash": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61"
   },
   "NciCheck.Properties.SecurityProofs.CheckAccepts": {
    "owner": "@network-accounting",
-   "signature": [
-    "NciCheck.Properties.SecurityProofs.CheckAccepts : NciCheck.Properties.CheckAccepts"
-   ],
+   "signature": ["NciCheck.Properties.SecurityProofs.CheckAccepts : NciCheck.Properties.CheckAccepts"],
    "assumptions": [],
    "type_hash": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5"
   },
   "NciCheck.Properties.SecurityProofs.CheckRefuses": {
    "owner": "@network-accounting",
-   "signature": [
-    "NciCheck.Properties.SecurityProofs.CheckRefuses : NciCheck.Properties.CheckRefuses"
-   ],
+   "signature": ["NciCheck.Properties.SecurityProofs.CheckRefuses : NciCheck.Properties.CheckRefuses"],
    "assumptions": [],
    "type_hash": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a"
   },
   "NciCheck.Properties.SecurityProofs.Decodes": {
    "owner": "@network-accounting",
-   "signature": [
-    "NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"
-   ],
+   "signature": ["NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"],
    "assumptions": [],
    "type_hash": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
-   "signature": [
-    "NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"
-   ],
+   "signature": ["NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"],
    "assumptions": [],
    "type_hash": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea"
   },
   "NciCheck.Properties.SecurityProofs.Reports": {
    "owner": "@network-accounting",
-   "signature": [
-    "NciCheck.Properties.SecurityProofs.Reports : NciCheck.Properties.Reports"
-   ],
+   "signature": ["NciCheck.Properties.SecurityProofs.Reports : NciCheck.Properties.Reports"],
    "assumptions": [],
    "type_hash": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8"
   },
   "NciCheck.Properties.SecurityProofs.Witnesses": {
    "owner": "@network-accounting",
-   "signature": [
-    "NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"
-   ],
+   "signature": ["NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"],
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
   "PousCheck.Properties.SecurityProofs.deployed": {
    "owner": "@memory-accounting",
-   "signature": [
-    "PousCheck.Properties.SecurityProofs.deployed : PousCheck.Properties.Deployed"
-   ],
+   "signature": ["PousCheck.Properties.SecurityProofs.deployed : PousCheck.Properties.Deployed"],
    "assumptions": [],
    "type_hash": "f8977ea58504508ed7a1eae3a72cadbc4a36e463c703441b45cddd5d5330cec3"
   },
@@ -223,73 +175,55 @@
   },
   "Properties.CertifierDevice.completeRows": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.completeRows : Properties.CertifierDevice.CompleteRows"
-   ],
+   "signature": ["Properties.CertifierDevice.completeRows : Properties.CertifierDevice.CompleteRows"],
    "assumptions": [],
    "type_hash": "28bc8acc17dd7535643026874267be8fb71cdc347f655c135d3c613215a5b6a6"
   },
   "Properties.CertifierDevice.contentIndependent": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.contentIndependent : Properties.CertifierDevice.ContentIndependent"
-   ],
+   "signature": ["Properties.CertifierDevice.contentIndependent : Properties.CertifierDevice.ContentIndependent"],
    "assumptions": [],
    "type_hash": "e32ef7570ad04c7311ce08530135353d14d625dc479aa68095255fb29fb04ba3"
   },
   "Properties.CertifierDevice.failClosed": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.failClosed : Properties.CertifierDevice.FailClosed"
-   ],
+   "signature": ["Properties.CertifierDevice.failClosed : Properties.CertifierDevice.FailClosed"],
    "assumptions": [],
    "type_hash": "e21f4f333b07742207112c7c3b3129dfbf940b434ec1c2e4273f54e572b4571a"
   },
   "Properties.CertifierDevice.issuerSigns": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.issuerSigns : Properties.CertifierDevice.IssuerSigns"
-   ],
+   "signature": ["Properties.CertifierDevice.issuerSigns : Properties.CertifierDevice.IssuerSigns"],
    "assumptions": [],
    "type_hash": "613fb12cc329b7d473eea2acf5e1127e5c59cee678c1237c37e60a7ea3192ed7"
   },
   "Properties.CertifierDevice.issuerVerifies": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.issuerVerifies : Properties.CertifierDevice.IssuerVerifies"
-   ],
+   "signature": ["Properties.CertifierDevice.issuerVerifies : Properties.CertifierDevice.IssuerVerifies"],
    "assumptions": [],
    "type_hash": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b"
   },
   "Properties.CertifierDevice.linkSchedule": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.linkSchedule : Properties.CertifierDevice.LinkSchedule"
-   ],
+   "signature": ["Properties.CertifierDevice.linkSchedule : Properties.CertifierDevice.LinkSchedule"],
    "assumptions": [],
    "type_hash": "ebc61df5d4bcea9f8a6698bb3499a497c7d0a575af8cf6c540359d19347d83e8"
   },
   "Properties.CertifierDevice.lmsCorrect": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.lmsCorrect : Properties.CertifierDevice.LmsCorrect"
-   ],
+   "signature": ["Properties.CertifierDevice.lmsCorrect : Properties.CertifierDevice.LmsCorrect"],
    "assumptions": [],
    "type_hash": "c0fc2bd002f025f6fc11e5fad51844c70fa58a9235d817cb0e5cb9450f2b35ec"
   },
   "Properties.CertifierDevice.records": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierDevice.records : Properties.CertifierDevice.Records"
-   ],
+   "signature": ["Properties.CertifierDevice.records : Properties.CertifierDevice.Records"],
    "assumptions": [],
    "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3"
   },
   "Properties.CertifierNetwork.deviceOutputAccepted": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.CertifierNetwork.deviceOutputAccepted : Properties.CertifierNetwork.DeviceOutputAccepted"
-   ],
+   "signature": ["Properties.CertifierNetwork.deviceOutputAccepted : Properties.CertifierNetwork.DeviceOutputAccepted"],
    "assumptions": [],
    "type_hash": "e60b64d60e57ef470c1c3b410954f8dfa0db434866dc3ea3d91a0c0f618c5e4f"
   },
@@ -303,41 +237,31 @@
   },
   "Properties.NetworkCertifier.acceptsIff": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.acceptsIff : Properties.NetworkCertifier.AcceptsIff"
-   ],
+   "signature": ["Properties.NetworkCertifier.acceptsIff : Properties.NetworkCertifier.AcceptsIff"],
    "assumptions": [],
    "type_hash": "c918838470ab95e7f8e713ddc765255f2c8d1caacb939c8ba8d35b8c55754155"
   },
   "Properties.NetworkCertifier.acceptsOneRecordEach": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.acceptsOneRecordEach : Properties.NetworkCertifier.AcceptsOneRecordEach"
-   ],
+   "signature": ["Properties.NetworkCertifier.acceptsOneRecordEach : Properties.NetworkCertifier.AcceptsOneRecordEach"],
    "assumptions": [],
    "type_hash": "d42de92f7820044006cc71b9e70572f5e891cf1517633894a1af4134899c7cf5"
   },
   "Properties.NetworkCertifier.answerAccepts": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.answerAccepts : Properties.NetworkCertifier.AnswerAccepts"
-   ],
+   "signature": ["Properties.NetworkCertifier.answerAccepts : Properties.NetworkCertifier.AnswerAccepts"],
    "assumptions": [],
    "type_hash": "ccee8d59f116f6aff96f10a3791ea371bd9e98f7fd0f39ca6aa03076a266a384"
   },
   "Properties.NetworkCertifier.decodeRefusals": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.decodeRefusals : Properties.NetworkCertifier.DecodeRefusals"
-   ],
+   "signature": ["Properties.NetworkCertifier.decodeRefusals : Properties.NetworkCertifier.DecodeRefusals"],
    "assumptions": [],
    "type_hash": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df"
   },
   "Properties.NetworkCertifier.honestAccepted": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.honestAccepted : Properties.NetworkCertifier.HonestAccepted"
-   ],
+   "signature": ["Properties.NetworkCertifier.honestAccepted : Properties.NetworkCertifier.HonestAccepted"],
    "assumptions": [],
    "type_hash": "50b7d88417346839f0002732214cf0086dddcb10bbfd8228ed1ffda6afaa42a1"
   },
@@ -351,9 +275,7 @@
   },
   "Properties.NetworkCertifier.undecidedIff": {
    "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.undecidedIff : Properties.NetworkCertifier.UndecidedIff"
-   ],
+   "signature": ["Properties.NetworkCertifier.undecidedIff : Properties.NetworkCertifier.UndecidedIff"],
    "assumptions": [],
    "type_hash": "c7b54ece9fbec0f22f390f210dfc18d345537ba8ea79f01872a04b1da772112f"
   },
@@ -367,378 +289,284 @@
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"
-   ],
+   "signature": ["Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"],
    "assumptions": [],
    "type_hash": "545ca67099062d0dd1c98c4469e8dc936d2200557cb1cf253be4196afe8f360e"
   },
   "Properties.Pouw.Check.acceptedDraw": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.acceptedDraw : Properties.Pouw.Check.AcceptedDraw"
-   ],
+   "signature": ["Properties.Pouw.Check.acceptedDraw : Properties.Pouw.Check.AcceptedDraw"],
    "assumptions": [],
    "type_hash": "5f9f29337f12c4f3ebedddade268afd4f5256e64f1177e1ee333437f0cefae9e"
   },
   "Properties.Pouw.Check.acceptedInRange": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.acceptedInRange : Properties.Pouw.Check.AcceptedInRange"
-   ],
+   "signature": ["Properties.Pouw.Check.acceptedInRange : Properties.Pouw.Check.AcceptedInRange"],
    "assumptions": [],
    "type_hash": "278636f5197f185a387db819593f8554ba9bf66cdfabbfe82122f96236923355"
   },
   "Properties.Pouw.Check.acceptedIsTheService's": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.acceptedIsTheService's : Properties.Pouw.Check.AcceptedIsTheService's"
-   ],
+   "signature": ["Properties.Pouw.Check.acceptedIsTheService's : Properties.Pouw.Check.AcceptedIsTheService's"],
    "assumptions": [],
    "type_hash": "4bbb525fc1112475ad5ad614cb28e55a2d79ac80ab513db40f6e3e1da768db7f"
   },
   "Properties.Pouw.Check.commitmentKeepsBytes": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.commitmentKeepsBytes : Properties.Pouw.Check.CommitmentKeepsBytes"
-   ],
+   "signature": ["Properties.Pouw.Check.commitmentKeepsBytes : Properties.Pouw.Check.CommitmentKeepsBytes"],
    "assumptions": [],
    "type_hash": "ac05a786e1a5c2a3c155575f091a80cf244aa534361f3b3133e47b7808a17090"
   },
   "Properties.Pouw.Check.digestIsOneStage's": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.digestIsOneStage's : Properties.Pouw.Check.DigestIsOneStage's"
-   ],
+   "signature": ["Properties.Pouw.Check.digestIsOneStage's : Properties.Pouw.Check.DigestIsOneStage's"],
    "assumptions": [],
    "type_hash": "7f35fb22b84c04ee517a37f3a246486f5a3fc4dc0736958050ae088fdc45acd7"
   },
   "Properties.Pouw.Check.neverNull": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.neverNull : Properties.Pouw.Check.NeverNull"
-   ],
+   "signature": ["Properties.Pouw.Check.neverNull : Properties.Pouw.Check.NeverNull"],
    "assumptions": [],
    "type_hash": "4d3318d61bae44d61571509ec5bb2c448b2439bff3c26001f1ab41f31c262925"
   },
   "Properties.Pouw.Check.publishesPublic": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.publishesPublic : Properties.Pouw.Check.PublishesPublic"
-   ],
+   "signature": ["Properties.Pouw.Check.publishesPublic : Properties.Pouw.Check.PublishesPublic"],
    "assumptions": [],
    "type_hash": "b22f72c2d2c45d769ab42ef353eba48b1591ce8e5176ec877a9fcfa0269a9056"
   },
   "Properties.Pouw.Check.undecidedOnlyFromService": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Check.undecidedOnlyFromService : Properties.Pouw.Check.UndecidedOnlyFromService"
-   ],
+   "signature": ["Properties.Pouw.Check.undecidedOnlyFromService : Properties.Pouw.Check.UndecidedOnlyFromService"],
    "assumptions": [],
    "type_hash": "bc2e50263838b4ba091dd8a089002f4fb04f5a55999dee3790fe39b0a015502e"
   },
   "Properties.Pouw.Commit.coinAccepts": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.coinAccepts : Properties.Pouw.Commit.CoinAccepts"
-   ],
+   "signature": ["Properties.Pouw.Commit.coinAccepts : Properties.Pouw.Commit.CoinAccepts"],
    "assumptions": [],
    "type_hash": "d53750168ca3e888be828d67ddf06ec2fce971334aab1109e34a6229fe8b556e"
   },
   "Properties.Pouw.Commit.coinBinding": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.coinBinding : Properties.Pouw.Commit.CoinBinding"
-   ],
+   "signature": ["Properties.Pouw.Commit.coinBinding : Properties.Pouw.Commit.CoinBinding"],
    "assumptions": [],
    "type_hash": "9881ce35860920a62862ad709801881a1d1ed754df2a5f433a78dc21e07d29ac"
   },
   "Properties.Pouw.Commit.coinNumbers": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.coinNumbers : Properties.Pouw.Commit.CoinNumbers"
-   ],
+   "signature": ["Properties.Pouw.Commit.coinNumbers : Properties.Pouw.Commit.CoinNumbers"],
    "assumptions": [],
    "type_hash": "934b8a11ad7197e51167ecd3565cfc31bcb85cc279bc422d4a1f49434ee3d777"
   },
   "Properties.Pouw.Commit.coinRaises": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.coinRaises : Properties.Pouw.Commit.CoinRaises"
-   ],
+   "signature": ["Properties.Pouw.Commit.coinRaises : Properties.Pouw.Commit.CoinRaises"],
    "assumptions": [],
    "type_hash": "2b5075ad8ae93629bac87f1ffdca90b1d18a30d172ee6b84d8080115d68da6bf"
   },
   "Properties.Pouw.Commit.depthServed": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.depthServed : Properties.Pouw.Commit.DepthServed"
-   ],
+   "signature": ["Properties.Pouw.Commit.depthServed : Properties.Pouw.Commit.DepthServed"],
    "assumptions": [],
    "type_hash": "01a16ec0ddc275fd4fc2bdb86a99fbe7e6a7310463b578a4111fca9a4f34ee42"
   },
   "Properties.Pouw.Commit.domainRefusals": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.domainRefusals : Properties.Pouw.Commit.DomainRefusals"
-   ],
+   "signature": ["Properties.Pouw.Commit.domainRefusals : Properties.Pouw.Commit.DomainRefusals"],
    "assumptions": [],
    "type_hash": "3027f3c9a6bed6a9a79e76b844ba678bcb31f3a8001b6b67436a898a30e7583b"
   },
   "Properties.Pouw.Commit.drawCoinAccepts": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.drawCoinAccepts : Properties.Pouw.Commit.DrawCoinAccepts"
-   ],
+   "signature": ["Properties.Pouw.Commit.drawCoinAccepts : Properties.Pouw.Commit.DrawCoinAccepts"],
    "assumptions": [],
    "type_hash": "94d38a0225cde06f3731a9af9350f6b5d174a69e88a3bb9db608658d77be19a1"
   },
   "Properties.Pouw.Commit.drawShape": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.drawShape : Properties.Pouw.Commit.DrawShape"
-   ],
+   "signature": ["Properties.Pouw.Commit.drawShape : Properties.Pouw.Commit.DrawShape"],
    "assumptions": [],
    "type_hash": "a9b27ef9d784124ffefdc3f62ee866098fa0560ff916a4dfa2c1b28e149e9239"
   },
   "Properties.Pouw.Commit.epochSaltAccepts": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.epochSaltAccepts : Properties.Pouw.Commit.EpochSaltAccepts"
-   ],
+   "signature": ["Properties.Pouw.Commit.epochSaltAccepts : Properties.Pouw.Commit.EpochSaltAccepts"],
    "assumptions": [],
    "type_hash": "552e94e629015560964a7134592c5c3b699c681120641a55554dac260e91fe1c"
   },
   "Properties.Pouw.Commit.frameInjective": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.frameInjective : Properties.Pouw.Commit.FrameInjective"
-   ],
+   "signature": ["Properties.Pouw.Commit.frameInjective : Properties.Pouw.Commit.FrameInjective"],
    "assumptions": [],
    "type_hash": "55203d8399261f28172ad062cee20d71b2dff7c11cff480c9d93e90eec22c625"
   },
   "Properties.Pouw.Commit.frameSizes": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.frameSizes : Properties.Pouw.Commit.FrameSizes"
-   ],
+   "signature": ["Properties.Pouw.Commit.frameSizes : Properties.Pouw.Commit.FrameSizes"],
    "assumptions": [],
    "type_hash": "2fcbf326a4d9e4cbe51b6dd8ccd56bf540629951fe22d1650ead90a10658f4fd"
   },
   "Properties.Pouw.Commit.keyRefusals": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.keyRefusals : Properties.Pouw.Commit.KeyRefusals"
-   ],
+   "signature": ["Properties.Pouw.Commit.keyRefusals : Properties.Pouw.Commit.KeyRefusals"],
    "assumptions": [],
    "type_hash": "fb2ac3684a0c5eba4fe7b1320a4738377c2e55fb9081a2784423875b97cd074f"
   },
   "Properties.Pouw.Commit.keySize": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.keySize : Properties.Pouw.Commit.KeySize"
-   ],
+   "signature": ["Properties.Pouw.Commit.keySize : Properties.Pouw.Commit.KeySize"],
    "assumptions": [],
    "type_hash": "8417ce6814230e1eabe8e5c5d56bce6165a4c858b09664e5f694138c601d9195"
   },
   "Properties.Pouw.Commit.leafRefusals": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.leafRefusals : Properties.Pouw.Commit.LeafRefusals"
-   ],
+   "signature": ["Properties.Pouw.Commit.leafRefusals : Properties.Pouw.Commit.LeafRefusals"],
    "assumptions": [],
    "type_hash": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33"
   },
   "Properties.Pouw.Commit.saltRefusals": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.saltRefusals : Properties.Pouw.Commit.SaltRefusals"
-   ],
+   "signature": ["Properties.Pouw.Commit.saltRefusals : Properties.Pouw.Commit.SaltRefusals"],
    "assumptions": [],
    "type_hash": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac"
   },
   "Properties.Pouw.Commit.saltSize": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.saltSize : Properties.Pouw.Commit.SaltSize"
-   ],
+   "signature": ["Properties.Pouw.Commit.saltSize : Properties.Pouw.Commit.SaltSize"],
    "assumptions": [],
    "type_hash": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a"
   },
   "Properties.Pouw.Commit.taggedSize": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Commit.taggedSize : Properties.Pouw.Commit.TaggedSize"
-   ],
+   "signature": ["Properties.Pouw.Commit.taggedSize : Properties.Pouw.Commit.TaggedSize"],
    "assumptions": [],
    "type_hash": "a0793f07a8d7ded1d610bb98d1a056f90c8ee3d67d01be6f20c199627b1f395e"
   },
   "Properties.Pouw.Window.bucket8192": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"
-   ],
+   "signature": ["Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"],
    "assumptions": [],
    "type_hash": "a971ebacf2a6b71e55ab2a526e26476b22f0308d3ca9236f97a374fc4e807c84"
   },
   "Properties.Pouw.Window.bucketCost": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.bucketCost : Properties.Pouw.Window.BucketCost"
-   ],
+   "signature": ["Properties.Pouw.Window.bucketCost : Properties.Pouw.Window.BucketCost"],
    "assumptions": [],
    "type_hash": "d8d24f0d8121d7c9d0c53aaa3197391b2491522ee3c3498598ba7f64330b6be4"
   },
   "Properties.Pouw.Window.bucketCost3": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.bucketCost3 : Properties.Pouw.Window.BucketCost3"
-   ],
+   "signature": ["Properties.Pouw.Window.bucketCost3 : Properties.Pouw.Window.BucketCost3"],
    "assumptions": [],
    "type_hash": "d576553bc5479500276cb0a46dc9f2c1e7b7df255d7222456baa0fc54834001a"
   },
   "Properties.Pouw.Window.bucketCredits": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.bucketCredits : Properties.Pouw.Window.BucketCredits"
-   ],
+   "signature": ["Properties.Pouw.Window.bucketCredits : Properties.Pouw.Window.BucketCredits"],
    "assumptions": [],
    "type_hash": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f"
   },
   "Properties.Pouw.Window.drawMisses": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"
-   ],
+   "signature": ["Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"],
    "assumptions": [],
    "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389"
   },
   "Properties.Pouw.Window.floorPointGreatest": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.floorPointGreatest : Properties.Pouw.Window.FloorPointGreatest"
-   ],
+   "signature": ["Properties.Pouw.Window.floorPointGreatest : Properties.Pouw.Window.FloorPointGreatest"],
    "assumptions": [],
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1"
   },
   "Properties.Pouw.Window.gridRefusals": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.gridRefusals : Properties.Pouw.Window.GridRefusals"
-   ],
+   "signature": ["Properties.Pouw.Window.gridRefusals : Properties.Pouw.Window.GridRefusals"],
    "assumptions": [],
    "type_hash": "29629fcf6b815b0f2fa6a3d22b2c018918a742db59c94e1a11a11113d8d40d6f"
   },
   "Properties.Pouw.Window.kPrimeExactAtEquality": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.kPrimeExactAtEquality : Properties.Pouw.Window.KPrimeExactAtEquality"
-   ],
+   "signature": ["Properties.Pouw.Window.kPrimeExactAtEquality : Properties.Pouw.Window.KPrimeExactAtEquality"],
    "assumptions": [],
    "type_hash": "56ee09302db5e8a3b601c900ae373a34da3dc327d9738d74c2664dd4ee304cdf"
   },
   "Properties.Pouw.Window.kPrimeLeast": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.kPrimeLeast : Properties.Pouw.Window.KPrimeLeast"
-   ],
+   "signature": ["Properties.Pouw.Window.kPrimeLeast : Properties.Pouw.Window.KPrimeLeast"],
    "assumptions": [],
    "type_hash": "5490be2a87fb8935e8d06c8e5adf1656ae9203186a8aa1fb02f9aa650d865aa9"
   },
   "Properties.Pouw.Window.kPrimeRefuses": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"
-   ],
+   "signature": ["Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"],
    "assumptions": [],
    "type_hash": "39670eae87e2d8d90b32f391473aba88a7b1652ed97adb56987e0410d318ef78"
   },
   "Properties.Pouw.Window.kPrimeServed": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.kPrimeServed : Properties.Pouw.Window.KPrimeServed"
-   ],
+   "signature": ["Properties.Pouw.Window.kPrimeServed : Properties.Pouw.Window.KPrimeServed"],
    "assumptions": [],
    "type_hash": "f120ede9251754e80c0b6b3850b115c640e1c4877d13c9d0f59894818d41849a"
   },
   "Properties.Pouw.Window.levelsCount": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"
-   ],
+   "signature": ["Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"],
    "assumptions": [],
    "type_hash": "adead606c9dfc7cebaa2c7f141e8009da48e039db74a6250f919b14e30a3a510"
   },
   "Properties.Pouw.Window.levelsServed": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.levelsServed : Properties.Pouw.Window.LevelsServed"
-   ],
+   "signature": ["Properties.Pouw.Window.levelsServed : Properties.Pouw.Window.LevelsServed"],
    "assumptions": [],
    "type_hash": "81826586ebf66577b8a53753af52918a2b7b66261cc3bb493d92787b40d2b915"
   },
   "Properties.Pouw.Window.onGridMeans": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.onGridMeans : Properties.Pouw.Window.OnGridMeans"
-   ],
+   "signature": ["Properties.Pouw.Window.onGridMeans : Properties.Pouw.Window.OnGridMeans"],
    "assumptions": [],
    "type_hash": "c774ffd575db03c83208a6b6480039108dab5eb26b77655d6cc41028efa3ef68"
   },
   "Properties.Pouw.Window.padLeast": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.padLeast : Properties.Pouw.Window.PadLeast"
-   ],
+   "signature": ["Properties.Pouw.Window.padLeast : Properties.Pouw.Window.PadLeast"],
    "assumptions": [],
    "type_hash": "79d2f7f93dc38938fe0a7c43e793bb9480c21422210ec02f198f40d585f99b5e"
   },
   "Properties.Pouw.Window.pointEnumerates": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"
-   ],
+   "signature": ["Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"],
    "assumptions": [],
    "type_hash": "0f6f4da17e2495b903d233db371fd0e01c4da3c9f0d31e5b77da417317a9f20f"
   },
   "Properties.Pouw.Window.publicItems_eq": {
    "owner": "@compute-accounting",
-   "signature": [
-    "Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"
-   ],
+   "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
    "assumptions": [],
    "type_hash": "ab5c999970b79020541ee791d4383183a75ff919bbbf260b83dc8e0e2a63fe99"
   },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
-   "signature": [
-    "Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"
-   ],
+   "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
    "assumptions": [],
    "type_hash": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910"
   },
   "Properties.SampledProofs.bernoulliBoundsNothing": {
    "owner": "@proofs",
-   "signature": [
-    "Properties.SampledProofs.bernoulliBoundsNothing : Properties.SampledProofs.BernoulliBoundsNothing"
-   ],
+   "signature": ["Properties.SampledProofs.bernoulliBoundsNothing : Properties.SampledProofs.BernoulliBoundsNothing"],
    "assumptions": [],
    "type_hash": "5ace41ec4bd032c56bec63d810edb0f8f8d7db00a89952264825b251de600497"
   },
   "Properties.SampledProofs.digestIsRecord's": {
    "owner": "@proofs",
-   "signature": [
-    "Properties.SampledProofs.digestIsRecord's : Properties.SampledProofs.DigestIsRecord's"
-   ],
+   "signature": ["Properties.SampledProofs.digestIsRecord's : Properties.SampledProofs.DigestIsRecord's"],
    "assumptions": [],
    "type_hash": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70"
   }
  },
  "shape": {
   "premises": [],
-  "statements": [
-   "Properties"
-  ],
+  "statements": ["Properties"],
   "properties": {
    "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
     "function": "NciCheck.evaluate",
@@ -877,10 +705,7 @@
     "outcome": "none"
    },
    "Properties.Pouw.Check.neverNull": {
-    "function": [
-     "PouwCheck.protocol.profileJson",
-     "PouwCheck.protocol.publicJson"
-    ],
+    "function": ["PouwCheck.protocol.profileJson", "PouwCheck.protocol.publicJson"],
     "outcome": "none"
    },
    "Properties.Pouw.Check.publishesPublic": {
@@ -934,10 +759,7 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.frameInjective": {
-    "function": [
-     "PouwCommit.frameBytes",
-     "PouwCommit.frameHash"
-    ],
+    "function": ["PouwCommit.frameBytes", "PouwCommit.frameHash"],
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.frameSizes": {
@@ -957,17 +779,11 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.saltRefusals": {
-    "function": [
-     "PouwCommit.saltOf",
-     "PouwCommit.unverifiedSalt"
-    ],
+    "function": ["PouwCommit.saltOf", "PouwCommit.unverifiedSalt"],
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.saltSize": {
-    "function": [
-     "PouwCommit.saltOf",
-     "PouwCommit.unverifiedSalt"
-    ],
+    "function": ["PouwCommit.saltOf", "PouwCommit.unverifiedSalt"],
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.taggedSize": {
@@ -1043,10 +859,7 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Window.pointEnumerates": {
-    "function": [
-     "PouwWindow.level",
-     "PouwWindow.point"
-    ],
+    "function": ["PouwWindow.level", "PouwWindow.point"],
     "outcome": "none"
    },
    "Properties.Pouw.Window.publicItems_eq": {
@@ -1465,7 +1278,6 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.serviceRejectRejects",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing"
@@ -1542,7 +1354,6 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.serviceRejectRejects",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing",
@@ -1550,7 +1361,7 @@
    ]
   },
   "CoreProtocol.Ratio": {
-   "digest": "d94d68e88bf4370de7834896aedaa2b776162dbdd4ebc84fa80c60a44ae674cc",
+   "digest": "3f1988e814591e4022dc241d15227fe64a239d475b49078d5cbd769c8670e415",
    "definitions": {
     "Core.Ratio": "7c8d146908a79f0b204e2877c04bdf5371a1a591b5fdb155207eaa0027919ef3",
     "Core.Ratio.casesOn": "79348311fc1d9500e7f88cdb99bf1b35e21a32315d58c361f3e5c30a5eca5a19",
@@ -1574,7 +1385,6 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.serviceRejectRejects",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing"
@@ -1605,10 +1415,7 @@
     "Verity.Declaration.D": "4796f04f2ae9193027263ff5a3e82a079e0104c069845088e0b6666b007fc552",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
-   "guarantees": [
-    "NciCheck.Properties.SecurityProofs.Reports",
-    "NciCheck.Properties.SecurityProofs.Witnesses"
-   ]
+   "guarantees": ["NciCheck.Properties.SecurityProofs.Reports", "NciCheck.Properties.SecurityProofs.Witnesses"]
   },
   "Definitions.Core.Partition": {
    "digest": "a61efe7bc07bac847495f338197cdbd33a863ef3f0523f100bcb46ef3da67298",
@@ -1630,10 +1437,7 @@
     "Nci.Policy": "a81cff6c812131f35e8b34e7d21b6fe0cdfc05c26075c9806d0b45ca908d872c",
     "Nci.novelReads": "f9a643aedf8a9ffa1542961e8c8a249e4e9954abe74c705a91d60d6565a6cf79"
    },
-   "guarantees": [
-    "NciCheck.Properties.SecurityProofs.Reports",
-    "NciCheck.Properties.SecurityProofs.Witnesses"
-   ]
+   "guarantees": ["NciCheck.Properties.SecurityProofs.Reports", "NciCheck.Properties.SecurityProofs.Witnesses"]
   },
   "Definitions.NetworkCertifier.Grid": {
    "digest": "a9bbd04140a88b1d6496f3e4c99d4440950cc3373326ecd64ff8fbf80b8aebbf",
@@ -1759,7 +1563,6 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.serviceRejectRejects",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinBinding",
@@ -1818,7 +1621,6 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.serviceRejectRejects",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing",
@@ -1914,7 +1716,6 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.serviceRejectRejects",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinBinding",
@@ -2103,20 +1904,14 @@
     "Flock.FV3.hash": "b59ec9cab0b358159e9e87bbae75fb83fb1b8266134f3ad0d2959008ae422824",
     "Flock.FV3.uint": "f00ede6b3df22859c2566c85b1665172f6061ba7a25333f7f96b23c90f52252c"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "Flock.Qcall": {
    "digest": "7dddd82c1acf24342d048e807657cc51f21ddcb980a61f3bbe262886459fb01e",
    "definitions": {
     "Flock.Qcall.PARAM_MAX": "49885dc52b74012fec75ae101e79e7ae51e32bed2ed37b4b11ab33d9e5613710"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "Flock.TemplateQuery": {
    "digest": "f36fd631e126056cdcf2fca257c7ea7d2cb1216aab021bcc608f2c7b336d80a2",
@@ -2152,10 +1947,7 @@
     "Flock.TemplateQuery.templatesOf": "a225e5289af1ec6cff84f31bfe36618bef6fc3ebcaa3b14abc8248499fde8a2a",
     "_private.Flock.TemplateQuery.0.Flock.TemplateQuery.showList": "d5a3296879e70e5e0cb3eb37f12c4953792cd600933b0f6bef8905084afc58cd"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "Identity.Sha512": {
    "digest": "f1d1300213f26823bdacd659be7cecb81b498cf4df45ca5ba65ef3b233d737a0",
@@ -2635,9 +2427,7 @@
     "PousCheck.P2.Params.validate": "0b0ae898c1975318419b47075f89c1a131a34c00f9974354025f4bad0ffd92be",
     "PousCheck.P2.Params.w": "7f5351dd69ff4b1dc5167626df1299be3681eede923dc44f2d6f7c31de17bbcc"
    },
-   "guarantees": [
-    "PousCheck.Properties.SecurityProofs.deployed"
-   ]
+   "guarantees": ["PousCheck.Properties.SecurityProofs.deployed"]
   },
   "PousCheck.Params": {
    "digest": "07841c3f3162a89aa0e07cfe02a9bbcd2a57770c16c37ab915ef5115bf8cc584",
@@ -2646,9 +2436,7 @@
     "PousCheck.W_BITS": "e6fb50911fc6a01898efb39e5406a25fd5f5a06eef8b445aecea96f885b012c3",
     "PousCheck.W_BYTES": "b2aa7e1660031dc72c628103605c42c9e9958d1ae57378c78923458b5e1c7765"
    },
-   "guarantees": [
-    "PousCheck.Properties.SecurityProofs.deployed"
-   ]
+   "guarantees": ["PousCheck.Properties.SecurityProofs.deployed"]
   },
   "PouwCheck.Check": {
    "digest": "df377d4eaf204a413a7091be02887a82c122fd50f020bd648ca65f4f23575997",
@@ -2958,9 +2746,7 @@
     "PouwCommit.RowsDomain.hm96": "01fec3cceebc46c48b316e7282f04ec506fbb439d2811dd8807d5debd25bc71e",
     "PouwCommit.RowsDomain.leaf": "400f8a8208d73eaf0e87e6d128017874fd233ef61ecda5bff5cd141309eecc56"
    },
-   "guarantees": [
-    "Properties.Pouw.Commit.leafRefusals"
-   ]
+   "guarantees": ["Properties.Pouw.Commit.leafRefusals"]
   },
   "PouwCommit.Tagged": {
    "digest": "0de31a2e6ad23594c5f56981488a727e94f3427c630c60311540f4a37c5f17a0",
@@ -3192,9 +2978,7 @@
     "Properties.CertifierNetwork.syncSetOf": "79cbe731cfa0b6a6eceb969b7f708f3ff2c8f7bc27fafeab41d140e9494c876a",
     "Properties.CertifierNetwork.unitParams": "be94e89979a4e1e7a32b0cdfe1e7b1280083df617657cd292a9868b65f663342"
    },
-   "guarantees": [
-    "Properties.CertifierNetwork.deviceOutputAccepted"
-   ]
+   "guarantees": ["Properties.CertifierNetwork.deviceOutputAccepted"]
   },
   "Properties.Nci": {
    "digest": "4b3d77855a2e124826e7a66b941d25fed75466b4c80308bbf134a764603d1ed0",
@@ -3307,9 +3091,7 @@
    "definitions": {
     "PousCheck.Properties.Deployed": "64310ef44823daae5664c18e7a537912c42a490dacf9dc239b731d09176d2275"
    },
-   "guarantees": [
-    "PousCheck.Properties.SecurityProofs.deployed"
-   ]
+   "guarantees": ["PousCheck.Properties.SecurityProofs.deployed"]
   },
   "Properties.Pouw": {
    "digest": "66423f4118c92ff184a122c1b88e2926f42f01df70de8d3ba866765df679736e",
@@ -3432,11 +3214,11 @@
    ]
   },
   "Properties.SampledProofs": {
-   "digest": "4f0987f790962f78ba7c4769986f9390fdb6be162d17edf3e138c366e153945b",
+   "digest": "e7993ccf5b9ed37016098bfb0e6402d6eda1ec70d14a83e88be6542b9060aa05",
    "definitions": {
-    "Properties.SampledProofs.AcceptMeans": "682a9289124b2580828e4e08ea4b8e7821c5f545796e9f1c09f0335cbe8405a1",
+    "Properties.SampledProofs.AcceptMeans": "95ddd9c6b9371f1cd10f11f0e71543c64c748c1a0dd841830ebb874f8605b71e",
     "Properties.SampledProofs.Ascending": "04f876a5de5d22c8370686b72b8247c3d51ea5c1cb9d5234cb8033aeebd56d49",
-    "Properties.SampledProofs.BernoulliBoundsNothing": "3be67bd7b6d2ff9823210b42c96362b326ecfe8d9e952d080a99d95e4a650891",
+    "Properties.SampledProofs.BernoulliBoundsNothing": "761bc8c0a0ec96481d4dbae5124c9fd4f9a30396fd869c1b0e53d99f0434a90a",
     "Properties.SampledProofs.DigestIsRecord's": "69747f08d8b9c81f22b803d141613418c4da9f7a21c26311c76112bfff24f636",
     "Properties.SampledProofs.Drawn": "8f2fe98cd469116b5e7d561ee565c564c6b4315c38f1fb038bc1d50f4612235b",
     "Properties.SampledProofs.EntryIs": "cee40a0a33edafef67c74f4483c0e6d201583686c6842c40b8f08fccadcbef9c",
@@ -3490,10 +3272,7 @@
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.next": "aa06d4d7589e09abc5a235934ea44d921c2c972d77793631b2215a6e4df7419c",
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.reduce": "63c5ef090c49de08468bfa27f6b97e3eb39200cde9286aca77609567ae980713"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "SampledProofs.Draw": {
    "digest": "629896e4b6ebce13a32a5b6c065ca78ec26a84412867da923f14daa48684d5ef",
@@ -3523,10 +3302,7 @@
     "_private.SampledProofs.Draw.0.SampledProofs.Draw.stratum?.match_1": "7b902a6160a8c1521cb627e93602175ddcff37a60866af129953eebb4e1ff9e7",
     "_private.SampledProofs.Draw.0.SampledProofs.Draw.sumSizes": "87560d0e5f45d7eb79cfe47f2dc322175a7fbd51de52bbb05857c5d22ecb6efb"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "SampledProofs.Json": {
    "digest": "c58a4e32ae81408bccb24518789c8c1ce5a512be45d761dbb74d95409eef5c25",
@@ -3613,10 +3389,7 @@
     "SampledProofs.Partition.units": "fbea7e51c6ad8541fdf90725934bfbf70eed4206bf9dab59d9755b09691333e6",
     "SampledProofs.Partition.valid": "4afd49c81c6a2b6534d2042d897a760151c0c17fcff2ab44cff6e72054073ff3"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "SampledProofs.Record": {
    "digest": "d73e4412fcad0448981445af082de8277a1ca310b37645887b19e7d39152dcb1",
@@ -3637,10 +3410,7 @@
     "_private.SampledProofs.Record.0.SampledProofs.Record.obj": "6303766253888605800e6e09f3608d8ff447caa237d350e6e5ff7bfab4371dde",
     "_private.SampledProofs.Record.0.SampledProofs.Record.sortedInts": "ca6689822062b8ed8b9809b08de9518fbfe851e5773bc1add2d4b587faf72a33"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "SampledProofs.Registered": {
    "digest": "717ecd471ded72c4fe974dd69b9c875bcc8649950dc9b367ca95cc92f38a9e44",
@@ -3671,10 +3441,7 @@
     "SampledProofs.Registered.widthSet": "456027ea3ccec5998cf8c30b9e6ac2595e98886b7b33d25eeff0238c4502fca2",
     "_private.SampledProofs.Registered.0.SampledProofs.Registered.tagged": "c60ace592236ee8cff61eec70a4bd12397e594bb3e257886065716c9eb1a53f2"
    },
-   "guarantees": [
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
-   ]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
   },
   "SampledProofs.Registration": {
    "digest": "bacb641fc8f0243c4855e22d400ede6994c89108d6e882ded1821c7f47c3a77b",
