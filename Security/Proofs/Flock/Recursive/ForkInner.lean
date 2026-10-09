@@ -1,4 +1,5 @@
 import Proofs.Flock.Recursive.Stage
+import Proofs.Flock.Recursive.ForkRuns
 
 /-!
 # Recursion: the inner protocol's soundness in fork form, through the recursive audit
@@ -21,20 +22,6 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit StrictCR
 open scoped ENNReal
-
-/-- **A bound at every outcome the strategy reaches is a bound**: if every reached outcome with `E` has `F`, then
-`Pr[E] ≤ Pr[F]`. -/
-theorem prob_mono_reached {α : Type} {E F : α → Prop} :
-    ∀ (g : Game α) (s : Strategy g), (∀ a, Game.Outcome g s a → E a → F a) → prob E g s ≤ prob F g s
-  | .ret a, _, h => by
-      classical
-      simp only [prob]
-      by_cases hE : E a
-      · simp [hE, h a rfl hE]
-      · simp [hE]
-  | .send _ k, s, h => prob_mono_reached (k s.1) s.2 h
-  | @Game.coin _ _ _ _ k, s, h =>
-      Finset.sum_le_sum fun c _ => mul_le_mul_right (prob_mono_reached (k c) (s c) fun a ha => h a ⟨c, ha⟩) _
 
 theorem option_eq_of_rel {α : Type} {R : α → α → Prop} (hR : ∀ a b, R a b → a = b) :
     ∀ {a b : Option α}, Option.Rel R a b → a = b
@@ -93,8 +80,8 @@ theorem commit_and_prove_on (σ : Strategy (recGame L Reg I Cm outer))
           (wmsg (dec σ.1 ω t s b))[k]? ((t[k]?).map fun e => ref ω (t.take k) e.1)) (outer σ.1 ω t) s +
         zLeaf ω t s := by
     intro ω t s ht
-    refine (prob_mono_reached (outer σ.1 ω t) s
-      (F := fun b => (Acc σ.1 ω t b ∧
+    refine (Game.prob_mono_outcome (outer σ.1 ω t) s
+      (q := fun b => (Acc σ.1 ω t b ∧
           ¬ I.accepts (wstmt (dec σ.1 ω t s b)) ((wmsg (dec σ.1 ω t s b)).zip (t.map Prod.snd))) ∨
         (Acc σ.1 ω t b ∧ wstmt (dec σ.1 ω t s b) ≠ x σ.1 ω) ∨
         (∃ k ∈ Finset.range I.r, Acc σ.1 ω t b ∧ ¬ Option.Rel (same k (t.map Prod.snd))
@@ -233,17 +220,6 @@ theorem ite_one_zero_iff {p q : Prop} {dp : Decidable p} {dq : Decidable q} (h :
   · rw [if_pos hp, if_pos (h.1 hp)]
   · rw [if_neg hp, if_neg (mt h.2 hp)]
 
-theorem outcome_bind {α β : Type} {f : α → Game β} : ∀ (g : Game α) (s : Strategy g) (t : (a : α) → Strategy (f a))
-    {a : α} {b : β}, Game.Outcome g s a → Game.Outcome (f a) (t a) b → Game.Outcome (g.bind f) (Strategy.bind g f s t) b
-  | .ret _, _, _, _, _, ha, hb => by
-      have ha' : _ = _ := ha
-      subst ha'
-      exact hb
-  | .send _ k, s, t, _, _, ha, hb => outcome_bind (k s.1) s.2 t ha hb
-  | @Game.coin _ _ _ _ k, s, t, _, _, ha, hb => by
-      obtain ⟨c, ha⟩ := ha
-      exact ⟨c, outcome_bind (k c) (s c) t ha hb⟩
-
 theorem outcome_of_bind {α β : Type} {f : α → Game β} : ∀ (g : Game α) (s : Strategy g) (t : (a : α) → Strategy (f a))
     {b : β}, Game.Outcome (g.bind f) (Strategy.bind g f s t) b → ∃ a, Game.Outcome g s a ∧ Game.Outcome (f a) (t a) b
   | .ret a, _, _, _, hb => ⟨a, rfl, hb⟩
@@ -253,22 +229,19 @@ theorem outcome_of_bind {α β : Type} {f : α → Game β} : ∀ (g : Game α) 
       obtain ⟨a, ha, hb⟩ := outcome_of_bind (k c) (s c) t hb
       exact ⟨a, ⟨c, ha⟩, hb⟩
 
-theorem outcome_map {α β : Type} (f : α → β) (g : Game α) (s : Strategy g) {a : α} (ha : Game.Outcome g s a) :
-    Game.Outcome (g.map f) (Strategy.map f g s) (f a) :=
-  outcome_bind (f := fun a => .ret (f a)) g s (fun _ => PUnit.unit) ha (rfl : f a = f a)
-
 theorem outcome_of_map {α β : Type} (f : α → β) (g : Game α) (s : Strategy g) {b : β}
     (h : Game.Outcome (g.map f) (Strategy.map f g s) b) : ∃ a, Game.Outcome g s a ∧ f a = b :=
   outcome_of_bind (f := fun a => .ret (f a)) g s (fun _ => PUnit.unit) h
 
 theorem outcome_oneRun {β γ : Type} (g : Game β) (s : Strategy g) (pick : β → γ) {a : β}
     (ha : Game.Outcome g s a) : Game.Outcome (StrictCR.oneRun g s pick).g (StrictCR.oneRun g s pick).s (pick a) :=
-  outcome_map pick g s ha
+  Game.Outcome.map_of pick g s ha
 
 theorem outcome_twoRuns {β γ : Type} (g : Game β) (s : Strategy g) (pick : β → β → γ) {a a' : β}
     (ha : Game.Outcome g s a) (ha' : Game.Outcome g s a') :
     Game.Outcome (StrictCR.twoRuns g s pick).g (StrictCR.twoRuns g s pick).s (pick a a') :=
-  outcome_bind (f := fun b => g.map (pick b)) g s (fun b => Strategy.map (pick b) g s) ha (outcome_map (pick a) g s ha')
+  Game.Outcome.bind_of g (fun b => g.map (pick b)) s (fun b => Strategy.map (pick b) g s) ha
+    (Game.Outcome.map_of (pick a) g s ha')
 
 theorem outcome_of_twoRuns {β γ : Type} (g : Game β) (s : Strategy g) (pick : β → β → γ) {p : γ}
     (h : Game.Outcome (StrictCR.twoRuns g s pick).g (StrictCR.twoRuns g s pick).s p) :

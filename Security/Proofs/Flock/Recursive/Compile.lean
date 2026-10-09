@@ -1,3 +1,4 @@
+import Proofs.Flock.Recursive.CompileRuns
 import Proofs.Flock.Recursive.Target
 import Proofs.Flock.Recursive.ForkInner
 import Proofs.Flock.Soundness.Assumptions.Recursive
@@ -90,7 +91,32 @@ theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
     InnerSoundForkOn H (flockInnerCL T CT A H E Lf cls regs sch) (clashPickCL T CT A H E Lf cls regs sch)
       (ENNReal.ofReal (tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩)) := by
-  sorry
+  intro M hno G s
+  change Hidden cls at M
+  have hout : ∀ {t o}, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
+      (schedSteps T CT 0 t) o → outCL T CT A H E Lf cls regs sch M t = some o := by
+    intro t o ho
+    have hex : ∃ out, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
+        (schedSteps T CT 0 t) out := ⟨o, ho⟩
+    rw [outCL, dif_pos hex]
+    exact congrArg some (PlaysT.det hex.choose_spec ho)
+  rcases compiled_runs_sound T CT A hA H E Lf cls regs sch hsch hlay (ClashCL H E Lf sch)
+      (fun _ _ h => Or.inl h) (fun _ _ p h => Or.inr (Or.inr (Or.inl ⟨p, h⟩)))
+      (fun _ _ i hi ℓ hℓ cap hcap p h => Or.inr (Or.inr (Or.inr ⟨i, hi, ℓ, hℓ, cap, hcap, p, h⟩))) M hno G s with
+    ⟨t, t', o, o', ht, ht', hG, hG', ho, ho', hc⟩ | hb
+  · left
+    have hr : 0 < (flockInnerCL T CT A H E Lf cls regs sch).r := by
+      rw [← Inner.length_of_outcome (flockInnerCL T CT A H E Lf cls regs sch) s ht]
+      have hne := PlaysT.ne_nil_of_send
+        (k := tableCmpL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts) ho
+      cases t with
+      | nil => exact (hne rfl).elim
+      | cons _ _ => exact Nat.succ_pos _
+    refine Inner.fork_of_outcomes H _ hr _ s ht ht' ?_
+    have e : pickOn G (clashPickCL T CT A H E Lf cls regs sch M) t t' =
+        clashPickCL T CT A H E Lf cls regs sch M t t' := pickOn_of hG hG'
+    exact (congrArg (StrictCR.IsColl H) e).mpr (collOf_isColl H _ ⟨o, o', hout ho, hout ho', hc⟩)
+  · exact Or.inr hb
 
 /-- **The compile lemma as `InnerSoundFork`**: `flock_inner_sound_compiled` at `G := True`. -/
 theorem flock_inner_sound_compiled_plain (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
