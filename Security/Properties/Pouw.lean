@@ -5,9 +5,9 @@ import PouwWindow
 
 The properties of the executable window (`verity/core/protocols/pouw/lean/window/`, the port of
 `verity/core/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
-function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and the refusal is
-exactly the inputs off its domain. Each is a `Prop`, and `Properties.Proofs.Pouw` proves
-every one, on Lean core.
+function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and a property says
+what an answer is, so its domain comes from the answer. That the function answers every input on its domain is
+completeness, proved beside it. Each is a `Prop`, and `Properties.Proofs.Pouw` proves every one, on Lean core.
 
 The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 multiply-adds (an FP8 tile), ε = 1/2, and δ
 from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.
@@ -30,48 +30,51 @@ def IsPoint (bits n : Nat) : Prop := ∃ m e, n = m * 2 ^ e ∧ 0 < m ∧ m < 2 
 /-- `onGrid` decides `IsPoint`. -/
 def OnGridMeans : Prop := ∀ bits n, onGrid bits n = true ↔ IsPoint bits n
 
-/-- `floorPoint n` is the largest point at most `n ≥ 1`. -/
+/-- What `floor_point(n)` answers is the largest point at most `n`. -/
 def FloorPointGreatest : Prop :=
-  ∀ bits n, 1 ≤ n →
-    IsPoint bits (floorPoint bits n) ∧ floorPoint bits n ≤ n ∧ ∀ g, IsPoint bits g → g ≤ n → g ≤ floorPoint bits n
+  ∀ bits (n : Int) g, floorPoint? bits n = .ok g →
+    IsPoint bits g ∧ g ≤ n.toNat ∧ ∀ g', IsPoint bits g' → g' ≤ n.toNat → g' ≤ g
 
-/-- `pad n` is the least point at least `n ≥ 1`. -/
+/-- What `pad(n)` answers is the least point at least `n`. -/
 def PadLeast : Prop :=
-  ∀ bits n, 1 ≤ n → IsPoint bits (pad bits n) ∧ n ≤ pad bits n ∧ ∀ g, IsPoint bits g → n ≤ g → pad bits n ≤ g
+  ∀ bits (n : Int) g, pad? bits n = .ok g → IsPoint bits g ∧ n.toNat ≤ g ∧ ∀ g', IsPoint bits g' → n.toNat ≤ g' → g ≤ g'
 
 /-- `point` lists the grid in increasing order from 1, and `level` is its inverse on the grid. -/
 def PointEnumerates : Prop :=
   ∀ bits, point bits 0 = 1 ∧ (∀ ℓ, point bits ℓ < point bits (ℓ + 1)) ∧ (∀ ℓ, IsPoint bits (point bits ℓ)) ∧
     (∀ ℓ, level bits (point bits ℓ) = ℓ) ∧ ∀ g, IsPoint bits g → point bits (level bits g) = g
 
-/-- A window of `real ≥ 1` real tiles registers the level of the largest point at most `real`: it is credited that
-point and pads to the least point above `real`. -/
+/-- The window `bucket(real)` answers registers the level of the largest point at most `real`: it is credited that point
+and pads to the least point above `real`. -/
 def BucketCredits : Prop :=
-  ∀ bits real, 1 ≤ real →
-    let w := bucket bits real
-    w = Work.at bits w.level ∧ w.credited = floorPoint bits real ∧ w.credited ≤ real ∧ real < w.n ∧
-      w.n = pad bits (real + 1)
+  ∀ bits (real : Int) w, bucket? bits real = .ok w →
+    w = Work.at bits w.level ∧ w.credited = floorPoint bits real.toNat ∧ w.credited ≤ real.toNat ∧ real.toNat < w.n ∧
+      w.n = pad bits (real.toNat + 1)
 
-/-- The grid's cost: from `2^bits` real tiles up, the credit drops less than a share `2^-bits` of the real tiles, and
-the padded count is at most `1 + 2^-bits` times the credit. -/
-def BucketCost : Prop :=
-  ∀ bits real, 2 ^ bits ≤ real →
-    real * (2 ^ bits - 1) < (bucket bits real).credited * 2 ^ bits ∧
-      (bucket bits real).n * 2 ^ bits ≤ (bucket bits real).credited * (2 ^ bits + 1)
+/-- The grid's cost for a window `w` of `real` real tiles: from `2^bits` real tiles up, the credit drops less than a share
+`2^-bits` of the real tiles, and the padded count is at most `1 + 2^-bits` times the credit. -/
+def CostBounded (bits real : Nat) (w : Work) : Prop :=
+  2 ^ bits ≤ real → real * (2 ^ bits - 1) < w.credited * 2 ^ bits ∧ w.n * 2 ^ bits ≤ w.credited * (2 ^ bits + 1)
 
-/-- On the served grid: from 8 real tiles up, the credit is more than 7/8 of them and the padded count at most 9/8 of the
-credit. -/
-def BucketCost3 : Prop :=
-  ∀ real, 8 ≤ real →
-    7 * real < 8 * (bucket gridBits real).credited ∧ 8 * (bucket gridBits real).n ≤ 9 * (bucket gridBits real).credited
+/-- The window `bucket(real)` answers costs what `CostBounded` says. -/
+def BucketCost : Prop := ∀ bits (real : Int) w, bucket? bits real = .ok w → CostBounded bits real.toNat w
 
-/-- `levels lo hi` (for `1 ≤ lo ≤ hi`) counts the levels a tile count in `[lo, hi]` registers, which are consecutive
-from `lo`'s. -/
+/-- The served grid's cost for a window `w` of `real` real tiles: from 8 real tiles up, the credit is more than 7/8 of
+them and the padded count at most 9/8 of the credit. -/
+def CostBounded3 (real : Nat) (w : Work) : Prop := 8 ≤ real → 7 * real < 8 * w.credited ∧ 8 * w.n ≤ 9 * w.credited
+
+/-- On the served grid, the window `bucket(real)` answers costs what `CostBounded3` says. -/
+def BucketCost3 : Prop := ∀ (real : Int) w, bucket? gridBits real = .ok w → CostBounded3 real.toNat w
+
+/-- `k` counts the levels a tile count in `[lo, hi]` registers, which are consecutive from `lo`'s, when `lo ≤ hi`. -/
+def LevelsCounted (bits lo hi : Nat) (k : Int) : Prop :=
+  lo ≤ hi → 0 < k ∧
+    ∀ ℓ, (∃ r, lo ≤ r ∧ r ≤ hi ∧ (bucket bits r).level = ℓ) ↔
+      (bucket bits lo).level ≤ ℓ ∧ (ℓ : Int) < (bucket bits lo).level + k
+
+/-- What `levels(lo, hi)` answers counts what `LevelsCounted` says. -/
 def LevelsCount : Prop :=
-  ∀ bits lo hi, 1 ≤ lo → lo ≤ hi →
-    0 < levels bits lo hi ∧
-      ∀ ℓ, (∃ r, lo ≤ r ∧ r ≤ hi ∧ (bucket bits r).level = ℓ) ↔
-        (bucket bits lo).level ≤ ℓ ∧ (ℓ : Int) < (bucket bits lo).level + levels bits lo hi
+  ∀ bits (lo hi : Int) k, levels? bits lo hi = .ok k → LevelsCounted bits lo.toNat hi.toNat k
 
 /-- The served grid's sizes: 304 levels for 1 to 2⁴⁰ tiles, 161 for 2¹⁰ to 2³⁰; the window's one public output, its
 level, so takes at most 9 bits, within a proof unit's 16. -/
@@ -81,43 +84,43 @@ def LevelsServed : Prop :=
 /-- A window of 8192 real tiles registers level 87: credited 8192, padded to 9216. -/
 def Bucket8192 : Prop := bucket gridBits 8192 = ⟨87, 8192, 9216⟩
 
-/-- Python's grid functions on any integer: each answers what the function on naturals does, and refuses exactly off
-its domain (`n ≥ 1` for a tile count, a grid point for `level`, `ℓ ≥ 0` for a level; `levels` needs both ends). -/
+/-- Python's grid functions on any integer answer only on their domain (`n ≥ 1` for a tile count, a grid point for
+`level`, `ℓ ≥ 0` for a level; `levels` needs both ends), and what they answer is the function on naturals. -/
 def GridRefusals : Prop :=
   ∀ bits (n lo : Int),
-    (floorPoint? bits n).isOk = decide (1 ≤ n) ∧ (pad? bits n).isOk = decide (1 ≤ n) ∧
-    (bucket? bits n).isOk = decide (1 ≤ n) ∧ (level? bits n).isOk = (decide (1 ≤ n) && onGrid bits n.toNat) ∧
-    (point? bits n).isOk = decide (0 ≤ n) ∧ (Work.at? bits n).isOk = decide (0 ≤ n) ∧
-    (levels? bits lo n).isOk = decide (1 ≤ lo ∧ 1 ≤ n) ∧
-    (1 ≤ n → floorPoint? bits n = .ok (floorPoint bits n.toNat) ∧ pad? bits n = .ok (pad bits n.toNat) ∧
-      bucket? bits n = .ok (bucket bits n.toNat)) ∧
-    (1 ≤ n → onGrid bits n.toNat = true → level? bits n = .ok (level bits n.toNat)) ∧
-    (0 ≤ n → point? bits n = .ok (point bits n.toNat) ∧ Work.at? bits n = .ok (Work.at bits n.toNat)) ∧
-    (1 ≤ lo → 1 ≤ n → levels? bits lo n = .ok (levels bits lo.toNat n.toNat))
+    (∀ g, floorPoint? bits n = .ok g → 1 ≤ n ∧ g = floorPoint bits n.toNat) ∧
+    (∀ g, pad? bits n = .ok g → 1 ≤ n ∧ g = pad bits n.toNat) ∧
+    (∀ w, bucket? bits n = .ok w → 1 ≤ n ∧ w = bucket bits n.toNat) ∧
+    (∀ ℓ, level? bits n = .ok ℓ → 1 ≤ n ∧ onGrid bits n.toNat = true ∧ ℓ = level bits n.toNat) ∧
+    (∀ g, point? bits n = .ok g → 0 ≤ n ∧ g = point bits n.toNat) ∧
+    (∀ w, Work.at? bits n = .ok w → 0 ≤ n ∧ w = Work.at bits n.toNat) ∧
+    (∀ k, levels? bits lo n = .ok k → 1 ≤ lo ∧ 1 ≤ n ∧ k = levels bits lo.toNat n.toNat)
 
 /-! ## The draw (L3) -/
 
-/-- `kPrime` answers exactly on its domain. -/
+/-- `kPrime` answers only on its domain. -/
 def KPrimeRefuses : Prop :=
-  ∀ eps δ (credited n w : Int), (kPrime eps δ credited n w).isOk = decide (KPrimeDomain eps δ credited n w)
+  ∀ eps δ (credited n w : Int) k, kPrime eps δ credited n w = .ok k → KPrimeDomain eps δ credited n w
 
-/-- On its domain, `kPrime` is the least `K ≥ 1` with `(1 − p)^K ≤ δ`, `p = ε·credited/(n·w)`, capped at `n`: exact in
-the rationals, so no rounding moves it by one. -/
+/-- What `kPrime` answers is the least `K ≥ 1` with `(1 − p)^K ≤ δ`, `p = ε·credited/(n·w)`, capped at `n`: exact in the
+rationals, so no rounding moves it by one. -/
 def KPrimeLeast : Prop :=
-  ∀ eps δ (credited n w : Int), KPrimeDomain eps δ credited n w →
+  ∀ eps δ (credited n w : Int) k, kPrime eps δ credited n w = .ok k →
     let q := 1 - missShare eps credited n w
-    ∃ k, kPrime eps δ credited n w = .ok k ∧ 1 ≤ k ∧ k ≤ n.toNat ∧ (k < n.toNat → q ^ k ≤ δ) ∧
-      ∀ j, 1 ≤ j → j < k → δ < q ^ j
+    1 ≤ k ∧ k ≤ n.toNat ∧ (k < n.toNat → q ^ k ≤ δ) ∧ ∀ j, 1 ≤ j → j < k → δ < q ^ j
 
 /-- The chance that `k` indices drawn uniformly without replacement from `[0, N)` all miss a set of `B` of them. -/
 def missProb (N B k : Nat) : Rat :=
   ((List.range k).map fun i => ((N - B - i : Nat) : Rat) / ((N - i : Nat) : Rat)).foldl (· * ·) 1
 
-/-- L3: a wrong set of `B` of the window's `n` tiles that holds a share `ε` of its credited work (each tile does at most
-`w`, so `ε·credited ≤ B·w`) is missed by all `K′` drawn tiles with chance at most `δ`. -/
+/-- A wrong set of `B` of the window's `n` tiles that holds a share `ε` of its credited work (each tile does at most `w`,
+so `ε·credited ≤ B·w`) is missed by all `k` drawn tiles with chance at most `δ`. -/
+def MissBounded (eps δ : Rat) (credited n w : Int) (B k : Nat) : Prop :=
+  B ≤ n.toNat → eps * credited ≤ B * w → missProb n.toNat B k ≤ δ
+
+/-- L3: the `K′` `kPrime` answers bounds every wrong set's miss as `MissBounded` says. -/
 def DrawMisses : Prop :=
-  ∀ eps δ (credited n w : Int) (B k : Nat), KPrimeDomain eps δ credited n w → kPrime eps δ credited n w = .ok k →
-    B ≤ n.toNat → eps * credited ≤ B * w → missProb n.toNat B k ≤ δ
+  ∀ eps δ (credited n w : Int) (B k : Nat), kPrime eps δ credited n w = .ok k → MissBounded eps δ credited n w B k
 
 /-- K′ at level ℓ of the served grid, at ε = 1/2, for FP8 tiles of 4096 (`sampling`'s law; 0 if refused). -/
 def servedK (δ : Rat) (ℓ : Nat) : Nat :=

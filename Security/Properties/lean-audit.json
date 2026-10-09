@@ -317,12 +317,6 @@
    "assumptions": [],
    "type_hash": "b22f72c2d2c45d769ab42ef353eba48b1591ce8e5176ec877a9fcfa0269a9056"
   },
-  "Properties.Pouw.Check.serviceRejectRejects": {
-   "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.serviceRejectRejects : Properties.Pouw.Check.ServiceRejectRejects"],
-   "assumptions": [],
-   "type_hash": "54d7c904edc0a25147226057321cfcfd82a73f4491233f9ab5d32b2e1be021ac"
-  },
   "Properties.Pouw.Check.undecidedOnlyFromService": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Check.undecidedOnlyFromService : Properties.Pouw.Check.UndecidedOnlyFromService"],
