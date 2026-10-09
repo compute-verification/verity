@@ -8,6 +8,9 @@ autoImplicit = false
 [[lean_lib]]
 name = "Flock"
 
+[[lean_lib]]
+name = "VStar"
+
 [[lean_exe]]
 name = "flock-verify"
 root = "FlockVerify"
