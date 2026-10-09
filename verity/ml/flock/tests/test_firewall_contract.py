@@ -2,8 +2,8 @@
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
 honest sessions accepted by both, the red team's six sessions on #1270 refused by both or sent as the schedule has them,
 tamper controls (firewalls that let out what the contract forbids) refused by the contract, review r6's leaks on #1323
-each cut at its item, every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on, and coins that do
-not open the challenger's commitment refused by both."""
+each cut at its item, every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on, coins that do
+not open the challenger's commitment refused by both, and no salt used twice."""
 from __future__ import annotations
 
 import copy
@@ -249,3 +249,30 @@ def test_coins_that_do_not_open_the_challengers_commitment_are_refused(lean, tmp
         items = json.loads((tmp_path / f"{n}.json").read_text())["items"]
         assert items[cut[n]["released"]]["coins"]["stream"] == st and items[cut[n]["released"]]["coins"]["round"] == k
 
+
+def test_a_salt_used_twice_in_a_session_is_refused(lean, tmp_path):
+    """Within a session the contract refuses any salt used twice, whoever drew it: a firewall whose salt source repeats (its
+    tape's salts not pairwise distinct), two commitments under one salt number, and one salt's bytes under two numbers."""
+    _, reqs, proxy, fresh, expect, challenger = next(c for c in FA.cases() if c[0] == "tamper-reused-salt")
+    s = FA.run_case("tamper-reused-salt", reqs, proxy, fresh, challenger=challenger)
+    t = s.transcript()
+    assert s.accepted() and len(set(t["tape"]["salts"])) == 1 < len(t["tape"]["salts"])
+    leaks = {n: (t, p, e) for n, t, p, e in FA.leaks() if n in ("salt-number-reused", "salt-bytes-reused")}
+    got = FA.decide(lean, tmp_path, [("reused", t, s.public())] + [(n, t, p) for n, (t, p, _) in leaks.items()])
+    assert got[0]["accepted"] is False and got[0]["released"] == 0 and got[0]["why"].startswith("the tape's salts are not pairwise distinct")
+    assert all(FA.meets(v, e) for v, (_, _, e) in zip(got[1:], leaks.values())), got
+
+
+def test_no_salt_repeats_across_a_thousand_sessions():
+    """Across 1,000 honest sessions, each on the firewall's own salt source (`hm96.SHA512.fresh_salt`, 192 bytes from the
+    operating system's generator) and the challenger's, every salt either drew is distinct from every other: the firewall's
+    tapes and the challenger's openings, within and across sessions."""
+    salts: list[str] = []
+    for _ in range(1000):
+        s = FT.Session(FA.SCHEDULE)
+        for r in FA.requests():
+            s.handle(r)
+        t = s.transcript()
+        assert s.accepted() and t["exposed"] == {"salts": [], "pads": []}
+        salts += t["tape"]["salts"] + [i["coins"]["opening"] for i in t["items"] if "coins" in i]
+    assert len(salts) == 1000 * (6 + 5) and len(set(salts)) == len(salts)
