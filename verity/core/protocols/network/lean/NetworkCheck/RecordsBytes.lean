@@ -167,10 +167,10 @@ theorem expectedGridsOfBytes_eq_expectedGrids (g : Check.Grid) (W : Nat) (l : By
 
 /-- Window `w`'s grid of `expectedGridsOfBytes` is `Check.expectedGrid`'s of the link as v2 reads it, slot for slot:
 `expectedGridsOfBytes_eq_expectedGrids` composed with `RecordsGrid.expectedGrids_eq`. -/
-theorem expectedGridsOfBytes_eq (g : Check.Grid) (W : Nat) (l : ByteLink) (w : Nat) (hw : w < W) :
-    (expectedGridsOfBytes g W l)[w]? = some (Check.expectedGrid g W l.toLink w) := by
+theorem expectedGridsOfBytes_eq (g : Check.Grid) (W : Nat) (l : ByteLink) (w : Fin W) :
+    (expectedGridsOfBytes g W l)[w.val]? = some (Check.expectedGrid g W l.toLink w.val) := by
   rw [expectedGridsOfBytes_eq_expectedGrids]
-  exact RecordsGrid.expectedGrids_eq g W l.toLink w hw
+  exact RecordsGrid.expectedGrids_eq g W l.toLink w
 
 /-- The unit's clock is v2's. -/
 theorem unitSync_toEvidence (e : ByteEvidence) (w : Nat) : unitSync e w = Check.unitSync e.toEvidence w := by
