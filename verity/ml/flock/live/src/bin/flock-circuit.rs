@@ -975,7 +975,7 @@ fn level0_root(st: &Stmt, wt: &WitData, lig: LigeritoProfile, level0: Option<&fl
     #[cfg(feature = "sha512")]
     {
         let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
-        flock_merkle::hm96::begin(Arc::new(s.expand(s.level0_id(), pcs.n_leaves())), Box::new(|_| panic!("the level-0 commitment draws no other tree")));
+        flock_merkle::hm96::begin(s.level0(pcs.n_leaves()), Box::new(|_| panic!("the level-0 commitment draws no other tree")));
     }
     #[cfg(not(feature = "sha512"))]
     let _ = salts;
@@ -1100,7 +1100,7 @@ impl Firewall {
     fn new(st: &Arc<Stmt>, z: Vec<F128>, lig: LigeritoProfile, l0: &flock_core::pcs::ligerito::zk::Level0Zk,
            salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool) -> Firewall {
         let pcs = params(st.m, lig);
-        let level0 = { let s = salts.lock().unwrap_or_else(PoisonError::into_inner); Arc::new(s.expand(s.level0_id(), pcs.n_leaves())) };
+        let level0 = salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs.n_leaves());
         let draws = Arc::new(Mutex::new(FirewallDraws { shared: salts.clone(), fork: None, level0: level0.clone(), device_trees: 0, two }));
         let d = draws.clone();
         flock_merkle::hm96::begin(level0, Box::new(move |n| {
@@ -2992,10 +2992,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             }
             // under the firewall its own salt context spans the table (`Firewall::new`)
             #[cfg(feature = "sha512")]
-            let level0 = (!plan.gpu && !firewalled && salted(st)).then(|| {
-                let s = salts.lock().unwrap_or_else(PoisonError::into_inner);
-                Arc::new(s.expand(s.level0_id(), pcs_of(st, lig).n_leaves()))
-            });
+            let level0 = (!plan.gpu && !firewalled && salted(st))
+                .then(|| salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs_of(st, lig).n_leaves()));
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let tl0 = Instant::now();
             let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
@@ -3890,13 +3888,16 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "device_salts_match_host" {
         #[cfg(all(feature = "gpu", feature = "sha512"))]
         if gpu {
-            let s = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os());
-            let idx: Vec<i64> = vec![0, 1, 2, 31, 1000, (1 << 22) + 3];
-            let ok = [0u64, 1, 5, u64::MAX].iter().all(|&nonce| {
-                let d = flock_live::gpu_circuit::device_salts(s.key(), nonce, &idx);
-                idx.iter().enumerate().all(|(k, &i)| d[192 * k..192 * (k + 1)] == s.salt(nonce, i as u64))
+            let n = 1000usize;
+            let x: Vec<u8> = (0..64 * n).map(|i| (i * 7 + 3) as u8).collect();
+            let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
+            let d = flock_live::gpu_circuit::device_leaves(&x, &salts);
+            let ok = (0..n).all(|i| {
+                let mut xi = flock_merkle::Hash::default();
+                xi.as_flattened_mut().copy_from_slice(&x[64 * i..64 * (i + 1)]);
+                d[64 * i..64 * (i + 1)] == *flock_merkle::hm96::leaf(&xi, &salts[192 * i..192 * (i + 1)]).as_flattened()
             });
-            return json!({"case": name, "gpu": true, "expect": "the device's salts equal LeafSalts::salt", "pass": ok});
+            return json!({"case": name, "gpu": true, "expect": "the device's leaves from the host's salts equal hm96::leaf", "pass": ok});
         }
         return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
     }
@@ -4173,36 +4174,42 @@ fn barrier_holds(order: &[String]) -> bool {
 fn tables_randomness_case(tabs: &Tables) -> Value {
     let seed = ProverSeed::from_os();
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
-    let draws = |tb: &Table, at: u64| -> Vec<[u8; 16]> {
+    // (the prover's stream words, the leaf salts): the salts are the OS's, so even at one table's addresses they are new
+    let draws = |tb: &Table, at: u64| -> (Vec<[u8; 16]>, Vec<[u8; 16]>) {
         let (st, lay) = (&tb.st, zk_layout(&tb.st));
         let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, at);
         let l0 = level0_zk(st, &mut prng, false, 0);
         let mut w: Vec<F128> = l0.extra.iter().chain(&l0.pads).flatten().copied().collect();
         let mut s = salts.table(at);
-        let mut b = s.expand(s.level0_id(), 64);
+        let (mut tau, mut b) = (Vec::new(), s.level0(64).to_vec());
         for rep in 0..2 {
             let p = zkv::Pads::draw(&mut prng, &lay, rep);
             w.extend(p.h.iter().chain(&p.mu).chain(&p.pad_h).chain(&p.pad_mu));
-            b.extend(&p.tau_salt);
+            tau.extend(&p.tau_salt);
             let id = s.next_id();
             b.extend(s.expand(id, 64));
         }
         let mask = wit(st, &tb.inst, &Plan::default(), false, seed, at as usize).mask;
         w.extend((0..st.blocks().min(4)).flat_map(|k| mask(k)));
-        w.iter().map(|x| {
+        let words = w.iter().map(|x| {
             let mut a = [0u8; 16];
             a[..8].copy_from_slice(&x.lo.to_le_bytes());
             a[8..].copy_from_slice(&x.hi.to_le_bytes());
             a
-        }).chain(b.chunks(16).map(|c| c.try_into().expect("16 bytes"))).collect()
+        }).chain(tau.chunks(16).map(|c| c.try_into().expect("16 bytes"))).collect();
+        (words, b.chunks(16).map(|c| c.try_into().expect("16 bytes")).collect())
     };
-    let (a, b, control) = (draws(&tabs.list[0], 0), draws(&tabs.list[1], 1), draws(&tabs.list[1], 0));
-    let first: std::collections::BTreeSet<&[u8; 16]> = a.iter().collect();
-    let shared = b.iter().filter(|x| first.contains(x)).count();
+    let ((a, sa), (b, sb), (control, sc)) = (draws(&tabs.list[0], 0), draws(&tabs.list[1], 1), draws(&tabs.list[1], 0));
+    let first: std::collections::BTreeSet<&[u8; 16]> = a.iter().chain(&sa).collect();
+    let shared = b.iter().chain(&sb).filter(|x| first.contains(x)).count();
     let control_equal = a.iter().zip(&control).filter(|(x, y)| x == y).count();
-    json!({"case": "zk_tables_share_no_randomness", "expect": "no word in common across the tables; all of them at one table's addresses",
-           "words": [a.len(), b.len()], "shared_words": shared, "control_words_equal": control_equal,
-           "pass": !a.is_empty() && a.len() == b.len() && shared == 0 && control.len() == a.len() && control_equal == a.len()})
+    let control_salts_shared = sc.iter().filter(|x| first.contains(x)).count();
+    json!({"case": "zk_tables_share_no_randomness",
+           "expect": "no word in common across the tables; all of the stream's at one table's addresses, none of the salts",
+           "words": [a.len() + sa.len(), b.len() + sb.len()], "shared_words": shared, "control_words_equal": control_equal,
+           "control_salt_words_shared": control_salts_shared,
+           "pass": !a.is_empty() && !sa.is_empty() && a.len() == b.len() && sa.len() == sb.len() && shared == 0 && control.len() == a.len()
+                   && control_equal == a.len() && sc.len() == sa.len() && control_salts_shared == 0})
 }
 
 #[cfg(not(feature = "seed-injection"))]
