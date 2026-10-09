@@ -242,7 +242,8 @@ theorem flockInnerCL_accepts (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
           out.accepted = true := by
   show (∃ out, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
     (schedSteps T CT 0 t) out ∧ out.accepted = true) ↔ _
-  rw [tableCL_eq]
+  -- explicit, since `cls.hm` proves `13 ≤ (M.toStatement regs).m` only up to unfolding `toStatement`
+  rw [tableCL_eq A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts]
   generalize schedSteps T CT 0 t = ss
   constructor
   · rintro ⟨out, h, hacc⟩
