@@ -23,6 +23,7 @@ import Proofs.Flock.VBridge.Algebra.Lincheck
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.Ligerito
 import Proofs.Flock.VBridge.Algebra.ToVStar
+import Proofs.Flock.VBridge.Compiled
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/
