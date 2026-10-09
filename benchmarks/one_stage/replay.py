@@ -133,12 +133,20 @@ class Sets:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(t.extractfile(m).read())
 
+    def has(self, tar_sha: str, name: str) -> bool:
+        return (self.dir(tar_sha) / name / "manifest.json").exists()
+
+    def holding(self, name: str) -> str | None:
+        """The extracted tar (its directory name) with the fewest sets that holds set `name`."""
+        tars = sorted((len(list(d.iterdir())), d.name) for d in self.root.iterdir() if (d / name / "manifest.json").exists()) \
+            if self.root.exists() else []
+        return tars[0][1] if tars else None
+
     def open(self, tar_sha: str, name: str):
         from verity_numerical.bench.input_sets import InputSet
-        d = self.dir(tar_sha) / name
-        if not (d / "manifest.json").exists():
+        if not self.has(tar_sha, name):
             raise Missing(f"inputs/set.tar ({tar_sha[:16]}): {name}/manifest.json")
-        return InputSet.open(str(d))
+        return InputSet.open(str(self.dir(tar_sha) / name))
 
 
 # --- a run -------------------------------------------------------------------------------------------------------------
@@ -150,7 +158,6 @@ class Run:
     files: list[dict]
     sets: Sets
     programs: Programs
-    sets_fallback: str | None = None
     outside: list[dict] = field(default_factory=list)
     fetch: Callable[[str], None] | None = None
 
@@ -184,14 +191,17 @@ class Run:
         j = self.json("job.json")
         return (j.get("computation") or {}).get("tree_sha") or ((j.get("store") or {}).get("conditions") or {}).get("source.commit")
 
-    def input_set(self, name: str, fallback: str | None = None):
-        """The run's own input set `name` (from the `set.tar` it was sent), else the `fallback` tar's, with provenance."""
+    def input_set(self, name: str):
+        """The run's own input set `name` (from the `set.tar` it was sent), else the one in the smallest other run's tar
+        that holds it, with provenance. Only the set's subcircuit and name are read."""
         own = self.file_sha256("inputs/set.tar")
-        sha = own or fallback
-        if sha is None:
-            raise Missing("inputs/set.tar")
-        return self.sets.open(sha, name), ("the run's inputs/set.tar" if own else f"inputs/set.tar {sha[:16]} of another run "
-                                                                                  "(this run's was not uploaded)")
+        if own is not None and self.sets.has(own, name):
+            return self.sets.open(own, name), "the run's inputs/set.tar"
+        other = self.sets.holding(name)
+        if other is None:
+            raise Missing(f"inputs/set.tar: {name}")
+        why = "this run's does not hold it" if own else "this run's was not uploaded"
+        return self.sets.open(other, name), f"inputs/set.tar {other} of another run ({why})"
 
 
 def live_line(path: Path) -> dict | None:
@@ -224,6 +234,16 @@ def public_digest(run: Run, pub: str, archive_log: str) -> tuple[str, str]:
     return sha512_file(run.path(pub)), f"SHA-512 of {pub}"
 
 
+def stage_report(run: Run, log: str) -> dict:
+    """`stage_subset.py`'s report, the last JSON line of its stdout in `log`: the staged selection's name and content
+    digest, which M0's frame domains bind."""
+    out = run.path(log).read_text().split("--- stdout", 1)[-1].split("--- stderr", 1)[0]
+    lines = [x for x in out.splitlines() if x.startswith("{")]
+    if not lines:
+        raise Missing(f"{log}: stage_subset's report")
+    return json.loads(lines[-1])
+
+
 def tar_member(run: Run, tar: str, name: str) -> bytes:
     with tarfile.open(run.path(tar)) as t:
         m = next((m for m in t.getmembers() if m.isfile() and Path(m.name).name == name), None)
@@ -248,19 +268,35 @@ def template_ids(desc: dict) -> list[str]:
 
 
 def partition_form(program, query: dict, rec: dict, era_templates: list[str]) -> tuple[dict | None, str]:
-    """The verifier's partition object for `rec`: the canonical one over `program` and `query` (null), or the
-    pre-canonical `{program, query}` with the era's query form (`Q_template_instance(s)` v0 with `template(s)` and a
-    `width_rule` at the top level) over the era's template ids."""
+    """The verifier's partition object for `rec`: the canonical one over `program` and `query` (null); the canonical
+    envelope over the era's template ids (Definition ids, before descriptor ids); or the pre-canonical `{program, query}`
+    with the era's query form (`Q_template_instance(s)` v0 with `template(s)` and a `width_rule` at the top level)."""
     sha = PO.program_sha512(program)
     if P.digest(P.partition(program, query)) == rec["partition"]:
         return None, "canonical"
-    forms = [{"name": "Q_template_instance", "template": t, "version": 0, "width_rule": None} for t in era_templates]
-    forms.append({"name": "Q_template_instances", "templates": list(era_templates), "version": 0, "width_rule": None})
-    for q in forms:
-        part = {"program": sha, "query": q}
-        if P.digest(part) == rec["partition"] and R.query_digest(q) == rec["query"]:
-            return part, f"pre-canonical {q['name']} over {era_templates}"
+    lists = (list(era_templates), sorted(era_templates))
+    envelope = [{"format": PO.FORMAT, "program": sha, "query": q} for q in
+                [{"name": "Q_template_instance", "version": 0, "params": {"template": t}} for t in era_templates]
+                + [{"name": "Q_template_instances", "version": 0, "params": {"templates": ts}} for ts in lists]]
+    old = [{"program": sha, "query": q} for q in
+           [{"name": "Q_template_instance", "template": t, "version": 0, "width_rule": None} for t in era_templates]
+           + [{"name": "Q_template_instances", "templates": ts, "version": 0, "width_rule": None} for ts in lists]]
+    for part, how in [*((p, "canonical envelope") for p in envelope), *((p, "pre-canonical") for p in old)]:
+        if P.digest(part) == rec["partition"] and R.query_digest(part["query"]) == rec["query"]:
+            return part, f"{how} {part['query']['name']} over {era_templates}"
     raise Gap(f"no partition form over {era_templates} gives the record's partition {rec['partition'][:16]}")
+
+
+def with_program(partition: dict | None, program, drop_template: bool = False) -> dict | None:
+    """The era's partition object over another program (a negative's), its last template dropped if `drop_template`."""
+    if partition is None:
+        return None
+    q = dict(partition["query"])
+    if drop_template and "templates" in q:
+        q["templates"] = q["templates"][:-1]
+    elif drop_template and "templates" in q.get("params", {}):
+        q["params"] = {**q["params"], "templates": q["params"]["templates"][:-1]}
+    return {**partition, "program": PO.program_sha512(program), "query": q}
 
 
 def _domain(binding: bytes, leaves: int) -> str:
@@ -275,10 +311,12 @@ def stand_in_layouts(s, n: int, prefix: str = "") -> dict[str, dict[str, tuple[s
             "hidden": {**rows, **{f"{prefix}{p.name}": (ROW, n) for p in sc.outputs}}}
 
 
-def stand_in_ports(s, n: int, layout: dict[str, tuple[str, int]], tag: str, content: bool, prefix: str = "") -> dict:
+def stand_in_ports(name: str, content_digest: str, n: int, layout: dict[str, tuple[str, int]], tag: str, content: bool,
+                   prefix: str = "") -> dict:
+    """M0's frame domains bound to the staged set `name` (with its `content_digest`, before hidden outputs)."""
     out = {}
     for p, (schema, leaves) in layout.items():
-        doc = {"set": s.name, **({"content_digest": s.content_digest} if content else {}), "lo": 0, "hi": n,
+        doc = {"set": name, **({"content_digest": content_digest} if content else {}), "lo": 0, "hi": n,
                "port": p[len(prefix):], "schema": schema}
         out[p] = {"domain": _domain(STAND_IN_BINDINGS[tag](tag, doc), leaves), "leaves": leaves}
     return out
@@ -516,7 +554,7 @@ def a0(run: Run) -> Iterator[Case]:
     summary = run.json(f"{base}/summary.json")
     rec = a["registration"]
     n = summary["n"]
-    s, set_from = run.input_set(rec["window"].get("input_set") or "rope101", run.sets_fallback)
+    s, set_from = run.input_set(rec["window"].get("input_set") or "rope101")
     template = s.subcircuit.definition()
     program = P.population_program(template, n)
     prov: dict = {"commit": run.commit(), "set": set_from, "program": "P.population_program(set template, n)"}
@@ -529,7 +567,7 @@ def a0(run: Run) -> Iterator[Case]:
     partition, prov["partition"] = partition_form(program, query, rec, [template.id])
     layouts = stand_in_layouts(s, n)
     ports, prov["ports"] = choose(((f"{tag} {layout}{' +content' if content else ''}",
-                                    stand_in_ports(s, n, layouts[layout], tag, content))
+                                    stand_in_ports(s.name, s.content_digest, n, layouts[layout], tag, content))
                                    for layout in ("words", "hidden") for tag in STAND_IN_BINDINGS for content in (True, False)),
                                   rec, "verity/flock-circuit/binding/v2 hidden")
     leaf_layer, prov["leaf_layer"] = public_digest(run, f"{base}/stage/pub-{n}.bin", f"{base}/session/archive-put.log")
@@ -550,7 +588,7 @@ def a0(run: Run) -> Iterator[Case]:
     draw = a["draw"]
     k = law["k"]
     smaller = P.population_program(template, n - 1)
-    spart, _ = (None, "") if partition is None else ({"program": PO.program_sha512(smaller), "query": partition["query"]}, "")
+    spart = with_program(partition, smaller)
     first = rec["roots"][0]
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch": lambda v: c.but(
@@ -592,13 +630,14 @@ def a0(run: Run) -> Iterator[Case]:
 
 
 def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable[[dict], Case]], *, base_instances: int,
-               session_roots: dict, served: list[int] | None = None) -> Iterator[Case]:
+               session_roots: dict | None, served: list[int] | None = None) -> Iterator[Case]:
     """The run's negatives: its own (`cases`), `audit_negatives`' (on the base audit as that function re-decided it:
     instances = the proved units, the sessions' roots, the served draw), and the ones outside the protocol."""
     an = c.but("", "negative", c.recorded, evidence={"instances": base_instances, "session_roots": session_roots,
                                                       "served": served})
     vs = c.evidence["verdicts"]
-    port = next(iter(session_roots), None)
+    port = next(iter(session_roots or {}), None)
+    opened = c.evidence["session_registered"] or {}
     shared: dict[str, Callable[[dict], Case]] = {
         "verifier-of-record-did-not-run (C2)": lambda v: an.but(
             "verifier-of-record-did-not-run (C2)", "negative", recorded_failed(v, src),
@@ -608,7 +647,10 @@ def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable
             evidence={"verdicts": {k: x for k, x in vs.items() if not x.get("of_record")}}),
         "session-root-not-registered": lambda v: an.but(
             "session-root-not-registered", "negative", recorded_failed(v, src),
-            evidence={"session_roots": {**session_roots, port: "00" * 64}}),
+            evidence={"session_roots": {**(session_roots or {}), port: "00" * 64}}),
+        "registered-read-opened-against-another-root": lambda v: an.but(
+            "registered-read-opened-against-another-root", "negative", recorded_failed(v, src),
+            evidence={"session_registered": {**opened, next(iter(opened), ""): "00" * 64}}),
     }
     if served is not None:
         other = next(u for u in range(c.rec["population"]) if u not in set(served))
@@ -632,7 +674,7 @@ def a2(run: Run) -> Iterator[Case]:
     summary = run.json(f"{base}/summary.json")
     rec = a["registration"]
     n = summary["n"]
-    s, set_from = run.input_set("rope101", run.sets_fallback)
+    s, set_from = run.input_set("rope101")
     template = s.subcircuit.definition()
     program = P.population_program(template, n)
     prov: dict = {"commit": run.commit(), "set": set_from, "program": "P.population_program(set template, n)"}
@@ -693,12 +735,117 @@ def a2(run: Run) -> Iterator[Case]:
                           session_roots=live.get("roots") or {})
 
 
+def _proved_check(v: dict, src: str) -> dict:
+    """A negative the run decided with `draw.check_proved` alone, which the protocol makes as the audit's proved check."""
+    return recorded("reject" if v["refused"] else "accept", "checks", ["proved"], f"{src} (check_proved)")
+
+
+def a3(run: Run) -> Iterator[Case]:
+    """A3 (`a3.py`): every template of one decoder layer as one population (`mixed_population_program` over
+    `Q_template_instances`), each member a stand-in staged from its selection of the set (`stage_subset.py`), one
+    registration (ports `<set>/<port>`, the leaf layer the SHA-512 of the map from set to its public file's SHA-512) and
+    one draw over the union. With `--draw-file` the audited draw is the verifier's Lean draw and the sessions' union is
+    the served draw; before it the audited draw is the union, and the audit took neither the served draw nor the
+    sessions' roots."""
+    base = "out/a3"
+    a = run.json(f"{base}/audit.json")
+    summary = run.json(f"{base}/summary.json")
+    rec = a["registration"]
+    members = summary["members"]
+    prov: dict = {"commit": run.commit(), "program": "P.mixed_population_program(each member's set template, n)", "sets": {}}
+    mem = []
+    for m in members:
+        s, prov["sets"][m["set"]] = run.input_set(m["set"])
+        mem.append((m["set"], s, s.subcircuit.definition(), m["n"]))
+    program = P.mixed_population_program([(d, cnt) for _, _, d, cnt in mem])
+    if PO.program_sha512(program) != rec["program"]:
+        stored = run.programs.get(rec["program"])
+        if stored is None:
+            raise Gap(f"the sets' population program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]} "
+                      f"(templates today: {[P.template_id(d) for _, _, d, _ in mem]}; the run's: {[m['template'] for m in members]})")
+        program, prov["program"] = stored, "a program.json the runs stored"
+    query = P.template_instances_query([d for _, _, d, _ in mem])
+    partition, prov["partition"] = partition_form(program, query, rec, [m["template"] for m in members])
+    selections = rec["window"].get("sets") or {}
+    ports, publics, prov["ports"], prov["leaf_layer"] = {}, {}, {}, {}
+    for name, s, _, cnt in mem:
+        prefix = f"{name}/"
+        st = stage_report(run, f"{base}/stage-{name}/stage.log")
+        if (selections.get(name) or {}).get("selection_digest") not in (None, st["content_digest"]):
+            raise Gap(f"stage-{name}/stage.log's content digest is not the record's selection digest")
+        layouts = stand_in_layouts(s, cnt, prefix)
+        got, prov["ports"][name] = choose(
+            ((f"{tag} {layout}{' +content' if content else ''} (selection {st['name']})",
+              stand_in_ports(st["name"], st["content_digest"], cnt, layouts[layout], tag, content, prefix))
+             for layout in ("words", "hidden") for tag in STAND_IN_BINDINGS for content in (True, False)),
+            rec, "verity/flock-ir-frame/binding/v1 words +content", only=lambda p, pre=prefix: p.startswith(pre))
+        ports.update(got)
+        publics[name], prov["leaf_layer"][name] = public_digest(run, f"{base}/stage-{name}/pub-{cnt}.bin",
+                                                                f"{base}/session-{name}/archive-put.log")
+    leaf_layer = hashlib.sha512(DT.canonical(publics).encode()).hexdigest()
+    split = a.get("split") or {}
+    draw_file = "--draw-file" in split.get("rule", "")
+    with_roots = "served_is_lean_draw" in split
+    instances, session_roots, sessions = 0, {}, []
+    for name, *_ in mem:
+        if not split.get("counts", {}).get(name):
+            continue
+        live = live_line(run.path(f"{base}/session-{name}/prove.log")) or {}
+        instances += live.get("instances", 0)
+        session_roots.update({f"{name}/{p}": r for p, r in (live.get("roots") or {}).items()})
+        sessions += session_digests(run, f"{base}/session-{name}")
+    sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or sessions
+    if draw_file and not split.get("served_is_lean_draw"):
+        raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
+    served = sorted(a["draw"]["units"]) if draw_file else None
+    law = {"k": summary["k"], "law": "subset"}
+    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots if with_roots else None,
+                 served=served)
+    prov["evidence"] = ("audit.json; instances and session roots from each session's prove.log LIVE line"
+                        + ("; served = the Lean draw (--draw-file)" if draw_file else
+                           "; the era's audit took neither the served draw nor the sessions' roots"))
+    c = Case(run.id, "a3", rec["format"], "audit", "audit", program, p, rec, e, recorded_audit(a, f"{base}/audit.json"), prov)
+    yield c
+    src = f"{base}/negatives.json"
+    n = rec["population"]
+    union = {"law": "subset", "population": n, "k": law["k"], "units": sorted(a["draw"]["units"])}
+    proved = sorted(a["proved_units"])
+    bases = {name: (lo, lo + cnt) for (name, *_), (_, lo, cnt) in zip(mem, P.ranges(program, query))}
+    fewer = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt) in enumerate(mem)])
+    cases: dict[str, Callable[[dict], Case]] = {
+        "registration-partition-mismatch": lambda v: c.but(
+            "registration-partition-mismatch", "negative", recorded_codes(v, "registration", src), program=fewer,
+            params={"program": descriptor(fewer), "partition": with_program(partition, fewer)}),
+        "registration-query-drops-a-template": lambda v: c.but(
+            "registration-query-drops-a-template", "negative", recorded_codes(v, "registration", src),
+            params={"query": P.template_instances_query([d for _, _, d, _ in mem][:-1]),
+                    "partition": with_program(partition, program, drop_template=True)}),
+        "union-draw-outside-the-partition": lambda v: c.but(
+            "union-draw-outside-the-partition", "negative", recorded_codes(v, "draw", src),
+            evidence={"draw": {**union, "units": union["units"][:-1] + [n]}}),
+        "proved-unit-not-drawn": lambda v: c.but(
+            "proved-unit-not-drawn", "negative", _proved_check(v, src),
+            evidence={"proved_units": sorted([next(u for u in range(n) if u not in union["units"]), *proved[1:]])}),
+        "registration-null-leaf-layer (R4)": lambda v: c.but(
+            "registration-null-leaf-layer (R4)", "negative", recorded_codes(v, "registration", src),
+            rec={**rec, "leaf_layer": None}),
+    }
+    for name, (lo, hi) in bases.items():
+        kept = [u for u in proved if not lo <= u < hi]
+        cases[f"session-dropped ({name})"] = lambda v, name=name, kept=kept: c.but(
+            f"session-dropped ({name})", "negative", _proved_check(v, src),
+            evidence={"proved_units": kept, "instances": len(kept)})
+    yield from _negatives(run, c, run.json(src), src, cases, base_instances=len(a["proved_units"]),
+                          session_roots=session_roots if with_roots else None, served=served)
+
+
 def session_digests(run: Run, session: str) -> list[str]:
     return sorted(f["sha256"] and sha512_file(run.path(f["path"])) for f in run.files
                   if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
 
 
-DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a2": a2}
+DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a2": a2, "a3": a3}
 
 
 # --- main --------------------------------------------------------------------------------------------------------------
@@ -770,9 +917,6 @@ def main() -> int:
     programs = Programs()
     for f in sorted(runs_root.glob("*/**/program.json")):
         programs.add_file(f)
-    # the rope101 set's tar (A0's), for the runs that were sent one but did not upload it
-    fallback = next((sha for sha in sorted(tars) if (sets.dir(sha) / "rope101" / "manifest.json").exists()
-                     and len(list(sets.dir(sha).iterdir())) == 1), None)
 
     servers = {False: DT.Server([a.lean, "serve"])}
     if a.r7_lean:
@@ -780,7 +924,7 @@ def main() -> int:
     results, runs_out, outside = [], [], []
     for r in rows:
         rid = r["art"][4:12]
-        run = Run(r, runs_root / rid, lists[rid], sets, programs, fallback, outside,
+        run = Run(r, runs_root / rid, lists[rid], sets, programs, outside,
                   (lambda rel, art=r["art"], d=runs_root / rid: research_fetch(art, d, [rel])) if a.fetch else None)
         info = {"run": rid, "art": r["art"], "id": r.get("run"), "drivers": r.get("drivers"),
                 "formats": r.get("registration_formats"), "python_verdicts": len(r.get("python_verdicts") or [])}
@@ -840,7 +984,7 @@ def classify(run: Run) -> str:
         return "neither-reads (registration v0)"
     if not run.row.get("python_verdicts"):
         return "no-recorded-verdict"
-    if drivers in (["a0"], ["a2"]):
+    if len(drivers) == 1 and drivers[0] in DRIVERS:
         return drivers[0]
     return "unhandled"
 
