@@ -23,6 +23,7 @@ imports only the standard library and `verity`, so the convention is restated he
 """
 from __future__ import annotations
 
+import atexit
 import fcntl
 import functools
 import json
@@ -136,8 +137,17 @@ class _Server:
                 return kind, body
         raise LeanError(f"{EXE} on {fn}: {reply[:500]}")
 
+    def close(self) -> None:
+        """End the server: `Difftest.serve` stops at the end of its input."""
+        with self._lock:
+            if self._proc is not None and self._proc.poll() is None:
+                self._proc.stdin.close()
+                self._proc.wait()
+            self._proc = None
+
 
 _server = _Server()
+atexit.register(_server.close)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
