@@ -215,4 +215,58 @@ theorem delta_flat_any (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
   rw [hd3, hd2, hd1, hd0, hd]
   rfl
 
+/-! ## The rows' wires, for rows of every kind -/
+
+/-- Row `p`'s wires: compression `k ≥ 1`'s `cv` from compression `k − 1`'s output where no chain starts at `k`, then
+the `hm96` slot's `cv` from the last compression's output when the row has one and no chain starts at the slot. -/
+def rowWiresOf (ports : Array Port) (sha hm p : ℕ) : List Wire :=
+  (List.range' 1 (((HmRow.rowSlots ports).2[p]!).size - 1)).flatMap (fun k =>
+      if (HmRow.chainStart ports[p]! k).isNone then [chainWire ports sha p k] else []) ++
+    (if 0 < ((HmRow.rowSlots ports).2[p]!).size &&
+        (HmRow.chainStart ports[p]! ((HmRow.rowSlots ports).2[p]!).size).isNone then [hmWire ports sha hm p] else [])
+
+/-- **The rows' wires**, port by port, for rows of every kind (`rowWiresOf`). -/
+theorem rowWires_any (ports : Array Port) (sha hm : ℕ) :
+    (HmRow.rowWires ports sha hm).toList =
+      (List.range (HmRow.rowSlots ports).2.size).flatMap (rowWiresOf ports sha hm) := by
+  unfold HmRow.rowWires
+  simp only
+  show (forIn (m := Id) [:(HmRow.rowSlots ports).2.size] (#[] : Array Wire) _).toList = _
+  refine Eq.trans (forIn_range_append (rowWiresOf ports sha hm) _ (fun p _ d => ?_) #[]) (by simp)
+  have hloop : ∀ d : Array Wire, ∃ d', (forIn (m := Id) [1:((HmRow.rowSlots ports).2[p]!).size] d fun k (r : Array Wire) =>
+        if (HmRow.chainStart ports[p]! k).isNone = true then
+          pure (ForInStep.yield (r.push ⟨(sha, ((HmRow.rowSlots ports).2[p]!)[k]!.1, 2 * ((HmRow.rowSlots ports).2[p]!)[k]!.2),
+            (sha, ((HmRow.rowSlots ports).2[p]!)[k - 1]!.1, ((HmRow.rowSlots ports).2[p]!)[k - 1]!.2)⟩))
+        else pure (ForInStep.yield r)) = d' ∧
+      d'.toList = d.toList ++ (List.range' 1 (((HmRow.rowSlots ports).2[p]!).size - 1)).flatMap (fun k =>
+        if (HmRow.chainStart ports[p]! k).isNone then [chainWire ports sha p k] else []) := fun d =>
+    ⟨_, rfl, forIn_range1_append _ _ (fun k _ d => by
+      by_cases h : (HmRow.chainStart ports[p]! k).isNone = true
+      · simp only [h, ↓reduceIte]
+        exact ⟨_, rfl, by rw [Array.toList_push]; rfl⟩
+      · simp only [h, ↓reduceIte, Bool.false_eq_true]
+        exact ⟨_, rfl, by simp⟩) d⟩
+  obtain ⟨d', hd', hd'l⟩ := hloop d
+  unfold rowWiresOf
+  by_cases h : (0 < ((HmRow.rowSlots ports).2[p]!).size &&
+      (HmRow.chainStart ports[p]! ((HmRow.rowSlots ports).2[p]!).size).isNone) = true
+  · simp only [h, ↓reduceIte]
+    refine ⟨_, rfl, ?_⟩
+    rw [Array.toList_push, ← List.append_assoc, hd', hd'l]
+    rfl
+  · simp only [h, Bool.false_eq_true, ↓reduceIte, List.append_nil]
+    exact ⟨_, rfl, by rw [hd', hd'l]⟩
+
+/-- The rows' wires' copies at template instance `g`'s row `p`, for rows of every kind. -/
+def wireFAny (c : Circuit) (g p : ℕ) : List (ℕ × ℕ) :=
+  (rowWiresOf c.ports c.shaNet c.hmNet p).flatMap
+    fun w => (List.range (Flat.wireWidth c w)).map fun t => (Flat.wireDst c g w + t, Flat.wireSrc c g w + t)
+
+theorem wireCopiesOf_rowsAny (c : Circuit) :
+    wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList = (List.range c.g).flatMap fun g =>
+      (List.range (HmRow.rowSlots c.ports).2.size).flatMap fun p => wireFAny c g p := by
+  unfold wireCopiesOf wireFAny
+  rw [rowWires_any]
+  simp only [List.flatMap_assoc]
+
 end FlockSoundness.Discharge.Hidden

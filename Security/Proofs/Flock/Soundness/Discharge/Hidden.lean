@@ -15,6 +15,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
 
 /-!
 # Hidden outputs: `Stmt.setupHidden`'s soundness at the protocol as Lean defines it
@@ -51,7 +52,9 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
   bytes reach its last block, `SegFits`) and the outer chain over them (`seg_commit`), the bytes `ExplicitLeaf.rowSeg`
   binds;
 * `Wide.SegDelta`: Δ for rows of every kind (`delta_flat_any`), a segmented row's pairs compression by compression
-  (`segPairsOf`);
+  (`segPairsOf`), and the rows' wires (`rowWires_any`);
+* `Wide.SegCopies`: Δ's copies at a row's own columns for rows of every kind (`filter_rowsAny`), and `Wide.Copies`'
+  copies at an unsegmented row's columns whatever the other rows (`Any.cv0_filterAll` … `Any.msg_filterAll`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
