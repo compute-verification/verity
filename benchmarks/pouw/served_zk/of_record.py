@@ -8,7 +8,8 @@ its Python reference on one input:
   what it reads of a PoUW registration, so it may refuse only what they refuse (`Record.public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch`);
 * ``draw``: the drawn units are the draw coin's (`pouw-check-difftest draw`, `core_check.draw`);
-* ``opening``: a drawn unit's opening (`pouw-check-difftest opening`, `core_check.opening`);
+* ``opening``: a drawn unit's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
+  `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
 * ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case`).
 
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
@@ -34,7 +35,7 @@ REPO = Path(__file__).resolve().parents[3]
 POUW = REPO / "verity/core/protocols/pouw/lean/check"
 PIECES = REPO / "verity/core/service/sampled_proofs"
 DISAGREE = "lean-python-disagree"
-CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "answer")
+CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "prelude", "answer")
 
 
 class Disagree(Exception):
@@ -184,6 +185,17 @@ class Record:
         if self.lean and not same:
             raise Disagree("public", {"codes": list(lean)}, {"codes": list(python)})
         return list(lean) if self.lean else list(python) or list(lean)
+
+    def prelude(self, python: str | None, lean: str | None) -> str | None:
+        """`served_commit.check`'s own reading of the registration before a unit's opening (`python`: its level in the
+        window's range, its window domain the served one) beside the opening's reason of record (`lean`), which reads the
+        domain itself, as PoUW's rule read the level at receipt.  They disagree only when the reading refuses an opening
+        Lean accepts; the reason of record is `lean`'s."""
+        same = python is None or lean is not None
+        self._note("prelude", {"reason": python}, {"reason": lean} if self.lean else None, same if self.lean else None)
+        if self.lean and not same:
+            raise Disagree("prelude", {"reason": lean}, {"reason": python})
+        return lean if self.lean else python or lean
 
     def pass_epoch(self, x: dict) -> dict:
         return self._piece("pass", "pouw-check-difftest", POUW, "pass", x, py_pass)

@@ -515,7 +515,8 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     lean = OR.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=lean) is None
-    assert [(e["check"], e["same"], e["lean"]) for e in lean.witness] == [("opening", True, None)]
+    assert [(e["check"], e["same"], e["lean"]) for e in lean.witness] == [("opening", True, None),
+                                                                           ("prelude", True, {"reason": None})]
     lean.close()
 
 
@@ -652,6 +653,14 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=record) == f"{OR.DISAGREE}: opening"
     assert record.witness[0]["python"] == "forced" and record.witness[0]["lean"] is None
+    record.close()
+    monkeypatch.undo()
+    op, served_domain = SC.opening(advice, priv, params, t), SC.window_domain
+    monkeypatch.setattr(SC, "window_domain", lambda params, ell: served_domain({**params, "context": "other"}, ell))
+    record = OR.Record()
+    assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
+        f"{OR.DISAGREE}: prelude"
+    assert [(e["check"], e["same"]) for e in record.witness] == [("opening", True), ("prelude", False)]
     record.close()
 
 

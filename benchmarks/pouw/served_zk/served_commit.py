@@ -51,8 +51,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the window's witness (``outcome.json``'s ``of_record``, the opening
   verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  `service.check_public` runs
-  beside R1-R6, which decide what it reads of the record, and may refuse only what they refuse (``public``); the
-  stream's own state stays Python's.
+  beside R1-R6, which decide what it reads of the record, and may refuse only what they refuse (``public``), as `check`'s
+  reading of the registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own
+  state stays Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
   serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
@@ -471,24 +472,27 @@ def core_params(params: dict) -> dict:
 
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
           record: OR.Record | None = None) -> str | None:
-    """None if the proof's public file opens unit `unit`'s rows under the registered window root, else why not: the
-    registered level the window's, its entries' domain the window's served one, and PoUW's rule on the opening
-    (`core_check.opening`, the unit drawn unless not `drawn`), of record (`record`, Lean's by default)."""
+    """None if the proof's public file opens unit `unit`'s rows under the registered window root, else why not: PoUW's
+    rule on the opening (`core_check.opening`, the unit drawn unless not `drawn`), of record (`record`, Lean's by
+    default), beside this reading of the registration (its level the window's, its entries' domain the window's served
+    one), which may refuse only what the rule refuses (`Record.prelude`)."""
     try:
         ell = level_of(rec)
         work_at(params, ell)
     except ValueError as e:
-        return str(e)
-    roots = {r["port"]: r for r in rec["roots"]}
-    if roots.get(PORT, {}).get("domain") != window_domain(params, ell).domain_id.hex():
-        return "the registered window domain is not the window's served domain"
+        pre: str | None = str(e)
+    else:
+        roots = {r["port"]: r for r in rec["roots"]}
+        pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
+            "the registered window domain is not the window's served domain"
     x = {"params": core_params(params), "commitment": OR.hexed(rec), "units": list(draw.get("units", ())) if drawn else None,
          "unit": unit, "pub": pub.hex(), "opening": op}
+    r = OR.Record() if record is None else record
     try:
-        out = (OR.Record() if record is None else record).opening(x)
+        out = r.opening(x)
+        return r.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
     except OR.Disagree as e:
         return e.code
-    return f"opening: {out['refused']}" if isinstance(out, dict) else out
 
 
 # ---- verdicts --------------------------------------------------------------------------------------------------------------
