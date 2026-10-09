@@ -68,6 +68,7 @@ import Definitions.Pouw.PearlC.RowPrimVectors
 import Definitions.Pouw.PearlC.RowPrims
 import Definitions.Pouw.PearlC.RowSem
 import Definitions.Pouw.PearlC.SaltDead
+import Definitions.Pouw.PearlC.Sha512
 import Definitions.Pouw.PearlC.Skip
 import Definitions.Pouw.PearlC.SkipP
 import Definitions.Pouw.PearlC.Sm120
