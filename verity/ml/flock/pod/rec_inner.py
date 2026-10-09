@@ -269,7 +269,8 @@ def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = No
     proved directly, with no recursion. `universal.direct`'s Boolean Definition of the netlist, unpadded, on each x's first
     ``n_in`` bits, ``n`` instances of it as one batch (`population_program`) partitioned by ``Q_template_instance``, staged by
     `class_statement.stage` with C-Flock's salted leaves (the ``--zk`` statement Lean covers), META naming the Definition its
-    units are instances of (``names_definition``), and every salt from the OS, into ``out`` as
+    units are instances of (``names_definition``), every instance's rows its own (no shared rows: the form Lean covers for
+    a statement without registered reads) and every salt from the OS, into ``out`` as
     rec-private-outer.sh's ``outer`` reads a statement: circuit.txt, inst.bin, pub.bin, partition.json and program.json (the
     program's descriptor)."""
     netlist = netlist or os.environ.get("REC_NETLIST") or None
@@ -295,16 +296,13 @@ def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = No
     [(shape, cl)] = units.classes().items()
     act = units.activation(cl.definition)
     uc = cl.representative
-    groups = CS.sources(act, uc, CS.owners_of(units, cl.definition.id))
-    ins, outs, rows = [[] for _ in uc.inputs], [[] for _ in uc.outputs], [[] for _ in groups]
-    for t, x in enumerate(xs):
+    ins, outs = [[] for _ in uc.inputs], [[] for _ in uc.outputs]
+    for x in xs:
         run = PU.evaluate(act, x)
         for port, k in zip(ins, uc.inputs):
             port.append(run[k])
         for port, j in zip(outs, uc.outputs):
             port.append(run[j])
-        for ids in rows:
-            ids.append(("x", t))
     want = [U.interpret(small, x) for x in xs]
     if any(list(evaluate(fn, x)) != w for x, w in zip(xs, want)):
         raise AssertionError("the Definition disagrees with universal.interpret")
@@ -314,7 +312,7 @@ def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = No
         raise AssertionError("the unit's outputs are not the netlist's computed outputs")
     FC.stage_salts = _os_salts()
     shutil.rmtree(out, ignore_errors=True)
-    st = CS.stage(units, B.SPEC, shape, cl, (ins, outs, rows), out, None, packed=True, names_definition=True)
+    st = CS.stage(units, B.SPEC, shape, cl, (ins, outs), out, None, packed=True, names_definition=True, share_rows=False)
     if st["n"] != n:
         raise AssertionError(f"staging capped the instances at {st['n']}, not {n}")
     (out / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
