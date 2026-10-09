@@ -158,10 +158,12 @@ inner() {
 }
 
 # fold NAME STMT [--program FILE]: V*'s native side (InnerFold.lean: the extra claims and each rep's comb, from the statement
-# and the session's coins) at $DD/points-NAME.json, into $DD/fold-NAME.json; its status
+# and the session's coins) at $DD/points-NAME.json, into $DD/fold-NAME.json; its status. A statement whose description is
+# registered (STMT/registered.json, verity_flock.inner_registered) is folded against that registration (--registered)
 fold() {
-  local name=$1 st=$2; shift 2
-  /usr/bin/time -v -o $O/vstar/time-fold-$name.txt $T/inner-fold --plain-leaves --partition $st/partition.json "$@" verity/flock-circuit \
+  local name=$1 st=$2 REG=(); shift 2
+  [ -s $st/registered.json ] && REG=(--registered $st/registered.json)
+  /usr/bin/time -v -o $O/vstar/time-fold-$name.txt $T/inner-fold --plain-leaves --partition $st/partition.json "$@" "${REG[@]}" verity/flock-circuit \
     $st/circuit.txt $(pub_of $st) $DD/points-$name.json os > $DD/fold-$name.json 2> $O/vstar/fold-$name.err
   local rc=$?; echo "fold $name exit $rc"; echo $rc > $O/vstar/fold-$name.exit
   return $rc
