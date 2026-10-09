@@ -408,6 +408,12 @@ theorem kLogs_of_setup {st : Setup} {S : Model.Statement} {sch : Flock.Schedule}
   obtain ⟨-, -, -, -, -, -, hle, hfk, -⟩ := hs
   exact ⟨hfk.trans hsh.2.1.symm, hle⟩
 
+/-- `RunsFrom`'s `foldKLog` and `kLog_le` at the verifier's setup of a statement: `circuitFold`'s `k_log` is the
+circuit's (`Statement.lean:342`), and `StmtWF` bounds it by `m`. -/
+theorem kLogs_ofCircuit (st : Stmt) (hwf : StmtWF st) :
+    (Setup.ofCircuit st).fold.kLog = st.c.kLog ∧ (Setup.ofCircuit st).kLog ≤ (Setup.ofCircuit st).m :=
+  ⟨rfl, hwf.hk⟩
+
 /-! ## At the family -/
 
 section family
@@ -478,6 +484,12 @@ theorem hSomePart : F.HSomePart := by
   obtain ⟨-, sp, ps, -, hsp, hps, -⟩ := statements_eq F.hstmts
   obtain ⟨j, nm, pt, hj⟩ := statements_inner F.hstmts hsp hps (parts_size hps (spec_res hsp))
   exact ⟨j, 0, nm, pt, hj⟩
+
+/-- **The family's structure facts**: `HSomePart`, `HCover`, `HOpenUnits` and `0 < nOpen`, from the openings' unit
+names (`HOpenName`) and V*'s part count (`HPartCount`). -/
+theorem structure_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hcount : F.HPartCount) :
+    F.HSomePart ∧ F.HCover ∧ F.HOpenUnits ∧ 0 < F.nOpen :=
+  ⟨F.hSomePart, F.hCover_of hcount, F.hOpenUnits_of hne hname, F.nOpen_pos⟩
 
 end VStarFamily
 
