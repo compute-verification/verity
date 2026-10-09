@@ -356,6 +356,28 @@ def test_a_dependencys_dependency_group_is_not_in_its_dependents_closure(tmp_pat
     assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
 
 
+def test_a_dependency_that_lists_exports_is_those_paths_to_its_dependents(tmp_path, monkeypatch):
+    """`a` lists `a/lib.py` under `exports`: `b`, which depends on it, keys on that file and not on the rest of `a`, so a change
+    to `a/cli.py` runs `a`'s suite alone."""
+    _workspace(tmp_path)
+    text = (tmp_path / "a" / "pyproject.toml").read_text()
+    (tmp_path / "a" / "pyproject.toml").write_text(text + '\n[tool.verity.tests]\nexports = ["a/lib.py"]\n')
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\ndependencies = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    for f in ("lib.py", "cli.py"):
+        (tmp_path / "a" / f).write_text("X = 1\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert S.inputs_of(by["a"], pkgs) == ["a"] and S.inputs_of(by["b"], pkgs) == ["a/lib.py", "b"]
+    (tmp_path / "a" / "cli.py").write_text("X = 2\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a"]
+    (tmp_path / "a" / "lib.py").write_text("X = 2\n")
+    assert [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())] == ["a", "b"]
+
+
 def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, monkeypatch):
     """A test that reads a declared package's dependency fails the guard, which allows only `inputs_of`, so a change there
     need not run the suite that declared the package."""

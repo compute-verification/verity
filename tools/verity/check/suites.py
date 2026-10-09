@@ -10,7 +10,8 @@
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
-transitively without their dependency groups, which are their own tests' tooling), the paths it lists under
+transitively without their dependency groups, which are their own tests' tooling; a package that lists `exports` under
+`[tool.verity.tests]` is those paths of it, what its dependents read, in place of its directory), the paths it lists under
 `[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
 tests read a little of a large dependency), the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
@@ -245,11 +246,14 @@ def members() -> dict[str, str]:
 
 
 def shipped(path: str) -> list[str]:
-    """The directories a workspace package's dependents key on: its directory, or for the root, which holds the whole tree, the
-    packages its wheel ships."""
+    """The paths a workspace package's dependents key on: those it lists under `[tool.verity.tests] exports`, else its directory,
+    or for the root, which holds the whole tree, the packages its wheel ships."""
+    data = _pyproject(path)
+    if (exports := data.get("tool", {}).get("verity", {}).get("tests", {}).get("exports")) is not None:
+        return list(exports)
     if path != ".":
         return [path]
-    return list(_pyproject(".")["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
+    return list(data["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 
 
 def tests_pythonpath() -> str:
@@ -1560,7 +1564,8 @@ def main(argv: list[str] | None = None) -> int:
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
             print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
-                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml")
+                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml"
+                  f" (a file of a dependency that lists `exports`: under those, if its dependents read it)")
         elif r.unguarded:
             print(f"        xdist workers {', '.join(r.unguarded)} sent the guard no record of what they read\n        log: {r.log}")
         elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above

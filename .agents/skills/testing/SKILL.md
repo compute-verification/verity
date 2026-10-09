@@ -60,6 +60,8 @@ inputs, in every process of the suite, including pytest-xdist workers and `conft
 keeps the cache sound: a pass is only reused while everything the tests read is unchanged. When it fails:
 
 - **The package imports another at run time:** add it to `[project] dependencies` (with a `[tool.uv.sources]` workspace entry).
+  A dependency's own dependency groups don't come with it. A dependency that lists `[tool.verity.tests] exports` (research
+  does) is those paths of it: when the failure names another of its files that importing code reads, add the file there.
 - **Only the tests need it,** such as a cross-check against another package, a shared fixture or the census: list the path
   under `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why. List what the tests read, as
   narrowly as a directory or a file allows: a listed workspace package is its directory alone, not its dependencies, and
