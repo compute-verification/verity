@@ -494,9 +494,22 @@ class Stream:
         return tuple(r["symbol"] for r in self._records)
 
     @property
+    def log(self) -> tuple[dict[str, Any], ...]:
+        """The registrations received, in order: the log `registration.check`'s R6 reads."""
+        return tuple(self._log)
+
+    @property
     def records(self) -> tuple[dict[str, Any], ...]:
         """The outcomes' records, in order; `Outcome.record` is each one's SHA-512."""
         return tuple(self._records)
+
+    def ready(self) -> None:
+        """Raises `Refused` when the stream receives no registration now: it has stopped, or an earlier registration has
+        no final outcome."""
+        if self.stopped:
+            raise _refuse("stopped", {"failures": self.failures, "budget": self.budget})
+        if self._entries and self._entries[-1].outcome is None:
+            raise _refuse("open", {"order": self._entries[-1].registration.order})
 
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
@@ -507,10 +520,7 @@ class Stream:
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes
         them). Under `TwoStage` its roots are the boundary values'. Then the receipt. Raises `Refused`: when the stream
         has stopped, while an earlier registration has no final outcome, or when either check fails."""
-        if self.stopped:
-            raise _refuse("stopped", {"failures": self.failures, "budget": self.budget})
-        if self._entries and self._entries[-1].outcome is None:
-            raise _refuse("open", {"order": self._entries[-1].registration.order})
+        self.ready()
         v = check_public(self.spec, record, self._values(interior=False))
         if not v.ok:
             raise Refused(v)
