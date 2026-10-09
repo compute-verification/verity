@@ -22,7 +22,7 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-  (hscope : Layout.scopeOk c = true)
+  (hscope : Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hU hpub in
@@ -33,7 +33,7 @@ theorem sitesShH_bcSiteS :
         BcSiteH ((sitesShH dj y₀ ht hc hscope).acc S R u h) pub ((sitesShH dj y₀ ht hc hscope).o S R u h)
           ((sitesShH dj y₀ ht hc hscope).vu S R u h) u.val := by
   intro S R u h M hM
-  show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc (v2_of_scope hscope)) pub ((tableShH dj y₀ S).o u h)
+  show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc (flat_of_scope hscope)) pub ((tableShH dj y₀ S).o u h)
     ((tableShH dj y₀ S).vu u h) u.val
   by_cases hS : Nonempty (DrawSetupZKH I mPts S (dj S))
   · have e : tableShH dj y₀ S = (Classical.choice hS).x.table := by
@@ -52,17 +52,17 @@ theorem sitesShH_bcSiteS :
 /-- **`rs` at the public plan, with or without shared rows**: `rsShH` with `hsite` from `sitesShH_bcSiteS`. -/
 noncomputable abbrev rsShHS : Binding.HmRows (layShH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
-    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
+    (Layout.scopeOkH_spec hU hscope).2.1 (Layout.scopeOkH_rows hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShH_bcSiteS dj y₀ ht hc hscope hU hpub)
-    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
+    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOkH_spec hU hscope).1
+      (Layout.scopeOkH_spec hU hscope).2.2)
 
 theorem rsShHS_computes : (rsShHS dj y₀ ht hc hscope hU hpub (Reg := Reg)).Computes :=
   keyRowsH_computes (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
-    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
+    (Layout.scopeOkH_spec hU hscope).2.1 (Layout.scopeOkH_rows hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShH_bcSiteS dj y₀ ht hc hscope hU hpub)
-    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
+    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOkH_spec hU hscope).1
+      (Layout.scopeOkH_spec hU hscope).2.2)
 
 /-- **`rs` at the hidden-output `--zk` tables, with or without shared rows**: `rsShHS` moved along `planAtZKH_S`. -/
 noncomputable abbrev rsZHS : HmRowsZ (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=

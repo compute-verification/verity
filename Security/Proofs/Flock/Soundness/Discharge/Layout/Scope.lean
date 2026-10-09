@@ -69,4 +69,58 @@ theorem scopeOk_ports {c : Circuit} (h : scopeOk c = true) :
   intro p hp
   exact and_assoc.1 (h.2 p (Array.mem_toList_iff.1 hp))
 
+/-! ## Hidden outputs -/
+
+/-- **Every row is unsegmented, of `16 · words` bits in whole SHA-512 blocks, and each output row holds one output
+port**: a `sha512/row/v1` row or a `sha512/row/v2` bit row, each committed under its own prefix (`HmRow.prefixOf`),
+as C-Flock's composer writes a hidden-output statement's output rows (`out_row`, no `out_row_ports`). -/
+def wholeRows (c : Circuit) : Bool :=
+  c.ports.all (fun p => p.segs.isNone && p.bits == 16 * p.words && 2 * p.words == 128 * p.chunks) &&
+    c.outRowPorts == Array.replicate c.outPorts.size 1
+
+/-- **The hidden-output circuits `rs` covers**: `scopeOk`'s unit conditions, and every row a `sha512/row/v1` row
+(`v1Ports`) or every row whole (`wholeRows`). -/
+def scopeOkH (c : Circuit) : Bool :=
+  c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
+    (v1Ports c || wholeRows c)
+
+/-- **The rows `scopeOkH` admits**: every row a `sha512/row/v1` row, or every row whole with one output port per output
+row. -/
+def RowsH (c : Circuit) : Prop :=
+  (∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) ∨
+    ((∀ p ∈ c.ports.toList, p.segs = none ∧ p.bits = 16 * p.words ∧ 2 * p.words = 128 * p.chunks) ∧
+      c.outRowPorts = Array.replicate c.outPorts.size 1)
+
+theorem scopeOkH_of_scopeOk {c : Circuit} (h : scopeOk c = true) : scopeOkH c = true := by
+  unfold scopeOk at h
+  unfold scopeOkH
+  simp only [Bool.and_eq_true] at h ⊢
+  exact ⟨h.1, by rw [h.2, Bool.true_or]⟩
+
+/-- **`scopeOkH` gives `rs`'s circuit conditions**: `h1`, `ho` and `PortReads`. -/
+theorem scopeOkH_spec {c : Circuit} (hU : Built c.unit) (h : scopeOkH c = true) :
+    c.unit.inGroups.size = 1 ∧ c.outNet = c.unitNet ∧ PortReads c hU := by
+  unfold scopeOkH at h
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨⟨h1, ho⟩, hu⟩, hpr⟩, -⟩ := h
+  exact ⟨h1, ho, portReads_of_portReadsB hU hu hpr⟩
+
+/-- **`scopeOkH` gives `RowsH`.** -/
+theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) : RowsH c := by
+  unfold scopeOkH at h
+  simp only [Bool.and_eq_true, Bool.or_eq_true] at h
+  rcases h.2 with h1 | h2
+  · unfold v1Ports at h1
+    simp only [Array.all_eq_true', Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h1
+    exact Or.inl fun p hp => and_assoc.1 (h1 p (Array.mem_toList_iff.1 hp))
+  · unfold wholeRows at h2
+    simp only [Array.all_eq_true', Bool.and_eq_true, beq_iff_eq, Option.isNone_iff_eq_none] at h2
+    exact Or.inr ⟨fun p hp => and_assoc.1 (h2.1 p (Array.mem_toList_iff.1 hp)), h2.2⟩
+
+/-- Every row `RowsH` admits has `16 · words` bits. -/
+theorem RowsH.bits {c : Circuit} (h : RowsH c) : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := by
+  rcases h with h | h
+  · exact fun p hp => (h p hp).2.1
+  · exact fun p hp => (h.1 p hp).2.1
+
 end FlockSoundness.Discharge.Layout

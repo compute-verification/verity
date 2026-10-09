@@ -1544,10 +1544,15 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
    own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
    table row): `a shared-row public file (header shared_rows)`;
-7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
-   outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
-   read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
-   `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+7. `Layout.scopeOk` of the circuit, at hidden outputs `Layout.scopeOkH` (`ProvedScope.scopeOkAt`): a unit reading one
+   input group (`a unit reading <g> input groups`) that returns the outputs (`a circuit whose outputs a tail stage
+   computes (META out_net)`), of at most `2^32` rows, whose computed rows read only port bits among its inputs (`a unit
+   row reading an input column that is not a port bit`), and every row a `sha512/row/v1` row of `16 · words` bits in at
+   least one chunk (`a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk`). At hidden outputs
+   the rows may instead all be whole (`ProvedScope.wholeRows`): unsegmented, of `16 · words` bits in whole SHA-512
+   blocks, any mix of `sha512/row/v1` rows and `sha512/row/v2` bit rows each under its own prefix, with one output port
+   per output row (`..., nor every row unsegmented of 16 · words bits in whole SHA-512 blocks with one output port per
+   output row`). A bit row of a partial last block and a segmented row (`sha512/row-seg/v1`) stay refused.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's law
 (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified law, with or without
@@ -1559,8 +1564,8 @@ verdict is `refused: a session without a draw: every soundness claim is about a 
 check has passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's
 reason. A claim for the draw of every unit would cover it; none is proved.
 
-The soundness package proves `scopeOk` the computable check (`FailClosed.scopeOk_eq`), and `FailClosed.*`'s headlines
-are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
+The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`),
+and `FailClosed.*`'s headlines are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
 `--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, whose

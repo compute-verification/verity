@@ -89,35 +89,49 @@ theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : Chec
   refine hne (Eq.trans ?_ he)
   omega
 
-/-- **No output pair of Δ is at a unit slot's row**, for `sha512/row/v1` rows: every output row's bytes are within its
-compressions (`2 · words = 128 · chunks`). -/
+/-- **The rows `unitRowsFlat` reads**: every row a `sha512/row/v1` row, or every row unsegmented in whole SHA-512 blocks
+(`2 · words = 128 · chunks`). -/
+def FlatRows (c : Circuit) : Prop :=
+  (∀ p ∈ c.ports.toList, p.v2 = false) ∨ ∀ p ∈ c.ports.toList, p.segs = none ∧ 2 * p.words = 128 * p.chunks
+
+/-- **`FlatRows`' rows are unsegmented, in whole SHA-512 blocks**: a parsed `sha512/row/v1` row is (`portWords`,
+`v1Segs`). -/
+theorem FlatRows.whole {c : Circuit} (P : ParseFacts tags c) (h : FlatRows c) :
+    ∀ p ∈ c.ports.toList, p.segs = none ∧ 2 * p.words = 128 * p.chunks := by
+  rcases h with h | h
+  · exact fun p hp => ⟨P.v1Segs p hp (h p hp), P.portWords p hp (h p hp)⟩
+  · exact h
+
+/-- **No output pair of Δ is at a unit slot's row**, for unsegmented rows of whole SHA-512 blocks: every output row's
+bytes are within its compressions (`2 · words = 128 · chunks`). -/
 theorem outPairs_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : CheckFacts st.c)
-    (hsha : st.c.unitNet ≠ st.c.shaNet) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false)
+    (hsha : st.c.unitNet ≠ st.c.shaNet)
+    (hw : ∀ p ∈ st.c.ports.toList, p.segs = none ∧ 2 * p.words = 128 * p.chunks)
     (hle : st.c.outRowPorts.size ≤ st.c.ports.size) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
   have hp : HmOut.nIn st.c + j < st.c.ports.size := by unfold HmOut.nIn; omega
-  have hw := P.portWords _ (getElem_mem_toList' hp) (hv1 _ (getElem_mem_toList' hp))
+  obtain ⟨hs0, hw0⟩ := hw _ (getElem_mem_toList' hp)
   have e : st.c.ports.getD (HmOut.nIn st.c + j) default = st.c.ports[HmOut.nIn st.c + j]! := by
     rw [getElem!_pos st.c.ports _ hp, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp, Option.getD_some]
-  have hs : (st.c.ports.getD (HmOut.nIn st.c + j) default).segs = none := by
-    rw [e]; exact P.v1Segs _ (getElem_mem_toList' hp) (hv1 _ (getElem_mem_toList' hp))
+  have hs : (st.c.ports.getD (HmOut.nIn st.c + j) default).segs = none := by rw [e]; exact hs0
   rw [e] at hk
   exact deltaMsgCol_ne_unit L P C hsha hg hp hs (by omega) (Nat.mod_lt _ (by norm_num)) hs₀ hb
 
-/-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, for `sha512/row/v1` rows, when
-its Δ being `HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
+/-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, for `FlatRows`, when its Δ is
+`HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
 theorem unitRowsFlat (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
-    (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false) : UnitRowsFlat st := by
+    (hv : FlatRows st.c) : UnitRowsFlat st := by
   have s := Hidden.setupHidden_spec' h
   obtain ⟨hp, hcr⟩ := Hidden.parse_untyped ht s.parse
   have L := flat_layout ht h
   have F := flat_unitFacts ht h
+  have hw := hv.whole (parse_facts hp)
   intro s₀ hs₀ b hb r j hr
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
-    rw [hr]; exact outPairs_ne_unit L F.parse F.check F.sha hv1 (checkRows_le hcr) hq hs₀ hb
+    rw [hr]; exact outPairs_ne_unit L F.parse F.check F.sha hw (checkRows_le hcr) hq hs₀ hb
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by rw [s.da, Hidden.hidden_delta']
   have hdb : st.db = (HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray := by rw [s.db, Hidden.hidden_delta']
   refine ⟨?_, ?_⟩

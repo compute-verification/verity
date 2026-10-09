@@ -6,12 +6,16 @@
 //! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, so the Lean
 //! check's rules on those hold of every statement it sets up, as do its parse and its public file's load.
 
-use crate::circuit::{port_cols, Composite, Instances, STATEMENT};
+use crate::circuit::{port_cols, Composite, Instances, Port, STATEMENT};
 use crate::ir_block::IrUnitNet;
 
 const WORD: usize = 128;
 
 const UNCOVERED: &str = ": a statement form the soundness proof does not cover";
+
+/// `ProvedScope.scopeWhy true`'s rows clause.
+const ROWS_WHY: &str = "a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk, nor every row \
+                        unsegmented of 16 · words bits in whole SHA-512 blocks with one output port per output row";
 
 /// `ProvedScope.refusal`: the verdict's reason.
 pub fn refusal(why: &str) -> String {
@@ -38,8 +42,22 @@ pub fn port_reads(net: &IrUnitNet) -> bool {
     (n..net.const_pos).all(|r| row(&net.a, r).iter().chain(row(&net.b, r)).all(|&x| x >= n || mask[x]))
 }
 
-/// `ProvedScope.scopeWhy` of a circuit outside `scopeOk`, `None` inside: the unit reads only its leaf group, returns the
-/// outputs, has at most `2^32` rows and reads only port bits among its inputs, and every row is a `sha512/row/v1` row.
+/// `ProvedScope.v1Ports`: every row is a `sha512/row/v1` row of `16 · words` bits in at least one chunk.
+pub fn v1_ports(ports: &[Port]) -> bool {
+    ports.iter().all(|p| !p.v2 && p.segs.is_none() && p.bits == 16 * p.words && p.comps > 0)
+}
+
+/// `ProvedScope.wholeRows`: every row is unsegmented, of `16 · words` bits in whole SHA-512 blocks, and each output row
+/// holds one output port: `out_row_ports` each output row's output ports, of `n_out` output ports.
+pub fn whole_rows(ports: &[Port], out_row_ports: &[usize], n_out: usize) -> bool {
+    ports.iter().all(|p| p.segs.is_none() && p.bits == 16 * p.words && 2 * p.words == WORD * p.comps)
+        && out_row_ports.len() == n_out
+        && out_row_ports.iter().all(|&k| k == 1)
+}
+
+/// `ProvedScope.scopeWhy true` of a circuit outside `scopeOkH`, `None` inside (every statement the live build sets up has
+/// hidden outputs): the unit reads only its leaf group, returns the outputs, has at most `2^32` rows and reads only port
+/// bits among its inputs, and every row is a `sha512/row/v1` row or every row is whole ([`whole_rows`]).
 pub fn circuit_why(c: &Composite) -> Option<String> {
     let unit = c.unit();
     if unit.in_groups.len() != 1 {
@@ -50,8 +68,8 @@ pub fn circuit_why(c: &Composite) -> Option<String> {
         Some(format!("a unit of 2^{} rows", unit.unit_log))
     } else if !port_reads(unit) {
         Some("a unit row reading an input column that is not a port bit".into())
-    } else if !c.ports.iter().all(|p| !p.v2 && p.segs.is_none() && p.bits == 16 * p.words && p.comps > 0) {
-        Some("a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk".into())
+    } else if !(v1_ports(&c.ports) || whole_rows(&c.ports, &c.out_row_ports, c.out_words.len())) {
+        Some(ROWS_WHY.into())
     } else {
         None
     }
@@ -155,5 +173,28 @@ mod tests {
         // a port past the first word's bits
         let two = vec![Group { col: 0, words: 1, bits: vec![16, 16] }];
         assert!(port_reads(&net(two, 1, vec![(vec![31], vec![16])])));
+    }
+
+    fn port(words: usize, comps: usize, bits: usize, v2: bool, segs: Option<Vec<(usize, usize)>>) -> Port {
+        Port { name: "p".into(), words, comps, bits, v2, segs }
+    }
+
+    #[test]
+    fn rows_are_v1_or_whole() {
+        let v1 = || port(64, 1, 1024, false, None);
+        let v2_whole = || port(128, 2, 2048, true, None);
+        // v1 rows need no output row per output port
+        assert!(v1_ports(&[v1(), v1()]) && !whole_rows(&[v1(), v1()], &[2], 2));
+        assert!(!v1_ports(&[v1(), v2_whole()]) && whole_rows(&[v1(), v2_whole()], &[1], 1));
+        // a run of two output ports in one row, an output row short of its ports, a bit row of a partial block, a segment
+        assert!(!whole_rows(&[v1(), v2_whole()], &[2], 2));
+        assert!(!whole_rows(&[v1(), v2_whole()], &[1], 2));
+        assert!(!whole_rows(&[v1(), port(100, 2, 1600, true, None)], &[1], 1));
+        assert!(!whole_rows(&[v1(), port(128, 2, 2048, false, Some(vec![(2048, 2)]))], &[1], 1));
+        assert!(!v1_ports(&[port(0, 0, 0, false, None)]));
+        assert_eq!(refusal(ROWS_WHY),
+                   "refused: a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk, nor every row \
+                    unsegmented of 16 · words bits in whole SHA-512 blocks with one output port per output row: a statement form \
+                    the soundness proof does not cover");
     }
 }

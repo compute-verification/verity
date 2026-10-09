@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
 
 Integrate's `sitesAt` and `sitesAt_parse` (`Integrate/Sites.lean`) at the hidden tables (`planAtH`, `tabAtH`). A drawn
 table's acceptance (`TableH.acc`) is its `Stmt.setupHidden` run, with the layout [wave2-hidden]'s `Hidden.hidden_layout`
-gives, its unit slots' rows its flat twin's (`unitRowsFlat`, from `Hidden.hidden_delta'`, for `sha512/row/v1` rows), and
+gives, its unit slots' rows its flat twin's (`unitRowsFlat`, from `Hidden.hidden_delta'`, at `FlatRows`), and
 the table's statement `stmtOf` of it, which is the layout's block R1CS (`Integrate.model_eq`).
 
 `sitesAtH` holds each drawn unit's acceptance, template instance and block; every acceptance parses the session's one
@@ -22,7 +22,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
-  (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false)
+  (hv1 : FlatRows c)
 
 namespace TableH
 

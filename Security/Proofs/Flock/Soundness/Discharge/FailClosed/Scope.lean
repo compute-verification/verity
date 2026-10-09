@@ -15,8 +15,9 @@ the draw-less session's refusal, and refuses the session when it fails. So what 
 from the check: an untyped statement (`Checks.typed`), retained rounds and `hm96-sha512/v1` leaves, at most one table
 without `--zk`, the circuit and public file as the headlines read them (`circ`, `pubOf`), no shared-row public file
 unless the session is `--zk`, the statement has hidden outputs and the verifier holds its own registered reads
-(`Checks.tables`; without them, `Checks.tables_none`) and `Layout.scopeOk` (`Checks.scope`, by `scopeOk_eq`: the
-executable's `ProvedScope.scopeOk` is `Layout.scopeOk`, its port bits a mask). The unconditional headlines
+(`Checks.tables`; without them, `Checks.tables_none`), and `Layout.scopeOk` at public outputs (`Checks.scope`, by
+`scopeOk_eq`: the executable's `ProvedScope.scopeOk` is `Layout.scopeOk`, its port bits a mask) and `Layout.scopeOkH` at
+hidden outputs (`Checks.scopeH`, by `scopeOkH_eq`). The unconditional headlines
 (`FailClosed.Composed`, `FailClosed.ZkHidden`, `FailClosed.Exec`) are over `Verifies`, with no hypothesis on the
 statement's form, and so is the registered one (`FailClosed.ZkRegistered`) over `VerifiesZKR`.
 
@@ -80,6 +81,11 @@ theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portRead
 theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := by
   simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports]
 
+/-- **The executable's `scopeOkH` is `Layout.scopeOkH`.** -/
+theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c := by
+  simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
+    ProvedScope.wholeRows, Layout.wholeRows]
+
 /-! ## The check, and what it gives -/
 
 /-- **The verifier's statement check passes** at tags `t` (the session's: under `--zk`, `zkTags`'s), with no public input
@@ -105,7 +111,7 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
     (t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
       (zk = true ∨ count ≤ 1)) ∧
     ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧
-      (pub.tables = none ∨ ProvedScope.sharedRowsOk t zk reg = true) ∧ ProvedScope.scopeOk c = true := by
+      (pub.tables = none ∨ ProvedScope.sharedRowsOk t zk reg = true) ∧ ProvedScope.scopeOkAt t.hiddenOutputs c = true := by
   unfold ProvedScope.check at h
   split at h
   · cases h
@@ -180,10 +186,24 @@ theorem tables : (pubOf t I).tables = none ∨ (zk = true ∧ t.hiddenOutputs = 
 theorem tables_none (hr : reg = false) : (pubOf t I).tables = none :=
   h.tables.resolve_right fun ⟨_, _, h'⟩ => by rw [hr] at h'; cases h'
 
-theorem scope : Layout.scopeOk (circ t I) = true := by
+theorem scopeAt : ProvedScope.scopeOkAt t.hiddenOutputs (circ t I) = true := by
   obtain ⟨c, -, hc, -, -, hs⟩ := (check_ok h).2
   have : circ t I = c := by unfold circ; rw [hc]
-  rw [this, ← scopeOk_eq, hs]
+  rw [this, hs]
+
+/-- At public outputs, `Layout.scopeOk`. -/
+theorem scope (hh : t.hiddenOutputs = false) : Layout.scopeOk (circ t I) = true := by
+  have h' := h.scopeAt
+  rw [hh] at h'
+  have h'' : ProvedScope.scopeOk (circ t I) = true := h'
+  rwa [scopeOk_eq] at h''
+
+/-- At hidden outputs, `Layout.scopeOkH`. -/
+theorem scopeH (hh : t.hiddenOutputs = true) : Layout.scopeOkH (circ t I) = true := by
+  have h' := h.scopeAt
+  rw [hh] at h'
+  have h'' : ProvedScope.scopeOkH (circ t I) = true := h'
+  rwa [scopeOkH_eq] at h''
 
 theorem parse (hh : t.hiddenOutputs = false) : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
   have := h.circuit_ok
@@ -213,7 +233,10 @@ theorem built : Built (circ t I).unit := by
   obtain ⟨ls, hls⟩ := P.check
   exact unit_built P (check_facts P.typed hls)
 
-theorem outNet : (circ t I).outNet = (circ t I).unitNet := (Layout.scopeOk_spec h.built h.scope).2.1
+theorem outNet : (circ t I).outNet = (circ t I).unitNet := by
+  cases hh : t.hiddenOutputs
+  · exact (Layout.scopeOk_spec h.built (h.scope hh)).2.1
+  · exact (Layout.scopeOkH_spec h.built (h.scopeH hh)).2.1
 
 end Checks
 
@@ -286,7 +309,13 @@ theorem ScopeZ.built {I : Inputs} (h : ScopeZ I) : Built (circZ I).unit := Check
 
 theorem ScopeZ.tables {I : Inputs} (h : ScopeZ I) : (pubZ I).tables = none := Checks.tables_none h rfl
 
-theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) : Layout.scopeOk (circZ I) = true := Checks.scope h
+theorem ScopeZ.scope {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
+    Layout.scopeOk (circZ I) = true := Checks.scope h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+theorem ScopeZ.scopeH {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = true) :
+    Layout.scopeOkH (circZ I) = true := Checks.scopeH h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+theorem ScopeZ.outNet {I : Inputs} (h : ScopeZ I) : (circZ I).outNet = (circZ I).unitNet := Checks.outNet h
 
 theorem ScopeZR.typed {I : Inputs} (h : ScopeZR I) : I.tags.typed = false := by
   rw [← zkTags_typed]; exact Checks.typed h
@@ -307,7 +336,10 @@ theorem ScopeZR.loadH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = 
 
 theorem ScopeZR.built {I : Inputs} (h : ScopeZR I) : Built (circZ I).unit := Checks.built h
 
-theorem ScopeZR.scope {I : Inputs} (h : ScopeZR I) : Layout.scopeOk (circZ I) = true := Checks.scope h
+theorem ScopeZR.scopeH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
+    Layout.scopeOkH (circZ I) = true := Checks.scopeH h (by rw [zkTags_hiddenOutputs]; exact hh)
+
+theorem ScopeZR.outNet {I : Inputs} (h : ScopeZR I) : (circZ I).outNet = (circZ I).unitNet := Checks.outNet h
 
 /-- **The check with the verifier's registered reads is the check without them at public outputs**: `sharedRowsOk`
 needs hidden outputs. -/
@@ -342,7 +374,11 @@ theorem Scope.built {I : Inputs} (h : Scope I) : Built (circS I).unit := Checks.
 
 theorem Scope.tables {I : Inputs} (h : Scope I) : (pubS I).tables = none := Checks.tables_none h rfl
 
-theorem Scope.scope {I : Inputs} (h : Scope I) : Layout.scopeOk (circS I) = true := Checks.scope h
+theorem Scope.scope {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
+    Layout.scopeOk (circS I) = true := Checks.scope h hh
+
+theorem Scope.scopeH {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = true) :
+    Layout.scopeOkH (circS I) = true := Checks.scopeH h hh
 
 theorem Scope.outNet {I : Inputs} (h : Scope I) : (circS I).outNet = (circS I).unitNet := Checks.outNet h
 
