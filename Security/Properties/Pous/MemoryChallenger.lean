@@ -36,7 +36,7 @@ def VerdictAccepts : Prop :=
     (verdict schemes trusted expected s c openings).accepted = true → Accepted schemes trusted expected s c openings
 
 def JudgeAccepts : Prop :=
-  ∀ (r : Judge.Record) (v : Verdict), Judge.judge r = .ok v → v.accepted = true →
+  ∀ (r : Judge.Record), Verdict.accepted <$> Judge.judge r = .ok true →
     ∃ schemes, Judge.schemesOf r.schemes = .ok schemes ∧
       Accepted schemes r.trusted.toList r.expected.find r.signed r.commitment r.openings
 

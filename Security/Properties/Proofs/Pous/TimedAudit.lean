@@ -370,7 +370,7 @@ theorem fileLeaves_entry {blocks : Nat} {leafBytes : ByteArray} (h : leafBytes.s
   intro i hi
   simp only [fileLeaves, Array.size_map, Array.size_range] at hi
   simp only [fileLeaves, Array.getElem_map, Array.getElem_range, ByteArray.size_extract, Merkle.DIGEST] at h ⊢
-  have : 64 * (i + 1) ≤ blocks * 64 := by nlinarith
+  have : 64 * (i + 1) ≤ blocks * 64 := by rw [Nat.mul_comm blocks]; exact Nat.mul_le_mul_left 64 hi
   omega
 
 theorem leaves_entry (salt : ByteArray) (C : Array (Array ByteArray)) :

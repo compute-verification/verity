@@ -195,14 +195,13 @@ theorem verdictAccepts : VerdictAccepts := by
   exact ⟨hco.1.1, ⟨o, hmem, hoj, hco.1.2, hco.2⟩, hd.1, hd.2, ht.1, ht.2⟩
 
 theorem judgeAccepts : JudgeAccepts := by
-  intro r v hj hv
+  intro r hj
   unfold Judge.judge at hj
   cases hs : Judge.schemesOf r.schemes with
   | error e => simp only [hs] at hj; cases hj
   | ok schemes =>
     simp only [hs] at hj
     refine ⟨schemes, rfl, verdictAccepts _ _ _ _ _ _ ?_⟩
-    cases hj
-    exact hv
+    simpa [Functor.map, Except.map, pure, Except.pure, bind, Except.bind] using hj
 
 end MemoryChallenger.Properties.SecurityProofs
