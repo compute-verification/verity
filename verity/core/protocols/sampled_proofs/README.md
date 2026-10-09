@@ -81,8 +81,15 @@ captured from serving, and says so (`window.kind = "stand-in"`).
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
   prove that its draws escape no more often than the modelled laws, and `Audit/FlockWork.lean` that its sizes are the
   model's.
-- **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit: `registration`, `draw` (the draw's checks, not
-  a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
+- **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
+  `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
+  (`check`), `matches_public`, `check_draw`, `check_proved` and the whole audit record (`audit_record`). Its one line
+  `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
+  beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
+  `benchmarks/one_stage` call it. The two are held to each other by
+  `verity/core/service/sampled_proofs/tests/test_difftest.py`.
+- **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
+  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is the two-stage law and the
   verifier's randomness, and
   `verity.core.protocols.sampled_proofs.plan` holds verification plans over IR Programs.
@@ -129,7 +136,10 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
   (the Lean verifier's `--registered`), `verify_read`.
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   law as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
-- `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code.
+- `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
+  (and `verifiers`, both verifiers' outcomes, from `verifier`).
+- `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved` and `audit_record` by the
+  Lean and the Python, `RECORD_VERDICT` naming whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `two_stage`: `TwoStageLaw` of `Stage`s and its `profile`; stage 1's draws `select_replay_units` and `draw_first` (a
   one-stage law's draw object over the RUs, with `closure_of` for a work law's closure), stage 2's `select_proof_units`,
@@ -225,8 +235,10 @@ only inside a proof (`one_stage.registered`).
   and one whose units it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
 - The audit record holds `session_registered`, the roots the verifier of record opened the reads against, to the
   registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
-  (`audit.session_registered`) reads them off the accepted verdicts of record (the Lean verdict's `registered`), never
-  off the registration; `benchmarks/one_stage`'s driver passes it.
+  (`audit.session_registered(verdicts, registration)`) reads them off the accepted verdicts of record (the Lean
+  verdict's `registered`), never off the registration, for the registration's own values (its roots' ports and
+  registered values), as the service splits the sessions' roots between a boundary and its interiors;
+  `verifier.audit_record` reads them so on both sides.
 
 Pinned by `tests/test_registered.py` and, for the Lean verifier's check, `verity/ml/flock/tests/test_lean_registered_reads.py`.
 
