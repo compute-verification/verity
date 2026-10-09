@@ -164,46 +164,23 @@ __global__ void sha512_merkle_level(uint8_t* tree, long long read_start, long lo
 
 // ---- hm96-sha512/v1 leaves (verity.ml.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
 //   x = the SHA-512 leaf above; y = the leaf's 192-byte salt; c = SHA-512(salt_prefix || y); b = x XOR M(key) y;
-//   leaf = SHA-512(leaf_prefix || b || c). Salts are ChaCha20 (zk_hooks::LeafSalts): leaf i of a tree with nonce id is blocks
-//   3i, 3i+1, 3i+2 under the proof's salt key; the device expands them where it finishes the leaves, the host only an opening's.
+//   leaf = SHA-512(leaf_prefix || b || c). Salts are the host's (zk_hooks::LeafSalts, read from the OS): the tree callback hands
+//   tree k's salts (192 bytes per leaf, in host memory until the proof ends); the device reads them HM96_CHUNK leaves at a time
+//   where it finishes the leaves, and an opening's are copied from the host's.
 
-typedef long long (*Hm96TreeCb)(void* ctx, int tree);
+typedef const uint8_t* (*Hm96TreeCb)(void* ctx, int tree, long long leaves);
 
-struct Hm96Key { uint32_t k[8]; };
-
-__host__ __device__ inline uint32_t cc_rotl(uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
-#define CC_QR(a, b, c, d) { a += b; d = cc_rotl(d ^ a, 16); c += d; b = cc_rotl(b ^ c, 12); \
-                             a += b; d = cc_rotl(d ^ a, 8);  c += d; b = cc_rotl(b ^ c, 7); }
-
-// One ChaCha20 block: "expand 32-byte k", the key, a 64-bit counter (words 12-13), a 64-bit nonce (words 14-15); out = 16
-// little-endian words (zk_hooks::chacha20_block).
-__host__ __device__ inline void chacha20_block(const Hm96Key& key, uint64_t counter, uint64_t nonce, uint32_t out[16]) {
-    uint32_t s[16] = {0x61707865u, 0x3320646eu, 0x79622d32u, 0x6b206574u,
-                      key.k[0], key.k[1], key.k[2], key.k[3], key.k[4], key.k[5], key.k[6], key.k[7],
-                      (uint32_t)counter, (uint32_t)(counter >> 32), (uint32_t)nonce, (uint32_t)(nonce >> 32)};
-    uint32_t x[16];
-    for (int i = 0; i < 16; i++) x[i] = s[i];
-    for (int r = 0; r < 10; r++) {
-        CC_QR(x[0], x[4], x[8], x[12]); CC_QR(x[1], x[5], x[9], x[13]); CC_QR(x[2], x[6], x[10], x[14]); CC_QR(x[3], x[7], x[11], x[15]);
-        CC_QR(x[0], x[5], x[10], x[15]); CC_QR(x[1], x[6], x[11], x[12]); CC_QR(x[2], x[7], x[8], x[13]); CC_QR(x[3], x[4], x[9], x[14]);
-    }
-    for (int i = 0; i < 16; i++) out[i] = x[i] + s[i];
-}
-
-// Leaf i's salt as 48 little-endian words.
-__host__ __device__ inline void hm96_salt(const Hm96Key& key, uint64_t nonce, long long i, uint32_t y[48]) {
-    for (int j = 0; j < 3; j++) chacha20_block(key, 3 * (uint64_t)i + j, nonce, y + 16 * j);
-}
+static const long long HM96_CHUNK = 1 << 18;   // leaves per upload of a tree's salts (48 MiB on the device)
 
 struct Hm96Ctx {
     Hm96TreeCb tree_cb = nullptr;
     void* ctx = nullptr;
     int trees = 0;
     long long level0_leaves = 0;
-    Hm96Key key{};
     uint64_t* d_tables = nullptr;   // [192][256][8]: per salt byte and value, the XOR of its set bits' columns
     uint64_t* d_mid = nullptr;      // SHA-512 states after the salt prefix block, then after the leaf prefix block
-    std::map<const uint8_t*, uint64_t> nonce;   // device tree -> its salt-stream nonce
+    uint8_t* d_salts = nullptr;     // HM96_CHUNK leaves' salts, zeroed when the proof ends
+    std::map<const uint8_t*, std::pair<const uint8_t*, long long>> salts;   // device tree -> its host salts and leaves
 };
 static Hm96Ctx g_hm96;
 
@@ -218,12 +195,18 @@ __global__ void hm96_midstates(const uint8_t* prefixes, uint64_t* mid) {
     }
 }
 
-__global__ void hm96_finish_leaves(uint8_t* tree, Hm96Key key, uint64_t nonce, const uint64_t* __restrict__ tables,
-                                   long long n, const uint64_t* __restrict__ mid) {
-    long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+// Leaves [base, n) of `tree`, leaf i's salt at salts[48 (i - base)] (little-endian words, the host's bytes).
+__global__ void hm96_finish_leaves(uint8_t* tree, const uint32_t* __restrict__ salts, long long base, long long n,
+                                   const uint64_t* __restrict__ tables, const uint64_t* __restrict__ mid) {
+    long long i = base + blockIdx.x * (long long)blockDim.x + threadIdx.x;
     if (i >= n) return;
     uint32_t yw[48];
-    hm96_salt(key, nonce, i, yw);
+    const uint4* sy = (const uint4*)(salts + 48 * (i - base));
+#pragma unroll
+    for (int q = 0; q < 12; q++) {
+        const uint4 v = __ldg(sy + q);
+        yw[4 * q] = v.x; yw[4 * q + 1] = v.y; yw[4 * q + 2] = v.z; yw[4 * q + 3] = v.w;
+    }
     // salt byte p is byte p % 4 of word p / 4 (little-endian); unrolled, so the salt stays in registers and the table rows'
     // loads (64 bytes each, 16 at a time) are independent
     uint64_t m[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -267,33 +250,42 @@ __global__ void hm96_finish_leaves(uint8_t* tree, Hm96Key key, uint64_t nonce, c
     s512_out(lt, tree + i * 64);
 }
 
-// The salts of `d_tree`'s leaves at `q` (192 bytes each, in order), recomputed on the host; empty when unsalted.
+// The salts of `d_tree`'s leaves at `q` (192 bytes each, in order), copied from the host's; empty when unsalted.
 inline std::vector<uint8_t> hm96_opened_salts(const uint8_t* d_tree, const std::vector<size_t>& q) {
     std::vector<uint8_t> out;
     if (!g_hm96.tree_cb) return out;
-    auto it = g_hm96.nonce.find(d_tree);
-    if (it == g_hm96.nonce.end()) { fprintf(stderr, "hm96: an opening of a tree built without salts\n"); abort(); }
+    auto it = g_hm96.salts.find(d_tree);
+    if (it == g_hm96.salts.end()) { fprintf(stderr, "hm96: an opening of a tree built without salts\n"); abort(); }
     out.resize(q.size() * 192);
-    uint32_t y[48];
     for (size_t k = 0; k < q.size(); k++) {
-        hm96_salt(g_hm96.key, it->second, (long long)q[k], y);
-        memcpy(out.data() + 192 * k, y, 192);
+        if ((long long)q[k] >= it->second.second) { fprintf(stderr, "hm96: an opening past the tree's leaves\n"); abort(); }
+        memcpy(out.data() + 192 * k, it->second.first + 192 * q[k], 192);
     }
-    volatile uint32_t* vy = y;
-    for (int j = 0; j < 48; j++) vy[j] = 0;
     return out;
 }
 
-// One proof's hm96 context (a null tree callback leaves the build unsalted); the salt key is zeroed when it ends. The context is
-// process-global: a second install while one is live is refused (two proofs would share a key, a tree counter and level 0).
+// Tree k's salts from the host (the level-0 tree's for k = 0: only a tree of its size takes them).
+inline const uint8_t* hm96_tree_salts(int k, long long num_leaves) {
+    if (k == 0 && num_leaves != g_hm96.level0_leaves) {
+        fprintf(stderr, "hm96: tree 0 takes level 0's salts (%lld leaves), refused for a tree of %lld\n", g_hm96.level0_leaves, num_leaves);
+        abort();
+    }
+    const uint8_t* h = g_hm96.tree_cb(g_hm96.ctx, k, num_leaves);
+    if (!h) { fprintf(stderr, "hm96: the host gave no salts for tree %d\n", k); abort(); }
+    return h;
+}
+
+// One proof's hm96 context (a null tree callback leaves the build unsalted); the device's copy of the salts is zeroed when it
+// ends. The context is process-global: a second install while one is live is refused (two proofs would share a tree counter and
+// level 0).
 struct Hm96Guard {
     bool mine = false;
-    Hm96Guard(Hm96TreeCb tree_cb, void* ctx, const uint8_t* key, const uint8_t* prefixes, const uint64_t* tables, long long level0_leaves) {
+    Hm96Guard(Hm96TreeCb tree_cb, void* ctx, const uint8_t* prefixes, const uint64_t* tables, long long level0_leaves) {
         if (!tree_cb) return;
         if (g_hm96.tree_cb) { fprintf(stderr, "hm96: a salt context is already installed (one proof at a time per process)\n"); abort(); }
         mine = true;
-        g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.nonce.clear(); g_hm96.level0_leaves = level0_leaves;
-        memcpy(g_hm96.key.k, key, 32);
+        g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = level0_leaves;
+        cudaMalloc(&g_hm96.d_salts, (size_t)HM96_CHUNK * 192);
         size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
         cudaMalloc(&g_hm96.d_tables, tb);
         cudaMemcpy(g_hm96.d_tables, tables, tb, cudaMemcpyHostToDevice);
@@ -309,10 +301,9 @@ struct Hm96Guard {
         if (!mine) return;
         if (g_hm96.d_tables) cudaFree(g_hm96.d_tables);
         if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
-        volatile uint32_t* vk = g_hm96.key.k;
-        for (int j = 0; j < 8; j++) vk[j] = 0;
-        g_hm96.tree_cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr;
-        g_hm96.trees = 0; g_hm96.nonce.clear(); g_hm96.level0_leaves = 0;
+        if (g_hm96.d_salts) { cudaMemset(g_hm96.d_salts, 0, (size_t)HM96_CHUNK * 192); cudaFree(g_hm96.d_salts); }
+        g_hm96.tree_cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr; g_hm96.d_salts = nullptr;
+        g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = 0;
     }
 };
 
@@ -328,14 +319,15 @@ inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long n
         sha512_merkle_leaves_bytes<<<(unsigned)blocks, tpb>>>(d_data, d_tree, num_leaves, leaf_size);
     }
     if (g_hm96.tree_cb) {
-        uint64_t nonce = (uint64_t)g_hm96.tree_cb(g_hm96.ctx, g_hm96.trees++);
-        if (nonce == 0 && num_leaves != g_hm96.level0_leaves) {
-            fprintf(stderr, "hm96: salt stream 0 is level 0's (%lld leaves), refused for a tree of %lld\n", g_hm96.level0_leaves, num_leaves);
-            abort();
+        const uint8_t* h = hm96_tree_salts(g_hm96.trees++, num_leaves);
+        // each piece's copy waits for the previous piece's kernel (one stream), so one device buffer serves the tree
+        for (long long at = 0; at < num_leaves; at += HM96_CHUNK) {
+            const long long n = num_leaves - at < HM96_CHUNK ? num_leaves - at : HM96_CHUNK;
+            cudaMemcpy(g_hm96.d_salts, h + 192 * at, (size_t)n * 192, cudaMemcpyHostToDevice);
+            hm96_finish_leaves<<<(unsigned)((n + tpb - 1) / tpb), tpb>>>(d_tree, (const uint32_t*)g_hm96.d_salts, at, at + n,
+                                                                         g_hm96.d_tables, g_hm96.d_mid);
         }
-        hm96_finish_leaves<<<(unsigned)((num_leaves + tpb - 1) / tpb), tpb>>>(d_tree, g_hm96.key, nonce, g_hm96.d_tables, num_leaves,
-                                                                                g_hm96.d_mid);
-        g_hm96.nonce[d_tree] = nonce;
+        g_hm96.salts[d_tree] = {h, num_leaves};
     }
     long long read_start = 0, read_len = num_leaves;
     while (read_len > 1) {
