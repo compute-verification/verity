@@ -1,8 +1,7 @@
 """Replay every recorded one-stage run through sampled proofs' Lean protocol and today's Python, against the verdict the
 run recorded.
 
-    python benchmarks/one_stage/replay.py --index INDEX.json --runs DIR [--fetch] --lean EXE [--r7-lean EXE] --out DIR \\
-      [--only RUN ...]
+    python benchmarks/one_stage/replay.py --index INDEX.json --runs DIR [--fetch] --lean EXE --out DIR [--only RUN ...]
 
 * **Index.** `one-stage-run/v0` rows (`research data select` of every run that holds one-stage registration or audit
   records): each run's art, the registration formats it holds and the Python verdicts it recorded.
@@ -12,7 +11,8 @@ run recorded.
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
   draw), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
   names, the domains derived again), and how each was found (`provenance`). Floats in verdicts and statements, which
-  neither side reads, are written as strings.
+  neither side reads, are written as strings. The registered roots the record's `registered` check reads are the
+  verdicts' own, for the registration's own values (`audit.session_registered(verdicts, registration)`), on both sides.
 * **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the draw's, the record's: proved,
   receipt, served, roots, registered; the verdicts') becomes the base case with the one change the run made; a refusal
   by a check the protocol does not make (the public file's own match, `flock-verify`'s U1-U3 and roots, M0's selftests
@@ -68,8 +68,8 @@ STAGES = ("registration", "draw", "checks", "verdict")
 REGISTRATION = ("registration",)
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
 #: the evidence of a case that holds the registration alone: no draw, so both sides stop at the draw's check
-NO_DRAW = {"draw": None, "instances": 0, "proved_units": [], "receipt": {}, "served": None, "session_registered": None,
-           "session_roots": None, "sessions": [], "statement": {}, "verdicts": {}}
+NO_DRAW = {"draw": None, "instances": 0, "proved_units": [], "receipt": {}, "served": None, "session_roots": None,
+           "sessions": [], "statement": {}, "verdicts": {}}
 
 
 class Missing(Exception):
@@ -487,8 +487,8 @@ def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None,
 def evidence(a: dict, *, instances: int, sessions: list[str], session_roots: dict | None, served: list[int] | None) -> dict:
     """The evidence of a recorded audit record `a` (what `audit_record` was handed)."""
     return {"draw": a["draw"], "instances": instances, "proved_units": a["proved_units"], "receipt": a["receipt"],
-            "served": served, "session_registered": audit.session_registered(a["verdicts"]),
-            "session_roots": session_roots, "sessions": sessions, "statement": a["statement"], "verdicts": a["verdicts"]}
+            "served": served, "session_roots": session_roots, "sessions": sessions, "statement": a["statement"],
+            "verdicts": a["verdicts"]}
 
 
 def recorded_audit(a: dict, source: str) -> dict:
@@ -540,7 +540,8 @@ def python(c: Case) -> dict:
     if not dv.ok:
         return out("reject", f"draw: {', '.join(dv.codes)}")
     a = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
-                           e["verdicts"], delta, e["sessions"], e["served"], e["session_roots"], e["session_registered"])
+                           e["verdicts"], delta, e["sessions"], e["served"], e["session_roots"],
+                           audit.session_registered(e["verdicts"], rec))
     failed = [k for k in CHECKS if k in a["checks"] and not a["checks"][k]["ok"]]
     if failed:
         return out("reject", f"the audit's checks failed: {', '.join(failed)}")
@@ -601,9 +602,7 @@ def against(c: Case, outcome: dict) -> str:
     return "same-verdict"
 
 
-def compare(c: Case, lean: dict | None, py: dict) -> dict:
-    if lean is None:
-        return {"python_recorded": against(c, py)} if c.recorded is not None else {}
+def compare(c: Case, lean: dict, py: dict) -> dict:
     hl, hp = held(c, lean), held(c, py)
     strip = lambda o: {k: v for k, v in o.items() if k != "reason"}  # noqa: E731
     lp = "same" if hl == hp else ("same-verdict" if strip(hl) == strip(hp) else "differ")
@@ -776,7 +775,10 @@ def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable
                                                       "served": served})
     vs = c.evidence["verdicts"]
     port = next(iter(session_roots or {}), None)
-    opened = c.evidence["session_registered"] or {}
+    value = next(iter(audit.session_registered(vs, c.rec) or {}), None)
+    other_root = {k: {**x, "registered": {p: {**r, "root": "00" * 64} if r["value"] == value else r
+                                          for p, r in x["registered"].items()}}
+                  if x.get("of_record") and isinstance(x.get("registered"), dict) else x for k, x in vs.items()}
     shared: dict[str, Callable[[dict], Case]] = {
         "verifier-of-record-did-not-run (C2)": lambda v: an.but(
             "verifier-of-record-did-not-run (C2)", "negative", recorded_failed(v, src),
@@ -789,7 +791,8 @@ def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable
             evidence={"session_roots": {**(session_roots or {}), port: "00" * 64}}),
         "registered-read-opened-against-another-root": lambda v: an.but(
             "registered-read-opened-against-another-root", "negative", recorded_failed(v, src),
-            evidence={"session_registered": {**opened, next(iter(opened), ""): "00" * 64}}),
+            evidence={"verdicts": other_root},
+            provenance={"change": f"the verdicts of record report {value}'s reads opened against another root"}),
     }
     if served is not None:
         other = next(u for u in range(c.rec["population"]) if u not in set(served))
@@ -1349,9 +1352,9 @@ def registered_gemm(run: Run) -> Iterator[Case]:
     parameter W (`pos` the reads of `stage/registered.json`). Windows register W in a `verity/registration/v2` record (R7:
     the verifier expects `{W: K}`, and a later window's log holds the earlier windows' records), baselines in a v1 record
     that registers nothing; every record also registers its statement's roots under M0's set-bound domains over the public
-    file's shared-row tables. The audit took the sessions, their roots (the LIVE line's) and the roots the Lean verdict
-    opened registered reads against, not the served draw; `audit_negatives` re-decided it with the record's roots as the
-    sessions'."""
+    file's shared-row tables. The audit took the sessions and their roots (the LIVE line's), not the served draw, and read
+    the roots the Lean verdict opened registered reads against; `audit_negatives` re-decided it with the record's roots as
+    the sessions'."""
     from verity_numerical.bench.input_sets import InputSet
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.program import Program
@@ -1514,8 +1517,8 @@ def served_window(run: Run) -> Iterator[Case]:
     (`outcome-<case>/`: honest, the selftest build's cases, the other request's proof), each its own audit record of the
     request's registration (a stream of its own, order 0). Before the proof service (`verity/one-stage/audit/v0`) the
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
-    is the service's and the audit took the delivered sessions. Neither took the served draw, the sessions' roots or
-    registered reads."""
+    is the service's and the audit took the delivered sessions. Neither took the served draw or the sessions' roots, and
+    no verdict of record reports registered reads."""
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
@@ -1599,7 +1602,6 @@ def served_window(run: Run) -> Iterator[Case]:
             raise Gap(f"{path}: not the request's registration")
         sessions = list(body.get("sessions") or []) if service else []
         e = evidence(a, instances=len(a["proved_units"]), sessions=sessions, session_roots=None, served=None)
-        e["session_registered"] = None
         name = path.split("/")[1]
         honest = name in ("outcome-honest", "outcome-st-honest")
         c = Case(run.id, "served-window", first.get("format", ""), name, "audit" if honest else "negative", program, p,
@@ -1700,7 +1702,6 @@ def served_audit(run: Run) -> Iterator[Case]:
             raise Gap(f"out/{side}/commitment.json's tiles give {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
         p = params(program, query, SERVED_ZK_V0_LAW, ports, None, delta_of(SERVED_ZK_V0_DELTA), scheme=SERVED_ZK_V0_SCHEME)
         e = evidence(a, instances=1, sessions=[], session_roots=None, served=None)
-        e["session_registered"] = None
         prov = {**prov0, "copies": f"out/{side}/commitment.json", "ports": f"served_domain {how['form'][0]} {how['form'][1]} "
                 f"(run {how['run_id']})", "evidence": f"{path}; one instance, the draw's unit; no sessions"}
         c = Case(run.id, "served-audit", rec["format"], f"audit-{name}", "audit" if name in ("honest", "st-honest") else "negative",
@@ -1782,7 +1783,6 @@ def main() -> int:
     ap.add_argument("--fetch", action="store_true", help="fetch what --runs lacks from the store (`wanted` files, and each "
                                                          "distinct set.tar's manifests)")
     ap.add_argument("--lean", required=True, help="sampled-proofs-one-stage")
-    ap.add_argument("--r7-lean", default=None, help="sampled-proofs-one-stage built with registered values (R7)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", nargs="*", default=None, help="run ids (8 hex digits)")
     a = ap.parse_args()
@@ -1827,9 +1827,7 @@ def main() -> int:
     for f in sorted([*runs_root.glob("*/**/audit.json"), *runs_root.glob("*/**/registration.json")]):
         records.add_file(f, runs_root)
 
-    servers = {False: DT.Server([a.lean, "serve"])}
-    if a.r7_lean:
-        servers[True] = DT.Server([a.r7_lean, "serve"])
+    server = DT.Server([a.lean, "serve"])
     results, runs_out, outside, audits = [], [], [], defaultdict(list)
 
     def replay(run: Run, info: dict) -> None:
@@ -1851,18 +1849,15 @@ def main() -> int:
         with open(out / "cases" / f"{run.id}.jsonl", "w") as f:
             for c in cases:
                 case = c.case()
-                lean = None
-                if c.r7 in servers:
-                    try:
-                        lean = servers[c.r7].exchange(case)
-                    except DT.ProtocolError as err:
-                        lean = {"verdict": "error", "reason": str(err)}
+                try:
+                    lean = server.exchange(case)
+                except DT.ProtocolError as err:
+                    lean = {"verdict": "error", "reason": str(err)}
                 try:
                     py = python(c)
                 except Exception as err:  # noqa: BLE001 - a crash is a verdict here
                     py = {"verdict": "error", "reason": f"{type(err).__name__}: {err}"}
-                results.append(_row(c, lean, py, {**compare(c, lean, py),
-                                                  **({"pending": "R7: no --r7-lean"} if lean is None else {})}))
+                results.append(_row(c, lean, py, compare(c, lean, py)))
                 f.write(json.dumps({"name": c.name, "r7": c.r7, "case": case}) + "\n")
                 if c.kind == "audit" and driver not in UNRECORDED:
                     audits[R.digest(c.rec)].append(c)
@@ -1885,9 +1880,8 @@ def main() -> int:
             replay(run, info)
     for run, info in late:
         replay(run, info)
-    for s in servers.values():
-        s.close()
-    report = {"format": "verity/one-stage-replay/v0", "index": a.index, "lean": a.lean, "r7_lean": a.r7_lean,
+    server.close()
+    report = {"format": "verity/one-stage-replay/v0", "index": a.index, "lean": a.lean,
               "runs": runs_out, "cases": results, "outside": outside, "counts": counts(runs_out, results, outside)}
     report["summary"] = summary_lines(report["counts"])
     (out / "replay.json").write_text(json.dumps(report, indent=1, sort_keys=True))
@@ -1953,7 +1947,6 @@ def counts(runs: list[dict], results: list[dict], outside: list[dict]) -> dict:
     none_runs = [r for r in runs if r["driver"] in UNRECORDED]
     return {"runs": len(runs), "cases": len(mine),
             "same_verdict": sum(1 for r in mine if r.get("lean_recorded") in ("same", "same-verdict")),
-            "pending_r7": sum(1 for r in mine if r.get("pending")),
             "negatives": sum(1 for r in mine if r["kind"] == "negative"),
             "analogs": sum(1 for r in mine if r["kind"] == "analog"), "outside": len(outside),
             "lean_python": dict(Counter(r.get("lean_python", "pending") for r in mine)),
