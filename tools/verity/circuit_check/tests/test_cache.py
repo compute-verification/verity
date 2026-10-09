@@ -989,3 +989,24 @@ def test_each_enumerator_only_imports_what_it_lists():
                     allowed |= {id(x) for x in ast.walk(n)}
             uses = [n for s in loop.body for n in ast.walk(s) if isinstance(n, ast.Name) and n.id == loop.target.id]
             assert uses and all(id(n) in allowed for n in uses), (mod, qual, ast.unparse(loop))
+
+
+def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
+    """ee02's circuit-check reused all 3,887 targets and still took 837 s, most of it building the catalog to find them: the
+    task list is reused whole when every target is as recorded.  An edit no target read (a registry module none resolves, a new
+    binding entry) still rebuilds the list, which it may change, and every target is reused as before."""
+    root = _tree(tmp_path)
+    assert "task_list" not in _run(root)["stats"]
+    again = _run(root)
+    assert again["hits"] == ["SynOther_v1", "SynTop_v1"] and again["stats"]["task_list"]
+    _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and "task_list" not in out["stats"]
+    assert _run(root)["stats"]["task_list"]
+    _edit(root, "targets.py", '("Spare_v1", lambda: "Spare_v1"),', '("Spare_v1", lambda: "Spare_v1"),\n        ("New_v1", lambda: 0),')
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and "task_list" not in out["stats"]
+    _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1"] and "task_list" not in out["stats"] and out["stats"]["stored"] == 1
+    assert _run(root)["stats"]["task_list"]

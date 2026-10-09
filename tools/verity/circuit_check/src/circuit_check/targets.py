@@ -473,6 +473,9 @@ def reachable(roots: Iterable[Any]) -> dict[str, Any]:
 #: targets such as `TokenSelect_v1{V=151936}` stay with the kernel tests)
 MAX_GATES = 150_000
 
+#: everything the last `suite` reached, `select`'s drops among it: the task list holds what their builds read (`cli.run`)
+REACHED: dict[str, Any] = {}
+
 
 def family(fn: Any) -> str:
     return getattr(fn, "base_id", None) or fn.id
@@ -503,7 +506,9 @@ def suite() -> dict[str, Any]:
     """Every Definition the suite checks, by id: `select`'s, and PoUW's roots whatever their size (each P's whole call and
     window share a family and a gate count, so `select` alone keeps one of them).  Records each one's `BINDINGS`."""
     by_unit: list = []
-    out = select(reachable(catalog(by_unit)))
+    REACHED.clear()
+    REACHED.update(reachable(catalog(by_unit)))
+    out = select(REACHED)
     for units, make in _root_bindings("_pouw_roots"):
         out.update({fn.id: fn for fn in _produce(units, make, by_unit)})
     for units, roots in by_unit:
@@ -513,7 +518,7 @@ def suite() -> dict[str, Any]:
     return dict(sorted(out.items()))
 
 
-__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
+__all__ = ["MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
            "binding_files", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics",
            "kind_of", "load_registries", "reachable", "root_functions", "select", "subcircuit", "suite", "table_probe",
            "template_params", "templates"]
