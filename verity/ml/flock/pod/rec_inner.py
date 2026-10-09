@@ -267,14 +267,19 @@ def universal(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None =
 def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = None) -> dict:
     """The overhead's baseline: the private circuit `universal` registers (the same netlist, the same x) as a public circuit
     proved directly, with no recursion. `universal.direct`'s Boolean Definition of the netlist, unpadded, on each x's first
-    ``n_in`` bits, one Call partitioned by ``Q_template_instance``, staged by `class_statement.stage` with C-Flock's salted
-    leaves (the ``--zk`` statement Lean covers) and every salt from the OS, into ``out`` as rec-private-outer.sh's ``outer``
-    reads a statement: circuit.txt, inst.bin, pub.bin, partition.json and program.json (the program's descriptor)."""
+    ``n_in`` bits, ``n`` instances of it as one batch (`population_program`) partitioned by ``Q_template_instance``, staged by
+    `class_statement.stage` with C-Flock's salted leaves (the ``--zk`` statement Lean covers), META naming the Definition its
+    units are instances of (``names_definition``), and every salt from the OS, into ``out`` as
+    rec-private-outer.sh's ``outer`` reads a statement: circuit.txt, inst.bin, pub.bin, partition.json and program.json (the
+    program's descriptor)."""
     netlist = netlist or os.environ.get("REC_NETLIST") or None
     B = _benchmark(plain=False)
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
 
+    from verity.core.protocols.sampled_proofs.one_stage.partition import (
+        population_program,
+    )
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity.ml.circuits.defs import bind
@@ -284,7 +289,7 @@ def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = No
     (G, N_IN, N_OUT), small, xs = _private(B, cls, n, seed, netlist)
     xs = [x[:small.n_in] for x in xs]
     fn = bind(B.direct(small, f"RecPrivateDirectG{G}N{N_IN}O{N_OUT}S{seed}"))
-    program = PU.one_call(fn)
+    program = population_program(fn, n)
     query = PO.template_instance_query(fn)
     units = PU.PartitionUnits(program, query=query)
     [(shape, cl)] = units.classes().items()
@@ -309,7 +314,7 @@ def direct(cls: str, n: int, out: Path, seed: int = 0, netlist: Path | None = No
         raise AssertionError("the unit's outputs are not the netlist's computed outputs")
     FC.stage_salts = _os_salts()
     shutil.rmtree(out, ignore_errors=True)
-    st = CS.stage(units, B.SPEC, shape, cl, (ins, outs, rows), out, None, packed=True)
+    st = CS.stage(units, B.SPEC, shape, cl, (ins, outs, rows), out, None, packed=True, names_definition=True)
     if st["n"] != n:
         raise AssertionError(f"staging capped the instances at {st['n']}, not {n}")
     (out / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))

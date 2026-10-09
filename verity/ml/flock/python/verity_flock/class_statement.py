@@ -587,7 +587,7 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
           packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
-          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None) -> dict:
+          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, names_definition: bool = False) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
@@ -601,7 +601,10 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 
     ``pad``: the statement padded to ``pad`` instances (a public cap, `rec_shape`), the lanes its first and the rest fillers:
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
-    and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``)."""
+    and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``).
+
+    ``names_definition``: META names the class's Definition as a wired statement's does, with no links (a template-instance
+    partition whose staged instances are its units in order, none reading another's outputs)."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -626,6 +629,10 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     spans: list = []
     writers: list = []
     definition = None
+    if names_definition:
+        from verity.ml.circuits.codec import descriptor_id
+
+        definition = descriptor_id(act.fn)
     if wiring is not None:
         from verity.ml.circuits.codec import descriptor_id
 
