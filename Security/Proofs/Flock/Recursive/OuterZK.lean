@@ -120,10 +120,6 @@ def commitStrs {n : ℕ} (m : Fin n → ByteArray) (y : Fin n → ZkView.Salt) :
 def idealStrs {n : ℕ} (u : Fin n → ZkView.Bits × ZkView.Salt) : Fin n → ZkView.Bits × ByteArray :=
   fun i => ((u i).1, ZkView.saltHash (u i).2)
 
-/-- A firewall leaf is the hm96 leaf of its commit string. -/
-theorem firewallLeaf_commitStrs {n : ℕ} (m : Fin n → ByteArray) (y : Fin n → ZkView.Salt) (i : Fin n) :
-    Flock.Guarantees.firewallLeaf (m i) (y i) = ZkView.leafH (commitStrs m y i) := rfl
-
 /-- **V*'s outer sessions as (ii) sees them.** `Ctx` is what the honest prover holds and `Pub` what the simulator reads
 (`pubOf`). Before its sessions the prover registers `R₂`: `n₂` hm96 commit strings to `m₂` (rec-acc's running sums and
 the opened rows) under fresh salts. Session `j` of V*'s `S` is one `--zk` table, `C j pc l` at the public context
@@ -220,13 +216,13 @@ noncomputable def err : ℝ≥0∞ := V.errS + V.n₂ * (2 : ℝ≥0∞) ^ (-193
 
 theorem nr_pos (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteArray) : 0 < V.NR j := by
   rw [← V.hR j pc l]
-  haveI : Nonempty (RandAt (V.C j pc l) (V.coin j pc l)) :=
+  have : Nonempty (RandAt (V.C j pc l) (V.coin j pc l)) :=
     ⟨((ZkHidden.rand_nonempty ((V.C j pc l).T (V.coin j pc l)).tab).some, fun _ => 0)⟩
   exact Fintype.card_pos
 
 theorem ns_pos (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteArray) : 0 < V.NS j := by
   rw [← V.hS j pc l]
-  haveI : Nonempty (SimAt (V.C j pc l) (V.coin j pc l)) :=
+  have : Nonempty (SimAt (V.C j pc l) (V.coin j pc l)) :=
     ⟨((ZkHidden.simRand_nonempty ((V.C j pc l).T (V.coin j pc l)).tab).some, fun _ => 0)⟩
   exact Fintype.card_pos
 
@@ -257,8 +253,8 @@ theorem close (hOK : V.TablesOK) (hKey : FlockSoundness.Assumptions.Zk.HashDeriv
     (hP : SelfCheckSilent prover) (x : Ctx) (hx : V.Honest x) (E : V.View → Prop) :
     prCoin (fun q : V.Ωo => E (V.view prover x q))
       ≤ prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.err := by
-  haveI : ∀ j, Nonempty (Fin (V.NR j)) := fun j => ⟨⟨0, V.nr_pos j (V.pubOf x) (commitStrs (V.m₂ x) fun _ => 0)⟩⟩
-  haveI : ∀ j, Nonempty (Fin (V.NS j)) := fun j => ⟨⟨0, V.ns_pos j (V.pubOf x) (commitStrs (V.m₂ x) fun _ => 0)⟩⟩
+  have : ∀ j, Nonempty (Fin (V.NR j)) := fun j => ⟨⟨0, V.nr_pos j (V.pubOf x) (commitStrs (V.m₂ x) fun _ => 0)⟩⟩
+  have : ∀ j, Nonempty (Fin (V.NS j)) := fun j => ⟨⟨0, V.ns_pos j (V.pubOf x) (commitStrs (V.m₂ x) fun _ => 0)⟩⟩
   have step : ∀ y₂ : Fin V.n₂ → ZkView.Salt,
       prCoin (fun ρ : (j : Fin V.S) → Fin (V.NR j) => E (V.view prover x (y₂, ρ)))
         ≤ prCoin (fun σ : (j : Fin V.S) → Fin (V.NS j) => E (V.simOut (V.pubOf x) σ (commitStrs (V.m₂ x) y₂)))
@@ -374,8 +370,8 @@ theorem vstar_private {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Nonemp
         + (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
   let x₀ : HCtx Prog Wit Ωa Ωp nr nh := (P, w, fun _ => 0, Classical.arbitrary Ωa, fun _ => ByteArray.empty,
     Classical.arbitrary Ωp, fun _ => 0)
-  haveI : ∀ j, Nonempty (Fin (V.NR j)) := fun j => ⟨⟨0, V.nr_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
-  haveI : ∀ j, Nonempty (Fin (V.NS j)) := fun j => ⟨⟨0, V.ns_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
+  have : ∀ j, Nonempty (Fin (V.NR j)) := fun j => ⟨⟨0, V.nr_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
+  have : ∀ j, Nonempty (Fin (V.NS j)) := fun j => ⟨⟨0, V.ns_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
   exact Flock.SecurityProofs.RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs
     (fun P w r a h p y q => V.view prover (P, w, r, a, h, p, y) q) (fun o v a h s => V.sim (pubS o v a h) s)
     (vstar_outer_zk rows pub honest msgs V pubS hpub hOK hP hH hKey) hKey p₀ o P w hw E
