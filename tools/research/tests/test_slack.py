@@ -23,6 +23,7 @@ import pytest
 from research import slack
 
 REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
+ACTING_AS = slack.acting_as
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
@@ -76,6 +77,12 @@ class FakeSlack:
             page = msgs[start:start + min(int(p.get("limit", 100)), self.page)]
             nxt = start + len(page)
             return {"ok": True, "messages": page, "response_metadata": {"next_cursor": str(nxt) if nxt < len(msgs) else ""}}
+        if method == "chat.update":
+            m = next((m for m in self.messages.get(ch, []) if m["ts"] == p["ts"]), None)
+            if not m:
+                return {"ok": False, "error": "message_not_found"}
+            m["text"] = p["text"]
+            return {"ok": True, "channel": ch, "ts": m["ts"]}
         if method == "reactions.add":
             if (ch, p["timestamp"], p["name"]) in self.reactions:
                 return {"ok": False, "error": "already_reacted"}                     # one reaction per emoji per user, like Slack
@@ -99,7 +106,8 @@ class FakeSlack:
 @pytest.fixture(autouse=True)
 def routes_dirs(tmp_path, monkeypatch):
     """No test reads the real notes clone's routes or the published ones: `local` is the clone's routes.d, `remote` the
-    published files, `seen` the read marks; nor asks the real gh for a PR's branch."""
+    published files, `seen` the read marks; nor asks the real gh for a PR's branch.  `--as` takes any name here; the
+    holder check has tests of its own (`ACTING_AS`)."""
     local, remote = tmp_path / "notes" / slack.ROUTES_DIR, tmp_path / "published"
     local.mkdir(parents=True)
     remote.mkdir()
@@ -108,6 +116,7 @@ def routes_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
     monkeypatch.setenv("RESEARCH_PR_BRANCHES", str(tmp_path / "pr-branches.json"))
     monkeypatch.setattr(slack, "GH", str(tmp_path / "no-gh"))
+    monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))  # tests post as any name
     return local, remote
 
 
@@ -463,7 +472,7 @@ def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
 def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
     src = Path(slack.__file__).read_text()
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
-    assert set(slack.DIRECT_ONLY) == {"usergroups.create", "usergroups.enable", "usergroups.update"}
+    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.enable", "usergroups.update"}
     assert called == set(slack.BROKER_METHODS) | set(slack.DIRECT_ONLY) and not set(slack.BROKER_METHODS) & set(slack.DIRECT_ONLY)
     assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
 
@@ -1096,6 +1105,47 @@ def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_p
     gh.write_text("#!/bin/sh\necho 'HTTP 401: Bad credentials' >&2\nexit 1\n")
     assert slack.pr_branches({"1999"}, log) == {}
     assert "PR owners unknown for #1999 (gh: HTTP 401: Bad credentials)" in log.getvalue()
+
+
+def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "acting_as", ACTING_AS)
+    reg = json.loads(registry.read_text())
+    held = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"]) for h in reg["handles"]}
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{held['infra'][0]}")
+    assert run(capsys, "send", "--as", "infra", "--text", "node 2 is free")[0] == 0
+    before = len(fake.messages[COORD])
+    rc, _, err = run(capsys, "send", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"], "--text", "x")
+    assert rc == 2 and f"@ci is held by {held['ci'][0]}, and this agent is {held['infra'][0]}" in err
+    rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
+    assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
+    lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{lander}")
+    assert "bc-8ece7cde" in held["proofs"] and run(capsys, "send", "--as", "proofs", "--text", "the train is up")[0] == 0
+    add_route(routes_dirs[0], "circuits", "1700000900.000200", holder="bc-11111111-2222-3333-4444-555555555555")
+    monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-11111111-2222-3333-4444-555555555555")
+    assert run(capsys, "send", "--as", "circuits", "--text", "a successor's first post")[0] == 0
+    monkeypatch.delenv("RESEARCH_AGENT_URL")
+    monkeypatch.setattr(slack, "self_agent_id", lambda: None)
+    rc, _, err = run(capsys, "send", "--as", "infra", "--text", "x")
+    assert rc == 2 and "this agent is unknown (set RESEARCH_AGENT_URL)" in err
+    rc, _, err = run(capsys, "send", "--dry-run", "--as", "infra", "--text", "x")
+    assert rc == 0 and "a real --as infra would be refused" in err
+
+
+def test_retract_blanks_only_the_names_own_post(fake, registry, capsys):
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--text", "x")
+    ts = out.split()[0]
+    reply = fake.add(COORD, text="a stray reply", username="infra", bot_id=BOT, thread_ts=ts)
+    other = fake.add(COORD, text="mine", username="ci", bot_id=BOT)
+    assert run(capsys, "retract", "--as", "infra", "--ts", ts, "--why", "sent by mistake")[0] == 0
+    assert next(m for m in fake.messages[COORD] if m["ts"] == ts)["text"] == "_retracted by @infra_: sent by mistake"
+    fake.replies_keep_root = True
+    assert run(capsys, "retract", "--as", "infra", "--ts", reply["ts"], "--thread", ts)[0] == 0
+    assert reply["text"] == "_retracted by @infra_"
+    rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", other["ts"])
+    assert rc == 2 and "was posted by @ci, not @infra" in err and other["text"] == "mine"
+    rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", "1700000999.000001")
+    assert rc == 2 and "a reply needs --thread ROOT" in err
 
 
 def argparse_ns(**kw):
