@@ -21,21 +21,24 @@ against C's leaf).
   first (`--keygen-workers`; about 1.1G SHA-512 hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
   `test/` id), its leaf state in `$TMPDIR`.
 - **The verdict** is `memory_challenger.verdict` under `memory_challenger.SCHEMES`, which accepts S1's scheme alone, so a
-  test-signed session is rejected: it fails closed.  `judge` computes it with the Lean port's (`lean_verdict`, built with
-  `lake` on first use), held to the Python, which stays the reference, by
-  `verity/core/devices/memory_challenger/lean/tests/test_verdict.py`.  `accepted_under_signer` is the same verdict under the signer's own
-  mapping (`memory_challenger.SCHEMES` for `lms`, the test signer's for `test`): for `test`, every check but the scheme's
-  acceptance, and never the verdict.
+  test-signed session is rejected: it fails closed.  `judge` computes it twice on every session, with the Lean port's
+  (`lean_verdict`, built with `lake` on first use) and with the Python, which stays the reference, and keeps both in the
+  witness (`verdicts`).  `RECORD_VERDICT` names the one that is the record's (the Lean's); where the two disagree, on the
+  accept bit or the reasons, the session is rejected for it (`DISAGREE`, listing both).
+  `verity/core/devices/memory_challenger/lean/tests/test_verdict.py` holds the Lean to the Python on generated records.
+  `accepted_under_signer` is the same verdict under the signer's own mapping (`memory_challenger.SCHEMES` for `lms`, the
+  test signer's for `test`): for `test`, every check but the scheme's acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
-  (`witness`: the signed session, the reasons, C's digests at the blocks the rounds revealed, per-round on-time and digest
-  bits), and keeps the responder's reports beside: with the signer's public key, every input of the verdict, so a record
-  replays.
+  (`witness`: the signed session, the record's reasons, both verdicts, C's digests at the blocks the rounds revealed,
+  per-round on-time and digest bits), and keeps the responder's reports beside: with the signer's public key, every input
+  of the verdict, so a record replays.
 
 Exit 0 when every session passes under the signer the run used, 1 otherwise.
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import gc
 import hashlib
 import importlib.util
@@ -67,6 +70,10 @@ from band_gpu.memory_challenger import (  # noqa: E402
 ROOT = Path(__file__).resolve().parents[3]
 TEST_SIGNER = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py"
 LEAN_VERDICT = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "lean" / "verdict.py"
+RECORD_VERDICT = "lean"
+"""Which verdict is the record's: `"lean"` (`lean_verdict`) or `"python"` (`memory_challenger.verdict`, the reference).
+`judge` computes both on every session and records both either way."""
+DISAGREE = "the Lean and Python verdicts disagree"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
 the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the responder in `r20261006-061825-bba8`)."""
@@ -80,6 +87,7 @@ def test_signer() -> Any:
     return mod
 
 
+@functools.cache
 def lean_verdict() -> Any:
     """The Lean port's verdict module (`verdict.py` beside its Lake package): `verdict`, with `memory_challenger.verdict`'s
     signature, computed by `memory-challenger-verdict` (built with `lake` on first use)."""
@@ -146,14 +154,35 @@ def binding_of(salt: bytes, digests: bytes) -> bytes:
     return hashlib.sha512(b"verity-pous/bench/memory-challenger/binding/v1\0" + salt + hashlib.sha512(digests).digest()).digest()
 
 
+def verdicts(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
+             schemes: Mapping[str, Any] | None = None) -> tuple[Any, dict[str, dict[str, Any]]]:
+    """Session `s` judged by the Lean verdict and by the Python's: the record's verdict, which is `RECORD_VERDICT`'s unless
+    the two disagree (accept bit or reasons), and then a rejection for it naming both; and both as recorded.  A record the
+    Lean refuses to read (`ValueError`) is its rejection."""
+    from verity.core.protocols.pous import memory_challenger as mc
+
+    args = (s["signed"], s["commitment"], s["openings"], expected)
+    kw = {"trusted": trusted, **({} if schemes is None else {"schemes": schemes})}
+    got = {"python": mc.verdict(*args, **kw)}
+    try:
+        got["lean"] = lean_verdict().verdict(*args, **kw)
+    except ValueError as e:
+        got["lean"] = mc.Verdict(False, (str(e),))
+    both = {name: {"accepted": v.accepted, "reasons": list(v.reasons)} for name, v in sorted(got.items())}
+    v = got[RECORD_VERDICT]
+    if both["lean"] != both["python"]:
+        v = mc.Verdict(False, (f"{DISAGREE}: lean {json.dumps(both['lean'])}, python {json.dumps(both['python'])}",),
+                       v.late, v.wrong)
+    return v, both
+
+
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
           signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Each session's verdict under `memory_challenger.SCHEMES` and under the signer's own mapping."""
-    verdict = lean_verdict().verdict
+    """Each session's verdict under `memory_challenger.SCHEMES` and under the signer's own mapping (`verdicts`)."""
     out = []
     for s in sessions:
-        v = verdict(s["signed"], s["commitment"], s["openings"], expected, trusted=trusted)
-        t = verdict(s["signed"], s["commitment"], s["openings"], expected, trusted=trusted, schemes=signer_schemes)
+        v, both = verdicts(s, expected, trusted)
+        t, both_t = verdicts(s, expected, trusted, signer_schemes)
         rounds = s["signed"].rounds
         answers = [{"index": r.index, "elapsed_ns": r.elapsed_ns, "device_ns": d, "server_ns": sv,
                     "correct": r.digest == expected(r.index), "on_time": r.elapsed_ns <= s["commitment"].limit_ns}
@@ -162,6 +191,7 @@ def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trus
                     "public": {"commitment": s["commitment"].to_json(), "verdict": v.public(),
                                "openings": [o.to_json() for o in s["openings"]]},
                     "witness": {"signed": s["signed"].to_json(), "reasons": list(v.reasons),
+                                "record_verdict": RECORD_VERDICT, "verdicts": both, "verdicts_under_signer": both_t,
                                 "expected": {str(r.index): expected(r.index).hex() for r in rounds
                                              if 0 <= r.index < s["commitment"].blocks},
                                 "reasons_under_signer": list(t.reasons)},

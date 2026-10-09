@@ -594,6 +594,61 @@ def test_the_memory_challenger_catches_a_flipped_bit_in_a_blocks_last_byte():
     assert doc["audits_accepted_under_signer"] == doc["audits_accepted"] == 0
 
 
+@pytest.mark.parametrize("record", ["lean", "python"])
+def test_the_memory_challenger_records_both_verdicts_whichever_is_the_records(record, monkeypatch):
+    """`judge` runs the Lean verdict and the Python's on every session and keeps both in the witness; `RECORD_VERDICT` picks
+    the record's, and where the two agree the record is the same either way."""
+    from verity.core.protocols.pous.schemes import p2
+
+    live = _live()
+    monkeypatch.setattr(live, "RECORD_VERDICT", record)
+    doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
+    assert doc["audits_accepted_under_signer"] == 1 and doc["audits_accepted"] == 0
+    for rec in doc["records"]:
+        w = rec["witness"]
+        assert w["record_verdict"] == record and w["reasons"] == ["signature scheme 'test/lms-sha512/n64-w1-h1/v0' is not accepted"]
+        assert w["verdicts"] == {name: {"accepted": False, "reasons": w["reasons"]} for name in ("lean", "python")}
+        assert w["verdicts_under_signer"] == {name: {"accepted": True, "reasons": []} for name in ("lean", "python")}
+
+
+@pytest.mark.parametrize("record", ["lean", "python"])
+@pytest.mark.parametrize("forced", ["lean", "python"])
+def test_a_disagreement_between_the_verdicts_rejects_the_session(forced, record, monkeypatch):
+    """`forced`'s verdict flips its accept bit: under `memory_challenger.SCHEMES` it accepts the test-signed sessions the other
+    rejects, and under the signer's mapping it rejects the honest ones the other accepts.  Each session is rejected for the
+    disagreement, with both verdicts named, whichever one accepted and whichever is the record's."""
+    import json
+
+    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous.schemes import p2
+
+    live = _live()
+
+    def flipped(verdict):
+        def flip(*args, **kw):
+            v = verdict(*args, **kw)
+            return mc.Verdict(not v.accepted, () if not v.accepted else ("forced",), v.late, v.wrong)
+        return flip
+
+    monkeypatch.setattr(live, "RECORD_VERDICT", record)
+    if forced == "python":
+        monkeypatch.setattr(mc, "verdict", flipped(mc.verdict))
+    else:
+        lean = live.lean_verdict().verdict
+        monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=flipped(lean)))
+    other = "python" if forced == "lean" else "lean"
+    doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
+    assert doc["audits"] == 1 and doc["audits_accepted"] == doc["audits_accepted_under_signer"] == 0
+    for rec in doc["records"]:
+        w = rec["witness"]
+        for verdicts, reasons, accepted in ((w["verdicts"], w["reasons"], forced), (w["verdicts_under_signer"],
+                                                                                    w["reasons_under_signer"], other)):
+            assert {name: v["accepted"] for name, v in verdicts.items()} == {forced: accepted == forced,
+                                                                             other: accepted == other}
+            assert reasons == [f"{live.DISAGREE}: lean {json.dumps(verdicts['lean'])}, python {json.dumps(verdicts['python'])}"]
+        assert rec["public"]["verdict"] == {"accepted": False} and not rec["accepted_under_signer"]
+
+
 def _live():
     sys.path.insert(0, str(BENCH))
     from memory_challenger import live
