@@ -575,8 +575,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="only the configurations whose RUN/CONFIGURATION (as progress.jsonl names them) ends with this; "
                         "repeatable")
     a.add_argument("--budget-gb", type=float,
-                   help=f"run configurations at once only while their estimated peak memory ({LEAN_GB_PER_FRAME * 1e3:g} "
-                        "MB per frame, the Lean check's evidence) stays under this")
+                   help="run configurations at once only while their estimated peak memory (--gb-per-frame) stays under this")
+    a.add_argument("--gb-per-frame", type=float, default=LEAN_GB_PER_FRAME,
+                   help=f"a configuration's estimated peak memory per Program frame, past 2 GB (default {LEAN_GB_PER_FRAME:g})")
     for p in (t, a):
         p.add_argument("--out", required=True, type=Path)
         p.add_argument("--jobs", type=int, default=1)
@@ -617,7 +618,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             sized += [(n, (root, c, controls and c == smallest, args.verifier)) for c, n in kept.items()]
         sized.sort(key=lambda x: -x[0])
         tasks = [t for _, t in sized]
-        kind, costs, budget = "active", [2 + n * LEAN_GB_PER_FRAME for n, _ in sized], args.budget_gb
+        kind, costs, budget = "active", [2 + n * args.gb_per_frame for n, _ in sized], args.budget_gb
     args.out.mkdir(parents=True, exist_ok=True)
     with open(args.out / "progress.jsonl", "w", encoding="utf-8") as fh:
         for r in results:
