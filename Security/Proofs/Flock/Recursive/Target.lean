@@ -250,12 +250,12 @@ theorem flockInnerCL_accepts (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
     cases ss with
     | nil => cases h.nil_inv
     | cons s ss =>
-      obtain ⟨cap₀, rfl, h⟩ := h.send_inv
+      obtain ⟨cap₀, rfl, h₁⟩ := h.send_inv
       cases ss with
-      | nil => cases h.nil_inv
+      | nil => cases h₁.nil_inv
       | cons s ss =>
-        obtain ⟨pts, rfl, h⟩ := h.coin_inv
-        exact ⟨cap₀, pts, ss, out, rfl, h, hacc⟩
+        obtain ⟨pts, rfl, h₂⟩ := h₁.coin_inv
+        exact ⟨cap₀, pts, ss, out, rfl, h₂, hacc⟩
   · rintro ⟨cap₀, pts, ts, out, rfl, h, hacc⟩
     exact ⟨out, .send cap₀ (.coin pts h), hacc⟩
 
