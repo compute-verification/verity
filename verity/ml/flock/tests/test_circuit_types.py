@@ -1,16 +1,19 @@
 """Circuit types (`verity_flock.circuit_types`): a two-level adder evaluates to the sum and equals its expansion; the digest is
-RFC 8785 JSON under SHA-512 and ignores names; table reads read their table; and `validate` refuses each broken rule."""
+RFC 8785 JSON under SHA-512 and ignores names; table reads read their table; `validate` refuses each broken rule; and the
+universal unit's type has the digests Lean's builder of it pins."""
 from __future__ import annotations
 
 import hashlib
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
 import pytest
 
 from verity.ml.circuits import library
+from verity.ml.private_circuits import universal as U
 from verity_flock import circuit_types as CT
 from verity_flock import gf2
 
@@ -160,6 +163,33 @@ def _vectors() -> list[dict]:
 
 def test_the_vectors_are_current():
     assert json.loads(VECTORS.read_text()) == _vectors()
+
+
+UNIVERSAL_LOWER = Path(__file__).resolve().parents[4] / "Security/Proofs/Flock/Recursive/UniversalLower.lean"
+
+
+def _universal_type(G: int, N_IN: int, N_OUT: int) -> CT.CircuitType:
+    """`universal.build` over the input ports (op, src, out, x), one committed bit each, as `UniversalLower.uuType` reads them."""
+    C = gf2.Circuit()
+    K = U.index_bits(G, N_IN)
+    op, src, out, x = C.input("in0", 2 * G), C.input("in1", 2 * G * K), C.input("in2", N_OUT * K), C.input("in3", N_IN)
+    elements = ([op[2 * g:2 * g + 2] for g in range(G)] + [src[i * K:(i + 1) * K] for i in range(2 * G)]
+                + [out[i * K:(i + 1) * K] for i in range(N_OUT)] + [x])
+    outs = U.build(C, G, N_IN, N_OUT, *elements)
+    return CT.from_gf2(C, op + src + out + x, outs, [(1, 2 * G), (1, 2 * G * K), (1, N_OUT * K), (1, N_IN)], [(1, N_OUT)],
+                       library.PROGRAM, {})
+
+
+def test_the_universal_unit_is_the_lean_builders_type():
+    """Lean's `UniversalLower.uuType`, proved to compute `Desc.eval`, pins its digest at six classes (`#guard`); `universal.build`
+    lowered by `from_gf2` has those digests, and exactly `and_count` ANDs: no AND folds and every one is live."""
+    pins = re.findall(r'#guard digestIs \(uuType ⟨(\d+), (\d+), (\d+)⟩\)\s+"([0-9a-f]{128})"', UNIVERSAL_LOWER.read_text())
+    assert len(pins) == 6
+    for *cls, digest in pins:
+        G, N_IN, N_OUT = map(int, cls)
+        t = _universal_type(G, N_IN, N_OUT)
+        assert len(t.items) == U.and_count(G, N_IN, N_OUT)
+        assert t.digest() == digest, (G, N_IN, N_OUT)
 
 
 if __name__ == "__main__" and "--write" in sys.argv:
