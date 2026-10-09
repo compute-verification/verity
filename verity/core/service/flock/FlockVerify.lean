@@ -297,9 +297,9 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln e; return 2
   let res : V Lean.Json := do
     let ss ← RecVStar.statements i
-    let base := [("statements", Lean.Json.arr (ss.map fun (s, n) => Lean.Json.arr #[Lean.Json.str s, Lean.toJson n]))]
+    let base := [("statements", Lean.Json.arr (ss.map fun s => Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson s.instances]))]
     match argOf args "--unit", (argOf args "--instances").bind String.toNat? with
-    | some u, some n => do RecVStar.check i u n; pure (Lean.Json.mkObj (base ++ [("checked", Lean.Json.arr #[Lean.Json.str u, Lean.toJson n])]))
+    | some u, some n => do discard <| RecVStar.check i u n; pure (Lean.Json.mkObj (base ++ [("checked", Lean.Json.arr #[Lean.Json.str u, Lean.toJson n])]))
     | _, _ => pure (Lean.Json.mkObj base)
   let line := match res with
     | .ok j => j.setObjVal! "ok" (Lean.Json.bool true)
@@ -435,7 +435,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        r.2.forM (RecVStar.checkStmt recInner · partition program)
+        r.2.forM (RecVStar.checkStmt recInner · circuitB partition program)
         if zk then r.2.forM Zk.shapeOk
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
@@ -528,7 +528,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
-      if recInner.isSome then RecVStar.checkStmt recInner st partition program
+      if recInner.isSome then RecVStar.checkStmt recInner st circuitB partition program
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
