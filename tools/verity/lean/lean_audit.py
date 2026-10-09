@@ -140,8 +140,10 @@ FLAGS = ["--build"]
 
 
 def tool_files(files: list[str]) -> list[str]:
-    """The auditor's files: `tools/verity/lean/` less its tests and docs, and the helpers it imports."""
-    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")]
+    """The auditor's files: `tools/verity/lean/` less its tests, its docs and `lean-deps.json` (the dependency bundles' pins,
+    which preflight reads and the audit doesn't), and the helpers it imports."""
+    tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
+            and f != LEAN_TOOL + "lean-deps.json"]
     return sorted({*tool, "tools/verity/check/common.py"})
 
 
