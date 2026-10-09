@@ -96,8 +96,9 @@ def measure(cls: str, n: int, out: Path, seed: int = 0, log=sys.stdout) -> dict:
             fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
             tr = U.traced(G, N_IN, N_OUT)
         with ph("units"):
-            program = PU.one_call(fn)
-            query = PO.template_instance_query(fn)
+            unit = RI.program_unit(fn)
+            program = PU.one_call(unit)
+            query = PO.template_instance_query(unit)
             units = PU.PartitionUnits(program, query=query)
             [(shape, cl)] = units.classes().items()
         with ph("lanes"):
