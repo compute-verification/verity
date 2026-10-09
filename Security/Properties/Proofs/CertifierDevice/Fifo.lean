@@ -8,7 +8,8 @@ canonical positions (`handList`), enqueues them, and releases `min(queue, r)` fr
 trace (`fifo_inv`), the shaper has handed `handed`'s frames, its `queued` count is the Program's queue (`NetworkCertifier.queue`)
 of the hand counts, and an unfaulted certifier's queue is the last `queued` frames handed. A complete record's window
 never faults (by `FailClosed`), so each of its rows is the FIFO's release, which is `NetworkCertifier.expectedRow` when
-each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`completeRows_proof`).
+each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`completeRows_honest`). `Complete` drops
+that condition: a frame handed late faults its window.
 -/
 
 namespace Properties.CertifierDevice.Proofs
@@ -616,7 +617,22 @@ theorem egressAt_exists {c : Config} {tr : List Event} {n k b : Nat} (hE : Egres
 
 /-! ## Complete records -/
 
-theorem completeRows_proof : CompleteRows := by
+/-- Complete records over the whole trace, given that each frame is handed at the bucket
+`NetworkCertifier.handingBuckets` gives it under the syncs the trace declared. -/
+def CompleteRowsHonest : Prop :=
+  ∀ (c : Config) (tr : List Event),
+    let hs := handed (init c) tr
+    let syncs := (after (init c) tr).shaper.syncs
+    let frames : List NetworkCertifier.LogicalFrame := hs.map fun x => ⟨bitsOf x.1.bytes, x.1.anchor, x.1.index⟩
+    let T := c.egress.buckets
+    hs.map Prod.snd = NetworkCertifier.handingBuckets T syncs.size (fun w => syncs[w]) frames →
+    ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts →
+      .publish rec p ∈ acts → rec.status = .complete → rec.window < syncs.size →
+      ∀ j < T, ∀ (s : Nat) (hs : s < c.egress.allocation),
+        NetworkCertifier.expectedRow c.egress.allocation T syncs.size (fun w => syncs[w]) frames (rec.window * T + j)
+          ⟨s, hs⟩ = (rec.grid[j]!)[s]!.map bitsOf
+
+theorem completeRows_honest : CompleteRowsHonest := by
   intro c tr
   dsimp only
   intro H n k backlog acts rec p hE hacts hmem hst hw j hj i hia

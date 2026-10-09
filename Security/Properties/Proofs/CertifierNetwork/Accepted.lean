@@ -21,7 +21,7 @@ namespace Properties.CertifierNetwork.Proofs
 open _root_.CertifierDevice
 open _root_.NetworkCertifier (LogicalFrame ClockSync)
 open Properties.CertifierDevice (outputs after EgressAt ValidKey)
-open Properties.CertifierDevice.Proofs (records_proof completeRows_proof)
+open Properties.CertifierDevice.Proofs (records_proof completeRows_honest)
 
 theorem mem_published {c : Config} {tr : List Event} {r : Record} (h : r ∈ published c tr) :
     ∃ (n : Nat) (acts : List Action) (p : Params), (outputs (init c) tr)[n]? = some acts ∧ Action.publish r p ∈ acts := by
@@ -64,7 +64,7 @@ theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (hT : Tick
       (openedFrames c tr) r.window := by
   obtain ⟨n, acts, p, hn, hm⟩ := mem_published hr
   obtain ⟨k, b, hE⟩ := egress_at hd hn hm hl
-  have hcr := completeRows_proof c tr ht n k b acts r p hE hn hm (hnf r hr)
+  have hcr := completeRows_honest c tr ht n k b acts r p hE hn hm (hnf r hr)
     (by show r.window < (declaredSyncs c tr).size; rw [hsd]; exact hw)
   have hcr' : ∀ j < c.egress.buckets, ∀ (s : Nat) (hs : s < c.egress.allocation),
       _root_.NetworkCertifier.expectedRow c.egress.allocation c.egress.buckets c.windows

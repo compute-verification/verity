@@ -30,11 +30,11 @@ takes are in its statement.
   `⟨egressLink, w, ρ (w·T) … ρ (w·T + T − 1), σ w⟩` with the egress grid's parameters: every published egress record's
   grid is the `T` rows its buckets released, each the frames its bucket wrote. No other event writes the link or
   publishes anything but an ingress record.
-* `CompleteRows`: a record whose status is complete, of a window with a declared sync, has every row equal to
-  `NetworkCertifier.expectedRow` over the frames the shaper handed (their bits, `bitsOf`, as the difftest compares) under
-  the syncs `step` declared, provided each frame was handed at the bucket the Program hands it
-  (`NetworkCertifier.handingBuckets`). That hypothesis is honest timing, stated over the trace (`handed`): it fails
-  where a frame is read after its logical hand bucket's tick, or ready after its logical hand time.
+* `CompleteRows`: a record an egress tick publishes whose status is complete, of a window with a declared sync, has
+  every row equal to `NetworkCertifier.expectedRow` over the frames the shaper handed through that tick (their bits,
+  `bitsOf`, as the difftest compares) under the syncs `step` declared through it (`ProgramRows`). It needs no honest
+  timing: the shaper hands a frame at its logical hand bucket (`NetworkCertifier.handingBuckets`) or later, and a frame
+  handed later faults the window it is handed in, so no complete window holds one.
 
 **(3) Fail-closed.** `FailClosed`: once the egress certifier holds a fault `r`, every later egress tick of that window
 releases nothing (it writes `r · B` zero bytes), and the window's record has status `notEstablished r` and padding in
@@ -153,22 +153,23 @@ def handed : State → List Event → List (Frame × Nat)
   | _, [] => []
   | st, ev :: tr => (handedAt st ev).map (·, st.shaper.t) ++ handed (step st ev).1 tr
 
-/-- **A complete record is the Program's.** If each frame the shaper hands over the trace is handed at the bucket
-`NetworkCertifier.handingBuckets` gives it, under the syncs `step` declared, then every published egress record whose
-status is complete, of a window with a declared sync, has as row `j`, slot by slot, `NetworkCertifier.expectedRow` at
-bucket `w·T + j` of the handed frames (their bits, as the difftest's honest check reads them). -/
-def CompleteRows : Prop :=
-  ∀ (c : Config) (tr : List Event),
-    let hs := handed (init c) tr
-    let syncs := (after (init c) tr).shaper.syncs
+/-- **The complete records of `tr` are the Program's.** Every record an egress tick of `tr` publishes, event `n`, whose
+status is complete, of a window with a sync among those `step` declared through event `n`, has as row `j`, slot by slot,
+`NetworkCertifier.expectedRow` at bucket `w·T + j` of the frames the shaper handed through event `n` (their bits, as the
+difftest's honest check reads them), under those syncs. -/
+def ProgramRows (c : Config) (tr : List Event) : Prop :=
+  ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts → .publish rec p ∈ acts →
+    let hs := handed (init c) (tr.take (n + 1))
+    let syncs := (after (init c) (tr.take (n + 1))).shaper.syncs
     let frames : List LogicalFrame := hs.map fun x => ⟨bitsOf x.1.bytes, x.1.anchor, x.1.index⟩
     let T := c.egress.buckets
-    hs.map Prod.snd = NetworkCertifier.handingBuckets T syncs.size (fun w => syncs[w]) frames →
-    ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts →
-      .publish rec p ∈ acts → rec.status = .complete → rec.window < syncs.size →
-      ∀ j < T, ∀ (s : Nat) (hs : s < c.egress.allocation),
-        NetworkCertifier.expectedRow c.egress.allocation T syncs.size (fun w => syncs[w]) frames (rec.window * T + j)
-          ⟨s, hs⟩ = (rec.grid[j]!)[s]!.map bitsOf
+    rec.status = .complete → rec.window < syncs.size →
+    ∀ j < T, ∀ (s : Nat) (hs : s < c.egress.allocation),
+      NetworkCertifier.expectedRow c.egress.allocation T syncs.size (fun w => syncs[w]) frames (rec.window * T + j)
+        ⟨s, hs⟩ = (rec.grid[j]!)[s]!.map bitsOf
+
+/-- **A complete record is the Program's**, on every trace. -/
+def CompleteRows : Prop := ∀ (c : Config) (tr : List Event), ProgramRows c tr
 
 /-! ## (3) Fail-closed -/
 

@@ -1,15 +1,15 @@
 import Mathlib
 import Properties.CertifierDevice
-import Properties.Proofs.CertifierDevice.Fifo
+import Properties.Proofs.CertifierDevice.Complete
 import Properties.Proofs.CertifierDevice.Issuer
 
 /-!
 # The certifier device's properties, proved
 
 Each statement of `Properties.CertifierDevice`, proved as the lower-case theorem of its name: the trace properties from
-one step's (`Proofs.CertifierDevice.Step`, `Proofs.CertifierDevice.Trace`), complete records from the egress FIFO's
-(`Proofs.CertifierDevice.Fifo`), the issuer's from LMS's correctness
-(`Proofs.CertifierDevice.Lms`, `Proofs.CertifierDevice.Issuer`).
+one step's (`Proofs.CertifierDevice.Step`, `Proofs.CertifierDevice.Trace`), complete records from the egress FIFO's and
+the handing buckets' (`Proofs.CertifierDevice.Fifo`, `Proofs.CertifierDevice.Late`, `Proofs.CertifierDevice.Complete`),
+the issuer's from LMS's correctness (`Proofs.CertifierDevice.Lms`, `Proofs.CertifierDevice.Issuer`).
 -/
 
 namespace Properties.CertifierDevice
