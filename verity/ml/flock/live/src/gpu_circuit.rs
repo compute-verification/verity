@@ -1006,7 +1006,7 @@ pub fn prove_circuit(
     let t_decode = Instant::now();
     drop(mctx);
     #[cfg(feature = "sha512")]
-    drop(key_guard);
+    drop(trees);
     if let Some(why) = rounds.and_then(|r| r.failed) {
         if rc == 0 {
             unsafe { flock_cuda_free(out) };
