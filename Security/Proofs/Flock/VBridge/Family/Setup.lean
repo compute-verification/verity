@@ -1,4 +1,6 @@
 import Proofs.Flock.VBridge.Family.Assembly
+import Proofs.Flock.VBridge.Algebra.Sim
+import Proofs.Flock.VBridge.Algebra.LigeritoConverse
 
 /-!
 # The inner statement's setup, from the hidden statement
@@ -12,8 +14,11 @@ executable statement `Stmt` stands behind it, so the setup the table files are r
 * `modelSetup_realizes`: it realizes `S` (`SetupRealizes`) at any `fast100` schedule of `S.m`;
 * `foldsOk_modelSetup`: its fold returns 64 elements at the round challenges `residualLins` draws (`ts_size`), so
   `FoldsOk` holds;
+* `CoinsAgree`: the rounds `verifierRows` takes have `run_of_frames`' counts (`roundSizes_shaped`), and Ligerito's
+  frames close at most the `ligCoins` rounds V*'s Ligerito draws after them (`ligRoundsLe_of`, at a schedule of the
+  seams);
 * at the family, `innerSetup` is `modelSetup` of each history's hidden statement, and `ShapeAt` (V*'s `m`, `k_log` and
-  schedule are the class's) gives `ShapeIs`, `SetupRealizes` and `FoldsOk` there;
+  schedule are the class's) gives `ShapeIs`, `SetupRealizes`, `FoldsOk` and `CoinsAgree` there;
 * `vbridgeRead_model`: `vbridgeRead_assembled` at `innerSetup`, without `hne`: with no history and registration,
   `VBridgeRead`'s first two conjuncts are vacuous.
 -/
@@ -216,6 +221,229 @@ def LigRoundsLe (sh : Shape) (sch : Flock.Schedule) : Prop :=
     3 + (sh.m - 6) + 2 + (sh.kLog - 6) + 1 + sh.claims + 1 + (chunks (ligFrames sch T cap lig)).1.length ≤
       (roundSizes sh).length
 
+/-- The rounds level `i` of `R` draws after level 0 (RecAlgebra.lean:415–432): four challenges, then two intros and a
+query fold below the last level, the queries and the batching coin at it. -/
+def levelCoins (R i : ℕ) : ℕ := if i + 1 < R then 11 else 7
+
+/-- The rounds Ligerito draws up to its final check (RecAlgebra.lean:436–450): the level-0 point and its batching
+coin, `k0` challenges, two intros, the query fold, then the levels'. -/
+def ligCoins (sch : Flock.Schedule) : ℕ :=
+  sch.k0 + 9 + ((List.range' 0 (sch.levels.size - 1)).map (levelCoins (sch.levels.size - 1))).sum
+
+theorem levelsLoop_k {c : Array (Array F128)} {M : Flock.RecAlgebra.Messages F128} {sch : Flock.Schedule} {R : ℕ}
+    (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
+    ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : Flock.RecAlgebra.LSt F128) (k : ℕ)
+      (out : Array (Array F256) × ℕ) (st' : Flock.RecAlgebra.LSt F128) (k' : ℕ), i + fuel ≤ R →
+      Flock.RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Flock.RecAlgebra.Coins.ofRounds c) =
+        .ok ((out, st'), k') →
+      k' = k + ((List.range' i fuel).map (levelCoins R)).sum
+  | 0, _, _, _, _, st, k, out, st', k', _, h => by
+    simp only [Flock.RecAlgebra.levelsLoop] at h
+    obtain ⟨-, -, rfl⟩ := Flock.RecAlgebra.vpure h
+    simp
+  | fuel + 1, i, split, levels, e, st, k, out, st', k', hi, h => by
+    simp only [Flock.RecAlgebra.levelsLoop] at h
+    by_cases hs : split < 4
+    · rw [ite_eq_left hs] at h
+      exact (Flock.RecAlgebra.vthrow h).elim
+    rw [ite_eq_right hs] at h
+    obtain ⟨chs, st₁, k₁, h₁, h⟩ := Flock.RecAlgebra.vbind_ok h
+    obtain ⟨e₁, -⟩ := Flock.RecAlgebra.challenges_conv (p := default) 4 0 #[] st st₁ k k₁ chs h₁
+    try dsimp only at h
+    rw [List.range'_succ, List.map_cons, List.sum_cons]
+    by_cases hi' : i + 1 < R
+    · rw [ite_eq_left hi'] at h
+      obtain ⟨u₂, st₂, k₂, h₂, h⟩ := Flock.RecAlgebra.vbind_ok h
+      obtain ⟨u₃, st₃, k₃, h₃, h⟩ := Flock.RecAlgebra.vbind_ok h
+      obtain ⟨u₄, st₄, k₄, h₄, h⟩ := Flock.RecAlgebra.vbind_ok h
+      obtain ⟨e₂, -⟩ := Flock.RecAlgebra.oodIntro_conv (p := default) (by omega) h₂
+      obtain ⟨e₃, -⟩ := Flock.RecAlgebra.oodIntro_conv (p := default) (by omega) h₃
+      obtain ⟨e₄, -⟩ := Flock.RecAlgebra.vqueryFold (hq (i + 1) (by omega)) h₄
+      have e₅ := levelsLoop_k hq fuel (i + 1) _ _ _ st₄ k₄ out st' k' (by omega) h
+      simp only [levelCoins, hi', ↓reduceIte]
+      omega
+    · rw [ite_eq_right hi'] at h
+      obtain ⟨r, st₂, k₂, h₂, h⟩ := Flock.RecAlgebra.vbind_ok h
+      obtain ⟨rfl, rfl, -, -, rfl⟩ := Flock.RecAlgebra.vquery (hq R le_rfl) h₂
+      try dsimp only at h
+      obtain ⟨-, h⟩ := Flock.RecAlgebra.vcoinOne_bind h
+      obtain ⟨⟨⟩, st₃, k₃, h₃, h⟩ := Flock.RecAlgebra.vbind_ok h
+      obtain ⟨-, rfl⟩ := Flock.RecAlgebra.vmodify_ok h₃
+      have e₅ := levelsLoop_k hq fuel (i + 1) _ _ _ st₃ _ out st' k' (by omega) h
+      simp only [levelCoins, hi', ↓reduceIte]
+      omega
+
+/-- **Ligerito up to its final check draws `ligCoins` rounds** at a schedule of the seams (`DimSeam`, `LevelSeam`). -/
+theorem ligeritoRun_k {c : Array (Array F128)} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages F128}
+    {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ} {out : Array F256 × Array (Array F256) × ℕ}
+    {stV : Flock.RecAlgebra.LSt F128} (hdim : DimSeam sch)
+    (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (Flock.RecAlgebra.Coins.ofRounds c) =
+      .ok ((out, stV), k')) :
+    k' = k₀ + ligCoins sch := by
+  obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
+  have hc01 := hcols 0 (by omega)
+  have hq : ∀ i ≤ sch.levels.size - 1, (sch.levels.getD i default).q ≠ 0 :=
+    fun i hi => (hlv i (by omega)).q_ne_zero
+  rw [StateT.run] at hrun
+  unfold Flock.RecAlgebra.ligeritoRun at hrun
+  obtain ⟨-, h⟩ := Flock.RecAlgebra.vcoinVec_bind (by omega) hrun
+  obtain ⟨y0, -, h⟩ := Flock.RecAlgebra.vnextOod_bind h
+  obtain ⟨-, h⟩ := Flock.RecAlgebra.vcoinOne_bind h
+  obtain ⟨⟨⟩, stZ, kZ, hZ, h⟩ := Flock.RecAlgebra.vbind_ok h
+  obtain ⟨-, rfl⟩ := Flock.RecAlgebra.vmodify_ok hZ
+  obtain ⟨m0, -, h⟩ := Flock.RecAlgebra.vnextMsg_bind h
+  obtain ⟨⟨⟩, stA, kA, hA, h⟩ := Flock.RecAlgebra.vbind_ok h
+  obtain ⟨-, rfl⟩ := Flock.RecAlgebra.vmodify_ok hA
+  obtain ⟨ic, st₁, k₁, h₁, h⟩ := Flock.RecAlgebra.vbind_ok h
+  try dsimp only at h
+  obtain ⟨⟨⟩, st₂, k₂, h₂, h⟩ := Flock.RecAlgebra.vbind_ok h
+  obtain ⟨⟨⟩, st₃, k₃, h₃, h⟩ := Flock.RecAlgebra.vbind_ok h
+  obtain ⟨⟨⟩, st₄, k₄, h₄, h⟩ := Flock.RecAlgebra.vbind_ok h
+  obtain ⟨⟨lv', ex'⟩, st₅, k₅, h₅, h⟩ := Flock.RecAlgebra.vbind_ok h
+  try dsimp only at h
+  obtain ⟨-, -, rfl⟩ := Flock.RecAlgebra.vpure h
+  obtain ⟨e₁, -⟩ := Flock.RecAlgebra.challenges_conv (p := default) sch.k0 0 #[] _ _ _ _ _ h₁
+  obtain ⟨e₂, -⟩ := Flock.RecAlgebra.oodIntro_conv (p := default) (by omega) h₂
+  obtain ⟨e₃, -⟩ := Flock.RecAlgebra.oodIntro_conv (p := default) (by omega) h₃
+  obtain ⟨e₄, -⟩ := Flock.RecAlgebra.vqueryFold (hlv 0 (by omega)).q_ne_zero h₄
+  have e₅ := levelsLoop_k hq _ _ _ _ _ st₄ _ _ _ _ (by omega) h₅
+  unfold ligCoins
+  omega
+
+/-- `ligerito` returns only after Ligerito up to its final check, having drawn every recorded round
+(RecAlgebra.lean:511–513). -/
+theorem ligerito_drawn {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages F128} {tIn : F128}
+    {sws : Array Flock.Switched} {k k' : ℕ} {src : Flock.RecAlgebra.Coins}
+    {r : Array F128 × Flock.RecAlgebra.LgPts} (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok (r, k')) :
+    ∃ st₀ out stV k₁, (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k src = .ok ((out, stV), k₁) ∧
+      src.drawnAll k₁ = true := by
+  unfold Flock.RecAlgebra.ligerito at h
+  obtain ⟨⟨out, stV⟩, k₁, h1, h⟩ := Flock.RecAlgebra.cm_bind h
+  obtain ⟨a, k₂, ha, h⟩ := Flock.RecAlgebra.cm_bind h
+  cases ha
+  obtain ⟨b, k₃, hb, h⟩ := Flock.RecAlgebra.cm_bind h
+  cases hb
+  by_cases cd : src.drawnAll k₁ = true
+  · exact ⟨_, out, stV, k₁, h1, cd⟩
+  · rw [ite_eq_left (by simpa using cd)] at h
+    obtain ⟨_, _, h0, _⟩ := Flock.RecAlgebra.cm_bind h
+    cases h0
+
+theorem chunks_length : ∀ fs : List Frame, (chunks fs).1.length = fs.countP closes
+  | [] => rfl
+  | f :: fs => by
+    rw [List.countP_cons, ← chunks_length fs, chunks]
+    by_cases hf : closes f = true
+    · simp only [hf, ite_true, List.length_cons]
+    · simp only [hf, Bool.false_eq_true, ite_false, Nat.add_zero]
+      cases (chunks fs).1 <;> rfl
+
+theorem countP_kFr (m : F256 × F256) : (kFr m).countP closes = 0 := rfl
+
+theorem closes_one (v : F128) : closes (.one v) = false := rfl
+theorem closes_bytes (b : ByteArray) : closes (.bytes b) = false := rfl
+theorem closes_label (b : ByteArray) : closes (.label b) = false := rfl
+theorem closes_capFr (cap : Array ByteArray) : closes (capFr cap) = false := rfl
+theorem closes_sq11 : closes (.sq 1 1) = true := rfl
+theorem closes_sq22 : closes (.sq 2 2) = true := rfl
+
+theorem countP_ones (l : List F128) : (l.map Frame.one).countP closes = 0 := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => rw [List.map_cons, List.countP_cons, ih]; rfl
+
+theorem countP_chFr (p : LigeritoProof) : ∀ k msg, (chFr p msg k).countP closes = k
+  | 0, _ => rfl
+  | k + 1, msg => by
+    simp only [chFr, List.countP_cons, List.countP_append, countP_kFr, countP_chFr p k (msg + 1), closes_sq22,
+      ↓reduceIte]
+    omega
+
+theorem countP_introFr (p : LigeritoProof) (dim ood msg cbn : ℕ) :
+    (introFr p dim ood msg cbn).countP closes ≤ 2 := by
+  cases dim <;> exact Nat.le_of_ble_eq_true rfl
+
+theorem countP_queryFr (p : LigeritoProof) (lv : Flock.Level) (qn cn : ℕ) :
+    (queryFr p lv qn cn).countP closes ≤ 2 := by
+  unfold queryFr
+  generalize lv.q = q
+  cases q <;> exact Nat.le_of_ble_eq_true rfl
+
+theorem countP_levelFr (sch : Flock.Schedule) (p : LigeritoProof) (i : ℕ) :
+    (levelFr sch p i).countP closes ≤ levelCoins (sch.levels.size - 1) i := by
+  unfold levelFr levelCoins
+  by_cases hi : i + 1 < sch.levels.size - 1
+  · have := countP_introFr p ((sch.levels.getD (i + 1) default).cols + 1) (3 + 2 * i) (sch.k0 + 8 + 7 * i) (4 + 3 * i)
+    have := countP_introFr p ((sch.levels.getD (i + 1) default).cols + 1) (4 + 2 * i) (sch.k0 + 9 + 7 * i) (5 + 3 * i)
+    have := countP_queryFr p (sch.levels.getD (i + 1) default) (1 + i) (1 + i)
+    simp only [hi, ↓reduceIte, List.countP_append, List.countP_cons, List.countP_nil, countP_chFr, countP_kFr,
+      closes_capFr, closes_bytes, closes_sq11, Bool.false_eq_true]
+    omega
+  · have := countP_queryFr p (sch.levels.getD (sch.levels.size - 1) default) (1 + i) (1 + i)
+    simp only [hi, ↓reduceIte, List.countP_append, List.countP_cons, List.countP_nil, countP_chFr, countP_ones,
+      closes_bytes, closes_sq11, Bool.false_eq_true]
+    omega
+
+theorem countP_levels (sch : Flock.Schedule) (p : LigeritoProof) :
+    ∀ a n, ((List.range' a n).flatMap (levelFr sch p)).countP closes ≤
+      ((List.range' a n).map (levelCoins (sch.levels.size - 1))).sum
+  | a, 0 => by simp
+  | a, n + 1 => by
+    rw [List.range'_succ, List.flatMap_cons, List.countP_append, List.map_cons, List.sum_cons]
+    have := countP_levelFr sch p a
+    have := countP_levels sch p (a + 1) n
+    omega
+
+/-- **A Ligerito run's frames close at most `ligCoins` rounds**: every `.sq` frame of `ligFrames` but the batching
+coins' is a draw of `ligeritoRun`'s, and none closes without one (FramesLigerito.lean:130–141, 207–228). -/
+theorem chunks_ligFrames_le (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof) :
+    (chunks (ligFrames sch T cap p)).1.length ≤ ligCoins sch := by
+  rw [chunks_length]
+  have := countP_introFr p (sch.n - sch.k0 + 1) 1 (sch.k0 + 1) 1
+  have := countP_introFr p (sch.n - sch.k0 + 1) 2 (sch.k0 + 2) 2
+  have := countP_queryFr p (sch.levels.getD 0 default) 0 0
+  have := countP_levels sch p 0 (sch.levels.size - 1)
+  unfold ligFrames ligCoins
+  simp only [List.countP_append, List.countP_cons, List.countP_nil, countP_chFr, countP_kFr, closes_capFr,
+    closes_bytes, closes_label, closes_one, closes_sq11, Bool.false_eq_true, ↓reduceIte]
+  split <;> omega
+
+/-- **`LigRoundsLe` at a schedule of the seams**: the rounds `verifierRows` takes are the zerocheck's, the
+lincheck's, ring switching's and then exactly `ligCoins` (`ligeritoRun_k`, at the evaluated messages `ligerito_sim`
+gives, and `drawnAll`), and Ligerito's frames close at most that many (`chunks_ligFrames_le`). -/
+theorem ligRoundsLe_of {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Schedule} {n : ℕ}
+    (hS : Flock.RecAlgebra.structureOf sh = .ok S) (hcl : sh.claims = 2 + n) (hm : 14 ≤ sh.m) (hsch : sh.sched = sch)
+    (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) :
+    LigRoundsLe sh sch := by
+  intro T cap lig
+  have hsz : (Flock.RecAlgebra.zeroRounds (roundSizes sh)).size = (roundSizes sh).length := by
+    simp [Flock.RecAlgebra.zeroRounds]
+  obtain ⟨x, hx⟩ := (roundSizes_spec hS (Flock.RecAlgebra.zeroRounds (roundSizes sh))
+    (Flock.RecAlgebra.extrasLike sh) #[]).2 ⟨zeroRounds_sizes _, by simp [Flock.RecAlgebra.extrasLike]; omega⟩
+  obtain ⟨v, info, kappa⟩ := x
+  obtain ⟨lins, hl⟩ := residualLins_of_verifierRows hx
+  obtain ⟨j, hj⟩ := Flock.RecAlgebra.residualLins_run hl
+  obtain ⟨-, r0, r1, rsr, lgr, k1, k2, k3, h0, h1, h2, h3, -⟩ := Flock.RecAlgebra.run_stages hj
+  obtain ⟨-, -, -, -, -, -, -, -, -, hk1, -⟩ := Flock.RecAlgebra.zerocheck_coins hm h0
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, hk2, -⟩ := Flock.RecAlgebra.lincheck_coins h1
+  have hcs : (Flock.RecAlgebra.claimsOf sh.m sh.kLog info.zc info.lc (Flock.RecAlgebra.extrasLike sh)).size =
+      2 + n := by
+    simp [Flock.RecAlgebra.claimsOf, Flock.RecAlgebra.extrasLike]; omega
+  obtain ⟨_, -, -, -, hk3, -⟩ := Flock.RecAlgebra.ringSwitch_spec (by omega) h2
+  have hzc : (Flock.RecAlgebra.symbolic sh).zc.size = sh.m - 6 := by simp [Flock.RecAlgebra.symbolic]
+  have hlc : (Flock.RecAlgebra.symbolic sh).lc.size = sh.kLog - 6 := by simp [Flock.RecAlgebra.symbolic]
+  rw [hzc] at hk1
+  rw [hlc] at hk2
+  rw [hcs] at hk3
+  have h3' := Flock.RecAlgebra.ligerito_sim (Flock.RecAlgebra.Lin.eval_hom fun _ => 0) _ _ _ _ _ _ _ _ h3
+  obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_drawn h3'
+  rw [hsch] at hrun
+  have hk := ligeritoRun_k hdim hlv hrun
+  have hd : k₄ = (Flock.RecAlgebra.zeroRounds (roundSizes sh)).size := beq_iff_eq.mp hdr
+  have := chunks_ligFrames_le sch T cap lig
+  omega
+
 /-- **`CoinsAgree`** at a setup of the shape's `m` and fold `k_log`, from `roundSizes_shaped` and `LigRoundsLe`. -/
 theorem coinsAgree_of {st : Setup} {sh : Shape} {sch : Flock.Schedule} {n : ℕ} {S : Flock.RecAlgebra.GfS}
     (hS : Flock.RecAlgebra.structureOf sh = .ok S) (hcl : sh.claims = 2 + n) (hm : st.m = sh.m)
@@ -262,12 +490,16 @@ theorem foldsOk_of (h : F.ShapeAt) (R : Reg) (ω : L.Ω) : FoldsOk (F.innerSetup
   foldsOk_modelSetup _ _ _ ((F.shapeIs_of h R ω).2.1)
 
 theorem coinsAgree_at (h : F.ShapeAt) {GS : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf F.sh = .ok GS)
-    (hcl : F.ClaimsAt) (hlig : LigRoundsLe F.sh sch) (R : Reg) (ω : L.Ω) :
+    (hcl : F.ClaimsAt) (R : Reg) (ω : L.Ω) :
     CoinsAgree (F.innerSetup R ω) F.sh sch (2 * ((F.x R ω).toStatement regs).regions.length) := by
   obtain ⟨hf, hm, -⟩ := shape?_eq F.hsh
   have h22 := (fast100_range hf).1
-  exact coinsAgree_of hS (F.claimsIs_of hcl R ω) (F.shapeIs_of h R ω).1.symm (F.shapeIs_of h R ω).2.1.symm
-    (by omega) hlig
+  have hs := h.2.2
+  have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
+    fast100_level _ _ hs _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hshp := F.shapeIs_of h R ω
+  exact coinsAgree_of hS (F.claimsIs_of hcl R ω) hshp.1.symm hshp.2.1.symm (by omega)
+    (ligRoundsLe_of hS (F.claimsIs_of hcl R ω) (by omega) hshp.2.2 (fast100_dims _ _ hs).1 hlv)
 
 end VStarFamily
 
@@ -281,9 +513,9 @@ variable (spec : SessionSpec)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
 
 /-- **VBridge G's read conjunct at the model setup**: `vbridgeRead_assembled` at `innerSetup`, whose `SetupRealizes`,
-`ShapeIs` and `FoldsOk` follow from `ShapeAt`. Without a history and registration (`¬ Nonempty (Reg × L.Ω × Reg₂)`),
-`VBridgeRead`'s first two conjuncts quantify over none and its last two are the lanes' (`vDecodesRead_of`,
-`vFullRead_of`), so `hne` is not needed. -/
+`ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`. Without a history and registration
+(`¬ Nonempty (Reg × L.Ω × Reg₂)`), `VBridgeRead`'s first two conjuncts quantify over none and its last two are the
+lanes' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
 theorem vbridgeRead_model (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
     (hshape : F.ShapeAt) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
     (hseen : F.HRowSeen) (hv : (F.assembled spec F.innerSetup cap lig own sel bc dec).HVCoins dg N k Rw)
@@ -292,7 +524,6 @@ theorem vbridgeRead_model (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bi
     (hcoef : (F.assembled spec F.innerSetup cap lig own sel bc dec).HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : (F.assembled spec F.innerSetup cap lig own sel bc dec).HEnds dg N k Rw V) (hcl : F.ClaimsAt)
-    (hlig : LigRoundsLe F.sh sch)
     (hcapS : F.AtAccepted dg N k Rw fun R ω _ l => CapShaped (F.innerSetup R ω) sch (cap l))
     (hligS : F.AtAccepted dg N k Rw fun R ω _ l => ∀ r, LigShaped (F.innerSetup R ω) sch (lig l r))
     (hregs : ∀ R ω, ((F.x R ω).toStatement regs).regions.length < 2 ^ 48)
@@ -319,7 +550,7 @@ theorem vbridgeRead_model (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bi
     obtain ⟨GS, gs, hst⟩ := F.hStruct_of hne hsome hname
     exact F.vbridgeRead_assembled dg N k Rw spec F.innerSetup cap lig own sel bc dec hne honame hcount hname hseen hv
       hlay hrr hrck hsame hshared hz hcoef V hV hE (F.setupRealizes_of hshape) (F.shapeIs_of hshape) hcl
-      (F.foldsOk_of hshape) (F.coinsAgree_at hshape hst.1 hcl hlig) hcapS hligS hregs htr hopen hpub hsel hS hu4
+      (F.foldsOk_of hshape) (F.coinsAgree_at hshape hst.1 hcl) hcapS hligS hregs htr hopen hpub hsel hS hu4
 
 end VStarFamily
 
