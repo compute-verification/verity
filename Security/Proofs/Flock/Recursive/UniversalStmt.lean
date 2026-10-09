@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.UniversalLower
 import Proofs.Flock.Recursive.Private
+import Proofs.Flock.Soundness.Discharge.Hm.Port
 import Flock.HmRow
 
 /-!
@@ -26,13 +27,23 @@ file states that, for `RecursiveAudit`'s (i) and the verifier's refusals, over a
   strings'). At no hidden entries every `Hidden cls` is the empty template (`hidden_eq`), so there `stmt` is one
   statement whatever the rows (`stmt_const`): the description reaches the inner statement through its rows' commit
   strings, never through `Hidden`.
-* **The argument order** (`argOrder p`, staging option (a)): the sources `op`, `src`, `out` are rows `0`, `1`, `2`, and
-  the bit at offset `j` of a source is row bit `j`: bit `j mod 16` of the row's u16 word `⌊j/16⌋` (`descAt_word`).
-  `descAt_op`, `descAt_src`, `descAt_out` read each place of `UniversalClass.layout` there.
-* **A faulty session** (`SessionFaulty π ρx ρy q qs`): some instance whose claimed outputs differ from the decoded
-  circuit's on its inputs under every opening of the rows they're read from (the description's from the registered
-  strings `q`; the instance's inputs and outputs from the statement's strings `qs`, through `ρx u` and `ρy u`). Where
-  every row read opens to exactly one row it is the chosen openings' `Faulty` (`sessionFaulty_iff`).
+* **The layout functions** (staging (a), 6692c8703), computable over a statement's files. The row ports are `p0` (the
+  description: one table row, which every instance refs), `p1` (the instance's inputs) and `out` (its hidden outputs).
+  `argOrder p j` is bit `j` of registered row `0`: description bit `j` is bit `j mod 16` of `p0`'s u16 word `⌊j/16⌋`
+  (`descAt_word`), and `descAt_op`, `descAt_src`, `descAt_out` read each place of `UniversalClass.layout` there.
+  `srcAt st u a` is bit `a` of instance `u`'s `p1` table row, `outAt st u i` bit `16 i` (u16 word `i`) of its `out`
+  table row, where `tableRow st u q` is the row `Public.digest` reads (`digestsAt_tableRow`). `paramsAt st` is
+  `{G, N_IN, N_OUT}` read off a typed class's unit type (`paramsAt_of_unitType`), and `UnitIsUniversal st` says that
+  type is `uuType` at them: the check T1 would add.
+* **A faulty session** (`SessionFaulty π ρx ρy q qs`): some instance faulty at every opening of the registered rows,
+  which equals faulty at the developer's opening unless two openings of a read row collide under SHA-512 (cr/sha-512,
+  listed). The description is read from the registered strings `q`, the instance's inputs and outputs from the
+  statement's strings `qs` through `ρx u` and `ρy u`. Where every row read opens to exactly one row it is the chosen
+  openings' `Faulty` (`sessionFaulty_iff`).
+* **The layout tie** (T4, `not_faulty_of_slot`, `not_faulty_of_class`, `not_sessionFaulty_of`): an instance whose
+  slot satisfies the unit's rows, whose description, input and output columns hold its `p0`, `p1` and `out` rows' bits
+  at `argOrder`, `srcAt` and `outAt`, and whose rows open the statement's strings there is no faulty session's witness.
+  The description's string is the registered `q 0` by T5b's equality. A row's bits at its columns are `rowBit_bytesOf`.
 * `prob_faulty_le`: (i)'s event at a faulty session from (i)'s event at the statement failing, once the statement
   holding rules out a faulty session at every outcome reached.
 -/
@@ -85,7 +96,9 @@ theorem uu_unit_sound_interpret {types : String → Option CircuitType} {ls : Ar
 
 /-! ## Faulty -/
 
-/-- **A faulty instance**: claimed outputs `y` that differ from the decoded circuit's on the inputs `x`. -/
+/-- **A faulty instance**: claimed outputs `y` that differ from the decoded circuit's on the inputs `x`. Over a session
+(`SessionFaulty`) an instance is faulty at every opening of the registered rows, which equals faulty at the developer's
+opening unless two openings of a read row collide under SHA-512 (cr/sha-512, listed). -/
 def Faulty (d : Desc p) (x : Fin p.nIn → Bool) (y : Fin p.nOut → Bool) : Prop := y ≠ interpret (UniversalClass.decode d) x
 
 theorem faulty_iff_eval {d : Desc p} {x : Fin p.nIn → Bool} {y : Fin p.nOut → Bool} : Faulty d x y ↔ y ≠ d.eval x := by
@@ -217,75 +230,119 @@ theorem stmt_const {cls : HClass} (h : cls.nnz = 0) {Ω : Type} (low : Desc p �
     (q q' : ℕ → ByteArray) (ω ω' : Ω) : stmt low π q ω = stmt low π q' ω' :=
   hidden_eq h _ _
 
-/-! ## The argument order -/
+/-! ## The layout functions (staging (a)) -/
 
-/-- **The argument order** (staging option (a)): the sources `op` (`2G` bits), `src` (`2G·K`) and `out` (`N_OUT·K`)
-are rows `0`, `1` and `2`, and the bit at offset `j` of a source is row bit `j`, bit `j mod 16` of the row's u16 word
-`⌊j/16⌋` under `packed=True` (`descAt_word`). -/
-def argOrder (p : Params) (j : Fin p.width) : ℕ × ℕ :=
-  if j.val < 2 * p.g then (0, j.val)
-  else if j.val < 2 * p.g + 2 * p.g * p.k then (1, j.val - 2 * p.g)
-  else (2, j.val - (2 * p.g + 2 * p.g * p.k))
+/-- **The staging's row ports**, in `c.ports` order: the description `p0`, the instance's inputs `p1`, its hidden
+outputs `out`. -/
+def descPort : ℕ := 0
 
-/-- The argument order reads rows `0`, `1` and `2` only. -/
-theorem argOrder_lt (j : Fin p.width) : (argOrder p j).1 < 3 := by
-  unfold argOrder
-  split_ifs <;> simp
+/-- The instance's inputs' port, `p1`. -/
+def xPort : ℕ := 1
 
-/-- **At the argument order, description bit `j` is bit `j mod 16` of u16 word `⌊j/16⌋` of its source's row**, `j`
-its offset in the source. -/
+/-- The instance's hidden outputs' port, `out`. -/
+def outPort : ℕ := 2
+
+/-- **The argument order** (staging (a)): description bit `j` is bit `j` of registered row `0`, the one `p0` row, which
+is bit `j mod 16` of its u16 word `⌊j/16⌋` under `packed=True` (`descAt_word`). The sources `op` (`2G` bits), `src`
+(`2G·K`) and `out` (`N_OUT·K`) follow one another there in `UniversalClass.layout`'s order. -/
+def argOrder (p : Params) (j : Fin p.width) : ℕ × ℕ := (descPort, j.val)
+
+/-- The argument order reads row `0` only. -/
+theorem argOrder_lt (j : Fin p.width) : (argOrder p j).1 < 1 := Nat.zero_lt_one
+
+/-- **At the argument order, description bit `j` is bit `j mod 16` of u16 word `⌊j/16⌋` of row `0`.** -/
 theorem descAt_word (q : ℕ → ByteArray) (j : Fin p.width) :
-    descAt (argOrder p) q j =
-      (word16 (openRow (q (argOrder p j).1)) ((argOrder p j).2 / 16)).testBit ((argOrder p j).2 % 16) :=
+    descAt (argOrder p) q j = (word16 (openRow (q 0)) (j.val / 16)).testBit (j.val % 16) :=
   rowBit_eq_word16 _ _
 
 /-- Op bit `t` of gate `g` is bit `2g + t` of row `0`. -/
 theorem descAt_op (q : ℕ → ByteArray) (g : Fin p.g) (t : Fin 2) :
     descAt (argOrder p) q (layout p (.inl (g, t))) = rowBit (openRow (q 0)) (2 * g.val + t.val) := by
-  have hg := g.isLt
-  have ht := t.isLt
-  show rowBit (openRow (q (argOrder p _).1)) (argOrder p _).2 = _
-  unfold argOrder
-  rw [layout_op, ite_eq_left (by omega)]
+  show rowBit (openRow (q 0)) (layout p _).val = _
+  rw [layout_op]
 
-/-- Bit `j` of gate `g`'s source `s` is bit `(2g + s)·K + j` of row `1`. -/
+/-- Bit `j` of gate `g`'s source `s` is bit `2G + (2g + s)·K + j` of row `0`. -/
 theorem descAt_src (q : ℕ → ByteArray) (g : Fin p.g) (s : Fin 2) (j : Fin p.k) :
     descAt (argOrder p) q (layout p (.inr (.inl ((g, s), j)))) =
-      rowBit (openRow (q 1)) ((2 * g.val + s.val) * p.k + j.val) := by
-  have hg := g.isLt
-  have hs := s.isLt
-  have hj := j.isLt
-  have hle : (2 * g.val + s.val + 1) * p.k ≤ 2 * p.g * p.k := Nat.mul_le_mul_right _ (by omega)
-  have hsucc : (2 * g.val + s.val + 1) * p.k = (2 * g.val + s.val) * p.k + p.k := by ring
-  show rowBit (openRow (q (argOrder p _).1)) (argOrder p _).2 = _
-  unfold argOrder
-  rw [layout_src, ite_eq_right (by omega), ite_eq_left (by omega)]
-  congr 2
-  omega
+      rowBit (openRow (q 0)) (2 * p.g + (2 * g.val + s.val) * p.k + j.val) := by
+  show rowBit (openRow (q 0)) (layout p _).val = _
+  rw [layout_src]
 
-/-- Bit `j` of output `i`'s index is bit `i·K + j` of row `2`. -/
+/-- Bit `j` of output `i`'s index is bit `2G + 2G·K + i·K + j` of row `0`. -/
 theorem descAt_out (q : ℕ → ByteArray) (i : Fin p.nOut) (j : Fin p.k) :
-    descAt (argOrder p) q (layout p (.inr (.inr (i, j)))) = rowBit (openRow (q 2)) (i.val * p.k + j.val) := by
-  show rowBit (openRow (q (argOrder p _).1)) (argOrder p _).2 = _
-  unfold argOrder
-  rw [layout_out, ite_eq_right (by omega), ite_eq_right (by omega)]
-  congr 2
-  omega
+    descAt (argOrder p) q (layout p (.inr (.inr (i, j)))) =
+      rowBit (openRow (q 0)) (2 * p.g + 2 * p.g * p.k + i.val * p.k + j.val) := by
+  show rowBit (openRow (q 0)) (layout p _).val = _
+  rw [layout_out]
 
-/-- **At the argument order the statement reads rows `0`, `1`, `2` only.** -/
-theorem stmt_argOrder_congr {H Ω : Type} (low : Desc p → H) {q q' : ℕ → ByteArray} (h : ∀ i < 3, q i = q' i) (ω : Ω) :
+/-- **At the argument order the statement reads row `0` only.** -/
+theorem stmt_argOrder_congr {H Ω : Type} (low : Desc p → H) {q q' : ℕ → ByteArray} (h : q 0 = q' 0) (ω : Ω) :
     stmt low (argOrder p) q ω = stmt low (argOrder p) q' ω :=
-  stmt_congr low argOrder_lt h ω
+  stmt_congr low argOrder_lt (fun i hi => by obtain rfl := Nat.lt_one_iff.mp hi; exact h) ω
+
+/-- **The table row instance `u`'s port `q` reads**, as `Public.digest` reads it: `starts[q] + refs[u·np + q]` in a
+shared-row file (its tables port-major), `u·np + q` otherwise, `np` the circuit's ports. -/
+def tableRow (st : Flock.Stmt) (u q : ℕ) : ℕ :=
+  match st.pub.tables with
+  | some t => t.starts.getD q 0 + t.refs.getD (u * st.c.ports.size + q) 0
+  | none => u * st.c.ports.size + q
+
+/-- **The statement's commit strings by table row**: the public file's `b ‖ c` at row `i`, `ByteArray.empty` past
+them. -/
+def digestsAt (st : Flock.Stmt) (i : ℕ) : ByteArray := st.pub.digests.getD i ByteArray.empty
+
+/-- **`digestsAt` at an instance's table row is the digest the verifier reads for it.** -/
+theorem digestsAt_tableRow (st : Flock.Stmt) (u q : ℕ) :
+    digestsAt st (tableRow st u q) = st.pub.digest u q st.c.ports.size := by
+  unfold digestsAt tableRow Flock.Public.digest
+  rcases st.pub.tables with _ | t <;> rfl
+
+/-- **Instance `u`'s input bit `a`**: bit `a` of its `p1` table row. -/
+def srcAt (st : Flock.Stmt) (u : Fin st.n) (a : Fin p.nIn) : ℕ × ℕ := (tableRow st u xPort, a.val)
+
+/-- **Instance `u`'s output `i`**: bit `16 i` of its `out` table row, bit `0` of the row's u16 word `i`. -/
+def outAt (st : Flock.Stmt) (u : Fin st.n) (i : Fin p.nOut) : ℕ × ℕ := (tableRow st u outPort, 16 * i.val)
+
+/-- **The parameters a unit type's ports name**: `G` from the first port's `2G` bits (`op`), `N_IN` from the fourth's
+(`x`), `N_OUT` from the one output port's. -/
+def paramsOfType (ty : Flock.CircuitType) : Params :=
+  ⟨(ty.ins.getD 0 (0, 0)).2 / 2, (ty.ins.getD 3 (0, 0)).2, (ty.outs.getD 0 (0, 0)).2⟩
+
+theorem paramsOfType_uuType : paramsOfType (uuType p) = p := by
+  obtain ⟨g, nIn, nOut⟩ := p
+  simp [paramsOfType, uuType]
+
+/-- **The statement's unit type**: the type its class names for the unit's layout, `none` for an untyped statement. -/
+def unitTypeAt (st : Flock.Stmt) : Option Flock.CircuitType :=
+  st.c.cls.bind fun k => (k.ls.getD k.unit default).type.bind (Flock.Typed.typeIn k.types)
+
+/-- **The statement's parameters `{G, N_IN, N_OUT}`**: its unit type's (`paramsOfType`), `⟨0, 0, 0⟩` for an untyped
+statement. -/
+def paramsAt (st : Flock.Stmt) : Params := ((unitTypeAt st).map paramsOfType).getD ⟨0, 0, 0⟩
+
+theorem paramsAt_of_unitType {st : Flock.Stmt} (h : unitTypeAt st = some (uuType p)) : paramsAt st = p := by
+  simp [paramsAt, h, paramsOfType_uuType]
+
+/-- **T1: the statement's unit is the universal unit at its ports**: its unit type is `uuType` at `paramsAt st`. The
+refusal T1 would add to Lean's verifier on the inner statement; no check makes it yet. -/
+def UnitIsUniversal (st : Flock.Stmt) : Prop := unitTypeAt st = some (uuType (paramsAt st))
+
+/-- **At a typed class, T1 is the class's unit type**: the form `uu_unit_sound`'s `ht` takes. -/
+theorem unitType_of_universal {st : Flock.Stmt} {k : Flock.Typed.Class} (hk : st.c.cls = some k)
+    (hu : UnitIsUniversal st) :
+    (k.ls.getD k.unit default).type.bind (Flock.Typed.typeIn k.types) = some (uuType (paramsAt st)) := by
+  simpa [UnitIsUniversal, unitTypeAt, hk] using hu
 
 /-! ## A faulty session -/
 
 /-- **`rows` open the commit strings `q` at every row `π` reads.** -/
 def RowsOpen {n : ℕ} (π : Fin n → ℕ × ℕ) (q rows : ℕ → ByteArray) : Prop := ∀ j, Opens (q (π j).1) (rows (π j).1)
 
-/-- **A faulty session**: some instance `u` whose claimed outputs differ from the decoded circuit's on its inputs under
-every opening of the rows they're read from: the description's from the registered commit strings `q` through `π`, the
-instance's inputs and claimed outputs from the statement's commit strings `qs` through `ρx u` and `ρy u`. A string that
-opens to no row leaves no opening, so an instance read from one is faulty. -/
+/-- **A faulty session**: some instance `u` faulty at every opening of the registered rows, which equals faulty at the
+developer's opening unless two openings of a read row collide under SHA-512 (cr/sha-512, listed). The rows are those
+`u` is read from: the description's from the registered commit strings `q` through `π`, the instance's inputs and
+claimed outputs from the statement's commit strings `qs` through `ρx u` and `ρy u`. A string that opens to no row leaves
+no opening, so an instance read from one is faulty. -/
 def SessionFaulty {ι : Type} (π : Fin p.width → ℕ × ℕ) (ρx : ι → Fin p.nIn → ℕ × ℕ) (ρy : ι → Fin p.nOut → ℕ × ℕ)
     (q qs : ℕ → ByteArray) : Prop :=
   ∃ u, ∀ rows srows : ℕ → ByteArray, RowsOpen π q rows → RowsOpen (ρx u) qs srows → RowsOpen (ρy u) qs srows →
@@ -327,6 +384,107 @@ theorem not_faulty_at {ι : Type} {π : Fin p.width → ℕ × ℕ} {ρx : ι �
     ¬ ∀ rows srows : ℕ → ByteArray, RowsOpen π q rows → RowsOpen (ρx u) qs srows → RowsOpen (ρy u) qs srows →
       Faulty (rowBits π rows) (rowBits (ρx u) srows) (rowBits (ρy u) srows) :=
   fun h => h rows srows hr hsx hsy hok
+
+/-! ## T4: the layout tie -/
+
+/-- **Bit `k` of the row whose bytes are `l`** is bit `k mod 8` of `l`'s byte `⌊k/8⌋` (`Hm.bitL`). -/
+theorem rowBit_mk (l : List UInt8) (k : ℕ) : rowBit ⟨l.toArray⟩ k = FlockSoundness.Discharge.Hm.bitL l k := by
+  unfold rowBit FlockSoundness.Discharge.Hm.bitL
+  congr 2
+  show l.toArray[k / 8]! = l.getD (k / 8) 0
+  rw [getElem!_def, List.getD_eq_getElem?_getD, List.getElem?_toArray]
+  rcases l[k / 8]? <;> rfl
+
+/-- **A row at its columns**: bit `k < 8N` of the row whose byte `j`'s bit `t` is `w (a j t)` is
+`w (a ⌊k/8⌋ (k mod 8))`. At `a = Typed.msgCol c g q` and `N = 2 · words` it is port `q`'s row at template instance
+`g`, the message bytes `row_bc_flat` commits. -/
+theorem rowBit_bytesOf (w : ℕ → Bool) {N : ℕ} (a : ℕ → ℕ → ℕ) {k : ℕ} (hk : k < 8 * N) :
+    rowBit ⟨(FlockSoundness.Discharge.Hm.bytesOf w N a).toArray⟩ k = w (a (k / 8) (k % 8)) := by
+  rw [rowBit_mk, FlockSoundness.Discharge.Hm.bitL_bytesOf w a hk]
+
+/-- **An instance's rows, as the statement's**: `rx` at its `p1` table row, `ry` at every other. -/
+def instRows (st : Flock.Stmt) (u : ℕ) (rx ry : ByteArray) : ℕ → ByteArray :=
+  fun i => if i = tableRow st u xPort then rx else ry
+
+theorem rowBits_argOrder (rd : ByteArray) : rowBits (argOrder p) (fun _ => rd) = fun j => rowBit rd j.val := rfl
+
+theorem rowBits_srcAt (st : Flock.Stmt) (u : Fin st.n) (rx ry : ByteArray) :
+    rowBits (srcAt (p := p) st u) (instRows st u rx ry) = fun a => rowBit rx a.val := by
+  funext a
+  simp [rowBits, srcAt, instRows]
+
+theorem rowBits_outAt (st : Flock.Stmt) (u : Fin st.n) (rx ry : ByteArray)
+    (hne : tableRow st u outPort ≠ tableRow st u xPort) :
+    rowBits (outAt (p := p) st u) (instRows st u rx ry) = fun i => rowBit ry (16 * i.val) := by
+  funext i
+  simp [rowBits, outAt, instRows, hne]
+
+theorem rowsOpen_argOrder {q : ℕ → ByteArray} {rd : ByteArray} (h : Opens (q 0) rd) :
+    RowsOpen (argOrder p) q fun _ => rd :=
+  fun _ => h
+
+theorem rowsOpen_srcAt {st : Flock.Stmt} {u : Fin st.n} {rx ry : ByteArray}
+    (h : Opens (digestsAt st (tableRow st u xPort)) rx) :
+    RowsOpen (srcAt (p := p) st u) (digestsAt st) (instRows st u rx ry) := fun _ => by
+  simpa [srcAt, instRows] using h
+
+theorem rowsOpen_outAt {st : Flock.Stmt} {u : Fin st.n} {rx ry : ByteArray}
+    (hne : tableRow st u outPort ≠ tableRow st u xPort) (h : Opens (digestsAt st (tableRow st u outPort)) ry) :
+    RowsOpen (outAt (p := p) st u) (digestsAt st) (instRows st u rx ry) := fun _ => by
+  simpa [outAt, instRows, hne] using h
+
+/-- **T4 at one instance, from its slot's facts.** Instance `u`'s slot satisfies the unit's rows with `one` at 1, and
+its description, input and output columns hold bits `argOrder`, `srcAt` and `outAt` read from its rows `rd`, `rx`,
+`ry`. Those rows open the statement's strings at its `p0`, `p1` and `out` table rows (T3 with the region tie), and
+the `p0` string is the registered `q 0` (`h5b`, T5b's equality). Its `p1` and `out` table rows differ (`hne`: the
+public file's refs lie below their tables' counts, and the tables are port-major). Then `u` is no faulty session's
+witness. -/
+theorem not_faulty_of_slot {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}
+    {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array DeriveAll.D}
+    (hd : DeriveAll.deriveChecked types ls info words unit = .ok done)
+    (ht : (ls.getD unit default).type.bind types = some (uuType p)) (one : ℕ) (z : ℕ → Bool)
+    (hz : Dag.SatAt (DeriveAll.blockRow words (done.getD unit default) one) z) (h1 : z one = true)
+    {st : Flock.Stmt} {q : ℕ → ByteArray} (u : Fin st.n) {rd rx ry : ByteArray}
+    (h5b : digestsAt st (tableRow st u descPort) = q 0) (hne : tableRow st u outPort ≠ tableRow st u xPort)
+    (hod : Opens (digestsAt st (tableRow st u descPort)) rd) (hox : Opens (digestsAt st (tableRow st u xPort)) rx)
+    (hoy : Opens (digestsAt st (tableRow st u outPort)) ry)
+    (hdz : ∀ j : Fin p.width, z ((done.getD unit default).inCols.getD j 0) = rowBit rd j)
+    (hxz : ∀ a : Fin p.nIn, z ((done.getD unit default).inCols.getD (p.width + a) 0) = rowBit rx a)
+    (hyz : ∀ i : Fin p.nOut, z ((done.getD unit default).outCols.getD i 0) = rowBit ry (16 * i.val)) :
+    ¬ ∀ rows srows : ℕ → ByteArray, RowsOpen (argOrder p) q rows → RowsOpen (srcAt (p := p) st u) (digestsAt st) srows →
+      RowsOpen (outAt (p := p) st u) (digestsAt st) srows →
+      Faulty (rowBits (argOrder p) rows) (rowBits (srcAt st u) srows) (rowBits (outAt st u) srows) := by
+  intro h
+  have hf := h (fun _ => rd) (instRows st u rx ry) (rowsOpen_argOrder (h5b ▸ hod)) (rowsOpen_srcAt hox)
+    (rowsOpen_outAt hne hoy)
+  rw [rowBits_argOrder, rowBits_srcAt, rowBits_outAt st u rx ry hne] at hf
+  exact not_faulty_of_unit hd ht one z hz h1 hdz hxz hyz hf
+
+/-- **T4 at one instance of a typed class**: `not_faulty_of_slot` at the class's derivation (`Typed.Class.hd`), with T1
+(`UnitIsUniversal`) for its unit type, at the parameters `paramsAt st`. -/
+theorem not_faulty_of_class {st : Flock.Stmt} {k : Flock.Typed.Class} (hk : st.c.cls = some k)
+    (hu : UnitIsUniversal st) (one : ℕ) (z : ℕ → Bool)
+    (hz : Dag.SatAt (DeriveAll.blockRow (Flock.Typed.wordsIn k.held) (k.done.getD k.unit default) one) z)
+    (h1 : z one = true) {q : ℕ → ByteArray} (u : Fin st.n) {rd rx ry : ByteArray}
+    (h5b : digestsAt st (tableRow st u descPort) = q 0) (hne : tableRow st u outPort ≠ tableRow st u xPort)
+    (hod : Opens (digestsAt st (tableRow st u descPort)) rd) (hox : Opens (digestsAt st (tableRow st u xPort)) rx)
+    (hoy : Opens (digestsAt st (tableRow st u outPort)) ry)
+    (hdz : ∀ j : Fin (paramsAt st).width, z ((k.done.getD k.unit default).inCols.getD j 0) = rowBit rd j)
+    (hxz : ∀ a : Fin (paramsAt st).nIn,
+      z ((k.done.getD k.unit default).inCols.getD ((paramsAt st).width + a) 0) = rowBit rx a)
+    (hyz : ∀ i : Fin (paramsAt st).nOut, z ((k.done.getD k.unit default).outCols.getD i 0) = rowBit ry (16 * i.val)) :
+    ¬ ∀ rows srows : ℕ → ByteArray, RowsOpen (argOrder (paramsAt st)) q rows →
+      RowsOpen (srcAt (p := paramsAt st) st u) (digestsAt st) srows → RowsOpen (outAt (p := paramsAt st) st u) (digestsAt st) srows →
+      Faulty (rowBits (argOrder (paramsAt st)) rows) (rowBits (srcAt st u) srows) (rowBits (outAt st u) srows) :=
+  not_faulty_of_slot k.hd (unitType_of_universal hk hu) one z hz h1 u h5b hne hod hox hoy hdz hxz hyz
+
+/-- **T4 over the session**: a session none of whose instances is a witness is not faulty. -/
+theorem not_sessionFaulty_of {st : Flock.Stmt} {q : ℕ → ByteArray}
+    (h : ∀ u : Fin st.n, ¬ ∀ rows srows : ℕ → ByteArray, RowsOpen (argOrder p) q rows →
+      RowsOpen (srcAt (p := p) st u) (digestsAt st) srows → RowsOpen (outAt (p := p) st u) (digestsAt st) srows →
+      Faulty (rowBits (argOrder p) rows) (rowBits (srcAt st u) srows) (rowBits (outAt st u) srows)) :
+    ¬ SessionFaulty (argOrder p) (srcAt st) (outAt st) q (digestsAt st) :=
+  fun ⟨u, hu⟩ => h u hu
 
 /-! ## (i) at a faulty session -/
 
