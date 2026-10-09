@@ -5,7 +5,8 @@ on drawn programs, laws, records, draws and verdicts, valid ones and one or two 
 The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `two_stage.draw_first` on
-`OwnRandomness` over the given bytes, and for `check_public` the proof service's public-items rule (`service.check_public`). Records are v1 and, on the programs with root parameters to register
+`OwnRandomness` over the given bytes, and for `check_public` and `check_verdicts` the proof service's own
+(`service.check_public`, `service.check_verdicts`). Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
@@ -565,6 +566,25 @@ def check_public(j):
     values = [SimpleNamespace(name=v["name"], registered=v["registered"]) for v in vs]
     with mock.patch.object(service, "SCHEME", j["scheme"]):
         return _json(service.check_public(spec, rec, values).to_json())
+
+
+def check_verdicts(j):
+    """The proof service's hold on an outcome's verdicts (`service.check_verdicts`) on `{"verdicts", "sessions",
+    "outputs"}`. Rejected where the Lean refuses: malformed verdicts, sessions or outputs, and, once none is pending, a
+    verdict of record's sessions that are neither a list nor empty (whose characters or keys Python's `list` would read)."""
+    j = _json(j)
+    vs, ss, outputs = (j.get(k) for k in ("verdicts", "sessions", "outputs")) if isinstance(j, dict) else (None, None, None)
+    if not (isinstance(vs, dict) and all(isinstance(v, dict) for v in vs.values())):
+        raise D.Reject("verdicts is not an object of objects")
+    if not (isinstance(ss, list) and all(isinstance(x, str) for x in ss)):
+        raise D.Reject("sessions is not a list of strings")
+    if not (isinstance(outputs, list) and all(isinstance(o, str) for o in outputs) and len(set(outputs)) == len(outputs)):
+        raise D.Reject("outputs are not distinct strings")
+    of_record = [v for v in vs.values() if v.get("of_record")]
+    pending = not of_record or any(v.get("accepted") is None for v in of_record)
+    if not pending and any(v.get("sessions") and not isinstance(v["sessions"], list) for v in of_record):
+        raise D.Reject("a verdict of record's sessions are not a list")
+    return _json(service.check_verdicts(vs, ss, outputs).to_json())
 
 
 RECORD_INPUT_KEYS = {"delta", "draw", "instances", "law", "proved_units", "receipt", "registration", "served", "session_roots",
@@ -1226,6 +1246,50 @@ CHECK_PUBLIC = D.Port(PIECES, "check_public", check_public, st.one_of(
     JSON), package=PACKAGE)
 
 
+OUTCOME_SESSIONS = ["5e" * 64, "a1" * 64]
+
+
+def _outcome_verdicts(n: int, accepted: list, outputs: list, change, x: int) -> dict:
+    """`check_verdicts`' input: `n` verdicts of record, each about the delivered sessions and reporting the public outputs
+    alike, maybe changed."""
+    delivered = OUTCOME_SESSIONS[:1 + x % 2]
+    vs = {name: {"accepted": accepted[i % len(accepted)], "of_record": True, "public": {o: 12 for o in outputs},
+                 "sessions": list(delivered)} for i, name in enumerate(["lean", "rust", "upstream"][:n])}
+    return change({"outputs": outputs, "sessions": delivered, "verdicts": vs}, x)
+
+
+def _one_verdict(f):
+    """A change to the `x`-th verdict."""
+    def change(c, x):
+        name = sorted(c["verdicts"])[x % len(c["verdicts"])]
+        return {**c, "verdicts": {**c["verdicts"], name: f(c["verdicts"][name], c, x)}}
+    return change
+
+
+#: One change each to the verdicts' share of an outcome: a verdict's sessions, public outputs, `of_record` or `accepted`,
+#: a verdict that is not of record (whose sessions nobody reads), none, the outputs and the delivered sessions.
+OUTCOME_VERDICTS = [
+    lambda c, x: c,
+    _one_verdict(lambda v, c, x: {**v, "sessions": [[], None, "s", {OUTCOME_SESSIONS[0]: 1}, 5, [OUTCOME_SESSIONS[1]],
+                                                    c["sessions"][::-1], c["sessions"] * 2, [True]][x % 9]}),
+    _one_verdict(lambda v, c, x: {**v, "public": [{o: 13 for o in c["outputs"]}, {}, None, "p", {**v["public"], "z": 1},
+                                                  [1], {o: [12] for o in c["outputs"]}][x % 7]}),
+    _one_verdict(lambda v, c, x: {**v, "of_record": [False, 0, "", None, [], 1, "yes"][x % 7]}),
+    _one_verdict(lambda v, c, x: {**v, "accepted": [None, False, 1, "no"][x % 4]}),
+    _one_verdict(lambda v, c, x: {k: e for k, e in v.items() if k != sorted(v)[x % len(v)]}),
+    lambda c, x: {**c, "verdicts": {}},
+    lambda c, x: {**c, "verdicts": {**c["verdicts"], "other": {"accepted": True, "sessions": 5, "public": None}}},
+    lambda c, x: {**c, "outputs": [[], ["credited", "x"], ["z"], ["credited", "credited"]][x % 4]},
+    lambda c, x: {**c, "sessions": [[], OUTCOME_SESSIONS[::-1], [OUTCOME_SESSIONS[1]], [5]][x % 4]},
+]
+CHECK_VERDICTS = D.Port(PIECES, "check_verdicts", check_verdicts, st.one_of(
+    st.builds(_outcome_verdicts, st.integers(1, 3), st.lists(st.sampled_from([True, False]), min_size=1, max_size=3),
+              st.sampled_from([[], ["credited"], ["credited", "x"]]), st.sampled_from(OUTCOME_VERDICTS), st.integers(0, 63)),
+    st.builds(lambda vs, ss, o: {"outputs": o, "sessions": ss, "verdicts": vs}, VERDICTS,
+              st.sampled_from([OUTCOME_SESSIONS[:1], []]), st.sampled_from([[], ["credited"]])),
+    JSON), package=PACKAGE)
+
+
 def _reads_input(a: dict, with_registration: bool) -> dict:
     out = {"verdicts": a["evidence"].get("verdicts")}
     return out | {"registration": a["record"]} if with_registration else out
@@ -1269,7 +1333,7 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300), (MATCHES_PUBLIC, 400),
-              (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500)]
+              (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])

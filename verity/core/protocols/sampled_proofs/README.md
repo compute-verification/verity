@@ -83,8 +83,8 @@ captured from serving, and says so (`window.kind = "stand-in"`).
   model's.
 - **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
-  (`check`), `matches_public`, `check_draw`, `check_proved`, the whole audit record (`audit_record`) and the service's
-  public-items rule (`check_public`). Its one line
+  (`check`), `matches_public`, `check_draw`, `check_proved`, the whole audit record (`audit_record`), and the service's
+  public-items rule (`check_public`) and hold on an outcome's verdicts (`check_verdicts`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
   `benchmarks/one_stage` call it. The two are held to each other by
@@ -120,8 +120,9 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
 
 - `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law`, `TwoStage`
   and `Sequential`.
-  - `check_public` is the public-items rule on a registration (the Python; a `Stream` runs it by the verifier of record,
-    `verifier.check_public`).
+  - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
+    to before the audit record (the Python; a `Stream` runs each by the verifier of record, `verifier.check_public` and
+    `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select` (with a work law's `closure=`),
     `register_interiors` (under `TwoStage`), `deliver` and `outcome`, which raise `Refused` (with its `Verdict`) or
     `Pending`.
@@ -141,8 +142,8 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
   (and `verifiers`, both verifiers' outcomes, from `verifier`).
 - `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved`, `audit_record` and
-  `check_public` (given the service's Python verdict) by the Lean and the Python, `RECORD_VERDICT` naming whose is the
-  record's.
+  `check_public` and `check_verdicts` (given the service's Python verdict) by the Lean and the Python, `RECORD_VERDICT`
+  naming whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `two_stage`: `TwoStageLaw` of `Stage`s and its `profile`; stage 1's draws `select_replay_units` and `draw_first` (a
   one-stage law's draw object over the RUs, with `closure_of` for a work law's closure), stage 2's `select_proof_units`,
@@ -386,7 +387,8 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
 - **No retries.** A second `select`, `register_interiors`, `deliver` or `outcome` is refused. A proof delivered more than
   `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`. An outcome is pending until every
-  verifier of record has run, and each verdict of record names the delivered sessions.
+  verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
+  alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
 - **The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the
   Spec's digest>, "budget", "delta", "challenger"}`. An outcome's record is `{"format":

@@ -6,5 +6,5 @@ import SampledProofs.Bound
 import SampledProofs.PyJson
 import SampledProofs.Record
 import SampledProofs.OneStage
-import SampledProofs.Public
+import SampledProofs.Service
 import SampledProofs.Pieces

@@ -1,15 +1,20 @@
 /-
-The proof service's public-items rule (`service.check_public`) on a one-stage registration record: each observable item
-is the service's own, a salted root of one of the given values, or an item the Spec declares. Codes in Python's order:
-`keys` alone for a record that is not an object; then `unsalted` (a scheme other than the service's), `query` (not the
-check's), `keys` (a field one-stage doesn't define, or an entry's), `roots` (an entry that is not one of the values' one
-salted root) and `undeclared` (the items the record shows that the Spec doesn't declare, first found first), each with
-Python's detail. An entry's fields are read in key order, as canonical JSON writes them.
+The proof service's own checks (`service.py`), each with Python's codes, order and details:
+
+* `checkPublic`: the public-items rule (`service.check_public`) on a one-stage registration record: each observable item
+  is the service's own, a salted root of one of the given values, or an item the Spec declares. Codes: `keys` alone for a
+  record that is not an object; then `unsalted` (a scheme other than the service's), `query` (not the check's), `keys` (a
+  field one-stage doesn't define, or an entry's), `roots` (an entry that is not one of the values' one salted root) and
+  `undeclared` (the items the record shows that the Spec doesn't declare, first found first). An entry's fields are read
+  in key order, as canonical JSON writes them.
+* `checkVerdicts`: what an outcome holds the verifiers' verdicts to before the audit record (`service.check_verdicts`),
+  the first failure only: `pending` (no verdict of record, or one that hasn't run), `sessions` (verdicts of record about
+  other sessions than the delivered ones) and `public` (the check's public outputs not reported alike).
 -/
 import SampledProofs.Registration
 import SampledProofs.PyJson
 
-namespace SampledProofs.Public
+namespace SampledProofs.Service
 
 open Lean (Json)
 open Flock (V)
@@ -37,10 +42,10 @@ def pyStr : Json → V String
 /-- `dict.fromkeys(xs)`: each once, first found first. -/
 def firsts (xs : Array String) : Array String := xs.foldl (fun acc x => if acc.contains x then acc else acc.push x) #[]
 
-/-- The rule on `record` with the service's `scheme`, the check's query digest `query`, the values whose roots it holds,
-and the Spec's declared items. Refused where Python raises: an entry named by a list or an object (unhashable), or a
-stratum's template one. -/
-def check (record scheme : Json) (query : String) (values : Array Value) (declared : Array String) : V Check := do
+/-- The public-items rule on `record` with the service's `scheme`, the check's query digest `query`, the values whose
+roots it holds, and the Spec's declared items. Refused where Python raises: an entry named by a list or an object
+(unhashable), or a stratum's template one. -/
+def checkPublic (record scheme : Json) (query : String) (values : Array Value) (declared : Array String) : V Check := do
   let .obj _ := record | return ({} : Check).fail "keys" (Json.str "not a record")
   let present := fun k => (field? record k).isSome
   let mut extra := sortStrings ((entries record).map (·.1) |>.filter (!RECORD_KEYS.contains ·))
@@ -85,4 +90,29 @@ def check (record scheme : Json) (query : String) (values : Array Value) (declar
   if !missing.isEmpty then c := c.fail "undeclared" (Json.arr (missing.map Json.str))
   return c
 
-end SampledProofs.Public
+/-- The verdicts' share of an outcome, on the verdicts in key order, the delivered `sessions` and the check's public
+`outputs` (distinct). Refused where Python would read a verdict of record's `sessions` that is neither a list nor empty
+(`list` of it), or compare reported outputs canonical JSON doesn't write (a non-integer number). -/
+def checkVerdicts (verdicts : Array (String × Json)) (sessions : Array Json) (outputs : Array String) : V Check := do
+  let ofRecord := (verdicts.qsort (·.1 < ·.1)).filter (truthy <| getD ·.2 "of_record")
+  if ofRecord.isEmpty || ofRecord.any (getD ·.2 "accepted" matches .null) then
+    return ({} : Check).fail "pending" (Json.str "the verifier of record hasn't run")
+  let wrong ← ofRecord.filterMapM fun (k, v) => do
+    let listed ← match getD v "sessions" with
+      | .arr xs => pure xs
+      | x => if truthy x then throw "a verdict of record's sessions are not a list" else pure #[]
+    return if listed.size == sessions.size && (listed.zip sessions).all fun (a, b) => jeq a b then none else some k
+  if !wrong.isEmpty then
+    return ({} : Check).fail "sessions" (Json.mkObj [("verdicts", Json.arr (wrong.map Json.str)),
+      ("delivered", Json.arr sessions)])
+  if outputs.isEmpty then return {}
+  let reported := ofRecord.map (getD ·.2 "public")
+  let shaped := reported.all fun r => keys? r == some (sortStrings outputs)
+  if shaped then
+    for r in reported do let _ ← Flock.canon r
+  if !shaped || !reported.all (jeq · (reported.getD 0 Json.null)) then
+    return ({} : Check).fail "public" (Json.mkObj [("outputs", Json.arr (outputs.map Json.str)),
+      ("reported", Json.arr reported)])
+  return {}
+
+end SampledProofs.Service

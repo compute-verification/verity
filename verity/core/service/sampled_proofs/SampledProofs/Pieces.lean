@@ -15,13 +15,14 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
-* `check_public`: the proof service's public-items rule on a registration record (`Public.check`).
+* `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
+* `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`check_draw`, `check_proved`, `record` and `check_public`.
+`check_draw`, `check_proved`, `record`, `check_public` and `check_verdicts`.
 -/
 import SampledProofs.OneStage
-import SampledProofs.Public
+import SampledProofs.Service
 
 namespace SampledProofs.Pieces
 
@@ -181,30 +182,46 @@ def record (j : Json) : V Json := do
   return Json.str (← PyJson.canonical (← Record.record (← Record.inputOf j)))
 
 /-- `{"record", "scheme", "query", "values": [{"name", "registered"}], "public": [item]}` to the service's public-items
-rule's `{"ok", "codes", "detail"}` (`Public.check`), the query's digest computed here: a string scheme, the check's query
+rule's `{"ok", "codes", "detail"}` (`Service.checkPublic`), the query's digest computed here: a string scheme, the check's query
 an object, each value a string name with a boolean, each declared item a string. -/
 def checkPublic (j : Json) : V Json := do
   if !(getD j "scheme" matches .str _) then throw "scheme is not a string"
   if !(getD j "query" matches .obj _) then throw "query is not an object"
   let .arr vs := getD j "values" | throw "values is not a list"
   let values ← vs.mapM fun v => match getD v "name", getD v "registered" with
-    | .str name, .bool registered => pure ({ name, registered } : Public.Value)
+    | .str name, .bool registered => pure ({ name, registered } : Service.Value)
     | _, _ => throw "a value is not a string name with a boolean"
   let .arr ps := getD j "public" | throw "public is not a list"
   let declared ← ps.mapM fun
     | .str s => pure s
     | _ => throw "a declared item is not a string"
   let query ← Registration.queryDigest (getD j "query")
-  return (← Public.check (getD j "record") (getD j "scheme") query values declared).toJson
+  return (← Service.checkPublic (getD j "record") (getD j "scheme") query values declared).toJson
+
+/-- `{"verdicts", "sessions", "outputs"}` to the outcome's verdict checks' `{"ok", "codes", "detail"}`
+(`Service.checkVerdicts`): verdicts an object of objects, sessions a list of strings, outputs distinct strings. -/
+def checkVerdicts (j : Json) : V Json := do
+  let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
+  let vs := entries (getD j "verdicts")
+  if !vs.all (·.2 matches .obj _) then throw "a verdict is not an object"
+  let .arr ss := getD j "sessions" | throw "sessions is not a list"
+  if !ss.all (· matches .str _) then throw "a session is not a string"
+  let .arr os := getD j "outputs" | throw "outputs is not a list"
+  let outputs ← os.mapM fun
+    | .str o => pure o
+    | _ => throw "an output is not a string"
+  if (sortStrings outputs).toList.eraseDups.length != outputs.size then throw "an output twice"
+  return (← Service.checkVerdicts vs ss outputs).toJson
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("check_proved", checkProved), ("bound", bound),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
-   ("check_public", checkPublic)]
+   ("check_public", checkPublic), ("check_verdicts", checkVerdicts)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("check_draw", checkDraw),
-   ("check_proved", checkProved), ("record", record), ("check_public", checkPublic)]
+   ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
+   ("check_verdicts", checkVerdicts)]
 
 end SampledProofs.Pieces
