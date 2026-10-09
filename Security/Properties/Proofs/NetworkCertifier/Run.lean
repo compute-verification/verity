@@ -23,11 +23,15 @@ namespace Properties.NetworkCertifier
 open Bytes Tree GridProofs CheckProofs
 
 theorem digest_ok {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) :
-    ∃ enc, h.encode = .ok enc ∧ dg = Sha512.hash (taggedInput recordTag enc) := by
+    ∃ enc x, h.encode = .ok enc ∧ Properties.Identity.taggedInput recordTag enc = .ok x ∧ dg = Sha512.hash x := by
   unfold RecordHead.digest at e
   cases he : h.encode with
   | error _ => rw [he] at e; exact (error_ne_ok e).elim
-  | ok enc => rw [he] at e; exact ⟨enc, rfl, (Except.ok.inj e).symm⟩
+  | ok enc =>
+    rw [he] at e
+    have e' : Identity.taggedSha512 recordTag enc = .ok dg := e
+    obtain ⟨x, hx, rfl⟩ := Properties.Identity.taggedSha512_ok.mp e'
+    exact ⟨enc, x, rfl, hx, rfl⟩
 
 theorem certificateMessage_ok {k : ByteArray} {l : String} {d : Direction} {w : Int} {g m : ByteArray}
     (e : certificateMessage k l d w g = .ok m) : ∃ x, messageInput k l d w g = .ok x ∧ m = Sha512.hash x := by
@@ -40,14 +44,16 @@ theorem certificateMessage_ok {k : ByteArray} {l : String} {d : Direction} {w : 
 theorem head_inj {X : ByteArray → Prop} (hX : CF X) {h h' : RecordHead} {dg : ByteArray}
     (hs : ∀ x, HeadString h x → X x) (hs' : ∀ x, HeadString h' x → X x) (e : h.digest = .ok dg)
     (e' : h'.digest = .ok dg) : h = h' := by
-  obtain ⟨enc, he, rfl⟩ := digest_ok e
-  obtain ⟨enc', he', hd⟩ := digest_ok e'
-  have := taggedInput_inj (hX _ _ (hs _ ⟨enc, he, rfl⟩) (hs' _ ⟨enc', he', rfl⟩) hd)
+  obtain ⟨enc, x, he, hx, rfl⟩ := digest_ok e
+  obtain ⟨enc', x', he', hx', hd⟩ := digest_ok e'
+  have hxx := hX _ _ (hs _ ⟨enc, he, hx⟩) (hs' _ ⟨enc', he', hx'⟩) hd
+  subst hxx
+  have := taggedInput_inj hx hx'
   subst this
   exact encode_inj he he'
 
 theorem link_short {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) : h.link.toUTF8.size < 2 ^ 16 := by
-  obtain ⟨enc, he, -⟩ := digest_ok e
+  obtain ⟨enc, -, he, -⟩ := digest_ok e
   exact encode_link he
 
 theorem zip_index {p : Params} {e : Evidence} (hfit : EvidenceFits p e) (ℓ : Fin p.egress.size) {link : Link}
