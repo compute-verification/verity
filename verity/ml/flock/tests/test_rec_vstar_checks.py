@@ -101,7 +101,7 @@ def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off
 def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_program(staged, tmp_path):  # noqa: F811
     """META's bindings are checked against the verifier's own files before the statement is matched to V*'s: without the
     verifier's program `verify --rec-inner` refuses, and a partition object naming another template, or another program,
-    is refused by the digest it changes."""
+    is refused by the digest it changes; the same descriptor written another way (indented) binds as the canonical one."""
     d = staged[0]
     inner = _inner(tmp_path / "inner.json", 25, 22, 8)
     base = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
@@ -125,6 +125,12 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
         p = subprocess.run([str(BIN), "statement", *base, "--partition", str(part), "--program", str(prog)],
                            capture_output=True, text=True)
         assert p.returncode == 1 and p.stdout.startswith(why), p.stdout
+    desc = json.loads((d / "program.json").read_text())
+    (tmp_path / "program.json").write_text(json.dumps(desc, indent=1))
+    p = subprocess.run([str(BIN), "statement", *base, "--partition", str(d / "partition.json"), "--program",
+                        str(tmp_path / "program.json")], capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.startswith(
+        "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape"), p.stdout
 
 
 def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(tmp_path):
