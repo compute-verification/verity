@@ -362,6 +362,31 @@ def test_a_declared_package_is_its_directory_without_its_dependencies(tmp_path, 
     assert touched() == ["a", "b", "c"]
 
 
+def test_an_inputs_only_suite_keys_on_what_it_declares_of_its_dependencies(tmp_path, monkeypatch):
+    """`inputs_only = true`: a suite depends on `a` for its package but its tests read only `a/used.py`, so a change elsewhere in
+    `a` need not run it; the guard allows only `inputs_of`, so a read of the rest of `a` fails it."""
+    _workspace(tmp_path)
+    (tmp_path / "b" / "pyproject.toml").write_text('[project]\nname = "b"\ndependencies = ["a"]\n\n[tool.uv.sources]\n'
+                                                   'a = { workspace = true }\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                   '[tool.verity.tests]\ninputs = ["a/used.py"]\ninputs_only = true\n')
+    (tmp_path / "a" / "used.py").write_text("X = 1\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert by["b"].inputs_only and not by["a"].inputs_only
+    assert S.inputs_of(by["b"], pkgs) == ["a/used.py", "b"]
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    (tmp_path / "a" / "other.py").write_text("Y = 1\n")
+    assert touched() == ["a"]
+    (tmp_path / "a" / "used.py").write_text("X = 2\n")
+    assert touched() == ["a", "b"]
+
+
 def test_the_roots_own_distribution_is_a_member_and_its_dependents_key_on_the_packages_it_ships(tmp_path, monkeypatch):
     """The root's pyproject.toml builds `core`, so uv makes it a member; a suite that depends on it keys on `core/`, not on the
     whole tree its directory holds."""

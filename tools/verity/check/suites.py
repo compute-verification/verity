@@ -10,7 +10,8 @@
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
-`[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
+`[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
+tests read a little of a large dependency), the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
@@ -214,6 +215,7 @@ class Suite:
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
+    inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
 
 
 def _pyproject(path: str) -> dict:
@@ -334,7 +336,7 @@ def discover() -> list[Suite]:
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
-                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0))))
+                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True))
     return suites
 
 
@@ -521,8 +523,9 @@ def environment() -> dict:
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
-    declared too."""
-    return sorted({suite.path, *closure(suite, pkgs), *suite.inputs})
+    declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
+    its tests read of them, which the guard holds it to."""
+    return sorted({suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
