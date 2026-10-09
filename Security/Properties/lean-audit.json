@@ -1158,6 +1158,354 @@
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "none"
    },
+   "Properties.Evaluator.Casts.bf16ToF32": {
+    "function": "Evaluate.Casts.bf16ToF32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.bitLength": {
+    "function": "Evaluate.Casts.bitLength",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.dyadicLt": {
+    "function": "Evaluate.Casts.dyadicLt",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e2m1NanCode": {
+    "function": "Evaluate.Casts.E2M1_NAN_CODE",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e2m1Up": {
+    "function": "Evaluate.Casts.E2M1_UP",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e4m3Nan": {
+    "function": "Evaluate.Casts.E4M3_NAN",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.e4m3ToF32": {
+    "function": "Evaluate.Casts.e4m3ToF32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f2fpBf16": {
+    "function": "Evaluate.Casts.f2fpBf16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f32ToBf16Rn": {
+    "function": "Evaluate.Casts.f32ToBf16Rn",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f32ToE2m1Sat": {
+    "function": "Evaluate.Casts.f32ToE2m1Sat",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.f32ToE4m3Sat": {
+    "function": "Evaluate.Casts.f32ToE4m3Sat",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Casts.roundEvenDyadic": {
+    "function": "Evaluate.Casts.roundEvenDyadic",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.addWith": {
+    "function": "Evaluate.Fp32.addWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16Add": {
+    "function": "Evaluate.Fp32.bf16Add",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16AddF2fp": {
+    "function": "Evaluate.Fp32.bf16AddF2fp",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16MulBf16": {
+    "function": "Evaluate.Fp32.bf16MulBf16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16MulF32": {
+    "function": "Evaluate.Fp32.bf16MulF32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16NanF2fp": {
+    "function": "Evaluate.Fp32.BF16_NAN_F2FP",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16NanTorch": {
+    "function": "Evaluate.Fp32.BF16_NAN_TORCH",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.bf16ToF32Bits": {
+    "function": "Evaluate.Fp32.bf16ToF32Bits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.decode": {
+    "function": "Evaluate.Fp32.decode",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.decodedAddRn": {
+    "function": "Evaluate.Fp32.Decoded.addRn",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.decodedMul": {
+    "function": "Evaluate.Fp32.Decoded.mul",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.divWith": {
+    "function": "Evaluate.Fp32.divWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32AddFtzV2": {
+    "function": "Evaluate.Fp32.f32AddFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32AddV2": {
+    "function": "Evaluate.Fp32.f32AddV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32DivV2": {
+    "function": "Evaluate.Fp32.f32DivV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Fma": {
+    "function": "Evaluate.Fp32.f32Fma",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaBits": {
+    "function": "Evaluate.Fp32.f32FmaBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaFtz": {
+    "function": "Evaluate.Fp32.f32FmaFtz",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaFtzV2": {
+    "function": "Evaluate.Fp32.f32FmaFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaSubFtz": {
+    "function": "Evaluate.Fp32.f32FmaSubFtz",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaSubFtzV2": {
+    "function": "Evaluate.Fp32.f32FmaSubFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32FmaV2": {
+    "function": "Evaluate.Fp32.f32FmaV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32GpuNan": {
+    "function": "Evaluate.Fp32.f32GpuNan",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Gt": {
+    "function": "Evaluate.Fp32.f32Gt",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Max": {
+    "function": "Evaluate.Fp32.f32Max",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32MaxBits": {
+    "function": "Evaluate.Fp32.f32MaxBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32MulFtzV2": {
+    "function": "Evaluate.Fp32.f32MulFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32MulV2": {
+    "function": "Evaluate.Fp32.f32MulV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32Nan": {
+    "function": "Evaluate.Fp32.F32_NAN",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32SubFtzV2": {
+    "function": "Evaluate.Fp32.f32SubFtzV2",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.f32ToBf16RnBits": {
+    "function": "Evaluate.Fp32.f32ToBf16RnBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.fmaWith": {
+    "function": "Evaluate.Fp32.fmaWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.ftzBits": {
+    "function": "Evaluate.Fp32.ftzBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.guardNegInfZero": {
+    "function": "Evaluate.Fp32.guardNegInfZero",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.infWord": {
+    "function": "Evaluate.Fp32.infWord",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.mulWith": {
+    "function": "Evaluate.Fp32.mulWith",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.roundRn": {
+    "function": "Evaluate.Fp32.roundRn",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.roundSum": {
+    "function": "Evaluate.Fp32.roundSum",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Fp32.zeroWord": {
+    "function": "Evaluate.Fp32.zeroWord",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Gates.andBits": {
+    "function": "Evaluate.andBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Gates.notBit": {
+    "function": "Evaluate.notBit",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Gates.xorBits": {
+    "function": "Evaluate.xorBits",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.bitAnd": {
+    "function": "Evaluate.Scalar.bitAnd",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32Fabs": {
+    "function": "Evaluate.Scalar.f32Fabs",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32Fmaxf": {
+    "function": "Evaluate.Scalar.f32Fmaxf",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32IsNan": {
+    "function": "Evaluate.Scalar.f32IsNan",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32NanPtx": {
+    "function": "Evaluate.Scalar.F32_NAN_PTX",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.f32Neg": {
+    "function": "Evaluate.Scalar.f32Neg",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.i32Add": {
+    "function": "Evaluate.Scalar.i32Add",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.i32Le": {
+    "function": "Evaluate.Scalar.i32Le",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.order": {
+    "function": "Evaluate.Scalar.order",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.selectBf16": {
+    "function": "Evaluate.Scalar.selectBf16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.Scalar.selectI32": {
+    "function": "Evaluate.Scalar.selectI32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.ampereBf16Dot16": {
+    "function": "Evaluate.TC.ampereBf16Dot16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.ampereBf16M16n8k16": {
+    "function": "Evaluate.TC.Spec.AMPERE_BF16_M16N8K16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bf16Class": {
+    "function": "Evaluate.TC.Spec.bf16Class",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bf16Product": {
+    "function": "Evaluate.TC.Spec.bf16Product",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bf16ProductTotal": {
+    "function": "Evaluate.TC.Spec.bf16ProductTotal",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.bitLength": {
+    "function": "Evaluate.TC.Spec.bitLength",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.fp32Class": {
+    "function": "Evaluate.TC.Spec.fp32Class",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.fp32Term": {
+    "function": "Evaluate.TC.Spec.fp32Term",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.fp32Value": {
+    "function": "Evaluate.TC.Spec.fp32Value",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.groupStepTotal": {
+    "function": "Evaluate.TC.Spec.groupStepTotal",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.groupSum": {
+    "function": "Evaluate.TC.Spec.groupSum",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.hopperBf16Dot16": {
+    "function": "Evaluate.TC.hopperBf16Dot16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.hopperBf16WgmmaK16": {
+    "function": "Evaluate.TC.Spec.HOPPER_BF16_WGMMA_K16",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.packFp32": {
+    "function": "Evaluate.TC.Spec.packFp32",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.packValue": {
+    "function": "Evaluate.TC.Spec.packValue",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.pipelineK": {
+    "function": "Evaluate.TC.Spec.Pipeline.k",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.runGroups": {
+    "function": "Evaluate.TC.Spec.runGroups",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.tcDotTotal": {
+    "function": "Evaluate.TC.Spec.tcDotTotal",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.valueInfSign": {
+    "function": "Evaluate.TC.Spec.Value.infSign?",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.valueIsNaN": {
+    "function": "Evaluate.TC.Spec.Value.isNaN",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.valueTerm": {
+    "function": "Evaluate.TC.Spec.Value.term?",
+    "outcome": "none"
+   },
+   "Properties.Evaluator.TC.zero": {
+    "function": "Evaluate.TC.Spec.ZERO",
+    "outcome": "none"
+   },
    "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
