@@ -3,8 +3,9 @@ the verifier restates them, are the ones `rec_vstage.stage` writes (each level's
 openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over two reps, `rec_shape.outer`'s), and a
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
-verifier's own inner shape (`--rec-inner`) or its own partition object and program. The honest sessions themselves are
-replayed on the pod: their statements are hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
+verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
+byte the one V* writes for its statement by the byte it differs at. The honest sessions themselves are replayed on the pod: their statements are
+hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
 from __future__ import annotations
 
 import json
@@ -131,3 +132,24 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
                         str(tmp_path / "program.json")], capture_output=True, text=True)
     assert p.returncode == 1 and p.stdout.startswith(
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape"), p.stdout
+
+
+def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(tmp_path):
+    """`rec-open/l16-h1` (V*'s last level at m = 23, over 142 openings) as `compose` writes it, byte-equal to `vstar
+    rec-open` (`test_vstar_difftest`): the verifier passes it, and refuses it with a space added inside META, which parses
+    to the same bindings, by the byte the two files differ at."""
+    from verity_flock import circuit as FC
+    from verity_flock import rec_outer as O
+
+    assert _v_star(23, 22, 8)[2] == ["rec-open/l16-h1", 142]
+    inner = _inner(tmp_path / "inner.json", 23, 22, 8)
+    honest = FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition="a" * 128, program="b" * 128).encode()
+    (tmp_path / "honest.txt").write_bytes(honest)
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "honest.txt"), "--instances", "142")
+    assert rc == 0 and line["checked"] == ["rec-open/l16-h1", 142], line
+    at = honest.index(b'META {"') + len(b"META {")
+    (tmp_path / "spaced.txt").write_bytes(honest[:at] + b" " + honest[at:])
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "spaced.txt"), "--instances", "142")
+    assert rc == 1 and line["error"] == (
+        f"rec-open/l16-h1: the circuit file ({len(honest) + 1} bytes) is not V*'s ({len(honest)} bytes): they differ at "
+        f"byte {at}, line 2"), line
