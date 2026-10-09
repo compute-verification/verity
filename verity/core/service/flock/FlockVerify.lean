@@ -274,7 +274,7 @@ def recInnerInput (args : List String) : IO (Except String (Option RecVStar.Inne
       | .error e => return .error s!"rec-inner: not JSON: {e}"
 
 /-- `rec-inner --circuit F --public F [--partition F] [--program F]`: the shape of V*'s inner session (`RecVStar.innerOf`)
-from the inner statement, as one `verity/rec-inner/v1` line, for `verify --rec-inner`. -/
+from the inner statement, as one `verity/rec-inner/v0` line, for `verify --rec-inner`. -/
 def recInnerCmd (args : List String) : IO UInt32 := do
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F]"; return 2
@@ -288,34 +288,26 @@ def recInnerCmd (args : List String) : IO UInt32 := do
   | .ok i => IO.println i.toJson.compress; return 0
   | .error e => IO.eprintln s!"rec-inner: {e}"; return 1
 
-/-- `rec-statements --rec-inner F [--unit NAME | --circuit F] [--instances N] [--registered F]`: V*'s statements at the
-inner shape (`RecVStar.statements`), each unit name and instance count, as one `RECVSTAR` line; with `--unit` and
-`--instances`, `RecVStar.check` on them as well, with `--circuit` and `--instances`, `RecVStar.checkCircuit` on that
-circuit file, and then with `--registered`, `RecVStar.checkOwn` on those reads, with the statement's own message-round
-ports (`RecVStar.ownPorts`). -/
+/-- `rec-statements --rec-inner F [--unit NAME | --circuit F] [--instances N]`: V*'s statements at the inner shape
+(`RecVStar.statements`), each unit name and instance count, as one `RECVSTAR` line; with `--unit` and `--instances`,
+`RecVStar.check` on them as well, and with `--circuit` and `--instances`, `RecVStar.checkCircuit` on that circuit file. -/
 def recStatementsCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-statements --rec-inner F [--unit NAME | --circuit F] [--instances N] [--registered F]"
+  let usage := "usage: flock-verify rec-statements --rec-inner F [--unit NAME | --circuit F] [--instances N]"
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2
-    | .error e => IO.eprintln e; return 2
-  let registered ← match ← registeredInput args with
-    | .ok r => pure r
     | .error e => IO.eprintln e; return 2
   let circuitB ← (argOf args "--circuit").mapM IO.FS.readBinFile
   let res : V Lean.Json := do
     let ss ← RecVStar.statements i
     let base := [("statements", Lean.Json.arr (ss.map fun s => Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson s.instances]))]
-    let checked := fun (s : VStar.Stmt) (n : Nat) => do
-      if let some r := registered then RecVStar.checkOwn s r
-      let own := (RecVStar.ownPorts s).map fun (nm, v, rd) => Lean.Json.arr #[Lean.Json.str nm, Lean.Json.str v, Lean.toJson rd]
-      pure (Lean.Json.mkObj (base ++ [("checked", Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson n]),
-        ("own", Lean.Json.arr own.toArray)]))
+    let checked := fun (u : String) (n : Nat) => Lean.Json.mkObj (base ++ [("checked", Lean.Json.arr #[Lean.Json.str u, Lean.toJson n])])
     match argOf args "--unit", circuitB, (argOf args "--instances").bind String.toNat? with
-    | some u, none, some n => do checked (← RecVStar.check i u n) n
+    | some u, none, some n => do discard <| RecVStar.check i u n; pure (checked u n)
     | none, some b, some n => do
       let c ← HmRow.parse Tags.circuit b []
-      checked (← RecVStar.checkCircuit i c n b) n
+      RecVStar.checkCircuit i c n b
+      pure (checked c.unit.name n)
     | none, none, _ => pure (Lean.Json.mkObj base)
     | _, _, _ => throw usage
   let line := match res with
@@ -452,7 +444,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        r.2.forM (RecVStar.checkStmt recInner · circuitB partition program registered)
+        r.2.forM (RecVStar.checkStmt recInner · circuitB partition program)
         if zk then r.2.forM Zk.shapeOk
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
@@ -545,7 +537,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
-      if recInner.isSome then RecVStar.checkStmt recInner st circuitB partition program registered
+      if recInner.isSome then RecVStar.checkStmt recInner st circuitB partition program
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"

@@ -4,9 +4,8 @@ openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
 verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
-byte the one V* writes for its statement by the byte it differs at. V*'s parts are as many as the verifier's own groups, the
-inner shape's claims are two and two per region, and the verifier's registered reads hold exactly the statement's
-message-round ports. The honest sessions themselves are replayed on the pod: their statements are
+byte the one V* writes for its statement by the byte it differs at. V*'s parts are as many as the verifier's own groups.
+The honest sessions themselves are replayed on the pod: their statements are
 hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
 from __future__ import annotations
 
@@ -27,10 +26,8 @@ pytestmark = [pytest.mark.slow,
 SHAPES = [(25, 22, 8), (27, 22, 8)]
 
 
-def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None) -> Path:
-    """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points."""
-    path.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": k, "claims": c,
-                                "regions": (c - 2) // 2 if regions is None else regions}))
+def _inner(path: Path, m: int, k: int, c: int) -> Path:
+    path.write_text(json.dumps({"format": "verity/rec-inner/v0", "m": m, "k_log": k, "claims": c}))
     return path
 
 
@@ -61,7 +58,7 @@ def test_the_verifiers_statements_are_the_ones_v_star_stages(tmp_path, shape):
 def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
     """At the 16,16,8 class's shape (level 0 is `rec-open/l64-h8` over 436 openings, as its run's cap recorded): another
     instance count, a part named at other claims, a part V*'s algebra does not have, and an honest part's name under an inner
-    shape of one more region are each refused by the value compared."""
+    shape of one more claim are each refused by the value compared."""
     inner = _inner(tmp_path / "inner.json", 27, 22, 8)
     parts = len(_v_star(27, 22, 8)) - 4
     cases = [
@@ -72,8 +69,8 @@ def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
         (inner, f"rec-residuals/m27-k22-c8-p{parts}", 2,
          f"rec-residuals/m27-k22-c8-p{parts}: not one of V*'s statements at the inner session's shape (m 27, k_log 22, claims 8)"),
         (inner, "rec-open/l64-h9", 436, "rec-open/l64-h9: not one of V*'s statements"),
-        (_inner(tmp_path / "more.json", 27, 22, 10), "rec-residuals/m27-k22-c8-p0", 2,
-         "rec-residuals/m27-k22-c8-p0: shape (m 27, k_log 22, claims 8), the inner session's (m 27, k_log 22, claims 10)"),
+        (_inner(tmp_path / "more.json", 27, 22, 9), "rec-residuals/m27-k22-c8-p0", 2,
+         "rec-residuals/m27-k22-c8-p0: shape (m 27, k_log 22, claims 8), the inner session's (m 27, k_log 22, claims 9)"),
     ]
     assert _v_star(27, 22, 8)[0] == ["rec-open/l64-h8", 436]
     for f, name, n, why in cases:
@@ -92,19 +89,6 @@ def test_v_stars_parts_are_as_many_as_the_verifiers_groups(tmp_path):
             RR.parts(RR.spec(A.Shape(*shape)))), line
     rc, line = _statements(_inner(tmp_path / "wide.json", 22, 6, 16))
     assert rc == 1 and line["error"] == "V*'s parts: residual 20 alone reads more than 64 regions or 160 sha512x3 slots", line
-
-
-def test_the_inner_shapes_claims_are_two_and_two_per_region(tmp_path):
-    """The inner shape's claims are `2 + 2 · regions` of the inner statement (`rec_vstage.verifier`'s `2 + len(extras)`, a
-    claim per region at each of two link points): a shape of one region more or fewer is refused, naming both counts, and
-    so is `rec-inner`'s previous format, which named no regions."""
-    for regions in (2, 4):
-        rc, line = _statements(_inner(tmp_path / "inner.json", 27, 22, 8, regions))
-        assert rc == 1 and line["error"] == (
-            f"the inner session's claims 8, not two and two per region of its {regions} ({2 + 2 * regions})"), line
-    (tmp_path / "v0.json").write_text(json.dumps({"format": "verity/rec-inner/v0", "m": 27, "k_log": 22, "claims": 8}))
-    p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(tmp_path / "v0.json")], capture_output=True, text=True)
-    assert p.returncode == 2 and p.stderr.strip() == "rec-inner: not a verity/rec-inner/v1 object", p.stderr
 
 
 def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off_it(staged, tmp_path):  # noqa: F811
@@ -162,49 +146,6 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
                         str(tmp_path / "program.json")], capture_output=True, text=True)
     assert p.returncode == 1 and p.stdout.startswith(
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape"), p.stdout
-
-
-def _reads(path: Path, ports: list[list]) -> Path:
-    """A `verity/registered-reads/v0` file of `[name, value, reads]` ports (the fields `checkOwn` does not read are fixed)."""
-    path.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {
-        nm: {"value": v, "root": "00" * 64, "leaves": 2, "words": 64, "domain": "00" * 64, "word_bits": 16, "reads": rd}
-        for nm, v, rd in ports}}))
-    return path
-
-
-def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
-    """A part's reads file holds its ports `m<k>` (`rec_residuals.write`: each under `rec-c<k>`, rows 0 and 1), in any key
-    order, beside its other ports; a level's holds none. A port read at another row, one the statement lacks, one missing,
-    a `rec-c<k>` under another name, and a level's file with a part's port are each refused by the port compared."""
-    inner = _inner(tmp_path / "inner.json", 27, 22, 8)
-    part = ["--unit", "rec-residuals/m27-k22-c8-p0", "--instances", "2"]
-    rc, line = _statements(inner, *part)
-    own = line["own"]
-    assert rc == 0 and own and all(v == f"rec-c{nm[1:]}" and rd == [0, 1] for nm, v, rd in own), line
-    other = [["v", "rec-v", [0, 1]], ["out", "rec-out", [0, 1]]]
-    honest = _reads(tmp_path / "honest.json", other + own[::-1])
-    rc, line = _statements(inner, *part, "--registered", str(honest))
-    assert rc == 0 and line["checked"] == ["rec-residuals/m27-k22-c8-p0", 2], line
-    (m0, c0, _), (ml, cl, _) = own[0], own[-1]
-    cases = [
-        ([[m0, c0, [0, 2]]] + own[1:], f"the registered reads' port {m0} under {c0} reading [0, 2] is not the statement's: "
-         f"the statement's is {m0} under {c0} reading [0, 1]"),
-        (own + [["m99", "rec-c99", [0, 1]]], f"the registered reads' port m99 under rec-c99 reading [0, 1] is not the "
-         f"statement's: the statement has no port m99 ({len(own)} message-round ports)"),
-        (own[:-1], f"the statement's message-round port {ml} under {cl} reading [0, 1] is not in the registered reads "
-         f"({len(own) - 1} message-round ports)"),
-        (own + [["w", c0, [0, 1]]], f"the registered reads' port w under {c0} reading [0, 1] is not the statement's: the "
-         f"statement has no port w ({len(own)} message-round ports)"),
-    ]
-    for k, (ports, why) in enumerate(cases):
-        rc, line = _statements(inner, *part, "--registered", str(_reads(tmp_path / f"t{k}.json", other + ports)))
-        assert rc == 1 and line["error"] == f"rec-residuals/m27-k22-c8-p0: {why}", (k, line)
-    level = ["--unit", "rec-open/l64-h8", "--instances", "436"]
-    rc, line = _statements(inner, *level, "--registered", str(_reads(tmp_path / "level.json", other)))
-    assert rc == 0 and line["own"] == [], line
-    rc, line = _statements(inner, *level, "--registered", str(_reads(tmp_path / "level-m.json", other + own[:1])))
-    assert rc == 1 and line["error"] == (f"rec-open/l64-h8: the registered reads' port {m0} under {c0} reading [0, 1] is not "
-                                         f"the statement's: the statement has no port {m0} (0 message-round ports)"), line
 
 
 def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(tmp_path):
