@@ -210,6 +210,84 @@ def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   | some (p, u) =>
     throw s!"U4: unit {u} reads {p.value}, a round's commitment (port {p.name}), and the draw does not draw it in full"
 
+/-! ### A recursive session's inner statement: its description, read from the developer's registration (§16.16) -/
+
+/-- The circuit's first port named `name`. -/
+def portOf (c : Circuit) (name : String) : Option Nat := (List.range c.ports.size).find? fun p => c.ports[p]!.name == name
+
+/-- The statement's commit strings of `reg`'s registered rows: registered row `r` is row `r` of the table of the circuit's
+port named `reg.name` (`checkDescription`: the table is the registration, in order). -/
+def rowsOf (c : Circuit) (pub : Public) (reg : Port) (r : Nat) : ByteArray :=
+  match portOf c reg.name, pub.tables with
+  | some p, some t => tableRow pub t p r
+  | _, _ => ByteArray.empty
+
+/-- The path the statement's header gives registered row `r` of `reg` (`entry`), the one `rowsOf c pub reg r` opens the
+registered root through. -/
+def pathOf (pub : Public) (reg : Port) (r : Nat) : ByteArray :=
+  match entry pub reg with
+  | .ok (_, paths) => paths.getD r ByteArray.empty
+  | .error _ => ByteArray.empty
+
+/-- The first of `rows` table rows whose stated position is not its own index. -/
+def badPosition (positions : Array Nat) (rows : Nat) : Option Nat :=
+  (List.range rows).find? fun r => positions.getD r 0 != r
+
+/-- The first of `n` instances whose ref names no row of port `p`'s `rows` table rows. -/
+def badRef (t : Tables) (np p rows n : Nat) : Option Nat :=
+  (List.range n).find? fun i => !decide (ref t np p i < rows)
+
+/-- The first of port `p`'s `rows` table rows that none of `n` instances reads. -/
+def unread (t : Tables) (np p rows n : Nat) : Option Nat :=
+  (List.range rows).find? fun r => !(List.range n).any fun i => ref t np p i == r
+
+/-- One port of an inner statement's description: a row of the circuit, an `hm96-sha512/row/v1` row of `reg`'s width
+(`Port.fits`), whose table is `reg`'s registration in order (as many rows as its leaves, table row `r` at position `r`,
+opening the registered root through its path), every instance reading a row of it, and every row of it read. -/
+def checkDescriptionPort (c : Circuit) (pub : Public) (t : Tables) (reg : Port) : V Unit := do
+  let np := c.ports.size
+  let some p := portOf c reg.name
+    | throw s!"registered reads: {reg.name} is not a row of the circuit (an input port, or an output port's row)"
+  if c.ports[p]!.v2 then
+    throw s!"registered reads: port {reg.name} is a {if c.ports[p]!.segs.isSome then HmRow.ROW_SCHEMA_SEG else HmRow.ROW_SCHEMA_V2} row, and {reg.value}'s registered rows are {HmRow.ROW_SCHEMA} rows"
+  if !reg.fits c.ports[p]!.words then
+    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.words} u16 words, not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
+  let (positions, paths) ← entry pub reg
+  let rows := t.counts.getD p 0
+  if rows != reg.leaves then
+    throw s!"registered reads: port {reg.name}: its table has {rows} rows, and {reg.value}'s registration {reg.leaves}: an inner statement's description is its registered rows, each once, in order"
+  else if positions.size != rows || paths.size != rows then
+    throw s!"registered reads: port {reg.name}: one position and one path per table row"
+  else match badPosition positions rows with
+  | some r =>
+    throw s!"registered reads: port {reg.name}: table row {r} states position {positions.getD r 0}, and an inner statement's description table is its registration in order (row {r} at position {r})"
+  | none =>
+    match badRow reg pub t p rows positions paths with
+    | some r =>
+      throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {r}"
+    | none =>
+      match badRef t np p rows pub.n with
+      | some i =>
+        throw s!"registered reads: port {reg.name}: instance {i}'s ref {ref t np p i} names no row of its {rows}-row table"
+      | none =>
+        match unread t np p rows pub.n with
+        | some r =>
+          throw s!"registered reads: port {reg.name}: none of the {pub.n} instances reads table row {r}, registered row {r} of {reg.value}'s {reg.leaves}: an inner statement reads its whole description"
+        | none => pure ()
+
+/-- **A recursive session's inner statement's description, read from the developer's registration** (PROTOCOL.md §16.16):
+the header's `registered` names exactly the verifier's own ports (`own`, `--registered`), each a table of a shared-row file
+that is the registration in order, every row of it opening the registered root at its index and read by an instance
+(`checkDescriptionPort`; `FlockProofs.Registered`: `checkDescription_ok`). No position depends on which unit an instance
+is, so unlike `check` the units need not be derived. -/
+def checkDescription (c : Circuit) (pub : Public) (own : Array Port) : V Unit := do
+  let .ok (.obj kvs) := pub.header.getObjVal? "registered"
+    | throw "registered reads: the inner statement names no registered rows: its description committed afresh opens no registered root"
+  for (name, _) in kvs.toArray do
+    if !own.any (·.name == name) then throw s!"registered reads: the statement names port {name} registered, and the verifier's registered reads do not"
+  let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
+  own.toList.forM (checkDescriptionPort c pub t)
+
 end Registered
 
 /-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its

@@ -24,6 +24,7 @@ import Proofs.Flock.Recursive.ReadsOpen
 import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Raw
 import Proofs.Flock.Recursive.OuterAbort
+import Proofs.Flock.Recursive.Description
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
