@@ -1,7 +1,7 @@
 // The ZK statement's row commitment on the serving GPU, for served_zk's cost measurement (rows_bench.py): a call's rows as
 // hm96-sha512 row leaves of a frame-v3-sha512 tree (verity.ml.commitments: rowleaf's sha512/row-seg/v1 and
 // sha512/row/v2, hm96's SHA512 instance, merkle's frame-v3 leaf and node), the hashing being C-Flock's (verity/ml/flock/cuda/
-// sha512.cuh: s512_compress, chacha20_block, hm96_salt).  Every launch takes rows_bench.py's Args (16 pointers, 16 ints).
+// sha512.cuh: s512_compress).  Every launch takes rows_bench.py's Args (16 pointers, 16 ints).
 //   sz_mid       the SHA-512 state after each of `count` 128-byte first blocks (the segment prefixes S(j, s, m_j), Q, P,
 //                hm96's salt and leaf prefixes): constants of a shape and a key, computed once
 //   sz_segments  d_j = SHA-512(S(j, s, m_j) || segment j) for every segment of every row, a lane a segment, a warp's 32 segments'
@@ -9,7 +9,7 @@
 //                each segment a whole number of 128-byte chunks
 //   sz_finish    a thread a row: x (row-seg: SHA-512(Q || d_0 .. d_(s-1)); v2, s = 0: SHA-512(P || row) of a row of at most
 //                111 bytes), then by mode: 0 x alone (the service's unsalted digest), 1 b || c and the hm96 leaf
-//                H(leaf_prefix || b || c) under the salt hm96_salt(key, nonce, i), 2 also the frame-v3 leaf
+//                H(leaf_prefix || b || c) under row i's salt (the host's), 2 also the frame-v3 leaf
 //                H(leaf_prefix_i || hm96 leaf) into the tree's level 0, and with one CTA the tree's levels above it; a
 //                grid-stride loop over the rows
 //   sz_level     one level of the tree (a thread a node), for trees wider than one CTA
@@ -121,9 +121,9 @@ __device__ __noinline__ void sz_tree(uint8_t* tree, const uint8_t* node_heads, i
     }
 }
 
-// p: digests (row-seg: rows * s * 64) or rows (v2), q_mid (Q's or P's state), tables, salt key (32 bytes), hm96 mids (salt
+// p: digests (row-seg: rows * s * 64) or rows (v2), q_mid (Q's or P's state), tables, salts (rows * 192), hm96 mids (salt
 //    prefix, leaf prefix), leaf heads (rows slots), node heads (width - 1 slots), x out, b||c out, tree (level 0 first)
-// i: rows, s (0: v2 rows), row stride (v2), mode, nonce lo, nonce hi, width, row bytes (v2)
+// i: rows, s (0: v2 rows), row stride (v2), mode, unused, unused, width, row bytes (v2)
 __device__ void sz_row(const Args& a, long long i) {
     int s = a.i[1], stride = a.i[2], mode = a.i[3];
     const uint64_t* q = (const uint64_t*)a.p[1];
@@ -175,11 +175,9 @@ __device__ void sz_row(const Args& a, long long i) {
         if (mode == 0) {
             for (int t = 0; t < 64; t++) xo[t] = x[t];
         } else {
-            Hm96Key key;
-            for (int t = 0; t < 8; t++) key.k[t] = ((const uint32_t*)a.p[3])[t];
-            uint64_t nonce = (uint32_t)a.i[4] | ((uint64_t)(uint32_t)a.i[5] << 32);
             uint32_t yw[48];
-            hm96_salt(key, nonce, i, yw);
+            const uint32_t* y = (const uint32_t*)a.p[3] + 48 * i;
+            for (int t = 0; t < 48; t++) yw[t] = y[t];
             const uint64_t* tables = (const uint64_t*)a.p[2];
             const uint64_t* mid = (const uint64_t*)a.p[4];
             uint64_t m[8] = {0, 0, 0, 0, 0, 0, 0, 0};
