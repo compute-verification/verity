@@ -17,9 +17,9 @@
  },
  "layers": {
   "NetworkCheck.Certificate": {
-   "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon"],
+   "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon", "Identity.Tagged"],
    "except": [],
-   "why": "the encodings are code: Lean core and C-Flock's hashes, bytes and canonical JSON only, no Mathlib and nothing of Security"
+   "why": "the encodings are code: Lean core, C-Flock's hashes, bytes and canonical JSON, and core's tagged SHA-512 only, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Check": {
    "imports": ["NetworkCheck.Certificate", "NetworkCertifier.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
