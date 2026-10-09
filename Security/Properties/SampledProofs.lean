@@ -15,8 +15,9 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   values (`R7`);
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
-* **the units** were proved and served as drawn, under the registered roots and registered values (`UnitsProved`), and
-  the receipt names the commitment's digest (`Receipt`);
+* **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
+  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
+  (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the law has a profile's draw and the population is a natural number;
@@ -177,7 +178,7 @@ def countIn (units : Array Int) (s : Json) : Nat :=
 stratified or work, with exactly its law's keys; the law it names is `law` and its population the registered one; its
 units integers, strictly ascending, in `[0, population)`; a subset's `k` its number of units; a Bernoulli `p` written
 `NUM/DEN` with `0 ≤ NUM ≤ DEN`, `0 < DEN`; a stratified or work draw's strata well formed over its population
-(`Draw.strataProblem`: each stratum exactly its keys, a distinct template, its ranges ascending, disjoint and tiling
+(`Draw.strataMessage` none: each stratum exactly its keys, a distinct template, its ranges ascending, disjoint and tiling
 `[0, population)`, its `k` the rule's), each stratum's `k` the number of units drawn in it; and a work draw's closure,
 when it has one, integers, non-empty, strictly ascending, in `[0, population)` and none of them drawn. -/
 def Drawn (draw population law : Json) : Prop :=
@@ -191,7 +192,7 @@ def Drawn (draw population law : Json) : Prop :=
     (kind = "subset" → int? (getD draw "k") = some (units.size : Int)) ∧
     (kind = "bernoulli" → ∃ p, getD draw "p" = .str p ∧ (Draw.probability? p).isSome) ∧
     ((kind = "stratified" ∨ kind = "work") →
-      ∃ n, int? (getD draw "population") = some n ∧ Draw.strataProblem draw n = false ∧
+      ∃ n, int? (getD draw "population") = some n ∧ Draw.strataMessage draw n = none ∧
         ∀ ss, getD draw "strata" = .arr ss → ∀ s ∈ ss, int? (getD s "k") = some (countIn units s : Int)) ∧
     (closure → ∃ cs ys, getD draw "closure" = .arr cs ∧ cs.mapM int? = some ys ∧ ∃ (h : 0 < ys.size),
       Ascending ys ∧ 0 ≤ ys[0] ∧ (∃ n, int? (getD draw "population") = some n ∧ ys[ys.size - 1] < n) ∧
@@ -209,29 +210,34 @@ def drawnInts (draw : Json) : Array Int :=
 def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
-/-- The record's registered values, `{value: root}`, each value's last entry (none for a v1 record). -/
-def registeredRoots (rec : Json) : Array (Json × Json) :=
-  (match getD rec "registered" with | .arr es => es | _ => #[]).foldl (fun (acc : Array (Json × Json)) x =>
-    let v := getD x "value"
-    (acc.filter fun ((w, _) : Json × Json) => !jeq w v).push (v, getD x "root")) #[]
+/-- The roots the verifiers of record that accepted report opening the sessions' registered reads against, for the
+record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
+to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
+`Record.ownRegistered` compute from the verdicts). -/
+def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
+  Record.ownRegistered rec (Record.sessionRegistered vs)
+
+/-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
+the same key and root in the second. -/
+def SameRoots (a b : Array (String × Json)) : Prop :=
+  a.size = b.size ∧ ∀ x ∈ a, ∃ y ∈ b, x.1 = y.1 ∧ jeq x.2 y.2
 
 /-- The units, as the record holds them (`audit_record`'s checks after the draw's): the proved statement's instances are
 exactly the units the draw proves (its units and a work draw's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the drawn units, when they were handed the draw; the sessions' roots, when
-given, name at least one port, each port's root the one the record registers for it; and, when the record registers
-values or the sessions report reads of them, the sessions' registered reads were opened against exactly the record's
-`{value: root}`. -/
+given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
+each port); and, when the record registers values or the verifiers of record report reads of the record's own values,
+those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
+entry). -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
-    ∀ pr ∈ entries roots, ∃ reg, rootFor c.record pr.1 = some reg ∧ jeq (getD reg "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ e.sessionRegistered.isSome →
-    let want := registeredRoots c.record
-    let opened := (e.sessionRegistered.map entries).getD #[]
-    opened.size = want.size ∧ ∀ vr ∈ opened, ∃ wr ∈ want, jeq wr.1 (.str vr.1) ∧ jeq wr.2 vr.2)
+    ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
+  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
+    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/
@@ -263,20 +269,20 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) 
 def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : Nat) : Core.Integrity :=
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
-    levels := #[{ name := OneStage.LEVEL, query := some (str "partition"), size := n, draw := some d }],
-    delta := p.delta, drawn := #[(OneStage.LEVEL, (drawnNats e.draw).size)] }
+    levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
+    delta := p.delta, drawn := #[(Record.LEVEL, (drawnNats e.draw).size)] }
 
 /-- The check accepts exactly when the registration keeps R1–R7 with `law` the verifier's agreed law as derived, the draw
 is a draw of `law` over the registered population, the units were proved and served as drawn under the registered roots
 and values with the receipt naming the commitment's digest, and the verdicts accept; `law` then has a profile's draw `d`
-(`OneStage.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
+(`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
 the profile `profileOf`. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof ↔
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
         UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
-        OneStage.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+        Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n
 
 /-- The commitment's digest, which the receipt is held to, is the registration digest of the record it decodes:
