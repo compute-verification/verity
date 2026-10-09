@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import os
 import random
 import resource
 import secrets
@@ -87,7 +88,8 @@ def main() -> int:
     net = U.pad(small, G, N_IN)
     xs = [[rng.randrange(2) for _ in range(N_IN)] for _ in range(a.n)]
     want = [U.interpret(net, x) for x in xs]
-    ph.end("netlist", circuit=name, gates=len(small.gates), padded=G - len(small.gates))
+    ph.end("netlist", circuit=name, gates=len(small.gates), padded=G - len(small.gates),
+           flock_plain_leaves=os.environ.get("FLOCK_PLAIN_LEAVES"), leaf_scheme=CS.LEAF_SCHEME)
 
     fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
     tr = U.traced(G, N_IN, N_OUT)

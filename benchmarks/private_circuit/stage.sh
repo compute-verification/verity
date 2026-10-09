@@ -5,6 +5,7 @@
 #     bash benchmarks/private_circuit/stage.sh CLS="256,64,32 512,64,32" GATES=inputs/F32MulFtz_v3.gates.json N=2
 # env: CLS (space-separated G,N_IN,N_OUT)  GATES (a circuit's description; default a random one per class)  N=2 instances
 #      KEEP (non-empty: keep the staged files under $OUT)  STAGE_DIR (stage each class into STAGE_DIR/G-N_IN-N_OUT, kept)
+#      FLOCK_PLAIN_LEAVES=1 (plain SHA-512 leaves, a recursion's inner statement; 0 for the default)
 #      MAX_GIB (an address-space cap for each staging process, so it fails alone rather than crowd the node)  FLOCK_WORK=/workspace/jobs/pc-stage (the venv; never the run dir)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -15,6 +16,7 @@ UV=$(command -v uv || ls /workspace/jobs/bin/uv 2>/dev/null || echo $HOME/.local
 exec 8>$W/venv.lock; flock 8
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; }
 exec 8>&-
+export FLOCK_PLAIN_LEAVES=${FLOCK_PLAIN_LEAVES:-1}
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 GA=(); [ -n "${GATES:-}" ] && GA=(--gates "$(cd "$RESEARCH_RUN_DIR" && realpath "$GATES")")
 TIME=(); [ -x /usr/bin/time ] && TIME=(/usr/bin/time -v)
