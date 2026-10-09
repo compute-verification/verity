@@ -161,7 +161,7 @@ simp with that.
   acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
   constant of a module under `shape.premises` (under its leading `∀`s); the acceptance applies the function in its own
   body, under no hypothesis of its own; a `Prop` field of a structure an input ranges over, or a family of them
-  (`Vs : Fin S → VStmt`) holds, counts as a hypothesis (a structure's own `Nonempty` aside),
+  (`Vs : Fin S → VStmt`) holds, counts as a hypothesis (`Nonempty` too),
   and a conjunction as its conjuncts; when they are about different functions, the entry lists `conjuncts`, one
   `{function, outcome}` each. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
   with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,

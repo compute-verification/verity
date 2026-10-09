@@ -332,7 +332,8 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
     """`Facts.lean`'s shape on real statements (the friction note `proofs/20261009T1340Z-friction-shape-check-session-
     mentions-pass`): mentioning a session whose structure names the function (`hown`) is no acceptance, nor is an
     implication whose consequent isn't one (`_hop`); a premise under `∀` is read by its head; a family of structures
-    (`Vs : Fin 3 → Stmt`, an `abbrev` of one) holds its fields; a structure's own `Nonempty` is no hypothesis."""
+    (`Vs : Fin 3 → Stmt`, an `abbrev` of one) holds its fields; a structure's own `Nonempty` is a hypothesis
+    too, since a field `Nonempty {x // Bad x}` is an existence claim."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control" / "ShapeSpec.lean").write_text(SHAPE_SPEC)
@@ -346,7 +347,7 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
     got = {n: [w.split(" : ")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"], ["Control.ShapePrem"])]
            for n in names}
     assert got == {"guarded": ["takes _hop"], "mentions": ["takes _hm"], "underForall": [], "family": ["takes _Vs.hscope"],
-                   "world": []}, got
+                   "world": ["takes _W.nonempty"]}, got
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -1469,7 +1470,7 @@ def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_w
     field = part([hyp("s.hscope", 0, ["P.Scope"], source="field"), ACCEPTS], inputs=[("s", 0)])
     assert "a field of an input it ranges over" in A.refusals(entry, [field], [])[0]
     nonempty = part([hyp("W.nonempty", 0, ["Nonempty"], source="field") | {"head": "Nonempty"}, ACCEPTS], inputs=[("W", 0)])
-    assert A.refusals(entry, [nonempty], []) == [], "a structure's own `Nonempty` is no hypothesis"
+    assert "a field of an input it ranges over" in A.refusals(entry, [nonempty], [])[0], "`Nonempty` is a hypothesis too"
     implied = part([ACCEPTS, hyp("hop", 2, ["P.check", "P.Q"]) | {"guarded": True, "applies": ["P.Q"]}], inputs=[("x", 0)])
     assert "under a hypothesis of its own" in A.refusals(entry, [implied], [])[0]
     named = part([hyp("hm", 1, ["P.check", "P.S"]) | {"applies": ["P.S"]}], inputs=[("x", 0)])

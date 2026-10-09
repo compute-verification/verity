@@ -177,8 +177,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   definitions (mentioning a structure whose fields name `F`, such as an outer session, is not applying it) and the
   acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
   P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
-  returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, except the structure's
-  own `Nonempty`. A guarantee under `frozen` (with why it doesn't fit yet) is
+  returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, its
+  own `Nonempty` among them. A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
