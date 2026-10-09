@@ -178,6 +178,40 @@ def test_without_the_lean_the_python_is_the_records_and_a_lean_failure_rejects(s
     assert out["audits_accepted"] == 0
 
 
+def test_the_lean_is_unavailable_without_lake_or_its_server(monkeypatch):
+    """The Lean runs where `lake` is on the PATH and `verity_difftest` imports; otherwise `lean_unavailable` says which."""
+    live = ta.challenger()
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    assert live.lean_unavailable() == "lake is not on the PATH"
+    monkeypatch.setattr(shutil, "which", lambda name: f"/opt/elan/bin/{name}")
+    monkeypatch.setitem(sys.modules, "verity_difftest", None)
+    assert live.lean_unavailable().startswith("verity_difftest is not importable here (")
+    monkeypatch.delitem(sys.modules, "verity_difftest")
+    assert live.lean_unavailable() is None
+
+
+def test_a_replay_writes_out_and_holds_the_recorded_verdicts_to_its_own(strict_doc, tmp_path, capsys):
+    """`--replay --out`: one line per document with both outputs; the verdicts `judge` recorded in the document are held to
+    the replay's, and one recorded otherwise is a difference."""
+    live, ready, leaves, honest, _ = strict_doc
+    bench = tmp_path / "run" / "bench"
+    bench.mkdir(parents=True)
+    judged = live.judge(ready, leaves, honest, by="python")
+    (bench / "ready-p2-honest.json").write_text(json.dumps(ready))
+    (bench / "audit-p2-honest.json").write_text(json.dumps(judged))
+    (bench / "leaves-p2.bin").write_bytes(leaves)
+    assert ta.main(["--replay", str(tmp_path / "run"), "--out", str(tmp_path / "out.jsonl")]) == 0
+    assert capsys.readouterr().out.endswith("1 runs, 1 same verdict, 0 negative controls\n"
+                                            "1 with recorded verdicts, 1 recorded as replayed\n")
+    [row] = [json.loads(s) for s in (tmp_path / "out.jsonl").read_text().splitlines()]
+    assert row["same"] and row["recorded_same"] and not row["negative"] and set(row["recorded"]) == {"lean", "python"}
+    assert row["recorded"]["python"] == row["python"] == row["lean"]
+    judged["verdicts"]["python"]["accepted"] = False
+    (bench / "audit-p2-honest.json").write_text(json.dumps(judged))
+    assert ta.main(["--replay", str(tmp_path / "run")]) == 1
+    assert "recorded lean and python DIFFERENT" in capsys.readouterr().out
+
+
 @pytest.mark.slow
 def test_a_replay_judges_a_record_with_blocks_and_names_what_one_without_lacks(tmp_path, capsys):
     from verity.core.protocols.pous.schemes import p2

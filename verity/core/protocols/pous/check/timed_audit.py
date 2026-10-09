@@ -3,7 +3,7 @@ replayed on the record) and `pous_check`'s `pous-timed-audit` (`PousCheck.TimedA
 records of runs.
 
     uv run python verity/core/protocols/pous/check/timed_audit.py --generated [--out FILE]
-    uv run python verity/core/protocols/pous/check/timed_audit.py --replay RUN_DIR...
+    uv run python verity/core/protocols/pous/check/timed_audit.py --replay RUN_DIR... [--out FILE]
 
 `--generated` compares the two on honest P2 v4 records, at reduced widths and at the registered point, and on negative
 controls of each part of the verdict (a wrong, flipped, short or long block, a leaf file of another store under its own
@@ -16,7 +16,9 @@ control is an instance built to be refused, faulted or rejected; the generator c
 and `bench/leaves-p2.bin`, as `band_gpu/harness.py` keeps them) both ways and prints
 `N runs, N same verdict, K negative controls` over the documents it can replay. A document whose answers do not carry
 their blocks cannot be replayed (the audit checks each block against its leaf), and neither can a record of another
-version than P2 v4; it says which, and counts neither.
+version than P2 v4; it says which, and counts neither. Where a document kept the verdicts its run computed (`verdicts`,
+`judge`'s), each one that ran is held to the replay's of the same name, and `M with recorded verdicts, M recorded as
+replayed` follows; the exit is 0 iff every document replays the same both ways and as recorded.
 
 Lean implements the verdict only: the records are the memory challenger's, which Python's audit wrote.
 """
@@ -296,10 +298,13 @@ def report(results: list[dict], out: Path | None = None) -> int:
     return 1 if differences or vacuous or not any(accepted(r["python"]) for r in results) else 0
 
 
-def replay(runs: list[Path]) -> int:
-    """Each audit document of each run's record judged both ways; prints what it cannot replay and why."""
+def replay(runs: list[Path], out: Path | None = None) -> int:
+    """Each audit document of each run's record judged both ways, and each verdict the run recorded (`verdicts`, but a Lean
+    `unavailable` there) held to the replay's of the same name; prints what it cannot replay and why; writes `out`, one
+    JSON line per document replayed."""
     mc = challenger()
-    replayed = same = negatives = 0
+    replayed = same = negatives = recorded = agree = 0
+    rows = []
     for run in runs:
         bench = run / "bench" if (run / "bench").is_dir() else run
         docs = sorted(bench.glob("audit-p2-*.json"))
@@ -326,9 +331,25 @@ def replay(runs: list[Path]) -> int:
             replayed += 1
             same += py == lean
             negatives += not accepted(py)
-            print(f"{run.name} {arm}: {'same' if py == lean else 'DIFFERENT'} {py if py == lean else py + ' / ' + lean}")
+            row = {"run": run.name, "arm": arm, "python": py, "lean": lean, "same": py == lean, "negative": not accepted(py)}
+            kept = {name: canonical(v) for name, v in (doc.get("verdicts") or {}).items()
+                    if not (isinstance(v, dict) and "unavailable" in v)}
+            note = ""
+            if kept:
+                row["recorded"] = kept
+                row["recorded_same"] = all(v == {"python": py, "lean": lean}.get(name) for name, v in kept.items())
+                recorded += 1
+                agree += row["recorded_same"]
+                note = f"; recorded {' and '.join(sorted(kept))} {'the same' if row['recorded_same'] else 'DIFFERENT'}"
+            rows.append(row)
+            print(f"{run.name} {arm}: {'same' if py == lean else 'DIFFERENT'} {py if py == lean else py + ' / ' + lean}{note}")
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("".join(canonical(r) + "\n" for r in rows))
     print(f"{replayed} runs, {same} same verdict, {negatives} negative controls")
-    return 0 if replayed and same == replayed else 1
+    if recorded:
+        print(f"{recorded} with recorded verdicts, {agree} recorded as replayed")
+    return 0 if replayed and same == replayed and agree == recorded else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -336,10 +357,10 @@ def main(argv: list[str] | None = None) -> int:
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--generated", action="store_true", help="the generated instances")
     mode.add_argument("--replay", type=Path, nargs="+", metavar="RUN_DIR", help="the audit documents of these runs")
-    ap.add_argument("--out", type=Path, help="write one JSON line per instance with both outputs")
+    ap.add_argument("--out", type=Path, help="write one JSON line per instance (or replayed document) with both outputs")
     a = ap.parse_args(argv)
     if a.replay:
-        return replay(a.replay)
+        return replay(a.replay, a.out)
     return report(compare(), a.out)
 
 

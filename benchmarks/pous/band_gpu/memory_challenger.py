@@ -436,15 +436,16 @@ VERDICTS = {"python": verdict, "lean": lean_verdict}
 
 
 def lean_unavailable() -> str | None:
-    """Why the Lean verdict can't run in this process (no `lake` on the PATH, or no `verity_difftest` beside this Python, as
-    in the GPU pods' venv), or None."""
-    import importlib.util
+    """Why the Lean verdict can't run in this process (no `lake` on the PATH, or `verity_difftest`, which serves it, not
+    importable beside this Python), or None."""
     import shutil
 
     if shutil.which("lake") is None:
         return "lake is not on the PATH"
-    if importlib.util.find_spec("verity_difftest") is None or importlib.util.find_spec("hypothesis") is None:
-        return "verity_difftest is not importable here"
+    try:
+        import verity_difftest  # noqa: F401
+    except ImportError as e:
+        return f"verity_difftest is not importable here ({e})"
     return None
 
 
