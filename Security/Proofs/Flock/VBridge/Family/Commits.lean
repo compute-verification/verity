@@ -1,4 +1,5 @@
 import Proofs.Flock.VBridge.Family
+import Proofs.Flock.VBridge.Family.ReadTransfer
 import Proofs.Flock.Soundness.Audit.FlockPublic
 
 /-!
@@ -76,11 +77,6 @@ noncomputable def skOf (own : Fin S → Array Flock.Registered.Port) (sel : ℕ 
 noncomputable def cmtOf {Cm : Type} (bc : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (j : Fin S) (e : Cm) (pos : PosK (Vs j).c (Vs j).hU (Vs j).nv) : (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg :=
   (pos, Refine.H512 (Refine.K512.leafPrefix ++ bc j e pos))
-
-/-- **Wire `g` of session `j` is read**: a committed wire of some unit. -/
-def ReadW (j : Fin S) (g : Fin ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).circuit
-    (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).N) : Prop :=
-  ∃ u, g ∈ ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
 
 variable (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
 
