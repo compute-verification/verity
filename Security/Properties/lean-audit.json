@@ -12,6 +12,9 @@
   "Properties.Proofs.CertifierDevice",
   "Properties.Pous",
   "Properties.Proofs.Pous",
+  "Properties.Pous.TimedAudit",
+  "Properties.Pous.MemoryChallenger",
+  "Properties.Proofs.Pous.MemoryChallenger",
   "Properties.NetworkCertifier",
   "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork",
@@ -77,7 +80,7 @@
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pous": {
-   "imports": ["Mathlib", "Definitions.Pous", "PousCheck", "Properties.Pous"],
+   "imports": ["Mathlib", "Definitions.Pous", "PousCheck", "MemoryChallenger", "Properties.Pous"],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
