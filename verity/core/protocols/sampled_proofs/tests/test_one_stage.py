@@ -115,6 +115,10 @@ def test_registration_refusals():
     assert "R2-partition" in _check(rec, P.population_program(PAIR, 5), q).codes
     assert "keys" in _check({**rec, "extra": 1}, prog, q).codes
     assert _check({**rec, "previous": R.digest(rec)}, prog, q, log=[rec]).codes == ("R6-window",)
+    both = {"roots": [dict(rec["roots"][0], domain="00" * 64), dict(rec["roots"][1], leaves=5)]}
+    ports = _ports(prog, q, P.units(prog, q))
+    codes = {_check({**rec, **both}, prog, q, ports=dict(order)).codes for order in (ports.items(), reversed(ports.items()))}
+    assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
 def test_served_domains_bind_program_partition_port_schema_leaves_and_run():
