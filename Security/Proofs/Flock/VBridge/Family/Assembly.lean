@@ -77,7 +77,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : F.HEnds dg N k Rw V)
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
-    (hshp : ∀ R ω, ShapeIs F.sh (st R ω) sch) (hcl : F.ClaimsIs) (hfold : ∀ R ω, FoldsOk (st R ω) F.sh)
+    (hshp : ∀ R ω, ShapeIs F.sh (st R ω) sch) (hcl : F.ClaimsAt) (hfold : ∀ R ω, FoldsOk (st R ω) F.sh)
     (hco : ∀ R ω, CoinsAgree (st R ω) F.sh sch (2 * ((F.x R ω).toStatement regs).regions.length))
     (henc : F.AtAccepted dg N k Rw fun R ω t l => (F.tableSrc spec st cap lig R ω t l).Encodes)
     (htr : F.AtAccepted dg N k Rw fun R ω t l =>
@@ -88,7 +88,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
     {d : Fin F.stmts.size → Flock.Draw.UnitDraw} (hu4 : F.U4Passes own dj d) :
     VBridgeRead (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg := by
   obtain ⟨GS, gs, hst⟩ := F.hStruct_of hne hsome hname
-  have hfit := F.hFit_of dg N k Rw spec st cap lig hrep hst hset hcl
+  have hfit := F.hFit_of dg N k Rw spec st cap lig hrep hst hset (F.claimsIs_of hcl)
   exact vbridgeRead_of_familyL F dg N k Rw hst (F.hShape_of dg N k Rw hrep hst hfit)
     (F.hRes_of dg N k Rw hrep hst hcov hname hseen hkeys hagree hone hv hz)
     (F.hUL_of dg N k Rw hrows hacc hU honeO hcoef V hV) (F.hReads_of dg N k Rw hacc hn V hV hE)
@@ -130,7 +130,7 @@ theorem vbridgeRead_assembled (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : (F.assembled spec st cap lig own sel bc dec).HEnds dg N k Rw V)
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
-    (hshp : ∀ R ω, ShapeIs F.sh (st R ω) sch) (hcl : F.ClaimsIs) (hfold : ∀ R ω, FoldsOk (st R ω) F.sh)
+    (hshp : ∀ R ω, ShapeIs F.sh (st R ω) sch) (hcl : F.ClaimsAt) (hfold : ∀ R ω, FoldsOk (st R ω) F.sh)
     (hco : ∀ R ω, CoinsAgree (st R ω) F.sh sch (2 * ((F.x R ω).toStatement regs).regions.length))
     (henc : F.AtAccepted dg N k Rw fun R ω t l =>
       ((F.assembled spec st cap lig own sel bc dec).tableSrc spec st cap lig R ω t l).Encodes)

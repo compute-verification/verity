@@ -89,6 +89,20 @@ theorem TableSrc.extrasAt_size (s : TableSrc) {ptLocal mPts : ℕ} (hset : Setup
   obtain ⟨e, he, hext, -⟩ := s.points_ok hset pts
   rw [s.extrasAt_of he, (hext e he).1, FlockSoundness.extraClaims_length]
 
+/-- `shape?` keeps the claims it is given. -/
+theorem shape?_claims {m k c : ℕ} {sh : Shape} (h : Flock.RecResiduals.shape? m k c = some sh) : sh.claims = c := by
+  unfold Flock.RecResiduals.shape? at h
+  cases hf : Flock.fast100 m with
+  | none => simp [hf] at h
+  | some s =>
+    by_cases hk : k < 6
+    · simp [hf, hk] at h
+    · by_cases hc : c < 2
+      · simp [hf, hc] at h
+      · simp [hf, hk, hc] at h
+        subst h
+        rfl
+
 /-! ## The inner coins, from the history -/
 
 /-- **The rounds' sizes `verifierRows` returns at**, at a shape (`verifierRows_schedule`). -/
@@ -271,9 +285,14 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
 
-/-- **The verifier's shape counts the statement's claims** (the verifier's gap `vsh`, with `ShapeIs`): `2` and two per
-region, as the inner session's `cls` gives them (`rec_vstage.shape`'s claims). -/
+/-- The verifier's shape counts the statement's claims: `2` and two per region. -/
 def ClaimsIs : Prop := ∀ R ω, F.sh.claims = 2 + 2 * ((F.x R ω).toStatement regs).regions.length
+
+/-- **V*'s shape counts the inner statement's claims** (the verifier's gap `vsh`, with `ShapeIs`): `vsh`'s claims are
+`2` and two per region of the inner session's `regs` (`rec_vstage.shape`'s claims). -/
+def ClaimsAt : Prop := F.vsh.claims = 2 + 2 * regs.length
+
+theorem claimsIs_of (h : F.ClaimsAt) : F.ClaimsIs := fun _ _ => (shape?_claims F.hsh).trans h
 
 theorem rep_rounds (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig F.wmsg)) (R : Reg) (ω : L.Ω)
     (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) :
