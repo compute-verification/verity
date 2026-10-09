@@ -321,17 +321,24 @@ tape, the firewall's commitments, the inner prover's randomness and the firewall
 abbrev HCtx (Prog Wit Ωa Ωp : Type) (nr nh : ℕ) : Type :=
   Prog × Wit × (Fin nr → ZkView.Salt) × Ωa × (Fin nh → ByteArray) × Ωp × (Fin nh → ZkView.Salt)
 
+/-- The honest context at the firewall's commitments to `msgs` under the salts `y`. -/
+abbrev hctxAt {Prog Wit Ωa Ωp : Type} {nr nh : ℕ}
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray) (P : Prog) (w : Wit)
+    (r : Fin nr → ZkView.Salt) (a : Ωa) (p : Ωp) (y : Fin nh → ZkView.Salt) : HCtx Prog Wit Ωa Ωp nr nh :=
+  (P, w, r, a, (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)), p, y)
+
 /-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = err`: the view `Sessions.view` at the honest context, the
 simulator `Sessions.sim` at the public context `pubS` reads (the owed outputs, the registration's view, the auditor's
-tape and the firewall's commitments), which is the honest context's (`hpub`). -/
+tape and the firewall's commitments), which is the honest context's (`hpub`). The honest witnesses (`hH`) and
+`hpub` are needed only at the firewall's own commitments (`hctxAt`). -/
 theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)
     (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
     (V : Sessions (HCtx Prog Wit Ωa Ωp nr nh) Pub) (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub)
-    (hpub : ∀ o P w, honest o P w → ∀ r a h p y,
-      V.pubOf (P, w, r, a, h, p, y) = pubS o (Flock.Guarantees.regLeaves rows pub P r) a h)
+    (hpub : ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (hctxAt msgs P w r a p y) =
+      pubS o (Flock.Guarantees.regLeaves rows pub P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)))
     (hOK : V.TablesOK) {prover : TableProver} (hP : SelfCheckSilent prover)
-    (hH : ∀ o P w, honest o P w → ∀ r a h p y, V.Honest (P, w, r, a, h, p, y))
+    (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
     (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :
     ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V.View → Prop),
       prCoin (fun q : V.Ωo => E (V.view prover
@@ -339,9 +346,8 @@ theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows 
         ≤ prCoin (fun s : V.Ωs => E (V.sim (pubS o (Flock.Guarantees.regLeaves rows pub P r) a
             (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i))) s)) + V.err := by
   intro o P w hw r a p y E
-  have h := V.close hOK hKey hP (P, w, r, a, (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)), p, y)
-    (hH o P w hw r a _ p y) E
-  rw [hpub o P w hw] at h
+  have h := V.close hOK hKey hP (hctxAt msgs P w r a p y) (hH o P w hw r a p y) E
+  rw [hpub o P w hw r a p y] at h
   exact h
 
 /-- **(ii) at V*'s sessions**: `RecursiveCircuitPrivateLeaves` with `_hOuter` from `vstar_outer_zk`. For every honest
@@ -351,10 +357,10 @@ theorem vstar_private {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Nonemp
     {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Out → Prog → Wit → Prop) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
     (V : Sessions (HCtx Prog Wit Ωa Ωp nr nh) Pub) (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub)
-    (hpub : ∀ o P w, honest o P w → ∀ r a h p y,
-      V.pubOf (P, w, r, a, h, p, y) = pubS o (Flock.Guarantees.regLeaves rows pub P r) a h)
+    (hpub : ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (hctxAt msgs P w r a p y) =
+      pubS o (Flock.Guarantees.regLeaves rows pub P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)))
     (hOK : V.TablesOK) {prover : TableProver} (hP : SelfCheckSilent prover)
-    (hH : ∀ o P w, honest o P w → ∀ r a h p y, V.Honest (P, w, r, a, h, p, y))
+    (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
     (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w)
     (E : Rv × Ωa × (Fin nh → ByteArray) × V.View → Prop) :
