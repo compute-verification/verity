@@ -242,6 +242,19 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     assert R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED, registered=[{**e, "word_bits": 16}]) == rec
 
 
+def test_an_r7_root_of_127_hex_digits_and_a_newline_is_refused():
+    """128 characters, all hex but the last: `$` would match before the newline, so the root is held to hex by `fullmatch`,
+    as Lean's `isHex` holds it."""
+    prog = _program()
+    reg = _registered(prog)
+    rec, ports = _record(prog, reg)
+    root = reg.entry()["root"][:127] + "\n"
+    assert len(root) == 128
+    got = R.check({**rec, "registered": [{**reg.entry(), "root": root}]}, prog, Q, law=LAW, scheme=SCHEME, ports=ports,
+                  registered={"W": 2})
+    assert got.codes == ("R7-root",)
+
+
 def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
     """The verifier's program says the table's leaves are 32 bits: a 32-bit registration of it passes R7, and one that
     names another width, or none (16), is refused, as is a 32-bit registration of a 16-bit table."""

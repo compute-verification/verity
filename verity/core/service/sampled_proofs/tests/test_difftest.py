@@ -786,7 +786,7 @@ RECORD = [
     _roots(lambda rs, x: rs[:1]), _roots(lambda rs, x: []), _roots(lambda rs, x: rs + rs[:1]), _roots(lambda rs, x: "roots"),
     _roots(lambda rs, x: [{**rs[0], "leaves": rs[0]["leaves"] + 1}, *rs[1:]]),
     _roots(lambda rs, x: [{**rs[0], "domain": "00" * 64}, *rs[1:]]),
-    _roots(lambda rs, x: [{**rs[0], "root": ["AB" * 64, 5, "", "xy"][x % 4]}, *rs[1:]]),
+    _roots(lambda rs, x: [{**rs[0], "root": ["AB" * 64, 5, "", "xy", rs[0]["root"] + "\n"][x % 5]}, *rs[1:]]),
     _roots(lambda rs, x: [{k: v for k, v in rs[0].items() if k != "domain"}, *rs[1:]]),
     _roots(lambda rs, x: [{**rs[0], "port": "y"}, *rs[1:]]),
     _set("record", "leaf_layer", lambda a, x: [None, "ff" * 64][x % 2]),
@@ -908,7 +908,8 @@ ENTRIES = [
     _entry(lambda e, x: {**e, "extra": 1}),
     _entries(lambda es, x: es[:-1]), _entries(lambda es, x: es + es[:1]), _entries(lambda es, x: es[::-1]),
     _entry(lambda e, x: {**e, "value": ["nope", 5, "w", None, True, "x"][x % 6]}),
-    _entry(lambda e, x: {**e, "root": ["AB" * 64, "ab" * 63, "ab" * 65, 5, "", "zz" * 64, None, "a" * 128][x % 8]}),
+    _entry(lambda e, x: {**e, "root": ["AB" * 64, "ab" * 63, "ab" * 65, 5, "", "zz" * 64, None, "a" * 128,
+                                       "a" * 127 + "\n"][x % 9]}),
     _entry(lambda e, x: {**e, "root": "12" * 64}),
     _entry(lambda e, x: {**e, "leaves": [e["leaves"] + 1, True, str(e["leaves"]), None, e["leaves"] - 1, 1][x % 6]}),
     _entry(lambda e, x: {**e, "words": [e["words"] + 1, True, str(e["words"]), 0, 1][x % 5]}),
@@ -1380,6 +1381,18 @@ def test_every_r7_code_is_reached(pieces):
                 kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
                 seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
     assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_a_root_with_a_trailing_newline_is_refused(pieces):
+    """A registered root and a registered value's 128-character root (127 hex digits and a newline), each with a newline
+    last, are refused by Lean and Python alike: Python's `$` matches before a final newline, which `fullmatch` doesn't."""
+    s = REGISTERED_SETUPS[0]
+    a = _v2_audit(s, s.values[1])
+    r3, r7 = copy.deepcopy(a), copy.deepcopy(a)
+    r3["record"]["roots"][0]["root"] += "\n"
+    r7["record"]["registered"][0]["root"] = r7["record"]["registered"][0]["root"][:127] + "\n"
+    for b, codes in ((r3, ["R3-root"]), (r7, ["R7-root", "R7-held"])):
+        assert D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces) == ("output", D.canonical({"codes": codes}))
 
 
 def test_every_public_items_code_is_reached(pieces):
