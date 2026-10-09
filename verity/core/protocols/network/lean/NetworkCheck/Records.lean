@@ -6,8 +6,8 @@ import Difftest
 
 `audit.py`'s `Audit` over its whole domain, `Published = Record | CommittedRecord | CertifiedRecord`, mixed lists
 included: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link. A certified record
-is checked exactly as `verity/network-certificate/v2` checks it (`NetworkCheck.Check`'s `egressVerdict` and
-`ingressVerdict` on that one record); a raw or committed record carries no direction, so it is matched by link and window
+is checked exactly as `verity/network-certificate/v2` checks it (`NetworkCheck.Check`'s `egressVerdict`, with the
+Program's grid from `expectedGrids`, and `ingressVerdict` on that one record); a raw or committed record carries no direction, so it is matched by link and window
 alone (`_by_window`), as one record of the link's egress windows and of its ingress windows alike.
 
 **Params** and **evidence**: `verity/network-certificate/v2`'s, read by its decoders.
@@ -172,26 +172,66 @@ def single (r : Certified) : Check.Commitment := ⟨#[r], .empty⟩
 
 def statusViolation (s : Option String) : Option String := s.map (s!"status:{·}")
 
-/-- An egress link-window's violation (`check_link`), none when it is accepted. -/
+/-- `handingFrom` with the hand times so far reversed in `acc`, so a run of any length takes no stack. -/
+def handingRev (T W : Nat) (syncs : Fin W → ClockSync) : Nat → List NetworkCertifier.LogicalFrame → List Nat → List Nat
+  | _, [], acc => acc
+  | last, f :: fs, acc =>
+    let h := if hw : f.anchor / T < W then max (NetworkCertifier.eligible f (syncs ⟨f.anchor / T, hw⟩)) last
+      else max (max last (W * T)) f.anchor
+    handingRev T W syncs h fs (h :: acc)
+
+/-- The enqueue counts of buckets `0 … H − 1`: bucket `t` counts the hand times `t` of `hs`. -/
+def enqueueCounts (H : Nat) (hs : List Nat) : Array Nat :=
+  hs.foldl (fun a h => a.modify h (· + 1)) (Array.replicate H 0)
+
+/-- The FIFO's release counts of `c` buckets from bucket `t` with `q` frames queued: `released` and `queue`, carried. -/
+def releases (S : Nat) (enq : Nat → Nat) : Nat → Nat → Nat → List Nat
+  | _, _, 0 => []
+  | t, q, c + 1 => min (q + enq t) S :: releases S enq (t + 1) (q + enq t - min (q + enq t) S) c
+
+/-- `fill` of the buckets releasing `ns`, the first from the `k`-th frame on: a bucket releasing `n` holds frames in slots
+`0 … n − 1`. -/
+def rows (S : Nat) (pay : Nat → ByteArray) : Nat → List Nat → List (Array (Option ByteArray))
+  | _, [] => []
+  | k, n :: ns => Array.ofFn (fun s : Fin S => if s.1 < n then some (pay (k + s.1)) else none) :: rows S pay (k + n) ns
+
+/-- `expected_grids(frames, syncs, params)`: the link's grid in each of the `W` windows, as `schedule.py` computes it, in
+time linear in the frames and the buckets: the hand times, the enqueue counts, the release counts, and the frames filled
+in order. Window `w`'s is `Check.expectedGrid`'s (`RecordsGrid.expectedGrids_eq`). -/
+def expectedGrids (g : Grid) (W : Nat) (l : Link) : Array RawGrid :=
+  let T := g.buckets
+  let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 Check.noSync
+  let enq := enqueueCounts (W * T) (handingRev T W syncs 0 l.frames []).reverse
+  let payloads := l.frames.toArray.map fun f => Check.bytesOfBits f.payload
+  let all := (rows g.allocation (fun k => payloads.getD k (Check.bytesOfBits [])) 0
+    (releases g.allocation (fun t => enq.getD t 0) 0 0 (W * T))).toArray
+  (Array.range W).map fun w => all.extract (w * T) (w * T + T)
+
+/-- An egress link-window's violation (`check_link`), none when it is accepted; `expected` is the Program's grid of the
+link-window. A certified record's is v2's `Check.egressVerdict`. -/
 def egressVerdict (p : Check.Params) (c : Commitment) (e : Evidence) (egressDigest : ByteArray) (l : String) (link : Link)
-    (w : Nat) : Option String :=
-  match (found c .egress l w).toList with
-  | [] => some "no-verdict"
-  | [.certified r] => Check.egressVerdict p (single r) e egressDigest l link w
-  | [r] =>
-    let (st, grids) := match r with
-      | .raw _ _ st grid => (st, fun expected => grid == expected)
-      | .committed _ _ st digest => (st, fun expected => (committedDigest l w expected p.grid).toOption == some digest)
-      | .certified _ => (none, fun _ => false)
-    match statusViolation st with
-    | some v => some v
-    | none =>
-      let s := link.syncs.getD w Check.noSync
-      let u := Check.unitSync e w
-      if !(Check.inSyncSet p.syncSet s && s.delta == u.delta && s.rho == u.rho) then some "advice"
-      else if grids (Check.expectedGrid p.grid p.windows link w) then none
-      else some "mismatch"
-  | _ => some "duplicate"
+    (expected : RawGrid) (w : Nat) : Option String :=
+  let screened : Except String (RawGrid → Bool) := match (found c .egress l w).toList with
+    | [] => .error "no-verdict"
+    | [.certified r] => (Check.screen p #[r]).map fun r grid =>
+      match recordHead l .egress w grid none p.grid egressDigest true >>= RecordHead.digest with
+      | .ok d => r.certificate.digest == d
+      | .error _ => false
+    | [.raw _ _ st grid] => match statusViolation st with
+      | some v => .error v
+      | none => .ok (· == grid)
+    | [.committed _ _ st digest] => match statusViolation st with
+      | some v => .error v
+      | none => .ok fun grid => (committedDigest l w grid p.grid).toOption == some digest
+    | _ => .error "duplicate"
+  match screened with
+  | .error v => some v
+  | .ok agrees =>
+    let s := link.syncs.getD w Check.noSync
+    let u := Check.unitSync e w
+    if !(Check.inSyncSet p.syncSet s && s.delta == u.delta && s.rho == u.rho) then some "advice"
+    else if agrees expected then none
+    else some "mismatch"
 
 /-- An ingress link-window's violation (`check_ingress_link`), none when it is accepted. -/
 def ingressVerdict (p : Check.Params) (c : Commitment) (ingressDigest : ByteArray) (l : String) (w : Nat) : Option String :=
@@ -203,9 +243,11 @@ def ingressVerdict (p : Check.Params) (c : Commitment) (ingressDigest : ByteArra
 
 /-- Every link-window's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's. -/
 def verdicts (p : Check.Params) (c : Commitment) (e : Evidence) (egressDigest ingressDigest : ByteArray) : Array LinkWindow :=
-  (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) => (List.range p.windows).map fun w =>
-      ({ direction := .egress, link := l, window := w, violation := egressVerdict p c e egressDigest l link w } :
-        LinkWindow)) ++
+  (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) =>
+      let grids := expectedGrids p.grid p.windows link
+      (List.range p.windows).map fun w =>
+        ({ direction := .egress, link := l, window := w,
+           violation := egressVerdict p c e egressDigest l link (grids.getD w #[]) w } : LinkWindow)) ++
     p.ingress.toList.flatMap fun l => (List.range p.windows).map fun w =>
       ({ direction := .ingress, link := l, window := w, violation := ingressVerdict p c ingressDigest l w } :
         LinkWindow)).toArray
