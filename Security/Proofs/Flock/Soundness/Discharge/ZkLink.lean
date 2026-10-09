@@ -15,6 +15,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
 import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 import Proofs.Flock.Soundness.Discharge.ZkLink.Public
