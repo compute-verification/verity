@@ -405,6 +405,7 @@ and the record keeps it as `unit_draw`. The offline checks:
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
 | U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, floor, k}`, a floor of at least one, `W ≥ 1`, each `k` the work rule's above its floor, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, and `verify` refuses a stratified draw without them and its own `K` (`--stratified K`), or at another `K`. A work draw's law must always be its own derivation from them, its work table (works and floors) and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
 | U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
+| U4 | every unit that reads a round's commitment by the verifier's own registered reads (a port whose value is `rec-c<i>` or `rec-top-L<l>`, §16.10) is drawn in full: its stratum's `k` is its size (a `subset` draw of `K = N`, a `p = 1` draw). A statement without a draw passes |
 
 `stratified_agree.py` checks the Lean verifier's laws, draws and U2 verdicts against core's (#164's
 `verity.core.protocols.sampled_proofs.one_stage.draw`, #161's `Stratified`).
@@ -1359,7 +1360,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   output port's row, whose table is the instances' output rows, instance `i`'s ref `i`, so instance `i`'s output is the
   registered row at `positions[i]`. Each table row's `hm96-sha512/row/v1` leaf must climb its path to the root at its
   position, each instance's ref name its unit's read position in the verifier's program (units `derived`). A port on
-  one side only refuses; verdicts report `registered`.
+  one side only refuses; verdicts report `registered`. A recursive statement reads the inner session's round commitments
+  as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
+  must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
+  stage's message is read off a sample.
 - **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
   statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
   `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are
@@ -1658,6 +1662,10 @@ expectation):
   parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
   exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
   verifier.
+- **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
+  ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
+  vector exercises it: no set's draw meets a `rec-c<i>` or `rec-top-L<l>` port. `Flock.Test.Full` runs it on synthetic
+  ports and draws.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

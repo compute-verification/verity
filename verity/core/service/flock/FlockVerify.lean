@@ -132,6 +132,7 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
     let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
       else Stmt.setupH tags circuitB pubB coins tables draw partition program
     checkRegistered st registered
+    Registered.checkFull registered draw
     checkIdentifier st identifier
     return st
   else do
@@ -156,6 +157,7 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     for st in sts do
       checkRegistered st registered
       checkIdentifier st identifier
+    Registered.checkFull registered draw
     return (spec, sts)
   else if count > 1 then throw s!"{tags.name}: one table per session"
   else do
