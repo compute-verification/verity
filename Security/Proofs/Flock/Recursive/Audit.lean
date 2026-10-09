@@ -65,7 +65,8 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap
   · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter hKey p₀ o P w hw E
-    exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter hKey p₀ o P w hw E
+    exact recursiveCircuitPrivateLeaves_le nr rows pub honest nh msgs view sim hOuter (δ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey
+      p₀ o P w hw E
   intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ st Vs zs₀ hCust dg N σ x wmsg Sk cmt msg rt stmt reads row op _ hA3 hop
     hx p op₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hacc : AcceptsStmt st

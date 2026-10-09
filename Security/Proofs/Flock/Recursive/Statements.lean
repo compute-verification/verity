@@ -28,8 +28,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   universal unit `UniversalUnit_v1{G, N_IN, N_OUT}`, and the auditor's whole view, the private circuit's registration, the
   firewall's commitments and V*'s sessions, has a simulator that reads only the class and the owed outputs, within the
   registration's hiding gap plus `RecursiveZK`'s. `RecursiveCircuitIndist` is its two-circuit form, and
-  `RecursiveCircuitPrivateLeaves` the registration as hm96 leaves of the private circuit's rows, its hiding gap from
-  `hash-derived-key`.
+  `RecursiveCircuitPrivateLeaves` the registration as hm96 leaves of the private circuit's rows, its hiding gap hm96's at
+  the pinned key. They assume nothing of the key or of SHA-512.
 * `RecursiveRanRegistered`, for the auditor, in `RecursiveSound`'s fork form: on its hypotheses and a registration
   binding at each row of the private circuit, a round or session fork, or a run the prover reaches whose sessions all accept
   having read a row other than the registered one and whose opening of it collides with the developer's, or the auditor
@@ -195,14 +195,18 @@ top (`firewallLeaf`), and V*'s sessions'. Assumed:
   and every event (`RecursiveCircuitPrivateLeaves` discharges it for a registration by hm96 leaves);
 * V*'s sessions are zero knowledge within `ε_o` at every honest witness, registration randomness, tape and salts, with a
   simulator `sim o v a h` that reads the owed outputs, the registration's view, the auditor's tape and the commitments
-  (V*'s public inputs), and nothing of the private circuit, the witness, the salts or the developer's randomness (`_hOuter`);
-* `hash-derived-key` (`Assumptions.Zk.HashDerivedKeyHm96`).
+  (V*'s public inputs), and nothing of the private circuit, the witness, the salts or the developer's randomness (`_hOuter`).
 
 Then for every honest witness `w` of every private circuit `P` of the class, and every private circuit `p₀` of the class, the real view
 and the simulated one (`recSimPr`: `p₀` registered, ideal commitments, `sim`), which reads only the class (`p₀` and the
 class's functions) and the owed outputs `o`, give every event probabilities within
-$$\varepsilon + \varepsilon_o + n_h \cdot 2^{-193}$$
-of each other, both ways. -/
+$$\varepsilon + \varepsilon_o + n_h \cdot \delta_{K^*}$$
+of each other, both ways.
+
+`δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
+`ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
+Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
+that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512. -/
 def RecursiveCircuitPrivate : Prop :=
   ∀ {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp]
     [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
@@ -217,18 +221,23 @@ def RecursiveCircuitPrivate : Prop :=
     (_hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
       prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs => E (sim o (reg P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    -- hash-derived-key
-    (_hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit), honest o P w →
     ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
-      recRealPr reg nh msgs view P w E ≤ recSimPr reg nh sim o p₀ E + (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
-        recSimPr reg nh sim o p₀ E ≤ recRealPr reg nh msgs view P w E + (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ))
+      recRealPr reg nh msgs view P w E ≤ recSimPr reg nh sim o p₀ E +
+          (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) ∧
+        recSimPr reg nh sim o p₀ E ≤ recRealPr reg nh msgs view P w E +
+          (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 /-- **Two private circuits of a class are indistinguishable in the recursive audit.** On `RecursiveCircuitPrivate`'s
 hypotheses, for honest witnesses `w` and `w'` of private circuits `P` and `P'` of the class that owe the same outputs `o`, the
 real views (`recRealPr`) give every event probabilities within
-$$2\,(\varepsilon + \varepsilon_o + n_h \cdot 2^{-193});$$
-exchanging `P` and `P'` gives the other way. -/
+$$2\,(\varepsilon + \varepsilon_o + n_h \cdot \delta_{K^*});$$
+exchanging `P` and `P'` gives the other way.
+
+`δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
+`ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
+Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
+that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512. -/
 def RecursiveCircuitIndist : Prop :=
   ∀ {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp]
     [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
@@ -240,11 +249,10 @@ def RecursiveCircuitIndist : Prop :=
     (_hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
       prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs => E (sim o (reg P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    (_hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
     (o : Out) (P P' : Prog) (w w' : Wit), honest o P w → honest o P' w' →
     ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
-      recRealPr reg nh msgs view P w E ≤
-        recRealPr reg nh msgs view P' w' E + 2 * (ε + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ))
+      recRealPr reg nh msgs view P w E ≤ recRealPr reg nh msgs view P' w' E +
+        2 * (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 /-- **A registration by hm96 leaves**: row `i` of the private circuit `P` (`rows P i`) committed as the firewall commits a
 message, `firewallLeaf (rows P i) (r i)` under its own fresh uniform salt `r i`; the auditor sees `pub` of the leaves
@@ -256,13 +264,17 @@ def regLeaves {Prog Rv : Type} {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
 
 /-- **The recursive audit is circuit private, the private circuit registered by hm96 leaves.** `RecursiveCircuitPrivate` with
 the registration `regLeaves rows pub` (the private circuit's `nr` rows, each under its own salt, the auditor seeing `pub` of the
-leaves): its hiding is `hash-derived-key` twice per row, `ε = 2·n_r·2^-193`, so the one hypothesis left beside
-`hash-derived-key` is V*'s sessions' zero knowledge (`_hOuter`). The salts of the registration may be read by the inner
-messages and V*'s sessions (the registered reads open them), never by the simulator. For every honest witness `w` of
-every private circuit `P` of the class and every private circuit `p₀` of it, the real view and the simulated one give every event
-probabilities within
-$$2 n_r \cdot 2^{-193} + \varepsilon_o + n_h \cdot 2^{-193}$$
-both ways. -/
+leaves): its hiding is hm96's at the pinned key twice per row, `ε = 2·n_r·δ_{K*}`, so the one hypothesis left is V*'s
+sessions' zero knowledge (`_hOuter`). The salts of the registration may be read by the inner messages and V*'s sessions
+(the registered reads open them), never by the simulator. For every honest witness `w` of every private circuit `P` of the
+class and every private circuit `p₀` of it, the real view and the simulated one give every event probabilities within
+$$2 n_r \cdot \delta_{K^*} + \varepsilon_o + n_h \cdot \delta_{K^*}$$
+both ways.
+
+`δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
+`ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
+Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
+that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512. -/
 def RecursiveCircuitPrivateLeaves : Prop :=
   ∀ {Out Prog Wit Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
     [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
@@ -276,13 +288,14 @@ def RecursiveCircuitPrivateLeaves : Prop :=
       prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs =>
             E (sim o (regLeaves rows pub P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    (_hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit), honest o P w →
     ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
       recRealPr (regLeaves rows pub) nh msgs view P w E ≤ recSimPr (regLeaves rows pub) nh sim o p₀ E +
-          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) + εo +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) ∧
         recSimPr (regLeaves rows pub) nh sim o p₀ E ≤ recRealPr (regLeaves rows pub) nh msgs view P w E +
-          (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + εo + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ))
+          (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) + εo +
+            nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 /-- **A session ran the registered program**, with its break tied to the run: `PrivateCircuit.RanRegistered` without its
 `cr/sha-512` hypothesis. The root `rt` commits to a registered program `p` (for a private circuit, `pad C c`) through
