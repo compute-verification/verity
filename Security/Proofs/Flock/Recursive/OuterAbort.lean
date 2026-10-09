@@ -11,8 +11,8 @@ commitment). The stop reads the witness, so the simulator could not reproduce it
 real view never stops; this module shows the honest prover's transmission with the stop in it is that view.
 
 * `Table.Stops`: rep `r`'s self-check fails, `⟨λ, h⟩ ≠ θ` (in characteristic 2 the same as `⟨c, h⟩ + t ≠ 0`), and
-  `Table.not_stops`: never, under `InnerHolds`. `Table.viewWith_pre`, `Coined.viewExe_pre`: the check reads only what
-  the executable prover sent before `τ`.
+  `Table.not_stops`: never, under `InnerHolds`. `Table.StopsAt`: the same at one rep. `Table.viewWith_pre`,
+  `Coined.viewExe_pre`: the check reads only what the executable prover sent before `τ`.
 * `sendsJ`: the session's honest prover at `J` tables: what a stopped run sends (`stopped`, any function of the prover's
   randomness) if some table's self-check stops, else the joint view.
 * `stopsJ_never`, `prCoin_stopsJ`, `sendsJ_honest`: at `Admits` coins, valid witnesses and public registered values,
@@ -26,9 +26,10 @@ they are `CoinedSetup.Admits`, which `ZkViewAtJ` assumes. The rest of the module
 * `ZkEveryCoin.coin_close_at`: `ZkEveryCoin.coin_close` with the registered values public at its one coin vector: at a
   table whose coins the prover refuses, the prefix it sent against the honest prefix on the dummy witness
   (`table_abort_hm96`), and Lemma B elsewhere.
-* `sendsAllJ`, `stopsAllJ_never`, `sendsAllJ_honest`: the session's honest prover at any coin vector: `stopped` if the
-  self-check stops at a table whose coins it doesn't refuse (never, by `CoinedOK`), else each table's output
-  (`ZkEveryCoin.outExe`: its view, or its cut where it refuses the table's coins).
+* `sendsAllJ`, `SelfCheckAtReps`, `stopsAllJ_never`, `sendsAllJ_honest`: the session's honest prover at any coin
+  vector: `stopped` if the self-check stops at a rep whose outer coins aren't `1` (never, by `SelfCheckAtReps`:
+  `Composed.innerOf_holds_rep_of`), else each table's output (`ZkEveryCoin.outExe`: its view, or its cut where it
+  refuses the table's coins).
 * `ZkViewAllJ`, `zkViewAllJ_of_ok`, `zk_session_view_allHJ`: at every coin vector, the honest prover's transmission
   against each table's simulator (`ZkEveryCoin.simAll`, which refuses where the prover does) within
   `Σ_j 2·|LeafPos_j|·δ₁`, at `zk_session_viewHJ`'s plan under its hypotheses. There is no hypothesis on the coins and no
@@ -48,6 +49,10 @@ def Stops (w : W) (ω : T.Rand) : Prop :=
 
 /-- Under `InnerHolds` the self-check never stops. -/
 theorem not_stops {w : W} (h : T.InnerHolds w) (ω : T.Rand) : ¬ T.Stops w ω := fun ⟨r, hr⟩ => hr (h ω r)
+
+/-- **The self-check stops at rep `r`**: `Stops` at one rep. -/
+def StopsAt (w : W) (ω : T.Rand) (r : Fin 2) : Prop :=
+  ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i ≠ T.theta r (T.view w ω).pre
 
 end Stops
 
@@ -210,44 +215,47 @@ theorem zkViewAtJS_of {J : ℕ} {C : Fin J → CoinedSetup} {δ₁ : ℝ≥0∞}
 /-! ## At every coin vector -/
 
 open Classical in
-/-- **What the session's honest prover sends at any coin vector** `c`: `stopped p` if the self-check stops at some table
-whose coins it doesn't refuse, else `enc` of each table's output (`ZkEveryCoin.outExe`: its view where the prover doesn't
-refuse the table's coins, and otherwise its cut `Table.abort` to what it sent before it stopped).
+/-- **What the session's honest prover sends at any coin vector** `c`: `stopped p` if the self-check stops at a rep of
+some table whose outer coins aren't `1`, else `enc` of each table's output (`ZkEveryCoin.outExe`: its view where the
+prover doesn't refuse the table's coins, and otherwise its cut `Table.abort` to what it sent before it stopped).
 
 The session stops at its first refused coin and sends no proof after (the barrier), so what it sent is a function, at
 fixed coins, of the tables' cuts up to there, each a function of the table's output; tables after it, cut or whole, only
-add to what `enc` may read. The self-check of a rep it reaches passes there too: the rep's outer coins opened in its
-zerocheck, before the self-check, and none is `1`, and the batched constraint at a rep reads only that rep's outer coins
-(`innerOf_holds_of` uses only `Admits`' last clause at the rep). -/
+add to what `enc` may read. A rep's self-check runs after its zerocheck opened its outer coins, where a `1` stops the
+session first (`refuse_outer`), so every rep whose self-check runs is one the guard ranges over. -/
 noncomputable def sendsAllJ {J : ℕ} (C : Fin J → CoinedSetup) (c : ∀ j, CoinsZK (C j).Rest) {Out : Type}
     (enc : (∀ j, ((C j).T (c j)).tab.View ⊕ ((C j).T (c j)).tab.Cut) → Out) (w : ∀ j, Witness (C j).S.m)
     (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out)
     (p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) : Out :=
-  if ∃ j, (C j).Admits (c j) ∧ ((C j).T (c j)).tab.Stops (w j) (p j).1 then stopped p
+  if ∃ j r, (∀ x ∈ (C j).rOuter (c j) r, x ≠ 1) ∧ ((C j).T (c j)).tab.StopsAt (w j) (p j).1 r then stopped p
   else enc fun j => ZkEveryCoin.outExe (C j) (c j) (w j) (p j).1 (p j).2
 
-/-- **The self-check never stops at a table whose coins the prover doesn't refuse**, at any coin vector, valid witnesses
-and public registered values: `CoinedOK`'s inner relation at that table. -/
-theorem stopsAllJ_never {J : ℕ} {C : Fin J → CoinedSetup} (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
+/-- **The self-check passes at every rep whose outer coins aren't `1`**, at every coin vector, valid witness whose
+registered values are the public ones and draw (`Composed.innerOf_holds_rep_of` at a setup's table). -/
+def SelfCheckAtReps (C : CoinedSetup) : Prop :=
+  ∀ (c : CoinsZK C.Rest) (r : Fin 2), (∀ x ∈ C.rOuter c r, x ≠ 1) → ∀ w, C.Valid w →
+    (C.T c).tab.sReg w = (C.T c).tab.pubReg → ∀ ω, ¬ (C.T c).tab.StopsAt w ω r
+
+/-- **The self-check never stops at a rep whose outer coins aren't `1`**, at any coin vector, valid witnesses and public
+registered values. -/
+theorem stopsAllJ_never {J : ℕ} {C : Fin J → CoinedSetup} (hR : ∀ j, SelfCheckAtReps (C j))
     {c : ∀ j, CoinsZK (C j).Rest} {w : ∀ j, Witness (C j).S.m} (hv : ∀ j, (C j).Valid (w j))
     (hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg)
     (p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) :
-    ¬ ∃ j, (C j).Admits (c j) ∧ ((C j).T (c j)).tab.Stops (w j) (p j).1 := by
-  rintro ⟨j, hA, hj⟩
-  obtain ⟨-, -, -, hT⟩ := hC j
-  obtain ⟨-, -, -, -, -, -, -, hinner⟩ := hT (c j) hA
-  exact ((C j).T (c j)).tab.not_stops (hinner (w j) (hv j) (hreg j)) (p j).1 hj
+    ¬ ∃ j r, (∀ x ∈ (C j).rOuter (c j) r, x ≠ 1) ∧ ((C j).T (c j)).tab.StopsAt (w j) (p j).1 r := by
+  rintro ⟨j, r, hr, hj⟩
+  exact hR j (c j) r hr (w j) (hv j) (hreg j) (p j).1 hj
 
 /-- **The honest prover's transmission is `enc` of the tables' outputs** at any coin vector, valid witnesses and public
 registered values. -/
-theorem sendsAllJ_honest {J : ℕ} {C : Fin J → CoinedSetup} (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
+theorem sendsAllJ_honest {J : ℕ} {C : Fin J → CoinedSetup} (hR : ∀ j, SelfCheckAtReps (C j))
     {c : ∀ j, CoinsZK (C j).Rest} {w : ∀ j, Witness (C j).S.m} (hv : ∀ j, (C j).Valid (w j))
     (hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg) {Out : Type}
     (enc : (∀ j, ((C j).T (c j)).tab.View ⊕ ((C j).T (c j)).tab.Cut) → Out)
     (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out)
     (p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) :
     sendsAllJ C c enc w stopped p = enc fun j => ZkEveryCoin.outExe (C j) (c j) (w j) (p j).1 (p j).2 := by
-  have hn := stopsAllJ_never hC hv hreg p
+  have hn := stopsAllJ_never hR hv hreg p
   unfold sendsAllJ
   split <;> first | contradiction | rfl
 
@@ -277,12 +285,14 @@ def ZkViewAllJ {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop
 set_option maxRecDepth 8000 in
 /-- **Zero knowledge at `J` `CoinedSetup`s at every coin vector, from their facts**: each table's output against its
 simulator's at its coin vector (`ZkEveryCoin.coin_close_at`: Lemma B where the prover doesn't refuse the table's coins,
-`table_abort_hm96` where it does), composed over the tables' independent randomness (`prCoin_pi_close`). -/
+`table_abort_hm96` where it does), composed over the tables' independent randomness (`prCoin_pi_close`); the self-check
+passes at each table's reps (`SelfCheckAtReps`). -/
 theorem zkViewAllJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) : ZkViewAllJ C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+    (hR : ∀ j, SelfCheckAtReps (C j)) (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
+    ZkViewAllJ C ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
   intro c Out enc w w0 hv hreg stopped E
   have hs : ∀ p, sendsAllJ C c enc w stopped p = enc fun j => ZkEveryCoin.outExe (C j) (c j) (w j) (p j).1 (p j).2 :=
-    sendsAllJ_honest hC hv hreg enc stopped
+    sendsAllJ_honest hR hv hreg enc stopped
   simp only [hs]
   have : Nonempty ZkView.Salt := ⟨0⟩
   have : ∀ j, Nonempty (((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) :=
@@ -347,6 +357,10 @@ theorem zk_session_view_allHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {
   fun S R ys => zkViewAllJ_of_ok _ (fun j => (coinedOf_setup_of P _ (ys j).x.st (ys j).x.wf.1
     (by rw [planZHJ_get_eq dj y₀ S R j (ys j)]; rfl)
     (maskSetup_of_setupHidden ((tagsAt_typed _ _ _).trans ((ZkExec.zkTags_typed I).trans ht)) (ys j).x.h)
-    (hdm S j (ys j))).2.2.2.2.2) hKey
+    (hdm S j (ys j))).2.2.2.2.2)
+    (fun j c r hr w hv hreg ω hs => hs (innerOf_holds_rep_of P _ (ys j).x.st (ys j).x.wf.1
+      (by rw [planZHJ_get_eq dj y₀ S R j (ys j)]; rfl)
+      (maskSetup_of_setupHidden ((tagsAt_typed _ _ _).trans ((ZkExec.zkTags_typed I).trans ht)) (ys j).x.h)
+      (hdm S j (ys j)) c r hr w hv hreg ω)) hKey
 
 end FlockSoundness.Discharge.ZkHidden
