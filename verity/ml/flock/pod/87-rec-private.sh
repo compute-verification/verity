@@ -27,7 +27,9 @@
 # the records and summary.json.
 # env: CLS=16,16,8  N=64 (instances, two a block: m = k_log + 5)  NW=8 (wired: per layer, 4 NW in all)  SEED=0  CPUS=32
 #      FLOCK_WORK (as 80-rec-inner.sh)  TAG (default CLS-nN)  LEAN_FROM (a cache directory whose lean-<sha>/flock-verify
-#      of the same sources is used)
+#      of the same sources is used)  STAGED STAGED_RECORD (an earlier staging, not restaged)  WCLS (the wired circuit's
+#      class)  CAP_FOLD (an earlier fold of the statement: the cap from it, the other netlist's chain in the background)
+#      OUTER_DRAW (rec-private-outer.sh: the verifier's draw, default all)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then
@@ -81,9 +83,19 @@ TP=$!
 pub_of() { ls $1/pub-*.bin | head -1; }
 
 # stage: the universal unit's statement and the other netlist's (u/), the wired circuit's honest and cheating ones (w/)
-/usr/bin/time -v -o $O/time-stage-universal.txt python3 $PY universal --cls $CLS --n $N --seed $SEED --out $DD/u > $O/stage-universal.json 2> $O/stage-universal.err \
-  || { tail -20 $O/stage-universal.err; exit 1; }
-/usr/bin/time -v -o $O/time-stage-wired.txt python3 $PY wired --cls $CLS --n $NW --seed $SEED --out $DD/w > $O/stage-wired.json 2> $O/stage-wired.err \
+if [ -n "${STAGED:-}" ]; then
+  # an earlier staging of the class's two statements (90-rec-stage.sh MODE=fast's DIR, with stage/ and other/), linked, not
+  # restaged; STAGED_RECORD: that run's summary.json, whose universal record is this run's stage-universal.json
+  [ -s $STAGED/stage/circuit.txt ] && [ -s $STAGED/other/circuit.txt ] || { echo "no staging under $STAGED"; exit 1; }
+  mkdir -p $DD/u && ln -s $STAGED/stage $DD/u/stage && ln -s $STAGED/other $DD/u/other || exit 1
+  [ -n "${STAGED_RECORD:-}" ] && python3 -c "import json, sys; print(json.dumps(json.load(open(sys.argv[1]))['universal']))" \
+    $STAGED_RECORD > $O/stage-universal.json
+else
+  /usr/bin/time -v -o $O/time-stage-universal.txt python3 $PY universal --cls $CLS --n $N --seed $SEED --out $DD/u > $O/stage-universal.json 2> $O/stage-universal.err \
+    || { tail -20 $O/stage-universal.err; exit 1; }
+fi
+# WCLS: the wired circuit's class (default CLS), staged by today's path: four layers of the unit
+/usr/bin/time -v -o $O/time-stage-wired.txt python3 $PY wired --cls ${WCLS:-$CLS} --n $NW --seed $SEED --out $DD/w > $O/stage-wired.json 2> $O/stage-wired.err \
   || { tail -20 $O/stage-wired.err; exit 1; }
 cp $DD/u/stage/partition.json $O/
 U=$DD/u/stage; PUB=$(pub_of $U)
@@ -125,11 +137,14 @@ fold() {
 
 # the other netlist first: its inner session (against the registered statement) and V*'s fold over the registered statement
 # give the claims, so the class's cap and the recursive session's parts are known before the honest session opens one
-inner other $U $DD/u/other/inst-$N.bin || exit 1
+# CAP_FOLD: an earlier fold of this statement (its extra claims are the statement's, so the cap is the same), and the other
+# netlist's chain (its inner session, fold and V*'s staging) runs in the background beside the honest one
+[ -z "${CAP_FOLD:-}" ] && { inner other $U $DD/u/other/inst-$N.bin || exit 1; }
 wait $LP; echo "flock-verify build exit $?"; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 wait $TP; echo "tools build exit $?"; [ -x $T/inner-fold ] && [ -x $T/core-firewall ] || { tail -30 $O/build-tools.log; exit 1; }
-fold other $U || exit 1
-python3 - $U/circuit.txt $N $DD/fold-other.json > $DD/cap.json <<'EOF' || exit 1
+[ -z "${CAP_FOLD:-}" ] && { fold other $U || exit 1; }
+for i in $(seq 360); do [ -z "${CAP_FOLD:-}" ] || [ -s $CAP_FOLD ] && break; sleep 20; done
+python3 - $U/circuit.txt $N ${CAP_FOLD:-$DD/fold-other.json} > $DD/cap.json <<'EOF' || exit 1
 import json, sys
 from pathlib import Path
 from verity_flock import rec_shape as RS
@@ -140,6 +155,13 @@ EOF
 cp $DD/cap.json $O/
 CAP=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['cap'])" $DD/cap.json)
 PARTS=$(python3 -c "import json, sys; print(','.join(json.load(open(sys.argv[1]))['parts']))" $DD/cap.json)
+if [ -n "${CAP_FOLD:-}" ]; then
+  ( inner other $U $DD/u/other/inst-$N.bin && fold other $U \
+      && /usr/bin/time -v -o $O/vstar/time-other.txt python3 -m verity_flock.rec_vstage stage $DD/inner-other $DD/fold-other.json $DD/vo \
+           --points $DD/points-other.json --salts $DD/vo-acc-salts.bin --levels none --cap $CAP > $O/vstar/other.json 2> $O/vstar/other.err
+    echo "other chain exit $?" ) > $O/other-chain.log 2>&1 &
+  OC=$!
+fi
 
 # honest: the inner session through the firewall (a recursive session opened with PARTS), the firewall's contract on what it
 # let out, the inner verified by Lean as far as it goes (plain leaves: refused until soundness covers them), V*'s fold
@@ -148,8 +170,10 @@ SID=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['session'
 echo $SID > $O/inner/honest/firewall-session.txt
 python3 verity/ml/flock/verifier/firewall_agree.py --lean $T/flock-firewall --out $O/inner/firewall-contract --sessions $DD/inner-honest \
   > $O/inner/firewall-contract.txt 2>&1; echo "inner firewall contract exit $?"
-$LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $U/circuit.txt --public $PUB --partition $U/partition.json \
-  --coins os --session $DD/inner-honest/session > $O/inner/honest/lean.log 2> $O/inner/honest/lean.err; echo "inner lean exit $?"
+( /usr/bin/time -v -o $O/inner/honest/time-lean.txt $LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $U/circuit.txt \
+    --public $PUB --partition $U/partition.json --coins os --session $DD/inner-honest/session > $O/inner/honest/lean.log 2> $O/inner/honest/lean.err
+  echo "inner lean exit $?" ) &
+IL=$!
 fold honest $U || exit 1
 python3 -m verity_flock.rec_vstar $DD/inner-honest > $O/vstar/vstar-honest.json 2> $O/vstar/vstar-honest.err; echo "vstar honest exit $?"
 
@@ -163,7 +187,7 @@ vstage() {
 vstage honest $DD/inner-honest $DD/fold-honest.json $V --points $DD/points-honest.json --salts $V/acc-salts.bin
 [ -f $V/acc-salts.bin ] || { tail -20 $O/vstar/honest.err; exit 1; }
 vstage forged-top $DD/inner-honest $DD/fold-honest.json $V --points $DD/points-honest.json --salts $V/acc-salts.bin --forge top
-vstage other $DD/inner-other $DD/fold-other.json $DD/vo --points $DD/points-other.json --salts $DD/vo-acc-salts.bin --levels none
+[ -z "${CAP_FOLD:-}" ] && vstage other $DD/inner-other $DD/fold-other.json $DD/vo --points $DD/points-other.json --salts $DD/vo-acc-salts.bin --levels none
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstar/sizes.txt
 
 # the flipped top: rec_inner.py forge --what top on a copy of the honest session; V*'s reference and staging refuse it by name,
@@ -199,8 +223,10 @@ done
 LAST=$(ls -d $V/forged-top/L* | head -1)
 outer forged-top-$(basename $LAST) $LAST dev
 outer flipped-top-L1 $DD/vf/forged-flipped-top/L1 dev
+[ -n "${OC:-}" ] && { wait $OC; tail -3 $O/other-chain.log; }
 for C in $(ls -d $DD/vo/alg/p* | sort -V); do outer other-alg-$(basename $C) $C dev; done
 cp $FWS/record.jsonl $O/firewall-record.jsonl
+wait $IL
 bash verity/ml/flock/pod/88-rec-private-public.sh TAG=$TAG > $O/public.log 2>&1; echo "public views exit $?"
 
 python3 verity/ml/flock/pod/rec_private_summary.py $O
