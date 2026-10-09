@@ -7,4 +7,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # tests/ checks the harness against PoUS itself (verity.core.protocols.pous) and the census's hardware ids;
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE).
-inputs = ["verity", "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py"]
+inputs = ["verity", "verity/core/protocols/pous/p2/PROTOCOL.md", "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py"]

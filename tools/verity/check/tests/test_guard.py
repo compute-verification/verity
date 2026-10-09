@@ -59,6 +59,19 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
     assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", [], [], 4), r.log.read_text()
 
 
+@pytest.mark.parametrize("listed", [False, True])
+def test_markdown_inside_the_inputs_is_outside_them_unless_the_suite_lists_markdown(tmp_path, monkeypatch, listed):
+    """A suite's keys leave `*.md` out of its directories unless it lists a `.md` (`suites.markdown`), so a test that reads one
+    unlisted fails, even under the suite's own directory; one that lists it passes."""
+    S, _ = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (tmp_path / "pkg" / "README.md").write_text("prose\n")
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "from pathlib import Path\n\ndef test_prose():\n    (Path(__file__).resolve().parents[1] / 'README.md').read_text()\n")
+    suite = S.Suite("pkg", "pkg", (), ("pkg/README.md",) if listed else ())
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs")
+    assert (r.status, r.outside) == (("passed", []) if listed else ("failed", ["pkg/README.md"])), r.log.read_text()
+
+
 @pytest.mark.parametrize("workers", [1, 2])
 @pytest.mark.parametrize("required", [False, True])
 def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, monkeypatch, workers, required):
