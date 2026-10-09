@@ -104,7 +104,7 @@ bytes a leaf, from the operating system (`getrandom`, the kernel's `getrandom(2)
 do the recursive audit's firewall and a registrant (`os.urandom`) for their commitments' salts. What A3 assumes there is
 that those reads, too, are independent uniform bytes; `Discharge.ZkView.OsSalts` reads 192 of them as one salt
 (`ZkView.saltEquiv`) and takes the hiding theorems, stated at uniform salts, to them (`hm96Hiding_os`,
-`ideal_leaves_swap_os`, `hides_os`, `Flock.SecurityProofs.recursiveZK_os`). With it no premise on a stream generator is
+`ideal_leaves_swap_os`, `hides_os`, `Flock.SecurityProofs.recursiveZK_os_gap`). With it no premise on a stream generator is
 left on the salts. The prover's masks and Reed–Solomon padding are still a ChaCha20 expansion of an OS seed
 (`ProverRng`), which the zero-knowledge theorems draw uniformly: that step is not A3's. -/
 def UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
@@ -208,7 +208,8 @@ hm96-sha512's `ZkView.My` and `ZkView.saltHash`.
 It is the common-reference-string step (`common-reference-string`), not a hardness assumption, and no reduction takes it
 to a property of SHA-512: `K*` is one public constant, so there is no secret and no adversary to reduce, and a bad key
 is not a set an algorithm is asked to find. Where a theorem's bound is stated at `hidingGap My saltHash` instead
-(`CROnly.hm96Hiding_gap`, `Flock.SecurityProofs.recursiveZK_gap`), it takes no premise at all. A key drawn per session
+(`CROnly.hm96Hiding_gap`), it takes no premise at all: so are `Flock.Guarantees.RecursiveZK`,
+`Flock.Guarantees.ZeroKnowledgeHidden` and `FailClosed.flock_verify_sound`'s zero-knowledge views. A key drawn per session
 from the operating system (A3) would replace it by the average over keys, `2^-257` (`CROnly.hm96_sha512_sum`), as the
 committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm96`). -/
 def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=

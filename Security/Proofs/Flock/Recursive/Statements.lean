@@ -22,7 +22,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
 * `RecursiveZK`, for the developer: the auditor's whole view, the firewall's commitments (`firewallLeaf`) to every inner
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
-  the commitments' hiding gap (`hash-derived-key`) plus the outer session's zero-knowledge gap.
+  the commitments' hiding gap at hm96-sha512's pinned key plus the outer session's zero-knowledge gap. It assumes nothing
+  of the key or of SHA-512.
 * `RecursiveCircuitPrivate`, for the developer of a hidden circuit: the private circuit is a witness value of the class's
   universal unit `UniversalUnit_v1{G, N_IN, N_OUT}`, and the auditor's whole view, the private circuit's registration, the
   firewall's commitments and V*'s sessions, has a simulator that reads only the class and the owed outputs, within the
