@@ -12192,12 +12192,12 @@
    ]
   },
   "Proofs.Flock.Recursive.Statements": {
-   "digest": "c250d19243fa0c0267bcaa90253c4b9f672f004eccf100d2e04905e7e42a7457",
+   "digest": "55eefdf5c952757f1fa4e78a25904972f6b6a6d25c6384e71c3b49f3ec051e67",
    "definitions": {
     "Flock.Guarantees.RanRegisteredRun": "357eb6ee0e5f33e3799142ff03cbf4c387f7347984218122d665618f1bcdd042",
-    "Flock.Guarantees.RecursiveCircuitIndist": "5f31d2f3ae18428fd4a6ba509efcc4455f64dcd5e881bf583dc96840818b5d03",
-    "Flock.Guarantees.RecursiveCircuitPrivate": "11206ab382e0203254e324efcbad877ef289d0801a099d25452397c9cc1e00ec",
-    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "af7aa43c0d4a71b0d1f1c564bfd21a39f07427d4de3f6311094afe4aa4c08368",
+    "Flock.Guarantees.RecursiveCircuitIndist": "c7719ac1a7546988710606e7c8d87c4cadb89067cc71247f6acd846e39f8e5dd",
+    "Flock.Guarantees.RecursiveCircuitPrivate": "ec182dfaa95ded7bc6d76f6a562d6929123610f1a159cf5338092d5aa898417a",
+    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "c345a2937c296bd2a103b1a6fab01bd5acfa145e54d1e2a1dd0ef8b9ea29a338",
     "Flock.Guarantees.RecursiveRanRegistered": "782f3557ce6a8bbf3830f82edb0d3ce4fc47073e38acc15c5b0d62951433591a",
     "Flock.Guarantees.RecursiveSound": "941ee65498be00befb71413490643364a29f8e72565334a7192d3708d802611c",
     "Flock.Guarantees.RecursiveZK": "75282f8fffeab43e8a2ef38430a9f20fa2d1e6f6c14ed9696277de4cf5402194",
@@ -12548,9 +12548,6 @@
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.RecursiveAudit",
-    "Flock.SecurityProofs.RecursiveCircuitIndist",
-    "Flock.SecurityProofs.RecursiveCircuitPrivate",
-    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
@@ -12581,10 +12578,7 @@
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
-    "Flock.SecurityProofs.RecursiveAudit",
-    "Flock.SecurityProofs.RecursiveCircuitIndist",
-    "Flock.SecurityProofs.RecursiveCircuitPrivate",
-    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves"
+    "Flock.SecurityProofs.RecursiveAudit"
    ]
   },
   "Proofs.Flock.Soundness.Audit.Circuit": {
