@@ -106,10 +106,15 @@ def encodeEvidence (segments : Array (Array ByteArray)) : ByteArray :=
   segments.foldl (init := Prim.beOfNat segments.size 4) fun out seg =>
     seg.foldl (init := out ++ Prim.beOfNat seg.size 4) fun out block => out ++ Prim.beOfNat block.size 4 ++ block
 
+/-- The setup check. It refuses parameters `P2.Params.validate` rejects (which `params` never returns), so validity is
+part of what an acceptance says. -/
 def check (q : P2.Params) (c : Commitment) (e : Array (Array ByteArray)) : Core.Outcome Public Unit :=
-  match Setup.verifierKeyFromEncoding q c.w c.salt e with
-  | .ok vk => .accept ⟨q.blocks, c.w, vk.root, c.salt⟩ ()
-  | .error r => .reject (r.message q)
+  match q.validate with
+  | .error m => .reject s!"params: {m}"
+  | .ok _ =>
+    match Setup.verifierKeyFromEncoding q c.w c.salt e with
+    | .ok vk => .accept ⟨q.blocks, c.w, vk.root, c.salt⟩ ()
+    | .error r => .reject (r.message q)
 
 def protocol : Core.Protocol where
   id := ID
@@ -158,5 +163,8 @@ private def HONEST : Array String := #["03c7dc4c7c6466f2", "16f7feeb615c1874"]
 #guard (run HONEST (commitment := "00")).digest.isNone
 #guard ((run HONEST (params := MANIFEST.replace "p2-6B" "p2-7B")).reason.map (·.startsWith "params: not the manifest"))
   == some true
+#guard match check ⟨64, 187, 2, 1⟩ ⟨.empty, .empty⟩ #[] with
+  | .reject r => r == "params: c0 ≡ 1 mod 4 (so p ≡ 3 mod 4) and below 2^16"
+  | _ => false
 
 end PousCheck.SetupProtocol
