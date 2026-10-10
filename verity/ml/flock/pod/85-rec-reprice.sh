@@ -179,8 +179,13 @@ EOF
 loopback() {
   local name=$1 pub=$2 inst=$3 circ=$4 zk=${5:-} s=$DD/$STEP-$1 PORT=$(free_port) PIN=$(sha512sum $4 | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/$STEP/$name
+  # the verifier's draw on a --zk session (Lean refuses a session without one, D12), as rec-private-outer.sh's:
+  # LOOPBACK_DRAW=all (default) every unit; none: no draw
+  local DRAW=()
+  [ -n "$zk" ] && [ "${LOOPBACK_DRAW:-all}" = all ] \
+    && DRAW=(--draw subset:$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $pub))
   taskset -c $VCPU $B serve $zk --listen 127.0.0.1:$PORT --out $s/sessions --instances $pub --circuit $circ --pin $PIN \
-    --operator loopback --concurrency $((NS + 1)) > $O/$STEP/$name/serve.log 2>&1 &
+    "${DRAW[@]}" --operator loopback --concurrency $((NS + 1)) > $O/$STEP/$name/serve.log 2>&1 &
   local SP=$!
   wait_serving $O/$STEP/$name/serve.log $SP || { tail -20 $O/$STEP/$name/serve.log; return 1; }
   prove_live $name 127.0.0.1:$PORT $inst $circ $zk; local rc=$?
