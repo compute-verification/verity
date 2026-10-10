@@ -15,8 +15,8 @@ namespace VStar
 
 def MAX_REGIONS : Nat := 64
 def MAX_SLOTS : Nat := 160
-/-- `rec_residuals.MAX_LONE_SLOTS`: a lone residual's part beside hm96's 2^23 and a 2^23 unit fills a 2^26 block. -/
-def MAX_LONE_SLOTS : Nat := 191
+/-- `rec_residuals.MAX_LONE_SLOTS`: a lone residual's part beside hm96's 2^23 and a 2^23 unit, within a 2^27 block. -/
+def MAX_LONE_SLOTS : Nat := 223
 
 /-- `rec_residuals.regions`: a digest region per row port, `v`'s and `out`'s. -/
 def regions (ports : Nat) : Nat := ports + 2

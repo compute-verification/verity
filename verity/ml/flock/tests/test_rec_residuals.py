@@ -220,6 +220,18 @@ def test_a_residual_wider_than_max_slots_stands_alone_within_max_lone_slots():
     assert [shape(p) for p in RR.parts(S8)] == [shape(p) for p in RR.parts(S8, max_lone_slots=0)] == [(10, 129, 61), (3, 123, 63)]
 
 
+@pytest.mark.slow
+def test_the_widest_lone_residual_max_lone_slots_admits_is_twenty_claims():
+    """The batched T alone reads 215 slots at 20 claims, a part that composes at k_log 27 (= circuit.K_MAX) beside a 2^23 unit
+    (run r20261010-223054-2894), and 226 at 21 claims, just past MAX_LONE_SLOTS, which refuses it. Slow for the two specs alone
+    (about 10 s); the quick test above pins the 16 claims a pinned shape needs."""
+    ps = RR.parts(RR.spec(A.Shape(35, 27, 20)))
+    assert [(len(p.res), RR.slots(p.S["ports"], p.S["gf"]["nv"]), RR.regions(p.S["ports"])) for p in ps][-1] == (1, 215, 23)
+    assert 215 <= RR.MAX_LONE_SLOTS < 226
+    with pytest.raises(ValueError, match="residual 25 alone reads more than 64 regions or 223 sha512x3 slots"):
+        RR.parts(RR.spec(A.Shape(35, 27, 21)))
+
+
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
     """Ports on which SMALL's residuals are zero: the added terms set to the residuals they cancel."""
     w = [g.getrandbits(128) for _ in range(SMALL["nw"])]

@@ -21,7 +21,7 @@ open HmNets hiding and
 def MAX_REGIONS : Nat := 64
 def MAX_SLOTS : Nat := 160
 /-- `rec_residuals.MAX_LONE_SLOTS`: the slots of a residual that fits no part alone under `MAX_SLOTS` and stands alone. -/
-def MAX_LONE_SLOTS : Nat := 191
+def MAX_LONE_SLOTS : Nat := 223
 def RES_OUT_WORDS : Nat := 128
 def PER_SLOT : Nat := 3
 

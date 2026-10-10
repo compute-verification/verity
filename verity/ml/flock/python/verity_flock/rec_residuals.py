@@ -83,10 +83,12 @@ MAX_REGIONS = 64
 # holds up to 14 claims (12 claims: 130)
 MAX_SLOTS = 160
 # a residual that fits no part alone under MAX_SLOTS stands alone up to this many: no other residual joins it (slots only
-# grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged. At 16 claims (llama32-1b/b1/i256's 2^29
-# bucket) the batched T alone reads 172 slots and 19 regions: hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask
-# (one) leave 191 slots of a 2^26 block (run r20261010-212155-f5ab: 172 slots end at 237 of 256)
-MAX_LONE_SLOTS = 191
+# grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged, and the bound reaches only residuals
+# MAX_SLOTS refuses. The widest, the batched T, reads 172 slots at 16 claims (llama32-1b/b1/i256's 2^29 bucket), 194 at 18
+# and 215 at 20, beside hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask (one): 191 fill a 2^26 block, so past
+# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (runs r20261010-212155-f5ab, r20261010-223054-2894: 172 at
+# k_log 26, 194 to 215 at 27). 21 claims' 226 refuse
+MAX_LONE_SLOTS = 223
 
 
 def port_words(n: int) -> int:

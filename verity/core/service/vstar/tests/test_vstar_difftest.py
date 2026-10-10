@@ -377,7 +377,7 @@ def _many(draw) -> dict:
     return {**S, "gf": {**S["gf"], "res": res}}
 
 
-#: S cut under limits it fits (64 regions, 160 slots, 191 alone), limits few residuals fit (3 regions: one port a part; 1 or
+#: S cut under limits it fits (64 regions, 160 slots, 223 alone), limits few residuals fit (3 regions: one port a part; 1 or
 #: 2 slots, alone 1 to 3 or more than packed), S of more residuals than a part holds, and S or limits that refuse
 MAX = {"max_regions": st.just(RR.MAX_REGIONS), "max_slots": st.just(RR.MAX_SLOTS), "max_lone_slots": st.just(RR.MAX_LONE_SLOTS)}
 PARTS = st.one_of(
@@ -457,12 +457,12 @@ def test_parts_agree(server):
 @pytest.mark.slow
 def test_statements_agree(server):
     """Drawn shapes, the universal unit's inner shape (17 residuals, two parts), llama32-1b/b1/i256's 2^29 bucket (16 claims:
-    its batched T alone, 172 slots), and the largest whose widest residual stands alone within MAX_LONE_SLOTS (17 claims:
-    183 slots; 18 claims' 194 refuse)."""
+    its batched T alone, 172 slots), and the largest whose widest residual stands alone within MAX_LONE_SLOTS (20 claims:
+    215 slots; 21 claims' 226 refuse)."""
     p = port("statements", statements, _shapes(14))
-    for sh in ({"m": 26, "k_log": 23, "claims": 12}, {"m": 35, "k_log": 27, "claims": 16}, {"m": 35, "k_log": 32, "claims": 17}):
+    for sh in ({"m": 26, "k_log": 23, "claims": 12}, {"m": 35, "k_log": 27, "claims": 16}, {"m": 35, "k_log": 32, "claims": 20}):
         assert D.replay(p, sh, server)[0] == "output"
-    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 18}, server)[0] == "reject"
+    assert D.replay(p, {"m": 35, "k_log": 32, "claims": 21}, server)[0] == "reject"
     stats = D.run(p, examples=32, seed=SEED, server=server)
     assert stats.outputs >= 8 and stats.rejects >= 4, stats
 
