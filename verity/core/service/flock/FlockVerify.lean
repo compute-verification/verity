@@ -225,19 +225,21 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
 
 /-- `--registered F`: the verifier's own registered reads (`Registered.ofJson`: per registered port, the value, its
 registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
-SHA-512. -/
-def registeredInput (args : List String) : IO (Except String (Option (Array Registered.Port))) := do
-  let some f := argOf args "--registered" | return .ok none
+SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
+form. -/
+def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
+    IO (Except String (Option (Array Registered.Port))) := do
+  let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
-    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"registered reads: {e}"))
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
     | some dir => archiveGet dir f
   match bytes with
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
-    | none => return .error "registered reads: not UTF-8"
+    | none => return .error s!"{ctx}: not UTF-8"
     | some t => match Lean.Json.parse t with
-      | .ok j => return (Registered.ofJson j).map some
-      | .error e => return .error s!"registered reads: not JSON: {e}"
+      | .ok j => return ((Registered.ofJson j).mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
+      | .error e => return .error s!"{ctx}: not JSON: {e}"
 
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
 form (`checkIdentifier`). -/
@@ -298,6 +300,18 @@ def recBindingsInput (args : List String) : IO (Except String (Option VStar.Bind
     | some t => match Lean.Json.parse t with
       | .ok j => return (RecVStar.ownBindingsOfJson j).map some
       | .error e => return .error s!"rec-bindings: not JSON: {e}"
+
+/-- `--rec-inner-transcript F`: the coin server's record of V*'s inner session (`rec/inner-transcript/v1`), with the inner
+session's record `record` (`--rec-inner-session`) that its coins must match: each rep's `c_k` (`RecVStar.innerCommits`). -/
+def recTranscriptInput (args : List String) (record : Option String) :
+    IO (Except String (Option (Array (Array (Nat × ByteArray))))) := do
+  let some f := argOf args "--rec-inner-transcript" | return .ok none
+  let some record := record | return .error "--rec-inner-transcript goes with the inner session (--rec-inner-session and its three files)"
+  let t ← try pure (Except.ok (← IO.FS.readFile f)) catch e => pure (Except.error s!"rec inner transcript: {e}")
+  return do
+    match Lean.Json.parse (← t) with
+    | .ok j => some <$> RecVStar.innerCommits j record
+    | .error e => throw s!"rec inner transcript: not JSON: {e}"
 
 /-- `rec-inner --circuit F --public F [--partition F] [--program F]`: the shape of V*'s inner session (`RecVStar.innerOf`)
 from the inner statement, as one `verity/rec-inner/v1` line, for `verify --rec-inner`. -/
@@ -415,7 +429,10 @@ a public file whose header names an identifier its own `--identifier F` (§16.10
 shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
 prints from 0: the levels, then the algebra's parts) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
-statement and session its coefficients are checked against (`RecCoins.check`). Each DIR holds `session.json`
+statement and session its coefficients are checked against (`RecCoins.check`), and a statement reading a `rec-c<k>` the
+coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
+`RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
+(`--rec-rows`, `RecVStar.checkRows`). Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
@@ -424,7 +441,7 @@ every check has passed (so the reason is the refusal only when nothing else fail
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR [--rec-inner-transcript F]] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -484,6 +501,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let recCoins ← match ← RecCoins.filesInput args with
     | .ok f => pure f
     | .error e => IO.eprintln e; return 2
+  let recCommits ← match ← recTranscriptInput args (recCoins.map (·.record)) with
+    | .ok c => pure c
+    | .error e => IO.eprintln e; return 2
+  let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
+    | .ok r => pure r
+    | .error e => IO.eprintln e; return 2
   let work := match ownK, table with
     | some k, some t => some (k, t)
     | _, _ => none
@@ -500,9 +523,10 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        r.2.forM (RecVStar.checkStmt recInner stmtTags tables · circuitB partition program registered recPart recBindings)
+        r.2.forM (RecVStar.checkStmt recInner stmtTags tables · circuitB partition program registered recPart recBindings recRows)
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered recCoins)
+        r.2.forM (RecVStar.checkPubRows · registered recCommits)
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
@@ -565,7 +589,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
 verifier's own `--rec-bindings F` (`RecVStar.checkStmt`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let stmtTags := tags
@@ -599,10 +623,13 @@ def statementCmd (args : List String) : IO UInt32 := do
   let recBindings ← match ← recBindingsInput args with
     | .ok b => pure b
     | .error e => IO.eprintln e; return 2
+  let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
+    | .ok r => pure r
+    | .error e => IO.eprintln e; return 2
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
-      if recInner.isSome then RecVStar.checkStmt recInner stmtTags tables st circuitB partition program registered recPart recBindings
+      if recInner.isSome then RecVStar.checkStmt recInner stmtTags tables st circuitB partition program registered recPart recBindings recRows
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
