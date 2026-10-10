@@ -6,11 +6,12 @@ import Proofs.Flock.Recursive.Loads
 # The recursive audit at public units: its proof
 
 `Flock.SecurityProofs.PublicAudit : Flock.Guarantees.PublicAudit`, `RecursiveAudit`'s proof
-(`Proofs.Flock.Recursive.Audit`) at a public inner unit, and `RecursiveFirewallPrivate` at no registration rows.
+(`Proofs.Flock.Recursive.Audit`) at a public inner unit, and `RecursiveFirewallPrivate`.
 
 In (i), from the statement and the premises, as in `RecursiveAudit`'s:
-* where some index has no session that types, the event is empty (`prob_sessionsR_untypable`, through
-  `typable_of_accepts` and so `loads_of_verifies`, open: gap 8);
+* where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
+  index loads it (`loads_of_verifiesV`, at the obligation `VStarParses` and V*'s tags) and so types
+  (`typable_of_accepts`), so at that index none verifies (`prob_sessionsR_untypable`);
 * at a statement Lean's verifier doesn't build from its partition object and program, the event is empty
   (`AcceptsPublic` is its first conjunct);
 * at one it builds, the statement is accepted (`AcceptsPublic.acceptsStmt`), so the class checks pass
@@ -19,10 +20,7 @@ In (i), from the statement and the premises, as in `RecursiveAudit`'s:
   registered rows enter, and the raw event is bounded by the typed sessions' at the transported prover
   (`prob_recT_le`, `verifies_zsOf`).
 
-(ii) is `RecursiveFirewallPrivate` at `nr = 0` (`noRows`) with the public circuit `P` as `p₀`: the registration's term
-`2 n_r·2^-193` is zero.
-
-Open in the proof, as in `RecursiveAudit`'s: that each accepted session loads V*'s statement (`loads_of_verifies`).
+(ii) is `RecursiveFirewallPrivate`, as in `RecursiveAudit`'s proof.
 -/
 
 namespace Flock.SecurityProofs
@@ -39,12 +37,9 @@ set_option synthInstance.maxHeartbeats 1000000
 theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   refine And.intro ?_ ?_
   swap
-  · intro Out Prog Wit Rv Ωa Ωp Pub _ _ _ _ hKey s pub honest nh reqs msgs T V pubS stopped o P w hF hpub hC hH hw E
-    have h := RecursiveFirewallPrivate hKey s 0 Flock.Guarantees.noRows pub honest nh reqs msgs T V pubS stopped P o P
-      w hF hpub hC hH hw E
-    simpa only [Nat.cast_zero, mul_zero, zero_mul, zero_add] using h
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust dg N σ wmsg Sk cmt msg hA3
-    k Rw M hk hRw hM ρ hρ hr hbr
+  · exact RecursiveFirewallPrivate
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust ish bind rows hob htags dg N σ wmsg Sk cmt
+    msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
   · left
@@ -52,8 +47,8 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
     obtain ⟨j₀, hj₀⟩ := hT
     refine prob_recGame_zero _ σ fun ω t s => ?_
     rw [prob_outerVR]
-    exact prob_sessionsR_untypable (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) j₀ (hj₀ (σ.1, ω, t, s.1)) _
-      (fun b hb => hb.2.1) _
+    exact prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) (htags σ.1 ω t s.1) j₀
+      (hj₀ (σ.1, ω, t, s.1)) _ (fun b hb => hb.2.1) _
   by_cases hacc : Flock.Guarantees.AcceptsPublic obj prog st
   swap
   · exact Or.inl (le_antisymm ((prob_mono_outcome _ σ fun o _ h => absurd h.1 hacc).trans (prob_false _ σ).le)
@@ -77,12 +72,12 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
-  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le zr _ hT σ _
+  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT htags σ _
       (fun o => Flock.Guarantees.AcceptsPublic obj prog st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.publicHidden st))
       (fun o ho => ho.2.1) (fun o hall ho =>
-        ⟨ho.1, verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall ho.2.1.1 ho.2.1.2, ho.2.2⟩))
+        ⟨ho.1, verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2, ho.2.2⟩))
       (le_trans (prob_mono_outcome _ (Flock.Guarantees.transported zr hCust hT σ)
         fun o _ h => ⟨h.2.1.1, h.2.2⟩) hb))))
 
