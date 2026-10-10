@@ -25,12 +25,12 @@ What it takes, against `RecursiveAudit`:
   hidden entries, `execClassAt_nnz`), in place of `hiddenAt` and `stmtAt`;
 * `AcceptsPublic obj prog st` in place of `AcceptsStmt st`: the partition object and program are the verifier's own,
   not some the prover picks (`AcceptsPublic.acceptsStmt`: it implies `AcceptsStmt`, so `ExecClass`'s lemmas apply);
-* premises: record custody (`Flock.Premises.RecordCustody`) and A3 (`Flock.Premises.UniformRandomBytes`). The coin
-  server's randomness is the game's own coin draw (`uniform/flock-coin-server`, no `Prop`), and SHA-512 enters only
-  as the fork disjuncts;
-* obligations, facts about our own code: in (i), `VStarComputes` (V*'s circuits compute C-Flock's inner verifier,
-  VBridge, at the public statement), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound` (each
-  session's inputs carry the tags their name names, `_hF`), as in `RecursiveAudit`; in (ii), whatever
+* premises: record custody (`Flock.Premises.RecordCustody`), A3 (`Flock.Premises.UniformRandomBytes`) and VBridge
+  (`Flock.Premises.VBridge`: V*'s circuits compute C-Flock's inner verifier, here at the public statement), as in
+  `RecursiveAudit`. The coin server's randomness is the game's own coin draw (`uniform/flock-coin-server`, no `Prop`),
+  and SHA-512 enters only as the fork disjuncts;
+* obligations, facts about our own code: in (i), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound`
+  (each session's inputs carry the tags their name names, `_hF`), as in `RecursiveAudit`; in (ii), whatever
   `RecursiveFirewallPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
@@ -70,18 +70,6 @@ theorem execClassAt_nnz (st : Flock.Stmt) : (execClassAt st).cls.nnz = 0 := by
 def publicHidden (st : Flock.Stmt) : Hidden (execClassAt st).cls :=
   fun i => (Nat.not_lt_zero _ (lt_of_lt_of_eq i.isLt (execClassAt_nnz st))).elim
 
-/-- Obligation (V*'s circuits compute C-Flock's inner verifier at the public statement): VBridge
-(`Flock.Assumptions.VBridge`) at V*'s sessions `zs` and the inner statement's hidden part `x`. A fact about V*'s code,
-to be proved of `VStar.statements`. -/
-abbrev VStarComputes {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
-    {Reg' Reg₂ : Type} (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray)
-    (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
-    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
-    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
-  Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg
-
 /-- **The recursive audit at public units.**
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st`, with its
@@ -95,9 +83,10 @@ obligation until gap 4), every session's inputs carrying the tags their name nam
 on our code), the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`), as in
 `RecursiveAudit`. Taken: A3 (`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
-V*'s circuits compute the inner verifier at the typed sessions and the public statement (`VStarComputes`, an
-obligation): the event below is empty; or the sessions type and there is a round fork, a session fork, or an inner
-fork of the transported prover's own runs whose decoded transcripts play the compiled table to outcomes that clash; or
+V*'s circuits compute the inner verifier at the typed sessions and the public statement (VBridge,
+`Flock.Premises.VBridge`): the event below is empty; or the sessions type and there is a round fork, a session fork,
+or an inner fork of the transported prover's own runs whose decoded transcripts play the compiled table to outcomes
+that clash; or
 $$\Pr[\text{Lean's verifier builds } st \text{ from } obj, prog \wedge \text{every session verifies as V*'s statement
   of its index} \wedge \neg\,st \text{ holds}]$$
 is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
@@ -149,7 +138,7 @@ def PublicAudit : Prop :=
       rateZ (planZAt (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- obligation: V*'s circuits compute the inner verifier, at the typed sessions and the public statement
     (_hbr : ∀ h : Typed zr,
-      VStarComputes (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
+      Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
     prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ¬ (innerAt T CT st).holds (publicHidden st))
         (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
