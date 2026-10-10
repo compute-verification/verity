@@ -73,11 +73,11 @@ theorem planAtZKH_S : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n),
   fun S _ _ => tableAtZKH_S dj y₀ S
 
 variable (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-  (hscope : Layout.scopeOk c = true)
+  (hscope : Layout.scopeOkH c = true)
 
 /-- **The public plan's sites** (`sitesAtH`'s, at `tableShH`). -/
 noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
-  acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc (v2_of_scope hscope)
+  acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
   o S _ u h := (tableShH dj y₀ S).o u h
@@ -101,7 +101,7 @@ theorem sitesShH_bcSite :
         BcSiteH ((sitesShH dj y₀ ht hc hscope).acc S R u h) pub ((sitesShH dj y₀ ht hc hscope).o S R u h)
           ((sitesShH dj y₀ ht hc hscope).vu S R u h) u.val := by
   intro S R u h M hM
-  show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc (v2_of_scope hscope)) pub ((tableShH dj y₀ S).o u h)
+  show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)) pub ((tableShH dj y₀ S).o u h)
     ((tableShH dj y₀ S).vu u h) u.val
   by_cases hS : Nonempty (DrawSetupZKH I mPts S (dj S))
   · have e : tableShH dj y₀ S = (Classical.choice hS).x.table := by
@@ -124,23 +124,23 @@ noncomputable abbrev layShH :
       (((keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planShH dj y₀) (tabShH dj y₀)
         (keyPlaceH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n))) :=
   keyLayoutH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
-    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
 
 /-- **`rs` at the public plan**: `keyRowsH` at `sitesShH`, its circuit conditions from `scopeOk`, with `hsite` from
 `sitesShH_bcSite`. -/
 noncomputable abbrev rsShH : Binding.HmRows (layShH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
-    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShH_bcSite dj y₀ ht hc hscope hU hpub hpt)
-    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
+    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOkH_spec hU hscope).1
+      (Layout.scopeOkH_spec hU hscope).2.2)
 
 theorem rsShH_computes : (rsShH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
   keyRowsH_computes (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) (fun _ => pub)
-    (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope) (Layout.outsOut_outsOf c hU n)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOut_outsOf c hU n)
     (sitesShH_bcSite dj y₀ ht hc hscope hU hpub hpt)
-    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOk_spec hU hscope).1
-      (Layout.scopeOk_spec hU hscope).2.2)
+    (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOkH_spec hU hscope).1
+      (Layout.scopeOkH_spec hU hscope).2.2)
 
 /-! ## The `--zk` places, layout and rows -/
 
