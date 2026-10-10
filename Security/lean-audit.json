@@ -214,6 +214,7 @@
   "Models.Flock.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
+  "VStar",
   "Proofs.Flock.Level3",
   "Proofs.Flock.Soundness",
   "Randomness",
