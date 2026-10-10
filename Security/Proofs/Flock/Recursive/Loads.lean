@@ -1,4 +1,5 @@
 import Proofs.Flock.Recursive.Raw
+import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.FailClosed.One
 
 /-!
@@ -14,6 +15,12 @@ as the prover supplies them (`ZkOuterR`), and no check the verifier of record ma
 * `loads_of_verifies` (open): a session the verifier of record accepts, at inputs that pass the statement check
   `--registered` runs (`ScopeZR`), loads V*'s statement. The verifier's check that a session's circuit and population
   are V*'s is to prove it.
+* `VStarParses` (an obligation, open until gap 4 builds `Vs j` from the partition): V*'s statement `j`'s file under its
+  bindings parses, at V*'s constant tags and no lookup tables, to `Vs j`'s circuit, and `Vs j` has its instances.
+* `loads_of_check`, `loads_of_verifiesV`: at V*'s tags and no lookup tables (`zkTags_vstar`), a session whose file is
+  statement `j`'s under `bind j` loads `Vs j`; a session `AcceptsZKV` accepts as statement `j` under `bind j` has that
+  file (`vstarFile_of_accepts`). This is `loads_of_verifies` at the check, once (i)'s event reads `AcceptsZKV` and the
+  verifier refuses other tags and lookup tables.
 * `typable_of_accepts`: such a session types (`ZkOuterR.Typable`): `Loads` gives its circuit and population, and the
   record's draw sets it up (`setupZ_of_verifiesZK`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
@@ -31,6 +38,59 @@ open scoped ENNReal
 units. -/
 def VStmt.Loads (Q : VStmt) (I : Inputs) : Prop :=
   circZ I = Q.c ∧ (pubZ I).n = Q.nv
+
+/-- Obligation: open until gap 4 builds `Vs j` from the partition, as this parse of V*'s file.
+**V*'s statement `j`, written under its bindings, parses to `Vs j`'s circuit, and `Vs j` has one unit per instance.**
+At V*'s tags `t₀` (the `--statement` the verifier requires of a V* session), the file `circuitFile stmts[j] (bind j)`
+that `vstar stage` writes parses, under `--zk`'s tags for one table (`Zk.tags` on the coin tree of
+`Zk.coinSpec #[t₀.table]`, at the file's `mask_log` and count 1) and with no lookup tables, to `(Vs j).c`; and
+`(Vs j).nv` is the statement's instance count. A fact about our code, not a premise: the tags are a constant of the file,
+so no session input enters it. -/
+def VStarParses (t₀ : Flock.Tags) (stmts : Array VStar.Stmt) (bind : Fin stmts.size → VStar.Bindings)
+    (Vs : Fin stmts.size → VStmt) : Prop :=
+  ∀ j cf, RecVStar.circuitFile stmts[j] (bind j) = .ok cf →
+    HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf cf) 1) cf
+      [] = .ok (Vs j).c ∧ (Vs j).nv = stmts[j].instances
+
+/-- **`--zk`'s tags at V*'s statement are a constant of the circuit file**: at `--statement` `t₀` and at most one table
+(`TagsOk`), the coin tree's tables are `#[t₀.table]` (`tableNames`) and the identity's hooks are one table's
+(`Zk.tags` reads only `count > 1`). -/
+theorem zkTags_vstar {I : Inputs} {t₀ : Flock.Tags} (hT : I.tags = t₀) (hc : I.count ≤ 1) :
+    zkTags I = Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf I.circuitFile)
+      1 := by
+  subst hT
+  have h1 : ¬ (1 < I.count) := by omega
+  simp only [zkTags, zkCoins, Flock.Zk.tags, Flock.Tags.tableNames, if_pos hc, gt_iff_lt, h1, Nat.lt_irrefl]
+
+/-- **A session of V*'s statement `j` loads `Vs j`**, at V*'s tags and no lookup tables, when its circuit file is
+`circuitFile stmts[j] (bind j)` and its registered population has the statement's instances: the session's circuit is
+the file's parse at `zkTags I` (`ScopeZ.parse`), which is the obligation's constant (`zkTags_vstar`). -/
+theorem loads_of_check {t₀ : Flock.Tags} {stmts : Array VStar.Stmt} {bind : Fin stmts.size → VStar.Bindings}
+    {Vs : Fin stmts.size → VStmt} (hob : VStarParses t₀ stmts bind Vs) (j : Fin stmts.size) {Reg' : Type}
+    (x : (Vs j).OuterR Reg') (hck : ScopeZR x.I) (hT : x.I.tags = t₀) (htab : x.I.tables = [])
+    (hf : RecVStar.circuitFile stmts[j] (bind j) = .ok x.I.circuitFile) (hn : (pubZ x.I).n = stmts[j].instances) :
+    (Vs j).Loads x.I := by
+  obtain ⟨hp, hnv⟩ := hob j _ hf
+  have hZ := (hck.scopeZ x.hTags.1).parse x.hTags.1
+  rw [zkTags_vstar hT x.hTags.2.2.2, htab, hp] at hZ
+  exact ⟨(Except.ok.inj hZ).symm, hn.trans hnv.symm⟩
+
+/-- **A session the verifier of record accepts as V*'s statement `j`, under the family's bindings for it, loads
+`Vs j`**, where its inputs pass the statement check, at V*'s tags and no lookup tables: `--rec-part j` makes the
+session's statement `stmts[j]` and `--rec-bindings` makes its file `circuitFile stmts[j] (bind j)`
+(`vstarFile_of_accepts`), and `loads_of_check` at the obligation. The tags and the tables are taken until the verifier
+refuses a session at other tags or with lookup tables. -/
+theorem loads_of_verifiesV {t₀ : Flock.Tags} {i : RecVStar.Inner} {stmts : Array VStar.Stmt}
+    {bind : Fin stmts.size → VStar.Bindings} {Vs : Fin stmts.size → VStmt} (hob : VStarParses t₀ stmts bind Vs)
+    (hss : RecVStar.statements i = .ok stmts) (j : Fin stmts.size) {Reg' : Type} (x : (Vs j).OuterR Reg')
+    (t : Exec.Transcript) (hacc : AcceptsZKV i j (bind j) x.I x.own t) (hck : ScopeZR x.I) (hT : x.I.tags = t₀)
+    (htab : x.I.tables = []) : (Vs j).Loads x.I := by
+  obtain ⟨ss, s, hss', hj, -, hn, hf, -⟩ := vstarFile_of_accepts x t hacc hck
+  rw [hss] at hss'
+  cases hss'
+  rw [Array.getElem?_eq_getElem j.2] at hj
+  cases hj
+  exact loads_of_check hob j x hck hT htab hf hn
 
 /-- **Open (gap 8): a session the verifier of record accepts, at inputs that pass the statement check, loads V*'s
 statement.** The one place `VStmt.Loads` enters the recursive audit's proof. No check of the verifier reads V*'s

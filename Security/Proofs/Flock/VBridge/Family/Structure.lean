@@ -374,7 +374,8 @@ def toF128 (a : 𝔽) : F128 := a
 the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`), §5 and
 §16.2. The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
 theorem setupRealizes_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) {sch : Flock.Schedule}
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (hf : Flock.fast100 st.m = some sch) (hb : RegionBytes st) :
+    (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (hf : Flock.fast100 st.m = some sch)
+    (hb : RegionBytes st) :
     SetupRealizes (Setup.ofCircuit st) (stmtOf st hwf (regionsOf st)) sch PT_LOCAL st.mPts := by
   refine ⟨rfl, rfl, ofCircuit_fold st hwf _, hms, hf, ?_, hwf.hk, rfl, fun pts => ?_⟩
   · show 14 ≤ st.m
@@ -440,7 +441,8 @@ theorem nOpen_pos : 0 < F.nOpen := by
   rw [hk, List.range_succ_eq_map, List.map_cons, List.sum_cons]
   exact Nat.lt_of_lt_of_le hq (Nat.le_add_right _ _)
 
-/-- **The circuit of a level's statement names its unit as the statement**, `RecOpen.unitName LANES H`: `circuitFile`
+/-- Obligation: discharged by `circuitFile`'s emit and parse round trip.
+**The circuit of a level's statement names its unit as the statement**, `RecOpen.unitName LANES H`: `circuitFile`
 writes the unit of `recOpenUnit LANES H` under `Stmt.name` (`Stage.lean:44`, `Compose.lean:217,233`) and `HmRow.parse`
 reads it as the circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile`, as `HUnitName`
 for the parts (the lane that proves `hfile`). -/
@@ -464,19 +466,21 @@ theorem hOpenUnits_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenN
   exact ⟨upv_pos hc (F.Vs _).hscope, unitLog_le (F.Vs _).hscope, _,
     params_of_check (parse_facts hc).recNet (hname ⟨ℓ, hj⟩ _ _ _ _ hst)⟩
 
-/-- **V*'s parts are at least the verifier's**: where `parts (spec vsh)` returns, it has at least as many parts as the
-verifier's `groups` at the shape (`partsOf`). V*'s `parts` (`Parts.lean:51-72`) and the verifier's `groups`
-(`RecResiduals.lean:119-139`) are the same first-fit packing of the same residuals, V*'s over the supports it computes
-(`Algebra.supports`), the verifier's over its symbolic algebra (`structureOf`); established by a lemma that `spec`'s S is
-`structureOf`'s (V*'s algebra lane), or by a verifier check that a session per part `p<j>` of `groups` is present. -/
+/-- Obligation: discharged by the verifier's check 6 (`cursor/rec-vstar-checks-741b`), whose pass is `ps.size =
+gs.size`.
+**The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
+`k_log` and claims of the parts' unit names, `RecResiduals.params`), the verifier evaluates V*'s parts,
+`VStar.parts (VStar.Algebra.spec vsh)` (`Parts.lean:51-100`), and its own, `groups (structureOf sh) (portSizes sh)`
+(`partsOf`, `RecResiduals.lean:119-139`), and refuses when they number differently. Both are the same first-fit packing,
+V*'s over the supports it computes (`Algebra.supports`), the verifier's over its symbolic algebra (`structureOf`). -/
 def HPartCount : Prop :=
-  ∀ sp ps, VStar.Algebra.spec F.vsh = .ok sp → VStar.parts sp = .ok ps → (partsOf F.sh).size ≤ ps.size
+  ∀ sp ps, VStar.Algebra.spec F.vsh = .ok sp → VStar.parts sp = .ok ps → ps.size = (partsOf F.sh).size
 
 /-- **`HCover`**: each of the verifier's parts is one of V*'s (`HPartCount`), which is a statement (`statements_inner`). -/
 theorem hCover_of (hc : F.HPartCount) : F.HCover := by
   intro p hp
   obtain ⟨-, sp, ps, -, hsp, hps, -⟩ := statements_eq F.hstmts
-  exact statements_inner F.hstmts hsp hps (Nat.lt_of_lt_of_le hp (hc sp ps hsp hps))
+  exact statements_inner F.hstmts hsp hps (Nat.lt_of_lt_of_le hp (hc sp ps hsp hps).ge)
 
 /-- **`HSomePart`**: V*'s S has residuals (`spec_res`), so V* has a part (`parts_size`), which is a statement
 (`statements_inner`). -/

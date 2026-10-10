@@ -10,7 +10,7 @@ points, both tapes and the openings (`tableTape`). `transcript_of_runs` proves t
 `G : TableFiles cls`, from the rest of `Valid`, `G.Runs`, and hypotheses on `G`'s fields:
 
 * each rep's tape is its proof file's messages and its stream's coins woven along its spine (`repSteps`). An accepting
-  rep plays its messages on its coins (`table_refines_hm96`), and such a run's tape is that weave (`repTape_of_plays`:
+  rep plays its messages on its coins (`table_refines_plain`), and such a run's tape is that weave (`repTape_of_plays`:
   `toT_exact`, `Spine.prefix`, `weave_of_prefix`), so the tape `inner_accepts_of_reps` needs is determined by the files;
 * the transcript's rounds hold the table's messages cut at its coins (`PlaysCoin.cut`), and its coins are the link
   points then both streams' coins. A transcript whose rounds and coins are a tape's is that tape on the schedule
@@ -290,10 +290,11 @@ the session's extra claims and rounds, `hmS` … `hex`), and both reps' runs (`T
 
 Then each rep's stream is found, its proof file decodes, with the pinned parameters and the committed cap, and its tape
 is a tape of its spine: both reps accept (`verifyRep_of_checks`), so each plays its messages on its stream's coins
-(`table_refines_hm96`), and `repTape_of_plays` gives the tape. -/
+(`table_refines_plain`), and `repTape_of_plays` gives the tape. -/
 theorem reps_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)
-    (hfold : FoldRealizes G.st.fold (M.toStatement regs)) (hms : G.st.merkle = MerkleScheme.hm96Sha512)
+    (hfold : FoldRealizes G.st.fold (M.toStatement regs))
+    (hms : G.st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     (hf : Flock.fast100 G.st.m = some G.sch)
     (hext : ExtraRealizes G.st (M.toStatement regs) G.sess.points
       (extraClaims (M.toStatement regs) cls.ptLocal cls.mPts G.pts))
@@ -322,7 +323,7 @@ theorem reps_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m -
       (hfind r hr2) hex (hdec r hr2) (hpar' r hr2) hprog hk (hcap' r hr2)
     rwa [bytes_eq_of_beq (hcap' r hr2)] at e
   obtain ⟨p₀, p₁, s₀, s₁, pend₀, pend₁, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, -⟩ :=
-    table_refines_hm96 G.spec G.st (M.toStatement regs) cls.hm hmS hkS hfold hms
+    table_refines_plain G.spec G.st (M.toStatement regs) cls.hm hmS hkS hfold hms
       (extraClaims (M.toStatement regs) cls.ptLocal cls.mPts G.pts) G.sess hext hwf G.sch hf G.i (G.bytes 0)
       (G.bytes 1) _ (acc 0 (by omega)) (acc 1 (by omega))
   have hd₀ := hdec 0 (by omega)
@@ -359,7 +360,8 @@ the transcript `t`,
 theorem transcript_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) (t : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)
-    (hfold : FoldRealizes G.st.fold (M.toStatement regs)) (hms : G.st.merkle = MerkleScheme.hm96Sha512)
+    (hfold : FoldRealizes G.st.fold (M.toStatement regs))
+    (hms : G.st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     (hf : Flock.fast100 G.st.m = some G.sch)
     (hext : ExtraRealizes G.st (M.toStatement regs) G.sess.points
       (extraClaims (M.toStatement regs) cls.ptLocal cls.mPts G.pts))
@@ -390,7 +392,8 @@ theorem transcript_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (c
 theorem valid_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) (t : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)
-    (hfold : FoldRealizes G.st.fold (M.toStatement regs)) (hms : G.st.merkle = MerkleScheme.hm96Sha512)
+    (hfold : FoldRealizes G.st.fold (M.toStatement regs))
+    (hms : G.st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     (hf : Flock.fast100 G.st.m = some G.sch)
     (hext : ExtraRealizes G.st (M.toStatement regs) G.sess.points
       (extraClaims (M.toStatement regs) cls.ptLocal cls.mPts G.pts))
@@ -417,7 +420,8 @@ as rounds (`schedSteps_zip`). -/
 theorem valid_of_layers (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) (ws : List (List (SMsg T))) (cs : List ((k : Fin nR) → CT k))
     (hmS : G.st.m = (M.toStatement regs).m) (hkS : G.st.kLog = (M.toStatement regs).kLog)
-    (hfold : FoldRealizes G.st.fold (M.toStatement regs)) (hms : G.st.merkle = MerkleScheme.hm96Sha512)
+    (hfold : FoldRealizes G.st.fold (M.toStatement regs))
+    (hms : G.st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     (hf : Flock.fast100 G.st.m = some G.sch)
     (hext : ExtraRealizes G.st (M.toStatement regs) G.sess.points
       (extraClaims (M.toStatement regs) cls.ptLocal cls.mPts G.pts))

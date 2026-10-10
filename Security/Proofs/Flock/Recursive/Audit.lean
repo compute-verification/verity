@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.Property
 import Proofs.Flock.Recursive.Private
+import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
 
 /-!
@@ -7,8 +8,8 @@ import Proofs.Flock.Recursive.Loads
 
 `Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `zk_sessions_recursive_fork_inner` at
 the compiled table, the description's binding of the hidden statement to the registered rows
-(`Recursion.ofRows_eq_or_collides`), and `RecursiveCircuitPrivateLeaves`. Its premises are
-`Proofs.Flock.Recursive.Premises`'.
+(`Recursion.ofRows_eq_or_collides`), and `RecursiveFirewallPrivate` (`Proofs.Flock.Recursive.FirewallZK`). Its
+premises are `Proofs.Flock.Recursive.Premises`'.
 
 In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`, `Proofs.Flock.Recursive.Loads`):
 * where some index has no session that types, the event is empty: a session that verifies types
@@ -24,8 +25,8 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
 * the raw event bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
 
 Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the law's field
-`L.nonempty`, and in (ii) V*'s sessions' zero knowledge (`_hOuter`, from `ZeroKnowledgeHidden`) and the honest
-witnesses (`honest`).
+`L.nonempty`, and in (ii) the honest witnesses (`honest`) and the obligations on the firewall's code and V*'s staging
+(`FirewallSends`, `SessionsPublic`, `SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`).
 Open in the proof: that each accepted session loads V*'s statement (`loads_of_verifies`), until the verifier checks it.
 -/
 
@@ -56,8 +57,7 @@ theorem readsBelow_stmtAt {Ω H : Type} (rt : Flock.Registered.Port) (stmt : (Fi
 theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap
-  · intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter p₀ o P w hw E
-    exact RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs view sim hOuter p₀ o P w hw E
+  · exact RecursiveFirewallPrivate
   intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ st Vs zr hCust dg N σ wmsg Sk cmt msg rt stmt hA3 p path₀ hreg
     k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
