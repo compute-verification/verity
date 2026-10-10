@@ -116,10 +116,16 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - Hiding the type mix costs padding, not an evaluation of every type. A session picks its type's matrix by a hidden
     index, small types are padded to the shape's nonzero bound, and session counts are padded per shape.
   - No benchmark harness is built until the theory lands.
+  - (7:08 PM) One key per protecting party, drawn once at setup from the OS before anything else: the developer's for
+    its registrations and the firewall, the challenger's for coin commitments. It is public and a constant in V\*, so
+    one V\* serves every registration. A Lean bound over the key chooses the data and the auditor's choices (prompts,
+    coins) after the key, never before it. A key on a wire stays the fallback: hm96's key is a GF(2) Hankel multiplier,
+    XORs as a constant and an AND per product as a wire.
 - 2026-10-09 (4:48–5:00 PM PDT, relayed by top): a key that hides a commitment is drawn by the party the hiding
   protects, and fixed in the commitment before use: the developer's for its leaves, the ZK server's for its commitments,
-  the challenger's for coin commitments. One key per registration is enough. hm96's pinned key stays only where the key
-  is wired into a circuit (the row gadget), as a named exception. The inner phase's coins are sent live, because the
+  the challenger's for coin commitments. One key per registration is enough (replaced at 7:08 PM by one key per party,
+  drawn once at setup). hm96's pinned key stays only where the key is wired into a circuit (the row gadget), as a named
+  exception. The inner phase's coins are sent live, because the
   auditor sees only hiding commitments that are never opened; committed coins are for V\*'s outer sessions. "The
   verifier accepts the inner statement" in a soundness event means the statement-level checks the auditor runs, never
   acceptance of the inner transcript, which VBridge derives.
