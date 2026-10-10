@@ -7,6 +7,8 @@ measured on the repository's own gadgets. Nothing here is estimated but the comp
 
 ``--buckets`` takes compute-accounting's F6 prover table (``verity/f6-prover/v1``) and gives V* per session at each unsplit
 bucket instead (`bucket_cost`): ANDs unpacked and packed, D under C-Flock's layout, and F6's prove-time and RSS law.
+``--candidate3 DIR`` (proofs' F4 K2 tree, art:5d4b3d5f…) adds the frozen design's V* beside it (`candidate3`), which runs the
+slot sumcheck's verifier and opens the registered bits instead of reading the matrix.
 
 **What V* computes.** The lincheck's circuit fold, Lean's `Flock.Stmt.foldedPartial`: for the unit's slot type (2^sl
 columns), each nonzero (i, c) of A_0 adds ``α · lw[i mod 64] · eq(ρ_lo, i >> 6) · eq(r_lo, c >> 6)`` into ``comb[c mod 64]``
@@ -332,15 +334,7 @@ def bucket_cost(b: dict, part: str, g: dict, weights: dict, dm: dict, reg: dict,
     copy = g["sha512_compression_rows"] / g["sha512_compression"]
 
     def law(fold_ands: float, hash_ands: float) -> dict:
-        rows = fold_ands + copy * hash_ands
-        k = max(22, math.ceil(rows).bit_length() + 2)
-        cb = rows * RHO * bytes_per_nnz + glue
-        c = fit["coef"]
-        x = (1.0, 2.0 ** k / 2 ** 30, cb / 2 ** 30)
-        rss = sum(a * v for a, v in zip(c["rss_gib"], x))
-        prove = sum(a * v for a, v in zip(c["prove_s"], x))
-        return {"ands": fold_ands + hash_ands, "rows": rows, "k_log": k, "D": 2 ** k, "circuit_bytes": cb, "rss_gib": rss,
-                "prove_s": prove, "fits_D": k <= 32, "fits_node": rss <= NODE_GIB}
+        return {"ands": fold_ands + hash_ands} | layout(fold_ands + copy * hash_ands, fit, glue, bytes_per_nnz)
 
     return {"part": part, "Z": b["Z"], "slots": slots, "types": b["types"], "labels": b["labels"],
             "sessions_public": b["sessions_public"], "sl": sl, "nnz_read": nnz, "packed_ratio": ratio,
@@ -351,9 +345,64 @@ def bucket_cost(b: dict, part: str, g: dict, weights: dict, dm: dict, reg: dict,
 
 
 NODE_GIB = 1716
+CAP_LOG = 32
 
 
-def buckets(path: Path, reps: int, depth: int) -> dict:
+def layout(rows: float, fit: dict, glue: float, bytes_per_nnz: float) -> dict:
+    """C-Flock's layout of a circuit of ``rows`` rows as one slot (D = 2^max(22, ceil(log2 rows) + 2)), its text at ``RHO``
+    nonzeros a row, and F6's fitted prove time and peak RSS. Two readings of the cap: ``fits_D``, D <= 2^32 bits for the
+    whole circuit; and F6's own (``prover.md``: the cap bounds a slot's nonzeros, Z <= 2^32, and a 16-slot session at it is
+    D = 2^34, 1.24e3 GiB), ``f6_sessions``: the cap sessions V*'s nonzeros fill, ``fits_f6``: one, within the node."""
+    k = max(22, math.ceil(rows).bit_length() + 2)
+    cb = rows * RHO * bytes_per_nnz + glue
+    c = fit["coef"]
+    x = (1.0, 2.0 ** k / 2 ** 30, cb / 2 ** 30)
+    rss = sum(a * v for a, v in zip(c["rss_gib"], x))
+    prove = sum(a * v for a, v in zip(c["prove_s"], x))
+    f6 = math.ceil(rows * RHO / (16 * 2 ** CAP_LOG))
+    return {"rows": rows, "k_log": k, "D": 2 ** k, "circuit_bytes": cb, "rss_gib": rss, "prove_s": prove,
+            "fits_D": k <= CAP_LOG, "fits_node": rss <= NODE_GIB, "f6_sessions": f6, "fits_f6": f6 == 1}
+
+
+def _k2(path: Path):
+    """proofs' F4 K2 count (art:5d4b3d5f…: ``k2.py`` and its ``units.json``, main's ``rec_outer.lowering`` rows per RecOpen)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("f4_k2", path / "k2.py")
+    k2 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(k2)
+    return k2, json.loads((path / "units.json").read_text())
+
+
+def candidate3(k2, units: dict, Z: float, slots: int, sl: int, types: int, reps: int, fit: dict, glue: float,
+               bytes_per_nnz: float) -> dict:
+    """Candidate 3's V* rows for one session, from proofs' K2 count (note:proofs/20261010T0250Z-draft-f4-bitsumcheck §5.3):
+    each slot's sparse phase over 2^nu entries (nu = ceil(log2 Z), its verifier's GF(2^128) products at 2,187 each, per rep),
+    its firewall commitments (70 hm96 leaves per two reps) and its root_tau read (1e6), and one registered opening (both
+    reps' claims at once, ``k2.opening`` at m = max(22, nu + ceil(log2(2 sl + 2))), plus 1,400 products of its own algebra)
+    per slot, or per distinct type when a type's slots batch into one opening (§1.4). The rows are K2's (C-Flock rows of
+    the RecOpen lowering); ``ands`` takes the hashing's rows back to ANDs at the compression's rows per AND."""
+    nu = math.ceil(math.log2(Z))
+    m = max(22, nu + math.ceil(math.log2(2 * sl + 2)))
+    open_rows, grade, levels = k2.opening(units, m, True)
+    open_alg = 1400 * k2.ROWS_PER_PRODUCT
+    sparse = reps / 2 * k2.sparse_mults(nu, sl) * 2187
+    firewall = reps / 2 * 70 * 142_282
+    per_slot = sparse + firewall + 1e6
+    copy = 81_402 / 58_120
+
+    def total(openings: int) -> dict:
+        rows = openings * (open_rows + open_alg) + slots * per_slot
+        ands = openings * (open_rows / copy + open_alg) + slots * (sparse + (firewall + 1e6) / copy)
+        return {"openings": openings, "ands": ands} | layout(rows, fit, glue, bytes_per_nnz)
+
+    return {"nu": nu, "m": m, "grade": grade, "opening_rows": open_rows, "opening_levels": levels,
+            "opening_algebra_rows": open_alg, "sparse_rows_per_slot": sparse, "firewall_rows_per_slot": firewall,
+            "root_read_rows_per_slot": 1e6, "per_slot": total(1) if slots > 1 else None, "unbatched": total(slots),
+            "batched": total(min(slots, types))}
+
+
+def buckets(path: Path, reps: int, depth: int, c3: Path | None = None) -> dict:
     p = json.loads(path.read_text())
     g, dm = gadgets(), demux()
     reg = registration(g, 65536, depth)
@@ -361,6 +410,11 @@ def buckets(path: Path, reps: int, depth: int) -> dict:
     weights = {sl: fold_weight(sl) for sl in sorted({b["session"]["k_log"] for _, _, b in rows})}
     out = [{"workload": wl} | bucket_cost(b, part, g, weights, dm, reg, reps, p["fit"], p["glue_bytes"], p["bytes_per_nnz"])
            for wl, part, b in rows]
+    if c3:
+        k2, units = _k2(c3)
+        for r, (_, _, b) in zip(out, rows):
+            r["candidate3"] = candidate3(k2, units, b["Z"], b["slots"], b["session"]["k_log"], b["types"], reps, p["fit"],
+                                         p["glue_bytes"], p["bytes_per_nnz"])
     print("weight per entry and rep (sl: chunks -> ANDs):", {sl: (w["chunks"], w["ands"]) for sl, w in weights.items()})
     print(f"demux {dm['ands']}; registration, 64 KiB rows read whole: {reg['whole_per_bit']:.1f} ANDs per bit; "
           f"selection path per slot at depth 20: {20 * g['FrameV3Node_v1{2}'] + g['LmsEqual_v1']:,}")
@@ -376,14 +430,32 @@ def buckets(path: Path, reps: int, depth: int) -> dict:
               f"{r['per_nonzero']['total']:>7,.0f} {u['ands']:>9.2e} {u['k_log']:>4} {r['packed_ratio']:>5.2f} "
               f"{k['ands']:>9.2e} {k['k_log']:>4} {k['prove_s']:>9.3g} {k['rss_gib']:>9.3g} "
               f"{r['selection_by_types']:>9.2e} {'yes' if k['fits_D'] and k['fits_node'] else 'no':>4}")
+    if c3:
+        print(f"\ncandidate 3 (proofs' K2 count), V* per session, {reps} reps: one registered opening per slot (unbatched) or "
+              f"per distinct type (batched), and one inner slot alone; same layout and law. 'D<=32': D <= 2^32 bits; "
+              f"'F6': cap sessions (Z <= 2^32 a slot, 16 slots) V*'s nonzeros fill; 'vs opt4': option 4 packed rows / these")
+        print(f"{'workload':24} {'part':4} {'Z/slot':>8} {'slots':>5} {'types':>5} {'m':>3} {'ANDs':>9} {'rows':>9} {'D':>4} "
+              f"{'prove s':>8} {'RSS GiB':>8} {'D<=32':>5} {'F6':>3} | {'batched':>9} {'D':>4} {'RSS GiB':>8} {'F6':>3} | "
+              f"{'1 slot':>9} {'D':>4} {'prove s':>8} {'RSS GiB':>8} {'F6':>3} | {'vs opt4':>7}")
+        for r in out:
+            c = r["candidate3"]
+            u, bt, one = c["unbatched"], c["batched"], c["per_slot"] or c["unbatched"]
+            wl = r["workload"].removeprefix("vllm/").split("__")
+            print(f"{wl[0] + '/' + wl[4] + '/' + wl[5]:24} {r['part']:4} {r['Z']:>8.3g} {r['slots']:>5} {r['types']:>5} "
+                  f"{c['m']:>3} {u['ands']:>9.2e} {u['rows']:>9.2e} {u['k_log']:>4} {u['prove_s']:>8.3g} {u['rss_gib']:>8.3g} "
+                  f"{'yes' if u['fits_D'] else 'no':>5} {u['f6_sessions']:>3} | {bt['rows']:>9.2e} {bt['k_log']:>4} "
+                  f"{bt['rss_gib']:>8.3g} {bt['f6_sessions']:>3} | {one['rows']:>9.2e} {one['k_log']:>4} {one['prove_s']:>8.3g} "
+                  f"{one['rss_gib']:>8.3g} {one['f6_sessions']:>3} | {r['packed']['rows'] / u['rows']:>7.0f}")
     return {"source": str(path), "reps": reps, "gadgets": g, "demux": dm, "weights": weights, "registration": reg,
-            "rho": RHO, "node_gib": NODE_GIB, "packed_ratio": PACKED_RATIO, "buckets": out}
+            "rho": RHO, "node_gib": NODE_GIB, "packed_ratio": PACKED_RATIO, "candidate3_source": str(c3) if c3 else None,
+            "buckets": out}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path)
     ap.add_argument("--buckets", type=Path, help="F6's prover.json: V* per session at each unsplit bucket instead")
+    ap.add_argument("--candidate3", type=Path, help="with --buckets: proofs' F4 K2 tree (k2.py, units.json), candidate 3 beside")
     ap.add_argument("--units", default=",".join(UNITS))
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--row-bits", type=int, nargs="*", default=[1024, 8192, 65536])
@@ -395,7 +467,7 @@ def main() -> None:
         return
     out = a.out or (Path(os.environ["RESEARCH_RUN_DIR"]) / "out" if os.environ.get("RESEARCH_RUN_DIR") else None)
     if a.buckets:
-        res = buckets(a.buckets, a.reps, a.depth)
+        res = buckets(a.buckets, a.reps, a.depth, a.candidate3)
         if out:
             out.mkdir(parents=True, exist_ok=True)
             (out / "bucket_cost.json").write_text(json.dumps(res, indent=1))
