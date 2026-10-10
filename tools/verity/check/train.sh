@@ -68,11 +68,13 @@ got, why = place(sys.argv[1], Path.cwd()); print("train: --on", sys.argv[1] + ":
   esac
   # research.queue's REMOTE_WAIT_S and REMOTE_TIMEOUT_S, the quick tier's slot wait and run time, and LEAN_BUILDS
   wait_s=21600 run_s=10800
-  job="i=\"\$RESEARCH_RUN_DIR/inputs\"; exec python3 \"\$i/slot.py\" --priority --wait-max $wait_s --run-max $run_s -- python3 \"\$i/quick_tier.py\""
+  # the run's command is the shipped tree's slot.py, the one form a machine with /etc/vy/runs-via-slot launches (slot_only.py)
+  job="exec python3 \"\$RESEARCH_RUN_DIR/inputs/quick_tier.py\""
   job+=" --lean verity/core/service/flock --head $sha --base $base -- uv run --locked --extra torch-cpu python tools/verity/check/suites.py"
   setsid nohup uv run -q research run --on "$machine" --project verity --source "$tree" --cwd source \
-    --send tools/research/src/research/quick_tier.py --send tools/verity/check/slot.py --require-result \
-    --timeout $((wait_s + run_s)) --custody-ttl $((wait_s + run_s + 1800)) --declared-output 'out/*' -- sh -c "$job" \
+    --send tools/research/src/research/quick_tier.py --require-result \
+    --timeout $((wait_s + run_s)) --custody-ttl $((wait_s + run_s + 1800)) --declared-output 'out/*' \
+    -- python3 tools/verity/check/slot.py --priority --wait-max $wait_s --run-max $run_s -- sh -c "$job" \
     > "$log" 2>&1 < /dev/null &
 fi
 pid=$!
