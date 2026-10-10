@@ -20,7 +20,7 @@
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
-#                JOBS at once
+#                JOBS at once; the job fails if one does not stage
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
@@ -566,7 +566,7 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
     local name=$1; shift
     /usr/bin/time -v -o $O/vstage/time-$name.txt python3 -m verity_flock.rec_vstage stage $INNER $V/fold.json $V \
       --points $V/points.json --salts $V/acc-salts.bin "$@" > $O/vstage/$name.json 2> $O/vstage/$name.err
-    echo "$name exit $?"
+    local rc=$?; echo "$name exit $rc"; return $rc
   }
   export -f vjob; export O V INNER
   vjob verifier --levels none --no-algebra
@@ -574,6 +574,7 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
   { want alg && echo alg --levels none
     for f in ${FORGE-message sum comb top top-salt coef dirs}; do echo forged-$f --forge $f; done
     for l in $ALL; do want L$l && echo L$l --levels $l --no-algebra; done; } | xargs -P ${JOBS:-4} -L 1 bash -c 'vjob "$@"' _
+  [ ${PIPESTATUS[1]} = 0 ] || { echo "vstage: a statement did not stage (out/vstage/<name>.err)"; exit 1; }
   (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage/sizes.txt
   ;;
 oprove)
