@@ -9,8 +9,8 @@ source that keeps every salt it hands out (`Tape`), and every answer the firewal
 splits each call into what the schedule fixes (its shape: ``fixed`` items) and the commitments it carries (``commit``
 items, one a node of a salted top or a message row, each with the message the firewall's own records say it commits to;
 a round's copies of a level-0 top carry none, Commit committed them), and each coin answer into
-the challenger's coins, the salt it sent with them to open its commitment, and the coins the workers received
-(``coins``). A salt any answer to the workers contains is
+the challenger's coins, the salt it sent with them to open its commitment (when it committed to them), and the coins the
+workers received (``coins``). A salt any answer to the workers contains is
 exposed. Nothing here trusts the firewall's checks: a call it should have refused is in the transcript as it was made.
 """
 from __future__ import annotations
@@ -32,8 +32,7 @@ def public(schedule, relations=(), statement=None, computes=(), coins=None) -> d
     """The verifier's public input `flock-firewall contract --public` reads (`Flock.Firewall.Contract.PublicInput`): the
     session's schedule (or ``None``), the relations the verifier checks on masked values, the values the public statement
     fixes (name to bytes), the names of the values the firewall fixes by its own computation, and the challenger's
-    commitments to its coins (`rec_live.CoinServer.commit_coins`: hex, per stream and round), which a session with a
-    schedule needs."""
+    commitments to its coins, if it made any (`rec_live.CoinServer.commit_coins`: hex, per stream and round)."""
     out = {"kind": PUBLIC_FORMAT, "schedule": schedule, "relations": list(relations),
            "statement": {k: v.hex() for k, v in (statement or {}).items()}, "computes": list(computes)}
     if coins is not None:
@@ -106,13 +105,13 @@ class RecordingCoins(RL.CoinServer):
 
 class Session:
     """One inner session through a firewall: ``handle`` answers the workers' requests as the firewall does and keeps what
-    the transcript needs. ``proxy`` is the firewall under test (`rec_live.Proxy` or a subclass). The challenger commits to
-    its coins before the session (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``,
-    the challenger's own, never the firewall's tape), unless ``commit`` is false. ``coins`` is the challenger under test
-    (`RecordingCoins` or a subclass)."""
+    the transcript needs. ``proxy`` is the firewall under test (`rec_live.Proxy` or a subclass). The challenger's coins are
+    live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the session
+    (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the
+    firewall's tape). ``coins`` is the challenger under test (`RecordingCoins` or a subclass)."""
 
     def __init__(self, schedule: dict, rand=None, fresh: Callable[[], bytes] = INST.fresh_salt, proxy=RL.Proxy,
-                 coin_salt: Callable[[], bytes] = INST.fresh_salt, commit: bool = True, coins=None):
+                 coin_salt: Callable[[], bytes] = INST.fresh_salt, commit: bool = False, coins=None):
         self.schedule = schedule
         self.coins = (coins or RecordingCoins)(rand)
         self.tape = Tape(fresh)
@@ -145,9 +144,9 @@ class Session:
         return self.coins.end == "finish" and self.proxy.stopped is None
 
     def public(self) -> dict:
-        """The inner session's public input: its schedule and the challenger's commitments to its coins, and no relation,
-        statement value or value of the firewall's own (the inner phase masks nothing and fixes everything it sends by the
-        schedule)."""
+        """The inner session's public input: its schedule and the challenger's commitments to its coins, if it committed to
+        them, and no relation, statement value or value of the firewall's own (the inner phase masks nothing and fixes
+        everything it sends by the schedule)."""
         return public(self.schedule, coins=self.commitments)
 
     def transcript(self) -> dict:

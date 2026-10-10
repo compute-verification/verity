@@ -28,9 +28,8 @@ def _schedule(streams=("circuit/rep0",)):
 
 
 def _proxy(schedule, coins=None):
-    """A proxy held to ``schedule``, whose challenger committed to the session's coins before it started."""
-    coins = coins or RL.CoinServer(T._counter_rand())
-    return RL.Proxy(coins, T._salts(), schedule=schedule, commitments=coins.commit_coins(schedule))
+    """A proxy held to ``schedule``, on live coins."""
+    return RL.Proxy(coins or RL.CoinServer(T._counter_rand()), T._salts(), schedule=schedule)
 
 
 def _run(proxy, hello=None, y=bytes(32), opens=("circuit/rep0",), streams=("circuit/rep0",)):
@@ -136,7 +135,7 @@ def _coin_calls(reqs, schedule):
     for name in ("start", "commit", "y", "open", "round", "record"):
         f = getattr(coins, name)
         setattr(coins, name, lambda *a, _f=f, _n=name, **kw: (calls.append((_n, a, kw)), _f(*a, **kw))[1])
-    proxy = RL.Proxy(coins, T._salts(), schedule=schedule, commitments=coins.commit_coins(schedule))
+    proxy = RL.Proxy(coins, T._salts(), schedule=schedule)
     for r in reqs:
         proxy.handle(r)
     return calls

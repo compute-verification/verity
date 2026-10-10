@@ -20,7 +20,8 @@ them (`Proofs.Flock.Recursive.Firewall`); their zero knowledge is `Proofs.Flock.
   commit strings `l`, at the coin vector the auditor's tape fixes (`coin`), on the honest witness `wit`. Its view
   (`view`), its simulator (`sim`), the honest witnesses (`Honest`), every table passing `CoinedOK` (`TablesOK`) and
   its error (`err`).
-* `HCtx`, `hctxAt`: what the honest prover holds in (ii), at the firewall's commitments.
+* `HCtx`, `hctxAt`: what the honest prover holds in (ii), at the firewall's commitments (`firewallCommits`: the inner
+  coins live, each message reading the commit strings before it).
 -/
 
 namespace FlockSoundness.Discharge.Recursion.OuterZK
@@ -191,10 +192,12 @@ tape, the firewall's commitments, the inner prover's randomness and the firewall
 abbrev HCtx (Prog Wit Ωa Ωp : Type) (nr nh : ℕ) : Type :=
   Prog × Wit × (Fin nr → ZkView.Salt) × Ωa × (Fin nh → ByteArray) × Ωp × (Fin nh → ZkView.Salt)
 
-/-- The honest context at the firewall's commitments to `msgs` under the salts `y`. -/
+/-- The honest context at the firewall's commitments to `msgs` under the salts `y`, the inner coins live: message `i`
+reads the commit strings before it (`Flock.Guarantees.firewallCommits`). -/
 abbrev hctxAt {Prog Wit Ωa Ωp : Type} {nr nh : ℕ}
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray) (P : Prog) (w : Wit)
-    (r : Fin nr → ZkView.Salt) (a : Ωa) (p : Ωp) (y : Fin nh → ZkView.Salt) : HCtx Prog Wit Ωa Ωp nr nh :=
-  (P, w, r, a, (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)), p, y)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
+    (P : Prog) (w : Wit) (r : Fin nr → ZkView.Salt) (a : Ωa) (p : Ωp) (y : Fin nh → ZkView.Salt) :
+    HCtx Prog Wit Ωa Ωp nr nh :=
+  (P, w, r, a, Flock.Guarantees.firewallCommits (msgs P w r a p) y, p, y)
 
 end FlockSoundness.Discharge.Recursion.OuterZK

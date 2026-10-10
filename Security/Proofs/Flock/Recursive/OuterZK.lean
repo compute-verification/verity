@@ -30,9 +30,9 @@ committed coins, which read the tape and what was public before the session).
 * `tablesOK_of_sessions`: V*'s tables pass `CoinedOK` where each is `coinedOf` at `verify --zk`'s table of the
   session's data at a draw it sets up (`coinedOf_setup`; every `--zk` setup avoids the mask slot,
   `FailClosed.DrawSetupZK.avoidsMask`).
-* `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = err`; `vstar_private`: (ii)'s
-  conclusion there (`RecursiveCircuitPrivateLeaves`); `vstar_private_exe`: the same at `proverExe`, with no hypothesis
-  on the abort.
+* `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = err`, at the firewall's commitments
+  under live inner coins (`firewallCommits`); `Flock.SecurityProofs.RecursiveFirewallPrivate`
+  (`Proofs.Flock.Recursive.FirewallZK`) takes it at `proverExe`, with no hypothesis on the abort.
 
 Left to the instance at V*'s staging: that each session's table is `coinedOf` at its data and draw (with a
 `DrawSetupZK` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses (`Honest`, which
@@ -199,80 +199,24 @@ theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigPro
 /-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = err`: the view `Sessions.view` at the honest context, the
 simulator `Sessions.sim` at the public context `pubS` reads (the owed outputs, the registration's view, the auditor's
 tape and the firewall's commitments), which is the honest context's (`hpub`). The honest witnesses (`hH`) and
-`hpub` are needed only at the firewall's own commitments (`hctxAt`). -/
+`hpub` are needed only at the firewall's own commitments (`hctxAt`, `firewallCommits`: the inner coins live). -/
 theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (V : Sessions (HCtx Prog Wit Ωa Ωp nr nh) Pub) (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub)
     (hpub : ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (hctxAt msgs P w r a p y) =
-      pubS o (Flock.Guarantees.regLeaves rows pub P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)))
+      pubS o (Flock.Guarantees.regLeaves rows pub P r) a (Flock.Guarantees.firewallCommits (msgs P w r a p) y))
     (hOK : V.TablesOK) {prover : TableProver} (hP : SelfCheckSilent prover)
     (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
     (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :
     ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V.View → Prop),
       prCoin (fun q : V.Ωo => E (V.view prover
-          (P, w, r, a, (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)), p, y) q))
+          (P, w, r, a, Flock.Guarantees.firewallCommits (msgs P w r a p) y, p, y) q))
         ≤ prCoin (fun s : V.Ωs => E (V.sim (pubS o (Flock.Guarantees.regLeaves rows pub P r) a
-            (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i))) s)) + V.err := by
+            (Flock.Guarantees.firewallCommits (msgs P w r a p) y)) s)) + V.err := by
   intro o P w hw r a p y E
   have h := V.close hOK hKey hP (hctxAt msgs P w r a p y) (hH o P w hw r a p y) E
   rw [hpub o P w hw r a p y] at h
   exact h
-
-/-- **(ii) at V*'s sessions**: `RecursiveCircuitPrivateLeaves` with `_hOuter` from `vstar_outer_zk`. For every honest
-witness of every private circuit of the class and every private circuit `p₀` of it, the auditor's whole view and the
-simulated one give every event probabilities within `2 n_r·2^-193 + err + n_h·2^-193`, both ways. -/
-theorem vstar_private {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp]
-    {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
-    (honest : Out → Prog → Wit → Prop) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
-    (V : Sessions (HCtx Prog Wit Ωa Ωp nr nh) Pub) (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub)
-    (hpub : ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (hctxAt msgs P w r a p y) =
-      pubS o (Flock.Guarantees.regLeaves rows pub P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)))
-    (hOK : V.TablesOK) {prover : TableProver} (hP : SelfCheckSilent prover)
-    (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
-    (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
-    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w)
-    (E : Rv × Ωa × (Fin nh → ByteArray) × V.View → Prop) :
-    Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs
-        (fun P w r a h p y q => V.view prover (P, w, r, a, h, p, y) q) P w E
-      ≤ Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh (fun o v a h s => V.sim (pubS o v a h) s)
-          o p₀ E + (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
-    Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh (fun o v a h s => V.sim (pubS o v a h) s) o p₀ E
-      ≤ Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs
-          (fun P w r a h p y q => V.view prover (P, w, r, a, h, p, y) q) P w E
-        + (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
-  let x₀ : HCtx Prog Wit Ωa Ωp nr nh := (P, w, fun _ => 0, Classical.arbitrary Ωa, fun _ => ByteArray.empty,
-    Classical.arbitrary Ωp, fun _ => 0)
-  have : ∀ j, Nonempty (Fin (V.NR j)) := fun j => ⟨⟨0, V.nr_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
-  have : ∀ j, Nonempty (Fin (V.NS j)) := fun j => ⟨⟨0, V.ns_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
-  exact Flock.SecurityProofs.recursiveCircuitPrivateLeaves_le nr rows pub honest nh msgs
-    (fun P w r a h p y q => V.view prover (P, w, r, a, h, p, y) q) (fun o v a h s => V.sim (pubS o v a h) s)
-    (vstar_outer_zk rows pub honest msgs V pubS hpub hOK hP hH hKey) (δ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey p₀ o P w hw E
-
-/-- **(ii) at V*'s sessions, the honest prover's code in them** (`vstar_private` at `proverExe`, `selfCheckSilent_exe`):
-whatever a stopped run sends, the auditor's whole view and the simulated one give every event probabilities within
-`2 n_r·2^-193 + err + n_h·2^-193`, both ways, with no hypothesis on the self-check. -/
-theorem vstar_private_exe {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp]
-    {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
-    (honest : Out → Prog → Wit → Prop) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
-    (V : Sessions (HCtx Prog Wit Ωa Ωp nr nh) Pub) (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub)
-    (hpub : ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (hctxAt msgs P w r a p y) =
-      pubS o (Flock.Guarantees.regLeaves rows pub P r) a
-        (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)))
-    (hOK : V.TablesOK)
-    (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut)
-    (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
-    (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96)
-    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w)
-    (E : Rv × Ωa × (Fin nh → ByteArray) × V.View → Prop) :
-    Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs
-        (fun P w r a h p y q => V.view (proverExe stopped) (P, w, r, a, h, p, y) q) P w E
-      ≤ Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh (fun o v a h s => V.sim (pubS o v a h) s)
-          o p₀ E + (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) ∧
-    Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh (fun o v a h s => V.sim (pubS o v a h) s) o p₀ E
-      ≤ Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs
-          (fun P w r a h p y q => V.view (proverExe stopped) (P, w, r, a, h, p, y) q) P w E
-        + (2 * nr * (2 : ℝ≥0∞) ^ (-193 : ℤ) + V.err + nh * (2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
-  vstar_private rows pub honest msgs V pubS hpub hOK (selfCheckSilent_exe stopped) hH hKey p₀ o P w hw E
 
 end FlockSoundness.Discharge.Recursion.OuterZK
