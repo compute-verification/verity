@@ -28,7 +28,9 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session (INNER_LEAN=1: also the inner's,
 #                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
-#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s)
+#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s). The job
+#                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
+#                a forgery's refused (lean_verdicts.py; the inner's is not checked)
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -40,7 +42,7 @@
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
 #      GPU_LEASE= (the lease command; default the queue's for this node)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
-#      MODES=dev  REPLAY=1  CONTROLS= (oprove)
+#      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's draw: every unit; none: no draw)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|oprove|oreplay|lean}
@@ -647,7 +649,13 @@ lean)
       --public $DD/stage-zk/pub-$N.bin --partition $DD/stage/partition.json --session $ZS > $O/lean/zk.log 2> $O/lean/zk.err
     echo "zk lean exit $?"
   fi
+  # fail closed: every statement vstage staged or oprove kept a session of, and ZK_LEAN's
+  PARTS=$( { [ -d $DD/v ] && (cd $DD/v && find . -name inst.bin -printf '%h\n' | sed 's:^\./::; s:/:-:g')
+    for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do basename $S; done; } | sort -uV | while read -r l; do want $l && echo $l; done)
+  [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
+  if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
+  else python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
 summary
-true
+exit ${LEAN_RC:-0}
