@@ -443,7 +443,7 @@ theorem recMsgs_tys (p : LigeritoProof) (ext : ℕ) :
       | with_reducible refine AllTys.map fun _ => ?_
       | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
       | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
-      | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _))
+      | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _)
   | left + 2, i, msg, ood => by
       rw [recMsgs]
       repeat' (first
@@ -453,7 +453,7 @@ theorem recMsgs_tys (p : LigeritoProof) (ext : ℕ) :
         | with_reducible refine AllTys.map fun _ => ?_
         | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
         | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
-        | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _))
+        | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _)
       exact recMsgs_tys p ext (left + 1) (i + 1) (msg + 7) (ood + 2)
 
 theorem repMsgs_tys (st : Setup) (sch : Flock.Schedule) (n : ℕ) (p : Proof) :
@@ -466,7 +466,7 @@ theorem repMsgs_tys (st : Setup) (sch : Flock.Schedule) (n : ℕ) (p : Proof) :
     | with_reducible refine AllTys.map fun _ => ?_
     | with_reducible exact kMsgs_tys _ _ _ _ | with_reducible exact fMsg_ty _ _ | with_reducible exact kMsg_ty _ _
     | with_reducible exact ty_cap _ | with_reducible exact ty_vv _ | with_reducible exact ty_ff _
-    | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _))
+    | with_reducible exact ty_v64 _ | with_reducible exact ty_v128 _ | with_reducible exact ty_yr _)
   exact recMsgs_tys _ _ _ _ _ _
 
 theorem mem_cut : ∀ (σ : List Exec.Kind) (ms : List Msg) {g : List Msg}, g ∈ cut σ ms → ∀ m ∈ g, m ∈ ms
