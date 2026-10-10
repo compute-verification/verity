@@ -348,23 +348,12 @@ malicious-verifier claim rests on beyond the theorems.
   byte's zero fill bits and SHA-512's padding, in a block with row bytes or in a block of its own); and a unit's leaf bit
   past `ℓ`, read from its slot's forced-zero row. That these constants are SHA-512's padding of `P(ℓ)` and the row's
   bytes is part of what it assumes. `HmRows.v2` takes `enc_inj` from `FlockLevel3.RowV2.enc_inj`.
-- **What it gives.** With the layout's facts (`Binding.Layout`, `Binding.HmRows`), the registration fact: a satisfying
-  witness's rows have the registered leaves. Then `ValueBinding` (`HmRows.binding`) and `registered_weights` hold with
-  `SHA512CRExpected` as the only cryptographic assumption, and `collide` an explicit SHA-512 collision
-  (`ExplicitLeaf.hm96`).
-- **At the registered leaves, and `δ_tree`.** The `_hm96` bounds count the executable's acceptance (`execAccept`, read
-  from the registered roots) with the model's at the leaves the registration commits to (`Layout.regLeaf`). Where the two
-  differ is `δ_tree`, the roots' Merkle binding (red-team review of #513, C2), under `SHA512CRStrict` (What is restated
-  over the two forms, below).
+- **What it gives, and `δ_tree`:** `assumption-notes/hm-row-computes.md`.
 - **Discharged only by fixed readers.** `HmRowComputes` and `decode_row` count as discharged only for readers of the
   witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
   chooses its values discharges nothing (red-team review of #513, C3).
-- **Proved so far.** For `sha512/row/v1` rows, from the `sha512x3` and `hm96` sections of the circuit file, Δ and the
-  chain's wiring (`HmRow.rowWires`): at an untyped statement `Stmt.setupH` accepted, `row_bc_setupH`, given that its rows
-  are v1 and its unit returns the outputs (`hv1`, `ho`), and at e2e-layout's drawn units `keyedRowsOuts_computes`; at a
-  typed template statement, `row_bc_setupH_typed`, with no hypothesis (`HmRow.rowPorts` refuses a typed statement's bit
-  rows, and `HmRow.checkTyped` a root with no forced-zero row). `HmRows.Computes` at a typed statement's drawn units
-  still needs their sites.
+- **Proved so far** for `sha512/row/v1` rows: `row_bc_setupH` (untyped, given `hv1` and `ho`), `keyedRowsOuts_computes`
+  (e2e-layout's drawn units) and `row_bc_setupH_typed` (typed, no hypothesis); `assumption-notes/hm-row-computes.md`.
 - **Upstream:** watch entry `hm-row-computes`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
