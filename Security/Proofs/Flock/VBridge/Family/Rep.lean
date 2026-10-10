@@ -493,13 +493,12 @@ def HVCoins : Prop :=
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)) q)
 
-/-- Obligation: discharged by acceptance once the layout keys an output gate to its output row (`Layout.keyRowOf` is
-`some` only at input gates, KeyProg.lean:202-203), which makes `RegOut` hold at the parts' `out` columns.
+/-- Obligation: to be discharged by acceptance, now that the layout keys a returned output gate to its output row
+(`HiddenExec.rowOfH`), which makes `RegOut` hold at the parts' `out` columns where they are registered reads.
 **The parts' outputs are 0 in the layer.** At an accepted outer proof, every output column of rep `r`'s copy of
 part `p` is 0 in the layer (`copyVal`). V* registers each part's `out` as reads of the zero row `rec-residuals-zero`
-(`rec_vstage.py`), but a registered read is a row of an input port and no output column is one (`not_regOut`), so
-acceptance (`Accepted`) does not reach these columns: `ZkOuter.Good` asks the layer to agree with the registrant at
-registered reads only (`RegAgree`). -/
+(`rec_vstage.py`), and `ZkOuter.Good` asks the layer to agree with the registrant at registered reads only
+(`RegAgree`), so acceptance (`Accepted`) reaches these columns only through those reads. -/
 def HZeroL : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r p, p < (partsOf F.sh).size →
     ∀ S ns nv, RecResiduals.part F.sh p = .ok (S, ns, nv) → ∀ hj : cp p r < (F.Vs (F.sess p)).c.upv,

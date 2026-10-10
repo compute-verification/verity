@@ -144,7 +144,7 @@ variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
 
 /-- V*'s live session at the history. -/
-abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) :=
+noncomputable abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) :=
   auditLive Lv Reg' (liveOfZJ dg (planZHJ zo.dj zo.y₀) N zo.wr)
 
 /-- The registered-reads layout of V*'s session (`layShHJ`). -/
@@ -155,7 +155,7 @@ noncomputable abbrev lay :=
 noncomputable abbrev vb := vbHJ (Reg := Reg') zo.dj zo.y₀ zo.ht zo.hcH (Layout.scopeOkH_of_scopeOk hscope) hU zo.hpub
 
 /-- The strategy a name stands for in V*'s session. -/
-def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg J mPts N)) : Strategy (zo.game dg N) :=
+noncomputable def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg J mPts N)) : Strategy (zo.game dg N) :=
   ⟨τ₀.1, fun ω => Strategy.map (fun t => (τ₀.1, Lv.draw ω, t)) _ (Strategy.map (zo.wr (Lv.draw ω) τ₀.1) _
     (castLive (zo.hlen (Lv.draw ω) τ₀.1) dg mPts N (τ₀.2 ω)))⟩
 
@@ -346,7 +346,8 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
       (fun o => regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port) ?_ hR)
   rintro ⟨R', S', tr⟩ ⟨hacc, ω, o', hS', htr⟩
   obtain rfl : S' = Lv.draw ω := hS'
-  obtain rfl : tr = zo.wr (Lv.draw ω) R' o' := htr
+  have htr' : tr = zo.wr (Lv.draw ω) R' o' := htr
+  rw [htr'] at hacc ⊢
   exact checked_of_acceptsHJ zo.I zo.ht zo.own zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.hTags
     _ hacc _ (zo.hown ω R' o' hacc)
 
@@ -445,7 +446,7 @@ abbrev VRec (Vs : Fin S → VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) 
   (j : Fin S) → (Vs j).Name Reg' dg N × (Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
 
 /-- **V*'s sessions at one history, in a row**: each played by the strategy the prover names at its start (`seqC`). -/
-abbrev sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
+noncomputable abbrev sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
     Game (VRec Vs Reg' dg N) :=
   seqC S (T := fun j => (Vs j).Name Reg' dg N) (α := fun j => Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
     (fun j => (zs j).game dg N) fun j => (zs j).ofBase dg N
@@ -508,12 +509,12 @@ variable {Reg₂ : Type}
 /-- **V*'s outer proof at one history**: the prover registers `R₂`, the values V*'s sessions read that the history does
 not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and with `link_rows` each
 level's opened rows `rec-rows-L<level>`), and then V*'s sessions at `R₂` run in a row. The output records `R₂`. -/
-abbrev outerV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
+noncomputable abbrev outerV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
     Game (Reg₂ × VRec Vs Reg' dg N) :=
   .send Reg₂ fun R₂ => (sessions (zs R₂) dg N).map fun b => (R₂, b)
 
 /-- The prover's strategy for V*'s sessions after its registration `s.1`. -/
-def sessOf (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+noncomputable def sessOf (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     (s : Strategy (outerV zs dg N)) : Strategy (sessions (zs s.1) dg N) :=
   Strategy.ofMap (fun b => (s.1, b)) (sessions (zs s.1) dg N) s.2
 

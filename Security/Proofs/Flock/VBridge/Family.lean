@@ -29,10 +29,10 @@ maps `hres` and `hu` would force the reps' values equal. Top's `rep`, `ops` and 
 alone, but each rep's coins, extra claims and comb, each level's `α` and the table files' streams are the verifier's,
 drawn from the history `t`, and V*'s wires register only what is computed from them (`v`, `coef`, `dirs`). So
 `vbridge_of_reps` is `vbridge_of_vstar` with the unit maps indexed by the rep and `rep`, `acc`, `ops`, `files` read at the
-history as well, from the same per-rep lemmas. Its `ResZeroAt` and `OpensAt` never hold at V*: their outputs are
-registered reads, and no output column is one (`Registered.not_resZeroAt`, `not_opensAt`). At the family the parts' and
-openings' outputs are read in the layers instead, and `vbridge_of_family` (`Openings.lean`) composes the same per-rep
-lemmas at `HResL` (`Rep.lean`) and `HUL`: `Flock.Assumptions.VBridge` from one named `Prop` per remaining hypothesis.
+history as well, from the same per-rep lemmas. Its `ResZeroAt` and `OpensAt` take the parts' and openings' outputs as
+registered reads (`RegOut`). At the family the parts' and openings' outputs are read in the layers instead, and
+`vbridge_of_family` (`Openings.lean`) composes the same per-rep lemmas at `HResL` (`Rep.lean`) and `HUL`:
+`Flock.Assumptions.VBridge` from one named `Prop` per remaining hypothesis.
 -/
 
 namespace FlockVBridge.Family

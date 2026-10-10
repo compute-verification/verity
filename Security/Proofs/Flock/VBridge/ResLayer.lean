@@ -7,7 +7,7 @@ import Proofs.Flock.VBridge.AlgHolds
 no computed row reads (`ReadCol`) is no wire of the unit (the copy's rows read only through `a` and `b`), so nothing
 reaches it from acceptance, and nothing needs to: the rows' values elsewhere do not depend on it (`sat_of_read`). Here
 the row ports are asked for `w` only at the columns some computed row reads, and the outputs are read in the layer
-(`copyVal`), which no registered read reaches (`Registered.not_regOut`).
+(`copyVal`) rather than at registered reads (`RegOut`).
 
 * `sat_of_read`: column values agreeing with satisfying ones at every read column and every computed one satisfy the
   rows. `rowCol_inj`, `rowCol_lt_nIn`: the row ports' columns are distinct input columns of the verifier's unit.
@@ -241,7 +241,7 @@ theorem decode_partR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
 /-- **Copy `j` of unit `u` is part `p` of the groups `gs`, its outputs 0 in the layer**: `ResZeroAt`'s facts, with the
 row ports registered bits of `w` only at the columns some computed row of the unit reads (`ReadCol`), and every output
 column of the part (`16 · RES_OUT_WORDS` bits) a 0 of copy `j` in the layer (`copyVal`) in place of a registered 0
-(`RegOut`), which no output column is (`Registered.not_regOut`). -/
+(`RegOut`). -/
 def ResZeroAtL (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j : ℕ) (sh : Shape)
     (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (p : ℕ) (w : ℕ → F128) (rounds : Array (Array F128))
     (extras : Array Claim) (comb : Array F128) : Prop :=

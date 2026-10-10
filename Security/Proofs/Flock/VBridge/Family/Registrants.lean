@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Registered.Binding
 import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+import Proofs.Flock.Level3.RowV2
 import Proofs.Flock.VBridge.Family.Registered
 
 /-!
@@ -11,8 +12,9 @@ SHA-512 collision, in a pair fixed by the two records rather than by a run:
 
 * `registrants_eq_or_collides`: two registered reads at one root and position carry one row's bytes (`enc`), or their
   openings collide (`TwoOpenings.collides`), or hm96's leaves do (`hm96Pair_spec`);
-* `rowEnc_get_eq`: one row's bytes (`rowEnc`, what `sha512/row/v1` hashes) fix its bits at every width, so two
-  sessions' values agree at each bit both widths hold;
+* `rowEncP_get_eq`, `rowEncPre_get_eq`: one row's bytes (`rowEncP` under a first block, what `sha512/row/v1` or
+  `sha512/row/v2` hashes, `Hidden.rowPre`) fix its bits at every width and either label, so two sessions' values agree
+  at each bit both widths hold;
 * `SharedRows`, `rowsShared_of_sharedRows`: `RowsShared` where two sessions' registrant records at one root and
   position hold one row's bytes, as they do when the family takes them from one choice;
 * `NoRegistrantCollision`, `sharedRows_of`, `rowsShared_of`: `SharedRows`, and so `RowsShared`, where no two such
@@ -73,11 +75,38 @@ theorem rowPrefix_head (w : ℕ) : (Flock.HmRow.rowPrefix w).data.toList.head? =
     List.head?_append, hA]
   rfl
 
-theorem rowEnc_head_shaped {W : ℕ} {v : BitVal W} (h : RowShaped v) : (rowEnc v).head? = some 118 := by
-  simp [rowEnc, h, List.head?_append, rowPrefix_head]
+/-- `sha512/row/v2`'s first block begins with the label's `v`. -/
+theorem rowPrefixV2_head (l : ℕ) : (Flock.HmRow.rowPrefixV2 l).data.toList.head? = some 118 := by
+  have hA : "verity/sha512-row/v2".toUTF8.data.toList.head? = some 118 := by decide
+  rw [FlockLevel3.RowV2.prefix_data, List.append_assoc, List.append_assoc, List.head?_append, hA]
+  rfl
 
-theorem rowEnc_head_other {W : ℕ} {v : BitVal W} (h : ¬ RowShaped v) : (rowEnc v).head? = some 0 := by
-  simp [rowEnc, h, List.head?_append, List.head?_replicate]
+/-- A hidden row's first block (`sha512/row/v1`'s or `sha512/row/v2`'s) begins with the label's `v`. -/
+theorem rowPre_head (v2 : Bool) (w : ℕ) : (FlockSoundness.Discharge.Hidden.rowPre v2 w).data.toList.head? = some 118 := by
+  unfold FlockSoundness.Discharge.Hidden.rowPre
+  split
+  · exact rowPrefixV2_head _
+  · exact rowPrefix_head _
+
+theorem rowPre_length (v2 : Bool) (w : ℕ) : (FlockSoundness.Discharge.Hidden.rowPre v2 w).data.toList.length = 128 := by
+  rw [Array.length_toList]
+  exact FlockSoundness.Discharge.Hidden.size_rowPre v2 w
+
+theorem rowEncP_head_shaped {pre : ℕ → ByteArray} (hpre : ∀ w, (pre w).data.toList.head? = some 118) {W : ℕ}
+    {v : BitVal W} (h : RowShaped v) : (rowEncP pre v).head? = some 118 := by
+  simp [rowEncP, h, List.head?_append, hpre]
+
+theorem rowEncP_head_other {pre : ℕ → ByteArray} {W : ℕ} {v : BitVal W} (h : ¬ RowShaped v) :
+    (rowEncP pre v).head? = some 0 := by
+  simp [rowEncP, h, List.head?_append, List.head?_replicate]
+
+theorem rowEncP_row_length {pre : ℕ → ByteArray} (hpre : ∀ w, (pre w).data.toList.length = 128) {W : ℕ}
+    {v : BitVal W} (h : RowShaped v) : (rowEncP pre v).length = 128 + 2 * (v.1.val / 16) := by
+  simp only [rowEncP, h, ↓reduceIte, List.length_append, hpre, rowBytes, List.length_ofFn]
+
+theorem rowEncP_other_length {pre : ℕ → ByteArray} {W : ℕ} {v : BitVal W} (h : ¬ RowShaped v) :
+    (rowEncP pre v).length = 128 + W + (2 * W + 1) := by
+  simp only [rowEncP, h, ↓reduceIte, List.length_append, List.length_replicate, bitCode_length]
 
 /-- `get_of_rowBytes` at two widths. -/
 theorem get_of_rowBytes₂ {W W' : ℕ} {v : BitVal W} {w : BitVal W'} (hv : RowShaped v) (h : rowBytes v = rowBytes w)
@@ -90,31 +119,39 @@ theorem get_of_rowBytes₂ {W W' : ℕ} {v : BitVal W} {w : BitVal W'} (hv : Row
   simp only [BitVal.get, show 8 * (i / 8) + i % 8 = i by omega, hi, hi', ↓reduceDIte] at this
   exact this
 
-/-- **One row's bytes fix its bits at every width** (`rowEnc_inj` at two widths): a row's length fixes its words and
-its bytes its bits, both zero past the words; the label's first byte (`rowPrefix_head`) tells a row from any other
-value; two other values are `bitCode`s of one width. -/
-theorem rowEnc_get_eq {W W' : ℕ} {v : BitVal W} {w : BitVal W'} (h : rowEnc v = rowEnc w) (i : ℕ) (hi : i < W)
-    (hi' : i < W') : v.2 ⟨i, hi⟩ = w.2 ⟨i, hi'⟩ := by
+/-- **One row's bytes fix its bits at every width, under either first block** (`rowEncP_inj` at two widths and two
+first blocks of 128 bytes): a row's length fixes its words and its bytes its bits, both zero past the words; a first
+block's first byte (`v`) tells a row from any other value; two other values are `bitCode`s of one width. -/
+theorem rowEncP_get_eq {pre pre' : ℕ → ByteArray} (hl : ∀ w, (pre w).data.toList.length = 128)
+    (hl' : ∀ w, (pre' w).data.toList.length = 128) (hh : ∀ w, (pre w).data.toList.head? = some 118)
+    (hh' : ∀ w, (pre' w).data.toList.head? = some 118) {W W' : ℕ} {v : BitVal W} {w : BitVal W'}
+    (h : rowEncP pre v = rowEncP pre' w) (i : ℕ) (hi : i < W) (hi' : i < W') : v.2 ⟨i, hi⟩ = w.2 ⟨i, hi'⟩ := by
   by_cases hv : RowShaped v <;> by_cases hw : RowShaped w
-  · have hl := congrArg List.length h
-    rw [rowEnc_row_length hv, rowEnc_row_length hw] at hl
+  · have hlen := congrArg List.length h
+    rw [rowEncP_row_length hl hv, rowEncP_row_length hl' hw] at hlen
     have hk : v.1.val = w.1.val := by have := hv.1; have := hw.1; omega
-    simp only [rowEnc, hv, hw, ↓reduceIte] at h
-    obtain ⟨-, hb⟩ := List.append_inj h (by rw [rowPrefix_length, rowPrefix_length])
+    simp only [rowEncP, hv, hw, ↓reduceIte] at h
+    obtain ⟨-, hb⟩ := List.append_inj h (by rw [hl, hl'])
     by_cases hiv : i < v.1.val
     · exact get_of_rowBytes₂ hv hb i hi hi' hiv
     · rw [hv.2 ⟨i, hi⟩ (by show v.1.val ≤ i; omega), hw.2 ⟨i, hi'⟩ (by show w.1.val ≤ i; omega)]
   · have := congrArg List.head? h
-    rw [rowEnc_head_shaped hv, rowEnc_head_other hw] at this
+    rw [rowEncP_head_shaped hh hv, rowEncP_head_other hw] at this
     exact absurd this (by decide)
   · have := congrArg List.head? h
-    rw [rowEnc_head_other hv, rowEnc_head_shaped hw] at this
+    rw [rowEncP_head_other hv, rowEncP_head_shaped hh' hw] at this
     exact absurd this (by decide)
-  · have hl := congrArg List.length h
-    rw [rowEnc_other_length hv, rowEnc_other_length hw] at hl
+  · have hlen := congrArg List.length h
+    rw [rowEncP_other_length hv, rowEncP_other_length hw] at hlen
     obtain rfl : W = W' := by omega
-    simp only [rowEnc, hv, hw, ↓reduceIte] at h
+    simp only [rowEncP, hv, hw, ↓reduceIte] at h
     rw [bitCode_inj (List.append_inj h rfl).2]
+
+/-- `rowEncP_get_eq` at two hidden rows' first blocks (`Hidden.rowPre`, `sha512/row/v1`'s or `sha512/row/v2`'s). -/
+theorem rowEncPre_get_eq {b b' : Bool} {W W' : ℕ} {v : BitVal W} {w : BitVal W'}
+    (h : rowEncP (FlockSoundness.Discharge.Hidden.rowPre b) v = rowEncP (FlockSoundness.Discharge.Hidden.rowPre b') w)
+    (i : ℕ) (hi : i < W) (hi' : i < W') : v.2 ⟨i, hi⟩ = w.2 ⟨i, hi'⟩ :=
+  rowEncP_get_eq (rowPre_length b) (rowPre_length b') (rowPre_head b) (rowPre_head b') h i hi hi'
 
 end Enc
 
@@ -124,7 +161,7 @@ section family
 
 open FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Recursion FlockSoundness.Model
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
-open FlockSoundness.Discharge.Layout (rowEnc)
+open FlockSoundness.Discharge.Layout (rowEncP)
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
@@ -154,14 +191,16 @@ def NoRegistrantCollision : Prop :=
     ¬ Collides (⟨(F.zs R ω t R₂ s).rd.port (.inl (u, q)), (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)),
         (F.zs R ω t R₂ s).rd.leaf (.inl (u, q)), (F.zs R ω t R₂ s).rd.wpath (.inl (u, q)),
         (F.zs R ω t R₂ s').rd.leaf (.inl (u', q')), (F.zs R ω t R₂ s').rd.wpath (.inl (u', q'))⟩ : TwoOpenings).pair ∧
-      ¬ Collides (hm96Pair (rowEnc (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))))
-        ((F.zs R ω t R₂ s).rd.ws (.inl (u, q))) (rowEnc (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
+      ¬ Collides (hm96Pair
+        (rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s).c)) (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))))
+        ((F.zs R ω t R₂ s).rd.ws (.inl (u, q)))
+        (rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s').c)) (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q'))))
         ((F.zs R ω t R₂ s').rd.ws (.inl (u', q'))))
 
 /-- Obligation: discharged by `NoRegistrantCollision` (`sharedRows`).
 **Two sessions' registrant records at one registered root and position hold one row's bytes.** At every accepted
 outer proof, where two sessions' registered reads name one root and one position, the registrants' values there have
-one `rowEnc`. It holds where the family's sessions take the registrant's opening at a root and position from one
+one row's bytes (`rowEncP` under each session's first block, `Hidden.rowPre`). It holds where the family's sessions take the registrant's opening at a root and position from one
 choice, the same in every session; `sharedRows_of` gives it from `NoRegistrantCollision` otherwise. -/
 def SharedRows : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (s s' : Fin F.stmts.size)
@@ -169,7 +208,8 @@ def SharedRows : Prop :=
     (F.zs R ω t R₂ s).rd.isRead (.inl (u, q)) → (F.zs R ω t R₂ s').rd.isRead (.inl (u', q')) →
     (F.zs R ω t R₂ s).rd.port (.inl (u, q)) = (F.zs R ω t R₂ s').rd.port (.inl (u', q')) →
     (F.zs R ω t R₂ s).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ s').rd.readAt (.inl (u', q')) →
-    rowEnc (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) = rowEnc (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
+    rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s).c)) (Decode.regVal (F.zs R ω t R₂ s) (.inl (u, q))) =
+      rowEncP (Hidden.rowPre (Hidden.rowV2 (F.Vs s').c)) (Decode.regVal (F.zs R ω t R₂ s') (.inl (u', q')))
 
 /-- **`SharedRows` where no two registrant records collide** (`registrants_eq_or_collides`). -/
 theorem sharedRows_of (h : F.NoRegistrantCollision dg N k Rw) : F.SharedRows dg N k Rw := by
@@ -180,10 +220,10 @@ theorem sharedRows_of (h : F.NoRegistrantCollision dg N k Rw) : F.SharedRows dg 
   · exact absurd hc h1
   · exact absurd hc h2
 
-/-- **`RowsShared` from one row's bytes** (`SharedRows`, `rowEnc_get_eq`). -/
+/-- **`RowsShared` from one row's bytes** (`SharedRows`, `rowEncPre_get_eq`). -/
 theorem rowsShared_of_sharedRows (h : F.SharedRows dg N k Rw) : F.RowsShared dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat b hb hb'
-  exact rowEnc_get_eq (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat) b _ _
+  exact rowEncPre_get_eq (h R ω t R₂ τ o ha s s' u u' q q' hr hr' hport hat) b _ _
 
 /-- **`RowsShared` where no two registrant records collide**. -/
 theorem rowsShared_of (h : F.NoRegistrantCollision dg N k Rw) : F.RowsShared dg N k Rw :=
