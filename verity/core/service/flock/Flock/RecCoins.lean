@@ -22,6 +22,7 @@ import Flock.Keccak
 import Flock.Registered
 import Flock.Firewall
 import Flock.Verify
+import Flock.Zk
 
 namespace Flock
 namespace RecCoins
@@ -78,11 +79,14 @@ structure Inner where
 /-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
+/-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
+on the coin server's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded. -/
 def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
     | .ok x => pure x
     | .error e => throw s!"rec-coins: {unit}: the inner statement: {e}"
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
+  if let .error e := Zk.schedule st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
   let sess ← match Record.decode spec f.record with
     | .ok s => pure s
     | .error e => throw s!"rec-coins: {unit}: the inner session's record: {e}"
