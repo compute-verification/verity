@@ -54,6 +54,7 @@ import Proofs.Flock.VBridge.Family.Files
 import Proofs.Flock.VBridge.Family.Runs
 import Proofs.Flock.VBridge.Family.Tape
 import Proofs.Flock.VBridge.Family.Join
+import Proofs.Flock.VBridge.Family.Transcript
 import Proofs.Flock.VBridge.Family.Assembly
 import Proofs.Flock.VBridge.Family.Registered
 import Proofs.Flock.VBridge.Family.Encode
