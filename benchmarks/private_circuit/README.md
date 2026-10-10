@@ -5,6 +5,9 @@ Protocol 2 (the private circuit) end to end: the private circuit's description i
 verified by the Lean verifier.
 
 - `universal.py`: the driver; its docstring says what it builds, what it checks and what a row records.
+- `nonzero_cost.py`: option 4 (pure recursion), V\* reading a unit's matrices as data: the ANDs per nonzero of the circuit
+  fold and of the registration read, measured on the repository's gadgets, with the nonzeros of real units' lowerings. It
+  runs in a few minutes on one core (`python benchmarks/private_circuit/nonzero_cost.py --out DIR`).
 - `pod.sh`: the entry point on a CPU node. It builds `flock-circuit` and `flock-verify` once per `FLOCK_WORK`, from this
   checkout:
 
