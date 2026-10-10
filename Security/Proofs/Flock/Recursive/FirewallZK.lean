@@ -51,7 +51,6 @@ theorem commitString_split (x : ByteArray) (y : Salt) :
   have hm' := hm (saltBytes y)
   rw [bitL] at hm'
   rw [hm']
-  dsimp only
   simp only [Pi.add_apply, bitsOf, My_apply y ⟨t, ht'⟩, bitL]
   exact xor_ind _ _
 
@@ -133,7 +132,7 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2,
           sim w.1.1.1 (encAt H (msgs w.1.1.1 w.1.1.2) w.1.2) w.2))).symm.trans_le ?_
     exact ZK.ideal_leaves_swap ZkView.My ZkView.saltHash hKey H nh
-      (fun (ω : (Ωa × Ωp) × Ωs) i => ZkView.bitsOf (Sha512.hash (msgs ω.1.1 ω.1.2 i)))
+      (fun (ω : (Ωa × Ωp) × Ωs) i => ZkView.bitsOf (Flock.Sha512.hash (msgs ω.1.1 ω.1.2 i)))
       (fun ω l => E (ω.1.1, l, sim ω.1.1 l ω.2))
   -- the developer's randomness is no longer read
   have h3 : prCoin (fun w : ((Ωa × Ωp) × Ωs) × (Fin nh → ZkView.Bits × ZkView.Salt) =>
@@ -230,8 +229,9 @@ theorem fwRealPr_eq {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Fintype Ωp]
       avg (realAt Flock.Guarantees.commitBytes (Flock.Guarantees.regLeaves rows pub) nh msgs
         (fun P w r a l p y q => V.view prover (P, w, r, a, (fun i => Flock.Hm96.Default512.treeLeaf (l i)), p, y) q)
         P w (fun t => E (t.1, t.2.1, (T t.2.2.1, true), t.2.2.2))) := by
-  simp only [Flock.Guarantees.fwRealPr, realAt]
+  unfold Flock.Guarantees.fwRealPr
   refine congrArg avg (funext fun r => ?_)
+  unfold realAt
   rw [← ZK.prCoin_congr_equiv
     (((Equiv.refl (Ωa × Ωp)).prodCongr (ZkView.saltsEquiv nh)).prodCongr (Equiv.refl V.Ωo))]
   refine congrArg prCoin (funext fun z => ?_)
@@ -240,11 +240,9 @@ theorem fwRealPr_eq {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Fintype Ωp]
         (T (encAt Flock.Guarantees.commitBytes (msgs P w r z.1.1.1 z.1.1.2) fun i => ZkView.saltOfBytes (z.1.2 i)),
           true) := by
     rw [hF]
-    congr 2
-    funext i
-    exact ZkView.commitString_os _ _
-  rw [hrun]
-  rfl
+    exact congrArg (fun f => (T f, true)) (funext fun i => ZkView.commitString_os _ _)
+  exact congrArg (fun u => E (Flock.Guarantees.regLeaves rows pub P r, z.1.1.1, u,
+    V.view prover (OuterZK.hctxAt msgs P w r z.1.1.1 z.1.1.2 fun i => ZkView.saltOfBytes (z.1.2 i)) z.2)) hrun
 
 end FlockSoundness.Discharge.Recursion.FirewallZK
 
