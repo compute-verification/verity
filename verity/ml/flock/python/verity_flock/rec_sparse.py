@@ -33,10 +33,13 @@ sends a round's coefficients without ``c_1 = claim + Σ_{i >= 2} c_i``, characte
 ``P(n) = 64 ⌈n / 8⌉`` words (whole M0 rows), its words past the elements unread.
 
 * ``h``, ``pre<j>``, ``v2``, ``sc<j>``, ``u``, ``vt``: the rep's sparse-phase messages, one port each, as the firewall committed
-  them (each a row the statement reads under the coin server's record, as `rec_residuals`' ``m<i>``). ``h`` is also read by the
-  rep's algebra (`rec_residuals.InnerRepCheck`), whose lincheck check L4′ it enters.
-* ``claim``: the registered claim's value, the row the registered opening's algebra reads (row r rep r's).
-* ``tau``: word σ is ``τ_σ``, ``W(S) = 64 ⌈S / 64⌉`` words, the slots' types as F2's coverage binds them.
+  them (each a row the statement reads under the coin server's record, as `rec_residuals`' ``m<i>``). ``h`` is the inner
+  session's h round (`rec_algebra.h_round`, absorbed before r′ and ζ_c), which the rep's algebra (`rec_residuals.InnerRepCheck`)
+  reads at the same row for its lincheck check L4′.
+* ``claim``: the registered claim's value, the row the registered opening's algebra reads (row r rep r's) as a witness
+  element at the coins' point (`registered_claim`), never as `rec_algebra`'s public extra claim.
+* ``tau``: word σ is ``τ_σ``, ``W(S) = 64 ⌈S / 64⌉`` words, the slots' types as F2's coverage binds them: one row of the session,
+  which every rep's instance reads (`reads`, `session_rows`).
 * ``v``: the verifier's own row (`verifier_row`): every value that only the coins and the public layout decide (`v_layout`).
 
 **Output.** The residuals, 8 words each, ``h2`` (H2's last check), ``h3`` (H3's), with T > 1 ``h4`` (the plane batch against the
@@ -67,8 +70,9 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
 
-__all__ = ["Coins", "PRE_ROUNDS", "RecSparse", "Shape", "ands", "definition", "message_ports", "out_words", "port_words",
-           "ports", "products", "products_structure", "rows", "sparse_ref", "v_layout", "verifier_row"]
+__all__ = ["Coins", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "definition", "inner_points", "message_ports",
+           "out_words", "port_words", "ports", "products", "products_structure", "reads", "registered_claim", "rows",
+           "session_rows", "sparse_ref", "v_layout", "verifier_row"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
@@ -237,6 +241,30 @@ def rows(sh: Shape, msgs: Mapping, v: Sequence[int]) -> dict[str, list[int]]:
     return out
 
 
+def reads(sh: Shape, reps: int) -> dict[str, list[int]]:
+    """The row of its registered value each port reads in instance r: row r for the messages, ``claim`` and ``v`` (rep r's;
+    ``h`` is the inner session's `rec_algebra.h_round` value, which `InnerRepCheck` reads at the same row), and row 0 for
+    ``tau`` in every instance: the session's one type row, which F2's coverage check reads too."""
+    out = {nm: list(range(reps)) for nm, _ in ports(sh)}
+    if sh.stacked:
+        out["tau"] = [0] * reps
+    return out
+
+
+def session_rows(sh: Shape, reps: Sequence[Mapping], vs: Sequence[Sequence[int]], tau: Sequence[int] | None = None
+                 ) -> list[dict[str, list[int]]]:
+    """Every rep's instance's ports (`rows`), from each rep's messages and verifier row and the session's one ``tau``: a rep's
+    messages that carry a τ of their own are refused, so the reps can't select different types."""
+    if any("tau" in m for m in reps):
+        raise ValueError("τ is the session's one row, read by every rep's instance: give it once, not in a rep's messages")
+    if sh.stacked != (tau is not None):
+        raise ValueError(f"{sh}: tau {'missing' if sh.stacked else 'given for one template'}")
+    out = [rows(sh, {**m, "tau": tau} if sh.stacked else m, v) for m, v in zip(reps, vs, strict=True)]
+    if sh.stacked and any(o["tau"] != out[0]["tau"] for o in out):
+        raise AssertionError("the reps' τ rows differ")
+    return out
+
+
 # --- the verifier's row ------------------------------------------------------------------------------------------------------
 
 def eq_table(r: Sequence[int]) -> list[int]:
@@ -254,8 +282,8 @@ def _dot(a: Sequence[int], b: Sequence[int]) -> int:
 @dataclass(frozen=True)
 class Coins:
     """A rep's public values the sparse phase reads: the lincheck's ``alpha``, the zerocheck's skip coin ``z``, the row and column
-    points' coordinates past the skip's (``x_rest`` = ρ_in's, ``y_rest`` = the lincheck's column coins t, at least ELL - 6
-    each, beyond which they enter only ``U``), H1's ``zeta_c`` (6), H2's ``pre`` (6, ζ_r), H3's ``rounds`` (r_k then r_s),
+    points' coordinates past the skip's (``x_rest`` = ρ_in's, ``y_rest`` = the column point in bit order, `rec_algebra`'s
+    ``r_in``, the lincheck's coins t reversed; at least ELL - 6 each, beyond which they enter only ``U``; `inner_points`), H1's ``zeta_c`` (6), H2's ``pre`` (6, ζ_r), H3's ``rounds`` (r_k then r_s),
     H4's ``zeta_p`` (P_LOG) and ``rho`` (T_LOG), and the slots' layout factors ``U`` (U_σ for σ < S, from the public layout and
     the points' high coordinates)."""
 
@@ -275,6 +303,37 @@ class Coins:
 
     def y_lo(self, sh: Shape) -> list[int]:
         return list(self.zeta_c) + list(self.y_rest[:sh.ELL - PRE_ROUNDS])
+
+
+def inner_points(inner, rounds: Sequence[Sequence[int]]) -> dict:
+    """``Coins``' ``alpha``, ``z``, ``x_rest`` and ``y_rest`` from the inner rep's coins by round (an inner
+    `rec_algebra.Shape`), through `rec_algebra.run`: the row point's ρ_in and the column point in bit order (``r_in``), the
+    points the comb is folded at and the inner claim on z has."""
+    from . import rec_algebra as A
+
+    info = A.run(inner, A.Coins(rounds), A.symbolic(inner), [], fold_only=True)[1]
+    return {"alpha": info["fold"]["alpha"], "z": info["z"], "x_rest": tuple(info["fold"]["rho_in"]), "y_rest": tuple(info["r_in"])}
+
+
+@dataclass(frozen=True)
+class RegisteredClaim:
+    """The claim rep r's instance hands the registered opening: its value is row ``row`` (= r) of the prover's ``claim``
+    registration, which the opening reads as a witness element, never as a public value (it depends on the templates), so
+    it has no ``value`` and `rec_algebra.run` refuses it as an extra claim; its point is the coins': skip weights
+    ``eq(point[:6], ·)`` and ``x = point[6:]``, ``point = (r_k, ζ_p, ρ_t)``, the stacked table's variables in order."""
+
+    row: int
+    skip: tuple[int, ...]
+    x: tuple[int, ...]
+    port: str = "claim"
+    value = None
+
+
+def registered_claim(sh: Shape, c: Coins, row: int) -> RegisteredClaim:
+    point = list(c.rounds[:sh.NU]) + list(c.zeta_p) + list(c.rho)
+    if len(point) < PRE_ROUNDS:
+        raise ValueError(f"{sh}: a claim point of {len(point)} coordinates, fewer than the skip's {PRE_ROUNDS}")
+    return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]))
 
 
 def verifier_row(sh: Shape, c: Coins) -> list[int]:

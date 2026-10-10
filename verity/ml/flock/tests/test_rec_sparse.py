@@ -86,17 +86,24 @@ def _template(g: random.Random, sh: RS.Shape) -> list[list[int]]:
     return planes
 
 
-def session(sh: RS.Shape, seed: int = 0):
+def session(sh: RS.Shape, seed: int = 0, inner: dict | None = None, tau: list[int] | None = None, tables=None):
     """One honest rep: ``(coins, messages, tables)``. Slot σ's template fills the unit at high bits σ of the hidden matrix
     (rows and columns of ELL + S_LOG + 1 bits, the other units public); the comb is the lincheck's, ``Σ_i e[i] M[i, c]`` with
-    ``e[s + 64 u] = L_s(z) eq(ρ_in, u)``, folded at the column coins; every message comes from the tables and the coins alone."""
+    ``e[s + 64 u] = L_s(z) eq(ρ_in, u)``, folded at the column point (bit j of a column against its coordinate j); every
+    message comes from the tables and the coins alone. ``inner``: alpha, z and the points from the inner rep's coins
+    (`rec_sparse.inner_points`), else drawn; ``tau``, ``tables``: the session's, else drawn."""
     g = random.Random(seed)
     E, hb, n = sh.ELL, sh.S_LOG + 1, 1 << sh.NU
-    tables = [_template(g, sh) for _ in range(sh.T)]
-    tau = [g.randrange(sh.T) for _ in range(sh.S)]
-    alpha, z = g.getrandbits(128), g.getrandbits(128)
-    rho_in = [g.getrandbits(128) for _ in range(E - 6 + hb)]
-    t_top = [g.getrandbits(128) for _ in range(E - 6 + hb)]
+    tables = tables if tables is not None else [_template(g, sh) for _ in range(sh.T)]
+    tau = list(tau) if tau is not None else [g.randrange(sh.T) for _ in range(sh.S)]
+    if inner is None:
+        alpha, z = g.getrandbits(128), g.getrandbits(128)
+        rho_in = [g.getrandbits(128) for _ in range(E - 6 + hb)]
+        t_top = [g.getrandbits(128) for _ in range(E - 6 + hb)]
+    else:
+        alpha, z = inner["alpha"], inner["z"]
+        rho_in, t_top = list(inner["x_rest"]), list(inner["y_rest"])
+        assert len(rho_in) == len(t_top) == E - 6 + hb
     zeta_c = [g.getrandbits(128) for _ in range(6)]
     y = zeta_c + t_top
     entries = []
@@ -244,3 +251,88 @@ def test_the_ands_are_the_products_and_the_selects():
 
     sh = RS.Shape(2, 6, 1, 1)
     assert BS.compile(RS.definition(2, 6, 1, 1)).counts["and"] == RS.ands(sh) == 151 * 2187 + 256
+
+
+def _inner_rounds(inner):
+    """An inner rep's coins by round, as many as `rec_algebra.run` draws at the shape."""
+    from verity_flock import rec_algebra as A
+
+    rec = A._dummy_coins(inner)
+    A.run(inner, rec, A.symbolic(inner), A._extras_like(inner))
+    return rec.rounds
+
+
+def test_y_rest_is_the_inner_column_point_in_bit_order():
+    """`inner_points` takes ``y_rest`` from the inner rep's coins through `rec_algebra.run`: the column point the inner claim
+    on z has (its coordinates after the skip's), the lincheck's coins t reversed. An honest rep on those points is accepted,
+    and the same rep with ``y_rest`` in the lincheck's round order is refused (k_log - 6 = ELL - 6 + S_LOG + 1, so every
+    coordinate is read)."""
+    from verity_flock import rec_algebra as A
+
+    sh, inner = RS.Shape(2, 8, 1, 1), A.Shape(22, 10, 2)
+    rounds = _inner_rounds(inner)
+    pts = RS.inner_points(inner, rounds)
+    info = A.run(inner, A.Coins(rounds), A.symbolic(inner), A._extras_like(inner))[1]
+    ts = info["fold"]["ts"]
+    assert pts["y_rest"] == info["claims"][0].x[:inner.k_log - 6] == tuple(ts[::-1]) != tuple(ts)
+    assert pts["x_rest"] == tuple(info["fold"]["rho_in"]) and pts["alpha"] == info["fold"]["alpha"] and pts["z"] == info["z"]
+    coins, msgs, _ = session(sh, 0, inner=pts)
+    assert _ref(sh, msgs, RS.verifier_row(sh, coins)) == [0] * RS.out_words(sh)
+    rounds_order = RS.Coins(**{**coins.__dict__, "y_rest": tuple(ts)})
+    assert "h3" in _hits(sh, _ref(sh, msgs, RS.verifier_row(sh, rounds_order)))
+
+
+def test_tau_is_one_row_that_every_reps_instance_reads():
+    """Two reps of one session over the same tables and τ: each instance holds on `session_rows`, which takes τ once, so the
+    reps' τ rows are one row, read at row 0 by both (`reads`) while every other port reads row r. Different τ per rep can't
+    be expressed: a rep's messages carrying a τ of their own are refused."""
+    sh = RS.Shape(2, 6, 1, 1)
+    g = random.Random(3)
+    tables = [_template(g, sh) for _ in range(sh.T)]
+    tau = [1, 0]
+    reps = [session(sh, seed, tau=tau, tables=tables) for seed in (0, 1)]
+    msgs = [{k: x for k, x in m.items() if k != "tau"} for _, m, _ in reps]
+    vs = [RS.verifier_row(sh, c) for c, _, _ in reps]
+    inst = RS.session_rows(sh, msgs, vs, tau)
+    assert all(RS.sparse_ref(sh, r) == [0] * RS.out_words(sh) for r in inst)
+    assert inst[0]["tau"] == inst[1]["tau"] and inst[0]["h"] != inst[1]["h"]
+    rd = RS.reads(sh, 2)
+    assert rd["tau"] == [0, 0] and all(rd[nm] == [0, 1] for nm, _ in RS.ports(sh) if nm != "tau")
+    with pytest.raises(ValueError, match="one row"):
+        RS.session_rows(sh, [msgs[0], {**msgs[1], "tau": [0, 1]}], vs, tau)
+    with pytest.raises(ValueError, match="tau missing"):
+        RS.session_rows(sh, msgs, vs)
+    assert "tau" not in RS.reads(RS.Shape(2, 6, 1, 0), 2)
+
+
+@pytest.mark.parametrize("sh", [RS.Shape(2, 6, 1, 1), RS.Shape(3, 7, 2, 2)], ids=str)
+def test_the_registered_claim_is_a_row_at_the_coins_point_never_a_public_extra_claim(sh):
+    """`registered_claim`'s point evaluates the stacked table (entries, then planes, then types) to the honest ``claim``; it
+    names row r of the ``claim`` registration and has no value, and `rec_algebra.run` refuses it as an extra claim."""
+    from verity_flock import rec_algebra as A
+
+    coins, msgs, tables = session(sh, 0)
+    rc = RS.registered_claim(sh, coins, 1)
+    flat = [P[p][k] for P in tables for p in range(sh.PP) for k in range(1 << sh.NU)]
+    rest = eq_table(rc.x)
+    assert _xor(mul(mul(rc.skip[i & 63], rest[i >> 6]), x) for i, x in enumerate(flat) if x) == msgs["claim"]
+    assert (rc.row, rc.port, rc.value) == (1, "claim", None)
+    inner = A.Shape(22, 10, 3)
+    with pytest.raises(TypeError, match="registered claim"):
+        A.run(inner, A.Coins(_inner_rounds(A.Shape(22, 10, 3))), A.symbolic(inner), [rc])
+
+
+def test_h_is_the_inner_sessions_h_round_read_at_row_r():
+    """RecSparse's ``h`` is the holo inner session's h round: the same 64 elements, one 512-word row port ``m<i>`` of
+    `InnerRepCheck`, read at row r by both; a wrong h moves RecSparse's H2 (and the algebra's lincheck,
+    `test_rec_residuals`)."""
+    from verity_flock import rec_algebra as A
+    from verity_flock import rec_residuals as RR
+
+    sh, inner = RS.Shape(2, 6, 1, 1), A.Shape(22, 10, 2, holo=True)
+    i = A.h_round(inner)
+    assert A.rounds(inner)[i] == [("h", l) for l in range(64)] and A.rounds(inner)[i - 1] == [("zp", l) for l in range(64)]
+    assert RR.spec(inner)["ports"][i] == [f"m{i}", 64] and dict(RS.ports(sh))["h"] == RR.port_words(64) == 512
+    assert RS.reads(sh, 2)["h"] == [0, 1]
+    coins, msgs, _ = session(sh, 0)
+    assert "h2" in _hits(sh, _ref(sh, {**msgs, "h": [msgs["h"][0] ^ 1] + msgs["h"][1:]}, RS.verifier_row(sh, coins)))
