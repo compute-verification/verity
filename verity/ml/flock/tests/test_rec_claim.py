@@ -341,3 +341,60 @@ def test_the_opening_only_products_against_k2():
     for m, k2, op in zip(range(22, 36), K2, OPENING):
         assert sum(len(r["mul"]) for r in A.structure(A.Shape(m, 6, 2))[0]["res"]) == k2
         assert sum(len(r["mul"]) for r in A.structure(A.Shape(m, 6, 2, opening_only=True))[0]["res"]) == op
+
+
+def _lean_statement(d: Path):
+    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
+                           "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"),
+                           "--program", str(d / "program.json"), "--registered", str(d / "registered.json")],
+                          capture_output=True, text=True, check=False)
+
+
+@pytest.mark.slow
+def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
+    """The registered opening staged as one ``InnerRepCheck_v2`` instance (`rec_residuals.stage_opening`): ``claim0`` and
+    ``claim1`` read rows 0 and 1 of the prover's ``rec-claim``, the very registration RecSparse's ``claim`` port reads row r of
+    (`rec_sparse.registrations`); ``acc0`` and ``acc1`` two rows of a ``rec-acc``, each round's message a one-row
+    registration, ``v`` the verifier's own. The honest opening holds and its unit agrees with the reference; with claim 1 one
+    bit off in the prover's ``rec-claim`` (the verifier's reads file naming the honest root), residual 1 alone fails. When
+    Lean is built, its `statement` accepts the honest files and refuses the forged claim row. About 3 minutes, most of it
+    building the statement (1,839,105 unit rows) twice."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.ml.commitments import hm96
+    from verity_flock.rec_outer import CLAIM_VALUE
+
+    s = sess
+    program = "ab" * 64
+    V, info = A.verifier_rows(OPEN, s["rounds"], s["points"], [])
+    Wt = A.witness(OPEN, s["proof"], s["rounds"], s["points"], acc0=(0x1234, 0x5678), info=info, claims=s["values"],
+                   cons=_cons(s["cons"]))
+    rows = RR.opening_rows(OPEN, Wt)
+    salts = [hm96.SHA512.fresh_salt() for _ in range(2)]
+    claim = RG.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], rows["claim1"]], salts)
+    inst = RS.session_rows(SPARSE, [{k: x for k, x in m.items() if k != "tau"} for _, m, _ in s["reps"]],
+                           [RS.verifier_row(SPARSE, c) for c, _, _ in s["reps"]], s["tau"])
+    assert [r["claim"] for r in inst] == [rows["claim0"], rows["claim1"]]
+    assert RS.registrations(SPARSE, program, inst, {"claim": salts})["claim"].entry() == claim.entry()
+    acc = RG.Registered.commit(program, "rec-acc", [rows["acc0"], rows["acc1"]])
+    regs = {f"m{i}": RG.Registered.commit(program, f"rec-opening-c{i}", [rows[f"m{i}"]]) for i in range(len(A.rounds(OPEN)))}
+    [h] = RR.stage_opening(OPEN, {**regs, "claim": claim}, (acc, 0, 1), V, tmp_path / "honest")
+    assert h["holds"] == [True] and h["unit_agrees"] == [True] and h["nonzero_residuals"] == [[]]
+    assert h["products"] == OPENING[0] and h["residuals"] == 5 and h["unit_rows"] == 1_839_105
+    d = tmp_path / "honest" / "p0"
+    reads = json.loads((d / "registered.json").read_text())["ports"]
+    assert reads["claim0"]["reads"] == [0] and reads["claim1"]["reads"] == [1]
+    assert reads["claim0"]["root"] == reads["claim1"]["root"] == claim.root.hex() and reads["claim0"]["value"] == "rec-claim"
+    assert reads["acc0"]["reads"] == [0] and reads["acc1"]["reads"] == [1]
+    assert "rec-opening/m22-c2-p0" in (d / "circuit.txt").read_text()
+    bad = RG.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], [rows["claim1"][0] ^ 1] + rows["claim1"][1:]], salts)
+    [f] = RR.stage_opening(OPEN, {**regs, "claim": bad}, (acc, 0, 1), V, tmp_path / "forged", evaluate=False,
+                           own={"claim0": claim.entry(), "claim1": claim.entry()})
+    assert f["holds"] == [False] and f["nonzero_residuals"] == [[1]]
+    if not BIN.exists():
+        pytest.skip("the Lean verifier is not built")
+    p = _lean_statement(d)
+    assert p.returncode == 0, p.stdout + p.stderr
+    line = json.loads(p.stdout.splitlines()[0])
+    assert line["registered"]["claim1"] == {"value": "rec-claim", "root": claim.root.hex()}
+    p = _lean_statement(tmp_path / "forged" / "p0")
+    assert p.returncode == 1 and "claim" in p.stdout, p.stdout + p.stderr
