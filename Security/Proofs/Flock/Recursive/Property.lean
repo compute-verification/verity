@@ -138,6 +138,11 @@ abbrev hiddenAt {Ω H : Type} (st : Flock.Stmt) (rt : Flock.Registered.Port)
     (stmt : (Fin rt.leaves → ByteArray) → Ω → H) {Reg : Type} : Reg → Ω → H :=
   fun _ ω => stmtAt rt stmt (Flock.Registered.rowsOf st.c st.pub rt) ω
 
+/-- **The law of a finite space of draws with an element**: `Law` at `Ω` and the units each draw takes, nonempty by
+the element. Every law is one (`Classical.inhabited_of_nonempty`); (i) binds the space, its element and the draw rather
+than a law, whose `nonempty` field would be a hypothesis of the statement. -/
+abbrev drawLaw {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω → Finset (Fin n)) : Law n := ⟨Ω, draw⟩
+
 /-- **The recursive audit, as the verifier of record runs it.**
 
 (i) For every inner statement `st`, with its class, regions and schedule `execClassAt st`, and every prover `σ` of the
@@ -179,19 +184,20 @@ it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `Ses
 `hz`, `hR`, `hS`). -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
-    {n : ℕ} {L : Law n} {Reg Cm : Type} {Reg' Reg₂ : Type}
+    -- the registration's draws, a finite space with an element, and the units each draws
+    {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the inner statement; the compiled table's class, regions and schedule are `execClassAt st`
     (st : Flock.Stmt)
     -- V*'s statements over the class, each drawing all its units, and V*'s sessions at each history and
     -- registration `R₂`, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
-    (zr : Reg → L.Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
+    (zr : Reg → (drawLaw draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
@@ -203,7 +209,7 @@ def RecursiveAudit : Prop :=
       PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (innerAt T CT st).Msg)
     -- the registration's root, and the private circuit's statement by the commit strings of its rows
-    (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → L.Ω → Hidden (execClassAt st).cls)
+    (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → (drawLaw draw).Ω → Hidden (execClassAt st).cls)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes Vs)
     -- the registered commit strings, each opening `rt` at its row through the developer's path
@@ -218,7 +224,7 @@ def RecursiveAudit : Prop :=
       Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
     prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧ VerifiesVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
-        (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+        (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     (∃ r < rt.leaves, Flock.Registered.rowsOf st.c st.pub rt r ≠ p r ∧
       Flock.Registered.Collides (Flock.Registered.bcPair rt r (Flock.Registered.rowsOf st.c st.pub rt r)
         (Flock.Registered.pathOf st.pub rt r) (p r) (path₀ r))) ∨
@@ -230,7 +236,7 @@ def RecursiveAudit : Prop :=
           (execClassAt st).regs (execClassAt st).sch) ∨
       prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧ VerifiesVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
-          (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+          (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
               (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +

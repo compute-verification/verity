@@ -24,9 +24,10 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
   (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
 * the raw event bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
 
-Still taken by the property, each to become a lemma at the executable or a refusal of the verifier: the law's field
-`L.nonempty`, and in (ii) the honest witnesses (`honest`) and the obligations on the firewall's code and V*'s staging
-(`FirewallSends`, `SessionsPublic`, `SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`).
+(i) is at the law of the registration's draws (`drawLaw`), nonempty by the element its space comes with. Still taken by
+the property, each to become a lemma at the executable or a refusal of the verifier: in (ii) the honest witnesses
+(`honest`) and the obligations on the firewall's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
+`SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`).
 Open in the proof: that each accepted session loads V*'s statement (`loads_of_verifies`), until the verifier checks it.
 -/
 
@@ -58,7 +59,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ st Vs zr hCust dg N σ wmsg Sk cmt msg rt stmt hA3 p path₀ hreg
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust dg N σ wmsg Sk cmt msg rt stmt hA3 p path₀ hreg
     k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
