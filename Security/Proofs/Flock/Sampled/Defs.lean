@@ -22,8 +22,9 @@ slot is bound to its unit's committed record by its opening of the root.
   the inner shape V* is staged over for each (`Menu.vstar`, Lean's `VStar.statements`), each shape's type bound and the
   padded sessions of an audit of `k` draws (`Menu.padded`); the obligations that V* stages the menu and that the live
   verifier's range check accepts it (`Menu.rangeCheck`); a placement of types at the menu's shapes within its bounds.
-* `Trace`, `Types`, `wrong`: the committed trace, partial (it holds nothing at a position no record opens); each type's
-  relation and its matrix's nonzeros; the units wrong in a trace.
+* `Trace`, `Types`, `Types.FitsIn`, `wrong`: the committed trace, partial (it holds nothing at a position no record
+  opens); each type's relation, its matrix's nonzeros and its unit's template instances; a type within a shape's nonzero
+  bound and unit positions; the units wrong in a trace.
 * `Batching`, `Hidden`, `Hidden.honest`: the prover's sessions, with their slots' hidden types; those with each slot's
   opening; and the honest prover's openings.
 * `drawOrder`, `CoverCheck`, `Bound`, `Covers`: the drawn units in order; the outer proof's coverage check; each held
@@ -44,10 +45,14 @@ open scoped ENNReal
 /-! ## The menu -/
 
 /-- A session's shape, all the auditor sees of it: its slots (F6's `B`: the units a session proves, each slot holding any
-unit within the nonzero bound) and its nonzero bound (F6's `Z`: the size each matrix of its type table is padded to). -/
+unit within the bounds), its nonzero bound (F6's `Z`: the size each matrix of its type table is padded to), and the unit
+positions each slot has (U_σ's, F6's `instances_max`). Every slot of the session has all its positions, whatever its type:
+its unit's template instances fill the first of them and dummy copies of the unit, satisfiable and wired to nothing, the
+rest. So the layout V* reads per slot is the menu entry's alone, and public. -/
 structure Shape where
   slots : ℕ
   nnz : ℕ
+  positions : ℕ
   deriving DecidableEq, Repr
 
 /-- The menu, public and fixed per model, never per audit. `shapes`: the shapes a session may take; `inner s`: the inner
@@ -98,20 +103,28 @@ def Menu.InRange (M : Menu) : Prop := ∀ s ∈ M.shapes, M.rangeCheck s = .ok (
 a position no record opens. -/
 abbrev Trace (N : ℕ) (T V : Type) := Fin N → Option (T × V)
 
-/-- The unit types: each one's relation on a unit's values, and its matrix's nonzero count. -/
+/-- The unit types: each one's relation on a unit's values, its matrix's nonzero count, and the template instances a unit
+of it fills (F6's `inst`). -/
 structure Types (T V : Type) where
   holds : T → V → Prop
   nnz : T → ℕ
+  instances : T → ℕ
+
+/-- **A type fits a shape**: its matrix within the shape's nonzero bound, and its unit's instances within the shape's unit
+positions, the rest of which hold dummy copies of the unit. -/
+structure Types.FitsIn {T V : Type} (Ty : Types T V) (t : T) (s : Shape) : Prop where
+  nnz : Ty.nnz t ≤ s.nnz
+  instances : Ty.instances t ≤ s.positions
 
 open Classical in
 /-- The units wrong in a trace: those with no record, and those whose values their type's relation refuses. -/
 noncomputable def wrong {N : ℕ} {T V : Type} (Ty : Types T V) (X : Trace N T V) : Finset (Fin N) :=
   Finset.univ.filter fun i => ∀ t v, X i = some (t, v) → ¬ Ty.holds t v
 
-/-- **A placement within the menu's bounds** of the types `U`: each placed at a shape on the menu whose nonzero bound it
-fits, and at most `M.types s` of them at each shape `s`. The placement is hidden; only the bounds are public. -/
+/-- **A placement within the menu's bounds** of the types `U`: each placed at a shape on the menu it fits, and at most
+`M.types s` of them at each shape `s`. The placement is hidden; only the bounds are public. -/
 def Menu.Within {T V : Type} (M : Menu) (Ty : Types T V) (U : Finset T) (place : T → Shape) : Prop :=
-  (∀ t ∈ U, place t ∈ M.shapes ∧ Ty.nnz t ≤ (place t).nnz) ∧ ∀ s, (U.filter fun t => place t = s).card ≤ M.types s
+  (∀ t ∈ U, place t ∈ M.shapes ∧ Ty.FitsIn t (place t)) ∧ ∀ s, (U.filter fun t => place t = s).card ≤ M.types s
 
 /-! ## The prover's batching -/
 
@@ -234,13 +247,14 @@ def SlotBreak {N : ℕ} {T V : Type} (C : Commit N T V) (X : Trace N T V) (path�
 /-! ## The audit -/
 
 /-- **The statement the sessions prove**, about what they hold hidden: the coverage check against the draw `S`, each held
-slot's opening of the root, each held slot's type within its shape's nonzero bound, and each held slot's values in its
-type's relation (`holds`: the slot check, candidate 3, the bit-committed sumcheck at w = 1; kept abstract here). -/
+slot's opening of the root, each held slot's type fitting its shape (`Types.FitsIn`), and each held slot's values in its
+type's relation (`holds`: the slot check, candidate 3, the bit-committed sumcheck at w = 1, over the shape's unit
+positions with dummy copies in those the type doesn't fill; kept abstract here). -/
 structure Proves {N : ℕ} {T V : Type} (Ty : Types T V) (C : Commit N T V) (S : Finset (Fin N)) (h : Hidden N T V) :
     Prop where
   cover : CoverCheck S h.β
   opens : C.SlotOpens h
-  fits : ∀ p i, h.β.held p = some i → Ty.nnz (h.β.slotTyp p) ≤ (h.β.shape p.1).nnz
+  fits : ∀ p i, h.β.held p = some i → Ty.FitsIn (h.β.slotTyp p) (h.β.shape p.1)
   holds : ∀ p i, h.β.held p = some i → Ty.holds (h.β.slotTyp p) (h.β.slotVal p)
 
 /-- **The auditor's verdict** on an outcome at the draw `S`: the sessions' shapes are the menu's padded sessions for `S`'s
