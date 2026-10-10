@@ -270,7 +270,7 @@ Never print a secret's value.
 - `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
   (`tools/agent-guard/shell_hook.py`).
 - A secret is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env`
-  on the VM.
+  on the VM. While any variable holds a multi-line value, the hook refuses every command and names the variable.
 
 ## Where writing goes
 
