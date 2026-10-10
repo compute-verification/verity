@@ -298,6 +298,24 @@ theorem u4Passes_own (hown : F.HOwn) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ
     F.U4Passes F.own dj d :=
   ⟨hd, hlaw, fun j => checkFull_of_msgPorts (hd j) (fun _ hp => isMsg_ownOf hp) (hown R ω t R₂ j) (hU4 j)⟩
 
+/-- Obligation: discharged by `AcceptsZKR` running `Registered.checkFull` on the session's reads file and draw
+(`cursor/registered-check-lib-95d4`). **U4 passes at every accepted outer proof**: at every accepted outer proof, the
+verifier's U4 (`checkFull`, `Registered.lean:205-211`) passes on each session's reads file and the draw `dj`. -/
+def U4Accepted (dg : ByteArray → ByteArray) (N k Rw : ℕ) (dj : Fin F.stmts.size → Lean.Json) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j,
+    Registered.checkFull (some (F.zs R ω t R₂ j).own) (some (dj j)) = .ok ()
+
+/-- **U4 at `own` from an accepted outer proof** (`U4Accepted`, `u4Passes_own`). -/
+theorem u4Passes_of_accepted (hown : F.HOwn) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {dj : Fin F.stmts.size → Lean.Json} {d : Fin F.stmts.size → Flock.Draw.UnitDraw}
+    (hd : ∀ j, Flock.Draw.UnitDraw.ofJson (dj j) = .ok (d j))
+    (hlaw : ∀ j, (d j).law = .stratified (F.Vs j).law.Kd (Array.ofFn (F.Vs j).law.St))
+    (hU4 : F.U4Accepted dg N k Rw dj) {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
+    {τ : (j : Fin F.stmts.size) → Strategy ((F.zs R ω t R₂ j).game dg N)}
+    {o : (j : Fin F.stmts.size) → Reg' × Finset (Fin (F.Vs j).nv) × Exec.Transcript}
+    (ha : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) : F.U4Passes F.own dj d :=
+  F.u4Passes_own hown R ω t R₂ hd hlaw (hU4 R ω t R₂ τ o ha)
+
 /-- **`VBridgeRead` at `own`, `sel` and `bc`**: `vbridgeRead_of_family` where the family's commit strings are
 `skOf`'s at `own` and `sel`, its digests `cmtOf`'s at `bc cOf`, and its messages `dec`'s; `HCommits` from `PubCommits`
 (`hCommits_of`), `VDecodesRead` from `dec` (`vDecodesRead_of`), and `VFullRead` from the verifier's U4 at one history
