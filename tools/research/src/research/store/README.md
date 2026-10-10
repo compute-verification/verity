@@ -232,10 +232,6 @@ themselves; `env.source_identity(conds)` gives the nested `source` block used by
 `git archive` has no `.git`: the control side passes the commit/tree/dirty it knew (`research run --source-identity`, added by
 `--on --source`) and the machine fills only what git could not tell it. `rt.torch` / `rt.triton` are the runner interpreter's
 distributions (`importlib.metadata`, never imported); a workload in another venv may differ.
-A dirty source's bytes go into the run dir as `source-dirty.tar` (`env.DIRTY_CAPTURE`: the diff against HEAD and each untracked,
-unignored file, the exact bytes `source.dirty_digest` hashes), named in job.json's `store.dirty_capture` with its size and sha256,
-and custody always uploads it with the run's own files: a source tree on the machine is never a run's only copy of its source. A
-`too-large` digest has no capture, and its tree stays the run's source (`evict.evict_src`, condition 3).
 
 ### 6.4 Derivation id and reuse key
 
