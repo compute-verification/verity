@@ -72,7 +72,7 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray �
 shape `i`, `--rec-part j`, the bindings `bind j` and the shared rows `rows` (`LiveAcceptsZKV`). -/
 def AcceptsRV (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     (zr : (j : Fin S) → (Vs j).OuterR Reg') (b : VRec Vs Reg' dg N) : Prop :=
-  ∀ j, LiveAcceptsZKV i j (bind j) rows (zr j).I (zr j).own (b j).2
+  ∀ j : Fin S, LiveAcceptsZKV i j (bind j) rows (zr j).I (zr j).own (b j).2
 
 /-- **Every session accepts as V*'s statement of its index**, at the registration the outcome records. -/
 def AcceptsVRV (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))

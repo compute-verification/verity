@@ -106,7 +106,8 @@ theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} 
     (hp : ∀ b, p b → AcceptsRV i bind rows zr b ∧ ∀ j, ScopeZR (zr j).I) (s : Strategy (sessionsR zr dg N)) :
     prob p (sessionsR zr dg N) s = 0 := by
   by_cases hck : ScopeZR (zr j₀).I
-  · have hP : ∀ o, LiveAcceptsZKV i j₀ (bind j₀) rows (zr j₀).I (zr j₀).own o →
+  · have hP : ∀ o : Reg' × Finset (Fin (Vs j₀).nv) × Exec.Transcript,
+        LiveAcceptsZKV i j₀ (bind j₀) rows (zr j₀).I (zr j₀).own o →
         LiveAcceptsZKR (zr j₀).I (zr j₀).own o ∧ (Vs j₀).Loads (zr j₀).I :=
       fun o h => ⟨h.1, loads_of_verifiesV hob j₀ (zr j₀) o.2.2 h hck (hT j₀)⟩
     refine le_antisymm (((prob_mono (q := fun b : VRec Vs Reg' dg N =>
