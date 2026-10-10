@@ -25,6 +25,9 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
 * `VStarParses` (an obligation, open until gap 4 builds `Vs j` from the partition): at the inner shape `i`, V*'s
   statement `j`'s file under `bind j` parses, at V*'s constant tags and no lookup tables, to `Vs j`'s circuit, and
   `Vs j` has its instances.
+* `TagsFound` (an obligation on our code): the inputs' tags are the statement their name names (`Tags.find?`), as
+  `verifyCmd` forms them; `find?_circuit`: `Tags.circuit`'s name names `Tags.circuit`. With refusal (5)'s name
+  equation they give V*'s tags.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
 * `checkFile_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it passes.
 * `population_of_setupH`: the set-up statement's population (`RecVStar.population`) is the size of the public file
@@ -100,6 +103,15 @@ def VStarParses {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S
     ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) = .ok cf →
     HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf cf) 1) cf
       [] = .ok (Vs j).c ∧ (Vs j).nv = s.instances
+
+/-- Obligation: a fact about our code, not a premise. **The inputs' tags are the statement their name names**
+(`Tags.find?`): `verifyCmd` sets every statement up at `stmtTags`, the tags `Tags.find?` returns for `--statement`, so
+every input the verifier forms carries the tags of its own name. -/
+def TagsFound (I : Inputs) : Prop :=
+  Flock.Tags.find? I.tags.name = some I.tags
+
+/-- **V*'s statement name names V*'s tags**: `Tags.find?` at `Tags.circuit`'s name, evaluated. -/
+theorem find?_circuit : Flock.Tags.find? Flock.Tags.circuit.name = some Flock.Tags.circuit := rfl
 
 /-- **A loop that returns early or runs through**, over a state whose first component is the early return: where each
 step from a state with no return either returns a value (`.done` with `some (some y)`) or, at a `k` where `P k` holds,

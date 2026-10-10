@@ -166,9 +166,9 @@ assumed of what the inputs parse to), their records' custody `_hCust`, the verif
 (the inner shape `ish`, V*'s bindings `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at
 which V*'s statements' files parse to `Vs` (`VStarParses`, an obligation until gap 4), the messages V*'s layers hold
 and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`, as in `RecursiveSound`), and the registration's root
-`rt`. Every session's inputs carry V*'s tags (`_hT`): not a premise, but the fact one verifier check will supply, since
-refusal (5) compares the tags' names only. Where every index has a session that types (`Typed zr`: its inputs pass the statement check, parse to V*'s
-circuit, have V*'s units and set up at some draw), `custodied zr _hCust h` are the typed sessions (`zsOf`: each
+`rt`. Every session's inputs carry the tags their name names (`TagsFound`, `_hF`): an obligation on our code, not a
+premise, which with refusal (5)'s name equation makes them V*'s. Where every index has a session that types
+(`Typed zr`: its inputs pass the statement check, parse to V*'s circuit, have V*'s units and set up at some draw), `custodied zr _hCust h` are the typed sessions (`zsOf`: each
 session that types, and at one that doesn't, a session of its index that types, refusing everything) and
 `transported zr _hCust h σ` is `σ` against them (`recT`). `stmt q ω` is the hidden statement at the draw `ω` of the
 private circuit whose `rt.leaves` rows the commit strings `q` commit to (`stmtAt` reads it at a list's first
@@ -217,9 +217,8 @@ def RecursiveAudit : Prop :=
     (rows : Option (Array Flock.Registered.Port))
     -- obligation (gap 4): V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
     (_hob : VStarParses Flock.Tags.circuit ish bind Vs)
-    -- V*'s tags at every session: not a premise but the fact one verifier check will supply, since refusal (5)
-    -- compares the tags' names only
-    (_hT : ∀ R ω t R₂ j, (zr R ω t R₂ j).I.tags = Flock.Tags.circuit)
+    -- obligation (our code): every session's inputs carry the tags their name names, as `verifyCmd` forms them
+    (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
     (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))

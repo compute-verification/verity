@@ -13,7 +13,7 @@ premises are `Proofs.Flock.Recursive.Premises`'.
 
 In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`, `Proofs.Flock.Recursive.Loads`):
 * where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
-  index loads it (`loads_of_verifiesV`, at the obligation `VStarParses` and V*'s tags) and so types
+  index loads it (`loads_of_verifiesV`, at the obligations `VStarParses` and `TagsFound`) and so types
   (`typable_of_accepts`), so at that index none verifies (`prob_sessionsR_untypable`);
 * at a statement Lean's verifier refuses, or whose description it refuses, the event is empty (`AcceptsStmt` and
   `AcceptsDescription` are its first conjuncts);
@@ -28,8 +28,8 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
 the property, each to become a lemma at the executable or a refusal of the verifier: in (ii) the honest witnesses
 (`honest`) and the obligations on the firewall's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
 `SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`); in (i) the obligation that V*'s statements'
-files parse to `Vs` (`VStarParses`, until gap 4), and V*'s tags at every session (`_hT`), the fact one verifier check
-will supply (refusal (5) compares the tags' names only).
+files parse to `Vs` (`VStarParses`, until gap 4), and the obligation on our code that every session's inputs carry the
+tags their name names (`TagsFound`, `_hF`), which with refusal (5)'s name equation makes them V*'s (`find?_circuit`).
 -/
 
 namespace Flock.SecurityProofs
@@ -60,7 +60,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
-  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust ish bind rows hob htags dg N σ wmsg Sk cmt msg rt
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt msg rt
     stmt hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
@@ -69,7 +69,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
     obtain ⟨j₀, hj₀⟩ := hT
     refine prob_recGame_zero _ σ fun ω t s => ?_
     rw [prob_outerVR]
-    exact prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) (htags σ.1 ω t s.1) j₀
+    exact prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) (hF σ.1 ω t s.1) j₀
       (hj₀ (σ.1, ω, t, s.1)) _ (fun b hb => hb.2.2.1) _
   by_cases hacc : AcceptsStmt st
   swap
@@ -101,7 +101,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
-  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT htags σ _
+  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT hF σ _
       (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.stmtAt rt stmt p o.2.1))

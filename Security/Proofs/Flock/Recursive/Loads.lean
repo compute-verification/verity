@@ -16,8 +16,8 @@ equation:
 * `loads_of_check`, `loads_of_verifiesV`: at V*'s tags and no lookup tables (`zkTags_vstar`), a session whose file
   parses to `Q`'s circuit and whose population is `Q`'s loads `Q`; a session `AcceptsZKV` accepts as statement `j` under
   `bind j` has statement `j`'s file and no lookup tables (`vstarFile_of_accepts`), which parses to `Vs j`'s circuit
-  (`VStarParses`, an obligation until gap 4). The verifier compares the tags by name only, so V*'s tags are still taken:
-  the fact one verifier check will supply.
+  (`VStarParses`, an obligation until gap 4). The verifier compares the tags by name only; the inputs' tags are the
+  statement their name names (`TagsFound`, an obligation on our code), so they are V*'s (`find?_circuit`).
 * `typable_of_accepts`: a session that accepts and loads `Q` types (`ZkOuterR.Typable`): `Loads` gives its circuit and
   population, and the record's draw sets it up (`setupZ_of_verifiesZK`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
@@ -61,15 +61,18 @@ theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.Oute
 /-- **A session the verifier of record accepts as V*'s statement `j`, under the family's bindings for it, loads
 `Vs j`**, where its inputs pass the statement check, at V*'s tags: `--rec-part j` makes the session's statement the
 `j`th of the inner shape's, `--rec-bindings` makes its file that statement's under `bind j`, and the verifier refuses
-lookup tables (`vstarFile_of_accepts`); then `loads_of_check` at the obligation.
-
-`hT` is not a premise: it is the fact one verifier check will supply. Refusal (5) compares the tags' names only
-(`tags.name != Tags.circuit.name`), and the model's inputs may carry any tags of that name. -/
-theorem loads_of_verifiesV {t₀ : Flock.Tags} {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
-    {Vs : Fin S → VStmt} (hob : VStarParses t₀ i bind Vs) (j : Fin S) {Reg' : Type} (x : (Vs j).OuterR Reg')
+lookup tables (`vstarFile_of_accepts`); then `loads_of_check` at the obligation. Refusal (5) compares the tags' names
+only (`tags.name != Tags.circuit.name`); the inputs' tags are the statement their name names (`TagsFound`, an
+obligation on our code), and `Tags.circuit`'s name names `Tags.circuit` (`find?_circuit`), so they are V*'s. -/
+theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings} {Vs : Fin S → VStmt}
+    (hob : VStarParses Flock.Tags.circuit i bind Vs) (j : Fin S) {Reg' : Type} (x : (Vs j).OuterR Reg')
     (t : Exec.Transcript) {rows : Option (Array Flock.Registered.Port)} (hacc : AcceptsZKV i j (bind j) rows x.I x.own t)
-    (hck : ScopeZR x.I) (hT : x.I.tags = t₀) : (Vs j).Loads x.I := by
-  obtain ⟨-, htab, ss, s, hss, hj, -, hn, hf, -⟩ := vstarFile_of_accepts x t hacc hck
+    (hck : ScopeZR x.I) (hF : TagsFound x.I) : (Vs j).Loads x.I := by
+  obtain ⟨htag, htab, ss, s, hss, hj, -, hn, hf, -⟩ := vstarFile_of_accepts x t hacc hck
+  have hT : x.I.tags = Flock.Tags.circuit := by
+    have h : Flock.Tags.find? x.I.tags.name = some x.I.tags := hF
+    rw [htag, find?_circuit] at h
+    exact (Option.some.inj h).symm
   obtain ⟨hp, hnv⟩ := hob j ss s _ hss hj hf
   exact loads_of_check x hck hT htab hp (hn.trans hnv.symm)
 
@@ -95,21 +98,22 @@ theorem prob_game_untypable {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hRec 
     (zero_le ..)
 
 /-- **Where a session of index `j₀` never types, the raw sessions' event is empty**, for an event at which every
-session accepts as V*'s statement of its index and passes the statement check, at V*'s tags: the event is `j₀`'s
-acceptance, at which `j₀`'s session loads `Vs j₀` (`loads_of_verifiesV`), which `prob_game_untypable` empties at each of
-the prover's names for `j₀` (`prob_seqC_exists_le`). -/
+session accepts as V*'s statement of its index and passes the statement check, where every session's inputs carry the
+tags their name names (`TagsFound`): the event is `j₀`'s acceptance, at which `j₀`'s session loads `Vs j₀`
+(`loads_of_verifiesV`), which `prob_game_untypable` empties at each of the prover's names for `j₀`
+(`prob_seqC_exists_le`). -/
 theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
-    {t₀ : Flock.Tags} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
-    {rows : Option (Array Flock.Registered.Port)} (hob : VStarParses t₀ i bind Vs)
+    {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)} (hob : VStarParses Flock.Tags.circuit i bind Vs)
     (zr : (j : Fin S) → (Vs j).OuterR Reg') (hRec : ∀ j, RecordsLiveZK (zr j).I (zr j).dj (zr j).wr)
-    (hT : ∀ j, (zr j).I.tags = t₀) (j₀ : Fin S) (hx : ¬ (zr j₀).Typable) (p : VRec Vs Reg' dg N → Prop)
+    (hF : ∀ j, TagsFound (zr j).I) (j₀ : Fin S) (hx : ¬ (zr j₀).Typable) (p : VRec Vs Reg' dg N → Prop)
     (hp : ∀ b, p b → AcceptsRV i bind rows zr b ∧ ∀ j, ScopeZR (zr j).I) (s : Strategy (sessionsR zr dg N)) :
     prob p (sessionsR zr dg N) s = 0 := by
   by_cases hck : ScopeZR (zr j₀).I
   · have hP : ∀ o : Reg' × Finset (Fin (Vs j₀).nv) × Exec.Transcript,
         LiveAcceptsZKV i j₀ (bind j₀) rows (zr j₀).I (zr j₀).own o →
         LiveAcceptsZKR (zr j₀).I (zr j₀).own o ∧ (Vs j₀).Loads (zr j₀).I :=
-      fun o h => ⟨h.1, loads_of_verifiesV hob j₀ (zr j₀) o.2.2 h hck (hT j₀)⟩
+      fun o h => ⟨h.1, loads_of_verifiesV hob j₀ (zr j₀) o.2.2 h hck (hF j₀)⟩
     refine le_antisymm (((prob_mono (q := fun b : VRec Vs Reg' dg N =>
         ∃ j, j = j₀ ∧ LiveAcceptsZKV i j (bind j) rows (zr j).I (zr j).own (b j).2)
         (fun b hb => ⟨j₀, rfl, (hp b hb).1 j₀⟩) _ _).trans
@@ -126,16 +130,16 @@ theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} 
       (prob_false _ _).le) (zero_le ..)
 
 /-- **The raw recursive audit's event is no likelier than the typed one's**, at the transported strategy (`recT`), when
-the event has every session accept as V*'s statement of its index and pass the statement check (`hp`), at V*'s tags
-(`hT`), and gives `q` where every session types (`hq`): where every session at a registration types, the typed sessions
-are the raw ones (`sessions_zsOf`, `prob_sessT`); where one doesn't, the raw event is empty there
-(`prob_sessionsR_untypable`). -/
+the event has every session accept as V*'s statement of its index and pass the statement check (`hp`), where every
+session's inputs carry the tags their name names (`hF`), and gives `q` where every session types (`hq`): where every
+session at a registration types, the typed sessions are the raw ones (`sessions_zsOf`, `prob_sessT`); where one
+doesn't, the raw event is empty there (`prob_sessionsR_untypable`). -/
 theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
-    {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {t₀ : Flock.Tags} {i : RecVStar.Inner}
-    {bind : Fin S → VStar.Bindings} {rows : Option (Array Flock.Registered.Port)} (hob : VStarParses t₀ i bind Vs)
+    {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)} (hob : VStarParses Flock.Tags.circuit i bind Vs)
     (zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
     (hRec : ∀ R ω t R₂ j, RecordsLiveZK (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (zr R ω t R₂ j).wr) (h : Typed zr)
-    (hT : ∀ R ω t R₂ j, (zr R ω t R₂ j).I.tags = t₀)
+    (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerVR (zr R ω t) dg N))
     (p q : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Prop)
     (hp : ∀ o, p o → AcceptsVRV i bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
@@ -150,7 +154,7 @@ theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg :
     exact prob_mono (fun b hb => hq (σ.1, ω, t, (s.1, b)) hall hb) _ _
   · push Not at hall
     obtain ⟨j₀, hj₀⟩ := hall
-    rw [prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => hRec σ.1 ω t s.1 j) (hT σ.1 ω t s.1) j₀ hj₀ _
+    rw [prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => hRec σ.1 ω t s.1 j) (hF σ.1 ω t s.1) j₀ hj₀ _
       (fun b hb => hp (σ.1, ω, t, (s.1, b)) hb) _]
     exact zero_le ..
 
