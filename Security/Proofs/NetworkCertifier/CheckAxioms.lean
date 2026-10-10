@@ -4,7 +4,7 @@ import Models.NetworkCertifier.Guarantees
 import Proofs.NetworkCertifier
 open NetTiming
 
--- The 35 statements' proofs (four of them `lean-audit.json`'s `guarantees`), then the 16 witnesses.
+-- The 35 statements' proofs (22 of them `lean-audit.json`'s `guarantees`, 13 lemmas), then the 16 witnesses.
 #print axioms SecurityProofs.CardFree
 #print axioms SecurityProofs.CardLeftPacked
 #print axioms SecurityProofs.FillInjective
