@@ -6,15 +6,15 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
 * `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
   `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; like the gate's, its outer session was proved before #1677. The inner description is not registered (no staging runs `inner_registered register`), and V*'s
-  sessions hide their outputs where `ZkOuterR.hTags` (`TagsOk`) takes public ones, so their shared-row public file fails
-  `Typable`'s `ScopeZ`.
+  `verity/flock-circuit`; like the gate's, its outer session was proved before #1677. The inner description is not
+  registered (no staging runs `inner_registered register`), and V*'s sessions hide their outputs where `ZkOuterR.hTags`
+  (`TagsOk`) takes public ones, so their shared-row public file fails `Typable`'s `ScopeZ`.
 * `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): art:743978d1…, 85 at K = 4096, N = 2,
   restaged with the inner program by `r20261010-081332-4738`; the fixture holds the files these tests read, the circuits
-  and V*'s programs xz-compressed, and each is checked against the art's own listing once decompressed. Lean's verifier builds the inner statement from its own
-  partition object and program (`AcceptsPublic`), V*'s six statements are the ones `outerStatementsAt` counts, each
-  session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit, and the rate is below 1 at
-  `k = 2^21`. The sessions were proved as `verity/flock-circuit` before #1677 named the OS's masks in its `--zk` identity,
+  and V*'s programs xz-compressed, and each is checked against the art's own listing once decompressed. Lean's verifier
+  builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s six statements are the
+  ones `outerStatementsAt` counts, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every
+  unit, and the rate is below 1 at `k = 2^21`. The sessions were proved as `verity/flock-circuit` before #1677 named the OS's masks in its `--zk` identity,
   so the verifier of record refuses them now (S2/R7) and accepts them as `verity/flock-circuit@cec3e347`, the statement
   they were proved as. The event's last conjunct is shown in its executable form only: the honest outputs are the
   circuit's, and a public file whose one output row is committed one bit off still sets up. That is the executable fact
@@ -22,8 +22,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   not being the circuit's output is up to a SHA-512 second preimage for that row.
 
 Each inner setup reads the 567 MB inner circuit (about a minute and 3 GB), the gate's files decompress to 2.3 GB, and its
-sessions take up to about 13 minutes each, run at once, so the module is slow; it catches what reading the theorems can't: a premise or event conjunct
-that no honest session meets."""
+sessions take up to about 13 minutes each, run at once, so the module is slow; it catches what reading the theorems
+can't: a premise or event conjunct that no honest session meets."""
 from __future__ import annotations
 
 import concurrent.futures as cf
@@ -283,7 +283,7 @@ def f1(f1_gate, f1_inner, tmp_path_factory) -> dict:
     """Every other `flock-witness` run the gate's tests read, at once: the inner statement at the cheater's public file, and
     each of V*'s sessions as `verity/flock-circuit` with the verifier's own V* inputs (the inner shape `accepts_stmt` prints,
     which is `rec-inner`'s; `--rec-part` its unit's index in the printed statements; `rec_bindings` of its partition
-    object and program; the family's shared rows, the algebra parts' registered row ports) and as `F1_PROVED`."""
+    object and program; the family's shared rows, the algebra parts' registered row ports) and as `PROVED`."""
     g, d = f1_gate, tmp_path_factory.mktemp("f1-runs")
     shape = d / "inner.json"
     shape.write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
@@ -308,7 +308,7 @@ def f1(f1_gate, f1_inner, tmp_path_factory) -> dict:
         jobs[part, STATEMENT] = functools.partial(
             _witness, "session", "--statement", STATEMENT, *files, "--rec-inner", str(shape), "--rec-part",
             str(names.index(_unit(g, part))), "--rec-bindings", str(b), "--rec-rows", str(rows), *sess)
-        jobs[part, F1_PROVED] = functools.partial(_witness, "session", "--statement", F1_PROVED, *files, *sess)
+        jobs[part, PROVED] = functools.partial(_witness, "session", "--statement", PROVED, *files, *sess)
     with cf.ThreadPoolExecutor(len(jobs)) as ex:
         futs = {k: ex.submit(fn) for k, fn in jobs.items()}
         return {k: f.result() for k, f in futs.items()} | {"cheat-file": cheat}
@@ -352,13 +352,13 @@ def test_f1_the_session_meets(f1, part):
 @pytest.mark.parametrize("part", F1_PARTS)
 def test_f1_the_session_was_proved_before_the_os_masks(f1, part):
     """`AcceptsZKR`, and so `AcceptsZKV`, refuses every gate session as `verity/flock-circuit` at its Hello, which names the
-    identity it was proved under (85's prover lacked #1677's `osMasks`), and accepts it as `F1_PROVED`, the same statement
+    identity it was proved under (85's prover lacked #1677's `osMasks`), and accepts it as `PROVED`, the same statement
     without the OS's masks. Holds as `verity/flock-circuit` once V*'s sessions are proved again with the OS-masks
     prover."""
     w = f1[part, STATEMENT]
     for check in ("accepts_zkr", "accepts_zkv"):
         assert (w[check]["ok"], w[check].get("why")) == (False, S2_R7), check
-    assert f1[part, F1_PROVED]["accepts_zkr"]["ok"], f1[part, F1_PROVED]["accepts_zkr"].get("why")
+    assert f1[part, PROVED]["accepts_zkr"]["ok"], f1[part, PROVED]["accepts_zkr"].get("why")
 
 
 def test_f1_the_sessions_are_not_typable(f1):
