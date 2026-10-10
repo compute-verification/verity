@@ -282,7 +282,13 @@ def replay(p):
 def lean(p):
     at = text(p).find("VERDICT ")
     if at < 0:
-        return text(p)[-600:]
+        # `flock-verify statement`'s line, read as lean_verdicts.py reads it
+        st = next((json.loads(l) for l in text(p).splitlines() if l.startswith("{") and '"partition_check"' in l), None)
+        if st is None:
+            return text(p)[-600:]
+        pc = st.get("partition_check") or {}
+        return {"accepted": pc.get("units") == "derived", "why": pc.get("note", ""), "partition_check": pc,
+                **{k: st.get(k) for k in ("statement_digest", "sigma", "circuit_sha512", "class_sha512")}}
     v = json.JSONDecoder(strict=False).raw_decode(text(p)[at + 8:])[0]
     # Main's stderr: inputs (from start), setup (from the session's start), then the session's whole time (setup included)
     ms = [int(x) for x in re.findall(r"^(?:inputs|setup|/\S+): (\d+) ms$", text(p.with_suffix(".err")), re.M)]
@@ -331,7 +337,7 @@ elif step == "vstage":
                  "wall": tv(d / "time-fold.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / "time-fold.txt")}
     s["statements"] = {}
     for f in sorted(d.glob("*.json")):
-        if f.stem in ("points", "fold", "partition"):
+        if f.stem in ("points", "fold", "partition", "program"):
             continue
         s["statements"][f.stem] = {"stage": json.loads(text(f).splitlines()[0]) if text(f).strip() else text(d / f"{f.stem}.err")[-1500:],
                                    "wall": tv(d / f"time-{f.stem}.txt", r"Elapsed \(wall clock\) time"), "peak_gb": gb(d / f"time-{f.stem}.txt")}
