@@ -9,7 +9,7 @@ import Proofs.Flock.VBridge.Family.Commits
   `Algebra.lean:386`), which its reads file registers under `rec-c<k>`, instance `r` (rep `r`) reading row `r`
   (`rec_vstage.messages`, `rec_vstage.py:156-168`; `rec_residuals.write`, `rec_residuals.py:452-454`). The verifier reads
   that file as `ZkOuter.own` (`Registered.ofJson`, `FlockVerify.lean:231-242`); `HOwn` is that its message-round ports
-  are `ownOf`'s (`msgPorts`), and `skOf_zs`, `u4Passes_own` carry `skOf` and U4 (`checkFull`) from it;
+  are `ownOf`'s (`msgPorts`), and `skOf_zs`, `checkFull_of_msgPorts` carry `skOf` and U4 (`checkFull`) from it;
 * `streamTags`: what each stream round of a rep absorbs, one round per coin of the rep's spine `repShape` (`RepTape`'s
   coin steps are the stream's rounds, `InnerAccepts.lean:107-111`; `coins_repShape`); its rounds that absorb elements
   are `RecAlgebra.rounds`' (`rec_algebra.rounds`, `rec_algebra.py:749-774`), in order (`eltRounds`);
@@ -287,36 +287,21 @@ theorem skOf_zs (hown : F.HOwn) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coi
     skOf F.Vs (fun j => (F.zs R ω t R₂ j).own) F.sel = skOf F.Vs F.own F.sel :=
   skOf_congr F.Vs (selMsg_selOf F.n₀ F.kc) (hown R ω t R₂)
 
-/-- **U4 at `own` from the verifier's U4 at one history**: where the verifier's U4 (`checkFull`, which
-`flock-verify --registered --draw` runs) passes on each session's reads file at a history and the draws `dj`, which
-parse to the stratified laws `d`, U4 passes on `own`. -/
-theorem u4Passes_own (hown : F.HOwn) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂)
-    {dj : Fin F.stmts.size → Lean.Json} {d : Fin F.stmts.size → Flock.Draw.UnitDraw}
-    (hd : ∀ j, Flock.Draw.UnitDraw.ofJson (dj j) = .ok (d j))
-    (hlaw : ∀ j, (d j).law = .stratified (F.Vs j).law.Kd (Array.ofFn (F.Vs j).law.St))
-    (hU4 : ∀ j, Registered.checkFull (some (F.zs R ω t R₂ j).own) (some (dj j)) = .ok ()) :
-    F.U4Passes F.own dj d :=
-  ⟨hd, hlaw, fun j => checkFull_of_msgPorts (hd j) (fun _ hp => isMsg_ownOf hp) (hown R ω t R₂ j) (hU4 j)⟩
-
 /-- **`VBridgeRead` at `own`, `sel` and `bc`**: `vbridgeRead_of_family` where the family's commit strings are
 `skOf`'s at `own` and `sel`, its digests `cmtOf`'s at `bc cOf`, and its messages `dec`'s; `HCommits` from `PubCommits`
-(`hCommits_of`), `VDecodesRead` from `dec` (`vDecodesRead_of`), and `VFullRead` from the verifier's U4 at one history
-(`u4Passes_own`, `vFullRead_of`, `SelRounds` by `sel`'s definition). -/
+(`hCommits_of`), `VDecodesRead` from `dec` (`vDecodesRead_of`), and `VFullRead` from V*'s full draw
+(`vFullRead_of`). -/
 theorem vbridgeRead_of_rounds (dg : ByteArray → ByteArray) (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs) (hsh : F.HShape dg N k Rw GS)
     (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw) (hsch : F.HSch)
     (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (cOf : Cm → List UInt8)
     (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg) (hSk : F.Sk = skOf F.Vs F.own F.sel)
     (hcmt : F.cmt = cmtOf F.Vs (F.bc cOf)) (hw : F.wmsg = wmsgOf F.Vs F.Sk (ℐ).r dec)
-    (hm : F.msg = msgOf F.Vs F.Sk dec) (hpub : F.PubCommits (F.bc cOf)) (hS : F.LawsExec) (hown : F.HOwn)
-    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂) {dj : Fin F.stmts.size → Lean.Json}
-    {d : Fin F.stmts.size → Flock.Draw.UnitDraw} (hd : ∀ j, Flock.Draw.UnitDraw.ofJson (dj j) = .ok (d j))
-    (hlaw : ∀ j, (d j).law = .stratified (F.Vs j).law.Kd (Array.ofFn (F.Vs j).law.St))
-    (hU4 : ∀ j, Registered.checkFull (some (F.zs R ω t R₂ j).own) (some (dj j)) = .ok ()) :
+    (hm : F.msg = msgOf F.Vs F.Sk dec) (hpub : F.PubCommits (F.bc cOf)) :
     VBridgeRead (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
   vbridgeRead_of_family F dg N k Rw hst hsh hres hu hrd hsch hfiles hruns
     (F.hCommits_of F.own F.sel (F.bc cOf) hSk hcmt hpub) (F.vDecodesRead_of dec hw hm)
-    (F.vFullRead_of F.own F.sel hSk F.selRounds_sel hS (F.u4Passes_own hown R ω t R₂ hd hlaw hU4))
+    F.vFullRead_of
 
 end VStarFamily
 

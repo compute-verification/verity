@@ -2,18 +2,17 @@ import Proofs.Flock.Recursive.Stage
 import Flock.Registered
 
 /-!
-# `VFull` from the verifier's U4
+# `VFull` and the verifier's U4
 
-`VFull` asks that each wire V* reads a stage from be a wire of a unit whose stratum session `j`'s law draws in full. The
-verifier's U4 (`Flock.Registered.checkFull`, PROTOCOL.md §16.10) refuses a drawn statement unless every unit its own
-registered reads name for a round's commitment (`rec-c<i>`, `rec-top-L<l>`) is drawn in full. So `VFull` holds of V*'s
-family once each session's draw is its law's (`VLaw.live`'s stratified law over `St`), U4 passed on it, and each stage wire
-is a wire of a unit that reads that stage's commitment (`vFull_of_checkFull`).
+`VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s law draws. V*'s laws are the full
+draw (`VLaw.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
+PROTOCOL.md §16.10) refuses a drawn statement unless every unit its own registered reads name for a round's commitment
+(`rec-c<i>`, `rec-top-L<l>`) is drawn in full; under a stratified draw that is the stratum holding it.
 
 * `mem_unit`: a unit in one of a stratum's ranges is one of its `size` units (`Stratum.unit`).
 * `drawsInFull_of_checkFull`: U4's pass draws in full each unit that reads a round's commitment.
-* `full_card`: a unit the stratified law over `St` draws in full has a stratum of at most `ks` units (`ExecStrata`).
-* `vFull_of_whole`: `VFull` for sessions whose law draws every stratum in full (`--draw subset:N`), without U4.
+* `full_stratum`: a unit a stratified draw draws in full is in a stratum it draws whole.
+* `vFull_of_whole`: `VFull` under the full draw (`--draw subset:N`), without U4.
 -/
 
 namespace FlockVBridge.Full
@@ -117,50 +116,14 @@ theorem full_stratum {m : ℕ} {St : Fin m → Flock.Draw.Stratum} {d : Flock.Dr
   simp only [Array.getElem_ofFn, Bool.and_eq_true, beq_iff_eq] at h
   exact ⟨⟨i, hi⟩, h⟩
 
-/-- **A unit the stratified law over `St` draws in full has a stratum of at most `ks` units**: under `ExecStrata`, the
-executable stratum that holds `u` and draws all of its units is `σ u`'s, so `σ u`'s stratum has `k` of its units. -/
-theorem full_card {n m : ℕ} {σ : Fin n → Fin m} {ks : Fin m → ℕ} {St : Fin m → Flock.Draw.Stratum}
-    (hS : Law.ExecStrata σ ks St) {d : Flock.Draw.UnitDraw} {Kd : ℕ} (hlaw : d.law = .stratified Kd (Array.ofFn St))
-    (u : Fin n) (hu : Flock.Registered.drawsInFull d u.val = true) : (Law.stratum σ (σ u)).card ≤ ks (σ u) := by
-  obtain ⟨s, hin, hk⟩ := full_stratum hlaw hu
-  obtain ⟨hks, hsz, him⟩ := hS s
-  obtain ⟨jj, hj, hju⟩ := mem_unit (St s) u.val hin
-  have hmem : u.val ∈ (Law.stratum σ s).map Fin.valEmbedding := by
-    rw [← him]; exact Finset.mem_image.mpr ⟨jj, Finset.mem_range.mpr hj, hju⟩
-  obtain ⟨v, hv, hvu⟩ := Finset.mem_map.mp hmem
-  have hvu' : v = u := Fin.ext hvu
-  subst hvu'
-  have hσ : σ v = s := Law.mem_stratum.mp hv
-  rw [hσ]; omega
-
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **`VFull` from U4**: session `j`'s draw `dj j` parses as `d j`, whose law is `VLaw.live`'s stratified law over the
-executable strata `(Vs j).law.St`; U4 passed on the verifier's own reads `own j` and that draw; and each wire of `Sk i j`
-(`i < r`) is a wire of a unit that a port of `own j` of a round's commitment reads. -/
-theorem vFull_of_checkFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
-    (own : Fin S → Array Flock.Registered.Port) (dj : Fin S → Lean.Json) (d : Fin S → Flock.Draw.UnitDraw)
-    (hd : ∀ j, Flock.Draw.UnitDraw.ofJson (dj j) = .ok (d j))
-    (hlaw : ∀ j, (d j).law = .stratified (Vs j).law.Kd (Array.ofFn (Vs j).law.St))
-    (hU4 : ∀ j, Flock.Registered.checkFull (some (own j)) (some (dj j)) = .ok ())
-    (hreads : ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
-      ∃ u, g ∈ ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u ∧
-        ∃ p ∈ own j, Flock.Registered.roundCommitment p.value = true ∧ ∃ x, p.reads[u.val]? = some (some x)) :
-    VFull r Sk := by
-  intro i hi j g hg
-  obtain ⟨u, hgu, p, hp, hc, x, hx⟩ := hreads i hi j g hg
-  exact ⟨u, hgu, full_card (hS j) (hlaw j) u (drawsInFull_of_checkFull (hU4 j) (hd j) hp hc hx)⟩
-
-/-- **`VFull` for sessions drawn whole** (`--draw subset:N`): when each session's law draws every stratum in full, `VFull`
-needs only that each wire of `Sk i j` (`i < r`) is a wire of some unit. -/
+/-- **`VFull` under the full draw** (`--draw subset:N`): V*'s laws draw every unit, so `VFull` needs only that each wire
+of `Sk i j` (`i < r`) is a wire of some unit. -/
 theorem vFull_of_whole (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
-    (hks : ∀ j t, (Law.stratum (Vs j).law.σs t).card ≤ (Vs j).law.ks t)
     (hio : ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
       ∃ u, g ∈ ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u) :
-    VFull r Sk := by
-  intro i hi j g hg
-  obtain ⟨u, hgu⟩ := hio i hi j g hg
-  exact ⟨u, hgu, hks j _⟩
+    VFull r Sk :=
+  hio
 
 end FlockVBridge.Full
