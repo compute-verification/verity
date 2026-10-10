@@ -15,6 +15,12 @@ as the prover supplies them (`ZkOuterR`), and no check the verifier of record ma
 * `loads_of_verifies` (open): a session the verifier of record accepts, at inputs that pass the statement check
   `--registered` runs (`ScopeZR`), loads V*'s statement. The verifier's check that a session's circuit and population
   are V*'s is to prove it.
+* `VStarParses` (an obligation, open until gap 4 builds `Vs j` from the partition): V*'s statement `j`'s file under its
+  bindings parses, at V*'s constant tags and no lookup tables, to `Vs j`'s circuit, and `Vs j` has its instances.
+* `loads_of_check`, `loads_of_verifiesV`: at V*'s tags and no lookup tables (`zkTags_vstar`), a session whose file is
+  statement `j`'s under `bind j` loads `Vs j`; a session `AcceptsZKV` accepts as statement `j` under `bind j` has that
+  file (`vstarFile_of_accepts`). This is `loads_of_verifies` at the check, once (i)'s event reads `AcceptsZKV` and the
+  verifier refuses other tags and lookup tables.
 * `typable_of_accepts`: such a session types (`ZkOuterR.Typable`): `Loads` gives its circuit and population, and the
   record's draw sets it up (`setupZ_of_verifiesZK`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is

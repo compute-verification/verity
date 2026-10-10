@@ -8,26 +8,26 @@ import Proofs.Flock.Soundness.Refine.Rep
 /-!
 # Recursion: the verifier's check that a session is one of V*'s (gap 8, check 1 in the model)
 
-`flock-verify verify --rec-inner F` runs `RecVStar.checkStmt` on each statement after `buildSession`
-(`FlockVerify.lean`'s `setupOf`): the circuit's META binds the verifier's own partition object and program, its unit is
-one of V*'s statements at the inner shape, its population is that statement's instance count, and the circuit file is
-byte for byte the one `vstar stage` writes for that statement under the file's own bindings. `AcceptsZKR` doesn't read
-that check. This file states it and what it gives. Nothing in `RecursiveAudit` reads it yet: which of V*'s statements a
-session must be, the bindings' `program_digests` value, and how `Vs` is tied to V*'s files wait on gap 8's call.
+`flock-verify verify --rec-inner F --rec-part J --rec-bindings F` runs `RecVStar.checkStmt` on each statement after
+`buildSession` (`FlockVerify.lean`'s `setupOf`): the verifier's own bindings are its partition object's and program's,
+the circuit's META binds exactly those, its unit is V*'s statement `J` at the inner shape, its population is that
+statement's instance count, and the circuit file is byte for byte the one `vstar stage` writes for that statement under
+the verifier's bindings. `AcceptsZKR` doesn't read that check. This file states it and what it gives; `Loads` takes it
+to `VStmt.Loads` (`loads_of_verifiesV`). Nothing in `RecursiveAudit` reads it yet.
 
 * `innerAt spec st`: the verifier's own inner shape at the inner statement, the value `RecVStar.innerOf` returns.
-* `AcceptsZKV i I own t`: flock-verify `--zk --registered F --rec-inner F` accepts: `AcceptsZKR`, and each statement
-  passes `checkStmt` at the inner shape `i` against the inputs' circuit file, partition object and program and `own`.
+* `AcceptsZKV i j f I own t`: flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F` accepts:
+  `AcceptsZKR`, and each statement passes `checkStmt` at the inner shape `i`, as statement `j` under the bindings `f`,
+  against the inputs' circuit file, partition object and program and `own`.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
 * `checkFile_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it passes.
 * `population_of_setupH`: the set-up statement's population (`RecVStar.population`) is the size of the public file
   `loadPublic` reads, drawn or not (`drawn` records it, `loadPublic` records none and leaves `n` at it).
 * `setup_of_accepts`: a raw session that passes the statement check sets up one statement, with `circZ I` as its circuit
   and `(pubZ I).n` as its population.
-* `vstarFile_of_accepts`: at a raw session that `AcceptsZKV` accepts and that passes the statement check, the inputs'
-  circuit file is `circuitFile s b` for one of V*'s statements `s` at `i`, named as the session's unit, with `b` the
-  bindings its META names; `(pubZ I).n` is `s`'s instance count, and the verifier's reads hold `s`'s message-round
-  ports.
+* `vstarFile_of_accepts`: at a raw session that `AcceptsZKV` accepts as statement `j` under `f` and that passes the
+  statement check, the inputs' circuit file is `circuitFile s f` for V*'s statement `s` at index `j` at `i`, named as the
+  session's unit; `(pubZ I).n` is `s`'s instance count, and the verifier's reads hold `s`'s message-round ports.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -143,8 +143,8 @@ theorem checkFile_ok {s : VStar.Stmt} {b : VStar.Bindings} {circuitB : ByteArray
       rw [hd] at h
       cases h
 
-/-- **The unit check**: a unit named `name` over `n` instances is one of V*'s statements at `i`, by its name, and `n` is
-its instance count. -/
+/-- **The unit check, as V*'s statement `j`**: a unit named `name` over `n` instances is statement `j` of V*'s
+statements at `i` (the one statement so named, and statement `j`'s name is it), and `n` is its instance count. -/
 theorem check_ok {i : RecVStar.Inner} {name : String} {n j : ℕ} {s : VStar.Stmt}
     (h : RecVStar.check i name n (some j) = .ok s) :
     ∃ ss, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = name ∧ n = s.instances := by
