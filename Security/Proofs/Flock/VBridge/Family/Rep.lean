@@ -491,7 +491,9 @@ def HVCoins : Prop :=
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)) q)
 
-/-- **The parts' outputs are 0 in the layer.** At an accepted outer proof, every output column of rep `r`'s copy of
+/-- Obligation: discharged by acceptance once the layout keys an output gate to its output row (`Layout.keyRowOf` is
+`some` only at input gates, KeyProg.lean:202-203), which makes `RegOut` hold at the parts' `out` columns.
+**The parts' outputs are 0 in the layer.** At an accepted outer proof, every output column of rep `r`'s copy of
 part `p` is 0 in the layer (`copyVal`). V* registers each part's `out` as reads of the zero row `rec-residuals-zero`
 (`rec_vstage.py`), but a registered read is a row of an input port and no output column is one (`not_regOut`), so
 acceptance (`Accepted`) does not reach these columns: `ZkOuter.Good` asks the layer to agree with the registrant at

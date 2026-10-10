@@ -88,8 +88,8 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 /-- **The registrant's rows at `rec-acc`'s root are `V`'s.** At every accepted outer proof, in every session, the
 registrant's row at a registered read at the root `pa`, on its first 256 bits (the two elements the openings and the
 algebra read), is the bytes of `V`'s row at the read's position
-(`rec_outer.Chain`: the rows the prover registers as `rec-acc`, `ACC_VALUE`, rec_outer.py:166-181). It says how the
-family takes `V` from the registration, as `RowsShared` says the sessions share one row per root and position. -/
+(`rec_outer.Chain`: the rows the prover registers as `rec-acc`, `ACC_VALUE`, rec_outer.py:166-181). It holds at
+`V := accReg pa` from `RowsShared` (`accRowsAre_of_shared`). -/
 def AccRowsAre (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
@@ -151,11 +151,11 @@ theorem accRowsAre_of_shared (hshared : F.RowsShared dg N k Rw)
   have hs := Classical.choose_spec hex
   exact (hshared R ω t R₂ τ o h _ j _ u _ q hs.1 hread (hs.2.1.trans hport.symm) hs.2.2.1 b hs.2.2.2 hb).symm
 
-/-- **The algebra unit's end columns are keyed by `rec-acc`'s rows at the rep's ends.** At every accepted outer proof,
+/-- Obligation: discharged by the parse of the part's circuit (its keys) and the session's reads file.
+**The algebra unit's end columns are keyed by `rec-acc`'s rows at the rep's ends.** At every accepted outer proof,
 bit `b` of `acc0 i` (`col0 r i b`) and of `acc1 i` (`col1 r i b`) at rep `r`'s algebra unit is bit `128 i + b` of a row
 `own` names, read at `rec-acc`'s root `pa` at the rep's first row `r · nOpen` and its last `r · nOpen + nOpen`
-(`rec_residuals.py`: `acc0`, `acc1`, rows of the prover's `rec-acc`). A fact of the part's circuit (its keys) and of
-the session's reads file. -/
+(`rec_residuals.py`: `acc0`, `acc1`, rows of the prover's `rec-acc`). -/
 def EndKeys (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) (sA : Fin 2 → Fin F.stmts.size)
     (uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv) (col0 col1 : Fin 2 → ℕ → ℕ → ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ i < 2, ∀ b < 128,
@@ -217,10 +217,10 @@ theorem regBit_of_hResL {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Ar
   rw [hdiv, hmod, FlockVBridge.Decode.sub_lt _ _ _ ha] at hr
   exact hr
 
-/-- **The rep's ends are elements part `pA` holds, at columns a computed row reads**: `acc0 i` is the element at
+/-- Obligation: discharged by V*'s shape (`wi`) and the parse of the part's circuit (`ReadCol`).
+**The rep's ends are elements part `pA` holds, at columns a computed row reads**: `acc0 i` is the element at
 position `a0 i` of the part's row ports and `acc1 i` at `a1 i` (`wi`; `rec_residuals.py`'s row ports `acc0`, `acc1`),
-and some computed row of the part's unit reads each of their bits' columns. A fact of V*'s shape and of the part's
-circuit. -/
+and some computed row of the part's unit reads each of their bits' columns. -/
 def EndsInPart (pA : ℕ) (a0 a1 : ℕ → ℕ) : Prop :=
   pA < (partsOf F.sh).size ∧ ∀ i < 2,
     (∃ h : a0 i < (wIOf F.sh pA).size, wi F.sh (.acc0 i) = some (wIOf F.sh pA)[a0 i]) ∧
@@ -249,11 +249,11 @@ theorem hEnds_of_part {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Arra
       exact F.regBit_of_hResL dg N k Rw hst hres h r hin.1 ha hb (hrd b hb).2)
     hreg hacc hkeys
 
-/-- **Each opening's `acc` columns are keyed by `rec-acc`'s row at its chain position.** At every accepted outer proof,
+/-- Obligation: discharged by the parse of the open circuit (its keys, `Flock.RecOpen`) and the level's reads file.
+**Each opening's `acc` columns are keyed by `rec-acc`'s row at its chain position.** At every accepted outer proof,
 bit `b` of opening `j` of level `ℓ` of rep `r`'s `acc` (`accCol + b`) is bit `b` of a row `own` names, read at
 `rec-acc`'s root `pa` at the opening's chain position (rec_outer.py:236: `acc` reads row `p`), and a computed row of
-the opening's unit reads the column. A fact of the open circuit (its keys, `Flock.RecOpen`) and of the level's reads
-file. -/
+the opening's unit reads the column. -/
 def OpenKeys (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∀ b < 256,
@@ -261,7 +261,9 @@ def OpenKeys (pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock
           (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j) ∧
         ReadCol (Rows.ofNet (F.Vs (F.sessO ℓ)).hU) (accCol (levelLanes F.sh ℓ) (F.depth ℓ) + b)
 
-/-- **The openings' `acc_out` in the layers are `V`'s next rows** (`HAccRows`' second half): at every accepted outer
+/-- Obligation: discharged by acceptance once the layout keys an output gate to its output row (`Layout.keyRowOf` is
+`some` only at input gates, KeyProg.lean:202-203), which makes `RegOut` hold at `acc_out`'s columns.
+**The openings' `acc_out` in the layers are `V`'s next rows** (`HAccRows`' second half): at every accepted outer
 proof, the first two elements of opening `j` of level `ℓ` of rep `r`'s `acc_out` output, in the layer, are those of
 `V`'s row after the opening's chain position. V*'s level sessions register `acc_out` as a read of `rec-acc`'s row
 `p + 1` (rec_outer.py:238, 242); acceptance does not reach the layer's outputs (`not_accOut`). -/
