@@ -4,7 +4,7 @@
  "assumptions": {
   "Flock.Assumptions.VBridge": {
    "owner": "@proofs",
-   "digest": "123d7906527300b40f49caefdb25e1ee2535989706f0cee85fa7b32d4bb8c0a4"
+   "digest": "928812a52c621ba8f1c48148872bf2c21c58388a45335bf64fc92e571ac56ef1"
   },
   "FlockSoundness.Assumptions.HmRowComputes": {
    "owner": "@proofs",
@@ -12194,11 +12194,10 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "Proofs.Flock.Recursive.Flock": {
-   "digest": "dfc89a3b2dbf76413b71f426bdb2fd92a372964a4cfa78e266fc968e876a0c97",
+   "digest": "3f5844373c992742a5bb5596bb614d9c422a3c706ad8d97734ab4a4cbc622565",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.Accepts": "840fed58dca4561ed2bfbda94d9f7a2f61c13776dafa29bd8ae90f844ec91dd4",
     "FlockSoundness.Discharge.Recursion.AcceptsV": "1c083a0b646e4afbe0d91abda9a75cbc265ba17849b2ecd1182d5600d6f9ccbb",
-    "FlockSoundness.Discharge.Recursion.VBridge": "27f7a2536e721fbe80531d027331b1d2b055d688d6a4125ec2d604357235ed22",
     "FlockSoundness.Discharge.Recursion.VLaw": "fe80d62d2401eb8afa43b38b0eb2cb27a6d4b50e398fe3cfb0c538273ba63172",
     "FlockSoundness.Discharge.Recursion.VLaw.Lb": "126313a30468a8bbb735f26632b91db1a6f17c851526f739b75d7d3e374f9deb",
     "FlockSoundness.Discharge.Recursion.VLaw.fintypeΩ": "912493e8eee14d4a03e164d5e17c2f69a3daab14de19367f129010c7562bc852",
@@ -12315,10 +12314,10 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
   },
   "Proofs.Flock.Recursive.PublicAudit": {
-   "digest": "cd5ac204a1586234ed84f0a5765b317ab3b73aff34f3902004c27caf17c16769",
+   "digest": "641c2797f0257bdd5462f7de35c13cd9d607564a74c38019ea23c22a4a318f7f",
    "definitions": {
     "Flock.Guarantees.AcceptsPublic": "0c16e0d24e52c09fa3fd3b0c70991e0ce7f77c6b42b255cd2678ad6aa8fc22da",
-    "Flock.Guarantees.PublicAudit": "b7062181686809bda2c233d687bbd10d64f3bf999bcf08a545a87e1fd4c9fc7b",
+    "Flock.Guarantees.PublicAudit": "d7c5f6e6ced0a4ef16228f91eb978247f108ba2b73f3a1b482373d40a7e24259",
     "Flock.Guarantees.publicHidden": "dc2d1ec9cc575620aa5285ed98f211af9345f59f698c59fe2009ee4bc3c54b99"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
@@ -12359,6 +12358,20 @@
     "FlockSoundness.Discharge.Recursion.zsOf": "7c565fd5298e88b06b0e582e15577870e3c3c721e3ecbeb27662f3d3916eb062"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit"]
+  },
+  "Proofs.Flock.Recursive.Registrants": {
+   "digest": "5e765dc934b7a3f6ad35517d080a6baacde93bad384d04545663d54aeb1fcc9c",
+   "definitions": {
+    "FlockSoundness.Discharge.Recursion.RegColl": "b930841d5d079583821abd55460777e9ca69d9531469b7470d75d77348e93252",
+    "FlockSoundness.Discharge.Recursion.VBridgeOff": "11db4e64d6059cddc0e5a8c56b6320ad8e2d661b488a3cc8a58d9d5a2915a0a1",
+    "FlockSoundness.Discharge.Recursion.regFinder": "a3757e97a296d9ea0502f63f2a6331483a103eb06ac0af447328d3d2c0a5a131",
+    "FlockSoundness.Registered.Reads.Clash": "25a7c6d6ad391431d762fcd07d0abe1cac437465be1667a9e74afe46eb5ed7ac"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveSound"
+   ]
   },
   "Proofs.Flock.Recursive.Schedule": {
    "digest": "6d1f7bc5a68aec58611f50d86312dac3d740aa7ed55ff57f17604537b2b7da42",
@@ -12456,14 +12469,14 @@
    ]
   },
   "Proofs.Flock.Recursive.Statements": {
-   "digest": "ebd4fe2aa4f025e76f5df0dace10072fbe6217312d020a30ba91a8ac2332038e",
+   "digest": "4f331ce0a1b1524495b9a4f256b5c6b5934bff977d2cda6e33b991929ab8cb01",
    "definitions": {
     "Flock.Guarantees.RanRegisteredRun": "357eb6ee0e5f33e3799142ff03cbf4c387f7347984218122d665618f1bcdd042",
     "Flock.Guarantees.RecursiveCircuitIndist": "c7719ac1a7546988710606e7c8d87c4cadb89067cc71247f6acd846e39f8e5dd",
     "Flock.Guarantees.RecursiveCircuitPrivate": "ec182dfaa95ded7bc6d76f6a562d6929123610f1a159cf5338092d5aa898417a",
     "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "c345a2937c296bd2a103b1a6fab01bd5acfa145e54d1e2a1dd0ef8b9ea29a338",
-    "Flock.Guarantees.RecursiveRanRegistered": "4917bc898363fdfa549d532be50cbc9346b12006a30070ede9782dd699c7bbcd",
-    "Flock.Guarantees.RecursiveSound": "9294e1840a756b3844ada6c70593f6e859834af30c9d0433fb07c9a96f8651e3",
+    "Flock.Guarantees.RecursiveRanRegistered": "dc5b389c975a0552b900e36b6bf207bb033bb171a24b508a41d12c7fefac2b62",
+    "Flock.Guarantees.RecursiveSound": "46a2e3a6aeeb88c8690602ec9e1c36180ec300244fce302c43eef5f5ae74663f",
     "Flock.Guarantees.RecursiveZK": "75282f8fffeab43e8a2ef38430a9f20fa2d1e6f6c14ed9696277de4cf5402194",
     "Flock.Guarantees.commitBytes": "a306696805093574152e21a9d23a447fe66f455f97fb09d60ccbdb5542499079",
     "Flock.Guarantees.firewallCommits": "4bf63ec6548cda121d11b679e1facd58fea3cdc1e35a4ba31065f84201c7dc1f",
@@ -12823,9 +12836,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.Recursive": {
-   "digest": "518c76bebd2d8c2037a1ba752b2df772b6554b44e4452d634783b16588f80067",
+   "digest": "8c82f4742feac1b40c5d06938bd65b180e0da5f006527af80ff38e6ebab68281",
    "definitions": {
-    "Flock.Assumptions.VBridge": "123d7906527300b40f49caefdb25e1ee2535989706f0cee85fa7b32d4bb8c0a4"
+    "Flock.Assumptions.VBridge": "928812a52c621ba8f1c48148872bf2c21c58388a45335bf64fc92e571ac56ef1"
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
