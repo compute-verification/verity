@@ -70,8 +70,7 @@ def shape(forged, tmp_path_factory) -> Path:
     return f
 
 
-def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
-         session: Path = SET / "outer-L3" / "session") -> subprocess.CompletedProcess:
+def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str) -> subprocess.CompletedProcess:
     u = SET / "u" / "stage"
     rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
                                     "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
@@ -79,7 +78,7 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
                         str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec, *extra,
-                        "--session", str(session)], capture_output=True, text=True, check=False)
+                        "--session", str(SET / "outer-L3" / "session")], capture_output=True, text=True, check=False)
     return p
 
 
