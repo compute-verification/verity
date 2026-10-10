@@ -1,5 +1,5 @@
 import Proofs.Flock.VBridge.ResUnit
-import Proofs.Flock.VBridge.Parts
+import Proofs.Flock.VBridge.PartsCover
 import Proofs.Flock.VBridge.AccUnits
 
 /-!
