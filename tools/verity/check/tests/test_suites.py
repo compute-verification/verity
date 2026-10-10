@@ -228,7 +228,8 @@ def _keys(S) -> dict[str, str]:
     out = {}
     for s in S.discover():
         paths = S.inputs_of(s, pkgs)
-        out[s.name] = S.key(s, S.object_ids(tree, sorted(set(paths) | set(S.RUNNER))), env, [], S.resolved(S.roots(s, pkgs), lock, s.path))
+        out[s.name] = S.key(s, S.input_ids(tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s)), env, [],
+                            S.resolved(S.roots(s, pkgs), lock, s.path))
     return out
 
 
@@ -325,6 +326,37 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == [] and _keys(S) == keys                     # check's own code decides no other suite's verdict
     (tmp_path / "tools" / "verity" / "check" / "suites.py").write_text("# the runner\n")
     assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
+
+
+def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
+    """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
+    then lets it read Markdown (test_guard.py holds the others to reading none)."""
+    _workspace(tmp_path)
+    (tmp_path / "a" / "README.md").write_text("prose\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    keys = _keys(S)
+    (tmp_path / "a" / "README.md").write_text("other prose\n")
+    (tmp_path / "a" / "GUIDE.md").write_text("new prose\n")
+    assert touched() == [] and _keys(S) == keys
+    (tmp_path / "a" / "data.txt").write_text("not prose\n")
+    assert touched() == ["a"] and _keys(S)["a"] != keys["a"]
+    (tmp_path / "a" / "data.txt").unlink()
+    (tmp_path / "b" / "pyproject.toml").write_text((tmp_path / "b" / "pyproject.toml").read_text()
+                                                   + '\n[tool.verity.tests]\ninputs = ["a/README.md"]\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "b reads a's README")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    keys = _keys(S)
+    (tmp_path / "a" / "README.md").write_text("third prose\n")
+    assert touched() == ["b"]                                       # b reads a's README: its edit reaches b alone
+    assert _keys(S)["a"] == keys["a"] and _keys(S)["b"] != keys["b"]
 
 
 def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch):

@@ -9,6 +9,7 @@ import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
 import Proofs.Flock.Recursive.Transfer
 import Proofs.Flock.Recursive.Stage
+import Proofs.Flock.Recursive.StageRead
 import Proofs.Flock.Recursive.Guarantees
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.Compile

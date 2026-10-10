@@ -1,4 +1,5 @@
 import NetworkCheck.Check
+import Properties.Identity
 import Definitions.NetworkCertifier
 import Mathlib.Data.Set.Card
 
@@ -235,7 +236,8 @@ def certMessage (r : Certified) : Option ByteArray :=
     r.certificate.digest).toOption
 
 /-- What SHA-512 hashes for a record head: `tagged_sha512(RECORD_TAG, encode(h))`'s input. -/
-def headStrings (h : RecordHead) : List ByteArray := (h.encode.toOption.map (taggedInput recordTag)).toList
+def headStrings (h : RecordHead) : List ByteArray :=
+  (h.encode.toOption.bind fun enc => (Properties.Identity.taggedInput recordTag enc).toOption).toList
 
 /-- The node inputs `pairs lv` hashes on one level. -/
 def pairInputs (lv : Nat) : List ByteArray → List ByteArray
