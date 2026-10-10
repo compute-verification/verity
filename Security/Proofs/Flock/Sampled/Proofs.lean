@@ -157,12 +157,11 @@ def fillValues {N : ℕ} {T V : Type} [Inhabited V] (β : Batching N T Unit) (X 
   val := fun b j => ((β.idx b j).bind X).elim default Prod.snd
 
 theorem menuComplete_holds : MenuComplete := by
-  intro N T V _ M Ty X S hM hSM hF
+  intro N T V _ M Ty X S hM hR hSM hF
   obtain ⟨β, hv, hc, hp, ht⟩ := hF
-  refine ⟨fillValues β X, hv, fun s hs => hM s (hSM S.card s ?_), hc, fun p i hi => ?_,
+  have hs : ∀ s ∈ β.view, s ∈ M.shapes := fun s h => hSM S.card s (by rw [← hv]; exact h)
+  refine ⟨fillValues β X, hv, fun s h => hM s (hs s h), fun s h => hR s (hs s h), hc, fun p i hi => ?_,
     fun p i hi => (hp p i hi).2, ht⟩
-  · rw [← hv]
-    exact hs
   · obtain ⟨⟨w, hw⟩, -⟩ := hp p i hi
     have hi' : β.held p = some i := hi
     have e1 : (β.held p).bind X = some (β.slotTyp p, w) := by
@@ -172,14 +171,14 @@ theorem menuComplete_holds : MenuComplete := by
     exact hw.trans (congrArg (fun u => some (β.slotTyp p, u)) e2.symm)
 
 theorem menuCompleteAt_holds : MenuCompleteAt := by
-  intro N T V _ M Ty L X δ hM hSM hR
+  intro N T V _ M Ty L X δ hM hIR hSM hR
   refine le_trans (prCoin_mono (q := fun ω => ¬ M.Fits Ty X (L.draw ω)) fun ω h hF => ?_) hR
-  exact h (menuComplete_holds M Ty X (L.draw ω) hM hSM hF)
+  exact h (menuComplete_holds M Ty X (L.draw ω) hM hIR hSM hF)
 
 theorem zeroKnowledgeAt_holds : ZeroKnowledgeAt := by
-  intro N T V Reg O _ session Ty com I M L R X path₀ δ hM hSM hcom hX hroom
-  refine ⟨menuCompleteAt_holds M Ty L X δ hM hSM hroom, fun ω β hβ => ?_⟩
-  obtain ⟨hv, -, hc, hB, hfit, -⟩ := hβ
+  intro N T V Reg O _ session Ty com I M L R X path₀ δ hM hIR hSM hcom hX hroom
+  refine ⟨menuCompleteAt_holds M Ty L X δ hM hIR hSM hroom, fun ω β hβ => ?_⟩
+  obtain ⟨hv, -, -, hc, hB, hfit, -⟩ := hβ
   refine zeroKnowledge_holds session Ty com I M R (L.draw ω) (Hidden.honest β path₀) hv
     { cover := hc, opens := fun p i hp => ?_, fits := hfit, holds := fun p i hp => hX i _ _ (hB p i hp) }
   have e : (Hidden.honest β path₀).path p = path₀ i := congrArg (fun o => Option.elim o ByteArray.empty path₀) hp

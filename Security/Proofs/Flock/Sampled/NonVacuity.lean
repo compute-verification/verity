@@ -10,10 +10,10 @@ and one session of one slot holding the unit (`batch₁`, its slots routed in se
 
 * `coverage_nonvacuous`, `slotBinding_nonvacuous`, `slotsSound_nonvacuous`: the hypotheses of `Coverage`, `SlotBinding`
   and `SlotsSound` at that instance, the draw being the one unit.
-* `menu₀_shapeMenu`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit (`batchOf`), one type per shape,
-  each staged over the inner shape `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀` and `Menu.Room` by proof; that V*
-  stages it (`menu₀.staged`, so `Menu.Staged`) is checked by `#guard`, by evaluation and not by proof: building V*'s
-  algebra is beyond the kernel's evaluation.
+* `menu₀_shapeMenu`, `menu₀_inRange`, `menu₀_room`: `menu₀`, one-slot sessions, one per drawn unit (`batchOf`), one
+  type per shape, each staged over the inner shape `m = 22, k_log = 6`, two claims. `ShapeMenu menu₀`, `Menu.InRange`
+  and `Menu.Room` by proof; that V* stages it (`menu₀.staged`, so `Menu.Staged`) is checked by `#guard`, by evaluation
+  and not by proof: building V*'s algebra is beyond the kernel's evaluation.
 * `Menu.Room.fits`, `Menu.Room.roomAt`: the deterministic room fits every draw, so it gives `Menu.RoomAt` at δ = 0
   under every law; `menu₀_fits`, `menu₀_roomAt` there. `menuComplete_nonvacuous`: `MenuComplete`'s and
   `MenuCompleteAt`'s hypotheses at `menu₀`, given that V* stages it.
@@ -157,6 +157,10 @@ theorem isOk_iff {ε α : Type} (x : Except ε α) : isOk x = true ↔ ∃ a, x 
 theorem Menu.staged_ok {M : Menu} (h : M.staged = true) : M.Staged :=
   fun s hs => (isOk_iff _).1 (List.all_eq_true.1 h s hs)
 
+/-- **The live verifier accepts `menu₀`**: its inner session has `k_log` 6, no regions and 24 + 16 link-point
+coordinates. -/
+theorem menu₀_inRange : menu₀.InRange := fun _ _ => rfl
+
 /-- **`menu₀` is a shape menu.** -/
 theorem menu₀_shapeMenu : ShapeMenu menu₀ := by
   intro k s hs
@@ -217,9 +221,9 @@ theorem menu₀_roomAt : menu₀.RoomAt Ty₁ L₁ X₁ 0 := Menu.Room.roomAt me
 /-- **`MenuComplete`'s and `MenuCompleteAt`'s hypotheses hold together**, at `menu₀` given that V* stages it: a
 nonempty draw of `X₁` fits, and under the one-point law every draw does (δ = 0, from `menu₀_room`). -/
 theorem menuComplete_nonvacuous (h : menu₀.staged = true) :
-    menu₀.Staged ∧ ShapeMenu menu₀ ∧ (Finset.univ : Finset (Fin 1)).Nonempty ∧ menu₀.Fits Ty₁ X₁ Finset.univ ∧
-      menu₀.RoomAt Ty₁ L₁ X₁ 0 :=
-  ⟨Menu.staged_ok h, menu₀_shapeMenu, Finset.univ_nonempty, menu₀_fits, menu₀_roomAt⟩
+    menu₀.Staged ∧ menu₀.InRange ∧ ShapeMenu menu₀ ∧ (Finset.univ : Finset (Fin 1)).Nonempty ∧
+      menu₀.Fits Ty₁ X₁ Finset.univ ∧ menu₀.RoomAt Ty₁ L₁ X₁ 0 :=
+  ⟨Menu.staged_ok h, menu₀_inRange, menu₀_shapeMenu, Finset.univ_nonempty, menu₀_fits, menu₀_roomAt⟩
 
 /-- Sessions that end at once. -/
 def session₁ : Finset (Fin 1) → Unit → Game Unit := fun _ _ => .ret ()
@@ -263,8 +267,8 @@ theorem zeroKnowledge_nonvacuous :
 /-- **`ZeroKnowledgeAt`'s hypotheses hold together**: at `menu₀` given that V* stages it, `X₁` committed under `C₁`, its
 one record in its type's relation, and room at every draw of the one-point law. -/
 theorem zeroKnowledgeAt_nonvacuous (h : menu₀.staged = true) :
-    menu₀.Staged ∧ ShapeMenu menu₀ ∧ C₁.Committed X₁ path₀₁ ∧ (∀ i t v, X₁ i = some (t, v) → Ty₁.holds t v) ∧
-      menu₀.RoomAt Ty₁ L₁ X₁ 0 :=
-  ⟨Menu.staged_ok h, menu₀_shapeMenu, C₁_committed, fun _ _ _ _ => trivial, menu₀_roomAt⟩
+    menu₀.Staged ∧ menu₀.InRange ∧ ShapeMenu menu₀ ∧ C₁.Committed X₁ path₀₁ ∧
+      (∀ i t v, X₁ i = some (t, v) → Ty₁.holds t v) ∧ menu₀.RoomAt Ty₁ L₁ X₁ 0 :=
+  ⟨Menu.staged_ok h, menu₀_inRange, menu₀_shapeMenu, C₁_committed, fun _ _ _ _ => trivial, menu₀_roomAt⟩
 
 end FlockSampled

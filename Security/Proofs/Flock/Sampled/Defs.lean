@@ -1,6 +1,7 @@
 import Mathlib.Data.Finset.Sort
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Game.Prob
+import Flock.Statement
 import Proofs.Flock.Verifier.Registered
 import VStar.Stage
 
@@ -17,10 +18,10 @@ the menu's padded sessions for the draw's size. That each drawn unit sits in exa
 in the outer proof: the slots' records pass up V*'s levels, and the top statement routes them into the draw's order. Each
 slot is bound to its unit's committed record by its opening of the root.
 
-* `Shape`, `Menu`, `Menu.Staged`, `Menu.Within`: a session's slots and nonzero bound; the menu's shapes, the inner shape
-  V* is staged over for each (`Menu.vstar`, Lean's `VStar.statements`), each shape's type bound and the padded sessions
-  of an audit of `k` draws (`Menu.padded`); the obligation that V* stages the menu; a placement of types at the menu's
-  shapes within its bounds.
+* `Shape`, `Menu`, `Menu.Staged`, `Menu.InRange`, `Menu.Within`: a session's slots and nonzero bound; the menu's shapes,
+  the inner shape V* is staged over for each (`Menu.vstar`, Lean's `VStar.statements`), each shape's type bound and the
+  padded sessions of an audit of `k` draws (`Menu.padded`); the obligations that V* stages the menu and that the live
+  verifier's range check accepts it (`Menu.rangeCheck`); a placement of types at the menu's shapes within its bounds.
 * `Trace`, `Types`, `wrong`: the committed trace, partial (it holds nothing at a position no record opens); each type's
   relation and its matrix's nonzeros; the units wrong in a trace.
 * `Batching`, `Hidden`, `Hidden.honest`: the prover's sessions, with their slots' hidden types; those with each slot's
@@ -76,6 +77,20 @@ fact about our own code (V*'s builder), not about the world: `#guard menu₀.sta
 (`Proofs.Flock.Sampled.NonVacuity`), and a proof is to come from `VStar.statements`. Not a listed guarantee's premise
 yet. -/
 def Menu.Staged (M : Menu) : Prop := ∀ s ∈ M.shapes, ∃ vs, M.vstar s = .ok vs
+
+/-- The live verifier's range check (`Flock.checkInRange`, which `Stmt.setup` makes on every statement) on the inner
+session of a session of shape `s`, read off its inner shape: the block size `k_log`; the public regions, two claims each
+past the two every session opens (`Stmt.nClaims`); and a link point's coordinates, `PT_LOCAL` and the table's block bits
+`m − k_log`. -/
+def Menu.rangeCheck (M : Menu) (s : Shape) : Except String Unit :=
+  Flock.checkInRange (M.inner s).kLog (((M.inner s).claims - 2) / 2) (Flock.PT_LOCAL + ((M.inner s).m - (M.inner s).kLog))
+
+/-- Obligation: the live verifier accepts every shape on the menu, its range check on the inner session a result and not
+a refusal (`Flock.checkInRange_ok`: `k_log ≤ 27`, at most 1024 regions, `m_pts ≤ 64`, the range the proved bound
+covers). V*'s builder doesn't check it (its refusals are `m`'s schedule, `k_log < 6` and fewer than two claims), and
+`setup` refuses every session at a shape outside it, the honest prover's too: it is what limits a shape's nonzero bound,
+which the menu leaves a parameter. A fact about the menu and our own code; `menu₀_inRange` proves it at one menu. -/
+def Menu.InRange (M : Menu) : Prop := ∀ s ∈ M.shapes, M.rangeCheck s = .ok ()
 
 /-! ## The trace and its types -/
 
