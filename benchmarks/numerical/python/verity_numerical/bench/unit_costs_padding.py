@@ -17,8 +17,9 @@ attention per NB stratum, every other binding its own).
 **Tails.** The sampler (token-select, gumbel) and every unit type over :data:`TAIL_FACTOR` x the body's 99th-percentile
 draw (the Z under which 99% of drawn units fall) are the tail, at B = 1 and never in a menu: each sampler binding its own
 bucket, the other large units one bucket at their largest Z (``eval_per_stratum``: one bucket per distinct Z instead), its
-cost shown separately (``tail``). token-select has no registered lowering, so its primary nonzeros are the generic
-count (quadratic in V); ``eval_step_model`` prices the tail again with it at (V − 1) ArgmaxStep units.
+cost shown separately (``tail``). token-select is priced at its argmax tree (``unit_costs.retree``, applied here to an
+inventory without it), which supersedes the generic scan count; ``eval_step_model`` prices the tail again with it at
+(V − 1) ArgmaxStep units.
 
 **The draw.** K = ``record_k`` units uniform without replacement from the workload's N subcircuits; a bucket with n of them
 holds X ~ Hypergeometric(N, n, K), its pmf summed exactly (:func:`hyper`). Per workload x menu x B:
@@ -359,7 +360,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     from pathlib import Path
 
-    pad = padding(json.loads(Path(a.inventory).read_text()))
+    from .unit_costs import retree
+
+    inv = json.loads(Path(a.inventory).read_text())
+    if "token_select" not in inv:
+        retree(inv)
+    pad = padding(inv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "padding.json").write_text(json.dumps(pad, indent=1) + "\n")
