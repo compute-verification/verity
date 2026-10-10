@@ -8,7 +8,8 @@ measured on the repository's own gadgets. Nothing here is estimated but the comp
 ``--buckets`` takes compute-accounting's F6 prover table (``verity/f6-prover/v1``) and gives V* per session at each unsplit
 bucket instead (`bucket_cost`): ANDs unpacked and packed, D under C-Flock's layout, and F6's prove-time and RSS law.
 ``--candidate3 DIR`` (proofs' F4 K2 tree, art:5d4b3d5f…) adds the frozen design's V* beside it (`candidate3`), which runs the
-slot sumcheck's verifier and opens the registered bits instead of reading the matrix.
+slot sumcheck's verifier and opens the registered bits instead of reading the matrix. ``--proofs-c3 buckets.json`` (with
+``--buckets`` for the law) lays proofs' own candidate-3 table (art:4e9ff89a…) out as multi-block statements (`proofs_c3`).
 
 **What V* computes.** The lincheck's circuit fold, Lean's `Flock.Stmt.foldedPartial`: for the unit's slot type (2^sl
 columns), each nonzero (i, c) of A_0 adds ``α · lw[i mod 64] · eq(ρ_lo, i >> 6) · eq(r_lo, c >> 6)`` into ``comb[c mod 64]``
@@ -412,6 +413,144 @@ def candidate3(k2, units: dict, Z: float, slots: int, sl: int, types: int, reps:
             "batched": total(min(slots, types))}
 
 
+SLOT_LOG = 18  # circuit.py's hm96 and sha512x3 slots (HM_LOG, SHA_LOG)
+LINK_PORTS = ("acc", "acc_out", "out")  # RecOpen's rows another statement writes or reads: the chain and the top
+STATE_BITS = 256  # what one acc row carries across: two GF(2^128) running sums (its words 0..15)
+
+
+def _comps(words: int) -> int:
+    return -(-(2 * words + 17) // 128) - 1
+
+
+def recopen_block(L: int, H: int, useful: int, links: bool = True, n: int | None = None) -> dict:
+    """``circuit.compose``'s ranges for a statement of ``n`` ``RecOpen{L, H}`` instances (`rec_outer`): per VU the unit's slot,
+    one hm96 slot per row (rounded to a power of two) and its compressions three to a sha512x3 slot, placed by
+    ``circuit._ranges``; ``G`` the most VUs (a power of two) a block of k_log <= 27 holds, ``k_log`` the block's at
+    ``min(G, n)`` VUs. ``links=False`` drops the three registered rows (`LINK_PORTS`), the price of the cross-statement wires
+    being the difference."""
+    from verity_flock import circuit as FC
+    from verity_flock import rec_open as R
+
+    words = {"row": R.row_words(L), "aux": R.aux_words(max(H, 1)), "acc": R.ACC_WORDS, "coef": 16 * L, "dirs": R.DIRS_WORDS,
+             "out": R.OUT_WORDS, "acc_out": R.ACC_WORDS}
+    ports = [p for p in words if links or p not in LINK_PORTS]
+    n_sha, n_hm, ul = -(-sum(_comps(words[p]) for p in ports) // 3), FC._pow2(len(ports)), FC._slot_log(useful)
+
+    def k_log(G: int) -> int:
+        return FC._ranges([("unit", SLOT_LOG, G * n_sha, {"net": "sha512x3", "packed": True}),
+                           ("unit", SLOT_LOG, G * n_hm, {"net": "hm96"}), ("unit", ul, G, {"net": "unit"}),
+                           ("mask", 14, 1, {"net": "mask"})])[1]
+
+    G = 1
+    while k_log(2 * G) <= K_LOG_MAX:
+        G *= 2
+    return {"unit_log": ul, "sha512x3": n_sha, "hm96": n_hm, "vu": 2 ** ul + (n_sha + n_hm) * 2 ** SLOT_LOG, "k_log_1": k_log(1),
+            "G": G, "k_log": k_log(min(G, FC._pow2(n)) if n else G)}
+
+
+def _session_law(blocks: int, k: int, text_rows: float, fit: dict, glue: float, bpn: float) -> dict:
+    """F6's law over a statement of ``blocks`` blocks of 2^k, in cap sessions of ``SLOTS``; its text one netlist."""
+    sessions, cb = math.ceil(blocks / SLOTS), text_rows * RHO * bpn + glue
+    full, last = divmod(blocks, SLOTS)
+    prove = full * _law(fit, "prove_s", SLOTS * 2.0 ** k, cb, k) + (last and _law(fit, "prove_s", last * 2.0 ** k, cb, k))
+    return {"blocks": blocks, "k_log": k, "sessions": sessions, "D_total": blocks * 2.0 ** k, "prove_s": prove,
+            "rss_gib": _law(fit, "rss_gib", min(blocks, SLOTS) * 2.0 ** k, cb, k)}
+
+
+def proofs_c3(path: Path, prover: Path) -> dict:
+    """V*'s outer proof for candidate 3 as multi-block statements, on proofs' bucket table (``buckets.json`` of art:4e9ff89a…,
+    ``k2.py`` and ``units.json`` beside it) and F6's law (``prover.json``, v2).
+
+    ``rows_rule``: proofs' rows (V* alone, with T types, and with the inner table's openings) laid out by `layout`.
+    ``split``: the statements C-Flock would prove, rec-v0's (`verity_flock.rec_vstage`): each Ligerito level of the registered
+    opening and of the inner table's openings one statement of identical ``RecOpen{L, H}`` instances (`recopen_block`, from
+    the circuit's own ranges, row commitments included), the opening's algebra one, and the sparse phase (its algebra, the
+    firewall commitments of its messages, the type selects) one; the last two by `layout`'s rule, not being lowered.
+    Statements are bound only through registered values (PROTOCOL.md §16.10 "Registered reads"): ``boundaries`` lists each
+    crossing, its rows and the state it carries; ``link_rows`` and ``link_D`` what those rows cost in the blocks."""
+    p, rows = json.loads(prover.read_text()), json.loads(path.read_text())
+    fit, glue, bpn = p["fit"], p["glue_bytes"], p["bytes_per_nnz"]
+    k2, units = _k2(path.parent)
+    msg = 2 ** SLOT_LOG + 2 ** SLOT_LOG // 3  # a 64-word registered row: its hm96 slot and a third of a sha512x3 slot
+    cache: dict = {}
+
+    def recopen(L, H):
+        if (L, H) not in cache:
+            useful, grade = k2.unit_rows(units, L, H)
+            on, off = recopen_block(L, H, int(useful)), recopen_block(L, H, int(useful), links=False)
+            cache[L, H] = {"L": L, "H": H, "unit_rows": int(useful), "grade": grade, "refused": not 1 <= H <= 16,
+                           "link_D_per_instance": on["vu"] - off["vu"]} | on
+        return cache[L, H]
+
+    out = []
+    for r in rows:
+        T = r["types"] if r["templates"] > 1 else 1
+        sts, refused, link_rows, link_D = [], [], 0, 0.0
+        m = r["m_if_T_types"] if T > 1 else r["m"]
+        for tag, mm, reg in (("open", m, True), ("inner", r["inner_m"], False)):
+            for lv, (L, H, n) in enumerate(k2.statements(mm, reg)):
+                f = recopen(L, H)
+                blocks, k = math.ceil(n / f["G"]), recopen_block(L, H, f["unit_rows"], n=n)["k_log"]
+                sts.append({"statement": f"{tag} L{lv}", "circuit": f"RecOpen{{{L},{H}}}", "instances": n, "G": f["G"],
+                            "same_circuit": True} | _session_law(blocks, k, f["unit_rows"], fit, glue, bpn))
+                link_rows += 3 * n
+                link_D += n * f["link_D_per_instance"]
+                if f["refused"]:
+                    refused.append(f"{tag} L{lv}: RecOpen{{{L},{H}}}")
+        sparse = r["terms"]["sparse algebra"] + r["terms"]["firewall commitments"] + r["terms"]["type selects"]
+        for name, rws in (("opening algebra", r["terms"]["opening algebra"]), ("sparse phase", sparse)):
+            lay = layout(rws, fit, glue, bpn)
+            sts.append({"statement": name, "circuit": name, "rows": rws, "same_circuit": lay["blocks"] == 1}
+                       | _session_law(lay["blocks"], lay["k_log"], rws / lay["blocks"], fit, glue, bpn))
+        msgs = r["terms"]["firewall commitments"] / 142_282  # vstar_c3.MSG: rows of one firewall commitment
+        boundaries = [
+            {"from": "firewall (the coin server's records)", "to": "sparse phase", "rows": round(msgs), "state_bits": None,
+             "what": "each new inner message, a registered row whose b||c the coin server recorded (rec-c<i>)"},
+            {"from": "root_tau", "to": "sparse phase", "rows": int(T > 1), "state_bits": SLOTS * math.ceil(math.log2(T)) if T > 1 else 0,
+             "what": "the slots' hidden types, one registered row (none with one template)"},
+            {"from": "sparse phase", "to": "opening algebra", "rows": 1, "state_bits": STATE_BITS,
+             "what": "the sparse sumcheck's final claim per rep at the opening's point (the point is coins: public)"},
+            {"from": "block", "to": "next block (any RecOpen statement)", "rows": 1, "state_bits": STATE_BITS,
+             "what": "the rec-acc chain: two running sums; every instance reads acc and writes acc_out"},
+            {"from": "RecOpen statements", "to": "opening algebra", "rows": 4, "state_bits": 4 * STATE_BITS,
+             "what": "each rep's first and last rec-acc rows"}]
+        link_rows += round(msgs) + int(T > 1) + 2 + 4
+        link_D += (round(msgs) + int(T > 1) + 2 + 4) * msg
+        D = sum(s["D_total"] for s in sts)
+        rule = {k: layout(r[f], fit, glue, bpn) for k, f in (("c3", "vstar_rows"), ("c3_T", "vstar_rows_if_T_types"),
+                                                             ("total", "total_rows"))}
+        out.append({"workload": r["workload"], "part": r["part"], "Z": r["Z"], "m": m, "inner_m": r["inner_m"], "T": T,
+                    "rows_rule": rule, "split": sts, "boundaries": boundaries, "refused": refused,
+                    "blocks": sum(s["blocks"] for s in sts), "sessions": sum(s["sessions"] for s in sts),
+                    "distinct_circuits": len({s["circuit"] for s in sts}), "D_total": D, "link_rows": link_rows,
+                    "link_D": link_D, "link_share": link_D / D, "prove_s": sum(s["prove_s"] for s in sts),
+                    "rss_gib": max(s["rss_gib"] for s in sts)})
+
+    print("RecOpen statements as composed (circuit._ranges, row commitments included): per VU, G VUs a k_log-27 block")
+    print(f"{'circuit':>16} {'unit rows':>10} {'VU':>10} {'xunit':>5} {'k_log(1)':>8} {'G':>3} {'links/VU':>9} refused")
+    for f in sorted(cache.values(), key=lambda f: (f["L"], f["H"])):
+        print(f"{f'RecOpen{{{f["L"]},{f["H"]}}}':>16} {f['unit_rows']:>10,} {f['vu']:>10,} {f['vu'] / f['unit_rows']:>5.2f} "
+              f"{f['k_log_1']:>8} {f['G']:>3} {f['link_D_per_instance']:>9,} {'H outside 1..16' if f['refused'] else ''}")
+    print("\nper bucket: proofs' rows by layout's rule (total = V* + inner openings) vs the split's statements")
+    print(f"{'workload':24} {'part':4} {'m':>3} {'im':>3} {'rule blk':>8} {'split blk':>9} {'stmts':>5} {'ses':>4} "
+          f"{'prove s':>8} {'RSS':>6} {'link rows':>9} {'link D':>7} refused")
+    for o in out:
+        wl = o["workload"].removeprefix("vllm/").split("__")
+        print(f"{wl[0] + '/' + wl[4] + '/' + wl[5] if len(wl) > 5 else o['workload'][:24]:24} {o['part']:4} {o['m']:>3} "
+              f"{o['inner_m']:>3} {o['rows_rule']['total']['blocks']:>8} {o['blocks']:>9} {len(o['split']):>5} "
+              f"{o['sessions']:>4} {o['prove_s']:>8.3g} {o['rss_gib']:>6.0f} {o['link_rows']:>9,} {o['link_share']:>7.1%} "
+              f"{'; '.join(o['refused'])}")
+    rng = lambda key, f=lambda o, k: o[k]: (min(f(o, key) for o in out), max(f(o, key) for o in out))
+    summary = {"rule_blocks": {k: rng(k, lambda o, k: o["rows_rule"][k]["blocks"]) for k in ("c3", "c3_T", "total")},
+               "rule_sessions": {k: rng(k, lambda o, k: o["rows_rule"][k]["sessions"]) for k in ("c3", "c3_T", "total")},
+               "split_blocks": rng("blocks"), "split_sessions": rng("sessions"), "statements": rng("distinct_circuits"),
+               "prove_s": rng("prove_s"), "rss_gib": rng("rss_gib"), "link_rows": rng("link_rows"),
+               "link_share": rng("link_share"), "refused_rows": sum(bool(o["refused"]) for o in out), "rows": len(out)}
+    print("\nsummary:", json.dumps(summary))
+    return {"source": str(path), "prover": str(prover), "format": p["format"], "recopen": list(cache.values()),
+            "summary": summary, "buckets": out}
+
+
 def buckets(path: Path, reps: int, depth: int, c3: Path | None = None) -> dict:
     p = json.loads(path.read_text())
     g, dm = gadgets(), demux()
@@ -465,6 +604,8 @@ def main() -> None:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--buckets", type=Path, help="F6's prover.json: V* per session at each unsplit bucket instead")
     ap.add_argument("--candidate3", type=Path, help="with --buckets: proofs' F4 K2 tree (k2.py, units.json), candidate 3 beside")
+    ap.add_argument("--proofs-c3", type=Path, help="with --buckets (for F6's law): proofs' candidate-3 buckets.json (k2.py and "
+                                                  "units.json beside it), V*'s outer proof as multi-block statements alone")
     ap.add_argument("--units", default=",".join(UNITS))
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--row-bits", type=int, nargs="*", default=[1024, 8192, 65536])
@@ -475,6 +616,12 @@ def main() -> None:
         print(json.dumps(unit_stats(a.one_unit)))
         return
     out = a.out or (Path(os.environ["RESEARCH_RUN_DIR"]) / "out" if os.environ.get("RESEARCH_RUN_DIR") else None)
+    if a.proofs_c3:
+        res = proofs_c3(a.proofs_c3, a.buckets)
+        if out:
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "proofs_c3_multiblock.json").write_text(json.dumps(res, indent=1))
+        return
     if a.buckets:
         res = buckets(a.buckets, a.reps, a.depth, a.candidate3)
         if out:
