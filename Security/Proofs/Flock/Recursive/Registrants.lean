@@ -32,12 +32,12 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : Layout P plan tab decode} {rs : HmRows lay}
+  {lay : Binding.Layout P plan tab decode} {rs : HmRows lay}
   {C' : Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
-  {lay' : Layout P' plan' tab' decode'} {rs' : HmRows lay'}
+  {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRows lay'}
 
 /-- **Two registrant records clash**: registered reads `p` of `rd` and `p'` of `rd'` name one root (`port`) and one
 position (`readAt`), and their openings (`TwoOpenings.pair`) or their hm96 leaves (`hm96Pair`) are a SHA-512
