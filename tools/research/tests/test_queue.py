@@ -971,6 +971,32 @@ def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
 
 
+def test_a_runner_seen_gone_just_after_it_recorded_its_end_is_not_lost(tmp_path):
+    """10 Oct: memory-accounting's tier r20261010-134738-7625 passed with rc 0, and the wait reported it lost. A fetch copies
+    status.json, then probes the runner's pid; a runner that records its end and exits in between reads as gone with a status
+    that isn't terminal. The wait fetches once more before calling it lost, and only a runner still gone then is."""
+    from research import queue as Q
+
+    fetched = []
+
+    def fetch(d: Path, ended: bool = True) -> dict:
+        fetched.append(d)
+        if len(fetched) == 1 or not ended:
+            (d / "status.json").write_text(json.dumps({"state": "running", "pid": 7}))
+            return {"runner_gone": {"why": "its runner (pid 7) is gone without recording an end"}}
+        (d / "status.json").write_text(json.dumps({"state": "done", "rc": 0}))
+        return {}
+
+    (d := tmp_path / "runs" / "r1").mkdir(parents=True)
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", poll_s=30, fetch=fetch, sleep=lambda s: None)
+    assert tier._wait(d, "vy-test") == ({"state": "done", "rc": 0}, None) and len(fetched) == 2
+    fetched.clear()
+    tier.fetch = lambda d: fetch(d, ended=False)
+    _, why = tier._wait(d, "vy-test")
+    assert why == "run r1 on vy-test ended without recording it: its runner (pid 7) is gone without recording an end"
+    assert len(fetched) == 2
+
+
 def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_takes(tmp_path):
     """The wait counted polls as if a fetch took no time, and `remote.fetch` may take its ssh's 900 s each poll: against a machine
     that takes the ssh and then hangs, the caller waited 180 polls of 930 s, about two days, not the run's timeout and the grace
