@@ -2,9 +2,9 @@
 smallest level of a recorded recursive session (`r20261009-111638-6720`, class (16,16,8) at 64 instances: level 3,
 `rec-open/l16-h4`, 106 openings), restaged by `rec_vstage.stage` from the fetched fixture `rec-coins/16-16-8-n64`: the inner
 statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
-recorded `pub.bin` and `registered.json`, and its recorded outer session. The session was proved before verity `b3727bd9`'s
-leaf scheme changed, so the level is restaged with that scheme's words (`circuit.LEAF_SCHEME_B3727BD9`) and verified as
-`verity/flock-circuit@b3727bd9`. The honest level is accepted at the honest inner
+recorded `pub.bin` and `registered.json`, and its recorded outer session. The level and its outer session were proved
+again at the current leaf scheme (`r20261010-040650-84a9`: the inner statement's leaves are unsalted, so the rest of the
+session is 6720's). The honest level is accepted at the honest inner
 session and refused without it, and a level whose `rec-coef` V* registered one bit off is refused at that opening, though
 its registration is consistent. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
@@ -18,7 +18,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity_flock import circuit as FC
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
@@ -27,10 +26,10 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 UNIT = "rec-open/l16-h4"
-STATEMENT = "verity/flock-circuit@b3727bd9"
+STATEMENT = "verity/flock-circuit"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves
-CIRCUIT_SHA512 = ("4c47dec94a141028c1bb722b703f0c5d5624b736cfecbedb142cd0512c411e1fc91b0317d2de6a74c5897476217bd89904dabdcfc71e84"
-                  "28ff1c6ecaa6c399f9")
+CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
+                  "459a42e2dda3e07463")
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -54,7 +53,6 @@ def forged(tmp_path_factory) -> Path:
     d = tmp_path_factory.mktemp("rec-coins")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(S, "coefficients", coefficients)
-        mp.setattr(FC, "LEAF_SCHEME", FC.LEAF_SCHEME_B3727BD9)
         res = S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
                       algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
     out = d / f"L{LEVEL}"
