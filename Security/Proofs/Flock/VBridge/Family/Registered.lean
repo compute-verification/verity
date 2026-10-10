@@ -214,7 +214,8 @@ theorem hRowKeys_of (hreg : F.RowsRegistered dg N k Rw) (hcol : F.RowColKeys dg 
 /-- Obligation: discharged by the parse of the parts' circuits (the bit) and their reads files with `OwnReads` (the
 root and the position). **Two parts' columns of one element's bit key one bit of one registered row.** At every accepted outer proof, where
 parts `p` and `p'` hold the same element of `w` at positions `a` and `a'`, the keys of their columns of bit `e` name the
-same bit `b` of rows `q`, `q'` whose registered reads, at rep `r`'s units, are at one registered root and one position.
+same bit `b` of rows `q`, `q'`, and where both rows are registered reads at rep `r`'s units, they are at one registered
+root and one position.
 V*'s part sessions read element `i` of `w` as row `r` of one registration `regs[nm]` (`rec_vstage.py:356-357`);
 established from the parse of the parts' circuits (the bit, the lane that proves `HStruct`) and the sessions' reads
 files with `OwnReads` (the root and the position, the lane that proves `HFiles`). -/
@@ -229,6 +230,8 @@ def SameRow : Prop :=
           (0 * (Rows.ofNet (F.Vs (F.sess p')).hU).nIn + rowColOf F.sh p' (128 * a' + e)) =
         .msg q'.val (b' / 8) (b' % 8) →
       b < Layout.portRowW (F.Vs (F.sess p)).c q → b' < Layout.portRowW (F.Vs (F.sess p')).c q' →
+      (F.zs R ω t R₂ (F.sess p)).rd.isRead (.inl (F.un p r, q)) →
+      (F.zs R ω t R₂ (F.sess p')).rd.isRead (.inl (F.un p' r, q')) →
       b = b' ∧ (F.zs R ω t R₂ (F.sess p)).rd.port (.inl (F.un p r, q)) =
           (F.zs R ω t R₂ (F.sess p')).rd.port (.inl (F.un p' r, q')) ∧
         (F.zs R ω t R₂ (F.sess p)).rd.readAt (.inl (F.un p r, q)) =
@@ -262,8 +265,9 @@ theorem hRowsAgree_of (hreg : F.RowsRegistered dg N k Rw) (hcol : F.RowColKeys d
   obtain ⟨-, q, b, hb, hkey, hread, hval⟩ := hrb
   have hsz : (wIOf F.sh p').size = (nsOf F.sh p').sum := by rw [wIOf, nsOf, OfVStar.wIdx_size]
   obtain ⟨hlt', q', b', hb', hkey', hown'⟩ := hcol R ω t R₂ τ o ha p' hp' (128 * a' + e) (by omega)
-  obtain ⟨rfl, hport, hat⟩ := hsame R ω t R₂ τ o ha r p p' a a' e hp hp' ha₁ ha₁' heq he q b q' b' hkey hkey' hb hb'
   have hread' := hreg R ω t R₂ τ o ha (F.sess p') (F.un p' r) q' hown'
+  obtain ⟨rfl, hport, hat⟩ :=
+    hsame R ω t R₂ τ o ha r p p' a a' e hp hp' ha₁ ha₁' heq he q b q' b' hkey hkey' hb hb' hread hread'
   refine ⟨hlt', q', b, hb', hkey', hread', ?_⟩
   rw [← hval]
   exact (hshared R ω t R₂ τ o ha _ _ _ _ _ _ hread hread' hport hat b hb hb').symm
