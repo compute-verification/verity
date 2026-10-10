@@ -38,7 +38,8 @@ sessions read that the history does not fix, its running sums `rec-acc` and with
 
 * **they accept only an accepted inner transcript** (`VBridgeOff RegColl`): where no two of V*'s sessions' registrant
   records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512 collision, which the
-  recursive audit prices once, `prob_regColl_le`), at all strategies of V*'s sessions there, when every session's outcome `flock-verify verify --zk --registered` accepts and every session's value layer is
+  recursive guarantees answer with a registrant fork, `regFinder`), at all strategies of V*'s sessions there, when
+  every session's outcome `flock-verify verify --zk --registered` accepts and every session's value layer is
   `Good` (no wrong unit, and at every unit each registered read carries the registrant's value: the hidden circuit's
   rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb `coef`), the messages
   `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement

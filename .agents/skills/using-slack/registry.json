@@ -120,6 +120,7 @@
       "linear": "MEM",
       "owns": [
         "verity/core/protocols/pous/",
+        "verity/core/devices/memory_challenger/",
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
@@ -135,6 +136,7 @@
       "linear": "NET",
       "owns": [
         "verity/core/protocols/certifier/",
+        "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",

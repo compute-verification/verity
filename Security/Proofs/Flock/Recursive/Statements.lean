@@ -358,7 +358,7 @@ read some of the rows, never necessarily all of them: on a run `o` whose session
 read row `i`, and `row o i` and `op o i` are the row and the opening of `rt` at `i` the run carries (`_hop`; the run's
 output holds the strategy the prover names for each session, and with it the registered reads), and the hidden
 statement the inner verifier ran on is the statement at the draw of every private circuit that has the rows the run read
-(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of four holds.
+(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of five holds.
 
 * `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`).
 * A registration break: some outcome `o` that `σ` reaches has all of V*'s sessions accepting, having read at some

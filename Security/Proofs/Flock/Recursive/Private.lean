@@ -15,7 +15,8 @@ import Proofs.Flock.Verifier.Registered
 * `RecursiveCircuitIndist` is the two ways of `recursiveCircuitPrivate_le` through the simulator at `p₀ = P`, at the gap.
 * `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·δ`, `ideal_leaves_swap` from each private circuit to the
   ideal leaves and back (on the complement); `recursiveCircuitPrivateLeaves_le` is `recursiveCircuitPrivate_le` with it,
-  `RecursiveCircuitPrivateLeaves` that at the gap, and `RecursiveAudit`'s (ii) that at `2^-193` under `hash-derived-key`.
+  `RecursiveCircuitPrivateLeaves` that at the gap, and `RecursiveAudit`'s (ii) the same at the firewall, at the gap
+  (`Proofs.Flock.Recursive.FirewallZK`).
 * `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
   registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.
 * `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at each row the run read
