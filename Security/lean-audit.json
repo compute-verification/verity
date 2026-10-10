@@ -2206,6 +2206,84 @@
    "assumptions": [],
    "type_hash": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b"
   },
+  "NetTiming.SecurityProofs.CardCountsEqLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.CardCountsEqLe : NetTiming.Guarantees.CardCountsEqLe"],
+   "assumptions": [],
+   "type_hash": "6ac53363ef74893090add2bcb7ad5ecbe306964a195570aec5a74a7936409f03"
+  },
+  "NetTiming.SecurityProofs.CardFree": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.CardFree : NetTiming.Guarantees.CardFree"],
+   "assumptions": [],
+   "type_hash": "e4e7a9edfc56cbca57a08a9cf0180c2156dab3e50650ae6ff3e0d0611079c2ee"
+  },
+  "NetTiming.SecurityProofs.CardLeftPacked": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.CardLeftPacked : NetTiming.Guarantees.CardLeftPacked"],
+   "assumptions": [],
+   "type_hash": "fdfab1c44d76caa6294c61288540dfde050ca2359206918637a50e713c6b9185"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeBlocks : NetTiming.Guarantees.EncardAccSeqsLeBlocks"],
+   "assumptions": [],
+   "type_hash": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts : NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts"
+   ],
+   "assumptions": [],
+   "type_hash": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConstantRate"
+   ],
+   "assumptions": [],
+   "type_hash": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock :",
+    "  NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock"
+   ],
+   "assumptions": [],
+   "type_hash": "20fc39951575ab482c9cae2fd98b1f3227bada256f634044e929818e3bd26afb"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow :",
+    "  NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow"
+   ],
+   "assumptions": [],
+   "type_hash": "cb4edaa614fa554bf28260d3f2be7a97d1fbcc281c4d5289f1ed37f1867bbb6e"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows : NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows"
+   ],
+   "assumptions": [],
+   "type_hash": "0b1f8a5253756424c59436b951f35d3c27d1ad0a2e780734d7ce6d21b6af784a"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock : NetTiming.Guarantees.EncardAccSeqsLeFixedClock"],
+   "assumptions": [],
+   "type_hash": "83702ebbd0d402a2f16e304ab599dcff7ea1f1557615b05a358e2b3caca1257d"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeSync": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardAccSeqsLeSync : NetTiming.Guarantees.EncardAccSeqsLeSync"],
+   "assumptions": [],
+   "type_hash": "1564cbcbef1db36b50e4f1da0cc1c7b6691134430a5d88f497954467812a4ada"
+  },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
    "signature": [
@@ -2223,6 +2301,34 @@
    "assumptions": [],
    "type_hash": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816"
   },
+  "NetTiming.SecurityProofs.EncardFifoGrids": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardFifoGrids : NetTiming.Guarantees.EncardFifoGrids"],
+   "assumptions": [],
+   "type_hash": "5f7005aaad8517a5e9ae40189d5fed4703b1b743643e815d658f804fc67b2385"
+  },
+  "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable : NetTiming.Guarantees.EncardFifoGridsLeOfAvailable"
+   ],
+   "assumptions": [],
+   "type_hash": "02730e35f9f7a998b1685f27c853538842a5575dd32c53de7a5088909c2211c0"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardIngressDecodableLe : NetTiming.Guarantees.EncardIngressDecodableLe"],
+   "assumptions": [],
+   "type_hash": "573fa5899e9bf7dc405fe54301de29c9298da91c72c35eb4269c04b82284b1b0"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents"
+   ],
+   "assumptions": [],
+   "type_hash": "3440d51f33b630457f4da31510ecf35700d053c06e69fa93448f649c9b85e861"
+  },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
    "owner": "@network-accounting",
    "signature": [
@@ -2230,6 +2336,23 @@
    ],
    "assumptions": [],
    "type_hash": "2ca793f68266f5d8b633599df98d5a44b14180caa908bc4ed29f780257ee184a"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngressObsDecodableLeContents"
+   ],
+   "assumptions": [],
+   "type_hash": "bdbc1f954c6569542c9d89590e8f6797c070343487e075e38dd8a2e9a24d5f44"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow :",
+    "  NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow"
+   ],
+   "assumptions": [],
+   "type_hash": "c8332f52fdcab8bc4e7465816cc451535a743eaf18a480d6dd14909cc8476545"
   },
   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": {
    "owner": "@network-accounting",
@@ -2239,6 +2362,12 @@
    ],
    "assumptions": [],
    "type_hash": "13ea83921034e1ee1dc0cb725f2a74c0c928d20fccf7e71f6d962b726f735fa1"
+  },
+  "NetTiming.SecurityProofs.ExpectedRowCausal": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal"],
+   "assumptions": [],
+   "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
   "Pous.SecurityProofs.BandMultiMeetsFamily": {
    "owner": "@memory-accounting",
@@ -3244,37 +3373,6 @@
    "Nci.SecurityProofs.ReadBound": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMul": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
-   "NetTiming.Guarantees.CardCountsEqLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.CardCountsLeLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.CardFree": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.CardLeftPacked": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeAdvice": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeBlocks": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRate": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeFixedClock": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAccSeqsLeSync": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardAcceptedRunsLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardDecodableLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardDecodableLeBlocks": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardFifoGrids": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardFifoGridsLeOfAvailable": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressDecodableLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressDecodableLeContents": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressObsDecodableLeContents": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardLeProdOfBranching": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.EncardObsDecodableLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.ExistsFillOfLeftPacked": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.ExpectedRowCausal": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.FillInjective": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.NoFaultOfAccepted": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.RecordedRowEqFill": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.ReleasedSelf": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "NetTiming.Guarantees.SumReleasedLe": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -3458,7 +3556,25 @@
    "Verity.Guarantees.SoundBatch": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.SoundBind": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.SoundInterleave": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out"
+   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeSync": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardFifoGrids": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
+   "NetTiming.SecurityProofs.EncardIngressDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -3702,23 +3818,42 @@
    ]
   },
   "Definitions.NetworkCertifier.Grid": {
-   "digest": "884daa56cf5ead0fe447aff6cef4a144be0c168a36c510d9ce0789e4dd01cfae",
+   "digest": "c7ed6edeeae9117352e16647ec33b99c24c886b9fb8833bad5989949fd0516fc",
    "definitions": {
     "NetTiming.Grid": "ffd16cd09146b02e4292cb44d8dce042a44bb60ebf1fd3cb63d668fa528af350",
+    "NetTiming.LeftPacked": "9ff4b6a0aa2c7bcd683de1acf23a739adcecc652cc14d3d17dd5901b7f791cf8",
     "NetTiming.Row": "ae6048b36e04cb61d4c26bd3d4ad5abf37420c03cea3b6f1c4bb89feeaf6f370",
     "NetTiming.RowLeftPacked": "e88ad2e420d43d14085e57523cee6175bb20aeedc42045cb9e9ebde38703ce1c",
     "NetTiming.fifoGrid": "8f8019b57fafeb6dc051337cb56ad7245efc4ebb94f87f0ccfe325612212fc47",
     "NetTiming.fill": "904f8f7344585631d73f9cfb680ce471134fb2a52faeab7e1ffa90ccf76f3270",
+    "NetTiming.instDecidablePredForallFinBoolRowLeftPacked": "845c7f790e4520dc3b6bfa9b48d2d6d00b4ebb33993f9089f480d2ca9272f739",
+    "NetTiming.instDecidablePredForallFinForallBoolLeftPacked": "8eb7f8feb2aeca95f6a281227db66fda3263b83c421d6e3974df692b35f93d18",
     "NetTiming.offset": "c377eb41551b36727e25c9b036e55dae5f80335600104b299d2acaefef174047",
     "NetTiming.queue": "b9f8bc87219599771624bc8bc675cb63dff16f09e1f33e941911dba6138e3b9e",
     "NetTiming.released": "5dbceb6ee682c7d972fb16f08ec0c1dfb84ba70b492ba1bb9055d217c9d0a3db",
     "NetTiming.rowCount": "95cee3532364711f79cb77b0ba21751b405644470a935c9f92c99eda351ab005"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.CardLeftPacked",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardFifoGrids",
+    "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
   "Definitions.NetworkCertifier.Ingress": {
@@ -3729,13 +3864,18 @@
     "NetTiming.rowFrames": "a1c2604aec04da7731fcbd03d5189d5e8c3d2915e7c3ad309dc1320af225403e"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.EncardIngressDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
    ]
   },
   "Definitions.NetworkCertifier.Run": {
-   "digest": "4b3f36dc64af150f85d008c3f459048e1e1aea14e163f6ef6c32e544180c8138",
+   "digest": "662752b77833aff2fb80b4afc179edc1ce0e1e40405c3602f3b5ebd8cbc87085",
    "definitions": {
+    "NetTiming.AccSeqs": "b591e011b7f8812e05bb2403572a002909ebd13b5f6d5c84653647dcebcf487e",
     "NetTiming.Accepted": "37cdec64e608117cac5611dabd35f4224906f64d184ef2dfe8d68ccebc198774",
     "NetTiming.AcceptedUpTo": "310f208fce13c24995d809d75f36e717d519a690cb6ca0f056a8064689056666",
     "NetTiming.Certifier": "a967d757eba04afc63b5fa8ed69c05db5c9982a993153a99adff75c1286f4807",
@@ -3767,9 +3907,21 @@
     "NetTiming.ingressUpTo": "d5d3269d8dd71a353c700722aa08bd635e621d61f95c36aaf14a34ebf1bbafe3"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
    ]
   },
@@ -3798,8 +3950,13 @@
     "NetTiming.payloads": "629f7e81bf6e3bc9a64a924267226b9298a3069c46e5d2a8101b6bc9e43f1d87"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
-    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow"
+    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
   "Definitions.Pous.Accounting.Params": {
@@ -8074,7 +8231,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "12e893be246288a196f71349f4d1480086012ccd61e104c820c565a533ce62e0",
+   "digest": "b2cfd1b79c9c20c451ac4a1b391c4ac30a3f07386835fcc97f8fda9da783b526",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -8209,7 +8366,7 @@
     "Flock.Stmt.setupH": "8984403d03339167cd3ce89c4dab49441b6de161bcef0de979d5cac8a905262d",
     "Flock.Stmt.setupH._sparseCasesOn_5": "d7fa2775d3f894d247b591b627dbe1dd5ebfde6070f3edf2d7aa1afbbfa0d77b",
     "Flock.Stmt.setupHidden": "09025742a5b9c3f0543232b2b1a8aeb4f62c04900d4d9ba4d12a3ff8f1f91d8b",
-    "Flock.Stmt.setupTables": "7e9b69ac862043dbb2861faca56e0f8de26b082d6dfc59581291c6d2fc7a1c28",
+    "Flock.Stmt.setupTables": "52f3ed50b801f5ba2656855481c8672ade2c9db182961b984b949f059e5adc2f",
     "Flock.Stmt.setupTables._sparseCasesOn_16": "56ea21fd4f73f92f1da9c2c4e69df2807862751397ac9b294c499a5db7357a11",
     "Flock.Stmt.setupTables._sparseCasesOn_3": "b9beebeb51c735d270108a9b6098482a6bfab1be9da211c9eb94313e817d5695",
     "_private.Flock.HmRow.0.Flock.HmRow.ctx": "be137ad375de546cbbc26a3840c9dda721fa5d02e7a0e715321bc4d87666e495",
@@ -9913,7 +10070,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "5480f54841ce2835edb5386ae4537cfb35311d38a1774150b453fe0961fff332",
+   "digest": "5273345b19e3ab98c0bccc91e3784844da442ff795fe113de6a9faa57c5bd0c5",
    "definitions": {
     "Flock.Registered.Port": "aade65f635f88322beebf73b54575522406e962788786d682837b0c542626389",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -9946,7 +10103,8 @@
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b",
     "Flock.Registered.sibs": "b434bb6941f9571a60856e1147aa3dae7ad6ff6fef41efb6677b956aa8e4b147",
     "Flock.Registered.tableRow": "d282b834f17e1c68b1a02f3e11d6eccad176108d6236f9ee3bd6bf55eb99b8ec",
-    "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22"
+    "Flock.Registered.unitIndices": "4f5d727b9688ad178fa4bdc618244d345d29ab47a0bc03ef4d00419ba6494a22",
+    "Flock.checkRegistered": "8f020acbd0b4638ea2eb647402e29a6bce245720bdedf9b6c29e930eb0f58aaa"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -10069,7 +10227,7 @@
    ]
   },
   "Flock.Statement": {
-   "digest": "ed318606ec5478c0b2aecbe8a66449342a807a88f58b3dcbd3bb55c8929e7c70",
+   "digest": "5b3b2b801954e7efda00607c75811c467bb09ee373ceebb73266494993e3ef41",
    "definitions": {
     "Flock.Circuit.delta.match_6": "c96c7c9d41ff86bdf3de864f1f206c94e5563938d77176c397af2805c7a20508",
     "Flock.Circuit.outRegion": "b985936c9cb971d9e994b33b851582d2a8580483bd4e1122cfc15d19c287bb1e",
@@ -10119,7 +10277,7 @@
     "Flock.Stmt.sumUpTo": "c0db0d130d36af17f6f0bbddc7808edf42ed78f0ff96f96550bf134916e179d5",
     "Flock.Stmt.tags": "b8cee97e26824b528e345715ee408cac6df0fb9a291f93f309abe862ab6cf906",
     "Flock.Stmt.tensor": "9d255feaafd736d05f0d629c182ccb2d7a8cd15d7755c5234954908e2abccd04",
-    "Flock.Tags.withCoins": "546dae129daaa437695a301e033f04e6d4f0621ab539a764b65009e89d86f63b",
+    "Flock.Tags.withCoins": "3aa6e970b1ff4b5e4310c7a32ee5de39620f7cfe63c7a354a390660100df8548",
     "Flock.checkInRange": "af916f3d8a80fd126a8ab2c23e640312ee6e2805bf9c39038e26b57296a5ef41",
     "Flock.helloOf": "cc5bfd4b18bb49b382b0aae5cb74875effb598946aa8405d714f808eee835700",
     "Flock.instBEqCoins": "437d448d5f0a5d790fe77116d7da4d798db2b015b4fbf5a47f4911a60bdc5960",
@@ -10164,12 +10322,12 @@
    ]
   },
   "Flock.Tags": {
-   "digest": "2e13f3de2e2c8b48de1d64232c635ee73377c454e019c2552e2f1dd61a04857f",
+   "digest": "862b80f3d50268706e0d5b619dad94fb7a301b147b6e2914fb4362584608000d",
    "definitions": {
     "Flock.TablesTags": "616e6a1133659aca6313acb08b641dbdb15f03279404705add3efd103a55fd45",
     "Flock.TablesTags.domainPrefix": "58ccbc9ce507eb6dde62a067432ef3c853a3ec9ab55ec5910f0fd9cdda2dc3c1",
     "Flock.TablesTags.sigmaTag": "5f3d032d58b88f62377b4ac9a1e985908ea03850e20fd887ce087d22c1a24727",
-    "Flock.Tags": "1f420ff476375cfd91d8ff30df32546d388ae16bfc0d672f172958a7aea6ddc9",
+    "Flock.Tags": "a2dac1bc806553c0dff32302816a9d7fea4bfe9f6d4c4b018dd0cc12f292dabd",
     "Flock.Tags.MAX_TABLES": "d378b50e3724c1fd421fba24ec3b0b88fe20a0ce0a1efbe402e58e9689f9e2c6",
     "Flock.Tags.bindings": "a53413c3b119d20558f8287f879ba6654e452b5d19d56b534d588dd70480c027",
     "Flock.Tags.blockKeyword": "2ee005a169cc273bfe3927786bb012bbc5950408e27eb88a822523b7a03153e7",
@@ -10186,6 +10344,7 @@
     "Flock.Tags.manyTables": "5c4a5ff0a85ca986915bbfce269612388c733106d2db51927df28722c55b6d73",
     "Flock.Tags.merkleLeaf": "6be4a7307bd5f5c2374a67bee0b0218c7c84c2d6afd6e12e0f09711a9a8926e0",
     "Flock.Tags.name": "71ad1cd6c17aad83f9364dd414a1c7509d2ae0f256388abf5fa58e58439a4c44",
+    "Flock.Tags.osMasks": "f7a6ef4253ebb8565e94e87350928f4a9aef0b502d84a181c572c97a1fab9e15",
     "Flock.Tags.outRowsIdentity": "0040c044249b11ca3a094742e1cd5022058b8feea9ae42cd3db018e7f8667e09",
     "Flock.Tags.outRowsV2Identity": "ea6cc1fd879dc34f5a1d6d6179c2d3d54f117a7a5367825d67e881b53a6b2daa",
     "Flock.Tags.pinnedLeafScheme": "258373fd740b4a89c171b6b0810912e9f8e676f3cfca8402f5bee05c186b5380",
@@ -10203,7 +10362,7 @@
     "Flock.Tags.tableNames": "2de00afa81c67541d87f8c5e7aca6e3560e279d661248a8ebaf83d5618dfe510",
     "Flock.Tags.typed": "0230b61d7d5fe7968739e0c6a1be049a02c369c6c1c939133e89c0fbe1612847",
     "Flock.instInhabitedTags": "504d4d30ef52585946f42dbca0c06421927dcc1dd400346f6b8909e092c194d3",
-    "Flock.instInhabitedTags.default": "93723484e8ee955b703b94f9cd583d79df590186eb96d53caa0d59613771356a",
+    "Flock.instInhabitedTags.default": "494fbff9262aa74eca8eeaa33837eb6088e5e66b6798aa9751ac8f1a929cebab",
     "_private.Flock.Tags.0.Flock.Tags.s": "a4a190d4a37066637be18f3ca5b4adc590b08525521438547f56b4222a5775ff"
    },
    "guarantees": [
@@ -10499,7 +10658,7 @@
    ]
   },
   "Flock.Zk": {
-   "digest": "0fc167e9da11daea17667ab10ce09963a824618f474f3c15af06356466c85060",
+   "digest": "6b4aa2c38b29b1194c128ffa3fa50fa1dc8f8e1f6d3a0e2f29ebbbd2b27e1d59",
    "definitions": {
     "Flock.Zk.INNER_LOG_INV_RATE": "d6ad9e7298bfa7fda1765c25e4b21bcf2d7ea35b7fb92014546242e462c35658",
     "Flock.Zk.K_PAD": "fb9b4b1b8bba3910fa6eb2a70efdb8cd80445d165fd5bcb81b641f1a8e459b54",
@@ -10550,7 +10709,7 @@
     "Flock.Zk.claimCheck": "0229769c0f97aa8015f36299532fde1139c1bc49abfdeafe4680cfbc6724beec",
     "Flock.Zk.codeAt": "296adca86e164940ffccc2088464c8ac42d47005d49431bbfce42ad75fc8f921",
     "Flock.Zk.coinSpec": "e7a5a238ef64cf48cdbdd64b4695fa468119a289ffb9237c59600e23adc2d7a1",
-    "Flock.Zk.hooks": "4991fc0da0c1194473160d2a434c151d179185c4057f84e646006893ca9c7880",
+    "Flock.Zk.hooks": "2f743475278b721357f7811b94574723a33c5a47e46a742971a8879a1d005943",
     "Flock.Zk.instInhabitedLin": "0b883e786d300762ca2880a4349508ddea871df9923e17b6d95338c4babeb276",
     "Flock.Zk.instInhabitedLin.default": "1bb69bf2d2c39a6995627c42b5975600974c7be276b697f9694a2985251ac76e",
     "Flock.Zk.l2add": "88ddc0c8f86169af93616b8261d4c8b9861ae1a529a2ed104c021545dd29a8ee",
@@ -10565,7 +10724,7 @@
     "Flock.Zk.schedule": "83fa9c4b25bc7d08d35755b385cbad2f614d24335758bc1164b3b89bf8963829",
     "Flock.Zk.schedule._sparseCasesOn_1": "ea9dcf3ca747ac78c64b1586828bd6055a721eb75d905bf577cf8a9d74465a43",
     "Flock.Zk.shapeOk": "07caba7ec94f66835f204e211932b15b09f04a654a7202c9bc184a2459433d08",
-    "Flock.Zk.tags": "8af55b8409e5d50c83ca1964219353ac30d985956c651c63e6e2424d4c4b1701",
+    "Flock.Zk.tags": "79a571778457736c3371f3a7efa48822ceb7f95fb875cffcd6d5780f781ab2ac",
     "Flock.Zk.tauCommitment": "7659c733b39bd50117a878725822e101b545e7cbcdd31d02673a28dc185d86e9",
     "Flock.Zk.triple": "d0e0c9fc6e6663a70f566a55608b593a802795563221b2b525b836e426af920b",
     "Flock.Zk.verify": "9b0b21639658ade6d63d5c014e72e6c43fece38a745eefa6e5e3491f6a4ac2f3",
@@ -10759,33 +10918,77 @@
    ]
   },
   "Models.NetworkCertifier.Assumptions": {
-   "digest": "c77a4aeacd4cf565a049605938e11697468cc25fd607554aa4cec19a85d47f0a",
+   "digest": "caf277c28b90843d92e77c576054596bad0cc0589030f3cfb2dc6c7e00393552",
    "definitions": {
     "NetTiming.Allocated": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94",
+    "NetTiming.FramesReadNoTimingAdvice": "fd7a18966dce0b0e94501f13840cbe1a5cd700e5872d74b49775862e57fdcd3f",
     "NetTiming.JitterBounded": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be",
+    "NetTiming.OccupancyReadsOwnBlock": "3e0f6592aa67809f7000885433abc0a57646746fa961c9ceb71d982c21bfe373",
     "NetTiming.Packed": "07208a21923ece8f743252f10d99fd592646fa16e1b476a784300c62cc134570",
     "NetTiming.Regenerates": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
    ]
   },
   "Models.NetworkCertifier.Guarantees": {
-   "digest": "7b4f5686fed85ee0823fd5cd69128052a43390c7b248021c771a8542ec0ab447",
+   "digest": "ab222e387b609b3a59ee9b1396a1f7684f04b2f6ba188c534cfad8bed93b4faa",
    "definitions": {
+    "NetTiming.Guarantees.CardCountsEqLe": "76cfdb78cd7740508d7036e568b2d06e1e8477270445c6b7d9d0c5ce450f39db",
+    "NetTiming.Guarantees.CardFree": "95b62a6bd671c7766718290c0a9171f73ee9bc36bd85a95cf1e9dda413ca4153",
+    "NetTiming.Guarantees.CardLeftPacked": "7653fe84ff0e09e8dd01c62937ace68f14424dde4e07900acc3b0d869a96d99c",
+    "NetTiming.Guarantees.EncardAccSeqsLeBlocks": "4c923e97bdb4dd6b8f6af42dd1e0b3c934e74a79578564da6a973375beb63539",
+    "NetTiming.Guarantees.EncardAccSeqsLeBlocksCounts": "a49f18706c77fac2d8abe977adc27c1002c6101413a43104dcced37c4b02cc4b",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRate": "b519169913a7015c8d7e76a91676d4f5c4e31d9008d1b93ccfa1ddc38fc78919",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock": "93c31cd95d771eafd5f2ccf4647668f221401ecd830cf894831cbf44df253e69",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow": "4730efb16d53a0ce553deff4de3eea25bfe57e4fa506fbfa8f992385f177f481",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows": "7c950bc34144cd89f79445a1c6ddd56e4d1ba1adec0fd3786ed7033b03f373a2",
+    "NetTiming.Guarantees.EncardAccSeqsLeFixedClock": "8cbd2e1bdb724dec1911df60d98518e3b2de2a3de4be6a360a8e85dd99ac4ceb",
+    "NetTiming.Guarantees.EncardAccSeqsLeSync": "1613a2d1d782c1606c0802e412999354e1783d8377ee34a109f97e0d79cca289",
     "NetTiming.Guarantees.EncardDecodableLeConstantRate": "2c7fddc75778661927f172ba424dfda819b4043b6e6c4e1a3b531c42387c39d1",
     "NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow": "214d92020ff264de6c6d98358204f7622abe9878815abcf55da54d3f3aec0ef6",
+    "NetTiming.Guarantees.EncardFifoGrids": "86ea321749434f1d29655b5a06b833fc54462d0abf395c9adde5b9ea406d42aa",
+    "NetTiming.Guarantees.EncardFifoGridsLeOfAvailable": "628485a6510b139296104a67939d308fcd61b3a51833f59dd11e11fa3d3cf6c6",
+    "NetTiming.Guarantees.EncardIngressDecodableLe": "701afa39b7723199d26d1dba9f53c680563db7d7d1b678f0c721fa8cd7a3ceb2",
+    "NetTiming.Guarantees.EncardIngressDecodableLeContents": "2a968e876707f2bc0aee9c57e8afb4eaecbc7f6bcbb8744abb28a7d1689b2619",
     "NetTiming.Guarantees.EncardIngressObsDecodableLe": "1e662478183ed129f72b09125137820af5694fb59ac9ee9b93c618b2b61fc027",
-    "NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow": "5b1bd0d5f8bb2e14913a96a64d8191d46d6a171723f46c3acb5c806c54e8cfe7"
+    "NetTiming.Guarantees.EncardIngressObsDecodableLeContents": "8610085580040505e3d7f8408af73b916138fdb3ff34b6f8ef0ea9b365db7f85",
+    "NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow": "460710ffcbbc13b8b6879879325220fafab040ee4505a620af6d8bf2e8c41664",
+    "NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow": "5b1bd0d5f8bb2e14913a96a64d8191d46d6a171723f46c3acb5c806c54e8cfe7",
+    "NetTiming.Guarantees.ExpectedRowCausal": "85dd5fa499a040c042f939c9e4fd249e9375914a67193e9ea5cde5b7560689f3"
    },
    "guarantees": [
+    "NetTiming.SecurityProofs.CardCountsEqLe",
+    "NetTiming.SecurityProofs.CardFree",
+    "NetTiming.SecurityProofs.CardLeftPacked",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock",
+    "NetTiming.SecurityProofs.EncardAccSeqsLeSync",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
+    "NetTiming.SecurityProofs.EncardFifoGrids",
+    "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLe",
+    "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
   "Models.Pous.Guarantees": {
@@ -13407,9 +13610,9 @@
    "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Setup": {
-   "digest": "a2e5dfc2cdaeb3f8bd2b7e6ae0bd86b38a7be1db658981e29175ea5f3eba03a6",
+   "digest": "53bb180059979a278c43001365db4ee62724daafef1e658e5c9eb82ece655d07",
    "definitions": {
-    "FlockSoundness.Discharge.Exec.tagsAt": "1a652483666eca83aff8dc337ed3f972341fa267c6b8869083f6603433b763fa"
+    "FlockSoundness.Discharge.Exec.tagsAt": "9174a34f1112f59245c1437a5a8a21fba7bdd0a061871d46bd814b89330c9492"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -15147,13 +15350,11 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.Defs": {
-   "digest": "c19766367f5486dd0e74cb14fd66c9aa9919bc1a2d98516953b04c7c3bf70083",
+   "digest": "ee8e32426436aeb7715c5f904b32f33bddd59389c6e540c016a86c873ae277b5",
    "definitions": {
-    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "dd3e6f0573cea7acdb20726188642ed0db7476781125cbd157fb7c469ce203b2",
+    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "413a2f07f95f33951926c91ea36ad6ad97ceb71ee0dae2f4663088c5d458dea5",
     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
     "FlockSoundness.Discharge.ZkReg.OwnReads": "63afdb8c86471f962ec5537985abda2af738111456c4f73cc59c01848b1346a7",
-    "FlockSoundness.Discharge.ZkReg.checkRegistered": "2c56b68cce3bcd0d7ecc9cf4a93359ee4e6bd02bbc8114d710d1e06cfd8eb39d",
-    "FlockSoundness.Discharge.ZkReg.checkRegistered._sparseCasesOn_1": "22dadcdf9f74a48b5e566838bc540dd36d562dd1c1be2565bfa3f061b1ed1f7e",
     "FlockSoundness.Discharge.ZkReg.regPaths": "b944e319b40e60721b3d1563861fcdb802c8a8eb46d33cb46eac08c8735a9a1e"
    },
    "guarantees": [

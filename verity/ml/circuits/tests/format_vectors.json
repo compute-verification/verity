@@ -1,5 +1,5 @@
 {
- "about": "Pinned vectors of verity/primitives/circuits/PROTOCOL.md (the program format), checked by verity/primitives/circuits/tests/test_format_spec.py; written by it with --write.",
+ "about": "Pinned vectors of verity/ml/circuits/PROTOCOL.md (the program format), checked by verity/ml/circuits/tests/test_format_spec.py; written by it with --write.",
  "canonical_json": {
   "in_domain": [
    [
@@ -1297,6 +1297,10 @@
    "KeyError: 'primitive Input016_v1 is not in the registry'"
   ],
   [
+   "an Input id with a trailing newline",
+   "KeyError: 'primitive Input16_v1\\n is not in the registry'"
+  ],
+  [
    "a primitive keyed by another id",
    "ValueError: definition 'TSum4_v1': a primitive is keyed by its id, not 'TSum6_v1'"
   ],
@@ -1356,6 +1360,10 @@
   ],
   [
    "Input16_v1 ",
+   false
+  ],
+  [
+   "Input16_v1\n",
    false
   ],
   [
@@ -1601,6 +1609,10 @@
   ],
   [
    "RegisteredInput16_v1 ",
+   null
+  ],
+  [
+   "RegisteredInput16_v1\n",
    null
   ]
  ],
