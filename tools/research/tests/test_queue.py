@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from research.cli import _custody_ttl_problem, main as research_main
+from research.pods.nebius import slot_only
 from research.queue import PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
@@ -517,7 +518,7 @@ def test_the_quick_tier_runs_the_suites_a_pr_changes_from_a_clean_checkout_at_it
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -668,18 +669,16 @@ class Machine:
 
 
 def _remote_tier(world, monkeypatch, machine: Machine, **kw):
-    """A `RemoteQuickTier` on machine `vy-test` for `world`, its slot.py the fake one and its clock the time its sleeps took; and
+    """A `RemoteQuickTier` on machine `vy-test` for `world`, its clock the time its sleeps took; and
     those sleeps."""
     from research import queue as Q
 
     world.with_store_remote()
-    (world.tmp / "bin").mkdir(exist_ok=True)
-    (slot := world.tmp / "bin" / "slot.py").write_text(FAKE_SLOT)
     monkeypatch.setenv("RESEARCH_RUNS", str(world.tmp / "runs"))
     monkeypatch.setenv("FAKE_SLOT_SEEN", str(world.tmp / "slot-seen.json"))
     sleeps: list[float] = []
     return Q.RemoteQuickTier(world.dev, str(world.origin), "vy-test", by="lane-1", root=world.tmp / "ready", sleep=sleeps.append,
-                             **{"clock": lambda: sum(sleeps), "slot": slot, "launch": machine.launch, "fetch": machine.fetch,
+                             **{"clock": lambda: sum(sleeps), "launch": machine.launch, "fetch": machine.fetch,
                                 **kw}), sleeps
 
 
@@ -690,7 +689,7 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
 
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -720,9 +719,10 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     ttl = flags[flags.index("--custody-ttl") + 1]
     assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
         "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
-    assert sorted(Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send") == ["quick_tier.py", "slot.py"]
+    assert [Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send"] == ["quick_tier.py"]
+    assert slot_only.through_slot(argv[argv.index("--") + 1:]), "cpu-1's launcher refuses a run whose command isn't slot.py's"
     assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
-        "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "python3"]
+        "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "sh"]
     s = json.loads(seen.read_text())
     assert s["argv"][:3] == ["--quick", "--changed", main] and s["pythonpath"] is None
     assert Path(s["argv"][s["argv"].index("--json") + 1]) == machine.root / "runs" / rid / "out" / "suites.json"
@@ -747,7 +747,7 @@ def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_reposito
 
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -918,8 +918,6 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     exited = Machine(world.tmp, outcome=lambda run, rid, head: None, fetched={"launcher_exited": {"last_line": "Traceback: boom"}})
     tier, sleeps = _remote_tier(world, monkeypatch, exited)
     assert re.fullmatch(r"run r\S+'s runner on vy-test exited before the run ended \(Traceback: boom\)", tier(pr)) and len(sleeps) == 1
-    tier, _ = _remote_tier(world, monkeypatch, Machine(world.tmp), slot=world.tmp / "no-slot.py")
-    assert tier(pr).endswith("no-slot.py isn't there to take a check slot on vy-test with (run it from a checkout of the repository)")
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
 
 
@@ -994,7 +992,7 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     tier ran tools/research on vy-nebius-1 failed it (#985, #1021)."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
@@ -1023,7 +1021,7 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
     It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "verity/core/service/flock/lakefile.toml": 'name = "flock"\n'})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "verity/core/service/flock/lakefile.toml": 'name = "flock"\n'})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
