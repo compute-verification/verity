@@ -55,9 +55,9 @@ theorem drawOrder_univ {k : ℕ} (j : Fin k) : drawOrder (Finset.univ : Finset (
   have hj : (j : ℕ) < (Finset.univ : Finset (Fin k)).card := lt_of_lt_of_eq j.isLt (Finset.card_fin k).symm
   have hu := Finset.orderEmbOfFin_unique (s := (Finset.univ : Finset (Fin k))) rfl
     (f := fun x => (⟨x.val, lt_of_lt_of_eq x.isLt (Finset.card_fin k)⟩ : Fin k)) (fun _ => Finset.mem_univ _)
-    (fun _ _ h => Fin.lt_iff_val_lt_val.2 (Fin.lt_iff_val_lt_val.1 h))
+    (fun _ _ h => Fin.lt_def.2 (Fin.lt_def.1 h))
   unfold drawOrder
-  rw [dif_pos hj]
+  rw [dite_eq_left hj]
   exact congrArg some (congrFun hu ⟨j.val, hj⟩).symm
 
 theorem batch₁_cover (k : ℕ) : CoverCheck Finset.univ (batch₁ k) :=
