@@ -89,6 +89,30 @@ def test_the_slot_sumcheck_at_fixed_coefficients():
     assert PR.hours(a)["share_mean"] == pytest.approx(a["sumcheck_h_mean"] / a["prover_h_mean"])
 
 
+def test_dp4t_keys_buckets_by_template():
+    """N = 1000, K = 160. Two registered types share a template (r1, r2: one tc-step-like unit) and differ in Z; a bulk
+    generic type g has its own; a rare generic type x (0.16 draws per audit) pads dp2's top bucket to its template (at most Z), so
+    dp4t gives it a bucket of its own (B = 1: its quantile sessions of one slot cost less than one session of 16)."""
+    units = [P.Unit("r1", "t", 500, 1000, 1000), P.Unit("r2", "t", 300, 2000, 2000), P.Unit("g", "u", 199, 1500, 1500),
+             P.Unit("x", "v", 1, 1900, 1900)]
+    nets = {"r1": {"kind": "registered", "nnz": 100, "bytes": 400}, "r2": {"kind": "registered", "nnz": 100, "bytes": 400},
+            "g": {"kind": "generic", "nnz": 1500, "bytes": 6000}, "x": {"kind": "generic", "nnz": 5000, "bytes": 20000}}
+    assert PR.template_class(units[0], nets) == ("registered", 7) and PR.template_class(units[3], nets) == ("generic", 13)
+    groups, rare = PR.menu_t(1000, 160, units, nets, budget=3)
+    assert [(c, Z, [u.label for u in us]) for c, Z, us in groups] == [
+        (("generic", 11), 1500, ["g"]), (("registered", 7), 1000, ["r1"]), (("registered", 7), 2000, ["r2"])]
+    assert [u.label for u in rare] == ["x"]
+    S = {"k1_ns": 10.0, "band": (5.0, 20.0), "reps": 2, "bits_bytes": 8.0, "work_bytes": 16.0}
+    a = PR.audit(1000, 160, units, {}, COEF, menu="dp4t", nets=nets, slot=S, **TINY)
+    assert a["buckets"] == {"body": 3, "rare": 1, "tail": 0} and a["rare"][0]["slots"] == 1
+    assert a["rare"][0]["sessions_public"] == P.upper_q(1000, 1, 160)
+    assert {x["template_class"]: x["session"]["template"] for x in a["body"]} == {"generic 2^11": 1500, "registered 2^7": 100}
+    d = PR.audit(1000, 160, units, {}, COEF, k=2, nets=nets, slot=S, **TINY)
+    assert max(x["session"]["template"] for x in d["body"]) == 2000 and a["sumcheck_h_mean"] < d["sumcheck_h_mean"]
+    assert a["padding"]["zpad"] == pytest.approx(sum(x["Z"] * 160 * x["units"] / 1000 for x in a["body"] + a["rare"])
+                                                 / sum(160 * u.n / 1000 * u.z_mean for u in units))
+
+
 def test_netlists_and_staging():
     per = {"nnz": 1000, "ands": 50, "committed": 10}
     inv = {"rows": [

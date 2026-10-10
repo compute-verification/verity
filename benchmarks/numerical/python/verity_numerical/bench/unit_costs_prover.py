@@ -31,6 +31,15 @@ largest power of two Z at which a B = 16 session at the workload's least ρ is i
 is split below the subcircuit into ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions
 ceil(p X / B) for X of its units drawn); every other unit keeps its dp4 bucket.
 
+**dp4t** (:func:`menu_t`): dp4 places on nonzeros alone, so a rare unregistered type in a bucket of registered ones pads
+every session's slots to its template. dp4t keys the body's buckets by (template class, Z): registered types by their
+registered unit's template (every GEMM tc step one class, at every K), generic types by their whole subcircuit's, each
+class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class drawn fewer than
+:data:`RARE_DRAWS` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
+its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The caps are dp4's (the cap search's session holds
+the workload's largest templates). The what-if registers every generic body type drawn at least :data:`RARE_DRAWS` times
+as a tc-step-like unit.
+
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
 (``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on circuits'
 staging ladder (:data:`STAGING`); a registered type lowers one unit, at least the measured registered staging
@@ -78,6 +87,10 @@ CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
 RHO_TABLE = 26.5
 MENU_K = 4
+#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class drawn fewer than :data:`RARE_DRAWS` times
+#: per audit (mean) is rare, each of its types a bucket of its own at B = 1 or 16 (whichever costs less at the public count)
+BUCKETS_T = 8
+RARE_DRAWS = 16
 #: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (r20261010-093619-c3ee; upper bounds,
 #: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
 #: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
@@ -459,22 +472,71 @@ def _buckets(N: int, K: int, groups: Mapping[float, Sequence[P.Unit]], slots: in
     return out
 
 
+def template_class(u: P.Unit, nets: Mapping[str, Mapping[str, Any]] | None) -> tuple[str, int]:
+    """A unit type's template class: registered (a registered unit or a tree's members) or generic (its whole subcircuit),
+    and its template's ceil(log2) nonzeros."""
+    n = (nets or {}).get(u.label)
+    t = n["nnz"] if n else u.z
+    return ("registered" if n and n["kind"] in ("registered", "tree") else "generic"), math.ceil(math.log2(max(t, 2)))
+
+
+def menu_t(N: int, K: int, units: Sequence[P.Unit], nets: Mapping[str, Mapping[str, Any]] | None,
+           budget: int = BUCKETS_T, rare: float = RARE_DRAWS) -> tuple[list[tuple[tuple[str, int], float, list[P.Unit]]],
+                                                                       list[P.Unit]]:
+    """``dp4t``: the body's buckets keyed by (template class, Z), and its rare types. Every GEMM tc step shares one class
+    (one registered unit at every K). A class drawn at least ``rare`` times per audit gets one bucket, and the rest of
+    ``budget`` go one at a time to the class whose :func:`~unit_costs_padding.menu_dp` gains most in padded nonzeros
+    (Σ Z_b W_b); the other classes' types are rare."""
+    classes: dict[tuple[str, int], list[P.Unit]] = defaultdict(list)
+    for u in units:
+        classes[template_class(u, nets)].append(u)
+    body = {c: us for c, us in classes.items() if K * sum(u.n for u in us) / N >= rare}
+    rares = [u for c, us in sorted(classes.items()) if c not in body for u in us]
+    cost = lambda us, j: sum(Z * sum(u.n for u in g) for Z, g in P.assign(us, P.menu_dp(us, j)).items())  # noqa: E731
+    k = {c: 1 for c in body}
+    while sum(k.values()) < budget:
+        gain = {c: cost(us, k[c]) - cost(us, k[c] + 1) for c, us in body.items() if k[c] < len({u.z for u in us})}
+        if not gain or max(gain.values()) <= 0:
+            break
+        k[max(gain, key=lambda c: gain[c])] += 1
+    return [(c, Z, g) for c, us in sorted(body.items()) for Z, g in P.assign(us, P.menu_dp(us, k[c])).items()], rares
+
+
+def _padding(N: int, K: int, units: Sequence[P.Unit], shapes: Sequence[Mapping[str, Any]]) -> dict[str, float]:
+    """The padding module's zpad, pad_mean and public over the body's ``units`` in their unsplit ``shapes``."""
+    actual = sum(K * u.n / N * u.z_mean for u in units)
+    return {"zpad": sum(s["Z"] * K * s["units"] / N for s in shapes) / actual,
+            "pad_mean": sum(s["slots"] * s["Z"] * s["sessions_mean"] for s in shapes) / actual,
+            "public": sum(s["slots"] * s["Z"] * s["sessions_public"] for s in shapes) / actual}
+
+
 def audit(N: int, K: int, units: Sequence[P.Unit], rho: Mapping[str, float], coef: Mapping[str, Sequence[float]],
-          limit: float | None = None, slots: int = SLOTS, k: int = MENU_K, **kw: Any) -> dict[str, Any]:
-    """The padding table's body in its dp``k`` buckets at ``slots`` and its tail at one slot (each sampler its own bucket,
-    the other large units one bucket at their largest Z), units over ``limit`` split (the module docstring)."""
+          limit: float | None = None, slots: int = SLOTS, k: int = MENU_K, menu: str = "dp4", **kw: Any) -> dict[str, Any]:
+    """The padding table's body in its dp``k`` buckets at ``slots`` (``menu`` "dp4t": :func:`menu_t`'s, its rare types each
+    their own bucket) and its tail at one slot (each sampler its own bucket, the other large units one bucket at their
+    largest Z), units over ``limit`` split (the module docstring)."""
     body, tail, _thr = P.tail_split(units)
     small = [u for u in body if limit is None or u.z <= limit]
-    shapes = _buckets(N, K, P.assign(small, P.menu_dp(small, k)) if small else {}, slots, None, rho, coef, **kw)
+    rare: list[dict[str, Any]] = []
+    if menu == "dp4t":
+        groups, rares = menu_t(N, K, small, kw.get("nets"))
+        shapes = [dict(x, template_class=f"{c[0]} 2^{c[1]}") for c, Z, us in groups
+                  for x in _buckets(N, K, {Z: us}, slots, None, rho, coef, **kw)]
+        rare = [dict(min((_buckets(N, K, {u.z: [u]}, b, None, rho, coef, **kw)[0] for b in (1, slots)),
+                         key=lambda x: x["prover_s_public"]), template_class="rare") for u in rares]
+    else:
+        shapes = _buckets(N, K, P.assign(small, P.menu_dp(small, k)) if small else {}, slots, None, rho, coef, **kw)
+    pad = _padding(N, K, body, shapes + rare) if limit is None and body else None
     shapes += _buckets(N, K, {limit: [u for u in body if u not in small]} if len(small) < len(body) else {}, slots, limit,
                        rho, coef, **kw)
     samplers = [u for u in tail if u.template in P.SAMPLERS]
     big = [u for u in tail if u.template not in P.SAMPLERS]
     tails = _buckets(N, K, P.assign(samplers, P.menu_natural(samplers)) if samplers else {}, 1, limit, rho, coef, **kw)
     tails += _buckets(N, K, P.assign(big, P.menu_max(big)) if big else {}, 1, limit, rho, coef, **kw)
-    every = shapes + tails
+    every = shapes + rare + tails
     tot = lambda key: sum(s[key] for s in every)  # noqa: E731
-    return {"limit": limit, "body": shapes, "tail": tails, "sessions_mean": tot("sessions_mean"),
+    return {"limit": limit, "menu": menu, "body": shapes, "rare": rare, "tail": tails, "padding": pad,
+            "buckets": {"body": len(shapes), "rare": len(rare), "tail": len(tails)}, "sessions_mean": tot("sessions_mean"),
             "sessions_public": tot("sessions_public"), "prover_h_mean": tot("prover_s_mean") / 3600,
             "prover_h_public": tot("prover_s_public") / 3600, "sumcheck_h_mean": tot("sumcheck_s_mean") / 3600,
             "sumcheck_h_public": tot("sumcheck_s_public") / 3600,
@@ -487,37 +549,53 @@ def audit(N: int, K: int, units: Sequence[P.Unit], rho: Mapping[str, float], coe
 
 
 def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[float]],
-             slaw: Mapping[str, Sequence[float]] | None = None, **kw: Any) -> dict[str, Any]:
+             slaw: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
+             **kw: Any) -> dict[str, Any]:
+    """One workload's audit under ``menu``, unsplit and at each cap. ``register_bulk``: a what-if with every generic body
+    type drawn at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
+    text and staging those of one tc step)."""
     K = int(inv["K"])
     N, units, skipped = P.units_of(inv, name)
     rho = rhos(inv, name)
     nets = netlists(inv, name, kw.get("bytes_per_nnz", BYTES_PER_NNZ))
+    body, _tail, _thr = P.tail_split(units)
+    registered = []
+    if register_bulk:
+        tc = {"kind": "registered", "nnz": TC_STEP_NNZ, "bytes": kw.get("bytes_per_nnz", BYTES_PER_NNZ) * TC_STEP_NNZ,
+              "ands": REGISTERED_STAGING[0][3]}
+        for u in body:
+            if u.label in nets and nets[u.label]["kind"] == "generic" and K * u.n / N >= RARE_DRAWS:
+                nets[u.label] = dict(tc)
+                registered.append(u.label)
     for net in nets.values():
         net["staging"] = staging(net, slaw or staging_fit())
-    body, _tail, _thr = P.tail_split(units)
     r0 = min((rho.get(u.label, RHO_TABLE) for u in body), default=RHO_TABLE)
+    kw = {**kw, "menu": menu}
     unsplit = audit(N, K, units, rho, coef, nets=nets, **kw)
     top = max(unsplit["body"], key=lambda s: s["Z"])
+    ck = {k: v for k, v in kw.items() if k != "menu"}
     every = [nets[u.label]["bytes"] for u in units if u.label in nets]
     stage = [dict(n["staging"], unit_type=k, kind=n["kind"], ands=n["ands"]) for k, n in nets.items()]
-    out: dict[str, Any] = {"workload": name, "N": N, "K": K, "skipped": skipped, "rho_min": r0, "dp4_top": top["Z"],
+    out: dict[str, Any] = {"workload": name, "menu": menu, "registered_whatif": registered, "N": N, "K": K,
+                           "skipped": skipped, "rho_min": r0, "dp4_top": top["Z"],
                            "dp4": [s["Z"] for s in unsplit["body"]], "top_session": top["session"],
                            "top_staging": top["staging"], "unsplit": unsplit,
                            "staging": {"shapes": len(stage), "max": max(stage, key=lambda x: x["peak_gib"], default=None),
                                        "total_h": sum(x["wall_s"] for x in stage) / 3600,
                                        "fits_node": all(x["peak_gib"] <= NODE_GIB for x in stage)},
-                           "range_cap": cap(r0, coef, math.inf, nets=every, **kw)}
+                           "range_cap": cap(r0, coef, math.inf, nets=every, **ck)}
     for node, gib in (("cpu", NODE_GIB), ("gpu", GPU_GIB)):
-        c = cap(r0, coef, gib, nets=every, **kw)
+        c = cap(r0, coef, gib, nets=every, **ck)
         over = [u for u in units if c is not None and u.z > c]
         at = audit(N, K, units, rho, coef, limit=c, nets=nets, **kw) if over else unsplit
-        out[node] = {"gib": gib, "cap": c, "cap_flock": cap(r0, coef, gib, nets=every, **{**kw, "slot": None}),
+        out[node] = {"gib": gib, "cap": c, "cap_flock": cap(r0, coef, gib, nets=every, **{**ck, "slot": None}),
                      "fits_unsplit": unsplit["in_range"] and unsplit["max_peak_gib"] <= gib,
                      "split": [{"unit_type": u.label, "nnz": u.z, "draw_share": u.n / N, "pieces": math.ceil(u.z / c)} for u in over],
-                     "at_cap": at, "heaviest": max(at["body"] + at["tail"], key=lambda s: s["session"]["total_s"])["session"],
+                     "at_cap": at,
+                     "heaviest": max(at["body"] + at["rare"] + at["tail"], key=lambda s: s["session"]["total_s"])["session"],
                      "band": [hours(audit(N, K, units, rho, coef, limit=c if over else None, nets=nets,
                                           **{**kw, "slot": dict(kw["slot"], k1_ns=b)}), b)
-                              for b in kw["slot"]["band"]] if kw.get("slot") else []}
+                              for b in kw["slot"]["band"]] if kw.get("slot") and node == "cpu" else []}
     return out
 
 
@@ -538,6 +616,7 @@ def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
     slaw = staging_fit()
     reg = [kw.get("bytes_per_nnz", BYTES_PER_NNZ) * TC_STEP_NNZ] * SLOTS
     kw["slot"] = slot
+    names = list(dict.fromkeys(r["workload"] for r in inv["rows"]))
     return {"format": "verity/f6-prover/v3", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
             "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_LOG_MAX, "fit": law,
             "slot_sumcheck": None if slot is None else {
@@ -548,7 +627,9 @@ def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
             "check": check(coef),
             "pow2": [{"registered": session(2.0 ** j, RHO_TABLE, coef, nets=reg, **kw),
                       "generic": session(2.0 ** j, RHO_TABLE, coef, **kw)} for j in POW2],
-            "workloads": [workload(inv, w, coef, slaw, **kw) for w in dict.fromkeys(r["workload"] for r in inv["rows"])]}
+            "workloads": [workload(inv, w, coef, slaw, **kw) for w in names],
+            "workloads_dp4t": [workload(inv, w, coef, slaw, menu="dp4t", **kw) for w in names],
+            "whatif_registered": [workload(inv, w, coef, slaw, menu="dp4t", register_bulk=True, **kw) for w in names]}
 
 
 # --- rendering ---------------------------------------------------------------------------------------------------------------
@@ -617,6 +698,45 @@ def _slot_table(pr: Mapping[str, Any]) -> list[str]:
     return L
 
 
+def _names(labels: Sequence[str]) -> str:
+    n: dict[str, int] = defaultdict(int)
+    for x in labels:
+        n[x.split("{")[0]] += 1
+    return ", ".join(f"{k} x{v}" if v > 1 else k for k, v in n.items()) or "none"
+
+
+def _menu_table(pr: Mapping[str, Any]) -> list[str]:
+    L = ["", "## Menus: dp4, dp4t, and dp4t with the bulk unregistered types registered (what-if)", "",
+         "Prover hours per audit at the node cap and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
+         "session at the node cap (Z, its largest template, prove + sumcheck, peak); the caps; the body's padding unsplit "
+         "(zpad, pad_mean, public, as in the padding table, the rare buckets included); the types the what-if registers "
+         f"(generic body types drawn at least {RARE_DRAWS} times per audit, each as one GEMM tc step's template).", "",
+         "| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | cap: node / GPU | "
+         "zpad / pad_mean / public | registered |", "|" + "---|" * 9]
+    for ws in zip(pr["workloads"], pr["workloads_dp4t"], pr["whatif_registered"]):
+        for tag, w in zip(("dp4", "dp4t", "dp4t, registered"), ws):
+            n, a, b, p = w["cpu"], w["cpu"]["at_cap"], w["unsplit"]["buckets"], w["unsplit"]["padding"]
+            h = n["heaviest"]
+            reg = w.get("registered_whatif") or []
+            L.append("| " + " | ".join([
+                P._short(w["workload"]), tag, f"{b['body']} + {b['rare']} + {b['tail']}",
+                f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}",
+                f"{a['sumcheck_h_mean'] / a['prover_h_mean']:.0%}" if a["prover_h_mean"] else "–",
+                f"{P._si(h['Z'])}, {P._si(h['template'])}: {_t(h['prove_s'])} + {_t(h['sumcheck_s'])}, {h['peak_gib']:.3g} GiB",
+                f"{_p2(n['cap'])} / {_p2(w['gpu']['cap'])}", f"{p['zpad']:.3f} / {p['pad_mean']:.3f} / {p['public']:.3f}",
+                _names(reg) if tag.endswith("registered") else "–",
+            ]) + " |")
+    L += ["", "### dp4t buckets, unsplit", "", "| workload | class | Z | slots | types | sessions mean / public | template | "
+          "session: prove + sumcheck | peak | prover h mean |", "|" + "---|" * 10]
+    for w in pr["workloads_dp4t"]:
+        for x in w["unsplit"]["body"] + w["unsplit"]["rare"]:
+            s = x["session"]
+            L.append(f"| {P._short(w['workload'])} | {x['template_class']} | {P._si(x['Z'])} | {x['slots']} | {x['types']} | "
+                     f"{x['sessions_mean']:.1f} / {x['sessions_public']} | {P._si(s['template'])} | {_t(s['prove_s'])} + "
+                     f"{_t(s['sumcheck_s'])} | {s['peak_gib']:.3g} GiB | {x['prover_s_mean'] / 3600:.3g} |")
+    return L
+
+
 def render(pr: Mapping[str, Any]) -> str:
     f = pr["fit"]
     c = f["coef"]
@@ -670,6 +790,8 @@ def render(pr: Mapping[str, Any]) -> str:
             _yn(st["fits_node"]), f"{st['shapes']} shapes, {st['total_h']:.3g} h"]) + " |")
     if pr.get("slot_sumcheck"):
         L += _slot_table(pr)
+    if pr.get("workloads_dp4t"):
+        L += _menu_table(pr)
     L += ["", f"## Power-of-two bounds (ρ = {RHO_TABLE} nonzeros per row)", "",
           "Registered: 16 distinct types, each one GEMM tc-step netlist. Generic: each slot its own netlist of Z nonzeros.", "",
           "| Z | rows per slot | k_log | in range | D | registered: circuit text | peak RSS | prove | generic: circuit text | "
