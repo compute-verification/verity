@@ -71,11 +71,12 @@ def shape(forged, tmp_path_factory) -> Path:
 
 
 def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
-         session: Path = SET / "outer-L3" / "session") -> subprocess.CompletedProcess:
+         session: Path = SET / "outer-L3" / "session", rows: Path | None = None) -> subprocess.CompletedProcess:
     u = SET / "u" / "stage"
     rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
                                     "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
                                     str(SET / inner / "session")]
+    rec += [] if rows is None else ["--rec-rows", str(rows)]
     p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
                         "--public", str(public), "--partition", str(level / "partition.json"), "--program",
                         str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape), *rec, *extra,
@@ -84,8 +85,8 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
 
 
 def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str | None, *extra: str,
-            session: Path = SET / "outer-L3" / "session") -> dict:
-    p = _run(level, public, registered, shape, inner, *extra, session=session)
+            session: Path = SET / "outer-L3" / "session", rows: Path | None = None) -> dict:
+    p = _run(level, public, registered, shape, inner, *extra, session=session, rows=rows)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
 
@@ -153,7 +154,25 @@ def algebra(forged, tmp_path_factory) -> Path:
     return d / "alg"
 
 
-def test_a_v_registered_one_element_off_is_refused_at_its_part(algebra, shape, undrawn, tmp_path):
+def _rec_rows(dst: Path, parts: list[Path]) -> Path:
+    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts: each row port's entry (every port but `v`
+    and `out`), which every part that has the port must agree on."""
+    ports: dict = {}
+    for d in parts:
+        for nm, e in json.loads((d / "registered.json").read_text())["ports"].items():
+            if nm not in ("v", "out"):
+                assert ports.setdefault(nm, e) == e, (d, nm)
+    dst.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+    return dst
+
+
+@pytest.fixture(scope="module")
+def rows(algebra, tmp_path_factory) -> Path:
+    """The verifier's shared rows of the honest algebra: its message rounds `m<k>` and the running sums' `acc0`, `acc1`."""
+    return _rec_rows(tmp_path_factory.mktemp("rec-rows") / "rows.json", sorted(algebra.iterdir()))
+
+
+def test_a_v_registered_one_element_off_is_refused_at_its_part(algebra, shape, undrawn, rows, tmp_path):
     """`HVCoins`' check (`RecCoins.checkResiduals`): the algebra staged with rep 0's first comb element of v one bit off
     (`rec_vstage --forge comb`) changes one part's registration, and that part is refused by the v the verifier's coins and
     fold give."""
@@ -164,7 +183,7 @@ def test_a_v_registered_one_element_off_is_refused_at_its_part(algebra, shape, u
     (p,) = changed
     t = SET / "inner-honest" / "public.json"
     why = _verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t),
-                  session=undrawn)["why"]
+                  session=undrawn, rows=rows)["why"]
     assert re.fullmatch(rf"setup: rec-coins: rec-residuals/m\d+-k\d+-c\d+-{p.name}: rep 0: part {p.name[1:]}'s \d+ elements of v: "
                         "the statement's v row is not the verifier's rec-v row 0", why), why
 
@@ -176,7 +195,7 @@ def _transcript(dst: Path, change) -> Path:
     return dst
 
 
-def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape, undrawn, tmp_path):
+def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape, undrawn, rows, tmp_path):
     """`HPubRows`' check (`RecVStar.checkPubRows`): the `pub.bin` rows of the first algebra part that reads `rec-c0` are,
     at its `rec-c<k>` reads, the `c_k` the coin server recorded. The honest part passes setup with the inner transcript
     (`undrawn`'s session is refused after it), is refused without it, and is refused at a transcript whose rep 0 `c_0` is
@@ -187,9 +206,9 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
     with (a / "circuit.txt").open() as f:
         unit = f.readline().split()[1]
     t = SET / "inner-honest" / "public.json"
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t), session=undrawn)
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t), session=undrawn, rows=rows)
     assert not v["why"].startswith("setup:"), v["why"]
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", session=undrawn)
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", session=undrawn, rows=rows)
     assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
 
     def flip(r):
@@ -198,9 +217,69 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
         r["commits"] = [c.hex()]
 
     bad = _transcript(tmp_path / "c0.json", flip)
-    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn)
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn, rows=rows)
     assert re.fullmatch(rf"setup: rec-pub: {re.escape(unit)}: port {port}'s table row \d+ is not rep 0's c_0 \(inner round \d+\) "
                         "of the inner transcript", v["why"]), v["why"]
     bad = _transcript(tmp_path / "coins.json", lambda r: r.__setitem__("coins", ["00" * 16] * len(r["coins"])))
-    p = _run(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn)
+    p = _run(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(bad), session=undrawn, rows=rows)
     assert p.returncode == 2 and "round" in p.stderr and "coins are not the inner session record's" in p.stderr, p.stderr
+
+
+def _unit(d: Path) -> str:
+    with (d / "circuit.txt").open() as f:
+        return f.readline().split()[1]
+
+
+def _salted(path, n):
+    """The running sums' salts with salt 0 one bit off: another registration of the same rows (`rec_vstage.acc_salts`)."""
+    ss = _honest_salts(path, n)
+    return [bytes([ss[0][0] ^ 1]) + ss[0][1:], *ss[1:]]
+
+
+_honest_salts = S.acc_salts
+
+
+def _unregistered(src: Path, dst: Path, port: str) -> Path:
+    """Part `src` with `port` committed afresh: gone from its reads file and from `pub.bin`'s registered rows."""
+    shutil.copytree(src, dst)
+    r = json.loads((dst / "registered.json").read_text())
+    del r["ports"][port]
+    (dst / "registered.json").write_text(json.dumps(r))
+    data = (dst / "pub.bin").read_bytes()
+    nl = data.index(b"\n")
+    head = json.loads(data[:nl])
+    del head["registered"][port]
+    (dst / "pub.bin").write_bytes(json.dumps(head).encode() + data[nl:])
+    return dst
+
+
+def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn, rows, tmp_path):
+    """`OwnNamesRows` and `PartPortsOne`'s check (`RecVStar.checkRows`): the honest part that reads `acc0` passes setup at the
+    verifier's shared rows (`--rec-rows`, the honest algebra's) and is refused without them. The algebra staged under another
+    salt of the running sums' row 0 registers the same rows as another `rec-acc`, consistently: that part passes setup at its
+    own staging's shared rows and is refused at the verifier's, by `acc0`'s root. The honest part with `acc0` committed
+    afresh (gone from its reads file and `pub.bin`'s registered rows) is refused by the missing row port."""
+    a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
+    unit = _unit(a)
+    t = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
+    assert not v["why"].startswith("setup:"), v["why"]
+    v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", *t, session=undrawn)
+    assert v["why"] == (f"setup: {unit}: one of V*'s parts; pass the verifier's record of V*'s shared rows (--rec-rows F), "
+                        "which each of its row ports must be"), v["why"]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(S, "acc_salts", _salted)
+        _stage(tmp_path / "salted", levels=[], algebra=True, evaluate=False)
+    b = tmp_path / "salted" / "alg" / a.name
+    own = _rec_rows(tmp_path / "own.json", sorted((tmp_path / "salted" / "alg").iterdir()))
+    v = _verify(b, b / "pub.bin", b / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=own)
+    assert not v["why"].startswith("setup:"), v["why"]
+    root = lambda f: json.loads(f.read_text())["ports"]["acc0"]["root"]
+    assert root(b / "registered.json") != root(rows)
+    v = _verify(b, b / "pub.bin", b / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
+    assert v["why"] == (f"setup: {unit}: its row port acc0 is not the verifier's shared row acc0 (--rec-rows): root "
+                        f"{root(b / 'registered.json')}, against {root(rows)}"), v["why"]
+    c = _unregistered(a, tmp_path / "fresh", "acc0")
+    v = _verify(c, c / "pub.bin", c / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
+    assert re.fullmatch(rf"setup: {re.escape(unit)}: its row port acc0 is not a port of the registered reads \(\[.*\]\)",
+                        v["why"]), v["why"]

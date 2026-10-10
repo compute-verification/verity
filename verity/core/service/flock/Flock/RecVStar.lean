@@ -192,6 +192,45 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
   if let some q := own.find? (!file.contains ·) then
     throw s!"{s.name}: the statement's message-round port {showPort q} is not in the registered reads ({file.length} message-round ports)"
 
+/-- A statement's row ports: a part's ports (`VStar/Algebra.lean:385-387`: its `m<k>`, `acc0`, `acc1`), not its `v` and
+`out`, which are its own (`rec_residuals.write`, rec_residuals.py:451-461); a level has none. -/
+def rowPorts : VStar.Stmt → List String
+  | .inner _ _ p => p.S.ports.map (·.1)
+  | .recOpen .. => []
+
+def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
+
+/-- The first field in which two registered ports differ, with both values: the registration (value, root, leaf count,
+row width, domain) and, with `reads`, the read positions; none if they agree. -/
+def portDiff? (a b : Registered.Port) (reads : Bool := true) : Option String :=
+  let w := fun (x : Option Nat) => (x.map toString).getD "none"
+  if a.value != b.value then some s!"value {a.value}, against {b.value}"
+  else if a.root != b.root then some s!"root {hexOf a.root}, against {hexOf b.root}"
+  else if a.leaves != b.leaves then some s!"leaves {a.leaves}, against {b.leaves}"
+  else if a.words != b.words then some s!"words {w a.words}, against {w b.words}"
+  else if a.wordBits != b.wordBits then some s!"word_bits {a.wordBits}, against {b.wordBits}"
+  else if a.domain != b.domain then some s!"domain {hexOf a.domain}, against {hexOf b.domain}"
+  else if reads && a.reads != b.reads then some s!"reads {showReads a.reads}, against {showReads b.reads}"
+  else none
+
+/-- **The verifier's reads file names a part's row ports, each the family's one entry of that name** (`OwnNamesRows`,
+`PartPortsOne`): every row port of the statement (`rowPorts`) is a port of `--registered`, and agrees in every field
+(`portDiff?`: value, root, leaf count, row width, domain and reads) with the port of that name in the verifier's record of
+V*'s shared rows (`--rec-rows`), one file for every session of the family. -/
+def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) : V Unit := do
+  let names := rowPorts s
+  if let some nm := names.find? fun nm => !registered.any (·.name == nm) then
+    throw s!"{s.name}: its row port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
+  if names.isEmpty then return
+  let some rows := rows
+    | throw s!"{s.name}: one of V*'s parts; pass the verifier's record of V*'s shared rows (--rec-rows F), which each of its row ports must be"
+  for nm in names do
+    let some reg := registered.find? (·.name == nm) | throw s!"{s.name}: its row port {nm} is not a port of the registered reads"
+    let some want := rows.find? (·.name == nm)
+      | throw s!"{s.name}: its row port {nm} is not a port of the verifier's shared rows (--rec-rows: {rows.toList.map (·.name)})"
+    if let some d := portDiff? reg want then
+      throw s!"{s.name}: its row port {nm} is not the verifier's shared row {nm} (--rec-rows): {d}"
+
 def TRANSCRIPT_FORMAT : String := "rec/inner-transcript/v1"
 
 /-- A round's coins, as hex strings. -/
@@ -251,15 +290,19 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
         throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} is not rep {x}'s c_{i} (inner round {k}) of the inner transcript"
 
 /-- `checkBindings` against the verifier's own partition object and program, then `checkCircuit` on a statement's
-circuit and population with its own inner shape `inner`, and `checkOwn` on the verifier's own registered reads; a
-statement of V*'s needs all three files, and with an inner shape, the statement must be V*'s. -/
+circuit and population with its own inner shape `inner`, and `checkOwn` and `checkRows` (against the verifier's shared
+rows `rows`) on the verifier's own registered reads; a statement of V*'s needs all three files, and with an inner shape,
+the statement must be V*'s. -/
 def checkStmt (inner : Option Inner) (st : Stmt) (circuitB : ByteArray) (partition : Option Json := none)
-    (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) : V Unit :=
+    (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none)
+    (rows : Option (Array Registered.Port) := none) : V Unit :=
   match inner with
   | some i => do
     discard <| checkBindings st.c partition program
     let s ← checkCircuit i st.c (population st) circuitB
-    if let some r := registered then checkOwn s r
+    if let some r := registered then
+      checkOwn s r
+      checkRows s r rows
   | none =>
     if isVStar st.c.unit.name then
       throw s!"{st.c.unit.name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"
