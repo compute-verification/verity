@@ -93,6 +93,7 @@ OUTCOME = "outcome"
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
+SOURCE_LOST = "source-lost"                             # on a run id: its exact source (commit + dirty bytes) is gone
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -170,7 +171,8 @@ MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "thread
 NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
 #: Keys whose label is only read with its ref: the form that ref must take, and what it names.
 REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
-    ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
+    ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
+    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
@@ -313,6 +315,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
        "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
        "the latest label wins", CUSTODY_VALUES),
+    _k(SOURCE_LOST, GROUP_VERIFICATION, BOOL, "on a run id: the exact source it ran is gone (its tree held a dirty source that no record "
+       "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
