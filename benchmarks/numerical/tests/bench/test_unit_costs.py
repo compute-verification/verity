@@ -45,6 +45,16 @@ def test_affine_refuses_a_bent_metric():
         U.affine(pts[:2], ("ands",))
 
 
+def test_argmax_scan_law_predicts_a_later_band():
+    builds = {v: _counts("token-select-greedy", {"V": v}) for v in range(2, 20)}
+    law = U.argmax_scan_law(builds)
+    assert law.constants == {"alpha": 103, "beta": 163, "inputs_per_V": 16}
+    assert law(70) == _counts("token-select-greedy", {"V": 70})
+    bent = {**builds, 15: {**builds[15], "ands": builds[15]["ands"] + 1, "committed": builds[15]["committed"] + 1}}
+    with pytest.raises(ValueError, match="breaks at V = 15"):
+        U.argmax_scan_law(bent)
+
+
 def test_missing_piece_is_reported_not_guessed():
     job, c = U._build_job(U._key("gumbel-top-p-token-select", {"V": 64}))
     assert c["error"].startswith("NoPiece:")

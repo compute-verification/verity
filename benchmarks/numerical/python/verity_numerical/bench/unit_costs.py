@@ -14,13 +14,17 @@ ANDs; their tables and widths are listed.
 Every number says how it was obtained (``method``):
 
 - ``exact``: the circuit built at the census parameters.
-- ``affine``: built at four small values of one parameter (:data:`AFFINE`: GEMM-like K, an element-wise width, the argmax's
-  V), every count checked to be exactly affine in it (fitted on the first two points, equal on the others), and evaluated at
-  the census value. When the census value is within ``--exact-nnz`` the circuit is also built there and must agree.
-- ``model`` (attention only): the head at the census D, BN and semantics built at key counts T within the first key block
-  (:data:`ATTENTION_T`), checked affine in T on those points, and evaluated at the stratum's T. Across key blocks the
-  per-block terms (the rescale of the running state, the q decode shared between blocks) are not verified, so these are
-  not exact.
+- ``affine``: built at four small values of one parameter (:data:`AFFINE`: GEMM-like K, an element-wise width), every count
+  checked to be exactly affine in it (fitted on the first two points, equal on the others), and evaluated at the census
+  value. When the census value is within ``--exact-nnz`` the circuit is also built there and must agree. Attention: the
+  head at the census D, BN and semantics built at key counts T within the first key block (:data:`ATTENTION_T`), checked
+  affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
+  two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
+  mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
+- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the law is read off builds at every V in
+  :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
+- ``model`` (attention whose builds past the first key block are over ``--exact-nnz`` or do not fit one per-block excess):
+  the first block's affine fit only, evaluated at the stratum's T; not exact.
 - ``missing``: no piece for a primitive of the Definition (the reason names it), or ``excluded`` (embedding-row is a
   commitment opening, not proved by a proof backend), or ``not built`` (a structured reduction whose census size is over
   ``--exact-nnz``).
@@ -66,9 +70,12 @@ AFFINE: dict[str, tuple[str, Callable[[Mapping[str, Any]], tuple[int, ...]]]] = 
     "bias-add": ("N", lambda p: (16, 32, 48, 64)),
     "bf16-mul-scalar": ("N", lambda p: (16, 32, 48, 64)),
     "moe-sum": ("H", lambda p: (16, 32, 48, 64)),
-    "token-select-greedy": ("V", lambda p: (64, 128, 192, 256)),
     "gumbel-top-p-token-select": ("V", lambda p: (64, 128, 192, 256)),
 }
+#: token-select's V − 1 ArgmaxStep scan: the law (:func:`argmax_scan_law`) is read off builds at every V in SCAN_POINTS and
+#: checked against an exact build at SCAN_CHECK
+SCAN_POINTS = tuple(range(2, 140))
+SCAN_CHECK = 1030
 #: templates whose Definition has a structured reduction (chunks, thread blocks): built only at the census parameters
 EXACT_ONLY = ("rmsnorm-fused-cuda", "rmsnorm-triton", "moe-router-topk")
 #: a small instance of each exact-only template, to estimate the census size's nonzeros (linear in the width) before building it
@@ -76,6 +83,9 @@ PROBE = {"rmsnorm-fused-cuda": "N", "rmsnorm-triton": "N", "moe-router-topk": No
 EXCLUDED = {"embedding-row": "commitment opening (census `commitment_opening`): opened against the commitment, not proved"}
 #: attention's key counts T, within the first key block, at which the head is built
 ATTENTION_T = (16, 32, 48, 64)
+#: j for the checks at T = j BN + 16, past the first key block: their excess over the first block's fit must be j times one
+#: block's
+BLOCK_CHECKS = (1, 2)
 
 
 # --- building --------------------------------------------------------------------------------------------------------------
@@ -152,6 +162,54 @@ def affine(points: Sequence[tuple[int, Mapping[str, int]]], metrics: Sequence[st
 
 def at(fit: Mapping[str, tuple[Fraction, Fraction]], x: Fraction | int) -> dict[str, Fraction]:
     return {m: a * x + b for m, (a, b) in fit.items()}
+
+
+def _pow2(x: int) -> bool:
+    return x > 0 and x & (x - 1) == 0
+
+
+def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], dict[str, int]]:
+    """token-select's counts at any V, from builds at consecutive V. Its step counter i is a constant, so a step's select of
+    i costs one AND per bit of i that is not constant zero, and the running (best, best_i) are linear forms that grow by one
+    term a step, never re-committed: with b = bit_length(V − 2), going from V − 1 to V adds ``alpha + b`` ANDs, the nonzeros'
+    increment grows by ``beta + b`` (one more when V − 2 is a power of two), output copies move by +1 when V − 2 and −1
+    when V − 1 is a power of two, inputs by a constant, and committed = inputs + ANDs + output copies. Checked at every
+    consecutive V given (ValueError naming the first that breaks it); nonzeros are quadratic in V."""
+    vs = sorted(builds)
+    if len(vs) < 8 or vs != list(range(vs[0], vs[-1] + 1)) or vs[0] < 2:
+        raise ValueError(f"the scan law is read off at least 8 consecutive V >= 2, not {vs[:3]}..")
+    c = {v: builds[v] for v in vs}
+    d = lambda v, m: c[v][m] - c[v - 1][m]  # noqa: E731
+    v0 = vs[0] + 2
+    alpha, beta = d(v0, "ands") - (v0 - 2).bit_length(), d(v0, "nnz_AB") - d(v0 - 1, "nnz_AB") - (v0 - 2).bit_length() - _pow2(v0 - 2)
+    di = d(v0, "inputs")
+    for v in vs[2:]:
+        b = (v - 2).bit_length()
+        want = {"ands": alpha + b, "d2nnz": beta + b + _pow2(v - 2), "output_copies": _pow2(v - 2) - _pow2(v - 1), "inputs": di,
+                "lookups": 0}
+        got = {"ands": d(v, "ands"), "d2nnz": d(v, "nnz_AB") - d(v - 1, "nnz_AB"), "output_copies": d(v, "output_copies"),
+               "inputs": d(v, "inputs"), "lookups": d(v, "lookups")}
+        if got != want or c[v]["committed"] != c[v]["inputs"] + c[v]["ands"] + c[v]["output_copies"]:
+            raise ValueError(f"the argmax scan law breaks at V = {v}: {got} != {want}")
+    top = vs[-1]
+
+    def law(V: int) -> dict[str, int]:
+        if V < vs[0]:
+            raise ValueError(f"V = {V} is below the builds")
+        if V <= top:
+            return {m: c[V][m] for m in METRICS}
+        r, dn = {m: c[top][m] for m in METRICS}, d(top, "nnz_AB")
+        for v in range(top + 1, V + 1):
+            b = (v - 2).bit_length()
+            r["ands"] += alpha + b
+            dn += beta + b + _pow2(v - 2)
+            r["nnz_AB"] += dn
+            r["output_copies"] += _pow2(v - 2) - _pow2(v - 1)
+            r["inputs"] += di
+        r["committed"] = r["inputs"] + r["ands"] + r["output_copies"]
+        return {m: r[m] for m in METRICS}
+    law.constants = {"alpha": alpha, "beta": beta, "inputs_per_V": di}  # type: ignore[attr-defined]
+    return law
 
 
 # --- the draw --------------------------------------------------------------------------------------------------------------
@@ -267,6 +325,8 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
         if template in AFFINE:
             var, pts = AFFINE[template]
             jobs += [_key(template, {**params, var: x}) for x in pts(params)]
+        elif template == "token-select-greedy":
+            jobs += [_key(template, {**params, "V": v}) for v in (*SCAN_POINTS, SCAN_CHECK)]
         elif template in EXACT_ONLY and PROBE[template]:
             jobs.append(_key(template, {**params, PROBE[template]: 128}))
         elif template == "attention-head":
@@ -278,6 +338,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
 
     out: dict[tuple, dict[str, Any]] = {}
     exact_jobs: dict[tuple, tuple] = {}
+    block_jobs: list[tuple] = []
     for key, (template, params) in distinct.items():
         r: dict[str, Any] = {"template": template, "params": params}
         out[key] = r
@@ -304,6 +365,26 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
                 r["method"] = "exact"
             elif r["counts"]["nnz_AB"] <= exact_nnz:
                 exact_jobs[key] = _key(template, params)
+        elif template == "token-select-greedy":
+            res = {v: built[_key(template, {**params, "V": v})] for v in (*SCAN_POINTS, SCAN_CHECK)}
+            err = next((c["error"] for c in res.values() if "error" in c), None)
+            if err:
+                r.update(method="missing", reason=err)
+                continue
+            try:
+                law = argmax_scan_law({v: res[v] for v in SCAN_POINTS})
+            except ValueError as e:
+                r.update(method="missing", reason=str(e))
+                continue
+            check = law(SCAN_CHECK)
+            agree = check == _plain(res[SCAN_CHECK])
+            V = int(params["V"])
+            r.update(method="exact" if V in res else "scan law", variable="V", points=[SCAN_POINTS[0], SCAN_POINTS[-1]],
+                     counts=law(V), law=law.constants, tables=res[SCAN_POINTS[-1]]["tables"],
+                     definition=res[SCAN_POINTS[-1]]["definition"],
+                     exact_check={"V": SCAN_CHECK, "result": "agrees" if agree else {m: [check[m], res[SCAN_CHECK][m]] for m in METRICS}})
+            if not agree:
+                r.update(method="missing", reason=f"the scan law disagrees with the exact build at V = {SCAN_CHECK}")
         elif template in EXACT_ONLY:
             probe = PROBE[template]
             if probe:
@@ -341,6 +422,11 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             r.update(method="model", variable="T", points=[T for T, _ in res], fit={m: [str(a), str(b)] for m, (a, b) in fit.items()},
                      built={T: _plain(c) for T, c in res}, tables=res[-1][1]["tables"], definition=res[-1][1]["definition"])
             r["_fit"] = fit
+            BN = int(params["BN"])
+            for j in BLOCK_CHECKS:
+                T = j * BN + 16
+                if at(fit, T)["nnz_AB"] <= exact_nnz:
+                    block_jobs.append((key, j, T, _key(template, params, {"T": T})))
         else:
             c = built[_key(template, params)]
             if "error" in c:
@@ -348,8 +434,24 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             else:
                 r.update(method="exact", counts=_plain(c), tables=c["tables"], definition=c["definition"])
 
-    log(f"stage 2: {len(exact_jobs)} builds at the census parameters (nonzeros <= {exact_nnz:.2e})")
-    big = run_builds(exact_jobs.values(), n_jobs)
+    log(f"stage 2: {len(exact_jobs)} builds at the census parameters and {len(block_jobs)} attention heads past the first key "
+        f"block (nonzeros <= {exact_nnz:.2e})")
+    big = run_builds([*exact_jobs.values(), *(job for *_, job in block_jobs)], n_jobs)
+    checks: dict[tuple, dict[int, tuple[int, dict[str, Any]]]] = {}
+    for key, j, T, job in block_jobs:
+        checks.setdefault(key, {})[j] = (T, big[job])
+    for key, by_j in checks.items():
+        r, fit = out[key], out[key]["_fit"]
+        if any("error" in c for _, c in by_j.values()):
+            r.setdefault("notes", []).append(f"a build past the first key block failed: {[c.get('error') for _, c in by_j.values()]}")
+            continue
+        resid = {j: {m: c[m] - at(fit, T)[m] for m in METRICS} for j, (T, c) in by_j.items()}
+        r["block_checks"] = {T: {"built": _plain(c), "over_first_block_fit": {m: _num(v) for m, v in resid[j].items()}}
+                             for j, (T, c) in by_j.items()}
+        if sorted(by_j) == list(BLOCK_CHECKS) and all(resid[j][m] == j * resid[1][m] for j in BLOCK_CHECKS for m in METRICS):
+            r["_block"] = resid[1]
+            r.update(method="affine", variable="T, NB", per_extra_block={m: _num(v) for m, v in resid[1].items()})
+    log("stage 2: done")
     for key, job in exact_jobs.items():
         r, c = out[key], big[job]
         if "error" in c:
@@ -379,9 +481,14 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
         for t in mine:
             s = subs[_key(t.template, t.params)]
             per_sub: dict[str, Any] | None = None
-            if s["method"] == "model":
-                per_sub = {m: float(v) for m, v in at(s["_fit"], Fraction(t.T["mean"])).items()}
-                per_sub_range = {b: float(at(s["_fit"], int(t.T[b]))["nnz_AB"] + at(s["_fit"], int(t.T[b]))["ands"]) for b in ("min", "max")}
+            if "_fit" in s:
+                extra = int(t.parameters["NB"]) - 1
+                blk = s.get("_block") or {m: 0 for m in METRICS}
+
+                def head(T: Fraction | int) -> dict[str, Fraction]:
+                    return {m: v + extra * blk[m] for m, v in at(s["_fit"], T).items()}
+                per_sub = {m: float(v) for m, v in head(Fraction(t.T["mean"])).items()}
+                per_sub_range = {b: float(head(int(t.T[b]))["nnz_AB"] + head(int(t.T[b]))["ands"]) for b in ("min", "max")}
             elif "counts" in s:
                 per_sub = dict(s["counts"])
                 per_sub_range = None
@@ -407,6 +514,7 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
             rows.append(row)
     for s in subs.values():
         s.pop("_fit", None)
+        s.pop("_block", None)
     return {"format": "verity/f6-unit-costs/v1", "epsilon": str(EPSILON), "delta": "2^-40", "K": K,
             "draw": "uniform K-subset of all units per workload and granularity (a hidden partition cannot stratify by type)",
             "quantile": "least k with P(X > k) <= 2^-40, hypergeometric", "exact_nnz": exact_nnz, "attention_t": list(attention_t),
@@ -425,13 +533,15 @@ def _si(v: float | None) -> str:
     return f"{v:.3g}"
 
 
-METHOD_MARK = {"exact": "E", "affine": "A", "model": "M", "missing": "–", "excluded": "x", "not built": "nb"}
+METHOD_MARK = {"exact": "E", "affine": "A", "scan law": "S", "model": "M", "missing": "–", "excluded": "x", "not built": "nb"}
 
 
 def render(inv: Mapping[str, Any]) -> str:
     lines = [f"# F6 unit costs: K = {inv['K']} draws (ε = {inv['epsilon']}, δ = {inv['delta']}), uniform over all units", "",
-             "Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds), "
-             "M attention model (affine in T within the first key block), – missing, x excluded, nb not built.", "",
+             "Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds; attention: "
+             "affine in T within a key block and in the block count, checked past the first block), S token-select's scan "
+             "law (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
+             "the first key block only), – missing, x excluded, nb not built.", "",
              "nnz = nnz_AB + ANDs (C = I). q = the 1 − 2⁻⁴⁰ hypergeometric quantile of the sampled count. Ops and bytes are "
              "the census work model.", ""]
     for gran in ("vu", "subcircuit"):
@@ -457,6 +567,10 @@ def render(inv: Mapping[str, Any]) -> str:
         detail = s.get("reason") or ""
         if s.get("points"):
             detail = f"{s.get('variable')} at {s['points']}" + (f"; exact check {s['exact_check']}" if s.get("exact_check") else "")
+        if s.get("per_extra_block"):
+            detail += f"; checked at T = {list(s['block_checks'])}, per extra block {s['per_extra_block']}"
+        elif s.get("block_checks"):
+            detail += f"; past the first block: {s['block_checks']}"
         if s.get("tables"):
             detail += "; tables " + ", ".join(f"{k} x{v['reads']}" for k, v in s["tables"].items())
         lines.append(f"| {s['template']} | {json.dumps(s['params'], sort_keys=True)} | {s['method']} | {s.get('definition', '')} | {detail} |")
