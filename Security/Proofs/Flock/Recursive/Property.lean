@@ -2,7 +2,6 @@ import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Statements
 import Proofs.Flock.Recursive.Premises
 import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Recursive.Reads
 import Proofs.Flock.Recursive.Description
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Flock.RecResiduals
@@ -35,9 +34,9 @@ statement's shape (`Recursion.shapeOf`: no region's bytes, which are instance da
 (`Recursion.AcceptsStmt`) passes the checks (`Recursion.classOk_of_accepts`), so the fixed class adds no accepted
 case: at a statement Lean's verifier refuses, (i)'s event is empty.
 
-* `regBcCommit`: the registration's commitment at a row position as V* checks a registered read, the commit string
-  `b ‖ c` that `Flock.Registered.opens` opens; the private circuit's rows are what those strings commit to, so a row's
-  hm96 binding is in what the hidden statement of a list of commit strings means (`stmt`).
+* `stmtAt`, `hiddenAt`: the private circuit's statement at a list of commit strings `b ‖ c`, one for each of the
+  registration's rows (what `Flock.Registered.opens` opens; the rows are what those strings commit to, so a row's hm96
+  binding is in what the statement means), and the run's hidden statement, at `st`'s own description rows.
 * `VerifiesV`, `VerifiesVR`: the verifier of record's verdict on every one of V*'s sessions, typed and as the prover
   supplies them. (i)'s event reads the latter, so nothing is assumed of what a session's inputs parse to.
 
@@ -51,23 +50,6 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
-
-open Classical in
-/-- **The registration's commitment at row position `i`, as V* checks a registered read**: an opening
-`(reg, bc, path)` of the port `reg` to the commit string `bc` is the verifier's `Flock.Registered.opens reg bc i path`.
-The extractor returns the two leaves' SHA-512 inputs when the two strings' tree leaves agree, and the registered path's
-pair (`Flock.Registered.openPair`) otherwise. -/
-noncomputable def regBcCommit (i : ℕ) :
-    PrivateCircuit.Commit Flock.Registered.Port ByteArray (Flock.Registered.Port × ByteArray × ByteArray) where
-  Opens reg bc op := op.1 = reg ∧ op.2.1 = bc ∧ Flock.Registered.opens reg bc i op.2.2 = true
-  ext op op' :=
-    if Hm96.Default512.treeLeaf op.2.1 = Hm96.Default512.treeLeaf op'.2.1 then
-      ((Hm96.Default512.leafPrefix ++ op.2.1).data.toList, (Hm96.Default512.leafPrefix ++ op'.2.1).data.toList)
-    else
-      ((Flock.Registered.openPair op.1 i (Hm96.Default512.treeLeaf op.2.1) op.2.2
-          (Hm96.Default512.treeLeaf op'.2.1) op'.2.2).1.data.toList,
-        (Flock.Registered.openPair op.1 i (Hm96.Default512.treeLeaf op.2.1) op.2.2
-          (Hm96.Default512.treeLeaf op'.2.1) op'.2.2).2.data.toList)
 
 /-- **The verifier of record accepts every one of V*'s sessions**: each session's proof (`AcceptsV`: setup, registered
 reads, `Flock.Zk.shapeOk`, `Flock.Zk.verify`) and its statement's form as `--registered` checks it

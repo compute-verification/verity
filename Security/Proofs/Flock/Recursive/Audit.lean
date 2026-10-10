@@ -1,6 +1,5 @@
 import Proofs.Flock.Recursive.Property
 import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Recursive.ReadsOpen
 import Proofs.Flock.Recursive.Loads
 
 /-!
@@ -40,26 +39,6 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
-
-/-- **The registration binds each row's commit string**: two openings of one port at `i` to different commit strings
-give a SHA-512 collision, of the two tree leaves' inputs when the leaves agree (the leaf prefix is the same, so the
-inputs differ), else the registered path's (`Flock.Registered.opensLeaf_binding`). -/
-theorem regBcCommit_binding (i : ℕ) : (Flock.Guarantees.regBcCommit i).Binding := by
-  rintro reg bc bc' ⟨r1, b1, p1⟩ ⟨r2, b2, p2⟩ ⟨h1r, h1b, h1⟩ ⟨h2r, h2b, h2⟩ hne
-  simp only at h1r h1b h1 h2r h2b h2
-  subst h1r h1b h2b
-  unfold Flock.Guarantees.regBcCommit
-  simp only
-  split_ifs with hl
-  · refine collides_of_bytes (x := (Hm96.Default512.leafPrefix ++ b1, Hm96.Default512.leafPrefix ++ b2))
-      ⟨fun e => hne ?_, hl⟩
-    have e2 := congrArg (fun b : ByteArray => b.data.toList) e
-    simp only [ByteArray.data_append, Array.toList_append] at e2
-    exact (bytes_of_list b1).symm.trans
-      ((congrArg (fun l : List UInt8 => (⟨l.toArray⟩ : ByteArray)) (List.append_cancel_left e2)).trans
-        (bytes_of_list b2))
-  · exact collides_of_bytes (Flock.Registered.opensLeaf_binding r1 i (Hm96.Default512.treeLeaf b1) p1
-      (Hm96.Default512.treeLeaf b2) p2 (Sha512.hash_size _) (Sha512.hash_size _) hl h1 h2)
 
 /-- **V*'s staging reads only the inner statement's shape**: two statements of one shape (`shapeOf`: their regions'
 bytes aside) give V* as many outer statements, over one class with as many regions (`execClassAt_shape`). -/
