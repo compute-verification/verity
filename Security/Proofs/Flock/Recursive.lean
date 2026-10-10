@@ -10,6 +10,7 @@ import Proofs.Flock.Recursive.Target
 import Proofs.Flock.Recursive.Transfer
 import Proofs.Flock.Recursive.Stage
 import Proofs.Flock.Recursive.StageRead
+import Proofs.Flock.Recursive.Registrants
 import Proofs.Flock.Recursive.Guarantees
 import Proofs.Flock.Recursive.OsSalts
 import Proofs.Flock.Recursive.Private

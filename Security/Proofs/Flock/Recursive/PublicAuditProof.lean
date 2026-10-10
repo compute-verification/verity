@@ -68,17 +68,18 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   rcases zk_sessions_recursive_fork_inner hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (fun _ _ => Flock.Guarantees.publicHidden st) wmsg Sk cmt msg
     (hbr hT) Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 (execClassAt st).cls
-      (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hb
+      (execClassAt st).regs (execClassAt st).sch) hin with hf | hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
-  · refine Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT hF σ _
+  · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
+  · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr _ hT hF σ _
       (fun o => Flock.Guarantees.AcceptsPublic obj prog st ∧
         Flock.Guarantees.VerifiesV (Flock.Guarantees.custodied zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
         ¬ (Flock.Guarantees.innerAt T CT st).holds (Flock.Guarantees.publicHidden st))
       (fun o ho => ho.2.1) (fun o hall ho =>
         ⟨ho.1, verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2, ho.2.2⟩))
       (le_trans (prob_mono_outcome _ (Flock.Guarantees.transported zr hCust hT σ)
-        fun o _ h => ⟨h.2.1.1, h.2.2⟩) hb))))
+        fun o _ h => ⟨h.2.1.1, h.2.2⟩) hb)))))
 
 end Flock.SecurityProofs
