@@ -161,7 +161,7 @@ private def linksOf (j : Json) (ctx : String) : V (Array String) := do
   pure ls
 
 /-- A positive fraction `[num, den]`, both at least 1. -/
-private def ratOf (j : Json) (ctx : String) : V Rat := do
+def ratOf (j : Json) (ctx : String) : V Rat := do
   let #[n, d] ← Flock.J.asArr j ctx | throw s!"{ctx}: not [numerator, denominator]"
   let n ← Flock.J.asNat n ctx
   let d ← Flock.J.asNat d ctx
@@ -264,12 +264,12 @@ def commitmentOf (b : ByteArray) : V Commitment := do
 
 end Commitment
 
-private def frameOf (j : Json) : V LogicalFrame := do
+def frameOf (j : Json) : V LogicalFrame := do
   let #[p, a, i] ← Flock.J.asArr j "a frame" | throw "a frame is [payload, anchor, index]"
   pure ⟨bitsOfBytes (← Flock.unhex (← Flock.J.asStr p "a frame's payload")), ← Flock.J.asNat a "an anchor",
     ← Flock.J.asNat i "an index"⟩
 
-private def syncOf (j : Json) : V ClockSync := do
+def syncOf (j : Json) : V ClockSync := do
   let #[d, n, m] ← Flock.J.asArr j "a sync" | throw "a sync is [delta, num, den]"
   let δ ← Flock.J.asNat d "a sync's delta"
   let ρ ← ratOf (.arr #[n, m]) "a sync's rho"
