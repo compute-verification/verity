@@ -176,4 +176,11 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   own.toList.forM (checkPort c pub t indices)
 
 end Registered
+
+/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
+output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
+registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
+def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
+  Registered.check st.c st.pub registered (Registered.derived st.partition)
+
 end Flock
