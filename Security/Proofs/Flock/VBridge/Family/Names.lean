@@ -7,8 +7,10 @@ import Proofs.Flock.Soundness.ExecCircuit
 `circuitFile` (`Family.lean`) writes `flock-circuit <unit>`, the `META` line, then `CIRCUIT unit <n>` and the unit's
 net, whose header line is `flock-ir-unit/v2 <unit> …` (`VStar.emitNet`, `Unit.lean:94`). `HmRow.parse`
 (`HmRow.lean:550`) splits the text at `\n`, takes the first `CIRCUIT unit` section's net (`Net.parse`, `Net.lean:200`),
-and that net's name is the second token of its header line. This file shows the text side: the legacy
-`String.splitOn "\n"` is `List.splitOn '\n'` on the characters, and `Flock.tokens` reads a line's second word.
+and that net's name is the second token of its header line. The legacy `String.splitOn "\n"` is `List.splitOn '\n'` on
+the characters (`splitOn_nl`), `Flock.tokens` reads a line's second word (`tokens_second`), `pyDumps` writes one line
+(`pyDumps_noNl`), and the unit names are one word (`recOpen_name`, `residuals_name`), so the parse names the circuit's
+unit as the statement's (`file_unitName`): `HUnitName` and `HOpenName` at any history and registration.
 -/
 
 namespace FlockVBridge.Names
