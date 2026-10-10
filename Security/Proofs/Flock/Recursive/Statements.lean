@@ -48,7 +48,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 /-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c` under their laws `(Vs j).law`, each
-the live stratified law on the operating system's bytes (A3, `uniform/os-random`); at each history `(R, ω, t)` and
+the live stratified law on the operating system's bytes (A3, `uniform/io-getrandombytes`); at each history `(R, ω, t)` and
 registration `R₂` of the outer proof, session `j` is `zs R ω t R₂ j`, whose fields carry `flock-verify verify --zk
 --registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the registrant's record of the registered
 reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's own). For every prover `σ` of the
@@ -108,7 +108,9 @@ def RecursiveSound : Prop :=
 /-- **The firewall's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
 the hm96-sha512 leaf of the message's SHA-512 digest, `H(SHA-512(msg) ⊕ M·y, c(y))` (`ZkView.leafH`, `ZkView.My`,
 `ZkView.saltHash` at the pinned key; `ZkView.leafSplit` states that this is the executable's `Hm96.Default512.leaf`). An
-honest firewall sends the auditor this, under a fresh uniform salt, for every message, and nothing else of them. -/
+honest firewall sends the auditor this, under a fresh uniform salt, for every message, and nothing else of them. The salt
+is 192 bytes from the operating system, uniform under A3 (`uniform/io-getrandombytes`); at those bytes `b` the
+executable's leaf is `firewallLeaf msg (ZkView.saltOfBytes b)` (`Flock.SecurityProofs.firewallLeaf_os`). -/
 def firewallLeaf (msg : ByteArray) (y : ZkView.Salt) : ByteArray :=
   ZkView.leafH (ZkView.bitsOf (Sha512.hash msg) + ZkView.My y, ZkView.saltHash y)
 
@@ -127,7 +129,12 @@ simulator `sim a h` (reading the auditor and the public input only) within `ε_o
 event, and under `hash-derived-key`, the auditor's whole view (its tape, the commitments, the outer view) is within
 $$\varepsilon_o + n_h \cdot 2^{-193}$$
 of the simulator that draws `nh` ideal commitments (`idealLeaf`) and runs `sim` on them: it reads the auditor and public
-inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's complement). -/
+inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's complement).
+
+The salts are drawn uniformly here; the firewall reads them from the operating system, and under A3
+(`uniform/io-getrandombytes`) the same bound holds at those bytes (`Flock.SecurityProofs.recursiveZK_os`), so no premise on
+a stream generator enters. `hash-derived-key` is used only to bound the commitments' hiding gap at the pinned key by
+`2^-193`: at the gap itself the bound needs no premise (`Flock.SecurityProofs.recursiveZK_gap`). -/
 def RecursiveZK : Prop :=
   ∀ {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo]
     [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
