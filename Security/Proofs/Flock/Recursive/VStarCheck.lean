@@ -16,9 +16,10 @@ the verifier's bindings. `AcceptsZKR` doesn't read that check. This file states 
 to `VStmt.Loads` (`loads_of_verifiesV`). Nothing in `RecursiveAudit` reads it yet.
 
 * `innerAt spec st`: the verifier's own inner shape at the inner statement, the value `RecVStar.innerOf` returns.
-* `AcceptsZKV i j f I own t`: flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F` accepts:
-  `AcceptsZKR`, and each statement passes `checkStmt` at the inner shape `i`, as statement `j` under the bindings `f`,
-  against the inputs' circuit file, partition object and program and `own`.
+* `AcceptsZKV i j f rows I own t`: flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F
+  --rec-rows F` accepts: `AcceptsZKR`, and each statement passes `checkStmt` at the inner shape `i`, as statement `j`
+  under the bindings `f`, against the inputs' tags, lookup tables, circuit file, partition object and program, `own`
+  and the shared rows `rows`.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
 * `checkFile_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it passes.
 * `population_of_setupH`: the set-up statement's population (`RecVStar.population`) is the size of the public file
@@ -40,14 +41,16 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 def innerAt (spec : Flock.SessionSpec) (st : Flock.Stmt) : RecVStar.Inner :=
   ⟨st.m, st.c.kLog, 2 + spec.points * st.regions.size, st.regions.size⟩
 
-/-- **flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F` accepts the transcript**, at the
-inner shape `i`, as V*'s statement `j` under the verifier's own bindings `f`: `AcceptsZKR`, and each statement the
-session sets up passes `RecVStar.checkStmt` at `i`, against the inputs' circuit file, partition object and program, the
-verifier's own registered reads `own`, `j` and `f` (`FlockVerify.lean`'s `setupOf`, after `buildSession`). -/
-def AcceptsZKV (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (I : Inputs) (own : Array Flock.Registered.Port)
-    (t : Exec.Transcript) : Prop :=
+/-- **flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the
+transcript**, at the inner shape `i`, as V*'s statement `j` under the verifier's own bindings `f`: `AcceptsZKR`, and each
+statement the session sets up passes `RecVStar.checkStmt` at `i`, against the inputs' tags and lookup tables, circuit
+file, partition object and program, the verifier's own registered reads `own`, `j`, `f` and its shared rows `rows`
+(`FlockVerify.lean`'s `setupOf`, after `buildSession`). -/
+def AcceptsZKV (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
+    (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
   AcceptsZKR I own t ∧ ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
-    sts.forM (RecVStar.checkStmt (some i) · I.circuitFile I.partition I.program (some own) (some j) (some f)) = .ok ()
+    sts.forM (RecVStar.checkStmt (some i) I.tags I.tables · I.circuitFile I.partition I.program (some own) (some j)
+      (some f) rows) = .ok ()
 
 /-- **A loop that returns early or runs through**, over a state whose first component is the early return: where each
 step from a state with no return either returns a value (`.done` with `some (some y)`) or, at a `k` where `P k` holds,
@@ -191,24 +194,37 @@ theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : 
   cases h
   exact ⟨hs', hu⟩
 
-/-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement's
-circuit file is `circuitFile s f` for V*'s statement `s` at index `j` at `i`, named as its unit, with the statement's
-population as its instances, and the verifier's reads hold `s`'s message-round ports. -/
-theorem checkStmt_ok {i : RecVStar.Inner} {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json}
-    {program : Option ByteArray} {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings}
-    (h : RecVStar.checkStmt (some i) st circuitB partition program (some own) (some j) (some f) = .ok ()) :
-    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = st.c.unit.name ∧
-      RecVStar.population st = s.instances ∧ RecVStar.circuitFile s f = .ok circuitB ∧
-      RecVStar.checkOwn s own = .ok () := by
+/-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
+up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is
+`circuitFile s f` for V*'s statement `s` at index `j` at `i`, named as its unit, with the statement's population as its
+instances, and the verifier's reads hold `s`'s message-round ports. -/
+theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)} {st : Flock.Stmt}
+    {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
+      .ok ()) :
+    tags.name = Flock.Tags.circuit.name ∧ tables = [] ∧
+      ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = st.c.unit.name ∧
+        RecVStar.population st = s.instances ∧ RecVStar.circuitFile s f = .ok circuitB ∧
+        RecVStar.checkOwn s own = .ok () := by
   unfold RecVStar.checkStmt at h
   dsimp only at h
   split at h
-  · obtain ⟨_, -, h⟩ := ebind_ok h
-    obtain ⟨s, hs, h⟩ := ebind_ok h
-    obtain ⟨hck, hf⟩ := checkCircuit_ok hs
-    obtain ⟨ss, hss, hj, hname, hn⟩ := check_ok hck
-    exact ⟨ss, s, hss, hj, hname, hn, checkFile_ok hf, h⟩
-  · cases h
+  · obtain ⟨_, h1, -⟩ := ebind_ok h
+    cases h1
+  · rename_i hn
+    split at h
+    · obtain ⟨_, h1, -⟩ := ebind_ok h
+      cases h1
+    · rename_i ht
+      split at h
+      · obtain ⟨_, -, h⟩ := ebind_ok h
+        obtain ⟨s, hs, h⟩ := ebind_ok h
+        obtain ⟨hck, hf⟩ := checkCircuit_ok hs
+        obtain ⟨ss, hss, hj, hname, hpop⟩ := check_ok hck
+        obtain ⟨⟨⟩, ho, -⟩ := ebind_ok h
+        exact ⟨by simpa using hn, by simpa using ht, ss, s, hss, hj, hname, hpop, checkFile_ok hf, ho⟩
+      · cases h
 
 -- walking `Stmt.setupH`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
 set_option maxHeartbeats 2000000 in
@@ -300,19 +316,22 @@ theorem setup_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec
 
 /-- **A raw session that `AcceptsZKV` accepts as V*'s statement `j` under the bindings `f` loads that statement's
 file**, where its inputs pass the statement check: its one statement is the setup's, with the inputs' circuit and
-`(pubZ I).n` as its population (`setup_of_accepts`), and `checkStmt_ok` at it: the inputs' circuit file is
-`circuitFile s f` for V*'s statement `s` at index `j`, whose instance count is `(pubZ I).n`. -/
+`(pubZ I).n` as its population (`setup_of_accepts`), and `checkStmt_ok` at it: the inputs' tags are named the
+circuit's and they carry no lookup tables, and the inputs' circuit file is `circuitFile s f` for V*'s statement `s` at
+index `j`, whose instance count is `(pubZ I).n`. -/
 theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
-    {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings} (hacc : AcceptsZKV i j f x.I x.own t) (hck : ScopeZR x.I) :
-    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = (circZ x.I).unit.name ∧
-      (pubZ x.I).n = s.instances ∧ RecVStar.circuitFile s f = .ok x.I.circuitFile ∧
-      RecVStar.checkOwn s x.own = .ok () := by
+    {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (hacc : AcceptsZKV i j f rows x.I x.own t) (hck : ScopeZR x.I) :
+    x.I.tags.name = Flock.Tags.circuit.name ∧ x.I.tables = [] ∧
+      ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = (circZ x.I).unit.name ∧
+        (pubZ x.I).n = s.instances ∧ RecVStar.circuitFile s f = .ok x.I.circuitFile ∧
+        RecVStar.checkOwn s x.own = .ok () := by
   obtain ⟨-, spec, sts, hs, hv⟩ := hacc
   obtain ⟨st, rfl, hcst, hpop⟩ := setup_of_accepts x t hs hck
   have hck1 := array_forM_ok hv 0 (by simp)
   simp only [List.getElem_toArray, List.getElem_cons_zero] at hck1
-  obtain ⟨ss, s, hss, hj, hname, hn, hf, ho⟩ := checkStmt_ok hck1
+  obtain ⟨htag, htab, ss, s, hss, hj, hname, hn, hf, ho⟩ := checkStmt_ok hck1
   rw [hcst] at hname
-  exact ⟨ss, s, hss, hj, hname, hpop ▸ hn, hf, ho⟩
+  exact ⟨htag, htab, ss, s, hss, hj, hname, hpop ▸ hn, hf, ho⟩
 
 end FlockSoundness.Discharge.Recursion

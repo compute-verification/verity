@@ -19,8 +19,8 @@ as the prover supplies them (`ZkOuterR`), and no check the verifier of record ma
   bindings parses, at V*'s constant tags and no lookup tables, to `Vs j`'s circuit, and `Vs j` has its instances.
 * `loads_of_check`, `loads_of_verifiesV`: at V*'s tags and no lookup tables (`zkTags_vstar`), a session whose file is
   statement `j`'s under `bind j` loads `Vs j`; a session `AcceptsZKV` accepts as statement `j` under `bind j` has that
-  file (`vstarFile_of_accepts`). This is `loads_of_verifies` at the check, once (i)'s event reads `AcceptsZKV` and the
-  verifier refuses other tags and lookup tables.
+  file and no lookup tables (`vstarFile_of_accepts`). This is `loads_of_verifies` at the check, once (i)'s event reads
+  `AcceptsZKV` and the model's tags are V*'s (the verifier compares them by name).
 * `typable_of_accepts`: such a session types (`ZkOuterR.Typable`): `Loads` gives its circuit and population, and the
   record's draw sets it up (`setupZ_of_verifiesZK`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
@@ -76,16 +76,16 @@ theorem loads_of_check {t₀ : Flock.Tags} {stmts : Array VStar.Stmt} {bind : Fi
   exact ⟨(Except.ok.inj hZ).symm, hn.trans hnv.symm⟩
 
 /-- **A session the verifier of record accepts as V*'s statement `j`, under the family's bindings for it, loads
-`Vs j`**, where its inputs pass the statement check, at V*'s tags and no lookup tables: `--rec-part j` makes the
-session's statement `stmts[j]` and `--rec-bindings` makes its file `circuitFile stmts[j] (bind j)`
-(`vstarFile_of_accepts`), and `loads_of_check` at the obligation. The tags and the tables are taken until the verifier
-refuses a session at other tags or with lookup tables. -/
+`Vs j`**, where its inputs pass the statement check, at V*'s tags: `--rec-part j` makes the session's statement
+`stmts[j]`, `--rec-bindings` makes its file `circuitFile stmts[j] (bind j)`, and the verifier refuses lookup tables
+(`vstarFile_of_accepts`); then `loads_of_check` at the obligation. The verifier compares the tags by name only, and the
+model's inputs may carry any tags, so the tags are still taken. -/
 theorem loads_of_verifiesV {t₀ : Flock.Tags} {i : RecVStar.Inner} {stmts : Array VStar.Stmt}
     {bind : Fin stmts.size → VStar.Bindings} {Vs : Fin stmts.size → VStmt} (hob : VStarParses t₀ stmts bind Vs)
     (hss : RecVStar.statements i = .ok stmts) (j : Fin stmts.size) {Reg' : Type} (x : (Vs j).OuterR Reg')
-    (t : Exec.Transcript) (hacc : AcceptsZKV i j (bind j) x.I x.own t) (hck : ScopeZR x.I) (hT : x.I.tags = t₀)
-    (htab : x.I.tables = []) : (Vs j).Loads x.I := by
-  obtain ⟨ss, s, hss', hj, -, hn, hf, -⟩ := vstarFile_of_accepts x t hacc hck
+    (t : Exec.Transcript) {rows : Option (Array Flock.Registered.Port)} (hacc : AcceptsZKV i j (bind j) rows x.I x.own t)
+    (hck : ScopeZR x.I) (hT : x.I.tags = t₀) : (Vs j).Loads x.I := by
+  obtain ⟨-, htab, ss, s, hss', hj, -, hn, hf, -⟩ := vstarFile_of_accepts x t hacc hck
   rw [hss] at hss'
   cases hss'
   rw [Array.getElem?_eq_getElem j.2] at hj
