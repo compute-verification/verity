@@ -25,7 +25,6 @@ open Finset Pouw.Fp8Atom
 
 /-! ## The counting theorem -/
 
-
 /-- The rows of 16-row block `b`. -/
 def fragRows (b : ℕ) : Finset ℕ := Ico (16 * b) (16 * b + 16)
 
@@ -99,7 +98,6 @@ theorem fragSlots_card_le (ok : ℕ → ℕ → ℕ → Prop) [∀ i j t, Decida
         rw [sum_boole, Nat.cast_id]
     _ ≤ _ := sum_le_sum hrow
 
-
 /-- **The counting theorem**: a skip program omits slots `(b, J, t)`, the `mma.sync` at atom `t` over the fragment of
 16-row block `b` and 8-column group `J`, each with at most 5 patched words. If every word stays
 correct (its omitted atoms form a skip set) and each slot's atom is undebited in its unpatched words, then
@@ -145,5 +143,3 @@ theorem fragSkip_saving_le (p : Pipeline) (G : ℕ) {m n k : ℕ} (A : Matrix (F
   nlinarith
 
 end Pouw.PearlC
-
-theorem Pouw.SecurityProofs.PearlC.FragSkipSavingLe : Pouw.Guarantees.PearlC.FragSkipSavingLe := @Pouw.PearlC.fragSkip_saving_le

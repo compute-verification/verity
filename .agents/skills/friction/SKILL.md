@@ -102,12 +102,38 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-08 (11:02 PM PDT, relayed by top): parallel proof work runs against fixed statements. The final theorem's
+  statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
+  integration runs continuously; what the deadline leaves open is a gap list of exact lemma names
+  (`.agents/skills/lean-proofs/SKILL.md`). The same night: say "private circuit" or "the circuit's description", never
+  "netlist" (the README's Glossary).
+- 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
+  evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
+  recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
+  Python keeps running beside it as the reference, the switch is a one-line change that can be reversed, and it moves
+  that protocol's properties from `Models/` to `Properties/`. The same day: lanes don't pick up rule changes on their
+  own, so each lane rereads AGENTS.md and the rulings here and in `.agents/skills/lean-proofs/SKILL.md` at the start of
+  every night, and each assignment from the coordinator lists the rules changed since that lane last read them.
+- 2026-10-08 (5:59 PM PDT, relayed by top): a named conjecture is a premise in a section of its own, with a falsification
+  test that runs, and a claim resting on one is listed as conditional. A model of how a device computes, such as
+  `TTOutPearlC`, is an assumption about the world, checked by measurement. Claims resting on a falsified premise come off
+  the list, and until the shape check unfolds `def G : Prop` bodies, the audit's past "no assumptions" results are
+  unverified (`.agents/skills/lean-proofs/SKILL.md`).
+- 2026-10-08 (5:11 PM PDT, relayed by top): the premises rule is mechanical. A property's only arguments are the input,
+  the function's acceptance and premises from the list, a premise being an assumption about the world that the function
+  can't see. Completeness theorems move to `Proofs/`, each with one concrete instance of its honest case, and
+  properties that don't fit yet sit on a frozen list that only shrinks (`.agents/skills/lean-proofs/SKILL.md`).
+- 2026-10-08 (4:30 PM PDT, relayed by top): a property's hypotheses come only from a short list of named premises kept
+  in `Security/Definitions/`: physical premises, such as a device being intact or every uplink being certified, and
+  VBridge until it's proved. The Lean check refuses any other hypothesis in `Properties/`, and adding a premise is a
+  `Definitions/` change, so it messages Daniel. The same day, `RecursiveSound` took the fork form of the hash break
+  (`.agents/skills/lean-proofs/SKILL.md`).
 - 2026-10-08 (22:55Z, the coordinator's, under the 7:16 AM PDT ruling): the two-PR cap counts the PRs a lane is working
   on. A ready PR whose head is in a queued or running check, or in a train the lander holds, doesn't count, and counts
   again if that check fails, so a slow check never holds a lane's next PR.
 - 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
-  or a statement reviewer's: `research merge` and `research queue` read none. This retires the grant rulings of 6 and 7
-  Oct below.
+  or a statement reviewer's: `research merge` and `research queue` read none. It retired the grant-carry rulings of 6 and
+  7 Oct.
 - 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. It ends in a break tied to the run, such as
   two distinct inputs the run itself hashed with one SHA-512 digest, and an input condition becomes the verifier's
   refusal rather than a hypothesis. The form is in `.agents/skills/lean-proofs/SKILL.md`.
@@ -119,7 +145,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
     and Daniel approves or edits them in one pass. The coordinator's reports lead with which outcomes moved and what
     blocked the rest, not with landing counts;
   - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
-    back only if the PR fails. A lane holds at most two open PRs;
+    back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
+    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived;
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
@@ -134,9 +161,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   check. Before an expensive step (a full check, a move window), rehearse the cheap one after it: `research merge
   --dry-run` against a scratch `main` would have shown on 7 Oct, ten hours earlier, that main's gate could accept no
   check of the moved tree.
-- 2026-10-07 (06:19Z), the coordinator: a grant also carries to a head whose only other changes lie outside the grant's
-  rule (`research.queue.carry` compares the paths the rule covers), because the paths it reviewed are still byte-identical.
-  This refines the 6 Oct ruling below (a red-team grant carries across a byte-identical patch) and doesn't reverse it.
 - 2026-10-06 (8:00 PM PDT, relayed by top): to make up for lost time, a lane uses as many workers and pods as its
   `budgets.toml` line allows without asking, and tells its coordinator when the line binds. GPU work still names its
   question.
@@ -163,8 +187,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   definition.
 - 2026-10-06 (8:03 and 8:14 AM PDT): research velocity first, no red tape (`AGENTS.md`, "Working principles"). Its
   applications so far:
-  - a red-team grant carries when the PR's own patch is byte-identical at both heads, even if `main` moved under it,
-    `lean-audit.json` included;
   - a train member needs no quick-tier pass (its own line below);
   - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
   - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
@@ -178,8 +200,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   maintained. Pearl's FP8 scheme stays as Pearl defines it, semi-maintained (BLAKE3 in `schemes/pearl_kw.py`), with
   `cr/blake3` its assumption alone.
 - 2026-10-06 (8:03 AM PDT): a train member needs no quick-tier pass. The train's own full check is the gate, and the
-  owner's `ready` label at the PR's head may be written by hand (`research data label pr:N@SHA ready true --by LANE`).
-  Grants are still required.
+  owner's `ready` label at the PR's head, which a train member still needs (8 Oct, 7:16 AM PDT), may be written by hand
+  (`research data label pr:N@SHA ready true --by LANE`).
 - 2026-10-05 (10:45 PM PDT): when Daniel hands over a design to implement, build it unless there is a strong reason not
   to: a measured cost that breaks a budget, a soundness or zero-knowledge hole, or a contradiction with a proved theorem.
   Taste isn't one. With a strong reason, build the nearest version you can defend and leave him a report, rather than

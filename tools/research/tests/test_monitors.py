@@ -994,6 +994,7 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
               failure={"class": "CANCELLED_DEADMAN", "why": "no heartbeat for 10 min"})
     write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="done", rc=0, steps=[{"step": "pytest", "status": "passed"}])
     write_run(tmp_path, "r20261003-200000-dddd", command=["python3", "tools/verity/check/check.py"], state="failed")
+    write_run(tmp_path, "r20261003-200000-1111", command=slot, state="failed", rc=M.NOT_STARTED)  # a twin that left its line
     write_run(tmp_path, "r20261003-200000-eeee", command=slot, state="running", rc=None,
               steps=[{"step": "lean-audit", "status": "failed", "log": "lean-audit.log"}],
               logs={"lean-audit.log": "AUDIT x: FAIL; built\n  lean: failed\n    error: dependency 'p' not in manifest\n"})
@@ -1017,6 +1018,25 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
     assert rows["aaaa"]["step"] == "pytest" and rows["aaaa"]["line"] == "FAILED tests/test_a.py::test_b - AssertionError"
     assert rows["eeee"]["line"] == "error: dependency 'p' not in manifest"
     assert rows["bbbb"].get("step") is None and rows["bbbb"]["class"] == "CANCELLED_DEADMAN" and rows["bbbb"]["rc"] == 143
+
+
+def test_the_reader_names_a_suites_runs_failed_suite_as_it_happens_from_its_stdout(tmp_path):
+    """A suites.py run writes no steps.jsonl: its first failed suite, and that suite's first failing line, come from stdout.log
+    while it still runs (25ea, 8 Oct: verity-ops failed at 23:54Z and nobody heard until the run ended at 01:01Z)."""
+    slot = ["python3", "tools/verity/check/slot.py", "--", "bash", "-c", "uv run python tools/verity/check/suites.py --changed x"]
+    out = ("suites: the change from x touches 3\npassed  verity-numerical   1093 passed in 39 s\n"
+           "failed  verity-ops         61 passed, 1 failed in 5 s\n        E       assert False\n"
+           "        FAILED tests/test_keeper.py::test_a - assert False\n        log: /tmp/x.log\n"
+           "passed  research           1955 passed in 35 s\nfailed  verity-later   1 failed\n")
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="running", rc=None, logs={"stdout.log": out})
+    (tmp_path / "runs" / "r20261003-200000-aaaa" / "steps.jsonl").unlink()
+    write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="running", rc=None,
+              logs={"stdout.log": "passed  verity-numerical   1093 passed in 39 s\n"})
+    script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
+    got = json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True, text=True, check=True).stdout)
+    (row,) = got["rows"]
+    assert row["run"].endswith("aaaa") and row["step"] == "suite verity-ops" and row["suite"]
+    assert row["line"] == "FAILED tests/test_keeper.py::test_a - assert False" and row["state"] == "running"
 
 
 def test_a_trains_prs_are_its_merges_from_the_head_and_a_merge_of_main_between_them():
@@ -1322,3 +1342,6 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     assert len(M.failed_checks(M.Ctx(now=T0 + 180, memo=memo, run=answer, act=True))) == 2 and not any("cancel" in c for c in calls[n:])
     (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
     assert f.text.endswith(" Cancelled at 20:40Z, since r20261003-203000-5415 waited for a check slot on vy-nebius-1.")
+    row["suite"], calls[:] = True, []                     # a suites.py run's failed suite rings, and the lander decides
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
+    assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
