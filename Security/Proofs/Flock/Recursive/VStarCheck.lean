@@ -1,26 +1,32 @@
 import Flock.RecVStar
 import Proofs.Flock.Recursive.Loads
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Recursion: the verifier's check that a session is one of V*'s (gap 8, check 1 in the model)
 
-`flock-verify verify --rec-inner F` runs `RecVStar.checkStmt` on each statement after `buildSession` (`FlockVerify.lean`'s
-`setupOf`): the circuit's META binds the verifier's own partition object and program, its unit is one of V*'s statements
-at the inner shape, its population is that statement's instance count, and the circuit file is byte for byte the one
-`vstar stage` writes for that statement under the file's own bindings. `AcceptsZKR` doesn't read that check. This file
-states it and what it gives. Nothing in `RecursiveAudit` reads it yet: which of V*'s statements a session must be, the
-bindings' `program_digests` value, and how `Vs` is tied to V*'s files wait on gap 8's call.
+`flock-verify verify --rec-inner F` runs `RecVStar.checkStmt` on each statement after `buildSession`
+(`FlockVerify.lean`'s `setupOf`): the circuit's META binds the verifier's own partition object and program, its unit is
+one of V*'s statements at the inner shape, its population is that statement's instance count, and the circuit file is
+byte for byte the one `vstar stage` writes for that statement under the file's own bindings. `AcceptsZKR` doesn't read
+that check. This file states it and what it gives. Nothing in `RecursiveAudit` reads it yet: which of V*'s statements a
+session must be, the bindings' `program_digests` value, and how `Vs` is tied to V*'s files wait on gap 8's call.
 
 * `innerAt spec st`: the verifier's own inner shape at the inner statement, the value `RecVStar.innerOf` returns.
 * `AcceptsZKV i I own t`: flock-verify `--zk --registered F --rec-inner F` accepts: `AcceptsZKR`, and each statement
   passes `checkStmt` at the inner shape `i` against the inputs' circuit file, partition object and program and `own`.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
 * `checkFile_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it passes.
+* `population_of_setupH`: the set-up statement's population (`RecVStar.population`) is the size of the public file
+  `loadPublic` reads, drawn or not (`drawn` records it, `loadPublic` records none and leaves `n` at it).
+* `setup_of_accepts`: a raw session that passes the statement check sets up one statement, with `circZ I` as its circuit
+  and `(pubZ I).n` as its population.
 * `vstarFile_of_accepts`: at a raw session that `AcceptsZKV` accepts and that passes the statement check, the inputs'
   circuit file is `circuitFile s b` for one of V*'s statements `s` at `i`, named as the session's unit, with `b` the
-  bindings its META names; the setup's statement has `s`'s instances as its population, and the verifier's reads hold
-  `s`'s message-round ports.
+  bindings its META names; `(pubZ I).n` is `s`'s instance count, and the verifier's reads hold `s`'s message-round
+  ports.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -188,17 +194,78 @@ theorem checkStmt_ok {i : RecVStar.Inner} {st : Flock.Stmt} {circuitB : ByteArra
   obtain ⟨ss, hss, hmem, hname, hn⟩ := check_ok hck
   exact ⟨ss, s, b, hss, hmem, hname, hn, hb, checkFile_ok hf, h⟩
 
-/-- **A raw session that `AcceptsZKV` accepts loads one of V*'s files**, where its inputs pass the statement check: its
-one statement is the setup's (`Exec.setupTables_ok`, one table), whose circuit is the inputs' (`setupH_spec`,
-`ScopeZ.parse`), and `checkStmt_ok` at it. Which of V*'s statements, and the bindings' `program_digests` value, are the
-file's. -/
-theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
-    {i : RecVStar.Inner} (hacc : AcceptsZKV i x.I x.own t) (hck : ScopeZR x.I) :
-    ∃ spec st ss s b, setupOf (zkInputs x.I) t.record = .ok (spec, #[st]) ∧ st.c = circZ x.I ∧
-      RecVStar.statements i = .ok ss ∧ s ∈ ss.toList ∧ s.name = (circZ x.I).unit.name ∧
-      RecVStar.population st = s.instances ∧ RecVStar.bindingsOf (circZ x.I) = .ok b ∧
-      RecVStar.circuitFile s b = .ok x.I.circuitFile ∧ RecVStar.checkOwn s x.own = .ok () := by
-  obtain ⟨-, spec, sts, hs, hv⟩ := hacc
+-- walking `Stmt.setupH`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
+set_option maxHeartbeats 2000000 in
+/-- **An undrawn statement's public file is the one `loadPublic` reads.** -/
+theorem setupH_undrawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {partition : Option Lean.Json} {program : Option ByteArray}
+    {st : Flock.Stmt} (h : Flock.Stmt.setupH tags circuitFile publicFile coins tables none partition program = .ok st) :
+    HmRow.loadPublic tags st.c publicFile = .ok st.pub := by
+  unfold Flock.Stmt.setupH at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    assumption
+
+-- walking `HmRow.loadPublic`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
+set_option maxHeartbeats 2000000 in
+/-- **A loaded public file is a population, not a draw**: `loadPublic` records no population. -/
+theorem loadPublic_population {tags : Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}
+    (h : HmRow.loadPublic tags c file = .ok pop) : pop.population = none := by
+  unfold HmRow.loadPublic at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rfl
+
+-- walking `HmRow.drawn`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
+set_option maxHeartbeats 2000000 in
+/-- **A drawn public file records its population's size**: the registered file's instance count. -/
+theorem drawn_population {c : Flock.Circuit} {pop pub : Flock.Public} {d : Lean.Json}
+    (h : HmRow.drawn c pop d = .ok pub) :
+    pub.population.map (·.1) = some pop.n := by
+  unfold HmRow.drawn at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rfl
+
+/-- **The set-up statement's population is the loaded public file's size**, drawn or not: `HmRow.drawn` records it, and
+an undrawn statement's `n` is the file's own (`setupH_n`). -/
+theorem population_of_setupH {tags : Tags} {cf pf : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}
+    {st : Flock.Stmt} (h : Flock.Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    ∃ pop, HmRow.loadPublic tags st.c pf = .ok pop ∧ RecVStar.population st = pop.n := by
+  cases draw with
+  | none =>
+    have hl := setupH_undrawn h
+    refine ⟨st.pub, hl, ?_⟩
+    unfold RecVStar.population
+    rw [loadPublic_population hl, (setupH_n h).1]
+    rfl
+  | some d =>
+    obtain ⟨pop, hl, hd⟩ := Layout.setupH_drawn h
+    refine ⟨pop, hl, ?_⟩
+    unfold RecVStar.population
+    rw [drawn_population hd]
+    rfl
+
+/-- **A raw session that passes the statement check sets up one statement**, whatever the record's draw: its circuit is
+the inputs' (`setupH_spec`, `ScopeZ.parse`) and its population is `(pubZ I).n` (`population_of_setupH`, `ScopeZ.load`).
+-/
+theorem setup_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
+    {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf (zkInputs x.I) t.record = .ok (spec, sts))
+    (hck : ScopeZR x.I) :
+    ∃ st, sts = #[st] ∧ st.c = circZ x.I ∧ RecVStar.population st = (pubZ x.I).n := by
   have hZ := hck.scopeZ x.hTags.1
   have hh' : (zkTags x.I).hiddenOutputs = false := (zkTags_hiddenOutputs x.I).trans x.hTags.1
   rcases Exec.setupTables_ok hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hc', -⟩
@@ -209,10 +276,27 @@ theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : 
       (setupH_spec ((zkTags_typed x.I).trans hZ.typed) hst).1
     rw [hZ.parse x.hTags.1] at h1
     exact (Except.ok.inj h1).symm
+  obtain ⟨pop, hl, hp⟩ := population_of_setupH hst
+  have hl' : HmRow.loadPublic (zkTags x.I) st.c x.I.publicFile = .ok pop := hl
+  rw [hcst, hZ.load x.hTags.1] at hl'
+  cases hl'
+  exact ⟨st, rfl, hcst, hp⟩
+
+/-- **A raw session that `AcceptsZKV` accepts loads one of V*'s files**, where its inputs pass the statement check: its
+one statement is the setup's, with the inputs' circuit and `(pubZ I).n` as its population (`setup_of_accepts`), and
+`checkStmt_ok` at it. Which of V*'s statements, and the bindings' `program_digests` value, are the file's. -/
+theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
+    {i : RecVStar.Inner} (hacc : AcceptsZKV i x.I x.own t) (hck : ScopeZR x.I) :
+    ∃ spec st ss s b, setupOf (zkInputs x.I) t.record = .ok (spec, #[st]) ∧ st.c = circZ x.I ∧
+      RecVStar.statements i = .ok ss ∧ s ∈ ss.toList ∧ s.name = (circZ x.I).unit.name ∧
+      (pubZ x.I).n = s.instances ∧ RecVStar.bindingsOf (circZ x.I) = .ok b ∧
+      RecVStar.circuitFile s b = .ok x.I.circuitFile ∧ RecVStar.checkOwn s x.own = .ok () := by
+  obtain ⟨-, spec, sts, hs, hv⟩ := hacc
+  obtain ⟨st, rfl, hcst, hpop⟩ := setup_of_accepts x t hs hck
   have hck1 := array_forM_ok hv 0 (by simp)
   simp only [List.getElem_toArray, List.getElem_cons_zero] at hck1
   obtain ⟨ss, s, b, hss, hmem, hname, hn, hb, hf, ho⟩ := checkStmt_ok hck1
   rw [hcst] at hname hb
-  exact ⟨spec, st, ss, s, b, hs, hcst, hss, hmem, hname, hn, hb, hf, ho⟩
+  exact ⟨spec, st, ss, s, b, hs, hcst, hss, hmem, hname, hpop ▸ hn, hb, hf, ho⟩
 
 end FlockSoundness.Discharge.Recursion
