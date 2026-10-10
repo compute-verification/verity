@@ -19,7 +19,7 @@ them (`Proofs.Flock.Recursive.Firewall`); their zero knowledge is `Proofs.Flock.
   (`commitStrs`), and runs `S` sessions, each one `--zk` table `C j pc l` at the public context `pc` and `R₂`'s
   commit strings `l`, at the coin vector the auditor's tape fixes (`coin`), on the honest witness `wit`. Its view
   (`view`), its simulator (`sim`), the honest witnesses (`Honest`), every table passing `CoinedOK` (`TablesOK`) and
-  its error (`err`).
+  its error (`err`, and `errAt` at an hm96 hiding bound `δ`).
 * `HCtx`, `hctxAt`: what the honest prover holds in (ii), at the firewall's commitments (`firewallCommits`: the inner
   coins live, each message reading the commit strings before it).
 -/
@@ -182,6 +182,14 @@ noncomputable def errS : ℝ≥0∞ :=
 
 /-- **V*'s sessions' `ε_o`**: the sessions' error and `R₂`'s, `n₂·2^-193`. -/
 noncomputable def err : ℝ≥0∞ := V.errS + V.n₂ * (2 : ℝ≥0∞) ^ (-193 : ℤ)
+
+/-- The sessions' error at an hm96 hiding bound `δ`, `Σ_j 2·|LeafPos z_j|·δ`. -/
+noncomputable def errSAt (δ : ℝ≥0∞) : ℝ≥0∞ :=
+  ∑ j, 2 * (Fintype.card (ZkView.LeafPos (V.z j)) : ℝ≥0∞) * δ
+
+/-- **V*'s sessions' `ε_o` at an hm96 hiding bound `δ`**: the sessions' error and `R₂`'s, `n₂·δ`; `err` is it at
+`2^-193`. -/
+noncomputable def errAt (δ : ℝ≥0∞) : ℝ≥0∞ := V.errSAt δ + V.n₂ * δ
 
 end Sessions
 
