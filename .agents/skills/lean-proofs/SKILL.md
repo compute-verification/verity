@@ -164,7 +164,8 @@ simp with that.
   outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
   acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
   constant of a module under `shape.premises`; a `Prop` field of a structure an input ranges over counts as a hypothesis,
-  and a conjunction as its conjuncts. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
+  and a conjunction as its conjuncts; when they are about different functions, the entry lists `conjuncts`, one
+  `{function, outcome}` each. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
   with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
   `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
   `shape.conjectures` (open with a falsification test that runs, or falsified, with why); a property resting on one

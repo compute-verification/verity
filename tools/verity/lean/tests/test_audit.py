@@ -1436,6 +1436,25 @@ def test_a_function_that_always_returns_takes_no_acceptance_and_each_conjunct_mu
     assert not A.reaches("P.protocol.check", {"P.protocol"})
 
 
+def test_an_entry_may_name_each_conjuncts_own_function_and_outcome():
+    """`conjuncts` in an entry: soundness of a check and simulation of a server, one statement, each conjunct held to its
+    own function and outcome, so the second needs no acceptance of the first's function; the list has one entry per
+    conjunct, each naming both, and replaces the entry's own function and outcome rather than joining them."""
+    sound = part([ACCEPTS], inputs=[("x", 0)], conclusion=["P.Good"])
+    sim = part(inputs=[("s", 0)], conclusion=["P.run"])
+    entry = {"conjuncts": [{"function": "P.check", "outcome": "accept"}, {"function": "P.run", "outcome": "none"}]}
+    assert A.refusals(entry, [sound, sim], []) == []
+    assert A.refusals({"function": "P.check", "outcome": "accept"}, [sound, sim], [])[0].startswith(
+        "(conjunct 2) takes no hypothesis that its function returned accept")
+    swapped = {"conjuncts": entry["conjuncts"][::-1]}
+    assert {w.split(")")[0] for w in A.refusals(swapped, [sound, sim], [])} == {"(conjunct 1", "(conjunct 2"}
+    for bad in ({"conjuncts": entry["conjuncts"][:1]}, {"conjuncts": [entry["conjuncts"][0], {"function": "P.run"}]},
+                {"conjuncts": "P.run"}):
+        assert A.refusals(bad, [sound, sim], [])[0].startswith("has 2 conjunct(s)"), bad
+    both = entry | {"function": "P.check"}
+    assert "both `conjuncts` and a function" in A.refusals(both, [sound, sim], [])[0]
+
+
 def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink():
     """`shape` with `shape.frozen`: a frozen guarantee that doesn't fit passes, one that fits fails until its entry goes,
     an entry needs a reason and a guarantee or unstated statement of this package, an unfrozen misfit fails, as does a
