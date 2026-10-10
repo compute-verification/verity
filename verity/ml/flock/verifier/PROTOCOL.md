@@ -1472,7 +1472,9 @@ statements define such a session; any other statement refuses `J > 1`.
 `@967b8d06` (§16.10) and `types@210d32e1` (§16.11) with their outputs as rows (Daniel, Oct 1); `+seed-injection` is the
 selftest build. Statements composed up to verity `b3727bd9` are `@b3727bd9` and `types@b3727bd9`: the same, but META
 `leaf_scheme.salt_source` names a ChaCha20 expansion of a per-proof OS key where the default's names the OS's bytes
-(§16.10's tags), and the identity carries that object. `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
+(§16.10's tags), and the identity carries that object. Statements composed up to verity `cec3e347` are `@cec3e347`
+and `types@cec3e347`: the default's, but their `--zk` identity names the pads and every table's draws ChaCha20 streams
+of the prover's seed where the default's names the OS's bytes (§16.14). `Flock.HmOut` (`Stmt.setupHidden`; its soundness is `FailClosed.flock_headline_exec_hidden`, and under
 `--zk` `zk_session_soundH` and `zk_session_soundHJ`, within the one theorem of §16.15) applies §16.10's definitions to every
 row. The public file holds roots, hiding leaves and structure only, under M0 and `--zk`. M0's transcript is not hiding
 (`NON_ZK_PROOF`, zero mask slots); only `--zk` targets that.
@@ -1527,7 +1529,9 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
 
 `verify --zk` (the verifier's setting) checks `flock-circuit --zk` sessions (any `J`, draws, hidden outputs) by the live
 PROTOCOL.md's masked protocol on §7.4's coin tree (`Flock.Zk*`). `hooks` is upstream's `zk_identity`; `proof_class`
-stays `NON_ZK_PROOF`. **Agreement:** README.
+stays `NON_ZK_PROOF`. Its `pads` (and `tables`, for `J > 1`) name the prover's randomness: the OS's bytes for the default
+statements (`Tags.osMasks`, Daniel's decision 4), ChaCha20 streams of the prover's seed for those pinned `@cec3e347` and
+earlier. **Agreement:** README.
 
 Each table's statement must have upstream's mask shape (`Zk.shapeOk`), and, which upstream does not check, its Δ and its
 regions avoid the mask slot (`Zk.maskFree`, D12): no pair of `da` or `db` has a row or a column in the mask range's
