@@ -20,6 +20,8 @@ open HmNets hiding and
 
 def MAX_REGIONS : Nat := 64
 def MAX_SLOTS : Nat := 160
+/-- `rec_residuals.MAX_LONE_SLOTS`: the slots of a residual that fits no part alone under `MAX_SLOTS` and stands alone. -/
+def MAX_LONE_SLOTS : Nat := 191
 def RES_OUT_WORDS : Nat := 128
 def PER_SLOT : Nat := 3
 
@@ -115,13 +117,15 @@ def touched (S : GfS) (st : Array Nat) (r : Res) : Array Nat × Array Nat := Id.
   return (sortDedup P, sortDedup V)
 
 /-- `parts`' grouping: each residual, in S's order, into the first part it fits, as its residuals, row ports and v
-elements; refused when a residual alone fits no part, or when the parts do not hold every residual once, in order. -/
+elements, or alone within `MAX_LONE_SLOTS`; refused when a residual alone fits no part, or when the parts do not hold
+every residual once, in order. -/
 def groups (S : GfS) (sizes : Array Nat) : Except String (Array (Array Nat × Array Nat × Array Nat)) := do
   let st := starts sizes
-  let fit (g : Array Nat × Array Nat × Array Nat) (P V : Array Nat) : Bool :=
+  let fitN (n : Nat) (g : Array Nat × Array Nat × Array Nat) (P V : Array Nat) : Bool :=
     let ps := union g.2.1 P
-    regions ps.size ≤ MAX_REGIONS && slots (ps.toList.map (sizes[·]!)) (union g.2.2 V).size ≤ MAX_SLOTS
+    regions ps.size ≤ MAX_REGIONS && slots (ps.toList.map (sizes[·]!)) (union g.2.2 V).size ≤ n
       && 8 * (g.1.size + 1) ≤ RES_OUT_WORDS
+  let fit := fitN MAX_SLOTS
   let mut gs : Array (Array Nat × Array Nat × Array Nat) := #[]
   for i in [0:S.res.size] do
     let (P, V) := touched S st S.res[i]!
@@ -130,8 +134,8 @@ def groups (S : GfS) (sizes : Array Nat) : Except String (Array (Array Nat × Ar
       let (R, P0, V0) := gs[gi]!
       gs := gs.set! gi (R.push i, union P0 P, union V0 V)
     | none =>
-      unless fit (#[], #[], #[]) P V do
-        throw s!"residual {i} alone reads more than {MAX_REGIONS} regions or {MAX_SLOTS} sha512x3 slots"
+      unless fitN MAX_LONE_SLOTS (#[], #[], #[]) P V do
+        throw s!"residual {i} alone reads more than {MAX_REGIONS} regions or {MAX_LONE_SLOTS} sha512x3 slots"
       gs := gs.push (#[i], P, V)
   let all := gs.foldl (fun a g => a ++ g.1) #[]
   if (all.qsort (· < ·)).toList != List.range S.res.size then

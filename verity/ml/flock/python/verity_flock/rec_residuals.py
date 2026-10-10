@@ -60,7 +60,7 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
+__all__ = ["InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
            "residual_forms", "residual_words", "slots", "spec",
            "statement", "unit_circuit", "write"]
 
@@ -82,6 +82,11 @@ MAX_REGIONS = 64
 # compressions (about nv / 8) put its first part at 2^27. A shape's widest residual reads about 10.75 slots a claim, so 160
 # holds up to 14 claims (12 claims: 130)
 MAX_SLOTS = 160
+# a residual that fits no part alone under MAX_SLOTS stands alone up to this many: no other residual joins it (slots only
+# grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged. At 16 claims (llama32-1b/b1/i256's 2^29
+# bucket) the batched T alone reads 172 slots and 19 regions: hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask
+# (one) leave 191 slots of a 2^26 block (run r20261010-212155-f5ab: 172 slots end at 237 of 256)
+MAX_LONE_SLOTS = 191
 
 
 def port_words(n: int) -> int:
@@ -119,9 +124,11 @@ def slots(ports: list, nv: int) -> int:
     return -(-sum(p.comps for p in rows) // FC.PER_SLOT)
 
 
-def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -> list[SimpleNamespace]:
+def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS,
+          max_lone_slots: int = MAX_LONE_SLOTS) -> list[SimpleNamespace]:
     """S's residuals cut into InnerRepCheck S's of at most ``max_regions`` public regions (`regions`), ``max_slots`` sha512x3
-    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order. A part
+    slots (`slots`) and ``OUT_WORDS / 8`` residuals each, each residual in the first part it fits, in S's order; a residual
+    that fits no part, not even alone, is a part of its own if it reads at most ``max_lone_slots`` slots. A part
     reads the row ports its residuals touch (in S's order, under their names) and the v elements they touch (in v's order),
     w and v renumbered; ``res`` and ``v`` are their indices in S. Every residual of S is one of a part's, so the algebra
     holds exactly when every part does."""
@@ -146,16 +153,17 @@ def parts(S: dict, max_regions: int = MAX_REGIONS, max_slots: int = MAX_SLOTS) -
 
     groups: list[tuple[list, set, set]] = []
     for i, (P, V) in enumerate(map(touched, gf["res"])):
-        def fit(g):
+        def fit(g, n=max_slots):
             ports = [S["ports"][p] for p in g[1] | P]
-            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= max_slots
+            return (regions(ports) <= max_regions and slots(ports, len(g[2] | V)) <= n
                     and F_WORDS * (len(g[0]) + 1) <= OUT_WORDS)
 
         g = next((g for g in groups if fit(g)), None)
         if g is None:
             g = ([], set(), set())
-            if not fit(g):
-                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or {max_slots} sha512x3 slots")
+            if not fit(g, max(max_slots, max_lone_slots)):
+                raise ValueError(f"residual {i} alone reads more than {max_regions} regions or "
+                                 f"{max(max_slots, max_lone_slots)} sha512x3 slots")
             groups.append(g)
         g[0].append(i)
         g[1].update(P)

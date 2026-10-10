@@ -200,7 +200,24 @@ def test_the_universal_units_inner_algebra_is_two_parts_within_the_caps(salt_len
         assert slots <= RR.MAX_SLOTS and regions <= RR.MAX_REGIONS and len(p.res) <= RR.OUT_WORDS // RR.F_WORDS
     assert [shape(p)[1] for p in RR.parts({"gf": {**S["gf"], "res": S["gf"]["res"][16:]}, "ports": S["ports"]})] == [130]
     with pytest.raises(ValueError, match="residual 16 alone reads more than 64 regions or 128 sha512x3 slots"):
-        RR.parts(S, max_slots=128)
+        RR.parts(S, max_slots=128, max_lone_slots=128)
+
+
+def test_a_residual_wider_than_max_slots_stands_alone_within_max_lone_slots():
+    """llama32-1b/b1/i256's 2^29 bucket samples inner sessions of 16 claims (Gumbel's 7 regions, note
+    proofs/20261010T2112Z-finding-c3-claims-per-shape), whose batched-T residual alone reads 172 sha512x3 slots: it is a part
+    of its own, and composes at k_log 26, under circuit.K_MAX (each part's net built in run r20261010-212155-f5ab). Shapes
+    whose residuals each fit MAX_SLOTS cut as they did under MAX_SLOTS alone; a uniform 172 would have moved (34, 26, 8)'s
+    first part to 172 slots and a 2^27 block."""
+    shape = lambda p: (len(p.res), RR.slots(p.S["ports"], p.S["gf"]["nv"]), RR.regions(p.S["ports"]))
+    S = RR.spec(A.Shape(35, 27, 16))
+    ps = RR.parts(S)
+    assert [shape(p) for p in ps] == [(11, 140, 64), (9, 115, 62), (1, 172, 19)] and ps[2].res == [20]
+    assert RR.MAX_SLOTS < 172 <= RR.MAX_LONE_SLOTS
+    with pytest.raises(ValueError, match="residual 20 alone reads more than 64 regions or 160 sha512x3 slots"):
+        RR.parts(S, max_lone_slots=RR.MAX_SLOTS)
+    S8 = RR.spec(A.Shape(34, 26, 8))
+    assert [shape(p) for p in RR.parts(S8)] == [shape(p) for p in RR.parts(S8, max_lone_slots=0)] == [(10, 129, 61), (3, 123, 63)]
 
 
 def _holding(g: random.Random) -> tuple[list[int], list[int]]:
