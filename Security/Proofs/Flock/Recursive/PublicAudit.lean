@@ -32,7 +32,8 @@ What it takes, against `RecursiveAudit`:
   the public statement) in (i); in (ii), `RecursiveFirewallPrivate`'s (`FirewallSends`, `SessionsPublic`,
   `SessionsCoined`, `SessionsHonest`), with its premise `hash-derived-key` until the setup's OS-drawn keys replace it.
 
-Its non-vacuity is to be shown at one recorded recursive run with a public inner unit (the F1 gate).
+Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
+shown at one recorded recursive run with a public inner unit (the F1 gate).
 -/
 
 namespace Flock.Guarantees
