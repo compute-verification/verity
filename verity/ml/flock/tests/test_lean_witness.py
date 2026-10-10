@@ -14,13 +14,13 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   and V*'s programs xz-compressed, and each is checked against the art's own listing once decompressed. Lean's verifier
   builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s six statements are the
   ones `outerStatementsAt` counts, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every
-  unit, and the rate is below 1 at `k = 2^21`. The sessions were proved as `verity/flock-circuit` before #1677 named
-  the OS's masks in its `--zk` identity, so the verifier of record refuses them now (S2/R7) and accepts them as
-  `verity/flock-circuit@cec3e347`, the statement they were proved as. The event's last conjunct is shown in its
-  executable form only: the honest outputs are the circuit's, and a public file whose one output row is committed one
-  bit off still sets up. That is the executable fact `¬ holds` is about, not that Lean's `holds` flips there: no Lean
-  lemma links execution to `holds`, and the cheater's row not being the circuit's output is up to a SHA-512 second
-  preimage for that row.
+  unit, and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved as
+  `verity/flock-circuit` before #1677 named the OS's masks in its `--zk` identity, so the verifier of record refuses
+  them now (S2/R7) and accepts them as `verity/flock-circuit@cec3e347`, the statement they were proved as: the gate is
+  witnessed under `@cec3e347`. The event's last conjunct is shown in its executable form only: the honest outputs are
+  the circuit's, and a public file whose one output row is committed one bit off still sets up. That is the executable
+  fact `¬ holds` is about, not that Lean's `holds` flips there: no Lean lemma links execution to `holds`, and the
+  cheater's row not being the circuit's output is up to a SHA-512 second preimage for that row.
 
 Each inner setup reads the 567 MB inner circuit (about a minute and 3 GB), the gate's files decompress to 2.3 GB, and its
 sessions take up to about 13 minutes each, run at once, so the module is slow; it catches what reading the theorems
@@ -374,13 +374,15 @@ def test_f1_the_sessions_are_not_typable(f1):
 def test_f1_the_rate_is_below_one_at_k_2_21(f1):
     """`_hr`: `rateZ j k = 2^(level 0's logLen) / (e·k)` (`ZkLink.rateZ`) over each session's own plan, its statement's
     `Zk.schedule`, whose level 0's `logLen = logCols + logInvRate` (`Accounting.Level.logLen`) is `cols + rate`. The largest
-    is L0's (m 33): 21, so at `k = 2^21` every session's rate is at most `ρ = 1/e < 1`."""
+    is L0's (m 33): 21, so at `k = 2^21` every recorded session's rate is at most `ρ = 1/e < 1`. `_hr` is over every
+    session the prover may supply, so the Lean takes `k = 2^23` (`Witness.hr_inv_exp`), the cap `Zk.schedule` puts on
+    level 0's `logLen` at every `m` it accepts (`ZkBind.zkLogLenCap_23`), which the recorded sessions are under."""
     zkr = {p: f1[p, STATEMENT]["accepts_zkr"] for p in F1_PARTS}
     for p, c in zkr.items():
         assert c["level0"]["d"] == c["level0"]["cols"] + c["level0"]["rate"], p
     assert (zkr["L0"]["m"], zkr["L0"]["level0"]["d"]) == (33, 21)
     k = 2 ** max(c["level0"]["d"] for c in zkr.values())
-    assert k == 2 ** 21
+    assert k == 2 ** 21 <= 2 ** 23
     assert max(2 ** c["level0"]["d"] / (math.e * k) for c in zkr.values()) == 1 / math.e < 1
 
 
