@@ -144,7 +144,7 @@ def registeredOf (args : List String) : IO (Except String (Array Registered.Port
 def bindingsOf (args : List String) : IO (Except String (Option Json × Option ByteArray)) := do
   let partition : Except String (Option Json) ← match argOf args "--partition" with
     | none => pure (.ok none)
-    | some f => do return (← readJson f).map some
+    | some f => do pure ((← readJson f).map some)
   let program ← (argOf args "--program").mapM IO.FS.readBinFile
   return partition.map fun p => (p, program)
 
