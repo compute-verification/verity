@@ -263,12 +263,6 @@
    "assumptions": [],
    "type_hash": "ebc61df5d4bcea9f8a6698bb3499a497c7d0a575af8cf6c540359d19347d83e8"
   },
-  "Properties.CertifierDevice.lmsCorrect": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.lmsCorrect : Properties.CertifierDevice.LmsCorrect"],
-   "assumptions": [],
-   "type_hash": "c0fc2bd002f025f6fc11e5fad51844c70fa58a9235d817cb0e5cb9450f2b35ec"
-  },
   "Properties.CertifierDevice.records": {
    "owner": "@network-accounting",
    "signature": ["Properties.CertifierDevice.records : Properties.CertifierDevice.Records"],
@@ -1270,10 +1264,6 @@
     "function": "CertifierDevice.step",
     "outcome": "none"
    },
-   "Properties.CertifierDevice.lmsCorrect": {
-    "function": "Lms.verify",
-    "outcome": "accept"
-   },
    "Properties.CertifierDevice.records": {
     "function": "CertifierDevice.step",
     "outcome": "none"
@@ -1908,7 +1898,6 @@
    "Properties.CertifierDevice.contentIndependent": "restatable: Move the tick-view equality into a named conclusion; it is also a corollary of LinkSchedule.",
    "Properties.CertifierDevice.failClosed": "restatable: Move 'a fault is held' and 'a later egress tick of the same window', which pick out the event, into a named conclusion.",
    "Properties.CertifierDevice.issuerVerifies": "restatable: Make ValidKey the subject: quantify over the keys Lms.key derives under Params.make, with certify ... = .ok (i', some cr) as the acceptance.",
-   "Properties.CertifierDevice.lmsCorrect": "completeness: Move to Proofs; no Lean instance (verity/core/devices/certifier/lean/scripts/issuer_vectors.py could supply one); it pairs with the LMS-forgery disjunct of AcceptedRowsAreProgramRows.",
    "Properties.NetworkCertifier.acceptedRowsAreProgramRows": "restatable: Make eg and ig definitions (the parameters digests of p, the rule's own example) instead of the ParamsDigests hypothesis; Honest p dev eg stays only if top lists it as trusted-nebius-host (question); the break disjuncts already follow the hash rule.",
    "Properties.NetworkCertifier.acceptsIff": "restatable: Split the iff: keep Accepts -> every link-window accepted; the converse is HonestAccepted's content and goes to Proofs.",
    "Properties.NetworkCertifier.answerAccepts": "restatable: Split the iff: keep accept -> the three decode and the check accepts; move the converse to Proofs as completeness.",
@@ -3077,7 +3066,6 @@
     "Properties.CertifierDevice.failClosed",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.lmsCorrect",
     "Properties.CertifierDevice.records",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -3239,7 +3227,6 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect",
     "Properties.Identity.streamIsFlock",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -3598,7 +3585,7 @@
     "Lms.secret": "9a1da7b4c316ba2ca43100102095dd447d344070d90383de37ae74d4c191c504",
     "Lms.signAt": "013e60d1e8eb98aa9cfcd9569309b9601fd53dee8fad48b90c5afb7632463676"
    },
-   "guarantees": ["Properties.CertifierDevice.issuerVerifies", "Properties.CertifierDevice.lmsCorrect"]
+   "guarantees": ["Properties.CertifierDevice.issuerVerifies"]
   },
   "Lms.Verify": {
    "digest": "34158752c38442f8d30203dd232eabbda949538bfb948ddffe729e3925cb0dbb",
@@ -3646,7 +3633,6 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
-    "Properties.CertifierDevice.lmsCorrect",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -4869,7 +4855,6 @@
     "Properties.CertifierDevice.failClosed",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
-    "Properties.CertifierDevice.lmsCorrect",
     "Properties.CertifierDevice.records"
    ]
   },

@@ -11,7 +11,7 @@ state it leaves and the proxy's actions out. The code has no fold of it over a t
 events' clock readings, order or bytes. `Issuer.certify` (`Issuer.lean`) signs a closed window's record. Each statement
 is a named `Prop`, proved as the lower-case theorem of the same name in `Properties.Proofs.CertifierDevice`, and a
 guarantee of this package (`lean-audit.json`). Each has one shape: for every input, if the code accepts it, the
-conclusion holds. `step` always returns, so the trace statements take no hypothesis; the issuer's take the acceptances
+conclusion holds. `step` always returns, so the trace statements take no hypothesis; the issuer's takes the acceptances
 of the calls that made the key and of the one they are about. No statement takes an assumption about the world.
 
 **(1) The link's schedule is content-independent.**
@@ -41,17 +41,14 @@ of the calls that made the key and of the one they are about. No statement takes
 releases nothing (it writes `r · B` zero bytes), and the window's record has status `notEstablished r` and padding in
 every row from the fault on. The certifier keeps the first fault of a window, so `r` is the first fault's reason.
 
-**(4) The issuer.** Each statement takes the key as `Lms.key` derives it under parameters `Lms.Params.make` admits:
-both calls' acceptances are its hypotheses, as `certify`'s or `signAt`'s is.
+**(4) The issuer.** `IssuerVerifies`: for every key `Lms.key` derives under parameters `Lms.Params.make` admits,
+every certificate `Issuer.certify` returns with it verifies (`CertifiedRecord.verify`) under the key's parameters and
+public key. Its subject is such a key: the two calls' acceptances are its hypotheses, beside `certify`'s.
 
-* `LmsCorrect`: every signature `Lms.signAt` returns verifies (`Lms.verify`) under the key's public key, and its
-  encoding decodes back to it.
-* `IssuerVerifies`: every certificate `Issuer.certify` returns verifies (`CertifiedRecord.verify`) under the key's
-  parameters and public key.
-
-That `signAt` and `certify` do return, at every leaf below `2^H` and for every record with a head, is completeness, not
-a guarantee: `Proofs.CertifierDevice.Lms.lmsSigns` and `Proofs.CertifierDevice.Issuer.issuerSigns`, each with a toy-LMS
-instance in `Proofs.CertifierNetwork.Instance`.
+That `signAt` and `certify` do return, at every leaf below `2^H` and for every record with a head, and that every
+signature `signAt` returns verifies, are completeness, not guarantees: `Proofs.CertifierDevice.Lms.lmsSigns`,
+`Proofs.CertifierDevice.Lms.lmsCorrect` and `Proofs.CertifierDevice.Issuer.issuerSigns`, each with a toy-LMS instance in
+`Proofs.CertifierNetwork.Instance`.
 -/
 
 namespace Properties.CertifierDevice
@@ -203,14 +200,6 @@ def ClosedAfterFault (c : Config) (tr : List Event) : Prop :=
 def FailClosed : Prop := ∀ (c : Config) (tr : List Event), ClosedAfterFault c tr
 
 /-! ## (4) The issuer -/
-
-/-- **LMS signatures verify.** For a key `Lms.key` derives under parameters `Lms.Params.make` admits, every signature
-`Lms.signAt` returns verifies under the key's public key (`Lms.verify`), and its encoding decodes back to it. -/
-def LmsCorrect : Prop :=
-  ∀ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I seed : ByteArray) (k : Lms.PrivateKey) (q : Nat)
-    (message : ByteArray) (sig : Lms.Signature),
-    Lms.Params.make N W H toy = .ok p → Lms.key p I seed = .ok k → Lms.signAt k q message = .ok sig →
-    Lms.verify p k.publicKey message sig = .ok true ∧ Lms.Signature.decode p sig.encode = .ok sig
 
 /-- **Every certificate the issuer returns verifies.** For a key `Lms.key` derives under parameters `Lms.Params.make`
 admits, every certificate `Issuer.certify` returns with that key verifies (`CertifiedRecord.verify`) under the

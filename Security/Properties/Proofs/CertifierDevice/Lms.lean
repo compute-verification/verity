@@ -4,6 +4,9 @@ import Properties.CertifierDevice
 /-!
 # LMS, proved: a key's signatures verify
 
+Completeness, not guarantees: `LmsCorrect` (every signature `signAt` returns verifies) and `LmsSigns` (`signAt` returns
+at every leaf below `2^H`), each with a toy-key instance in `Proofs.CertifierNetwork.Instance`.
+
 A key `Lms.key` derives holds its tree: node `2^H + q` is leaf q's hash of its one-time public key, and each interior node
 r is `interior r` of its children (`key_spec`). The signature `signAt` gives at leaf q reveals each chain `a_i` steps in,
 and the verifier runs it the remaining `2^W − 1 − a_i` steps, which ends where the key's chain ended (`chain_chain`); so
@@ -398,7 +401,17 @@ theorem verify_signAt {N W H : Nat} {toy : Bool} {p : Params} {I seed : ByteArra
   rw [climb k.params k.I k.tree q hq hint _ le_rfl, top_shift _ _ hq, ← hpub, hT]
   exact congrArg pure (beq_self _)
 
-theorem lmsCorrect_proof : LmsCorrect := by
+/-- **LMS signatures verify** (completeness, not a guarantee): for a key `Lms.key` derives under parameters
+`Lms.Params.make` admits, every signature `Lms.signAt` returns verifies under the key's public key (`Lms.verify`), and its
+encoding decodes back to it. It pairs with the LMS-forgery disjunct of
+`Properties.NetworkCertifier.AcceptedRowsAreProgramRows`. -/
+def LmsCorrect : Prop :=
+  ∀ (N W H : Nat) (toy : Bool) (p : Params) (I seed : ByteArray) (k : PrivateKey) (q : Nat) (message : ByteArray)
+    (sig : Signature),
+    Params.make N W H toy = .ok p → key p I seed = .ok k → signAt k q message = .ok sig →
+    verify p k.publicKey message sig = .ok true ∧ Signature.decode p sig.encode = .ok sig
+
+theorem lmsCorrect : LmsCorrect := by
   intro N W H toy p I seed k q message sig hp hk hs
   obtain ⟨-, hH, -, hH30⟩ := make_spec hp
   obtain ⟨hpk, -⟩ := key_spec hk

@@ -3,9 +3,9 @@ import Properties.Proofs.CertifierNetwork.Accepted
 /-!
 # The completeness statements' honest cases, instantiated
 
-Each completeness statement (`Proofs.Lms.LmsSigns`, `Proofs.Issuer.IssuerSigns`, `CertifierNetwork.DeviceOutputAccepted`)
-has one instance here whose hypotheses all hold: a toy LMS key (`N = 8`, `W = 8`, `H = 1`, two leaves) from a 16-byte
-identifier and an 8-byte seed, a one-bucket record under it, and a one-window configuration with a declared sync whose
+Each completeness statement (`Proofs.Lms.LmsSigns`, `Proofs.Lms.LmsCorrect`, `Proofs.Issuer.IssuerSigns`,
+`CertifierNetwork.DeviceOutputAccepted`) has one instance here whose hypotheses all hold: a toy LMS key (`N = 8`,
+`W = 8`, `H = 1`, two leaves) from a 16-byte identifier and an 8-byte seed, a one-bucket record under it, and a one-window configuration with a declared sync whose
 run ticks each grid once and hands nothing. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
 the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
@@ -17,7 +17,7 @@ namespace Properties.CertifierNetwork.Instance
 
 open _root_.CertifierDevice
 open Properties.CertifierDevice (ValidKey Packed)
-open Properties.CertifierDevice.Proofs.Lms (key_ok key_spec)
+open Properties.CertifierDevice.Proofs.Lms (key_ok key_spec lmsSigns)
 
 /-! ## A toy LMS key -/
 
@@ -52,6 +52,13 @@ and leaf `0 < 2^1`. -/
 theorem lmsSigns_instance : ∃ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I s : ByteArray) (k : Lms.PrivateKey)
     (q : Nat), Lms.Params.make N W H toy = .ok p ∧ Lms.key p I s = .ok k ∧ q < 2 ^ H :=
   ⟨8, 8, 1, true, toyParams, ident, seed, toyKey, 0, toyParams_ok, toyKey_eq, by decide⟩
+
+/-- **`LmsCorrect`'s honest case holds**: the toy key signs the empty message at leaf `0`. -/
+theorem lmsCorrect_instance : ∃ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I s : ByteArray) (k : Lms.PrivateKey)
+    (q : Nat) (message : ByteArray) (sig : Lms.Signature), Lms.Params.make N W H toy = .ok p ∧ Lms.key p I s = .ok k ∧
+    Lms.signAt k q message = .ok sig := by
+  obtain ⟨sig, hs⟩ := lmsSigns 8 8 1 true toyParams ident seed toyKey 0 .empty toyParams_ok toyKey_eq (by decide)
+  exact ⟨8, 8, 1, true, toyParams, ident, seed, toyKey, 0, .empty, sig, toyParams_ok, toyKey_eq, hs⟩
 
 /-! ## A record the issuer certifies -/
 
