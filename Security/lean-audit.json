@@ -1334,6 +1334,9 @@
    "assumptions": [],
    "type_hash": "bfebc7008d7efa43d9ec61b0f3ceb4b0682621cf299c32df9bd6dde4907c0fb3"
   },
+  "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1": {
    "owner": "@proofs",
    "signature": [
@@ -3372,6 +3375,7 @@
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash,world-unlisted): Scope now follows from acceptance, but it still takes TableCRZ as a hypothesis and bounds the link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes), DrawOkZK, RecordsLiveZK and their H and J forms, premises that aren't on the list.",
+   "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash,world-unlisted): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes), DrawOk (DrawOkH with hidden outputs) and RecordsLive, premises that aren't on the list.",
    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK": "lemma: leaves the list under the 5:11 PM ruling",
