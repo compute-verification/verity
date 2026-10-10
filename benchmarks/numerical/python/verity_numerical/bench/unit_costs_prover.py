@@ -16,16 +16,25 @@ residuals). The fitted coefficients and every residual are in the output.
 **A session** (:func:`session`) of B slots at bound Z, each slot one unit of at most Z nonzeros with ρ nonzeros per row:
 rows = Z / ρ; ``k_log`` = max(22, ceil(log2(rows + 1)) + 2), the slot rounded up to a power of two and at most doubled again
 by the SHA-512, hm96 and lookup ranges (every recorded block is at least 2^22); D = B 2^k_log; circuit bytes =
-:data:`GLUE_BYTES` + B :data:`BYTES_PER_NNZ` Z, each slot its own netlist (a session's slots may hold different unit types).
-ρ is the least nonzeros per committed row among the unit types in the bucket (the inventory's ``nnz / committed``).
+:data:`GLUE_BYTES` + the netlists of the session's distinct unit types (at most B; a session's slots may hold different
+types), each at :data:`BYTES_PER_NNZ` per nonzero of what the circuit text holds (:func:`netlists`): a registered type's one
+unit (GEMM's tc-step: 263,933 nonzeros, shared by its K/16 units), a token-select tree's distinct members, a generic type's
+whole subcircuit; never more than Z nonzeros. ρ is the least nonzeros per committed row among the bucket's types (the
+inventory's ``nnz / committed``). A block is at most 2^:data:`K_LOG_MAX` bits (``Stmt.InRange``), so a session needing more
+is out of range: flock-circuit refuses it.
 
 **Per workload** (:func:`audit`): the padding table's body in its dp4 buckets at B = 16 and its tail at B = 1
 (``unit_costs_padding``); each shape's sessions (mean and the public 1 − 2⁻⁴⁰ count), its session's RSS and prove time, and
 the prover time per audit, Σ sessions x prove time, on one prover. **The cap** is the largest power of two Z at which a
-B = 16 session at the workload's least ρ fits one node's memory (:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU
-law taken as a bound on the CUDA prover's). A unit over the cap is split below the subcircuit into ceil(z / cap) pieces,
-its pieces in a bucket of their own at the cap (sessions ceil(p X / B) for X of its units drawn); every other unit keeps its
-dp4 bucket.
+B = 16 session at the workload's least ρ is in range and fits one node's memory (:data:`NODE_GIB`; :data:`GPU_GIB` for one
+GPU's, the CPU law taken as a bound on the CUDA prover's). A unit over the cap is split below the subcircuit into
+ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions ceil(p X / B) for X of its units drawn);
+every other unit keeps its dp4 bucket.
+
+**Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
+(``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on circuits'
+staging ladder (:data:`STAGING`); a registered type lowers one unit, at least the measured registered staging
+(:data:`REGISTERED_STAGING`), a generic type its whole subcircuit, a tree its distinct members.
 """
 from __future__ import annotations
 
@@ -49,6 +58,8 @@ BYTES_PER_NNZ = 6.04
 #: Pc4RowATail_v1{K=256,KS=64} of 5,280 ANDs
 GLUE_BYTES = 55_911_585
 K_MIN_LOG = 22
+#: ``Stmt.InRange``'s block bound (``live/src/circuit.rs``'s ``IN_RANGE_K_LOG``; ``verity_flock.circuit.K_MAX``)
+K_LOG_MAX = 27
 POW2 = tuple(range(16, 33))
 CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
@@ -57,7 +68,7 @@ MENU_K = 4
 
 #: (run, definition, instances, k_log, dense_m, circuit bytes, prove s (median), prover process wall s, prover peak RSS GiB,
 #: threads): ``benchmarks/pouw/hidden_zk`` summaries on vy-nebius-1/2
-SOURCE: tuple[tuple[str, str, int, int, int, int, float, float, float, int], ...] = (
+HIDDEN_ZK: tuple[tuple[str, str, int, int, int, int, float, float, float, int], ...] = (
     ('r20261003-060202-b967', 'Pc4Tile_v1{K=1024,TM=1,TN=1}', 16, 22, 26, 100136943, 1.0987, 6.53, 1.39, 32),
     ('r20261003-060202-b967', 'Pc4Tile_v1{K=256,TM=1,TN=1}', 16, 22, 25, 70617623, 0.938, 5.7, 1.04, 32),
     ('r20261003-060227-1efd', 'Pc4RowA_v1{K=1024}', 16, 25, 29, 5760857510, 7.5869, 116.56, 20.16, 32),
@@ -121,6 +132,34 @@ SOURCE: tuple[tuple[str, str, int, int, int, int, float, float, float, int], ...
     ('r20261004-230455-eac8', 'Pc4RowAForm_v1{K=14336,KS=2048,J=5}', 16, 26, 30, 10328215509, 14.938, 222.25, 38.13, 16),
     ('r20261004-230501-ceb4', 'Pc4RowAForm_v1{K=14336,KS=2048,J=6}', 16, 26, 30, 10328215509, 15.1235, 221.66, 37.97, 16),
 )
+#: one GEMM tc-step unit's netlist (rows + A and B nonzeros), the registered unit of every gemm-coordinate K
+TC_STEP_NNZ = 9473 + 120_833 + 133_627
+#: registered GEMM-coordinate sessions, the column's check (``benchmarks/pouw/hidden_zk/registered.sh``, 16 instances, sm80
+#: bf16, vy-nebius-1): K (each slot K / 16 tc-step units) and the session in :data:`HIDDEN_ZK`'s form. The verifier checks
+#: every one and refuses its form (a unit reading 2 input groups) as one the soundness proof does not cover yet.
+REGISTERED_SESSIONS: tuple[tuple[int, tuple[str, str, int, int, int, int, float, float, float, int]], ...] = (
+    (16384, ('r20261010-084308-31a9', 'gemm-coordinate/tc-step/k16384/sm80-bf16', 16, 26, 30, 57_362_394, 15.5087, 78.98,
+             17_677_104 / 2 ** 20, 32)),
+    (32768, ('r20261010-084308-31a9', 'gemm-coordinate/tc-step/k32768/sm80-bf16', 16, 27, 31, 57_892_825, 27.7097, 150.65,
+             34_913_896 / 2 ** 20, 32)),
+)
+SOURCE = HIDDEN_ZK + tuple(r for _, r in REGISTERED_SESSIONS)
+
+#: circuits' staging ladder, ``verity_flock`` staging (trace, units, lanes, stage) of a random G-gate class, 2 instances, on
+#: vy-cpu-2: (run, G, ANDs lowered, wall s, peak RSS GiB). G = 4096's ANDs are its report's rounded 17.5M.
+STAGING: tuple[tuple[str, int, int, float, float], ...] = (
+    ('r20261009-064739-e959', 256, 110_754, 25.57, 1.08),
+    ('r20261009-064739-e959', 512, 351_170, 63.81, 3.055),
+    ('r20261009-064739-e959', 1024, 1_225_698, 207.22, 10.834),
+    ('r20261009-064739-e959', 2048, 4_548_610, 782.68, 41.611),
+    ('r20261009-062139-dab2', 4096, 17_500_000, 3907.0, 163.5e9 / 2 ** 30),
+)
+#: registered staging measured (``benchmarks/pouw/hidden_zk/registered.sh``, 16 instances, vy-nebius-1): (run, lowering, K,
+#: ANDs lowered (one tc-step unit), wall s, peak RSS GiB)
+REGISTERED_STAGING: tuple[tuple[str, str, int, int, float, float], ...] = (
+    ('r20261010-084308-31a9', 'gemm-coordinate/tc-step/k16384/sm80-bf16', 16384, 8260, 29.16, 893_960 / 2 ** 20),
+    ('r20261010-084308-31a9', 'gemm-coordinate/tc-step/k32768/sm80-bf16', 32768, 8260, 33.74, 901_800 / 2 ** 20),
+)
 
 
 # --- the fit -----------------------------------------------------------------------------------------------------------------
@@ -148,21 +187,36 @@ def lstsq(xs: Sequence[Sequence[float]], ys: Sequence[float], ws: Sequence[float
     return _solve(A, b)
 
 
-def features(D: float, cb: float) -> tuple[float, float]:
-    return D / 2 ** 30, cb / 2 ** 30
+#: each law's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out the
+#: circuit text, whose coefficient fitted with it is negative and below its error
+LAWS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
+#: the column as posted at b41137f42: every law over (D, circuit bytes), fitted on :data:`HIDDEN_ZK`
+POSTED_LAWS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
+
+
+def features(D: float, cb: float, block: float) -> tuple[float, float, float]:
+    return D / 2 ** 30, cb / 2 ** 30, block / 2 ** 30
+
+
+def _law(xs: Sequence[Sequence[float]], ys: Sequence[float], use: Sequence[int], ws: Sequence[float] | None = None) -> list[float]:
+    c = lstsq([[x[j] for j in use] for x in xs], ys, ws)
+    out = [c[0], 0.0, 0.0, 0.0]
+    for j, v in zip(use, c[1:]):
+        out[1 + j] = v
+    return out
 
 
 def _at(c: Sequence[float], x: Sequence[float]) -> float:
     return c[0] + sum(a * v for a, v in zip(c[1:], x))
 
 
-def fit(source: Sequence[tuple] = SOURCE) -> dict[str, Any]:
-    """The three laws over (D / 2^30, circuit bytes / GiB) and each record's residuals."""
-    xs = [features(2.0 ** r[4], r[5]) for r in source]
+def fit(source: Sequence[tuple] = SOURCE, laws: Mapping[str, Sequence[int]] = LAWS) -> dict[str, Any]:
+    """The three laws over ``laws``' features and each record's residuals."""
+    xs = [features(2.0 ** r[4], r[5], 2.0 ** r[3]) for r in source]
     t32 = [i for i, r in enumerate(source) if r[9] == 32]
-    coef = {"rss_gib": lstsq(xs, [r[8] for r in source]),
-            "prove_s": lstsq([xs[i] for i in t32], [source[i][6] for i in t32], [source[i][6] ** -2 for i in t32]),
-            "wall_s": lstsq([xs[i] for i in t32], [source[i][7] for i in t32], [source[i][7] ** -2 for i in t32])}
+    coef = {"rss_gib": _law(xs, [r[8] for r in source], laws["rss_gib"]),
+            **{k: _law([xs[i] for i in t32], [source[i][j] for i in t32], laws[k], [source[i][j] ** -2 for i in t32])
+               for k, j in (("prove_s", 6), ("wall_s", 7))}}
     points = []
     for r, x in zip(source, xs):
         p = {"run": r[0], "definition": r[1], "instances": r[2], "k_log": r[3], "dense_m": r[4], "circuit_bytes": r[5],
@@ -173,29 +227,95 @@ def fit(source: Sequence[tuple] = SOURCE) -> dict[str, Any]:
     resid = {"rss_gib": max(abs(p["rss_gib"] - p["rss_gib_fit"]) for p in points),
              **{k: max(abs(p[k] / p[f"{k}_fit"] - 1) for p in points if p["threads"] == 32) for k in ("prove_s", "wall_s")}}
     return {"coef": coef, "points": points, "max_residual": resid,
-            "law": "y = c0 + c1 D/2^30 + c2 (circuit bytes)/GiB; RSS GiB unweighted over all records, prove and process wall "
-                   "seconds weighted by 1/y^2 over the 32-thread records"}
+            "law": "y = c0 + c1 D/2^30 + c2 (circuit bytes)/GiB + c3 2^k_log/2^30 (prove: c2 = 0); RSS GiB unweighted over "
+                   "all records, prove and process wall seconds weighted by 1/y^2 over the 32-thread records"}
+
+
+def check(coef: Mapping[str, Sequence[float]], before: Sequence[tuple] = HIDDEN_ZK) -> list[dict[str, Any]]:
+    """Each registered session against what the column predicted for it: the fit on ``before`` (the column as posted) at its
+    measured D and circuit bytes, and its bound Z under the posted session model (each slot its own netlist of Z nonzeros,
+    ρ = :data:`RHO_TABLE`), next to this model's prediction (one tc-step netlist, ``coef``)."""
+    old = fit(before, POSTED_LAWS)["coef"]
+    out = []
+    for K, r in REGISTERED_SESSIONS:
+        Z = K // 16 * TC_STEP_NNZ
+        x = features(2.0 ** r[4], r[5], 2.0 ** r[3])
+        posted = session(Z, RHO_TABLE, old)
+        now = session(Z, Z / (K // 16 * 9473), coef, r[2], nets=[BYTES_PER_NNZ * TC_STEP_NNZ])
+        row = {"K": K, "run": r[0], "Z": Z, "k_log": r[3], "D": 2.0 ** r[4], "circuit_bytes": r[5],
+               "measured": {"rss_gib": r[8], "prove_s": r[6], "wall_s": r[7]},
+               "law_at_measured": {k: _at(old[k], x) for k in ("rss_gib", "prove_s", "wall_s")},
+               "posted": {k: posted[k] for k in ("k_log", "D", "circuit_bytes", "rss_gib", "prove_s", "wall_s")},
+               "now": {k: now[k] for k in ("k_log", "D", "circuit_bytes", "rss_gib", "prove_s", "wall_s")}}
+        for k in ("rss_gib", "prove_s"):
+            row[f"{k}_vs_posted"] = r[8 if k == "rss_gib" else 6] / posted[k] - 1
+            row[f"{k}_vs_law"] = r[8 if k == "rss_gib" else 6] / row["law_at_measured"][k] - 1
+        out.append(row)
+    return out
 
 
 # --- a session ---------------------------------------------------------------------------------------------------------------
 
 def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: int = SLOTS, bytes_per_nnz: float = BYTES_PER_NNZ,
-            glue: float = GLUE_BYTES) -> dict[str, float]:
-    """One session of ``slots`` slots at bound Z (the module docstring): its rows per slot, k_log, D, circuit bytes, and the
-    laws' RSS (GiB), prove and process wall seconds."""
+            glue: float = GLUE_BYTES, nets: Sequence[float] | None = None) -> dict[str, Any]:
+    """One session of ``slots`` slots at bound Z (the module docstring): its rows per slot, k_log, whether it is in range, D,
+    circuit bytes, and the laws' RSS (GiB), prove and process wall seconds. ``nets``: the netlist bytes of the unit types
+    it may hold (None: each slot a netlist of its own Z nonzeros)."""
     rows = Z / rho
     k_log = max(K_MIN_LOG, math.ceil(math.log2(rows + 1)) + 2)
     D = slots * 2.0 ** k_log
-    cb = glue + slots * bytes_per_nnz * Z
-    x = features(D, cb)
-    return {"Z": Z, "slots": slots, "rho": rho, "rows": rows, "k_log": k_log, "D": D, "circuit_bytes": cb,
-            **{k: _at(c, x) for k, c in coef.items()}}
+    full = bytes_per_nnz * Z
+    held = [full] * slots if nets is None else sorted(nets, reverse=True)[:slots]
+    cb = glue + sum(min(n, full) for n in held)
+    x = features(D, cb, 2.0 ** k_log)
+    return {"Z": Z, "slots": slots, "rho": rho, "rows": rows, "k_log": k_log, "in_range": k_log <= K_LOG_MAX, "D": D,
+            "circuit_bytes": cb, **{k: _at(c, x) for k, c in coef.items()}}
 
 
 def cap(rho: float, coef: Mapping[str, Sequence[float]], gib: float, slots: int = SLOTS, **kw: Any) -> float | None:
-    """The largest power of two Z in 2^16..2^40 whose session fits ``gib`` (None when none does)."""
-    fits = [2.0 ** j for j in CAP_SEARCH if session(2.0 ** j, rho, coef, slots, **kw)["rss_gib"] <= gib]
+    """The largest power of two Z in 2^16..2^40 whose session is in range and fits ``gib`` (None when none does)."""
+    fits = [2.0 ** j for j in CAP_SEARCH
+            if (s := session(2.0 ** j, rho, coef, slots, **kw))["in_range"] and s["rss_gib"] <= gib]
     return max(fits) if fits else None
+
+
+def netlists(inv: Mapping[str, Any], workload: str, bytes_per_nnz: float = BYTES_PER_NNZ) -> dict[str, dict[str, Any]]:
+    """Each unit type's netlist in the circuit text (the module docstring): its kind, nonzeros, bytes and the ANDs staging
+    lowers."""
+    out = {}
+    for r in inv["rows"]:
+        c = r["subcircuit"].get("per_unit")
+        if r["workload"] != workload or not c:
+            continue
+        ru, tree = r.get("registered_unit"), r.get("tree")
+        if r.get("source") == "registered" and ru:
+            kind, nnz, ands = "registered", ru["rows"] + ru["nnz_a"] + ru["nnz_b"], ru["ands"]
+        elif tree:
+            ms = list({m["member"]: m for m in tree["members"]}.values())
+            kind, nnz, ands = "tree", sum(m["nnz"] for m in ms), sum(m["ands"] for m in ms)
+        else:
+            kind, nnz, ands = "generic", c["nnz"], c["ands"]
+        out[r["unit_type"]] = {"kind": kind, "nnz": nnz, "bytes": bytes_per_nnz * nnz, "ands": ands}
+    return out
+
+
+# --- staging -----------------------------------------------------------------------------------------------------------------
+
+def staging_fit(ladder: Sequence[tuple] = STAGING) -> dict[str, list[float]]:
+    """Wall seconds and peak RSS GiB, each affine in ANDs / 10^6, weighted by 1 / y²."""
+    xs = [[r[2] / 1e6] for r in ladder]
+    return {"wall_s": lstsq(xs, [r[3] for r in ladder], [r[3] ** -2 for r in ladder]),
+            "peak_gib": lstsq(xs, [r[4] for r in ladder], [r[4] ** -2 for r in ladder])}
+
+
+def staging(net: Mapping[str, Any], law: Mapping[str, Sequence[float]],
+            registered: Sequence[tuple] = REGISTERED_STAGING) -> dict[str, float]:
+    """One template shape's staging: the law at the ANDs it lowers, a registered type's at least its measured staging."""
+    out = {k: _at(c, [net["ands"] / 1e6]) for k, c in law.items()}
+    if net["kind"] == "registered" and registered:
+        out = {"wall_s": max(out["wall_s"], *(r[4] for r in registered)),
+               "peak_gib": max(out["peak_gib"], *(r[5] for r in registered))}
+    return out
 
 
 # --- a workload's audit ------------------------------------------------------------------------------------------------------
@@ -210,16 +330,28 @@ def rhos(inv: Mapping[str, Any], workload: str) -> dict[str, float]:
     return out
 
 
+def _held(us: Sequence[P.Unit], nets: Mapping[str, Mapping[str, Any]] | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """``session``'s netlists for a bucket of ``us`` (none without ``nets``), and the bucket's largest staging."""
+    if nets is None:
+        return {}, None
+    st = [dict(nets[u.label]["staging"], unit_type=u.label, kind=nets[u.label]["kind"]) for u in us
+          if "staging" in nets.get(u.label, {})]
+    return {"nets": [nets[u.label]["bytes"] for u in us if u.label in nets]}, max(st, key=lambda x: x["peak_gib"], default=None)
+
+
 def shape(N: int, K: int, us: Sequence[P.Unit], Z: float, slots: int, pieces: int, rho: Mapping[str, float],
-          coef: Mapping[str, Sequence[float]], **kw: Any) -> dict[str, Any]:
-    """A bucket of ``us`` at bound Z, each unit ``pieces`` slots: its sessions (mean, public) and their cost."""
+          coef: Mapping[str, Sequence[float]], nets: Mapping[str, Mapping[str, Any]] | None = None,
+          **kw: Any) -> dict[str, Any]:
+    """A bucket of ``us`` at bound Z, each unit ``pieces`` slots: its sessions (mean, public), their cost, and its
+    largest staging."""
     n = sum(u.n for u in us)
     k0, pmf = P.hyper(N, n, K)
     mean = sum(p * -(-pieces * (k0 + j) // slots) for j, p in enumerate(pmf))
     public = -(-pieces * P.upper_q(N, n, K) // slots)
-    s = session(Z, min(rho.get(u.label, RHO_TABLE) for u in us), coef, slots, **kw)
+    held, st = _held(us, nets)
+    s = session(Z, min(rho.get(u.label, RHO_TABLE) for u in us), coef, slots, **held, **kw)
     return {"Z": Z, "slots": slots, "pieces": pieces, "types": len(us), "units": n, "labels": [u.label for u in us][:8],
-            "sessions_mean": mean, "sessions_public": public, "session": s,
+            "sessions_mean": mean, "sessions_public": public, "session": s, "staging": st,
             "prover_s_mean": mean * s["prove_s"], "prover_s_public": public * s["prove_s"]}
 
 
@@ -239,7 +371,8 @@ def pieces_pmf(N: int, K: int, groups: Mapping[int, int]) -> list[float]:
 
 
 def pieces_shape(N: int, K: int, us: Sequence[P.Unit], limit: float, slots: int, rho: Mapping[str, float],
-                 coef: Mapping[str, Sequence[float]], delta: float = P.DELTA, **kw: Any) -> dict[str, Any]:
+                 coef: Mapping[str, Sequence[float]], delta: float = P.DELTA,
+                 nets: Mapping[str, Mapping[str, Any]] | None = None, **kw: Any) -> dict[str, Any]:
     """One bucket at ``limit`` holding the pieces of ``us`` (each unit ceil(z / limit) of them): sessions ceil(Y / slots)."""
     groups: dict[int, int] = defaultdict(int)
     for u in us:
@@ -253,9 +386,11 @@ def pieces_shape(N: int, K: int, us: Sequence[P.Unit], limit: float, slots: int,
             break
         tail += pmf[y]
     public = -(-q // slots)
-    s = session(limit, min(rho.get(u.label, RHO_TABLE) for u in us), coef, slots, **kw)
+    held, st = _held(us, nets)
+    s = session(limit, min(rho.get(u.label, RHO_TABLE) for u in us), coef, slots, **held, **kw)
     return {"Z": limit, "slots": slots, "pieces": dict(sorted(groups.items())), "types": len(us), "units": sum(groups.values()),
             "labels": [u.label for u in us][:8], "sessions_mean": mean, "sessions_public": public, "session": s,
+            "staging": st,
             "prover_s_mean": mean * s["prove_s"], "prover_s_public": public * s["prove_s"]}
 
 
@@ -291,36 +426,55 @@ def audit(N: int, K: int, units: Sequence[P.Unit], rho: Mapping[str, float], coe
             "sessions_public": tot("sessions_public"), "prover_h_mean": tot("prover_s_mean") / 3600,
             "prover_h_public": tot("prover_s_public") / 3600,
             "max_rss_gib": max((s["session"]["rss_gib"] for s in every), default=0.0),
-            "max_prove_s": max((s["session"]["prove_s"] for s in every), default=0.0)}
+            "max_prove_s": max((s["session"]["prove_s"] for s in every), default=0.0),
+            "in_range": all(s["session"]["in_range"] for s in every),
+            "max_k_log": max((s["session"]["k_log"] for s in every), default=0)}
 
 
-def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[float]], **kw: Any) -> dict[str, Any]:
+def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[float]],
+             slaw: Mapping[str, Sequence[float]] | None = None, **kw: Any) -> dict[str, Any]:
     K = int(inv["K"])
     N, units, skipped = P.units_of(inv, name)
     rho = rhos(inv, name)
+    nets = netlists(inv, name, kw.get("bytes_per_nnz", BYTES_PER_NNZ))
+    for net in nets.values():
+        net["staging"] = staging(net, slaw or staging_fit())
     body, _tail, _thr = P.tail_split(units)
     r0 = min((rho.get(u.label, RHO_TABLE) for u in body), default=RHO_TABLE)
-    unsplit = audit(N, K, units, rho, coef, **kw)
-    top = max(s["Z"] for s in unsplit["body"])
-    out: dict[str, Any] = {"workload": name, "N": N, "K": K, "skipped": skipped, "rho_min": r0, "dp4_top": top,
-                           "dp4": [s["Z"] for s in unsplit["body"]], "top_session": session(top, r0, coef, **kw),
-                           "unsplit": unsplit}
+    unsplit = audit(N, K, units, rho, coef, nets=nets, **kw)
+    top = max(unsplit["body"], key=lambda s: s["Z"])
+    every = [nets[u.label]["bytes"] for u in units if u.label in nets]
+    stage = [dict(n["staging"], unit_type=k, kind=n["kind"], ands=n["ands"]) for k, n in nets.items()]
+    out: dict[str, Any] = {"workload": name, "N": N, "K": K, "skipped": skipped, "rho_min": r0, "dp4_top": top["Z"],
+                           "dp4": [s["Z"] for s in unsplit["body"]], "top_session": top["session"],
+                           "top_staging": top["staging"], "unsplit": unsplit,
+                           "staging": {"shapes": len(stage), "max": max(stage, key=lambda x: x["peak_gib"], default=None),
+                                       "total_h": sum(x["wall_s"] for x in stage) / 3600,
+                                       "fits_node": all(x["peak_gib"] <= NODE_GIB for x in stage)},
+                           "range_cap": cap(r0, coef, math.inf, nets=every, **kw)}
     for node, gib in (("cpu", NODE_GIB), ("gpu", GPU_GIB)):
-        c = cap(r0, coef, gib, **kw)
+        c = cap(r0, coef, gib, nets=every, **kw)
         over = [u for u in units if c is not None and u.z > c]
-        out[node] = {"gib": gib, "cap": c, "fits_unsplit": unsplit["max_rss_gib"] <= gib,
+        out[node] = {"gib": gib, "cap": c, "fits_unsplit": unsplit["in_range"] and unsplit["max_rss_gib"] <= gib,
                      "split": [{"unit_type": u.label, "nnz": u.z, "draw_share": u.n / N, "pieces": math.ceil(u.z / c)} for u in over],
-                     "at_cap": audit(N, K, units, rho, coef, limit=c, **kw) if over else unsplit}
+                     "at_cap": audit(N, K, units, rho, coef, limit=c, nets=nets, **kw) if over else unsplit}
     return out
 
 
 def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None, **kw: Any) -> dict[str, Any]:
     law = law or fit()
     coef = law["coef"]
-    return {"format": "verity/f6-prover/v1", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
-            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "fit": law,
-            "pow2": [session(2.0 ** j, RHO_TABLE, coef, **kw) for j in POW2],
-            "workloads": [workload(inv, w, coef, **kw) for w in dict.fromkeys(r["workload"] for r in inv["rows"])]}
+    slaw = staging_fit()
+    reg = [kw.get("bytes_per_nnz", BYTES_PER_NNZ) * TC_STEP_NNZ] * SLOTS
+    return {"format": "verity/f6-prover/v2", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
+            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_LOG_MAX, "fit": law,
+            "staging_fit": {"coef": slaw, "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],
+                            "registered": [dict(zip(("run", "lowering", "K", "ands", "wall_s", "peak_gib"), r))
+                                           for r in REGISTERED_STAGING]},
+            "check": check(coef),
+            "pow2": [{"registered": session(2.0 ** j, RHO_TABLE, coef, nets=reg, **kw),
+                      "generic": session(2.0 ** j, RHO_TABLE, coef, **kw)} for j in POW2],
+            "workloads": [workload(inv, w, coef, slaw, **kw) for w in dict.fromkeys(r["workload"] for r in inv["rows"])]}
 
 
 # --- rendering ---------------------------------------------------------------------------------------------------------------
@@ -336,54 +490,94 @@ def _t(s: float) -> str:
     return f"{s:.3g} s" if s < 600 else f"{s / 60:.3g} min" if s < 36_000 else f"{s / 3600:.3g} h"
 
 
+def _yn(b: bool) -> str:
+    return "yes" if b else "no"
+
+
+def _st(x: Mapping[str, Any] | None) -> str:
+    return "–" if x is None else f"{_t(x['wall_s'])}, {x['peak_gib']:.3g} GiB ({x['kind']})"
+
+
 def render(pr: Mapping[str, Any]) -> str:
     f = pr["fit"]
     c = f["coef"]
-    law = lambda k: f"{c[k][0]:.4g} + {c[k][1]:.4g}·D/2^30 + {c[k][2]:.4g}·cb/GiB"  # noqa: E731
+    sc = pr["staging_fit"]["coef"]
+    law = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
     L = [f"# F6 prover column: sessions of {pr['slots']} slots, {pr['menu']} buckets, K = {pr['K']}", "",
          "C-Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
-         "the session's bits (slots x 2^k_log); cb: its circuit text (each slot's netlist at "
-         f"{pr['bytes_per_nnz']} B per nonzero, plus {pr['glue_bytes'] / 1e6:.0f} MB of glue).", "",
+         "the session's bits (slots x 2^k_log); cb: its circuit text, the netlists of its distinct unit types at "
+         f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
+         f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "
+         "(Stmt.InRange): flock-circuit refuses a session needing more.", "",
          f"- peak RSS (GiB) = {law('rss_gib')}; max |residual| {f['max_residual']['rss_gib']:.2f} GiB",
          f"- prove (s) = {law('prove_s')}; max relative residual {f['max_residual']['prove_s']:.2f}",
          f"- prover process wall, circuit load included (s) = {law('wall_s')}; max relative residual "
          f"{f['max_residual']['wall_s']:.2f}",
+         f"- staging, once per template shape (s) = {sc['wall_s'][0]:.4g} + {sc['wall_s'][1]:.4g}·ANDs/10^6; peak (GiB) = "
+         f"{sc['peak_gib'][0]:.4g} + {sc['peak_gib'][1]:.4g}·ANDs/10^6 (circuits' ladder); a registered type at least its "
+         "measured staging",
          f"- fits: one node {pr['node_gib']} GiB (vy-nebius-1/2), one GPU {pr['gpu_gib']:.1f} GiB (RTX PRO 6000; the CPU law as "
          "a bound)", "",
-         "## Per workload: dp4 at B = 16, unsplit and at the cap", "",
-         "cap: the largest power-of-two bound whose 16-slot session fits; units over it split into ceil(z / cap) pieces. "
-         "Prover hours: Σ sessions x prove time on one prover, body and tail, mean / public session counts.", "",
-         "| workload | dp4 top Z | session prove | session RSS | fits node / GPU | node cap | sessions unsplit (mean / public) | "
-         "prover h unsplit | GPU cap | units split at GPU cap (draw share) | sessions at GPU cap | prover h at GPU cap |",
-         "|" + "---|" * 12]
+         "## Check: registered GEMM-coordinate sessions", "",
+         "Measured against the column as posted (its fit at the measured D and circuit text, and its session model at the "
+         "bound Z: each slot its own netlist of Z nonzeros) and against this model.", "",
+         "| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted law at measured D, cb | this model | "
+         "prove | posted model | posted law | this model |", "|" + "---|" * 14]
+    for r in pr["check"]:
+        m, po, la, no = r["measured"], r["posted"], r["law_at_measured"], r["now"]
+        L.append(f"| {r['K']} | {r['run']} | {P._si(r['Z'])} | {r['k_log']} | 2^{int(math.log2(r['D']))} | "
+                 f"{r['circuit_bytes'] / 1e6:.1f} MB | {m['rss_gib']:.3g} GiB | {po['rss_gib']:.3g} ({r['rss_gib_vs_posted']:+.0%}) | "
+                 f"{la['rss_gib']:.3g} ({r['rss_gib_vs_law']:+.0%}) | {no['rss_gib']:.3g} | {_t(m['prove_s'])} | "
+                 f"{_t(po['prove_s'])} ({r['prove_s_vs_posted']:+.0%}) | {_t(la['prove_s'])} ({r['prove_s_vs_law']:+.0%}) | "
+                 f"{_t(no['prove_s'])} |")
+    L += ["", "## Per workload: dp4 at B = 16, unsplit and at the cap", "",
+          "cap: the largest power-of-two bound whose 16-slot session is in range and fits; units over it split into "
+          "ceil(z / cap) pieces. Prover hours: Σ sessions x prove time on one prover, body and tail, mean / public session "
+          "counts. Staging: the dp4 top bucket's largest template shape, and the largest of every shape in the workload.", "",
+          "| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | cap: node / GPU | "
+          "units split at node cap (draw share) | sessions at node cap (mean / public) | prover h at node cap | "
+          "prover h at GPU cap | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |",
+          "|" + "---|" * 15]
     for w in pr["workloads"]:
-        u, g, s = w["unsplit"], w["gpu"], w["top_session"]
-        a = g["at_cap"]
+        u, n, g, s, st = w["unsplit"], w["cpu"], w["gpu"], w["top_session"], w["staging"]
+        a, ag = n["at_cap"], g["at_cap"]
         L.append("| " + " | ".join([
-            P._short(w["workload"]), P._si(w["dp4_top"]), _t(s["prove_s"]), f"{s['rss_gib']:.0f} GiB",
-            f"{'yes' if w['cpu']['fits_unsplit'] else 'no'} / {'yes' if g['fits_unsplit'] else 'no'}", _p2(w["cpu"]["cap"]),
-            f"{u['sessions_mean']:.0f} / {u['sessions_public']}", f"{u['prover_h_mean']:.3g} / {u['prover_h_public']:.3g}",
-            _p2(g["cap"]), f"{len(g['split'])} ({sum(x['draw_share'] for x in g['split']):.2%})",
-            f"{a['sessions_mean']:.0f} / {a['sessions_public']}", f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}"]) + " |")
+            P._short(w["workload"]), P._si(w["dp4_top"]), f"{s['k_log']}", _t(s["prove_s"]), f"{s['rss_gib']:.3g} GiB",
+            f"{_yn(u['in_range'])} (k_log ≤ {u['max_k_log']})", f"{_p2(n['cap'])} / {_p2(g['cap'])}",
+            f"{len(n['split'])} ({sum(x['draw_share'] for x in n['split']):.2%})",
+            f"{a['sessions_mean']:.0f} / {a['sessions_public']}", f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}",
+            f"{ag['prover_h_mean']:.3g} / {ag['prover_h_public']:.3g}", _st(w["top_staging"]), _st(st["max"]),
+            _yn(st["fits_node"]), f"{st['shapes']} shapes, {st['total_h']:.3g} h"]) + " |")
     L += ["", f"## Power-of-two bounds (ρ = {RHO_TABLE} nonzeros per row)", "",
-          "| Z | rows per slot | k_log | D | circuit text | peak RSS | prove | process wall | fits node | fits GPU |",
-          "|" + "---|" * 10]
-    for s in pr["pow2"]:
-        L.append(f"| {_p2(s['Z'])} | {P._si(s['rows'])} | {s['k_log']} | 2^{int(math.log2(s['D']))} | {s['circuit_bytes'] / 2 ** 30:.3g} GiB | "
-                 f"{s['rss_gib']:.3g} GiB | {_t(s['prove_s'])} | {_t(s['wall_s'])} | {'yes' if s['rss_gib'] <= pr['node_gib'] else 'no'} | "
-                 f"{'yes' if s['rss_gib'] <= pr['gpu_gib'] else 'no'} |")
-    L += ["", "## Shapes", "", "| workload | split at | part | Z | slots | pieces | types | sessions mean / public | session RSS | "
-          "session prove | prover h mean |", "|" + "---|" * 11]
+          "Registered: 16 distinct types, each one GEMM tc-step netlist. Generic: each slot its own netlist of Z nonzeros.", "",
+          "| Z | rows per slot | k_log | in range | D | registered: circuit text | peak RSS | prove | generic: circuit text | "
+          "peak RSS | prove | fits GPU: registered / generic |", "|" + "---|" * 12]
+    for q in pr["pow2"]:
+        r, gq = q["registered"], q["generic"]
+        L.append(f"| {_p2(r['Z'])} | {P._si(r['rows'])} | {r['k_log']} | {_yn(r['in_range'])} | 2^{int(math.log2(r['D']))} | "
+                 f"{r['circuit_bytes'] / 2 ** 30:.3g} GiB | {r['rss_gib']:.3g} GiB | {_t(r['prove_s'])} | "
+                 f"{gq['circuit_bytes'] / 2 ** 30:.3g} GiB | {gq['rss_gib']:.3g} GiB | {_t(gq['prove_s'])} | "
+                 f"{_yn(r['rss_gib'] <= pr['gpu_gib'])} / {_yn(gq['rss_gib'] <= pr['gpu_gib'])} |")
+    L += ["", "## Staging", "", "| run | G / lowering | ANDs | wall | peak RSS | law: wall | law: peak |", "|" + "---|" * 7]
+    for r in pr["staging_fit"]["ladder"]:
+        L.append(f"| {r['run']} | G = {r['G']} | {P._si(r['ands'])} | {_t(r['wall_s'])} | {r['peak_gib']:.3g} GiB | "
+                 f"{_t(_at(sc['wall_s'], [r['ands'] / 1e6]))} | {_at(sc['peak_gib'], [r['ands'] / 1e6]):.3g} GiB |")
+    for r in pr["staging_fit"]["registered"]:
+        L.append(f"| {r['run']} | {r['lowering']} | {P._si(r['ands'])} | {_t(r['wall_s'])} | {r['peak_gib']:.3g} GiB | "
+                 f"{_t(_at(sc['wall_s'], [r['ands'] / 1e6]))} | {_at(sc['peak_gib'], [r['ands'] / 1e6]):.3g} GiB |")
+    L += ["", "## Shapes", "", "| workload | split at | part | Z | k_log | slots | pieces | types | sessions mean / public | "
+          "session RSS | session prove | prover h mean | largest staging |", "|" + "---|" * 13]
     for w in pr["workloads"]:
-        for tag, a in (("unsplit", w["unsplit"]), ("GPU cap", w["gpu"]["at_cap"] if w["gpu"]["split"] else None)):
+        for tag, a in (("unsplit", w["unsplit"]), ("node cap", w["cpu"]["at_cap"] if w["cpu"]["split"] else None)):
             if a is None:
                 continue
             for part in ("body", "tail"):
                 for s in a[part]:
                     pc = s["pieces"] if isinstance(s["pieces"], int) else f"{min(s['pieces'])}-{max(s['pieces'])}"
-                    L.append(f"| {P._short(w['workload'])} | {tag} | {part} | {P._si(s['Z'])} | {s['slots']} | {pc} | "
-                             f"{s['types']} | {s['sessions_mean']:.1f} / {s['sessions_public']} | {s['session']['rss_gib']:.3g} GiB | "
-                             f"{_t(s['session']['prove_s'])} | {s['prover_s_mean'] / 3600:.3g} |")
+                    L.append(f"| {P._short(w['workload'])} | {tag} | {part} | {P._si(s['Z'])} | {s['session']['k_log']} | "
+                             f"{s['slots']} | {pc} | {s['types']} | {s['sessions_mean']:.1f} / {s['sessions_public']} | "
+                             f"{s['session']['rss_gib']:.3g} GiB | {_t(s['session']['prove_s'])} | "
+                             f"{s['prover_s_mean'] / 3600:.3g} | {_st(s.get('staging'))} |")
     L += ["", "## Source runs", "", "| run | definition | instances | k_log | D | circuit text | prove | fit | process wall | fit | "
           "peak RSS | fit | threads |", "|" + "---|" * 13]
     for p in f["points"]:

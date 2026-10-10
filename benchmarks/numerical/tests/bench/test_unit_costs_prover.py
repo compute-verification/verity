@@ -1,6 +1,9 @@
-"""F6's prover column: the fit, one session priced from fixed coefficients, the cap, a tiny audit unsplit and split exactly,
-and token-select's argmax tree."""
+"""F6's prover column: the fit and the posted fit it replaces, the registered check, one session priced from fixed
+coefficients, the range and memory caps, netlists, staging, a tiny audit unsplit and split exactly, and token-select's
+argmax tree."""
 from __future__ import annotations
+
+import math
 
 import pytest
 
@@ -8,7 +11,7 @@ from verity_numerical.bench import unit_costs as U
 from verity_numerical.bench import unit_costs_padding as P
 from verity_numerical.bench import unit_costs_prover as PR
 
-COEF = {"rss_gib": (1.0, 2.0, 3.0), "prove_s": (0.5, 4.0, 8.0), "wall_s": (0.0, 0.0, 0.0)}
+COEF = {"rss_gib": (1.0, 2.0, 3.0, 0.0), "prove_s": (0.5, 4.0, 8.0, 0.0), "wall_s": (0.0, 0.0, 0.0, 0.0)}
 TINY = {"bytes_per_nnz": 4, "glue": 0}
 
 
@@ -19,9 +22,23 @@ def test_lstsq_recovers_an_affine_law():
 
 def test_the_fit_over_the_source_runs():
     f = PR.fit()
-    assert len(f["points"]) == len(PR.SOURCE) == 62
-    assert f["coef"]["rss_gib"] == pytest.approx([3.526, 4.000, 3.040], abs=2e-3)
-    assert f["max_residual"]["rss_gib"] < 8
+    assert len(f["points"]) == len(PR.SOURCE) == 64
+    assert f["coef"]["rss_gib"] == pytest.approx([1.229, 3.956, 2.535, 135.3], abs=2e-2)
+    assert f["coef"]["prove_s"][2] == 0 and f["max_residual"]["rss_gib"] < 8 and f["max_residual"]["prove_s"] < 1.25
+    posted = PR.fit(PR.HIDDEN_ZK, PR.POSTED_LAWS)
+    assert posted["coef"]["rss_gib"] == pytest.approx([3.526, 4.000, 3.040, 0], abs=2e-3)
+
+
+def test_the_registered_check():
+    """The posted column missed both registered sessions by more than 25%, its session model and its law alike; the refit
+    holds them within 25%."""
+    rows = PR.check(PR.fit()["coef"])
+    assert [r["K"] for r in rows] == [16384, 32768] and [r["k_log"] for r in rows] == [26, 27]
+    for r in rows:
+        assert r["posted"]["rss_gib"] > 4 * r["measured"]["rss_gib"] and r["law_at_measured"]["rss_gib"] < r["measured"]["rss_gib"] / 2
+        assert r["now"]["k_log"] == r["k_log"] and r["now"]["D"] == r["D"]
+        for k in ("rss_gib", "prove_s"):
+            assert abs(r["now"][k] / r["measured"][k] - 1) < 0.25
 
 
 def test_a_session_from_fixed_coefficients():
@@ -29,11 +46,39 @@ def test_a_session_from_fixed_coefficients():
     s = PR.session(2 ** 20, 16, COEF, **TINY)
     assert (s["k_log"], s["D"], s["circuit_bytes"]) == (22, 2 ** 26, 2 ** 26)
     assert (s["rss_gib"], s["prove_s"]) == pytest.approx((1 + 2 / 16 + 3 / 16, 0.5 + 4 / 16 + 8 / 16))
-    # 2^30: 2^26 rows, k_log 27 + 2; D = 2^33 (8 x 2^30); text 2^36 (64 GiB)
+    # 2^30: 2^26 rows, k_log 27 + 2, out of range; D = 2^33 (8 x 2^30); text 2^36 (64 GiB)
     s = PR.session(2 ** 30, 16, COEF, **TINY)
-    assert (s["k_log"], s["rss_gib"]) == (29, 1 + 2 * 8 + 3 * 64)
-    assert PR.cap(16, COEF, 209, **TINY) == 2 ** 30 and PR.cap(16, COEF, 208.9, **TINY) == 2 ** 29
+    assert (s["k_log"], s["in_range"], s["rss_gib"]) == (29, False, 1 + 2 * 8 + 3 * 64)
+    # 2^28 is the last in range (2^24 rows, k_log 27): D = 2^31, text 16 GiB, 53 GiB; 2^27 27 GiB
+    assert PR.cap(16, COEF, math.inf, **TINY) == 2 ** 28
+    assert PR.cap(16, COEF, 53, **TINY) == 2 ** 28 and PR.cap(16, COEF, 52.9, **TINY) == 2 ** 27
     assert PR.cap(16, COEF, 1, **TINY) is None
+    # netlists: the largest 16, each at most Z's; a block term
+    s = PR.session(2 ** 20, 16, COEF, nets=[2 ** 10, 2 ** 30, 5], **TINY)
+    assert s["circuit_bytes"] == 2 ** 22 + 2 ** 10 + 5
+    blk = dict(COEF, rss_gib=(0.0, 0.0, 0.0, 16.0))
+    assert PR.session(2 ** 20, 16, blk, **TINY)["rss_gib"] == pytest.approx(16 * 2 ** 22 / 2 ** 30)
+
+
+def test_netlists_and_staging():
+    per = {"nnz": 1000, "ands": 50, "committed": 10}
+    inv = {"rows": [
+        {"workload": "w", "unit_type": "r", "source": "registered", "subcircuit": {"per_unit": per},
+         "registered_unit": {"rows": 1, "ands": 2, "nnz_a": 3, "nnz_b": 4}},
+        {"workload": "w", "unit_type": "t", "source": "tree", "subcircuit": {"per_unit": per},
+         "tree": {"members": [{"member": "m", "nnz": 7, "ands": 1}, {"member": "m", "nnz": 7, "ands": 1},
+                              {"member": "n", "nnz": 9, "ands": 2}]}},
+        {"workload": "w", "unit_type": "g", "source": "generic", "subcircuit": {"per_unit": per}},
+        {"workload": "v", "unit_type": "x", "source": "generic", "subcircuit": {"per_unit": per}}]}
+    n = PR.netlists(inv, "w", bytes_per_nnz=2)
+    assert n == {"r": {"kind": "registered", "nnz": 8, "bytes": 16, "ands": 2},
+                 "t": {"kind": "tree", "nnz": 16, "bytes": 32, "ands": 3},
+                 "g": {"kind": "generic", "nnz": 1000, "bytes": 2000, "ands": 50}}
+    law = PR.staging_fit()
+    for r in PR.STAGING:
+        assert abs(PR._at(law["peak_gib"], [r[2] / 1e6]) / r[4] - 1) < 0.1
+    floor = max(r[5] for r in PR.REGISTERED_STAGING)
+    assert PR.staging(n["r"], law)["peak_gib"] == floor and PR.staging(n["g"], law)["peak_gib"] < floor
 
 
 def test_pieces_pmf():
@@ -47,7 +92,7 @@ def test_a_tiny_audit_unsplit_and_split():
     """N = 6 units, 4 of 3 nonzeros and 2 of 10; K = 3 drawn; dp2 at 2 slots; one second per session. Split at 5, each b is
     2 pieces, so its bucket takes X_b sessions: E = 1, and X_b <= 2 gives 2 public sessions."""
     units = [P.Unit("a", "t", 4, 3, 3), P.Unit("b", "t", 2, 10, 10)]
-    coef = {"rss_gib": (1.0, 0.0, 0.0), "prove_s": (1.0, 0.0, 0.0), "wall_s": (0.0, 0.0, 0.0)}
+    coef = {"rss_gib": (1.0, 0.0, 0.0, 0.0), "prove_s": (1.0, 0.0, 0.0, 0.0), "wall_s": (0.0, 0.0, 0.0, 0.0)}
     a = PR.audit(6, 3, units, {}, coef, slots=2, k=2)
     assert [s["Z"] for s in a["body"]] == [3, 10] and not a["tail"]
     assert (a["sessions_mean"], a["sessions_public"], a["prover_h_mean"]) == pytest.approx((2.0, 3, 2.0 / 3600))
