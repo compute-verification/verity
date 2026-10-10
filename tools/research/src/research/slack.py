@@ -888,18 +888,18 @@ class Routes:
         return {**self.local, **{k: v for k, v in self._fetched.items() if v}}
 
     def server_delivers(self) -> bool:
-        """Whether the console site's events route rings the doorbells: `routes.d/router.json` says `"mode": "server"`, in
-        the clone or, failing that, as published."""
+        """Whether the console site's events route rings the doorbells: `routes.d/router.json` says `"mode": "server"` as
+        published and in the clone, each that can be read.  Either saying otherwise means the sender rings them, so switching
+        back to `cli` reaches every sender at once, a clone not yet pulled included."""
         if not hasattr(self, "_mode"):
-            p, raw = self.root / ROUTES_DIR / "router.json", None
-            try:
-                raw = p.read_bytes() if p.is_file() else self.get(f"{self.base}router.json")
-            except (OSError, SlackError):
-                pass
-            try:
-                self._mode = (json.loads(raw) or {}).get("mode") if raw else None
-            except (ValueError, AttributeError):
-                self._mode = None
+            p, modes = self.root / ROUTES_DIR / "router.json", []
+            for read in (lambda: self.get(f"{self.base}router.json"), lambda: p.read_bytes() if p.is_file() else None):
+                try:
+                    raw = read()
+                    modes += [(json.loads(raw) or {}).get("mode")] if raw else []
+                except (OSError, SlackError, ValueError, AttributeError):
+                    modes.append(None)
+            self._mode = "server" if modes and all(m == "server" for m in modes) else "cli"
         return self._mode == "server"
 
     def inboxes(self) -> set[str]:
