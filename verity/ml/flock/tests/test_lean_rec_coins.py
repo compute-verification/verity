@@ -4,7 +4,7 @@ smallest level of a recorded recursive session (`r20261009-111638-6720`, class (
 statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
 recorded `pub.bin` and `registered.json`, and its recorded outer session. The honest level is accepted at the honest inner
 session and refused without it, and a level whose `rec-coef` V* registered one bit off is refused at that opening, though
-its registration is consistent. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the
+its registration is consistent. Set up as another statement than V*'s `verity/flock-circuit`, the honest level is refused. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
 coins, against the ones V*'s Python registers."""
 from __future__ import annotations
@@ -81,15 +81,19 @@ def shape(forged, tmp_path_factory) -> Path:
     return f
 
 
-def _verify(level: Path, public: Path, registered: Path, shape: Path, bindings: Path, inner: str | None) -> dict:
+def _files(level: Path, public: Path, registered: Path, shape: Path, bindings: Path, statement: str) -> list[str]:
+    return ["--statement", statement, "--circuit", str(level / "circuit.txt"), "--public", str(public), "--partition",
+            str(level / "partition.json"), "--program", str(level / "program.json"), "--registered", str(registered),
+            "--rec-inner", str(shape), "--rec-part", str(PART), "--rec-bindings", str(bindings)]
+
+
+def _verify(level: Path, public: Path, registered: Path, shape: Path, bindings: Path, inner: str | None,
+            statement: str = "verity/flock-circuit") -> dict:
     u = SET / "u" / "stage"
     rec = [] if inner is None else ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
                                     "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
                                     str(SET / inner / "session")]
-    p = subprocess.run([str(BIN), "verify", "--zk", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"),
-                        "--public", str(public), "--partition", str(level / "partition.json"), "--program",
-                        str(level / "program.json"), "--registered", str(registered), "--rec-inner", str(shape),
-                        "--rec-part", str(PART), "--rec-bindings", str(bindings), *rec,
+    p = subprocess.run([str(BIN), "verify", "--zk", *_files(level, public, registered, shape, bindings, statement), *rec,
                         "--session", str(SET / "outer-L3" / "session")], capture_output=True, text=True, check=False)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     return v
@@ -109,3 +113,21 @@ def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape, 
     v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, bindings, "inner-honest")
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
                         "verifier's rec-coef row 0")
+
+
+def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, shape, bindings):
+    """V*'s statements are `verity/flock-circuit`'s: the honest level set up as `verity/flock-circuit+seed-injection`, which
+    parses the same file, is refused by that check alone, since `statement` derives it without one under V*'s own; `verify`
+    refuses it at setup."""
+    why = (f"setup: {UNIT}: one of V*'s statements, which are verity/flock-circuit statements (--statement "
+           "verity/flock-circuit), not verity/flock-circuit+seed-injection")
+    own = _files(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, bindings, "verity/flock-circuit")
+    p = subprocess.run([str(BIN), "statement", *own], capture_output=True, text=True)
+    assert p.returncode == 0 and json.loads(p.stdout)["statement"] == "verity/flock-circuit", (p.stdout, p.stderr)
+    other = _files(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, bindings,
+                   "verity/flock-circuit+seed-injection")
+    p = subprocess.run([str(BIN), "statement", *other], capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == why, p.stdout
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, bindings, "inner-honest",
+                "verity/flock-circuit+seed-injection")
+    assert v["why"] == why, v["why"]

@@ -412,7 +412,7 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
-shape `--rec-inner F`, which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
+shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
 prints from 0: the levels, then the algebra's parts) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
 statement and session its coefficients are checked against (`RecCoins.check`). Each DIR holds `session.json`
@@ -428,6 +428,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
@@ -499,7 +500,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        r.2.forM (RecVStar.checkStmt recInner · circuitB partition program registered recPart recBindings)
+        r.2.forM (RecVStar.checkStmt recInner stmtTags · circuitB partition program registered recPart recBindings)
         if zk then r.2.forM Zk.shapeOk
         r.2.forM (RecCoins.check · registered recCoins)
         pure r) with
@@ -567,6 +568,7 @@ def statementCmd (args : List String) : IO UInt32 := do
     | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let tags := tags.withCoins coins
@@ -600,7 +602,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   match (do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
-      if recInner.isSome then RecVStar.checkStmt recInner st circuitB partition program registered recPart recBindings
+      if recInner.isSome then RecVStar.checkStmt recInner stmtTags st circuitB partition program registered recPart recBindings
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
