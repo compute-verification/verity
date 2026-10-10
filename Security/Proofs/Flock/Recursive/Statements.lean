@@ -49,12 +49,12 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 /-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c` under their laws `(Vs j).law`, each
-the live stratified law on the operating system's bytes (A3, `uniform/io-getrandombytes`); at each history `(R, ω, t)` and
-registration `R₂` of the outer proof, session `j` is `zs R ω t R₂ j`, whose fields carry `flock-verify verify --zk
---registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the registrant's record of the registered
-reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's own). For every prover `σ` of the
-recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of
-three holds.
+the full draw (`--draw subset:<units>`) on the operating system's bytes (A3, `uniform/io-getrandombytes`); at each
+history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is `zs R ω t R₂ j`, whose fields carry
+`flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the
+registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's
+own). For every prover `σ` of the recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`) and the inner
+protocol's soundness at `ε_in`, one of three holds.
 
 * A round fork (`RoundFork`): for some round `i < r`, draw `ω` and commit string `pos`, round `i`'s fork finder
   (`forkAt`: two continuations of `σ` after its round-`i` commitment, each running the trial for `pos`) outputs a
@@ -78,8 +78,7 @@ for a prover that never collides on a fork, and says nothing for one that collid
 SHA-512 evaluations. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-    -- V*'s laws: their strata and A3
-    (_hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    -- V*'s laws: A3
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -339,7 +338,6 @@ statement the inner verifier ran on is the statement at the draw of every privat
 Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-    (_hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)

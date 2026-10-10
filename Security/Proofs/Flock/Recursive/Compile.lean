@@ -179,7 +179,6 @@ leaf of `σ` with their coins, so that its inner term is `prob (accepts ∧ G)` 
 a fork of `refStrat` on two such transcripts is one of `σ`'s (`InnerForkRec`), then the same through
 `recursive_sound_upto`, `zk_sessions_recursive_upto`, `zk_sessions_recursive_full` and `zk_sessions_recursive_fork`. -/
 theorem zk_sessions_recursive_fork_inner
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -202,7 +201,7 @@ theorem zk_sessions_recursive_fork_inner
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
   by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
   · exact Or.inr (Or.inr (Or.inl hf))
-  rcases zk_sessions_recursive_fork_on hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun _ _ a b => a = b)
+  rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun _ _ a b => a = b)
       (fun _ _ _ _ h => h) Sk cmt msg hbr.2.1 hbr.2.2.1 hbr.2.2.2
       (innerAtLeavesV_of_forkOn zs dg N k Rw σ x wmsg H pick hin hf) with h | h | h
   · exact Or.inl h
@@ -233,7 +232,6 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)
     (hsch : Accounting.fast100 cls.m = some sch)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')
@@ -258,7 +256,7 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
           ((flockInnerCL T CT A H E Lf cls regs sch).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩) :=
-  zk_sessions_recursive_fork_inner hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr H
+  zk_sessions_recursive_fork_inner hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr H
     (clashPickCL T CT A H E Lf cls regs sch) (flock_inner_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay)
 
 /-- **`recursive_sound_compiled` with the numbers**: the inner term at most `2^-205` for `22 ≤ m ≤ 33` and a shape in
@@ -269,7 +267,6 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
     (hsch : Accounting.fast100 cls.m = some sch) (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33)
     (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.Stmt).InRange)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')
@@ -294,7 +291,7 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
           ((flockInnerCL T CT A H E Lf cls regs sch).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
-  (recursive_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg
+  (recursive_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg
     hbr).imp id <| Or.imp id <| Or.imp id fun h =>
       h.trans (add_le_add le_rfl (ENNReal.ofReal_le_ofReal (Accounting.tableError_le_of_le_33 hm1 hm2 hsch _ hshape)))
 

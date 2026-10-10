@@ -1,5 +1,8 @@
 import Proofs.Flock.Recursive.Universal
-import Proofs.Flock.Recursive.VStarU2
+import Proofs.Flock.Soundness.ExecDraw
+import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+import Proofs.Flock.Soundness.Discharge.Exec.Pts
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # Recursion: the class, regions and schedule of an executable statement
@@ -23,8 +26,6 @@ function of it (`execClassAt`), so the class's fields are no hypotheses and the 
 * Class-fixed regions: the class (`execClassAt_cls`), the number of regions (`execClassAt_regs_length`) and the
   schedule (`execClassAt_sch`) are functions of `shapeOf st`, and so is each region's place in the block, its free and
   fixed bits (`regionsOf_layout`); two statements of one shape differ only in the regions' bytes (`execClassAt_shape`).
-* `VStmt.exec`, `execStmts`: a statement with its model read off its executable strata where they tile its units (its
-  live law unchanged), and `VStmt.exec_execStrata`, `_hS` there.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -199,41 +200,5 @@ theorem regionsOf_layout (st : Flock.Stmt) :
   rw [show (shapeOf st).regions = st.regions.map stripBytes from rfl, Array.toList_map]
   simp only [List.map_map]
   rfl
-
-/-! ### The model read off V*'s strata -/
-
-open Classical in
-/-- **A law with its model read off its executable strata** where they tile its units (`VLaw.ofExec`'s: each unit's
-stratum the one holding it, each stratum's draw count its own), its own model otherwise. Its live law's fields are its
-own. -/
-noncomputable def VLaw.exec {nv : ℕ} (law : VLaw nv) : VLaw nv :=
-  { law with
-    σs := if h : Law.Tiles law.St nv then h.stratumOf else law.σs
-    ks := if Law.Tiles law.St nv then fun s => (law.St s).k else law.ks
-    hks := by
-      split_ifs with h
-      · intro s
-        rw [h.card_stratum]
-        exact h.k_le s
-      · exact law.hks }
-
-/-- **A statement with its law's model read off its executable strata**: the same circuit and live law. -/
-noncomputable def VStmt.exec (Q : VStmt) : VStmt := { Q with law := Q.law.exec }
-
-/-- **V*'s statements with their models read off their executable strata.** -/
-noncomputable abbrev execStmts {S : ℕ} (Vs : Fin S → VStmt) : Fin S → VStmt := fun j => (Vs j).exec
-
-open Classical in
-/-- **`_hS` at a statement whose strata tile its units**: its model read off them is theirs. -/
-theorem VStmt.exec_execStrata (Q : VStmt) (h : Law.Tiles Q.exec.law.St Q.exec.nv) :
-    Law.ExecStrata Q.exec.law.σs Q.exec.law.ks Q.exec.law.St := by
-  have h' : Law.Tiles Q.law.St Q.nv := h
-  refine (VLaw.execStrata_iff Q.exec.law).2 ⟨h, ?_, ?_⟩
-  · show (if h : Law.Tiles Q.law.St Q.nv then h.stratumOf else Q.law.σs) = _
-    rw [dif_pos h']
-    exact rfl
-  · show (if Law.Tiles Q.law.St Q.nv then fun s => (Q.law.St s).k else Q.law.ks) = _
-    rw [if_pos h']
-    exact rfl
 
 end FlockSoundness.Discharge.Recursion

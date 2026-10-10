@@ -23,9 +23,9 @@ open scoped ENNReal
 
 /-- **The recursive audit is sound.** -/
 theorem RecursiveSound : Flock.Guarantees.RecursiveSound := by
-  intro n L Reg I Cm S Vs Reg' Reg₂ hS hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
+  intro n L Reg I Cm S Vs Reg' Reg₂ hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
   obtain ⟨hb, hcmt, hdec, hfull⟩ := hbr
-  exact zk_sessions_recursive_fork_read hS hA3 zs dg N hk hRw hM hρ hr σ x wmsg hb (fun _ _ a b => a = b)
+  exact zk_sessions_recursive_fork_read hA3 zs dg N hk hRw hM hρ hr σ x wmsg hb (fun _ _ a b => a = b)
     I.accepts_of_rel_eq Sk cmt msg hcmt hdec hfull hin
 
 section ZK

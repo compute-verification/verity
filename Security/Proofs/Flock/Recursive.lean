@@ -15,8 +15,6 @@ import Proofs.Flock.Recursive.OsSalts
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Audit
-import Proofs.Flock.Recursive.VStarStrata
-import Proofs.Flock.Recursive.VStarU2
 import Proofs.Flock.Recursive.Universal
 import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.ExecClass
@@ -28,11 +26,10 @@ import Proofs.Flock.Recursive.Description
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
 system's salts (`OsSalts`), its soundness at the compiled inner
-protocol with the compile lemma open (`Compile`), V*'s laws from their executable strata (`VStarStrata`) and those
-strata's tiling from the verifier's U2 check (`VStarU2`), the compile premise at a class whose schedule is
-`fast100`'s (`Universal`), the universal unit's class of private circuits, its descriptions read in gate order
+protocol with the compile lemma open (`Compile`), the compile premise at a class whose schedule is `fast100`'s
+(`Universal`), the universal unit's class of private circuits, its descriptions read in gate order
 (`UniversalClass`), the class, regions and schedule of an executable statement (`ExecClass`), the inner statement's
 description read from its own rows, which are the registered ones or SHA-512 collides (`Description`), V*'s sessions
 as the prover supplies them, typed where they type and refusing elsewhere, with the prover's strategy carried across
-(`Raw`), where V*'s statement enters a session, with the law's population V*'s units (`Loads`), and V*'s outer
+(`Raw`), where V*'s statement enters a session (`Loads`), and V*'s outer
 sessions zero knowledge with the honest prover's self-check in them, which never stops (`OuterAbort`). -/

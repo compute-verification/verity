@@ -298,29 +298,27 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
     (zo.hown ω R' o' hacc)
 
 /-- **V*'s session at one history, at one strategy**: an accepted outcome at which V*'s value layer is not `Good` is at
-most `bound` likely. The bad units are fixed by the strategy: the draw misses them all (`Law.execOS_escape_le` under
-A3, then `miss 1`), or meets a wrong unit or a registered-value disagreement at the registrant's leaf
+most `bound` likely. The bad units are fixed by the strategy: the draw misses them all (`Law.execOS_subset_escape_le`
+under A3, then `miss 1`), or meets a wrong unit or a registered-value disagreement at the registrant's leaf
 (`zk_session_regDrawnR`), or an off-leaf registered read (`off_le`). -/
-theorem accepts_le {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    (zo : ZkOuter mPts nv Reg' c hU hscope (Law.execOS (n := nv) src (.stratified Kd (Array.ofFn St)) pop))
+    (zo : ZkOuter mPts nv Reg' c hU hscope (Law.execOS (n := nv) src (.subset nv) nv))
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZAt (Reg := Reg') zo.dj zo.y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     {qF qS qW qR : ℝ} (τ : Strategy (zo.game dg N)) (hCR : zo.CR dg N k Rw qF qS qW qR τ) :
     prob (fun o => LiveAcceptsZKR zo.I zo.own o ∧ ¬ zo.Good (zo.layer dg N k Rw τ)) (zo.game dg N) τ ≤
-      zo.bound dg N (Law.stratified σs ks hks) k Rw M ρ t' qF qS qW qR τ := by
+      zo.bound dg N (Law.subset nv nv le_rfl) k Rw M ρ t' qF qS qW qR τ := by
   classical
   by_cases hG : zo.Good (zo.layer dg N k Rw τ)
   · exact (prob_mono (fun o h => h.2 hG) _ _).trans ((prob_false _ _).le.trans zero_le)
   have h1 : prob (fun o => Disjoint o.2.1 (zo.badUnits dg N k Rw τ)) (zo.game dg N) τ ≤
-      (Law.stratified σs ks hks).miss 1 :=
+      (Law.subset nv nv le_rfl).miss 1 :=
     (prob_auditLive_draw _ τ fun S => Disjoint S (zo.badUnits dg N k Rw τ)).trans_le
-      ((Law.execOS_escape_le σs ks hks St hS Kd pop Lb src hA3 _).trans
+      ((Law.execOS_subset_escape_le nv nv le_rfl Lb src hA3 _).trans
         (Law.escape_le_miss _ (Finset.card_pos.2 (zo.badUnits_nonempty dg N k Rw τ hG))))
-  have h2 := zk_session_regDrawnR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope St Kd pop Lb src
+  have h2 := zk_session_regDrawnR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hc hU zo.hpub hscope _
     zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' zo.rd τ hCR.1 hCR.2.1
   have h3 := zo.off_le dg N τ hCR.2.2
   refine (prob_mono (fun o h => ?_) _ _).trans
@@ -335,22 +333,15 @@ theorem accepts_le {m : ℕ} (σs : Fin nv → Fin m) (ks : Fin m → ℕ) (hks 
 
 end ZkOuter
 
-/-- **The law of a public verifier's units**: the live stratified law on a byte source (`live`), and the model's
-stratified law it escapes no more often than (`model`), with the strata `σs`, their draw counts `ks` and the
-executable's strata `St`. -/
+/-- **The law of a public verifier's units**: the full draw, the live subset law of all `nv` units over `[0, nv)` on a
+byte source (`live`, `--draw subset:<units>`, as V* is staged), and the model's uniform `nv`-subset it escapes no more
+often than (`model`, which misses no unit). -/
 structure VLaw (nv : ℕ) : Type 1 where
-  m : ℕ
-  σs : Fin nv → Fin m
-  ks : Fin m → ℕ
-  hks : ∀ s, ks s ≤ (Law.stratum σs s).card
-  St : Fin m → Flock.Draw.Stratum
-  Kd : ℕ
-  pop : ℕ
   Ω : Type
   [fintypeΩ : Fintype Ω]
   [nonemptyΩ : Nonempty Ω]
-  Lb : Fin m → ℕ
-  src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256
+  Lb : Fin 1 → ℕ
+  src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
 
 attribute [instance] VLaw.fintypeΩ VLaw.nonemptyΩ
 
@@ -358,11 +349,11 @@ namespace VLaw
 
 variable {nv : ℕ} (law : VLaw nv)
 
-/-- The live stratified law on the source's bytes. -/
-abbrev live : Law nv := Law.execOS (n := nv) law.src (.stratified law.Kd (Array.ofFn law.St)) law.pop
+/-- The live full draw on the source's bytes. -/
+abbrev live : Law nv := Law.execOS (n := nv) law.src (.subset nv) nv
 
-/-- The model's stratified law. -/
-abbrev model : Law nv := Law.stratified law.σs law.ks law.hks
+/-- The model's full draw. -/
+abbrev model : Law nv := Law.subset nv nv le_rfl
 
 end VLaw
 
@@ -423,7 +414,6 @@ noncomputable def sumS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray 
 satisfies `Q` of the layers, the sessions accept with `Q` failing at most the expected sum of the sessions' `boundIf`
 (`accepts_le`, `prob_seqC_exists_le`). -/
 theorem sessions_le
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -451,8 +441,7 @@ theorem sessions_le
     intro j τ₀
     unfold ZkOuter.boundIf
     split_ifs with hc
-    · exact ZkOuter.accepts_le (Vs j).law.σs (Vs j).law.ks (Vs j).law.hks (Vs j).law.St (hS j) (Vs j).law.Kd
-        (Vs j).law.pop (Vs j).law.Lb (Vs j).law.src (hA3 j) (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
+    · exact ZkOuter.accepts_le (Vs j).law.Lb (Vs j).law.src (hA3 j) (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
     · exact prob_le_one _ _ _
   exact (prob_mono hmono _ _).trans
     (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
@@ -493,7 +482,6 @@ theorem prob_outerV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : By
 
 /-- **V*'s outer proof at one history**: `sessions_le` at the registration the prover sends. -/
 theorem outerV_le
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -507,7 +495,7 @@ theorem outerV_le
     prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
       sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   rw [prob_outerV]
-  exact sessions_le hS hA3 (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR Q (hQ s.1) (sessOf zs dg N s)
+  exact sessions_le hA3 (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR Q (hQ s.1) (sessOf zs dg N s)
 
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
@@ -528,8 +516,7 @@ def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S
 verifier reads**: `recursive_sound_upto` at V*'s outer proof (`outerV_le` at every leaf, on `VBridge`). Stage `i` opens
 to `msg i v`, and its transfer bounds the messages V*'s layers hold for round `i` not being `same i` as that. -/
 theorem zk_sessions_recursive_upto
-    -- V*'s laws: their strata and A3
-    (hS : ∀ j, Law.ExecStrata (Vs j).law.σs (Vs j).law.ks (Vs j).law.St)
+    -- V*'s laws: A3
     (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -573,7 +560,7 @@ theorem zk_sessions_recursive_upto
       (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) (εP := 0)
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
-  · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hS hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
+  · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
       qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd))) (hbr σ.1 ω t) _) _
   · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
