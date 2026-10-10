@@ -125,7 +125,7 @@ def readTables (args : List String) : IO (List (String × ByteArray)) := do
   let mut out := []
   for t in MUFU_TABLES do
     let p : System.FilePath := dir ++ s!"/{t.name}.u32"
-    if ← p.pathExists then out := out ++ [(t.name, ← IO.FS.readBinFile p)]
+    if (← p.pathExists) then out := out ++ [(t.name, (← IO.FS.readBinFile p))]
   return out
 
 def readJson (path : String) : IO (Except String Json) := do
@@ -188,8 +188,10 @@ def sessionCmd (args : List String) : IO UInt32 := do
   let own ← match ← registeredOf args with
     | .ok o => pure o
     | .error e => IO.eprintln s!"registered reads: {e}"; return 2
-  let I : Inputs := { tags, circuitFile := ← IO.FS.readBinFile cf, publicFile := ← IO.FS.readBinFile pf, count,
-    tables := ← readTables args, partition, program }
+  let circuitFile ← IO.FS.readBinFile cf
+  let publicFile ← IO.FS.readBinFile pf
+  let tables ← readTables args
+  let I : Inputs := { tags, circuitFile, publicFile, count, tables, partition, program }
   let mut all ← line "tags_ok" (tagsOk I)
   all := (← line "scope_z" (scope I false)) && all
   all := (← line "scope_zr" (scope I true)) && all
@@ -207,7 +209,7 @@ def sessionCmd (args : List String) : IO UInt32 := do
     all := (← line "full_draw" draw [("session", Json.str dir), ("population", Lean.toJson n)]) && all
     let s := setupOf I record
     let verdict ← match s with
-      | .error e => pure (Except.error s!"setup: {e}")
+      | .error e => pure (Except.error s!"setup: {e}" : V Unit)
       | .ok (spec, _) => do
         let proofs ← spec.repStreams.mapM fun (_, _, w) => IO.FS.readBinFile s!"{dir}/{w.replace "/" "."}.bin"
         pure (acceptsZKRAt s own record proofs)
