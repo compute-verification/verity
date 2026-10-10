@@ -127,8 +127,8 @@ theorem one_ok {sts : Array Flock.Stmt} {st : Flock.Stmt} (h : Flock.Witness.one
   · cases h
 
 /-- **The witness's inner check is `AcceptsStmt`.** -/
-theorem acceptsStmt_ok {cf pf : ByteArray} {p : Lean.Json} {st : Flock.Stmt}
-    (h : Flock.Witness.acceptsStmt cf pf p = .ok st) : AcceptsStmt st := by
+theorem acceptsStmt_ok {cf pf : ByteArray} {p : Option Lean.Json} {g : Option ByteArray} {st : Flock.Stmt}
+    (h : Flock.Witness.acceptsStmt cf pf p g = .ok st) : AcceptsStmt st := by
   unfold Flock.Witness.acceptsStmt at h
   obtain ⟨⟨spec, sts⟩, h1, h⟩ := bind_ok h
   obtain ⟨st', h2, h⟩ := bind_ok h
@@ -136,7 +136,7 @@ theorem acceptsStmt_ok {cf pf : ByteArray} {p : Lean.Json} {st : Flock.Stmt}
   have hst : st' = st := Except.ok.inj h
   rw [← hst]
   have h2' : Flock.Witness.one sts = .ok st' := h2
-  exact ⟨⟨cf, pf, p, spec, by rw [h1, one_ok h2']⟩, q, h3⟩
+  exact ⟨⟨cf, pf, p, g, spec, by rw [h1, one_ok h2']⟩, q, h3⟩
 
 /-- **The witness's description check is `AcceptsDescription` at each of the verifier's own registered reads.** -/
 theorem acceptsDescription_ok {st : Flock.Stmt} {own : Array Flock.Registered.Port}

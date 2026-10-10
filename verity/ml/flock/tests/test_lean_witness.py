@@ -2,7 +2,8 @@
 (`flock-witness`, `Flock/Witness.lean`; `Proofs.Flock.Recursive.Witness` proves each check's `.ok` is the model's
 predicate): the fetched fixture `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session,
 and level 3's recorded `pub.bin`, `registered.json` and outer session), with level 3's statement restaged by
-`rec_vstage.stage` as `test_lean_rec_coins` restages it. What a recorded honest session meets is asserted; what none meets yet
+`rec_vstage.stage` as `test_lean_rec_coins` restages it, with b3727bd9's leaf-scheme words, and checked as
+`verity/flock-circuit@b3727bd9`. What a recorded honest session meets is asserted; what none meets yet
 is asserted refused by name, so the change that closes it has to say so here: the inner description is not registered
 (no staging runs `inner_registered register`), and V*'s sessions hide their outputs where `ZkOuterR.hTags` (`TagsOk`)
 takes public ones. Staging the level takes about a minute and the session check sets up its 158 MB circuit, so the module
@@ -16,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from verity_flock import circuit as FC
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
@@ -23,6 +25,7 @@ LEAN = HERE.parents[2] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
+STATEMENT = "verity/flock-circuit@b3727bd9"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves (`test_lean_rec_coins`)
 CIRCUIT_SHA512 = ("4c47dec94a141028c1bb722b703f0c5d5624b736cfecbedb142cd0512c411e1fc91b0317d2de6a74c5897476217bd89904dabdcfc71e84"
                   "28ff1c6ecaa6c399f9")
@@ -50,11 +53,13 @@ def inner() -> dict[str, dict]:
 @pytest.fixture(scope="module")
 def outer(inner, tmp_path_factory) -> dict[str, dict]:
     d = tmp_path_factory.mktemp("rec-witness")
-    S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
-            pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(FC, "LEAF_SCHEME", FC.LEAF_SCHEME_B3727BD9)
+        S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
+                pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
     level = d / f"L{LEVEL}"
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
-    return _witness("session", "--statement", "verity/flock-circuit", "--circuit", str(level / "circuit.txt"), "--public",
+    return _witness("session", "--statement", STATEMENT, "--circuit", str(level / "circuit.txt"), "--public",
                     str(SET / f"L{LEVEL}" / "pub.bin"), "--partition", str(level / "partition.json"), "--program",
                     str(level / "program.json"), "--registered", str(SET / f"L{LEVEL}" / "registered.json"), "--session",
                     str(SET / f"outer-L{LEVEL}" / "session"))
@@ -86,8 +91,8 @@ def test_the_recorded_level_meets(outer, check):
 
 
 def test_the_recorded_level_hides_its_outputs(outer):
-    """`ZkOuterR.hTags` (`TagsOk`) takes public outputs, but every V* session is `verity/flock-circuit`'s, which hides
-    them. It holds once the chain's session lemmas take hidden outputs (`TagsOkZHJ`)."""
+    """`ZkOuterR.hTags` (`TagsOk`) takes public outputs, but every V* session is a `verity/flock-circuit` statement's,
+    which hides them. It holds once the chain's session lemmas take hidden outputs (`TagsOkZHJ`)."""
     c = outer["tags_ok"]
     assert not c["ok"]
-    assert c["why"].startswith("verity/flock-circuit: hidden outputs true,"), c["why"]
+    assert c["why"].startswith(f"{STATEMENT}: hidden outputs true,"), c["why"]

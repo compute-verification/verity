@@ -12,10 +12,11 @@ library's functions returning `.ok`, so they can be evaluated on recorded files,
 meets is found by a run rather than by reading. Each check here is one of them, as a function of the files `flock-verify`
 reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the model's predicate.
 
-* `inner --circuit F --public F --partition F [--registered F] [--record F]`: the inner statement. `acceptsStmt`
-  (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags` and the coin server's coins returns one table, and
-  `Zk.schedule` accepts its `m`), `acceptsDescription` (`AcceptsDescription`, at each of the verifier's own registered
-  reads), and with `--record` the recorded inner session's Σ (its `hello`'s `link.sigma`) against the statement's.
+* `inner --circuit F --public F [--partition F] [--program F] [--registered F] [--record F]`: the inner statement.
+  `acceptsStmt` (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags`, the coin server's coins and the statement's
+  partition object and program returns one table, and `Zk.schedule` accepts its `m`), `acceptsDescription`
+  (`AcceptsDescription`, at each of the verifier's own registered reads), and with `--record` the recorded inner
+  session's Σ (its `hello`'s `link.sigma`) against the statement's.
 * `session [--statement ID] --circuit F --public F [--partition F] [--program F] [--registered F] [--tables DIR]
   [--session-tables J] --session DIR...`: one of V*'s outer sessions, with `flock-verify verify --zk`'s flags. Once:
   `tagsOk` (`DecodeZL.TagsOk`), the statement check without and with the registered reads (`ScopeZ`, `ScopeZR`), and the
@@ -103,9 +104,10 @@ def one (sts : Array Stmt) : V Stmt :=
   | [st] => .ok st
   | _ => .error s!"{sts.size} tables, not one"
 
-/-- **Lean's verifier accepts `st` as the inner statement** (`AcceptsStmt`), from the inner statement's files. -/
-def acceptsStmt (cf pf : ByteArray) (partition : Json) : V Stmt := do
-  let r ← Stmt.setupTables RecVStar.innerTags cf pf Coins.os 1 (partition := some partition)
+/-- **Lean's verifier accepts `st` as the inner statement** (`AcceptsStmt`), from the inner statement's files, partition
+object and program, as `RecVStar.innerOf` sets it up. -/
+def acceptsStmt (cf pf : ByteArray) (partition : Option Json) (program : Option ByteArray) : V Stmt := do
+  let r ← Stmt.setupTables RecVStar.innerTags cf pf Coins.os 1 (partition := partition) (program := program)
   let st ← one r.2
   let _ ← Zk.schedule st.m
   pure st
@@ -138,6 +140,14 @@ def registeredOf (args : List String) : IO (Except String (Array Registered.Port
   let some f := argOf args "--registered" | return .ok #[]
   return (← readJson f) >>= Registered.ofJson
 
+/-- `--partition` and `--program`, each optional, as `flock-verify` reads them. -/
+def bindingsOf (args : List String) : IO (Except String (Option Json × Option ByteArray)) := do
+  let partition : Except String (Option Json) ← match argOf args "--partition" with
+    | none => pure (.ok none)
+    | some f => do return (← readJson f).map some
+  let program ← (argOf args "--program").mapM IO.FS.readBinFile
+  return partition.map fun p => (p, program)
+
 def line (check : String) (r : V Unit) (extra : List (String × Json) := []) : IO Bool := do
   let j := Json.mkObj ([("check", Json.str check), ("ok", Json.bool r.toBool)] ++
     (match r with | .ok () => [] | .error e => [("why", Json.str e)]) ++ extra)
@@ -150,16 +160,16 @@ def recordSigma (record : Json) : V String := do
   (← h.getObjVal? "link").getObjValAs? String "sigma"
 
 def innerCmd (args : List String) : IO UInt32 := do
-  let (some cf, some pf, some pt) := (argOf args "--circuit", argOf args "--public", argOf args "--partition")
-    | IO.eprintln "usage: flock-witness inner --circuit F --public F --partition F [--registered F] [--record F]"; return 2
-  let partition ← match ← readJson pt with
-    | .ok p => pure p
+  let usage := "usage: flock-witness inner --circuit F --public F [--partition F] [--program F] [--registered F] [--record F]"
+  let (some cf, some pf) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
+  let (partition, program) ← match ← bindingsOf args with
+    | .ok b => pure b
     | .error e => IO.eprintln e; return 2
   let own ← match ← registeredOf args with
     | .ok o => pure o
     | .error e => IO.eprintln s!"registered reads: {e}"; return 2
   let t0 ← IO.monoMsNow
-  let st := acceptsStmt (← IO.FS.readBinFile cf) (← IO.FS.readBinFile pf) partition
+  let st := acceptsStmt (← IO.FS.readBinFile cf) (← IO.FS.readBinFile pf) partition program
   let extra := match st with
     | .ok st => [("m", Lean.toJson st.m), ("sigma", Json.str (hexOf st.sigma))]
     | .error _ => []
@@ -179,12 +189,9 @@ def sessionCmd (args : List String) : IO UInt32 := do
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
-  let partition ← match argOf args "--partition" with
-    | none => pure none
-    | some f => match ← readJson f with
-      | .ok p => pure (some p)
-      | .error e => IO.eprintln e; return 2
-  let program ← (argOf args "--program").mapM IO.FS.readBinFile
+  let (partition, program) ← match ← bindingsOf args with
+    | .ok b => pure b
+    | .error e => IO.eprintln e; return 2
   let own ← match ← registeredOf args with
     | .ok o => pure o
     | .error e => IO.eprintln s!"registered reads: {e}"; return 2
