@@ -6,7 +6,9 @@ recorded `pub.bin` and `registered.json`, and its recorded outer session. The ho
 session and refused without it, and a level whose `rec-coef` V* registered one bit off is refused at that opening, though
 its registration is consistent. Staging the level takes about a minute and each verify sets up its 158 MB circuit, so the
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
-coins, against the ones V*'s Python registers."""
+coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v`,
+their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
+rows (`--rec-rows`)."""
 from __future__ import annotations
 
 import hashlib
@@ -91,18 +93,28 @@ def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str
     return v
 
 
-def test_the_honest_level_is_accepted_at_the_honest_inner_session(forged, shape):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest")
+def _acc_rows(dst: Path, level: Path) -> Path:
+    """Shared rows (`--rec-rows`) whose `acc0` is staged level `level`'s `rec-acc` registration (its `acc` port)."""
+    acc = json.loads((level / "registered.json").read_text())["ports"]["acc"]
+    dst.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {"acc0": acc}}))
+    return dst
+
+
+def test_the_honest_level_is_accepted_at_the_honest_inner_session(forged, shape, tmp_path):
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
+                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
     assert v["accepted"], v.get("why")
 
 
-def test_the_honest_level_is_refused_without_the_inner_session(forged, shape):
-    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, None)
+def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path):
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, None,
+                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
     assert v["why"].startswith(f"setup: rec-coins: {UNIT}: the verifier holds no inner session"), v["why"]
 
 
-def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape):
-    v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest")
+def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
+    v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest",
+                rows=_acc_rows(tmp_path / "rows.json", forged))
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
                         "verifier's rec-coef row 0")
 
@@ -129,7 +141,7 @@ def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(forged, shape, 
         mp.setattr(S.R, "dirs_words", dirs_words)
         _stage(tmp_path, levels=[LEVEL], algebra=False)
     out = tmp_path / f"L{LEVEL}"
-    v = _verify(out, out / "pub.bin", out / "registered.json", shape, "inner-honest")
+    v = _verify(out, out / "pub.bin", out / "registered.json", shape, "inner-honest", rows=_acc_rows(tmp_path / "rows.json", out))
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's dirs row is not the "
                         "verifier's rec-dirs row 0"), v["why"]
 
@@ -283,3 +295,46 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
     v = _verify(c, c / "pub.bin", c / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
     assert re.fullmatch(rf"setup: {re.escape(unit)}: its row port acc0 is not a port of the registered reads \(\[.*\]\)",
                         v["why"]), v["why"]
+
+
+def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):
+    """`EndKeysS` and `OpenKeysS`'s one registration (`RecVStar.checkAcc`): the recorded level 3 reads `rec-acc` as `acc` and
+    `acc_out`, at the registration of the honest algebra's `acc0` and `acc1`, and is accepted at those shared rows
+    (`--rec-rows`) and refused without them. Level 3 staged under another salt of the running sums' row 0 reads the same rows
+    as another `rec-acc`, consistently: it passes setup at its own registration and is refused at the verifier's by `acc`'s
+    root. The recorded level with its `acc_out` read at that other registration (its reads file's entry and `pub.bin`'s paths;
+    the rows it reads are the same, row 0 being no opening's `acc_out`) and `acc` at the honest one is refused as two
+    registrations."""
+    reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
+    site = lambda e: {k: x for k, x in e.items() if k != "reads"}
+    shared = json.loads(rows.read_text())["ports"]
+    assert site(reads(SET / "L3")["acc"]) == site(reads(SET / "L3")["acc_out"]) == site(shared["acc0"]) == site(shared["acc1"])
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
+    assert v["accepted"], v.get("why")
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest")
+    assert v["why"] == (f"setup: {UNIT}: it reads rec-acc; pass the verifier's record of V*'s shared rows (--rec-rows F), whose "
+                        "rec-acc registration it must be"), v["why"]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(S, "acc_salts", _salted)
+        _stage(tmp_path / "salted", levels=[LEVEL], algebra=False)
+    b = tmp_path / "salted" / f"L{LEVEL}"
+    other, honest = reads(b)["acc"]["root"], shared["acc0"]["root"]
+    assert other != honest
+    v = _verify(forged, b / "pub.bin", b / "registered.json", shape, "inner-honest", rows=_acc_rows(tmp_path / "own.json", b))
+    assert not v["why"].startswith("setup:"), v["why"]
+    v = _verify(forged, b / "pub.bin", b / "registered.json", shape, "inner-honest", rows=rows)
+    assert v["why"] == (f"setup: {UNIT}: its rec-acc port acc is not the verifier's rec-acc registration (--rec-rows acc0): "
+                        f"root {other}, against {honest}"), v["why"]
+    c = tmp_path / "mixed"
+    c.mkdir()
+    r = json.loads((SET / "L3" / "registered.json").read_text())
+    r["ports"]["acc_out"] = reads(b)["acc_out"]
+    (c / "registered.json").write_text(json.dumps(r))
+    data, salted = (SET / "L3" / "pub.bin").read_bytes(), (b / "pub.bin").read_bytes()
+    nl, snl = data.index(b"\n"), salted.index(b"\n")
+    head = json.loads(data[:nl])
+    head["registered"]["acc_out"] = json.loads(salted[:snl])["registered"]["acc_out"]
+    (c / "pub.bin").write_bytes(json.dumps(head).encode() + data[nl:])
+    v = _verify(forged, c / "pub.bin", c / "registered.json", shape, "inner-honest", rows=rows)
+    assert v["why"] == (f"setup: {UNIT}: its rec-acc ports acc and acc_out are two registrations: root {honest}, against "
+                        f"{other}"), v["why"]
