@@ -1,4 +1,5 @@
 import Proofs.Flock.VBridge.Family.Assembly
+import Proofs.Flock.VBridge.Family.Lig
 import Proofs.Flock.VBridge.Algebra.Sim
 import Proofs.Flock.VBridge.Algebra.LigeritoConverse
 
@@ -551,6 +552,53 @@ theorem vbridgeRead_model (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bi
     exact F.vbridgeRead_assembled dg N k Rw spec F.innerSetup cap lig own sel bc dec hne honame hcount hname hseen hv
       hlay hrr hrck hsame hshared hz hcoef V hV hE (F.setupRealizes_of hshape) (F.shapeIs_of hshape) hcl
       (F.foldsOk_of hshape) (F.coinsAgree_at hshape hst.1 hcl) hcapS hligS hregs htr hopen hpub hsel hS hu4
+
+end VStarFamily
+
+namespace VStarFamily
+
+variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+variable (w : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T)))
+
+/-- **The cap read from the inner messages `w l`** (`capOf`, Lig.lean). -/
+noncomputable def capW : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray := fun l => capOf T sch (w l)
+
+/-- **The Ligerito openings read from V*'s layers and the inner messages `w l`** (`ligOf`, Lig.lean). -/
+noncomputable def ligW : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof :=
+  fun l r => F.ligOf (w l) l r
+
+variable (spec : SessionSpec) (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
+    (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
+
+/-- **`vbridgeRead_model` with the cap and openings read from the inner messages**: `cap := capW w` and
+`lig := ligW w`, whose `CapShaped` and `LigShaped` follow from the model setup's scheme (`hCapS_of`, `hLigS_of`). -/
+theorem vbridgeRead_model_msgs (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → (ℐ).Msg)
+    (hshape : F.ShapeAt) (honame : F.HOpenName) (hcount : F.HPartCount) (hname : F.HUnitName)
+    (hseen : F.HRowSeen)
+    (hv : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).HVCoins dg N k Rw)
+    (hlay : F.OneInLayer dg N k Rw) (hrr : F.RowsRegistered dg N k Rw) (hrck : F.RowColKeys dg N k Rw)
+    (hsame : F.SameRow dg N k Rw) (hshared : F.RowsShared dg N k Rw) (hz : F.HZeroL dg N k Rw)
+    (hcoef : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).HCoefCols dg N k Rw)
+    (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
+    (hE : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).HEnds dg N k Rw V)
+    (hcl : F.ClaimsAt) (hregs : ∀ R ω, ((F.x R ω).toStatement regs).regions.length < 2 ^ 48)
+    (htr : F.AtAccepted dg N k Rw fun R ω t l =>
+      ((F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).tableSrc spec F.innerSetup (F.capW w)
+        (F.ligW w) R ω t l).TranscriptIs T CT cls ((wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r dec l).zip (t.map Prod.snd)))
+    (hopen : F.AtAccepted dg N k Rw fun R ω t l => ∀ r,
+      OpenedAll (F.innerSetup R ω) sch F.sh
+        (((F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).tableSrc spec F.innerSetup (F.capW w)
+          (F.ligW w) R ω t l).proofAt r)
+        ((F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).rep R ω t l r))
+    (hpub : (F.assembled spec F.innerSetup (F.capW w) (F.ligW w) own sel bc dec).PubCommits bc)
+    (hsel : SelRounds sel) (hS : F.LawsExec) {dj : Fin F.stmts.size → Lean.Json}
+    {d : Fin F.stmts.size → Flock.Draw.UnitDraw} (hu4 : F.U4Passes own dj d) :
+    VBridgeRead (I := ℐ) F.zs dg N k Rw F.x (wmsgOf F.Vs (skOf F.Vs own sel) (ℐ).r dec) (skOf F.Vs own sel)
+      (cmtOf F.Vs bc) (msgOf F.Vs (skOf F.Vs own sel) dec) :=
+  F.vbridgeRead_model dg N k Rw spec (F.capW w) (F.ligW w) own sel bc dec hshape honame hcount hname hseen hv hlay hrr
+    hrck hsame hshared hz hcoef V hV hE hcl
+    (F.hCapS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w)
+    (F.hLigS_of dg N k Rw F.innerSetup (F.setupRealizes_of hshape) w) hregs htr hopen hpub hsel hS hu4
 
 end VStarFamily
 
