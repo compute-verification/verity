@@ -9,17 +9,20 @@ import Flock.Firewall
 `RecursiveFirewallPrivate` is (ii) of `RecursiveAudit`, zero knowledge with circuit privacy, stated about the code that
 sends the auditor its view: the firewall (`Flock.Firewall.run`), which salts every message and tree top the worker
 sends it with 192 bytes of its own and sends the auditor the salted commit strings, and V*'s outer sessions run by the
-honest prover's code (`OuterZK.proverExe`). It takes no zero knowledge of V*'s sessions and no acceptance: its one
-premise is `hash-derived-key`, and what it takes of the code is named, each an obligation:
+honest prover's code (`OuterZK.proverExe`). The inner coins are live: the auditor draws each after the commit strings
+before it, so the worker's later messages and requests may read those strings. It takes no zero knowledge of V*'s
+sessions and no acceptance: its one premise is `hash-derived-key`, and what it takes of the code is named, each an
+obligation:
 
 * `FirewallSends`: the honest worker's requests run through the firewall to the pinned schedule's transcript, its
-  holes the salted commit strings of the messages in salt order, and finish.
+  holes the salted commit strings of the messages in salt order (`firewallStrings`), and finish.
 * `SessionsPublic`, `SessionsCoined`, `SessionsHonest`: V*'s staging. The simulator's public context is the honest
   one's, each session's table is `verify --zk`'s at its data and a draw it sets up, and the honest witnesses are valid
   with public registered values; V*'s sizes are `OuterZK.Sessions`' `hz`, `hR`, `hS`.
 
-`fwRealPr` is the auditor's real view, `fwSimPr` the simulated one; `commitBytes` is a commit string from its two
-halves.
+`fwRealPr` is the auditor's real view, `fwSimPr` the simulated one; `firewallStrings` is the commit strings the
+firewall sends, message `i` reading the strings before it (`commitBytes`, `firewallCommits`: a commit string from its
+two halves, and the commitments V*'s sessions read).
 Its proof is `Flock.SecurityProofs.RecursiveFirewallPrivate` (`Proofs.Flock.Recursive.FirewallZK`).
 -/
 
@@ -32,32 +35,41 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **An hm96-sha512 commit string from its two halves**, `b ‖ c`: the 128 bytes a firewall leaf hashes
-(`ZkView.leafH` is `Default512.treeLeaf` of them). -/
-def commitBytes (u : ZkView.Bits × ByteArray) : ByteArray := ZkView.bytesOf (k := 64) u.1 ++ u.2
+/-- **The commit strings the firewall sends under live inner coins**, at the salt bytes `ys`: string `i` is message
+`i`'s SHA-512 under `ys i` (`Default512.commitString`), where message `i`, `msgs i l`, reads the strings `l` the
+firewall sent before it, which the auditor's coins after them may read. -/
+def firewallStrings {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (ys : Fin nh → ByteArray)
+    (i : Fin nh) : ByteArray :=
+  Hm96.Default512.commitString (Sha512.hash (msgs i fun j => firewallStrings msgs ys (Fin.castLE i.isLt.le j))) (ys i)
+termination_by i.val
+decreasing_by exact j.isLt
 
 /-- Obligation (the honest worker's requests follow the pinned schedule `s`): at every private circuit `P`, witness `w`,
 registration salts `r`, tape `a` and randomness `p`, the requests the honest worker sends the firewall,
-`reqs P w r a p`, run through it (`Flock.Firewall.run s`) at any salts `ys` to `s`'s transcript `T`, its holes the
-salted commit strings of the messages `msgs P w r a p` (each message's SHA-512 under its salt,
-`Default512.commitString`, in salt order), and finish. `T` reads only the schedule: the firewall pins every count,
-name and position it sends to `s`, and Commit's table order, which it doesn't pin, is the honest worker's. -/
+`reqs P w r a p l` when the firewall sends the commit strings `l`, run through it (`Flock.Firewall.run s`) at any salts
+`ys` to `s`'s transcript `T`, its holes the salted commit strings of the messages `msgs P w r a p` in salt order
+(`firewallStrings`: each message's SHA-512 under its salt, message `i` reading the strings before it), and finish.
+The inner coins are live: the worker's later requests answer coins the auditor draws after the strings before them,
+so both read those strings. `T` reads only the schedule: the firewall pins every count, name and position it sends to
+`s`, and Commit's table order, which it doesn't pin, is the honest worker's. -/
 def FirewallSends {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
-    (reqs : Prog → Wit → Rr → Ωa → Ωp → List ByteArray) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
+    (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent) : Prop :=
-  ∀ P w r a p (ys : Fin nh → ByteArray), Flock.Firewall.run s (reqs P w r a p) (List.ofFn ys) =
-    (T fun i => Hm96.Default512.commitString (Sha512.hash (msgs P w r a p i)) (ys i), true)
+  ∀ P w r a p (ys : Fin nh → ByteArray),
+    Flock.Firewall.run s (reqs P w r a p (firewallStrings (msgs P w r a p) ys)) (List.ofFn ys) =
+      (T (firewallStrings (msgs P w r a p) ys), true)
 
 /-- Obligation (V*'s staging, the public context): at every honest context (`OuterZK.hctxAt`, the firewall's
 commitments to `msgs` under the salts `y`), the public context V*'s sessions read is the one their simulator reads,
 `pubS` at the owed outputs, the registration's view, the auditor's tape and the firewall's commitments. -/
 def SessionsPublic {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub)
     (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub) : Prop :=
   ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (OuterZK.hctxAt msgs P w r a p y) =
-    pubS o (regLeaves rows pub P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i))
+    pubS o (regLeaves rows pub P r) a (firewallCommits (msgs P w r a p) y)
 
 /-- Obligation (V*'s staging, the tables): each of V*'s session tables is `coinedOf` at `verify --zk`'s table of the
 session's data `D` at a draw `verify --zk` sets up (`DrawSetupZK`), so it passes `CoinedOK`
@@ -73,26 +85,28 @@ def SessionsCoined {Ctx Pub : Type} (V : OuterZK.Sessions Ctx Pub) : Prop :=
 /-- Obligation (V*'s staging, the honest witnesses): at every honest context, each session's witness is valid and its
 registered values are the public ones (`OuterZK.Sessions.Honest`). -/
 def SessionsHonest {Out Prog Wit Ωa Ωp Pub : Type} {nr nh : ℕ} (honest : Out → Prog → Wit → Prop)
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub) : Prop :=
   ∀ o P w, honest o P w → ∀ r a p y, V.Honest (OuterZK.hctxAt msgs P w r a p y)
 
 /-- **The recursive audit's real view at the firewall**, the probability of the event `E`. The developer registers the
 private circuit `P` under the registration's salts `r`, and the auditor sees `regLeaves rows pub P r`. The honest
-worker sends the firewall its requests `reqs P w r a p` at the auditor's tape `a` and its randomness `p`; the firewall
+worker sends the firewall its requests `reqs P w r a p l` at the auditor's tape `a`, its randomness `p` and the commit
+strings `l` the firewall sends (the inner coins live: the auditor draws each after the strings before it); the firewall
 (`Flock.Firewall.run s`) salts them with `nh` salts of 192 uniform bytes `b` and sends the auditor what it sends and
 whether the session finished. V*'s sessions, run by the honest prover's code `prover` at the firewall's commitments and
 salts (`OuterZK.hctxAt`), give the auditor their view at their randomness `q`. The average is over `r`, `a`, `p`, `b`
 and `q`, uniform and independent. -/
 noncomputable def fwRealPr {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Fintype Ωp] {nr nh : ℕ}
     (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv) (s : Flock.Firewall.Schedule)
-    (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → List ByteArray)
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+    (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub) (prover : OuterZK.TableProver) (P : Prog) (w : Wit)
     (E : Rv × Ωa × (Array Flock.Firewall.Sent × Bool) × V.View → Prop) : ℝ≥0∞ :=
   avg fun r : Fin nr → ZkView.Salt => prCoin fun z : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × V.Ωo =>
     E (regLeaves rows pub P r, z.1.1.1,
-      Flock.Firewall.run s (reqs P w r z.1.1.1 z.1.1.2)
+      Flock.Firewall.run s (reqs P w r z.1.1.1 z.1.1.2 (firewallStrings (msgs P w r z.1.1.1 z.1.1.2)
+          fun i => FlockSoundness.Audit.Law.streamOf (z.1.2 i)))
         (List.ofFn fun i => FlockSoundness.Audit.Law.streamOf (z.1.2 i)),
       V.view prover (OuterZK.hctxAt msgs P w r z.1.1.1 z.1.1.2 fun i => ZkView.saltOfBytes (z.1.2 i)) z.2)
 
@@ -115,11 +129,12 @@ one size class of the universal unit, public: `Prog` is the class's private circ
 `nr` rows (`regLeaves rows pub`), and `honest o P w` says that `w` is an honest witness on which `P` computes the owed
 outputs `o`. The auditor's whole view (`fwRealPr`) is the registration's, what the firewall sends (`Flock.Firewall.run`
 at the pinned schedule `s`, on the honest worker's requests `reqs` and `nh` salts of 192 uniform bytes) and V*'s outer
-sessions `V`, run by the honest prover's code (`OuterZK.proverExe`, whatever a stopped run sends). The one premise is
-`hash-derived-key`; what it takes of the code, each an obligation:
+sessions `V`, run by the honest prover's code (`OuterZK.proverExe`, whatever a stopped run sends). The inner coins are
+live: the auditor draws each after the commit strings before it, and message `i` and the requests read those strings.
+The one premise is `hash-derived-key`; what it takes of the code, each an obligation:
 
 * the honest worker's requests run through the firewall to the schedule's transcript `T` with the salted commit strings
-  of the messages `msgs` in it, and finish (`FirewallSends`);
+  of the messages `msgs` in it, each reading the strings before it, and finish (`FirewallSends`);
 * V*'s staging: the simulator's public context `pubS` is the honest one's (`SessionsPublic`), each session's table is
   `verify --zk`'s at its data and a draw it sets up (`SessionsCoined`), the honest witnesses are valid with public
   registered values (`SessionsHonest`), and V*'s sizes are fixed (`OuterZK.Sessions`' `hz`, `hR`, `hS`).
@@ -137,8 +152,8 @@ def RecursiveFirewallPrivate : Prop :=
       (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
       (honest : Out → Prog → Wit → Prop)
       -- the honest worker's requests to the firewall, the messages they commit, and the schedule's transcript
-      (nh : ℕ) (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → List ByteArray)
-      (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+      (nh : ℕ) (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+      (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
       (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
       -- V*'s outer sessions, the public context their simulator reads, and what a stopped run sends
       (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub)
