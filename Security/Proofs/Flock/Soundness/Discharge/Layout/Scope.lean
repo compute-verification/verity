@@ -15,6 +15,10 @@ returns the outputs (`ho`), and every input a unit row reads is a port bit (`Por
 (`Rows.ofNet_a`). Every accepted statement has it (`Layout.unitLog_le`), so it narrows nothing. And it checks that every
 row is a `sha512/row/v1` row of `16 · words` bits in at least one chunk (`scopeOk_ports`): `rowEnc` is that row's bytes,
 and a bit row (`sha512/row/v2`) commits other bytes.
+
+`scopeOkH` is the hidden-output headlines' scope: `scopeOk`'s conditions on the unit, and every row a `sha512/row/v1`
+row or every row an unsegmented `sha512/row/v2` row of `16 · words` bits whose bytes end in its `hm96` slot's block, one
+output port each (`scopeOkH_rows`). Those headlines commit each row under its own prefix (`Hidden.rowPre`).
 -/
 
 namespace FlockSoundness.Discharge.Layout
@@ -68,5 +72,57 @@ theorem scopeOk_ports {c : Circuit} (h : scopeOk c = true) :
   simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
   intro p hp
   exact and_assoc.1 (h.2 p (Array.mem_toList_iff.1 hp))
+
+/-! ## The hidden-output headlines' scope -/
+
+/-- **A `sha512/row/v2` row the hidden-output headlines cover**: unsegmented, `16 · words` bits, its bytes filling its
+compressions' blocks and ending, with SHA-512's 17 bytes of padding, in its `hm96` slot's block. -/
+def v2Row (p : Port) : Bool :=
+  p.v2 && p.segs.isNone && p.bits == 16 * p.words && decide (128 * p.chunks ≤ 2 * p.words) &&
+    decide (2 * p.words + 17 ≤ 128 * (p.chunks + 1))
+
+/-- **Every row is a `v2Row`**, and each output row holds one output port. -/
+def v2Rows (c : Circuit) : Bool := c.ports.all v2Row && c.outRowPorts.all (· == 1)
+
+/-- **The circuits the hidden-output headlines cover**: `scopeOk`'s conditions on the unit, and every row a
+`sha512/row/v1` row (`v1Ports`) or every row a `v2Row`, one output port each (`v2Rows`). -/
+def scopeOkH (c : Circuit) : Bool :=
+  c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
+    (v1Ports c || v2Rows c)
+
+theorem scopeOkH_of_scopeOk {c : Circuit} (h : scopeOk c = true) : scopeOkH c = true := by
+  unfold scopeOk at h
+  unfold scopeOkH
+  simp only [Bool.and_eq_true] at h ⊢
+  exact ⟨h.1, Bool.or_eq_true_iff.2 (Or.inl h.2)⟩
+
+/-- **`scopeOkH` gives `rs`'s circuit conditions**: `h1`, `ho` and `PortReads`. -/
+theorem scopeOkH_spec {c : Circuit} (hU : Built c.unit) (h : scopeOkH c = true) :
+    c.unit.inGroups.size = 1 ∧ c.outNet = c.unitNet ∧ PortReads c hU := by
+  unfold scopeOkH at h
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨⟨h1, ho⟩, hu⟩, hpr⟩, -⟩ := h
+  exact ⟨h1, ho, portReads_of_portReadsB hU hu hpr⟩
+
+/-- **`scopeOkH`'s rows**: all `sha512/row/v1` rows, or all unsegmented `sha512/row/v2` rows of `16 · words` bits
+ending in their `hm96` slot's block, each output row of one output port. -/
+theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
+    (∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) ∨
+      ((∀ p ∈ c.ports.toList, p.v2 = true ∧ p.segs = none ∧ p.bits = 16 * p.words ∧ 128 * p.chunks ≤ 2 * p.words ∧
+        2 * p.words + 17 ≤ 128 * (p.chunks + 1)) ∧ ∀ r ∈ c.outRowPorts.toList, r = 1) := by
+  unfold scopeOkH at h
+  simp only [Bool.and_eq_true, Bool.or_eq_true] at h
+  rcases h.2 with h1 | h2
+  · left
+    unfold v1Ports at h1
+    simp only [Array.all_eq_true', Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h1
+    intro p hp
+    exact and_assoc.1 (h1 p (Array.mem_toList_iff.1 hp))
+  · right
+    unfold v2Rows v2Row at h2
+    simp only [Bool.and_eq_true, Array.all_eq_true', beq_iff_eq, decide_eq_true_eq, Option.isNone_iff_eq_none] at h2
+    refine ⟨fun p hp => ?_, fun r hr => h2.2 r (Array.mem_toList_iff.1 hr)⟩
+    obtain ⟨⟨⟨⟨hv, hs⟩, hb⟩, h1⟩, h2'⟩ := h2.1 p (Array.mem_toList_iff.1 hp)
+    exact ⟨hv, hs, hb, h1, h2'⟩
 
 end FlockSoundness.Discharge.Layout

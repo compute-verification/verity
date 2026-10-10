@@ -71,7 +71,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["."]
+inputs = [".", "AGENTS.md"]   # its lints read the docs: a listed `.md` keys its Markdown too (`suites.markdown`)
 testpaths = ["tests", "tools/research/tests", "infra/ops/tests", "benchmarks/native_peak/tests", "verity/tests", "archive/sp1/tests", "benchmarks/numerical/tests", "archive/gkr/tests", "verity/ml/flock/tests", "tools/verity/circuit_check/tests", "tools/verity/lean/tests", "verity/core/protocols", "verity/ml/circuits/ops/tests", "benchmarks/pouw/tests"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`",
            "circuit_suite: one circuit-check target per test (tools/verity/circuit_check); `check` runs these as `circuit-check --all`"]
