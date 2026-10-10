@@ -53,6 +53,7 @@ archive/direct/fixtures/crosscheck_units.json
 verity/ml/flock/tests/fixtures/hidden-outputs
 verity/ml/flock/tests/fixtures/public-inputs
 verity/ml/flock/tests/fixtures/public-inputs-blocks
+verity/ml/flock/tests/fixtures/rec-coins
 archive/gkr/fixtures/babybear-transcripts/transcript_vu4.json
 archive/gkr/fixtures/babybear-transcripts/transcript_vu64.json
 archive/gkr/fixtures/v2_synth/circuit.txt

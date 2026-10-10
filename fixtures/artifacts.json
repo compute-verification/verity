@@ -110,6 +110,7 @@
   "art:8e64204959f3943541eaaa2eb7e980a7b6d09a470d6f3ccb4b17f676efcdffa7": "verity/ml/flock/tests/fixtures/hidden-outputs",
   "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "verity/ml/flock/tests/fixtures/public-inputs",
   "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "verity/ml/flock/tests/fixtures/public-inputs-blocks",
+  "art:97537edaf796edb3ec098d64a39283d2c74040bd06be85375304a5263e6bedc9": "verity/ml/flock/tests/fixtures/rec-coins",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
