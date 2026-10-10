@@ -1,8 +1,4 @@
 import Proofs.Flock.Recursive.Universal
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-import Proofs.Flock.Soundness.Discharge.Exec.Pts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # Recursion: the class, regions and schedule of an executable statement
