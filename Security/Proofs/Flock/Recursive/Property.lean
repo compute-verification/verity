@@ -19,10 +19,10 @@ private circuit registered by hm96 leaves. It is a conjunction:
 * (i) soundness in fork form, at an inner statement `st` whose class, regions and schedule are `execClassAt st`, over
   V*'s sessions as the prover supplies them, with the hidden statement read from `st`'s own description rows: the
   event is empty, or at a row `st`'s commit string is not the registered one and their openings collide, or the
-  sessions type and there is a round fork, a session fork or an inner fork of the prover's own runs, or Lean's
-  verifier accepts `st` and its description and the verifier of record every session while the registered private
-  circuit's hidden statement fails with probability at most `RecursiveSound`'s bound with the compiled table's error
-  as its inner term;
+  sessions type and there is a registrant fork (`regFinder`), a round fork, a session fork or an inner fork of the
+  prover's own runs, or Lean's verifier accepts `st` and its description and the verifier of record every session
+  while the registered private circuit's hidden statement fails with probability at most `RecursiveSound`'s bound with
+  the compiled table's error as its inner term;
 * (ii) zero knowledge with circuit privacy, stated about the firewall's code (`Flock.Firewall.run`) and V*'s outer
   sessions run by the honest prover's code (`Recursion.OuterZK.proverExe`), `RecursiveFirewallPrivate`'s form
   (`Proofs.Flock.Recursive.Firewall`), the inner coins live: a simulator that reads only the class, the schedule's

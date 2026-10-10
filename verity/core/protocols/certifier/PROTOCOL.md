@@ -249,13 +249,15 @@ plus what survived that wipe. `capacity.k_share` expresses bits as a share of K,
 (`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
 
-Of the bounds, `Security/lean-audit.json` lists as guarantees only the four whose bounds `calibration.calibrate`
-reports (its other four certifier guarantees are the program's agreement, in Tests): egress over a horizon
+Every statement in the table's Lean column is a guarantee in `Security/lean-audit.json`, frozen as no-function: each is
+stated over the model, not the network check's code (`Security/Proofs/NetworkCertifier/README.md`, "The records"). Four
+are the bounds `calibration.calibrate` reports: egress over a horizon
 (`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
 (`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a horizon (the
 K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
 per link-window (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction
-is any link's). The table's other statements are lemmas: proved and audited, with no record.
+is any link's). The steps of their proofs are lemmas (`Security/Proofs/NetworkCertifier/Lemmas.lean`): proved and
+audited, with no record.
 
 The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
 dataflow hypothesis: for every frame function, sync set and operator, over a horizon within the W windows with advice
@@ -439,8 +441,8 @@ replays recorded traces through the proxy in real time, and on an injected clock
 `uv run tools/verity/check/suites.py verity/core/protocols/certifier`. The tests enumerate small
 horizons, so they check the Lean statements on examples and prove nothing. By name, they mirror 19 of the analysis's 35
 statements (in `Security/`, not the certifier program's `lean/`)
-`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, none of them among its guarantees (`Security/lean-audit.json`'s
-`guarantees`), and three more proved lemmas:
+`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, 12 of them guarantees (`Security/lean-audit.json`'s `guarantees`)
+and seven lemmas, and three more proved lemmas:
 - **`test_network_certifier_grid.py`:**
   - Proposition 2's ten statements, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
     `SecurityProofs.FillInjective`, `SecurityProofs.ExistsFillOfLeftPacked`, `SecurityProofs.CardCountsEqLe`,

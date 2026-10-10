@@ -1563,11 +1563,16 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
    `sha512/row/v1` row of `16 · words` bits in at least one chunk (`a row that is not a sha512/row/v1 row of 16 · words
    bits in at least one chunk`). Under hidden outputs (§16.13) the check is `Layout.scopeOkH`: the same unit, and every
-   row a `sha512/row/v1` row as above or every row an unsegmented `sha512/row/v2` row (§16.14) of `16 · words` bits whose
-   last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block (`128 · chunks ≤ 2 · words` and
-   `2 · words + 17 ≤ 128 · (chunks + 1)`), each output row holding one output port (`rows that are neither all
-   sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits
-   ending in their hm96 block, one output port each`). A segmented row (`sha512/row-seg/v1`) is outside both.
+   row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
+   `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
+   (`128 · chunks ≤ 2 · words` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
+   row of `16 · words` bits segmented as `HmRow.segShape` cuts it, in its segments' and its outer message's compressions,
+   each segment's bytes and SHA-512's 17 bytes of padding ending in its last block (`ProvedScope.segRow`: a segment of
+   `b` bytes in `c` compressions has `128 · (c - 1) ≤ b`), the output rows unsegmented and each holding one output port
+   (`ProvedScope.bitRows`; refused as `rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one
+   chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows
+   of 16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each`). A
+   PoUW tile's rows, row-seg A rows and v2 B rows, are such a mix (`ZkHidden.witnessMix_scope`).
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
 design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling

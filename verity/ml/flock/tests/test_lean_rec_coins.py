@@ -4,8 +4,10 @@ smallest level of a recorded recursive session (`r20261009-111638-6720`, class (
 statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
 recorded `pub.bin` and `registered.json`, and its recorded outer session. The level and its outer session were proved
 again at the current leaf scheme (`r20261010-040650-84a9`: the inner statement's leaves are unsalted, so the rest of the
-session is 6720's). The honest level is accepted at the honest inner
-session and refused without it, and a level whose `rec-coef` V* registered one bit off is refused at that opening, though
+session is 6720's), before #1677's OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
+as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check (S2/R7) once every V*
+check has passed at setup. The honest level passes setup at the honest inner session and is refused without it, and a
+level whose `rec-coef` V* registered one bit off is refused at that opening, though
 its registration is consistent. Set up as another statement than V*'s `verity/flock-circuit`, or with a lookup table held,
 the honest level is refused. Every verify names the session's statement (`--rec-part J`, its index in `rec-statements`'
 list) and passes the verifier's own bindings (`--rec-bindings F`, `rec_bindings` of its partition object and program).
@@ -37,6 +39,8 @@ UNIT = "rec-open/l16-h4"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves
 CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
                   "459a42e2dda3e07463")
+#: the recorded outer session's refusal as `verity/flock-circuit`, after setup
+S2_R7 = "S2/R7: the session parameters are not the verifier's"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -147,10 +151,10 @@ def _acc_rows(dst: Path, level: Path) -> Path:
     return dst
 
 
-def test_the_honest_level_is_accepted_at_the_honest_inner_session(forged, shape, tmp_path):
+def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path):
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest",
                 rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
-    assert v["accepted"], v.get("why")
+    assert (v["accepted"], v["why"]) == (False, S2_R7), v
 
 
 def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path):
@@ -266,7 +270,7 @@ def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape
         unit = f.readline().split()[1]
     t = SET / "inner-honest" / "public.json"
     v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", "--rec-inner-transcript", str(t), session=undrawn, rows=rows)
-    assert not v["why"].startswith("setup:"), v["why"]
+    assert v["why"] == S2_R7, v["why"]
     v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", session=undrawn, rows=rows)
     assert v["why"].startswith(f"setup: rec-pub: {unit}: the verifier holds no inner transcript"), v["why"]
 
@@ -322,7 +326,7 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
     unit = _unit(a)
     t = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
     v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
-    assert not v["why"].startswith("setup:"), v["why"]
+    assert v["why"] == S2_R7, v["why"]
     v = _verify(a, a / "pub.bin", a / "registered.json", shape, "inner-honest", *t, session=undrawn)
     assert v["why"] == (f"setup: {unit}: one of V*'s parts; pass the verifier's record of V*'s shared rows (--rec-rows F), "
                         "which each of its row ports must be"), v["why"]
@@ -332,7 +336,7 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
     b = tmp_path / "salted" / "alg" / a.name
     own = _rec_rows(tmp_path / "own.json", sorted((tmp_path / "salted" / "alg").iterdir()))
     v = _verify(b, b / "pub.bin", b / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=own)
-    assert not v["why"].startswith("setup:"), v["why"]
+    assert v["why"] == S2_R7, v["why"]
     root = lambda f: json.loads(f.read_text())["ports"]["acc0"]["root"]
     assert root(b / "registered.json") != root(rows)
     v = _verify(b, b / "pub.bin", b / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows)
@@ -346,18 +350,18 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
 
 def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):
     """`EndKeysS` and `OpenKeysS`'s one registration (`RecVStar.checkAcc`): the recorded level 3 reads `rec-acc` as `acc` and
-    `acc_out`, at the registration of the honest algebra's `acc0` and `acc1`, and is accepted at those shared rows
-    (`--rec-rows`) and refused without them. Level 3 staged under another salt of the running sums' row 0 reads the same rows
-    as another `rec-acc`, consistently: it passes setup at its own registration and is refused at the verifier's by `acc`'s
-    root. The recorded level with its `acc_out` read at that other registration (its reads file's entry and `pub.bin`'s paths;
-    the rows it reads are the same, row 0 being no opening's `acc_out`) and `acc` at the honest one is refused as two
-    registrations."""
+    `acc_out`, at the registration of the honest algebra's `acc0` and `acc1`, and passes setup at those shared rows
+    (`--rec-rows`; S2/R7 refuses its outer session after) and is refused without them. Level 3 staged under another salt
+    of the running sums' row 0 reads the same rows as another `rec-acc`, consistently: it passes setup at its own
+    registration and is refused at the verifier's by `acc`'s root. The recorded level with its `acc_out` read at that other
+    registration (its reads file's entry and `pub.bin`'s paths; the rows it reads are the same, row 0 being no opening's
+    `acc_out`) and `acc` at the honest one is refused as two registrations."""
     reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
     site = lambda e: {k: x for k, x in e.items() if k != "reads"}
     shared = json.loads(rows.read_text())["ports"]
     assert site(reads(SET / "L3")["acc"]) == site(reads(SET / "L3")["acc_out"]) == site(shared["acc0"]) == site(shared["acc1"])
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
-    assert v["accepted"], v.get("why")
+    assert (v["accepted"], v["why"]) == (False, S2_R7), v
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: {UNIT}: it reads rec-acc; pass the verifier's record of V*'s shared rows (--rec-rows F), whose "
                         "rec-acc registration it must be"), v["why"]
@@ -368,7 +372,7 @@ def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, sha
     other, honest = reads(b)["acc"]["root"], shared["acc0"]["root"]
     assert other != honest
     v = _verify(forged, b / "pub.bin", b / "registered.json", shape, "inner-honest", rows=_acc_rows(tmp_path / "own.json", b))
-    assert not v["why"].startswith("setup:"), v["why"]
+    assert v["why"] == S2_R7, v["why"]
     v = _verify(forged, b / "pub.bin", b / "registered.json", shape, "inner-honest", rows=rows)
     assert v["why"] == (f"setup: {UNIT}: its rec-acc port acc is not the verifier's rec-acc registration (--rec-rows acc0): "
                         f"root {other}, against {honest}"), v["why"]
@@ -387,20 +391,20 @@ def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, sha
                         f"{other}"), v["why"]
 
 
-def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, shape, tmp_path):
-    """V*'s statements are `verity/flock-circuit`'s: the honest level set up as `verity/flock-circuit+seed-injection`, which
-    parses the same file, is refused by that check alone, since `statement` derives it with every other flag under V*'s
-    own; `verify` refuses it at setup."""
+@pytest.mark.parametrize("other", ["verity/flock-circuit+seed-injection", "verity/flock-circuit@cec3e347"])
+def test_the_honest_level_is_refused_as_another_statement_than_v_stars(forged, shape, tmp_path, other):
+    """V*'s statements are `verity/flock-circuit`'s: the honest level set up as `other`, which parses the same file, is
+    refused by that check alone, since `statement` derives it with every other flag under V*'s own; `verify` refuses it at
+    setup. `verity/flock-circuit@cec3e347` is the statement the recorded outer session was proved as."""
     why = (f"setup: {UNIT}: one of V*'s statements, which are verity/flock-circuit statements (--statement "
-           "verity/flock-circuit), not verity/flock-circuit+seed-injection")
+           f"verity/flock-circuit), not {other}")
     rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
     pub, reg = SET / "L3" / "pub.bin", SET / "L3" / "registered.json"
     p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows)], capture_output=True, text=True)
     assert p.returncode == 0 and json.loads(p.stdout)["statement"] == "verity/flock-circuit", (p.stdout, p.stderr)
-    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows, "verity/flock-circuit+seed-injection")],
-                       capture_output=True, text=True)
+    p = subprocess.run([str(BIN), "statement", *_files(forged, pub, reg, shape, rows, other)], capture_output=True, text=True)
     assert p.returncode == 1 and p.stdout.strip() == why, p.stdout
-    v = _verify(forged, pub, reg, shape, "inner-honest", rows=rows, statement="verity/flock-circuit+seed-injection")
+    v = _verify(forged, pub, reg, shape, "inner-honest", rows=rows, statement=other)
     assert v["why"] == why, v["why"]
 
 
@@ -422,13 +426,13 @@ def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp
 
 def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged, algebra, shape, undrawn, rows, coins,
                                                                          tmp_path):
-    """Check 5's setup once per inner session (`rec-coins`, `--rec-inner-coins`): the honest level is accepted on the record,
+    """Check 5's setup once per inner session (`rec-coins`, `--rec-inner-coins`): the honest level passes setup on the record,
     the coef registered one bit off is refused with the message the inner statement's files give, and the part holding v's
     comb gets the same verdict either way. The record is refused against another inner session's record, and in place of
     nothing: beside the inner statement's files."""
     acc = _acc_rows(tmp_path / "rows.json", SET / "L3")
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=acc, coins=coins)
-    assert v["accepted"], v.get("why")
+    assert (v["accepted"], v["why"]) == (False, S2_R7), v
     v = _verify(forged, forged / "pub.bin", forged / "registered.json", shape, "inner-honest",
                 rows=_acc_rows(tmp_path / "forged-rows.json", forged), coins=coins)
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's coef row is not the "
@@ -437,7 +441,7 @@ def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged,
     t = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
     both = [_verify(p, p / "pub.bin", p / "registered.json", shape, "inner-honest", *t, session=undrawn, rows=rows, coins=c)
             for c in (None, coins)]
-    assert both[0] == both[1] and not both[0]["why"].startswith("setup:"), both
+    assert both[0] == both[1] and both[0]["why"] == S2_R7, both
     other = tmp_path / "other"
     shutil.copytree(SET / "inner-honest" / "session", other / "session")
     (other / "session" / "session.json").write_text((other / "session" / "session.json").read_text() + "\n")

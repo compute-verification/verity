@@ -75,8 +75,9 @@ doesn't name:
     circuit-check   first flock-circuit-build, `verity/ml/flock/check_build.sh`: `cargo check` of flock-circuit in every CPU
                     feature set a pod builds, the proving builds without `seed-injection` among them (a Flock b684b12 checkout,
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
-                    `circuit-check --all --jobs` the other half, at most one per 128 GB of memory (`circuit_check_jobs`):
-                    every registered Definition and template (`tools/verity/circuit_check`),
+                    `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
+                    (`circuit_check/heavy.json`) fit the memory the run has: every registered Definition and template
+                    (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
@@ -631,18 +632,6 @@ def memory_gb(root: Path = Path("/")) -> int:
     return max(0, min(left)) >> 30 if left else 0
 
 
-#: the memory circuit-check counts on per worker: a cold `--all` on vy-nebius-cpu-1 (755 GB) at 23 workers grew six of them to
-#: 136, 84, 80, 54, 51 and 40 GiB and took the node down twice (7 Oct,
-#: note:core-firewall/20261007T2327Z-finding-circuit-check-all-exhausts-cpu-1); at 7 workers in vy-n2's 900 GiB session scope
-#: they grew to 155, 151, 136, 136, 133, 107 and 55 GiB and the scope OOM-killed one (r20261009-061009-1b4d, 9 Oct)
-CIRCUIT_CHECK_GB_PER_JOB = 160
-
-
-def circuit_check_jobs(b: int) -> int:
-    """circuit-check's `--jobs`: its share ``b`` of the cores, at most one per `CIRCUIT_CHECK_GB_PER_JOB` of this process's memory."""
-    return max(1, min(b, memory_gb() // CIRCUIT_CHECK_GB_PER_JOB))
-
-
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
 #: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
 #: (tip 38's shard 2/3, 6 Oct)
@@ -985,7 +974,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
-    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(circuit_check_jobs(b)), "--out", str(out / "circuit-check.json"),
+    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
