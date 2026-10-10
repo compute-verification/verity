@@ -101,3 +101,61 @@ def test_attention_t_of_a_stratum():
     assert (U._t_stats(part, 128)["min"], U._t_stats(part, 128)["max"]) == (257, 383)
     runs = {"parameters": {"NB": 1, "last": "partial"}, "variable_counts": {"T": {"runs": [{"min": 1, "max": 3, "vus_per_value": 2}]}}}
     assert U._t_stats(runs, 128)["mean"] == 2
+    assert U._t_stats(full, 128)["ceil16_mean"] == 24
+    assert U._t_stats(part, 128)["ceil16_mean"] == sum(-(-T // 16) for T in range(257, 384)) / 127
+    assert U._t_stats(runs, 128)["ceil16_mean"] == 1
+    two = {"parameters": {"NB": 1, "last": "partial"},
+           "variable_counts": {"T": {"runs": [{"min": 15, "max": 17, "vus_per_value": 1}, {"min": 40, "max": 40, "vus_per_value": 3}]}}}
+    assert U._t_stats(two, 128)["ceil16_mean"] == (1 + 1 + 2 + 3 * 3) / 6
+
+
+#: circuits' F3 units (art:b56410ca…): nnz_a + nnz_b of one registered unit
+@pytest.mark.parametrize("template, params, units, nnz_ab", [
+    ("rope-head", {"D": 64}, 32, 156_755),
+    ("gemm-coordinate", {"K": 32, **AMPERE}, 2, 254_460),
+    ("silu-mul", {"I": 16}, 16, 378_759),
+])
+def test_registered_units(template, params, units, nnz_ab):
+    r = U.registered(template, params)
+    assert (r["units"], r["unit"]["nnz_a"] + r["unit"]["nnz_b"]) == (units, nnz_ab)
+
+
+def test_registered_none_says_why():
+    assert U.registered("token-select-greedy", {"V": 64}) == {"none": "no registered C-Flock lowering"}
+    assert "N = 1536" in U.registered("rmsnorm-fused-cuda", {"N": 1536, "EPS": 1e-6})["none"]
+    assert "NotImplementedError" in U._reg_job(U._key("gemm-coordinate", {"K": 32, **HOPPER}))[1]["none"]
+
+
+def test_attention_steps_match_the_registered_head():
+    p = {"D": 64, "BN": 128, "semantics": "sm80.fa2.bf16"}
+    for T in (1, 16, 17, 129):
+        assert U.registered("attention-head", p, T)["units"] == U.attention_steps(64, T)
+    assert U.attention_steps(64, 17) == 4 * 17 + 64 * 2
+
+
+def test_argmax_step():
+    assert U.argmax_step() == {"rows": 513, "ands": 165, "nnz_a": 1708, "nnz_b": 1240}
+
+
+def test_inventory_takes_registered_counts_and_keeps_generic():
+    w = {"id": "w", "template_mix": [
+        {"vu_family": "SiluMul", "parameters": {"I": 16}, "vus": 30_000, "subcircuit_template": "silu-mul",
+         "subcircuit_parameters": {"I": 16}, "subcircuits_per_vu": 2},
+        {"vu_family": "Argmax", "parameters": {"V": 64}, "vus": 1, "subcircuit_template": "token-select-greedy",
+         "subcircuit_parameters": {"V": 64}, "subcircuits_per_vu": 1}]}
+    gen = {"inputs": 1, "ands": 10, "output_copies": 1, "committed": 12, "nnz_AB": 100, "lookups": 0}
+    subs = {U._key("silu-mul", {"I": 16}): {"template": "silu-mul", "params": {"I": 16}, "method": "exact", "counts": gen},
+            U._key("token-select-greedy", {"V": 64}): {"template": "token-select-greedy", "params": {"V": 64}, "method": "exact",
+                                                       "counts": gen}}
+    regs = {U._key("silu-mul", {"I": 16}): {"lowering": "l", "units": 4, "unit": {"rows": 5, "ands": 3, "nnz_a": 7, "nnz_b": 9,
+                                                                                   "reads": 0}},
+            U._key("token-select-greedy", {"V": 64}): {"none": "no registered C-Flock lowering"}}
+    step = {"rows": 2, "ands": 1, "nnz_a": 3, "nnz_b": 4}
+    inv = U.inventory([w], subs=subs, regs=regs, step=step, log=lambda m: None)
+    silu, ts = inv["rows"]
+    c = silu["vu"]["per_unit"]
+    assert silu["source"] == "registered"
+    assert (c["committed"], c["nnz_AB"], c["nnz"], c["nnz_generic"]) == (2 * 4 * 5, 2 * 4 * 16, 2 * 4 * 21, 2 * 110)
+    assert ts["source"] == "generic" and ts["subcircuit"]["per_unit"]["nnz"] == 110 == ts["subcircuit"]["per_unit"]["nnz_generic"]
+    assert ts["nnz_step_model"]["nnz"] == 63 * 9
+    assert "| R |" in U.render(inv) and "| G |" in U.render(inv)
