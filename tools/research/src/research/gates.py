@@ -2,7 +2,7 @@
 
 `git_env()` is the environment for a gate's subprocesses: the caller's, less what makes git read a repository other than the
 one at its cwd (`GIT_LOCAL_ENV`: a hook's GIT_DIR, a scratch GIT_INDEX_FILE) and what a caller's process leaks into code it runs
-(`CALLER_ENV`: its import path, the Lean and check slots it holds).  `refuse()` is the one way a gate says no: a line on stderr
+(`CALLER_ENV`: its import path, the Lean and check slots it holds), with the record merge driver set (`RECORD_DRIVER`).  `refuse()` is the one way a gate says no: a line on stderr
 naming why, and the shared exit code `REFUSED`.
 """
 from __future__ import annotations
@@ -25,10 +25,23 @@ CALLER_ENV = ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT
               "CHECK_SLOT")
 
 
+#: git's merge driver for `lean-audit.json` (`.gitattributes`: `lean-audit.json merge=lean-audit`), set for every git a gate
+#: runs: a clone's config holds it only after `merge.py --install`, and without it git merges a record line by line (the queue's
+#: own clone, a fresh VM's checkout); a tree from before the tools/verity move has it at tools/lean/merge.py
+RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)",
+                 "merge.lean-audit.driver": 'f=tools/verity/lean/merge.py; [ -f "$f" ] || f=tools/lean/merge.py; python3 "$f" %O %A %B %P'}
+
+
 def git_env(**extra: str) -> dict[str, str]:
-    """The environment for a gate's subprocess: os.environ less GIT_LOCAL_ENV and CALLER_ENV, plus ``extra``."""
+    """The environment for a gate's subprocess: os.environ less GIT_LOCAL_ENV and CALLER_ENV, with `RECORD_DRIVER` after any
+    GIT_CONFIG_COUNT settings the caller carries, plus ``extra``."""
     drop = {*GIT_LOCAL_ENV, *CALLER_ENV}
-    return {**{k: v for k, v in os.environ.items() if k not in drop}, **extra}
+    env = {k: v for k, v in os.environ.items() if k not in drop}
+    n = int(env.get("GIT_CONFIG_COUNT") or 0)
+    for i, (k, v) in enumerate(RECORD_DRIVER.items(), n):
+        env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v
+    env["GIT_CONFIG_COUNT"] = str(n + len(RECORD_DRIVER))
+    return {**env, **extra}
 
 
 def refuse(prog: str, why: str) -> int:

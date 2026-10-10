@@ -22,6 +22,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .gates import RECORD_DRIVER
+
 CWD_CLONE = "clone"
 
 
@@ -147,6 +149,8 @@ def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: boo
         r = _git(["clone", "-q", "--shared", "--no-checkout", str(src), str(dest)])
         if r.returncode == 0:
             r = _git(["-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head], dest)
+        for k, v in RECORD_DRIVER.items():
+            r = r if r.returncode else _git(["config", k, v], dest)
         if r.returncode:
             raise Refused(f"git could not clone {src} into {dest}: {_why(r)}")
         got = _git(["rev-parse", "HEAD"], dest).stdout.strip()
