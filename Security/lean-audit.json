@@ -460,14 +460,14 @@
     "  (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) pop) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (hacc : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  Nonempty",
     "    (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
     "      (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I)))",
     "      (FlockSoundness.Discharge.Composed.partS I (dj S) S ⟨0, ⋯⟩) (FlockSoundness.Discharge.Composed.drawJ I (dj S) 0))"
    ],
    "assumptions": [],
-   "type_hash": "7612342bfcee18e130acb0a8febc7c2ca220d04fd98640f3f4f9686d0b387e6b"
+   "type_hash": "8698ab7b4f32f0bc8d375b62a09ba4420f634bfe69d60e10e41fcfe4a49cda17"
   },
   "Flock.SecurityProofs.EndToEndRegistered": {
    "owner": "@proofs",
@@ -491,14 +491,14 @@
     "  (dj : Finset (Fin n) → Lean.Json) (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) pop)",
     "  (hT : FlockSoundness.Discharge.Composed.TagsOkZJ I) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (hacc : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  Nonempty",
     "    (FlockSoundness.Discharge.Composed.DrawSetupZJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
     "      (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I)))",
     "      (FlockSoundness.Discharge.Composed.partS I (dj S) S ⟨0, ⋯⟩) (FlockSoundness.Discharge.Composed.drawJ I (dj S) 0))"
    ],
    "assumptions": [],
-   "type_hash": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20"
+   "type_hash": "c60e7f2c832120c146ed803c73f8cc4c3962305d16e9649a905073bdfca5eed6"
   },
   "Flock.SecurityProofs.RecursiveSound": {
    "owner": "@proofs",
@@ -1148,15 +1148,14 @@
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK {n mPts : Nat} (I : FlockSoundness.Discharge.Exec.Inputs)",
     "  (hh : Eq I.tags.hiddenOutputs Bool.false) (ht : Eq I.tags.typed Bool.false) (dj : Finset (Fin n) → Lean.Json)",
     "  {S : Finset (Fin n)} {t : FlockSoundness.Discharge.Exec.Transcript}",
-    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S)))",
+    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t) (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S)))",
     "  (hok : FlockSoundness.Discharge.Composed.DrawOkZKJ I dj mPts S) (j : Fin (FlockSoundness.Discharge.Composed.nTab I)) :",
     "  Nonempty",
     "    (FlockSoundness.Discharge.Composed.DrawSetupZJ (FlockSoundness.Discharge.Composed.inputsJ I j.val) mPts",
     "      (FlockSoundness.Discharge.Composed.partS I (dj S) S j) (FlockSoundness.Discharge.Composed.drawJ I (dj S) j.val))"
    ],
    "assumptions": [],
-   "type_hash": "fa6a2905bbb83ff800f0dd42e66462f788c0960a32d8830b74cf1e54ce3cf833"
+   "type_hash": "163ad7191b8bdf69c6452845b756cc579bfce1938fcfbc79d3f591f341564d64"
   },
   "FlockSoundness.Discharge.Composed.y0_binder_16_2_1": {
    "owner": "@proofs",
@@ -1167,7 +1166,7 @@
     "  (hJ : Eq (FlockSoundness.Discharge.Composed.nTab I) 2) (hg : Eq c.g 1) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset 16) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And (Eq (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv 16 (FlockSoundness.Discharge.Composed.nTab I))) 27)",
     "    (And",
     "      (Nonempty",
@@ -1182,7 +1181,7 @@
     "            (dj S₀))))"
    ],
    "assumptions": [],
-   "type_hash": "043e166d7fb44dd286f1296670a0a470f1f98772e22f5f5023f0a525e1a1f699"
+   "type_hash": "5f3e0a6312609cfdc7d31f9145e63ea2d9ec30f2fd602ca58ccc2679c84f4e2f"
   },
   "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous": {
    "owner": "@proofs",
@@ -1196,8 +1195,7 @@
     "  (hdj :",
     "    ∀ (S : Finset (Fin n)), Eq (dj S) (FlockSoundness.Discharge.ZkLink.drawOf (Flock.Draw.Law.subset kd) n S).toJson)",
     "  {S : Finset (Fin n)} {t : FlockSoundness.Discharge.Exec.Transcript}",
-    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t) (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.Composed.DrawSetupZJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1216,7 +1214,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "d30db6a60eae31013990ad62a6a08bdabc6cbad238770a91e1a87c53120b119a"
+   "type_hash": "ae993e886f2f7a9ebbc3ca0b72d7f72fb2d0aa3369630dd402b8a82bb8f8aa0f"
   },
   "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous": {
    "owner": "@proofs",
@@ -1228,8 +1226,7 @@
     "  (kd : Nat) (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0)",
     "  (dj : Finset (Fin n) → Lean.Json) (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n)",
     "  {S : Finset (Fin n)} {t : FlockSoundness.Discharge.Exec.Transcript}",
-    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t) (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.Composed.DrawSetupZJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1248,7 +1245,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "81a4e1cc63cce79afc4fef9d1034d2b90dd0084697f853715b87fb454bd7eeed"
+   "type_hash": "f54c9ef9bede09045a5e16ef472eebf6d889ad7d892775921fddd16916a1271a"
   },
   "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous": {
    "owner": "@proofs",
@@ -1259,8 +1256,7 @@
     "  (kd : Nat) (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0)",
     "  (dj : Finset (Fin n) → Lean.Json) (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n)",
     "  {S : Finset (Fin n)} {t : FlockSoundness.Discharge.Exec.Transcript}",
-    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t) (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.Composed.DrawSetupZJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1279,7 +1275,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "81a4e1cc63cce79afc4fef9d1034d2b90dd0084697f853715b87fb454bd7eeed"
+   "type_hash": "f54c9ef9bede09045a5e16ef472eebf6d889ad7d892775921fddd16916a1271a"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": {
    "owner": "@proofs",
@@ -1347,7 +1343,7 @@
     "  (hc : Eq (Flock.HmOut.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c))",
     "  (ho : Eq c.outNet c.unitNet) (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S)))",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S)))",
     "  (hok : FlockSoundness.Discharge.ZkHidden.DrawOkZKHJ I dj mPts S)",
     "  (j : Fin (FlockSoundness.Discharge.Composed.nTab I)) :",
     "  Nonempty",
@@ -1355,7 +1351,7 @@
     "      (FlockSoundness.Discharge.Composed.partS I (dj S) S j) (FlockSoundness.Discharge.Composed.drawJ I (dj S) j.val))"
    ],
    "assumptions": [],
-   "type_hash": "258ffa5e095a1e3d8bb0a17f85efd8f136259467a95b03ee876dfa67a33ac85a"
+   "type_hash": "b816ed905985ba01053db3c351b666c79e91e9fcf68c2f94868c6c3fcaeed0b1"
   },
   "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1": {
    "owner": "@proofs",
@@ -1367,7 +1363,7 @@
     "  (hJ : Eq (FlockSoundness.Discharge.Composed.nTab I) 2) (hg : Eq c.g 1) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset 16) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And (Eq (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv 16 (FlockSoundness.Discharge.Composed.nTab I))) 27)",
     "    (And",
     "      (Nonempty",
@@ -1382,7 +1378,7 @@
     "            (dj S₀))))"
    ],
    "assumptions": [],
-   "type_hash": "41b10f5ad868e18f6a466a61444b218725d6527430393878d5243d3bee9fb210"
+   "type_hash": "5664a64acfe429733a9749b8b9d91b7ce77cfb5584d10a4bab0118579158ec2c"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_session_composedHJ_nonvacuous": {
    "owner": "@proofs",
@@ -1394,7 +1390,7 @@
     "  (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1413,7 +1409,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "faca5be4676efe203e4424c105350b57fd2541d6fc5106a1c6d862de3a389ef8"
+   "type_hash": "7590de60228b9fc5b853eab9146a25d4309e41045cb9883fe41530fe14b9f6a3"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_json_nonvacuous": {
    "owner": "@proofs",
@@ -1427,8 +1423,7 @@
     "  (hdj :",
     "    ∀ (S : Finset (Fin n)), Eq (dj S) (FlockSoundness.Discharge.ZkLink.drawOf (Flock.Draw.Law.subset kd) n S).toJson)",
     "  {S : Finset (Fin n)} {t : FlockSoundness.Discharge.Exec.Transcript}",
-    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t) (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1447,7 +1442,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "84d4346e3c17d22cd25d35e8ff0dd782df79c64207dcaccae419202578143b90"
+   "type_hash": "8bc128b496e3f10f67bf3cc9285e9231ac6e8d2a963c215c67e98ba3f9dfdaf3"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_custody_nonvacuous": {
    "owner": "@proofs",
@@ -1460,7 +1455,7 @@
     "  (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1479,7 +1474,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "faca5be4676efe203e4424c105350b57fd2541d6fc5106a1c6d862de3a389ef8"
+   "type_hash": "7590de60228b9fc5b853eab9146a25d4309e41045cb9883fe41530fe14b9f6a3"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous": {
    "owner": "@proofs",
@@ -1491,7 +1486,7 @@
     "  (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1510,7 +1505,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "faca5be4676efe203e4424c105350b57fd2541d6fc5106a1c6d862de3a389ef8"
+   "type_hash": "7590de60228b9fc5b853eab9146a25d4309e41045cb9883fe41530fe14b9f6a3"
   },
   "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous": {
    "owner": "@proofs",
@@ -1522,7 +1517,7 @@
     "  (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1537,7 +1532,7 @@
     "          (FlockSoundness.Discharge.Composed.drawJ I (dj S) j.val)))"
    ],
    "assumptions": [],
-   "type_hash": "65d45c8eb606bb7f8eb16374f9e058e4d5a26bd7f326807e17edc04a8f5f39b8"
+   "type_hash": "7371f03ed7467bdd167da98ed242bf891c6d6a06d6b0fa7997eded54a1ba2b9b"
   },
   "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous": {
    "owner": "@proofs",
@@ -1550,7 +1545,7 @@
     "  (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1569,7 +1564,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "faca5be4676efe203e4424c105350b57fd2541d6fc5106a1c6d862de3a389ef8"
+   "type_hash": "7590de60228b9fc5b853eab9146a25d4309e41045cb9883fe41530fe14b9f6a3"
   },
   "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous": {
    "owner": "@proofs",
@@ -1581,7 +1576,7 @@
     "  (hdiv : Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0) (dj : Finset (Fin n) → Lean.Json)",
     "  (hdj : FlockSoundness.Discharge.ZkLink.DrawFileZK dj (Flock.Draw.Law.subset kd) n) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
-    "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S))) :",
+    "  (hd : Eq (Flock.recordDraw t.record) (Option.some (dj S))) :",
     "  And",
     "    (Nonempty",
     "      (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I 0)",
@@ -1600,7 +1595,7 @@
     "          (FlockSoundness.Discharge.Exec.mPtsOf c.g (instHDiv.hDiv kd (FlockSoundness.Discharge.Composed.nTab I))) S'))"
    ],
    "assumptions": [],
-   "type_hash": "faca5be4676efe203e4424c105350b57fd2541d6fc5106a1c6d862de3a389ef8"
+   "type_hash": "7590de60228b9fc5b853eab9146a25d4309e41045cb9883fe41530fe14b9f6a3"
   },
   "FlockSoundness.table_sound": {
    "owner": "@proofs",
@@ -8118,7 +8113,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "12e893be246288a196f71349f4d1480086012ccd61e104c820c565a533ce62e0",
+   "digest": "fe94824241e39008b845324642569c287788153f8e6499c2721340f3d1baf941",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -8256,6 +8251,8 @@
     "Flock.Stmt.setupTables": "7e9b69ac862043dbb2861faca56e0f8de26b082d6dfc59581291c6d2fc7a1c28",
     "Flock.Stmt.setupTables._sparseCasesOn_16": "56ea21fd4f73f92f1da9c2c4e69df2807862751397ac9b294c499a5db7357a11",
     "Flock.Stmt.setupTables._sparseCasesOn_3": "b9beebeb51c735d270108a9b6098482a6bfab1be9da211c9eb94313e817d5695",
+    "Flock.recordDraw": "61cef972cb60c5487790b15ae52d98b85d0f0e4dae0783f3b82dbcf447075eca",
+    "Flock.recordDraw._sparseCasesOn_1": "f56a8d7f04bb37799e6c090c439f4d49f5d049e3534833be2d270939a92fdedc",
     "_private.Flock.HmRow.0.Flock.HmRow.ctx": "be137ad375de546cbbc26a3840c9dda721fa5d02e7a0e715321bc4d87666e495",
     "_private.Flock.HmRow.0.Flock.HmRow.intLists": "0c26d755fb4eada06d94d2a78a53ea3ab79542eac0d9e569c9d05341cd625f89",
     "_private.Flock.HmRow.0.Flock.HmRow.templateStrata": "d1afdd12f32817b3c645c55e29c61170a35ba172f9918cee9d3e1221f392b5c6"
@@ -12912,7 +12909,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveSound", "FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
   "Proofs.Flock.Soundness.Discharge.Composed.DefsJ": {
-   "digest": "b5b33dbd12e8aac6d59865a19f42acd291cc5d80af8fe518a3752a99a6541bbf",
+   "digest": "6f7d21095020c2bec164c1011259cebacbbbc6bb89d3d9a3af0943cdbde56c18",
    "definitions": {
     "FlockSoundness.Discharge.Composed.DecodesOnZKJ": "a85019adc75681e109ee461e11df1bca7a5dc6dfd6d6f66456714e3e9b83b9b0",
     "FlockSoundness.Discharge.Composed.DrawOkZKJ": "6b934a06bae538d076972cccc930fc6e8849a099dbddee1783dc1a8c4a932669",
@@ -12924,7 +12921,7 @@
     "FlockSoundness.Discharge.Composed.DrawSetupZJ.tabAt": "cd3705c8438faad123d1379d66d6b82f2c94ea9b767fe88c3fd13ef4b57dc35a",
     "FlockSoundness.Discharge.Composed.DrawSetupZJ.table": "14046050a0d6aacaacea84b141b24c8ac3b18e27961af8c15ffd830492541611",
     "FlockSoundness.Discharge.Composed.DrawSetupZJ.x": "8a5e32da7c2b53f3231169641aa326abd0bc6a76d77f3db163f74563da746b67",
-    "FlockSoundness.Discharge.Composed.RecordsLiveZKJ": "a68e0d98d184cf7ac93a31fab734a44d05f1cd4d08e77fa26978fe81c532fec3",
+    "FlockSoundness.Discharge.Composed.RecordsLiveZKJ": "97f04346767dc5fd2660cdf84bebc72e2c04365c0f996e256d41f5b1c008bac5",
     "FlockSoundness.Discharge.Composed.TagsOkZJ": "9819dd3abf8a7632a4c98a664eb1f260b71c560e6b5f1687df9fb842f351d912",
     "FlockSoundness.Discharge.Composed.decAtZJ": "60699844d0dfaca14c2571d9c0a1a39982a135bf512c7e32f84f79e0010a74ee",
     "FlockSoundness.Discharge.Composed.drawJ": "047bf26897286c9cf99b5a433a5694eac272fa9f90de7c540dc74ca2fe16073d",
@@ -13153,10 +13150,10 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZL.Statements": {
-   "digest": "7641bd2360aecbd82ac688d6845760c8d3d06458dbcf5608df4f6d9d5e4de86c",
+   "digest": "7c3cf1c9c8afaba50aba9e4ac8a49d2e5c92158b326890fd5726bc314cc629e8",
    "definitions": {
     "FlockSoundness.Discharge.DecodeZL.DrawOk": "db8326e888275ac4d5bafc98aad8332e6c770a8fd4482d4d2c2842e453ab68db",
-    "FlockSoundness.Discharge.DecodeZL.RecordsLive": "f6380bcf25dd19b6f0a937ae1c0647c3e7e13c530fc4b74cb2fa367313b84eef",
+    "FlockSoundness.Discharge.DecodeZL.RecordsLive": "6759b86805cda887ba9131b327c3cc92b93d3fe1349898e5e0b09155a81075e6",
     "FlockSoundness.Discharge.DecodeZL.TagsOk": "06314832f77b40daa2488efe78cebd2601d2b4f7add3b4bdffbac30d989ae854",
     "FlockSoundness.Discharge.DecodeZL.decAt": "dcb8e07efe41f5805e2ed62b0c7f5ea5ee53296bec1bdc75c7b846f962b24e79",
     "FlockSoundness.Discharge.DecodeZL.nX": "9abfdf73bd52c1ab021d47df202a20bbe3985d57f45cc85a4e19d78f1bfda3eb",
@@ -13272,7 +13269,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.Event": {
-   "digest": "0fe3af9e147575798d413e7959fcbf4529be08cc43b89e5e6b7520e22b5bd14d",
+   "digest": "eba528b9c8e462348dd49a2a3871424f82ceeb4714c3e3d28e0c4eaaa36f4ad2",
    "definitions": {
     "FlockSoundness.Discharge.Exec.Accepts": "ca70925abb83f3c8603f3a7834ae1e0f6303c0f71debae1519e99829633fdf49",
     "FlockSoundness.Discharge.Exec.Inputs": "cace16637b2ce5fcda6fa22011d6e00ddf57703e9e4ed2aa84256c4ae869e177",
@@ -13291,9 +13288,7 @@
     "FlockSoundness.Discharge.Exec.Transcript.proofs": "9bdd2b0f0885cf828c6157bb6bde23ce7a32b1246ab1588c0a36396b4b8fee04",
     "FlockSoundness.Discharge.Exec.Transcript.record": "71f2e9b51830e4679369f371ca7e2bf31557ad4b5e5f05cd4eea21ca1160e54b",
     "FlockSoundness.Discharge.Exec.auditLive": "c401690a50fb7327ee31abd7fceb26752a337ffb68882642e5eea0b927d15daa",
-    "FlockSoundness.Discharge.Exec.recordDraw": "0a577c67725f5d57c4480491ef231f0d7f4e880d2598cb5529df377126176031",
-    "FlockSoundness.Discharge.Exec.recordDraw._sparseCasesOn_1": "9a95c0f6976cec984f7c0f7901bfa83002786f656ee457b1273d4c6b684b16f2",
-    "FlockSoundness.Discharge.Exec.setupOf": "a1b00a74a7d210e3564d54a90f1691ea9da1252cd87fbeac47ee3b0225b9e412"
+    "FlockSoundness.Discharge.Exec.setupOf": "3995f2ac93c39be1c97e11a3ae8e98ed7f0c96014032b9a9b26162fd8de1817e"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -15090,7 +15085,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt": {
-   "digest": "0ef11b1186b76e60eacdc6915a9e34b540e770ade85c7a8a2909ffeab51eeacd",
+   "digest": "3937bb13dbbc301c0b990d51bad682f8a51d5ac361da0bd2d85046319dea6d68",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.DrawOkZK": "6380d5afca3fcfe84679d7762f8330d72c1b490515f249bc81ff35256237b4a8",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK": "48491d752c6a82404edb98d00bf0c2a3bd9934c4d3cb0d89c4877d97a781e57d",
@@ -15101,7 +15096,7 @@
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK.tabAt": "19886044aa5d0ddce916d0fecf5c56cec7cd36fa482f86aa6f2d287d180aed67",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK.table": "fb4d45c8400214d7905885d5806fd54c2efcbce9d1952d76fd85a5fcb27da943",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK.x": "73f732500bb842443468a87ce7cad141b6c78b8eff0717a46168518339ee424a",
-    "FlockSoundness.Discharge.ZkLink.RecordsLiveZK": "6e8deda4c9759caaa184277e873d772fd21cbfdfbd9aeddc4a7f0481e815f699",
+    "FlockSoundness.Discharge.ZkLink.RecordsLiveZK": "2d2f262adf830a6c3d185d58b8f74a95b48c305a2ad20e9dd8a9372ca2b44d2c",
     "FlockSoundness.Discharge.ZkLink.innerPos": "6317210c116d975b1cb4335a002ddfb836269b5f2545765f3337024a5c5efb85",
     "FlockSoundness.Discharge.ZkLink.innerPt": "18ff7e4d0b32ad8d7d831614019ac26242b559a4e1b40da0945cedb401bbf5b0",
     "FlockSoundness.Discharge.ZkLink.layOf": "567be33f8bca073e3d9c062b6e7f5ab8a4a89acd28b51454926b830f18ee9ecc",
@@ -15167,12 +15162,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.Defs": {
-   "digest": "ee8e32426436aeb7715c5f904b32f33bddd59389c6e540c016a86c873ae277b5",
+   "digest": "d0516932cf888a8e92c7193aa43bfa301e1c68192f05eb04677db694f4c58f3e",
    "definitions": {
     "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "413a2f07f95f33951926c91ea36ad6ad97ceb71ee0dae2f4663088c5d458dea5",
     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569",
-    "FlockSoundness.Discharge.ZkReg.OwnReads": "63afdb8c86471f962ec5537985abda2af738111456c4f73cc59c01848b1346a7",
-    "FlockSoundness.Discharge.ZkReg.regPaths": "b944e319b40e60721b3d1563861fcdb802c8a8eb46d33cb46eac08c8735a9a1e"
+    "FlockSoundness.Discharge.ZkReg.OwnReads": "d119b75ccea7d22678d26e7289e164eddde5276cef30df14f4efb068c5cd58f5",
+    "FlockSoundness.Discharge.ZkReg.regPaths": "1e81c76adaa3078910464070596ef96b0c84a472dd4d0d8cdd06b7ec08ceebd9"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -15182,10 +15177,10 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ": {
-   "digest": "a993957ad7b84263a6f9277b9151e6708181ed64b71ca486fe04ec23742e94d6",
+   "digest": "4488c0c24bc37c1d216a50fb3f04a44a95483f1aa4af7c9809721808dd8d325f",
    "definitions": {
-    "FlockSoundness.Discharge.ZkReg.OwnReadsHJ": "e9aeedec7fad74902c6d756469f6931815c8b93e9b49fb3395f722b292580164",
-    "FlockSoundness.Discharge.ZkReg.regPathsHJ": "f37ee7c5a58a68aec79752ba01684aea4ec0cce5b8e04e533153d9b5d86f64e5"
+    "FlockSoundness.Discharge.ZkReg.OwnReadsHJ": "6c66dd94ea3ea7a2f6808c6884534ff4f3cd8f242db6aa0d7ba4894ef0d85c21",
+    "FlockSoundness.Discharge.ZkReg.regPathsHJ": "2c12e4ff3d31a5f562b46e4982acf932d76d6e5b5aa7666942e2c130eecbcc9a"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEndRegistered",
