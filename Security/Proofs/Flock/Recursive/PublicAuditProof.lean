@@ -43,7 +43,7 @@ theorem PublicAudit : Flock.Guarantees.PublicAudit := by
     have h := RecursiveFirewallPrivate hKey s 0 Flock.Guarantees.noRows pub honest nh reqs msgs T V pubS stopped P o P
       w hF hpub hC hH hw E
     simpa only [Nat.cast_zero, mul_zero, zero_mul, zero_add] using h
-  intro nT r T CT _ _ n L Reg Cm Reg' Reg₂ obj prog st Vs zr hCust dg N σ wmsg Sk cmt msg hA3
+  intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust dg N σ wmsg Sk cmt msg hA3
     k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap

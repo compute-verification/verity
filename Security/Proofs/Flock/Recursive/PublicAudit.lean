@@ -13,8 +13,8 @@ statement read from registered rows. It is a conjunction:
   the event is empty, or the sessions type and there is a round fork, a session fork or an inner fork of the prover's
   own runs, or Lean's verifier accepts `st` and the verifier of record every session while `st` fails with probability
   at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
-* (ii) zero knowledge: `RecursiveFirewallPrivate` at no registration rows, the simulator reading the public circuit and
-  the owed outputs.
+* (ii) zero knowledge: `RecursiveFirewallPrivate` at no registration rows, the inner coins live, the simulator reading
+  the public circuit and the owed outputs.
 
 What it takes, against `RecursiveAudit`:
 
@@ -88,11 +88,13 @@ def noRows {Prog : Type} : Prog → Fin 0 → ByteArray := fun _ i => i.elim0
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st`, with its
 class, regions and schedule `execClassAt st`, and every prover `σ` of the recursive audit with C-Flock's compiled table
-there as its inner protocol (`innerAt`): V*'s statements `Vs` (`outerStatementsAt st` of them, each drawing all its
-units), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, the
-messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`), as in `RecursiveAudit`. Taken: A3 (`_hA3`). Then for every count curve `(k, R_w, M, ρ)` that bounds every session's
-rate at each setup of its inputs, given that V*'s circuits compute the inner verifier at the typed sessions and the
-public statement (`VStarComputes`, an obligation): the event below is empty; or the sessions type and there is a round
+there as its inner protocol (`innerAt`), at the law of the registration's draws (`drawLaw`: a finite space with an
+element, so the law's `nonempty` is no hypothesis): V*'s statements `Vs` (`outerStatementsAt st` of them, each drawing
+all its units), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their records' custody
+`_hCust`, the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`), as in
+`RecursiveAudit`. Taken: A3 (`_hA3`). Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at
+each setup of its inputs, given that V*'s circuits compute the inner verifier at the typed sessions and the public
+statement (`VStarComputes`, an obligation): the event below is empty; or the sessions type and there is a round
 fork, a session fork, or an inner fork of the transported prover's own runs whose decoded transcripts play the
 compiled table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier builds } st \text{ from } obj, prog \wedge \text{every session verifies} \wedge
@@ -105,21 +107,23 @@ every honest witness `w` of `P`, the auditor's whole view at the firewall (`fwRe
 reading `P`, the schedule's transcript and the owed outputs) give every event probabilities within
 $$\varepsilon_V + n_h \cdot 2^{-193}$$
 both ways, under `hash-derived-key` and the obligations `FirewallSends`, `SessionsPublic`, `SessionsCoined` and
-`SessionsHonest`. -/
+`SessionsHonest`. The inner coins are live: the auditor draws each after the commit strings before it, and each message
+`msgs … i` and the requests `reqs` read those strings (`firewallStrings`). -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
-    {n : ℕ} {L : Law n} {Reg Cm : Type} {Reg' Reg₂ : Type}
+    -- the registration's draws, a finite space with an element, and the units each draws
+    {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
     -- the verifier's own partition object and program, and the inner statement
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
     -- V*'s statements and sessions, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
-    (zr : Reg → L.Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
+    (zr : Reg → (drawLaw draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
@@ -142,7 +146,7 @@ def PublicAudit : Prop :=
       VStarComputes (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
     prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ¬ (innerAt T CT st).holds (publicHidden st))
-        (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+        (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
       SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
@@ -151,7 +155,7 @@ def PublicAudit : Prop :=
           (execClassAt st).regs (execClassAt st).sch) ∨
       prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVR (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (publicHidden st))
-          (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+          (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
               (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
@@ -163,9 +167,10 @@ def PublicAudit : Prop :=
   (∀ {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa] [Fintype Ωp] [Inhabited Ωp],
     Flock.Premises.HashDerivedKeyHm96 →
     ∀ (s : Flock.Firewall.Schedule) (pub : (Fin 0 → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)
-      -- the honest worker's requests to the firewall, the messages they commit, and the schedule's transcript
-      (nh : ℕ) (reqs : Prog → Wit → (Fin 0 → ZkView.Salt) → Ωa → Ωp → List ByteArray)
-      (msgs : Prog → Wit → (Fin 0 → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
+      -- the honest worker's requests to the firewall and the messages they commit, each reading the commit strings
+      -- the firewall sent before it (the inner coins live), and the schedule's transcript
+      (nh : ℕ) (reqs : Prog → Wit → (Fin 0 → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+      (msgs : Prog → Wit → (Fin 0 → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
       (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
       -- V*'s outer sessions, the public context their simulator reads, and what a stopped run sends
       (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp 0 nh) Pub)
