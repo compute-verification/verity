@@ -29,8 +29,10 @@ maps `hres` and `hu` would force the reps' values equal. Top's `rep`, `ops` and 
 alone, but each rep's coins, extra claims and comb, each level's `α` and the table files' streams are the verifier's,
 drawn from the history `t`, and V*'s wires register only what is computed from them (`v`, `coef`, `dirs`). So
 `vbridge_of_reps` is `vbridge_of_vstar` with the unit maps indexed by the rep and `rep`, `acc`, `ops`, `files` read at the
-history as well, from the same per-rep lemmas, and `vbridge_of_family` is it at the family:
-`Flock.Assumptions.VBridge` from one named `Prop` per remaining hypothesis.
+history as well, from the same per-rep lemmas. Its `ResZeroAt` and `OpensAt` never hold at V*: their outputs are
+registered reads, and no output column is one (`Registered.not_resZeroAt`, `not_opensAt`). At the family the parts' and
+openings' outputs are read in the layers instead, and `vbridge_of_family` (`Openings.lean`) composes the same per-rep
+lemmas at `HResL` (`Rep.lean`) and `HUL`: `Flock.Assumptions.VBridge` from one named `Prop` per remaining hypothesis.
 -/
 
 namespace FlockVBridge.Family
@@ -66,7 +68,7 @@ variable {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S �
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Flock.Schedule)
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 /-- **`vbridge_of_vstar` with a unit and copy per rep, and the reps' values at the history**: part `p` of rep `r` is
 copy `cp p r` of unit `un p r` of session `sess p`, opening `j` of level `ℓ` of rep `r` copy `cpO ℓ r j` of unit
@@ -151,7 +153,7 @@ variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) [∀ k, Fint
 variable (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Flock.Schedule)
 variable {n : ℕ} (L : Law n) (Reg Cm Reg' Reg₂ : Type)
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 /-- **V*'s statement family over one inner session.** The objects `vbridge_of_vstar` reads, each tied to V*'s code by
 an equation: the statements `VStar.statements` lists at V*'s shape `vsh` (`hstmts`), the verifier's shape `sh` the one
@@ -305,30 +307,6 @@ def HShape (GS : Flock.RecAlgebra.GfS) : Prop :=
     (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).w.size = GS.nw ∧
       (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb.size = 64
 
-/-- **`hres`**: at every accepted outer proof, rep `r`'s instance of part `p` holds part `p` at the rep's values, its
-outputs registered zero. -/
-def HRes (gs : Array (Array ℕ × Array ℕ × Array ℕ)) : Prop :=
-  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ p < gs.size,
-    ResZeroAt (F.zs R ω t R₂ (F.sess p)) (layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)) (F.un p r) (cp p r) F.sh gs p
-      (el (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).w)
-      (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).rounds (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
-      (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb
-
-/-- **`hu`**: at every accepted outer proof, rep `r`'s instance of opening `j` of level `ℓ` opens the rep's row at the
-verifier's coefficients, from `rec-acc`'s row at its chain position to the next. -/
-def HU : Prop :=
-  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
-    ∀ j < (F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).q ℓ,
-      OpensAt (F.zs R ω t R₂ (F.sessO ℓ)) (layers F.zs dg N k Rw R ω t R₂ τ (F.sessO ℓ)) (F.unO ℓ r j) (cpO ℓ r j)
-        (levelLanes F.sh ℓ) ((F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).rows ℓ)[j]!
-        #[(F.acc (layers F.zs dg N k Rw R ω t R₂ τ)
-            ((F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).start ℓ + j))[0]!,
-          (F.acc (layers F.zs dg N k Rw R ω t R₂ τ)
-            ((F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).start ℓ + j))[1]!]
-        ((F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).coef ℓ j)
-        (F.acc (layers F.zs dg N k Rw R ω t R₂ τ)
-          ((F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).start ℓ + j + 1))
-
 /-- **`hrd`**: at every accepted outer proof, V*'s algebra reads `rec-acc` at each rep's ends of the chain. -/
 def HReads : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r,
@@ -368,20 +346,6 @@ def HFull : Prop :=
 theorem vFull_of_hFull (h : F.HFull) : VFull (ℐ).r F.Sk := FlockVBridge.Full.vFull_of_whole _ F.Sk h
 
 end VStarFamily
-
-/-- **VBridge G at V*'s statement family**: `Flock.Assumptions.VBridge` at the family's sessions, statement, messages,
-commit strings and digests, from its obligations (`vbridge_of_reps`; `CoefsAre` and `ConsAre` hold by definition) and
-`VFullR`, which V*'s full draw gives (`vFullR_of_read`). -/
-theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
-    (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
-    (hsh : F.HShape dg N k Rw GS) (hres : F.HRes dg N k Rw gs) (hu : F.HU dg N k Rw) (hrd : F.HReads dg N k Rw)
-    (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
-    (hdec : F.HDecodes) (hfull : VFullR (ℐ).r F.Sk) :
-    Flock.Assumptions.VBridge (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
-  vbridge_of_reps T CT cls regs sch F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg F.sh F.rep hst.1 hst.2 F.sess F.un cp
-    (fun R ω t R₂ τ o h r => (hsh R ω t R₂ τ o h r).1) (fun R ω t R₂ τ o h r => (hsh R ω t R₂ τ o h r).2) hres
-    (fun _ _ _ => F.acc) F.ops F.sessO F.unO cpO hu (fun R ω t _ _ _ _ r => F.coefsAre R ω t _ r)
-    (fun R ω t _ _ _ _ r => F.consAre R ω t _ r) hrd F.files hsch hfiles hruns hcm hdec hfull
 
 end family
 

@@ -1,21 +1,24 @@
 import Proofs.Flock.VBridge.Family
 import Proofs.Flock.VBridge.Pinned
+import Proofs.Flock.VBridge.ResLayer
 
 /-!
-# A rep's values in V*'s layers: `HStruct`, `HShape`, `HRes`
+# A rep's values in V*'s layers: `HStruct`, `HShape`, `HResL`
 
 `repOf` is the `rep₀` of a family, read as V*'s Python reads it (`rec_vstage.py:352-366`, `409-412`):
 
 * `w`, from the wires: element `i`'s bit `e` is the layer's bit at the input column of a part's `InnerRepCheck` copy
   (copy 0 of the rep's instance, `units_per_vu` 1) that holds bit `e` of `i` in one of the part's row ports (`rowCol`)
-  and that a row of the unit reads (`IoColAt`), where the layer agrees with the registrant (`RegAgree`);
+  and that a row of the unit reads (`IoColAt`, which a column a computed row reads is: `ioColAt_of_readCol`), where the
+  layer agrees with the registrant (`RegAgree`);
 * `rounds`, `extras`, `comb`, from the verifier's coins at the history: the rep's stream's coins and the session's extra
   claims in a table's files `tf` (the family's `files`, or any), and the circuit fold the lincheck computes at the coins'
   points (`Piop.lean:143`), 64 elements.
 
-`hStruct_of`, `hShape_of` and `hRes_of` prove `HStruct`, `HShape` and `HRes` for every family whose `rep₀` is `repOf`,
+`hStruct_of`, `hShape_of` and `hResL_of` prove `HStruct`, `HShape` and `HResL` for every family whose `rep₀` is `repOf`,
 from facts about V*'s statements, circuits and registrations, each a named `Prop` below saying which check or lane
-establishes it.
+establishes it. `HResL` asks each part's row ports for the rep's `w` only at the columns some computed row reads
+(`ResZeroAtL`), so each such bit of `w` is read where it is asked, and `repOf`'s `w` needs no column beyond those.
 -/
 
 namespace FlockVBridge.Family
@@ -25,9 +28,8 @@ open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Mod
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 open Flock.RecResiduals (portSizes groups)
 open Flock.RecAlgebra (structureOf verifierRows el)
-open FlockVBridge.OfVStar (ResZeroAt rowCol vBase partRep partBase)
+open FlockVBridge.OfVStar (ResZeroAtL ReadCol rowCol vBase partRep partBase)
 open FlockVBridge.Decode (RegBit sub vOf)
-open FlockVBridge.AccChain (RegOut)
 open FlockVBridge.PartS (wIdx)
 
 /-! ## The verifier's names and sizes -/
@@ -329,6 +331,26 @@ theorem bitAt_of_regBit {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') {bits : Q.
   refine (copyVal_input _ _ hj hcol).trans (Eq.trans ?_ (copyVal_input _ _ hj hcol).symm)
   exact (FlockVBridge.Decode.fill_io zo hA (hio hj _)).symm
 
+/-- **A column a computed row reads is read at copy 0**: copy 0's computed row `i` of the stack reads the copy's columns
+of row `i` (`stack_a`, `stack_b`), and an input column is no gate of the unit (`outside`), so its wire is one of the
+unit's inputs (`mem_io_of_read`). -/
+theorem ioColAt_of_readCol {Q : VStmt} (u : Fin Q.nv) {col : ℕ} (hc : col < (Rows.ofNet Q.hU).nIn)
+    (h : ReadCol (Rows.ofNet Q.hU) col) : IoColAt Q u col := by
+  obtain ⟨i, x, hx, rfl⟩ := h
+  intro hj hcw
+  refine (keyInst Q.hU Q.nv (Layout.outsOf Q.c Q.hU Q.nv) u).mem_io_of_read
+    (i := ⟨0 * ((Rows.ofNet Q.hU).nComp + 1) + (1 + i.val), Rows.mul_add_lt hj (by omega)⟩) ?_ ?_
+  · rw [stack_a _ _ hj i, stack_b _ _ hj i]
+    rcases List.mem_append.1 hx with hx | hx
+    · exact List.mem_append_left _ (List.mem_map_of_mem hx)
+    · exact List.mem_append_right _ (List.mem_map_of_mem hx)
+  · refine (keyInst Q.hU Q.nv (Layout.outsOf Q.c Q.hU Q.nv) u).outside _ fun i' h' => ?_
+    have he := congrArg Fin.val h'
+    have hle : (Rows.ofNet Q.hU).nIn ≤ Q.c.upv * (Rows.ofNet Q.hU).nIn := Nat.le_mul_of_pos_left _ hj
+    rw [Rows.stackCol, dite_eq_left hc] at he
+    simp only [Rows.comp, Rows.stack] at he
+    omega
+
 /-- The circuit fold the lincheck computes at a rep's coins (`Piop.lean:143-146`), 64 zeros where it gives no 64
 elements. -/
 def combOf (sh : Shape) {cls : HClass} (TF : TableFiles cls) (rounds : Array (Array F128)) : Array F128 :=
@@ -361,7 +383,7 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
 variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 leaf512 cls regs (schedOf sch)
+local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
 namespace VStarFamily
 
@@ -422,19 +444,12 @@ lane), or by a verifier check that a session per part `p<j>` of `groups` is pres
 def HCover : Prop :=
   ∀ p < (partsOf F.sh).size, ∃ (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt
 
-/-- **The circuit of a part's statement names its unit as the statement.** `circuitFile` writes the unit of
+/-- Obligation: discharged by `circuitFile`'s emit and parse round trip.
+**The circuit of a part's statement names its unit as the statement.** `circuitFile` writes the unit of
 `innerUnit S nm` under `nm` (`metaHead`, `emitSections`, `Compose.lean:217,233`) and `HmRow.parse` reads it as the
 circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile` (the lane that proves `hfile`). -/
 def HUnitName : Prop :=
   ∀ (j : Fin F.stmts.size) p nm pt, F.stmts[j] = .inner p nm pt → (F.Vs j).c.unit.name = nm
-
-/-- **Every bit of `w` a part reads is read by a row of some part's unit.** A circuit fact about V*'s `InnerRepCheck`
-units at their instances: for each element at some part's `w` index and each bit `e`, some part's copy has a computed
-row reading the column of that bit (a wire of the unit, `IoColAt`); established by `circuit-check` on the parts' units
-(the columns `rowCol` gives, against the net's rows). -/
-def HRowSeen : Prop :=
-  ∀ r i e, e < 128 →
-    (∃ p a, p < (partsOf F.sh).size ∧ ∃ ha : a < (wIOf F.sh p).size, (wIOf F.sh p)[a] = i) → ∃ pk, F.Seen r i e pk
 
 variable (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
@@ -464,7 +479,8 @@ def HOne : Prop :=
     layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sess p)).c (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv) (F.un p r)) = true
 
-/-- **The registered `v` is the verifier's at the rep's coins** (a verifier gap). At an accepted outer proof, the `v`
+/-- Obligation: discharged by a verifier check recomputing the registered `v` from the rep's coins (not run today).
+**The registered `v` is the verifier's at the rep's coins** (a verifier gap). At an accepted outer proof, the `v`
 port of rep `r`'s copy of part `p` is registered bits of `verifierRows`' coefficients at the rep's coins, extra claims
 and comb (`vOf`), at the part's `V`; established by a verifier check that recomputes the registered `v` from its coins
 (not run today). -/
@@ -477,13 +493,20 @@ def HVCoins : Prop :=
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)) q)
 
-/-- **The parts' outputs are registered zero.** At an accepted outer proof, every output column of rep `r`'s copy of
-part `p` is a registered bit 0 (`RegOut`): V* registers each part's `out` as the zero row `rec-residuals-zero`;
-established by the session's own reads at that port (`ZkOuter.hown`, `OwnReads`). -/
-def HZero : Prop :=
+/-- Obligation: discharged by acceptance once the layout keys an output gate to its output row (`Layout.keyRowOf` is
+`some` only at input gates, KeyProg.lean:202-203), which makes `RegOut` hold at the parts' `out` columns.
+**The parts' outputs are 0 in the layer.** At an accepted outer proof, every output column of rep `r`'s copy of
+part `p` is 0 in the layer (`copyVal`). V* registers each part's `out` as reads of the zero row `rec-residuals-zero`
+(`rec_vstage.py`), but a registered read is a row of an input port and no output column is one (`not_regOut`), so
+acceptance (`Accepted`) does not reach these columns: `ZkOuter.Good` asks the layer to agree with the registrant at
+registered reads only (`RegAgree`). -/
+def HZeroL : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r p, p < (partsOf F.sh).size →
-    ∀ S ns nv, RecResiduals.part F.sh p = .ok (S, ns, nv) → ∀ hj : 0 < (F.Vs (F.sess p)).c.upv,
-      ∀ e < 16 * RecResiduals.RES_OUT_WORDS, RegOut (F.zs R ω t R₂ (F.sess p)) (F.un p r) hj (partBase S ns nv + e) false
+    ∀ S ns nv, RecResiduals.part F.sh p = .ok (S, ns, nv) → ∀ hj : cp p r < (F.Vs (F.sess p)).c.upv,
+      ∀ e < 16 * RecResiduals.RES_OUT_WORDS,
+        copyVal (keyInst (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv
+            (Layout.outsOf (F.Vs (F.sess p)).c (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv) (F.un p r))
+          (layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)) hj (partBase S ns nv + e) = false
 
 /-- **The rep's coins fit the verifier's schedule.** At an accepted outer proof, `verifierRows` accepts each rep's
 coins and extra claims: its rounds have the sizes the shape's schedule draws and there are `claims - 2` extra claims
@@ -526,15 +549,24 @@ theorem hShape_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F
   show (F.wOf _ r).size = GS.nw
   rw [wOf, Array.size_ofFn, nwOf_eq hst.1]
 
-/-- **`HRes` at `repOf`'s `w`**: rep `r`'s copy of part `p` is the verifier's part `p` (`ParseFacts.recResiduals`,
-`HUnitName`, `check_part`), its unit's constant 1 (`HOne`), each row-port column a registered bit of the decoded `w`
-(the layer's bit where a row reads it, `bitAt_of_regBit`, carried to every part by `HRowsAgree`), its `v` the verifier's
-(`HVCoins`) and its outputs registered zero (`HZero`). -/
-theorem hRes_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → TableFiles cls}
+/-- **`hres`, its row ports at the read columns and its outputs in the layer**: at every accepted outer proof, rep
+`r`'s instance of part `p` holds part `p` at the rep's values, its outputs 0 in the layer (`ResZeroAtL`). -/
+def HResL (gs : Array (Array ℕ × Array ℕ × Array ℕ)) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ p < gs.size,
+    ResZeroAtL (F.zs R ω t R₂ (F.sess p)) (layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)) (F.un p r) (cp p r) F.sh gs p
+      (el (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).w)
+      (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).rounds (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
+      (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb
+
+/-- **`HResL` at `repOf`'s `w`**: rep `r`'s copy of part `p` is the verifier's part `p` (`ParseFacts.recResiduals`,
+`HUnitName`, `check_part`), its unit's constant 1 (`HOne`), each row-port column a computed row reads a registered bit
+of the decoded `w` (the layer's bit there, `ioColAt_of_readCol`, `bitAt_of_regBit`, carried to every part by
+`HRowsAgree`), its `v` the verifier's (`HVCoins`) and its outputs 0 in the layer (`HZeroL`). -/
+theorem hResL_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.stmts.size) → (F.Vs j).Bits) → TableFiles cls}
     (hrep : F.rep₀ = F.repOf tf) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
-    (hst : F.HStruct GS gs) (hcov : F.HCover) (hname : F.HUnitName) (hseen : F.HRowSeen)
-    (hkeys : F.HRowKeys dg N k Rw) (hagree : F.HRowsAgree dg N k Rw) (hone : F.HOne dg N k Rw)
-    (hv : F.HVCoins dg N k Rw) (hz : F.HZero dg N k Rw) : F.HRes dg N k Rw gs := by
+    (hst : F.HStruct GS gs) (hcov : F.HCover) (hname : F.HUnitName) (hkeys : F.HRowKeys dg N k Rw)
+    (hagree : F.HRowsAgree dg N k Rw) (hone : F.HOne dg N k Rw) (hv : F.HVCoins dg N k Rw)
+    (hz : F.HZeroL dg N k Rw) : F.HResL dg N k Rw gs := by
   intro R ω t R₂ τ o h r p hp
   have hP : partsOf F.sh = gs := partsOf_eq hst.1 hst.2
   have hpP : p < (partsOf F.sh).size := by rw [hP]; exact hp
@@ -560,7 +592,7 @@ theorem hRes_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.s
     rfl
   refine ⟨hp, hupv p, hone R ω t R₂ τ o h r p hpP, hchk, unitLog_le (F.Vs (F.sess p)).hscope, _, _, _, hpar, F.hsh,
     S, ns, nv, hpart, ?_, ?_, ?_⟩
-  · intro q hq
+  · intro q hq hrd
     show RegBit (F.zs R ω t R₂ (F.sess p)) (F.un p r) 0 _ _
     rw [hW, ← hwI]
     have hsz : (wIOf F.sh p).size = ns.sum := by rw [hwI, FlockVBridge.OfVStar.wIdx_size, hns]
@@ -569,8 +601,14 @@ theorem hRes_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.s
     have hi : (wIOf F.sh p)[q / 128] < nwOf F.sh := by
       rw [nwOf_eq hst.1, ← part_nw hst.1 hpart]
       exact wIdx_lt (portSizes F.sh) ((partsOf F.sh)[p]!.2.1) ha
-    have hex : ∃ pk, F.Seen r (wIOf F.sh p)[q / 128] (q % 128) pk :=
-      hseen r _ _ he ⟨p, q / 128, hpP, ha, rfl⟩
+    obtain ⟨-, hc1, -⟩ := hkeys R ω t R₂ τ o h r p hpP q (by rw [hnsp]; exact hq)
+    have hio : F.IoCol p r (rowColOf F.sh p (128 * (q / 128) + q % 128)) := by
+      show IoColAt (F.Vs (F.sess p)) (F.un p r) _
+      rw [Nat.div_add_mod q 128]
+      refine ioColAt_of_readCol _ hc1 ?_
+      rw [rowColOf, hnsp, hnvp]
+      exact hrd
+    have hex : ∃ pk, F.Seen r (wIOf F.sh p)[q / 128] (q % 128) pk := ⟨(p, q / 128), hpP, ha, rfl, hio⟩
     obtain ⟨hp0, ha0, hi0, hio0⟩ := F.locOf_spec hex
     have hsz0 : (wIOf F.sh (F.locOf r (wIOf F.sh p)[q / 128] (q % 128)).1).size =
         (nsOf F.sh (F.locOf r (wIOf F.sh p)[q / 128] (q % 128)).1).sum := by
