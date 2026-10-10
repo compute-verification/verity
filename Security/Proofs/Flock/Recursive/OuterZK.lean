@@ -245,9 +245,9 @@ theorem vstar_private {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Nonemp
     Classical.arbitrary Ωp, fun _ => 0)
   have : ∀ j, Nonempty (Fin (V.NR j)) := fun j => ⟨⟨0, V.nr_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
   have : ∀ j, Nonempty (Fin (V.NS j)) := fun j => ⟨⟨0, V.ns_pos j (V.pubOf x₀) (commitStrs (V.m₂ x₀) fun _ => 0)⟩⟩
-  exact Flock.SecurityProofs.RecursiveCircuitPrivateLeaves nr rows pub honest nh msgs
+  exact Flock.SecurityProofs.recursiveCircuitPrivateLeaves_le nr rows pub honest nh msgs
     (fun P w r a h p y q => V.view prover (P, w, r, a, h, p, y) q) (fun o v a h s => V.sim (pubS o v a h) s)
-    (vstar_outer_zk rows pub honest msgs V pubS hpub hOK hP hH hKey) hKey p₀ o P w hw E
+    (vstar_outer_zk rows pub honest msgs V pubS hpub hOK hP hH hKey) (δ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey p₀ o P w hw E
 
 /-- **(ii) at V*'s sessions, the honest prover's code in them** (`vstar_private` at `proverExe`, `selfCheckSilent_exe`):
 whatever a stopped run sends, the auditor's whole view and the simulated one give every event probabilities within
