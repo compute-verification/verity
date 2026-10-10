@@ -106,6 +106,23 @@ theorem castLive_castLive {J J' : ℕ} (h : J' = J) (dg : ByteArray → ByteArra
   subst h
   rfl
 
+/-- **Implications at every outcome of `liveOfZJ`'s live audit bound probabilities**: at the registration the prover
+sends, each of the law's draws and each output of the live session of `J` tables written by `wr`. -/
+theorem prob_auditLive_liveOfZJ_mono {n : ℕ} {L : Law n} {Reg : Type} {mPts : ℕ} (dg : ByteArray → ByteArray) (N : ℕ)
+    {planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts)}
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
+    (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr)))
+    {p q : Reg × Finset (Fin n) × Exec.Transcript → Prop}
+    (h : ∀ ω o', p (τ.1, L.draw ω, wr (L.draw ω) τ.1 o') → q (τ.1, L.draw ω, wr (L.draw ω) τ.1 o')) :
+    prob p (auditLive L Reg (liveOfZJ dg planZ N wr)) τ ≤ prob q (auditLive L Reg (liveOfZJ dg planZ N wr)) τ := by
+  show avg (fun ω => prob p ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)) ≤
+    avg fun ω => prob q ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)
+  refine avg_mono fun ω => ?_
+  rw [prob_map, prob_map]
+  unfold liveOfZJ
+  rw [prob_map, prob_map]
+  exact prob_mono (fun o' => h ω o') _ _
+
 namespace ZkOuterD
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
@@ -321,7 +338,7 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
     rintro ω o' ⟨hacc, u, hu, hoff⟩
     obtain ⟨p, hp, hrow, hne⟩ := (Finset.mem_filter.1 hoff).2
     exact ⟨⟨hacc, ω, o', rfl, rfl⟩, p, ⟨hp, rowIn_mono (Finset.singleton_subset_iff.2 hu) p hrow⟩, hne⟩
-  refine (prob_auditLive_liveOf_mono dg N zo.wr τ
+  refine (prob_auditLive_liveOfZJ_mono dg N zo.wr τ
     (q := fun o => (LiveAcceptsZKR zo.I zo.own o ∧ ∃ ω o', o.2.1 = Lv.draw ω ∧ o.2.2 = zo.wr (Lv.draw ω) o.1 o') ∧
       (zo.rd.restrict (rowIn o.2.1)).Off o.1) hmono).trans
     (FlockSoundness.Registered.Reads.prob_offOn_le (zo.game dg N) τ (fun o => zo.rd.restrict (rowIn o.2.1))

@@ -1,6 +1,5 @@
 import Proofs.Flock.Soundness.Registered.Binding
 import Proofs.Flock.Soundness.Discharge.Exec.Live
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 /-!
 # Registered reads off the registrant's leaf, at the outcome's draw
@@ -12,7 +11,7 @@ and the verifier checks only the reads of the units it draws. So:
 * `rowIn S`: a commit string that is a row of a unit of `S`; `Reads.restrict`: the reads at the positions `A` keeps;
 * `Reads.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
 * `prob_auditLive_draw`, `prob_auditLive_liveOf_mono`: an event of the live audit's draw alone has the law's
-  probability, and implications at every outcome of `liveOfZJ`'s session bound probabilities;
+  probability, and implications at every outcome of `liveOf`'s session bound probabilities;
 * `reg_cast`: a strategy's registration survives a cast along an equation of sessions.
 -/
 
@@ -100,22 +99,18 @@ theorem prob_auditLive_draw {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (F
   · rw [if_neg h]
     exact le_antisymm ((prob_mono (fun _ hq => h hq) _ _).trans (prob_false _ _).le) zero_le
 
-open Composed (liveOfZJ) in
-open FlockSoundness.Discharge.Tables (LiveOutJ) in
-/-- **Implications at every outcome of `liveOfZJ`'s live audit bound probabilities**: at the registration the prover
-sends, each of the law's draws and each output of the live session of `J` tables written by `wr`. -/
+/-- **Implications at every outcome of `liveOf`'s live audit bound probabilities**: at the registration the prover
+sends, each of the law's draws and each output of the live session written by `wr`. -/
 theorem prob_auditLive_liveOf_mono {n : ℕ} {L : Law n} {Reg : Type} {mPts : ℕ} (dg : ByteArray → ByteArray) (N : ℕ)
-    {planZ : Finset (Fin n) → Reg → List (ZkSession.TabZK FlockLevel3.GF128 mPts)}
-    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
-    (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr)))
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr)))
     {p q : Reg × Finset (Fin n) × Exec.Transcript → Prop}
     (h : ∀ ω o', p (τ.1, L.draw ω, wr (L.draw ω) τ.1 o') → q (τ.1, L.draw ω, wr (L.draw ω) τ.1 o')) :
-    prob p (auditLive L Reg (liveOfZJ dg planZ N wr)) τ ≤ prob q (auditLive L Reg (liveOfZJ dg planZ N wr)) τ := by
-  show avg (fun ω => prob p ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)) ≤
-    avg fun ω => prob q ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)
+    prob p (auditLive L Reg (liveOf dg mPts N wr)) τ ≤ prob q (auditLive L Reg (liveOf dg mPts N wr)) τ := by
+  show avg (fun ω => prob p ((liveOf dg mPts N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)) ≤
+    avg fun ω => prob q ((liveOf dg mPts N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)
   refine avg_mono fun ω => ?_
   rw [prob_map, prob_map]
-  unfold liveOfZJ
+  unfold liveOf
   rw [prob_map, prob_map]
   exact prob_mono (fun o' => h ω o') _ _
 
